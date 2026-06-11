@@ -1,6 +1,7 @@
 package graphdb
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
@@ -16,7 +17,7 @@ func TestIndexFileMeta_Basic(t *testing.T) {
 		MediaType:   "text/x-go",
 		SizeBytes:   1024,
 	}
-	err := engine.IndexFileMeta("file:1", "workspace:/root", []string{"tag:code"}, meta)
+	err := engine.IndexFileMeta(context.TODO(), "file:1", "workspace:/root", []string{"tag:code"}, meta)
 	require.NoError(t, err)
 
 	node, ok := engine.GetNode("file:1")
@@ -32,7 +33,7 @@ func TestIndexFileMeta_Basic(t *testing.T) {
 func TestIndexFileMeta_MediaTypeKind(t *testing.T) {
 	engine, _ := newTestEngine(t)
 
-	err := engine.IndexFileMeta("img:1", "ws:/", nil, FileMeta{
+	err := engine.IndexFileMeta(context.TODO(), "img:1", "ws:/", nil, FileMeta{
 		Path:      "assets/screenshot.png",
 		MediaType: "image/png",
 	})
@@ -45,7 +46,7 @@ func TestIndexFileMeta_MediaTypeKind(t *testing.T) {
 func TestFileMetaFromNode(t *testing.T) {
 	engine, _ := newTestEngine(t)
 
-	err := engine.IndexFileMeta("f:1", "ws:/", nil, FileMeta{
+	err := engine.IndexFileMeta(context.TODO(), "f:1", "ws:/", nil, FileMeta{
 		Path:      "doc/readme.md",
 		MediaType: "text/markdown",
 		SizeBytes: 500,
@@ -65,9 +66,9 @@ func TestFileMetaFromNode(t *testing.T) {
 func TestQueryFileMetaByMedia(t *testing.T) {
 	engine, _ := newTestEngine(t)
 
-	require.NoError(t, engine.IndexFileMeta("a", "ws:/", nil, FileMeta{Path: "a.png", MediaType: "image/png"}))
-	require.NoError(t, engine.IndexFileMeta("b", "ws:/", nil, FileMeta{Path: "b.png", MediaType: "image/png"}))
-	require.NoError(t, engine.IndexFileMeta("c", "ws:/", nil, FileMeta{Path: "c.go", MediaType: "text/x-go"}))
+	require.NoError(t, engine.IndexFileMeta(context.TODO(), "a", "ws:/", nil, FileMeta{Path: "a.png", MediaType: "image/png"}))
+	require.NoError(t, engine.IndexFileMeta(context.TODO(), "b", "ws:/", nil, FileMeta{Path: "b.png", MediaType: "image/png"}))
+	require.NoError(t, engine.IndexFileMeta(context.TODO(), "c", "ws:/", nil, FileMeta{Path: "c.go", MediaType: "text/x-go"}))
 
 	nodes := engine.QueryFileMetaByMedia("image/png")
 	require.Len(t, nodes, 2)
@@ -82,8 +83,8 @@ func TestQueryFileMetaByMedia(t *testing.T) {
 func TestQueryFileMetaByHash(t *testing.T) {
 	engine, _ := newTestEngine(t)
 
-	require.NoError(t, engine.IndexFileMeta("a", "ws:/", nil, FileMeta{Path: "a.go", ContentHash: "sha256:x"}))
-	require.NoError(t, engine.IndexFileMeta("b", "ws:/", nil, FileMeta{Path: "b.go", ContentHash: "sha256:y"}))
+	require.NoError(t, engine.IndexFileMeta(context.TODO(), "a", "ws:/", nil, FileMeta{Path: "a.go", ContentHash: "sha256:x"}))
+	require.NoError(t, engine.IndexFileMeta(context.TODO(), "b", "ws:/", nil, FileMeta{Path: "b.go", ContentHash: "sha256:y"}))
 
 	nodes := engine.QueryFileMetaByHash("sha256:x")
 	require.Len(t, nodes, 1)
@@ -96,8 +97,8 @@ func TestQueryFileMetaByHash(t *testing.T) {
 func TestQueryFileMetaBySource(t *testing.T) {
 	engine, _ := newTestEngine(t)
 
-	require.NoError(t, engine.IndexFileMeta("a", "ws:root", nil, FileMeta{Path: "a.go", MediaType: "text/x-go"}))
-	require.NoError(t, engine.IndexFileMeta("b", "ws:root", nil, FileMeta{Path: "b.go", MediaType: "text/x-go"}))
+	require.NoError(t, engine.IndexFileMeta(context.TODO(), "a", "ws:root", nil, FileMeta{Path: "a.go", MediaType: "text/x-go"}))
+	require.NoError(t, engine.IndexFileMeta(context.TODO(), "b", "ws:root", nil, FileMeta{Path: "b.go", MediaType: "text/x-go"}))
 
 	nodes := engine.QueryFileMetaBySource("ws:root")
 	require.Len(t, nodes, 2)
@@ -114,7 +115,7 @@ func TestPropsTooLarge(t *testing.T) {
 	meta := FileMeta{
 		Path: string(longPath),
 	}
-	err := engine.IndexFileMeta("oversized", "ws:/", nil, meta)
+	err := engine.IndexFileMeta(context.TODO(), "oversized", "ws:/", nil, meta)
 	require.ErrorIs(t, err, ErrPropsTooLarge)
 }
 
@@ -173,7 +174,7 @@ func TestFileMetaRoundTripWithEngine(t *testing.T) {
 		MTimeUnix:   1780950000,
 		ArtifactRef: "artifact://logo",
 	}
-	require.NoError(t, engine.IndexFileMeta("logo", "ws:/", nil, original))
+	require.NoError(t, engine.IndexFileMeta(context.TODO(), "logo", "ws:/", nil, original))
 
 	node, ok := engine.GetNode("logo")
 	require.True(t, ok)

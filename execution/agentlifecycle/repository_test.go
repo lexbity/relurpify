@@ -2,6 +2,7 @@ package agentlifecycle
 
 import (
 	"context"
+	"errors"
 	"testing"
 )
 
@@ -15,7 +16,7 @@ func (m *mockRepository) CreateWorkflow(ctx context.Context, workflow WorkflowRe
 }
 
 func (m *mockRepository) GetWorkflow(ctx context.Context, workflowID string) (*WorkflowRecord, error) {
-	return nil, nil
+	return nil, errors.New("mock not found")
 }
 
 func (m *mockRepository) ListWorkflows(ctx context.Context) ([]WorkflowRecord, error) {
@@ -27,7 +28,7 @@ func (m *mockRepository) CreateRun(ctx context.Context, run WorkflowRunRecord) e
 }
 
 func (m *mockRepository) GetRun(ctx context.Context, runID string) (*WorkflowRunRecord, error) {
-	return nil, nil
+	return nil, errors.New("mock not found")
 }
 
 func (m *mockRepository) ListRuns(ctx context.Context, workflowID string) ([]WorkflowRunRecord, error) {
@@ -43,7 +44,7 @@ func (m *mockRepository) UpsertDelegation(ctx context.Context, entry DelegationE
 }
 
 func (m *mockRepository) GetDelegation(ctx context.Context, delegationID string) (*DelegationEntry, error) {
-	return nil, nil
+	return nil, errors.New("mock not found")
 }
 
 func (m *mockRepository) ListDelegations(ctx context.Context, workflowID string) ([]DelegationEntry, error) {
@@ -79,7 +80,7 @@ func (m *mockRepository) UpsertArtifact(ctx context.Context, artifact WorkflowAr
 }
 
 func (m *mockRepository) GetArtifact(ctx context.Context, artifactID string) (*WorkflowArtifactRecord, error) {
-	return nil, nil
+	return nil, errors.New("mock not found")
 }
 
 func (m *mockRepository) ListArtifacts(ctx context.Context, workflowID string) ([]WorkflowArtifactRecord, error) {
@@ -95,7 +96,7 @@ func (m *mockRepository) UpsertLineageBinding(ctx context.Context, binding Linea
 }
 
 func (m *mockRepository) GetLineageBinding(ctx context.Context, bindingID string) (*LineageBindingRecord, error) {
-	return nil, nil
+	return nil, errors.New("mock not found")
 }
 
 func (m *mockRepository) FindLineageBindingByWorkflow(ctx context.Context, workflowID string) ([]LineageBindingRecord, error) {
@@ -107,11 +108,11 @@ func (m *mockRepository) FindLineageBindingByRun(ctx context.Context, runID stri
 }
 
 func (m *mockRepository) FindLineageBindingByLineageID(ctx context.Context, lineageID string) (*LineageBindingRecord, error) {
-	return nil, nil
+	return nil, errors.New("mock not found")
 }
 
 func (m *mockRepository) FindLineageBindingByAttemptID(ctx context.Context, attemptID string) (*LineageBindingRecord, error) {
-	return nil, nil
+	return nil, errors.New("mock not found")
 }
 
 func (m *mockRepository) Close() error {

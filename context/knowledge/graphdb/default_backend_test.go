@@ -1,6 +1,7 @@
 package graphdb
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -11,10 +12,10 @@ import (
 func TestDefaultOptions_CreatesBadger(t *testing.T) {
 	dir := t.TempDir()
 	opts := DefaultOptions(filepath.Join(dir, "ws"))
-	engine, err := Open(opts)
+	engine, err := Open(context.Background(), opts)
 	require.NoError(t, err)
 	require.NotNil(t, engine)
-	require.NoError(t, engine.Close())
+	require.NoError(t, engine.Close(context.Background()))
 
 	// A Badger store creates a MANIFEST file.
 	manifestPath := filepath.Join(dir, "ws", "MANIFEST")
@@ -41,9 +42,9 @@ func TestDefaultOptions_WithBadgerDir(t *testing.T) {
 	opts := DefaultOptions(dataDir)
 	opts.BadgerDir = badgerDir
 
-	engine, err := Open(opts)
+	engine, err := Open(context.Background(), opts)
 	require.NoError(t, err)
-	require.NoError(t, engine.Close())
+	require.NoError(t, engine.Close(context.Background()))
 
 	// Badger data should be in BadgerDir, not DataDir.
 	_, err = os.Stat(filepath.Join(badgerDir, "MANIFEST"))
@@ -54,21 +55,21 @@ func TestNewBadgerStoreIsUsable(t *testing.T) {
 	dir := t.TempDir()
 	opts := DefaultOptions(dir)
 
-	engine, err := Open(opts)
+	engine, err := Open(context.Background(), opts)
 	require.NoError(t, err)
 
-	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "n1", Kind: "function"}))
+	require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: "n1", Kind: "function"}))
 	node, ok := engine.GetNode("n1")
 	require.True(t, ok)
 	require.Equal(t, "n1", node.ID)
 
-	require.NoError(t, engine.Link("n1", "n2", "calls", "", 1, nil))
-	require.NoError(t, engine.Close())
+	require.NoError(t, engine.Link(context.TODO(), "n1", "n2", "calls", "", 1, nil))
+	require.NoError(t, engine.Close(context.Background()))
 
 	// Reopen and verify data persists.
-	engine2, err := Open(opts)
+	engine2, err := Open(context.Background(), opts)
 	require.NoError(t, err)
-	defer engine2.Close()
+	defer engine2.Close(context.Background())
 
 	_, ok = engine2.GetNode("n1")
 	require.True(t, ok, "data should persist after reopen with Badger")

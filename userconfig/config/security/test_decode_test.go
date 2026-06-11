@@ -18,5 +18,5 @@ func testDecode(path string, data []byte, out any) (any, error) {
 	if err := dec.Decode(out); err != nil {
 		return nil, err
 	}
-	return nil, nil
+	return out, nil
 }

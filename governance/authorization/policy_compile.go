@@ -1,6 +1,7 @@
 package authorization
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -218,7 +219,7 @@ func convertExternalProvidersToStrings(values []string) []string {
 func compileGlobalPolicy(key string, level string) (*pol.PolicyRule, error) {
 	key = strings.TrimSpace(strings.ToLower(key))
 	if key == "" || key == "default_tool_policy" || level == "" {
-		return nil, nil
+		return nil, errors.New("invalid global policy key or level")
 	}
 	rule := &pol.PolicyRule{
 		ID:       "global:" + key,

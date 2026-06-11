@@ -16,18 +16,18 @@ import (
 // TestBadgerRuntime_OpenClose verifies a Badger-backed engine opens and
 // closes cleanly.
 func TestBadgerRuntime_OpenClose(t *testing.T) {
-	engine, err := graphdb.Open(graphdb.DefaultOptions(t.TempDir()))
+	engine, err := graphdb.Open(context.Background(), graphdb.DefaultOptions(t.TempDir()))
 	require.NoError(t, err)
 	require.NotNil(t, engine)
-	require.NoError(t, engine.Close())
+	require.NoError(t, engine.Close(context.Background()))
 }
 
 // TestBadgerRuntime_ChunkStore verifies the knowledge ChunkStore works
 // with a Badger-backed graphdb engine.
 func TestBadgerRuntime_ChunkStore(t *testing.T) {
-	engine, err := graphdb.Open(graphdb.DefaultOptions(t.TempDir()))
+	engine, err := graphdb.Open(context.Background(), graphdb.DefaultOptions(t.TempDir()))
 	require.NoError(t, err)
-	defer engine.Close()
+	defer engine.Close(context.Background())
 
 	store := &knowledge.ChunkStore{Graph: engine}
 
@@ -38,7 +38,7 @@ func TestBadgerRuntime_ChunkStore(t *testing.T) {
 		Body:        knowledge.ChunkBody{Raw: "test content", Fields: map[string]any{"key": "val"}},
 		Freshness:   knowledge.FreshnessValid,
 	}
-	saved, err := store.Save(chunk)
+	saved, err := store.Save(context.TODO(), chunk)
 	require.NoError(t, err)
 	require.NotNil(t, saved)
 	require.Equal(t, knowledge.ChunkID("chunk:test"), saved.ID)
@@ -54,18 +54,18 @@ func TestBadgerRuntime_ChunkStore(t *testing.T) {
 // TestBadgerRuntime_ChunkEdges verifies edge operations in the chunk
 // store work with a Badger-backed engine.
 func TestBadgerRuntime_ChunkEdges(t *testing.T) {
-	engine, err := graphdb.Open(graphdb.DefaultOptions(t.TempDir()))
+	engine, err := graphdb.Open(context.Background(), graphdb.DefaultOptions(t.TempDir()))
 	require.NoError(t, err)
-	defer engine.Close()
+	defer engine.Close(context.Background())
 
 	store := &knowledge.ChunkStore{Graph: engine}
 
-	_, err = store.Save(knowledge.KnowledgeChunk{ID: "chunk:a", WorkspaceID: "ws", Body: knowledge.ChunkBody{Raw: "a"}})
+	_, err = store.Save(context.TODO(), knowledge.KnowledgeChunk{ID: "chunk:a", WorkspaceID: "ws", Body: knowledge.ChunkBody{Raw: "a"}})
 	require.NoError(t, err)
-	_, err = store.Save(knowledge.KnowledgeChunk{ID: "chunk:b", WorkspaceID: "ws", Body: knowledge.ChunkBody{Raw: "b"}})
+	_, err = store.Save(context.TODO(), knowledge.KnowledgeChunk{ID: "chunk:b", WorkspaceID: "ws", Body: knowledge.ChunkBody{Raw: "b"}})
 	require.NoError(t, err)
 
-	saved, err := store.SaveEdge(knowledge.ChunkEdge{
+	saved, err := store.SaveEdge(context.TODO(), knowledge.ChunkEdge{
 		FromChunk: "chunk:a",
 		ToChunk:   "chunk:b",
 		Kind:      knowledge.EdgeKindRequiresContext,
@@ -89,9 +89,9 @@ func TestBadgerRuntime_ChunkEdges(t *testing.T) {
 // store works with a Badger engine.
 func TestBadgerRuntime_ASTIndexStore(t *testing.T) {
 	dir := t.TempDir()
-	engine, err := graphdb.Open(graphdb.DefaultOptions(dir))
+	engine, err := graphdb.Open(context.Background(), graphdb.DefaultOptions(dir))
 	require.NoError(t, err)
-	defer engine.Close()
+	defer engine.Close(context.Background())
 
 	astStore := ast.NewGraphIndexStore(engine)
 
@@ -132,13 +132,13 @@ func TestBadgerRuntime_ASTIndexStore(t *testing.T) {
 // TestBadgerRuntime_Retriever verifies the retrieval path works with a
 // Badger-backed graphdb engine.
 func TestBadgerRuntime_Retriever(t *testing.T) {
-	engine, err := graphdb.Open(graphdb.DefaultOptions(t.TempDir()))
+	engine, err := graphdb.Open(context.Background(), graphdb.DefaultOptions(t.TempDir()))
 	require.NoError(t, err)
-	defer engine.Close()
+	defer engine.Close(context.Background())
 
 	store := &knowledge.ChunkStore{Graph: engine}
 
-	_, err = store.Save(knowledge.KnowledgeChunk{
+	_, err = store.Save(context.TODO(), knowledge.KnowledgeChunk{
 		ID: "chunk:searchable", WorkspaceID: "ws",
 		Body: knowledge.ChunkBody{Raw: "important content", Fields: map[string]any{"content": "important content"}},
 	})
@@ -158,11 +158,11 @@ func TestBadgerRuntime_Retriever(t *testing.T) {
 // error.
 func TestBadgerRuntime_CloseCleanly(t *testing.T) {
 	dir := t.TempDir()
-	engine, err := graphdb.Open(graphdb.DefaultOptions(dir))
+	engine, err := graphdb.Open(context.Background(), graphdb.DefaultOptions(dir))
 	require.NoError(t, err)
 
 	store := &knowledge.ChunkStore{Graph: engine}
-	_, err = store.Save(knowledge.KnowledgeChunk{ID: "chunk:preclose", WorkspaceID: "ws", Body: knowledge.ChunkBody{Raw: "data"}})
+	_, err = store.Save(context.TODO(), knowledge.KnowledgeChunk{ID: "chunk:preclose", WorkspaceID: "ws", Body: knowledge.ChunkBody{Raw: "data"}})
 	require.NoError(t, err)
 
 	astStore := ast.NewGraphIndexStore(engine)
@@ -172,9 +172,9 @@ func TestBadgerRuntime_CloseCleanly(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify edge operations before close
-	_, err = store.SaveEdge(knowledge.ChunkEdge{FromChunk: "chunk:preclose", ToChunk: "chunk:preclose", Kind: knowledge.EdgeKindRequiresContext})
+	_, err = store.SaveEdge(context.TODO(), knowledge.ChunkEdge{FromChunk: "chunk:preclose", ToChunk: "chunk:preclose", Kind: knowledge.EdgeKindRequiresContext})
 	require.NoError(t, err)
 
 	// Close should succeed
-	require.NoError(t, engine.Close())
+	require.NoError(t, engine.Close(context.Background()))
 }

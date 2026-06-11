@@ -19,7 +19,7 @@ type ProbeResult struct {
 
 // ProbeWorkspace runs all platform runtime checks required for a workspace.
 // It returns a slice of results, one per check.
-func ProbeWorkspace(cfg WorkspaceConfig, secrets llm.ProviderSecrets, backend llm.ManagedBackend) []ProbeResult {
+func ProbeWorkspace(ctx context.Context, cfg WorkspaceConfig, secrets llm.ProviderSecrets, backend llm.ManagedBackend) []ProbeResult {
 	var results []ProbeResult
 
 	// 1. Workspace directory
@@ -32,7 +32,7 @@ func ProbeWorkspace(cfg WorkspaceConfig, secrets llm.ProviderSecrets, backend ll
 	})
 
 	// 3. Inference backend reachable
-	inferenceOk, inferenceMsg := checkInferenceBackend(cfg, secrets, backend)
+	inferenceOk, inferenceMsg := checkInferenceBackend(ctx, cfg, secrets, backend)
 	results = append(results, ProbeResult{
 		Name:     "inference_backend",
 		Required: true,
@@ -68,7 +68,7 @@ func checkWorkspaceDirectory(workspace string) (bool, string) {
 	return true, "workspace directory exists and is readable"
 }
 
-func checkInferenceBackend(cfg WorkspaceConfig, secrets llm.ProviderSecrets, backend llm.ManagedBackend) (bool, string) {
+func checkInferenceBackend(ctx context.Context, cfg WorkspaceConfig, secrets llm.ProviderSecrets, backend llm.ManagedBackend) (bool, string) {
 	if backend == nil {
 		var err error
 		backend, err = llm.New(llm.ProviderConfigFromRuntimeConfig(cfg), secrets)
@@ -77,10 +77,10 @@ func checkInferenceBackend(cfg WorkspaceConfig, secrets llm.ProviderSecrets, bac
 		}
 		defer backend.Close()
 	}
-	if err := backend.Warm(context.Background()); err != nil {
+	if err := backend.Warm(ctx); err != nil {
 		return false, fmt.Sprintf("inference backend unhealthy: %s", err)
 	}
-	models, err := backend.ListModels(context.Background())
+	models, err := backend.ListModels(ctx)
 	if err != nil {
 		return false, fmt.Sprintf("inference backend model list failed: %s", err)
 	}

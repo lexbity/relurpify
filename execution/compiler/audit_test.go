@@ -23,7 +23,7 @@ func TestCompilationAuditor_ReportAndDigest(t *testing.T) {
 		Freshness:   knowledge.FreshnessValid,
 		Provenance:  knowledge.ChunkProvenance{CompiledBy: knowledge.CompilerDeterministic, Timestamp: now},
 	}
-	_, err := store.Save(chunk)
+	_, err := store.Save(context.TODO(), chunk)
 	require.NoError(t, err)
 
 	registry := retrieval.NewRankerRegistry()
@@ -41,7 +41,7 @@ func TestCompilationAuditor_ReportAndDigest(t *testing.T) {
 
 	data, err := json.Marshal(record)
 	require.NoError(t, err)
-	_, err = store.Save(knowledge.KnowledgeChunk{
+	_, err = store.Save(context.TODO(), knowledge.KnowledgeChunk{
 		ID:           knowledge.ChunkID(record.RequestID),
 		SourceOrigin: knowledge.SourceOrigin("compilation_record"),
 		Body:         knowledge.ChunkBody{Raw: string(data), Fields: map[string]any{"content": string(data)}},

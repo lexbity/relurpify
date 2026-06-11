@@ -7,3 +7,11 @@
 unconvert
 wastedassign
 ineffassign
+
+# Slice 2 — Bug-class correctness (hand-fixed, each with a test that can fail)
+nilnil
+nilerr
+nilnesserr
+contextcheck
+errchkjson
+bodyclose

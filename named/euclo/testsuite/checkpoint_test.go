@@ -138,7 +138,7 @@ func TestEndToEndCheckpointMaterialization(t *testing.T) {
 	deps := rootGraphDeps(caps)
 	deps.Checkpoints = repo
 	deps.Persistence = writer
-	graph, err := orchestrate.NewRootGraph(deps)
+	graph, err := orchestrate.NewRootGraph(context.Background(), deps)
 	if err != nil {
 		t.Fatalf("NewRootGraph failed: %v", err)
 	}

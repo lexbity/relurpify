@@ -88,9 +88,6 @@ type screenshotResponse struct {
 }
 
 func New(ctx context.Context, cfg Config) (*Backend, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	if cfg.StartupTimeout <= 0 {
 		cfg.StartupTimeout = defaultStartupTimeout
 	}
@@ -108,7 +105,7 @@ func New(ctx context.Context, cfg Config) (*Backend, error) {
 	}
 	transport, err := newWebsocketTransport(ctx, wsURL)
 	if err != nil {
-		_ = backend.Close()
+		_ = backend.Close(ctx)
 		return nil, err
 	}
 	backend.transport = transport
@@ -243,7 +240,7 @@ func (b *Backend) CurrentURL(ctx context.Context) (string, error) {
 	return fmt.Sprint(value), nil
 }
 
-func (b *Backend) Close() error {
+func (b *Backend) Close(_ context.Context) error {
 	var errs []error
 	if b.transport != nil {
 		if err := b.transport.Close(); err != nil {
@@ -361,7 +358,10 @@ func mapCDPError(operation string, err error) error {
 }
 
 func jsString(value string) string {
-	encoded, _ := json.Marshal(value)
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		return ""
+	}
 	return string(encoded)
 }
 

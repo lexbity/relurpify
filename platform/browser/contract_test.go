@@ -60,7 +60,7 @@ func (f *fakeBackend) WaitFor(_ context.Context, condition WaitCondition, _ time
 	return nil
 }
 func (f *fakeBackend) CurrentURL(context.Context) (string, error) { return f.currentURL, nil }
-func (f *fakeBackend) Close() error {
+func (f *fakeBackend) Close(_ context.Context) error {
 	f.closed++
 	return nil
 }
@@ -98,8 +98,8 @@ func runBackendContractTests(t *testing.T, backend Backend) {
 	require.NotEmpty(t, screenshot)
 
 	require.NoError(t, backend.WaitFor(ctx, WaitCondition{Type: WaitForSelector, Selector: "#result"}, time.Second))
-	require.NoError(t, backend.Close())
-	require.NoError(t, backend.Close())
+	require.NoError(t, backend.Close(context.Background()))
+	require.NoError(t, backend.Close(context.Background()))
 }
 
 func TestBackendContractWithFakeBackend(t *testing.T) {

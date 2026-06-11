@@ -1,6 +1,7 @@
 package toolcapabilities
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"sort"
@@ -126,7 +127,7 @@ func buildGoNative(workspace string, manifest ports.ToolManifest, strict bool) (
 			return nil, fmt.Errorf("go_native implementation %q not registered (strict mode)", impl)
 		}
 		log.Printf("tool build: go_native %q: implementation %q not registered, skipping", manifest.Name, impl)
-		return nil, nil
+		return nil, errors.New("go_native implementation not registered")
 	}
 
 	tool := ctor(workspace)

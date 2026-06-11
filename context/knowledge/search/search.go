@@ -151,16 +151,16 @@ func NewSearchEngine(vs SemanticStore, idx CodeIndex) *SearchEngine {
 }
 
 // Search executes the configured query using semantic and/or keyword retrieval.
-func (se *SearchEngine) Search(q SearchQuery) ([]SearchResult, error) {
+func (se *SearchEngine) Search(ctx context.Context, q SearchQuery) ([]SearchResult, error) {
 	switch q.Mode {
 	case SearchSemantic:
-		return se.semanticSearch(q)
+		return se.semanticSearch(ctx, q)
 	case SearchKeyword:
 		return se.keywordSearch(q)
 	case SearchSymbolOnly:
 		return se.symbolSearch(q)
 	default:
-		semantic, err := se.semanticSearch(q)
+		semantic, err := se.semanticSearch(ctx, q)
 		if err != nil {
 			return nil, err
 		}
@@ -195,8 +195,8 @@ func (se *SearchEngine) RefreshFiles(files []string) error {
 
 // SearchWithBudget executes the query but stops once the aggregated snippet
 // tokens exceed the budget.
-func (se *SearchEngine) SearchWithBudget(q SearchQuery, tokenBudget int) ([]SearchResult, error) {
-	results, err := se.Search(q)
+func (se *SearchEngine) SearchWithBudget(ctx context.Context, q SearchQuery, tokenBudget int) ([]SearchResult, error) {
+	results, err := se.Search(ctx, q)
 	if err != nil {
 		return nil, err
 	}
@@ -225,7 +225,7 @@ func (se *SearchEngine) SearchWithBudget(q SearchQuery, tokenBudget int) ([]Sear
 	return pruned, nil
 }
 
-func (se *SearchEngine) semanticSearch(q SearchQuery) ([]SearchResult, error) {
+func (se *SearchEngine) semanticSearch(ctx context.Context, q SearchQuery) ([]SearchResult, error) {
 	if se.vectorStore == nil {
 		return nil, nil
 	}
@@ -233,7 +233,7 @@ func (se *SearchEngine) semanticSearch(q SearchQuery) ([]SearchResult, error) {
 	if maxResults <= 0 {
 		maxResults = 5
 	}
-	matches, err := se.vectorStore.Query(context.Background(), q.Text, maxResults)
+	matches, err := se.vectorStore.Query(ctx, q.Text, maxResults)
 	if err != nil {
 		return nil, err
 	}

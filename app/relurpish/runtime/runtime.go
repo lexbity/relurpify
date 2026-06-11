@@ -232,8 +232,7 @@ func New(ctx context.Context, cfg Config, secrets config.Secrets) (*Runtime, err
 			Permissions:   securityProduct.Permissions,
 			RunnerConfig:  securityProduct.RunnerConfig,
 		}
-		capProduct, err := envcomposition.BuildCapabilityRuntime(cfg.Workspace, securityProduct.Runner, envcomposition.CapabilityRuntimeOptions{
-			Context:           ctx,
+		capProduct, err := envcomposition.BuildCapabilityRuntime(ctx, cfg.Workspace, securityProduct.Runner, envcomposition.CapabilityRuntimeOptions{
 			AgentID:           registration.ID,
 			PermissionManager: registration.Permissions,
 			AgentSpec:         agentSpec,
@@ -416,16 +415,16 @@ func New(ctx context.Context, cfg Config, secrets config.Secrets) (*Runtime, err
 	if eventTelemetry.Log != nil && registration.HITL != nil {
 		ch, cancel := registration.HITL.Subscribe(32)
 		rt.hitlCancel = cancel
-		go func() {
+		go func(ctx context.Context) {
 			for ev := range ch {
 				resolved := ev.Type == fauthorization.HITLEventResolved || ev.Type == fauthorization.HITLEventExpired
-				eventTelemetry.EmitHITLEvent(resolved, ev)
+				eventTelemetry.EmitHITLEvent(ctx, resolved, ev)
 			}
-		}()
+		}(ctx)
 	}
 	rt.Delegations.SetObserver(rt.observeDelegationSnapshot)
 	if err := RegisterBuiltinProviders(ctx, rt); err != nil {
-		_ = rt.Close()
+		_ = rt.Close(ctx)
 		return nil, fmt.Errorf("register builtin providers: %w", err)
 	}
 	// Nexus gateway and node provider registration removed (app/nexus shelved)
@@ -440,18 +439,18 @@ func New(ctx context.Context, cfg Config, secrets config.Secrets) (*Runtime, err
 
 	rt.Agent = agent
 	if err := ayenitd.RegisterWorkspaceServices(ctx, ayenitd.WorkspaceConfig{Workspace: cfg.Workspace}, sess, rt.Tools, registration); err != nil {
-		_ = rt.Close()
+		_ = rt.Close(ctx)
 		return nil, fmt.Errorf("register workspace services: %w", err)
 	}
 	if err := ayenitd.StartWorkspaceServices(ctx, sess); err != nil {
-		_ = rt.Close()
+		_ = rt.Close(ctx)
 		return nil, fmt.Errorf("start workspace services: %w", err)
 	}
 	return rt, nil
 }
 
 // Close releases resources managed by fruntime.
-func (r *Runtime) Close() error {
+func (r *Runtime) Close(ctx context.Context) error {
 	if r == nil {
 		return nil
 	}
@@ -471,7 +470,7 @@ func (r *Runtime) Close() error {
 
 	// Close workspace (handles backend, services, logs, etc.)
 	if r.Workspace != nil {
-		if err := r.Workspace.Close(); err != nil {
+		if err := r.Workspace.Close(ctx); err != nil {
 			errs = append(errs, err)
 		}
 		r.Workspace = nil

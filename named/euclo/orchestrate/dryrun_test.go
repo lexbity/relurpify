@@ -50,7 +50,7 @@ func TestDryRun_ReturnsReport_NoExecution(t *testing.T) {
 		id:           "euclo:cap.ast_query",
 		availability: descriptor.AvailabilitySpec{Available: true},
 	}
-	if err := reg.RegisterInvocableCapability(handler); err != nil {
+	if err := reg.RegisterInvocableCapability(context.Background(), handler); err != nil {
 		t.Fatalf("register handler: %v", err)
 	}
 
@@ -70,10 +70,10 @@ func TestDryRun_IncludesAllCandidates(t *testing.T) {
 	reg := registry.NewRegistry()
 	one := &dryRunCountingHandler{id: "euclo:cap.ast_query", availability: descriptor.AvailabilitySpec{Available: true}}
 	two := &dryRunCountingHandler{id: "euclo:cap.symbol_trace", availability: descriptor.AvailabilitySpec{Available: true}}
-	if err := reg.RegisterInvocableCapability(one); err != nil {
+	if err := reg.RegisterInvocableCapability(context.Background(), one); err != nil {
 		t.Fatalf("register one: %v", err)
 	}
-	if err := reg.RegisterInvocableCapability(two); err != nil {
+	if err := reg.RegisterInvocableCapability(context.Background(), two); err != nil {
 		t.Fatalf("register two: %v", err)
 	}
 
@@ -90,10 +90,10 @@ func TestDryRun_PolicyDenied_InCandidateList(t *testing.T) {
 	reg := registry.NewRegistry()
 	visible := &dryRunCountingHandler{id: "euclo:cap.ast_query", availability: descriptor.AvailabilitySpec{Available: true}}
 	hidden := &dryRunCountingHandler{id: "euclo:cap.code_review", availability: descriptor.AvailabilitySpec{Available: true}}
-	if err := reg.RegisterInvocableCapability(visible); err != nil {
+	if err := reg.RegisterInvocableCapability(context.Background(), visible); err != nil {
 		t.Fatalf("register visible: %v", err)
 	}
-	if err := reg.RegisterInvocableCapability(hidden); err != nil {
+	if err := reg.RegisterInvocableCapability(context.Background(), hidden); err != nil {
 		t.Fatalf("register hidden: %v", err)
 	}
 	reg.AddExposurePolicies([]agentspec.CapabilityExposurePolicy{{
@@ -131,7 +131,7 @@ func TestDryRun_PolicyDenied_InCandidateList(t *testing.T) {
 func TestDryRun_SamePreflightAsLiveExecution(t *testing.T) {
 	reg := registry.NewRegistry()
 	primary := &dryRunCountingHandler{id: "euclo:cap.ast_query", availability: descriptor.AvailabilitySpec{Available: true}}
-	if err := reg.RegisterInvocableCapability(primary); err != nil {
+	if err := reg.RegisterInvocableCapability(context.Background(), primary); err != nil {
 		t.Fatalf("register primary: %v", err)
 	}
 
@@ -154,7 +154,7 @@ func TestDryRun_SamePreflightAsLiveExecution(t *testing.T) {
 func TestDryRun_EmitsDryRunEvent(t *testing.T) {
 	reg := registry.NewRegistry()
 	primary := &dryRunCountingHandler{id: "euclo:cap.ast_query", availability: descriptor.AvailabilitySpec{Available: true}}
-	if err := reg.RegisterInvocableCapability(primary); err != nil {
+	if err := reg.RegisterInvocableCapability(context.Background(), primary); err != nil {
 		t.Fatalf("register primary: %v", err)
 	}
 

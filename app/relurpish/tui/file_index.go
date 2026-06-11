@@ -61,7 +61,7 @@ func buildFileIndex(root string) ([]FileEntry, error) {
 		}
 		info, err := d.Info()
 		if err != nil {
-			return nil
+			return err
 		}
 		rel, err := filepath.Rel(root, path)
 		if err != nil {

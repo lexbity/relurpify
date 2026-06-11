@@ -53,7 +53,7 @@ func (n *reactThinkNode) Execute(ctx context.Context, env *contextdata.Envelope)
 	}
 	var resp *model.LLMResponse
 	var err error
-	tools := n.agent.availableToolsForPhase(env, n.task)
+	tools := n.agent.availableToolsForPhase(ctx, env, n.task)
 	recordActiveToolNames(env, tools)
 	configNativeTC := n.agent.Config != nil && n.agent.Config.NativeToolCalling
 	profileNativeTC := false

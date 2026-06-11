@@ -237,13 +237,17 @@ func TestLaunchChromiumAndClose(t *testing.T) {
 	httpServer := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/json/list":
-			_ = json.NewEncoder(w).Encode([]listTarget{{
+			if err := json.NewEncoder(w).Encode([]listTarget{{
 				ID:                   "page-1",
 				Type:                 "page",
 				WebSocketDebuggerURL: wsURL,
-			}})
+			}}); err != nil {
+				panic(err)
+			}
 		case "/status":
-			_ = json.NewEncoder(w).Encode(map[string]any{"value": map[string]any{"ready": true}})
+			if err := json.NewEncoder(w).Encode(map[string]any{"value": map[string]any{"ready": true}}); err != nil {
+				panic(err)
+			}
 		default:
 			http.NotFound(w, r)
 		}
@@ -269,7 +273,7 @@ func TestLaunchChromiumAndClose(t *testing.T) {
 		process:  launched.process,
 		userData: launched.userData,
 	}
-	require.NoError(t, backend.Close())
+	require.NoError(t, backend.Close(context.Background()))
 }
 
 func TestWaitForDebuggerAndPageWebSocketURL(t *testing.T) {

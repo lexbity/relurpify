@@ -48,6 +48,7 @@ func TestBrokerRefusesCONNECTToPrivate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read response: %v", err)
 	}
+	resp.Body.Close()
 	if resp.StatusCode != 403 {
 		t.Fatalf("expected 403, got %d %s", resp.StatusCode, resp.Status)
 	}
@@ -74,6 +75,7 @@ func TestBrokerRefusesCONNECTToPrivateHostname(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read response: %v", err)
 	}
+	resp.Body.Close()
 	if resp.StatusCode != 403 {
 		t.Fatalf("expected 403, got %d %s", resp.StatusCode, resp.Status)
 	}
@@ -100,6 +102,7 @@ func TestBrokerResolvesHostOnce(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read response: %v", err)
 	}
+	resp.Body.Close()
 	if resp.StatusCode != 502 {
 		t.Fatalf("expected 502, got %d %s", resp.StatusCode, resp.Status)
 	}
@@ -126,6 +129,7 @@ func TestBrokerRejectsBadRequest(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read response: %v", err)
 	}
+	resp.Body.Close()
 	if resp.StatusCode != 400 {
 		t.Fatalf("expected 400, got %d %s", resp.StatusCode, resp.Status)
 	}

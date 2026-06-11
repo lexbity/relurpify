@@ -93,9 +93,6 @@ type screenshotResult struct {
 }
 
 func New(ctx context.Context, cfg Config) (*Backend, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	if cfg.StartupTimeout <= 0 {
 		cfg.StartupTimeout = defaultStartupTimeout
 	}
@@ -113,12 +110,12 @@ func New(ctx context.Context, cfg Config) (*Backend, error) {
 		backend.baseURL = strings.TrimRight(strings.TrimSpace(cfg.RemoteURL), "/")
 	}
 	if err := backend.startSession(ctx, cfg); err != nil {
-		_ = backend.Close()
+		_ = backend.Close(ctx)
 		return nil, err
 	}
 	transport, err := newWebsocketTransport(ctx, backend.webSocketURL)
 	if err != nil {
-		_ = backend.Close()
+		_ = backend.Close(ctx)
 		return nil, err
 	}
 	backend.transport = transport
@@ -126,11 +123,11 @@ func New(ctx context.Context, cfg Config) (*Backend, error) {
 	if _, err := transport.Call(ctx, "session.subscribe", map[string]any{
 		"events": []string{"browsingContext.load"},
 	}); err != nil {
-		_ = backend.Close()
+		_ = backend.Close(ctx)
 		return nil, err
 	}
 	if err := backend.resolveContext(ctx); err != nil {
-		_ = backend.Close()
+		_ = backend.Close(ctx)
 		return nil, err
 	}
 	return backend, nil
@@ -264,7 +261,7 @@ func (b *Backend) CurrentURL(ctx context.Context) (string, error) {
 	return fmt.Sprint(value), nil
 }
 
-func (b *Backend) Close() error {
+func (b *Backend) Close(ctx context.Context) error {
 	var errs []error
 	if b.transport != nil {
 		if err := b.transport.Close(); err != nil {
@@ -273,7 +270,7 @@ func (b *Backend) Close() error {
 		b.transport = nil
 	}
 	if b.sessionID != "" {
-		_, err := b.do(context.Background(), http.MethodDelete, "/session/"+b.sessionID, nil)
+		_, err := b.do(ctx, http.MethodDelete, "/session/"+b.sessionID, nil)
 		if err != nil && !isInvalidSession(err) {
 			errs = append(errs, err)
 		}
@@ -538,7 +535,10 @@ func isInvalidSession(err error) bool {
 }
 
 func jsString(value string) string {
-	encoded, _ := json.Marshal(value)
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		return ""
+	}
 	return string(encoded)
 }
 

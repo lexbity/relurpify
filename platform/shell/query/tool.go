@@ -58,11 +58,11 @@ func (t *discoveryTool) Execute(ctx context.Context, args map[string]any) (*port
 	}
 	q, err := ParseDiscoveryQuery(args)
 	if err != nil {
-		return &ports.ToolResult{Success: false, Error: err.Error()}, nil
+		return nil, err
 	}
 	result, err := t.engine.Search(q)
 	if err != nil {
-		return &ports.ToolResult{Success: false, Error: err.Error()}, nil
+		return nil, err
 	}
 	return &ports.ToolResult{
 		Success: true,
@@ -110,11 +110,11 @@ func (t *instantiationTool) Execute(ctx context.Context, args map[string]any) (*
 	}
 	q, err := ParseInstantiationQuery(args)
 	if err != nil {
-		return &ports.ToolResult{Success: false, Error: err.Error()}, nil
+		return nil, err
 	}
 	result, err := t.engine.Instantiate(q)
 	if err != nil {
-		return &ports.ToolResult{Success: false, Error: err.Error()}, nil
+		return nil, err
 	}
 	return &ports.ToolResult{
 		Success: true,

@@ -1,6 +1,7 @@
 package react
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strings"
@@ -73,8 +74,8 @@ func (a *ReActAgent) initializePhase(env *contextdata.Envelope, task *execution.
 	env.SetWorkingValueWithClass("react.phase", phase, contextdata.MemoryClassTask)
 }
 
-func (a *ReActAgent) availableToolsForPhase(env *contextdata.Envelope, task *execution.Task) []ports.Tool {
-	catalog := a.executionCapabilityCatalog()
+func (a *ReActAgent) availableToolsForPhase(ctx context.Context, env *contextdata.Envelope, task *execution.Task) []ports.Tool {
+	catalog := a.executionCapabilityCatalog(ctx)
 	if catalog == nil && a.Tools == nil {
 		return nil
 	}
@@ -85,7 +86,7 @@ func (a *ReActAgent) availableToolsForPhase(env *contextdata.Envelope, task *exe
 		}
 	}
 	var filtered []ports.Tool
-	tools := executionCallableTools(a.Tools, catalog)
+	tools := executionCallableTools(ctx, a.Tools, catalog)
 	for _, tool := range tools {
 		if toolAllowedForPhase(tool, phase, task) || a.recoveryToolAllowed(env, task, tool.Name()) {
 			if !a.toolAllowedBySkillConfig(task, phase, tool.Name()) {
@@ -101,7 +102,7 @@ func (a *ReActAgent) availableToolsForPhase(env *contextdata.Envelope, task *exe
 	return filtered
 }
 
-func (a *ReActAgent) executionCapabilityCatalog() *capability.ExecutionCapabilityCatalogSnapshot {
+func (a *ReActAgent) executionCapabilityCatalog(ctx context.Context) *capability.ExecutionCapabilityCatalogSnapshot {
 	if a == nil {
 		return nil
 	}
@@ -111,11 +112,11 @@ func (a *ReActAgent) executionCapabilityCatalog() *capability.ExecutionCapabilit
 	if a.Tools == nil {
 		return nil
 	}
-	return a.Tools.CaptureExecutionCatalogSnapshot()
+	return a.Tools.CaptureExecutionCatalogSnapshot(ctx)
 }
 
-func (a *ReActAgent) executionPolicySnapshot() *capresult.PolicySnapshot {
-	if catalog := a.executionCapabilityCatalog(); catalog != nil {
+func (a *ReActAgent) executionPolicySnapshot(ctx context.Context) *capresult.PolicySnapshot {
+	if catalog := a.executionCapabilityCatalog(ctx); catalog != nil {
 		return catalog.PolicySnapshot()
 	}
 	if a == nil || a.Tools == nil {
@@ -124,8 +125,8 @@ func (a *ReActAgent) executionPolicySnapshot() *capresult.PolicySnapshot {
 	return a.Tools.CapturePolicySnapshot()
 }
 
-func (a *ReActAgent) executionCapabilityDescriptor(idOrName string) (descriptor.CapabilityDescriptor, bool) {
-	if catalog := a.executionCapabilityCatalog(); catalog != nil {
+func (a *ReActAgent) executionCapabilityDescriptor(ctx context.Context, idOrName string) (descriptor.CapabilityDescriptor, bool) {
+	if catalog := a.executionCapabilityCatalog(ctx); catalog != nil {
 		if entry, ok := catalog.GetCapability(idOrName); ok {
 			return entry.Descriptor, true
 		}
@@ -136,14 +137,14 @@ func (a *ReActAgent) executionCapabilityDescriptor(idOrName string) (descriptor.
 	return a.Tools.GetCapability(idOrName)
 }
 
-func executionCallableTools(registry *capability.CapabilityRegistry, catalog *capability.ExecutionCapabilityCatalogSnapshot) []ports.Tool {
+func executionCallableTools(ctx context.Context, registry *capability.CapabilityRegistry, catalog *capability.ExecutionCapabilityCatalogSnapshot) []ports.Tool {
 	if catalog != nil {
-		return catalog.ModelCallableTools()
+		return catalog.ModelCallableTools(ctx)
 	}
 	if registry == nil {
 		return nil
 	}
-	return registry.ModelCallableTools()
+	return registry.ModelCallableTools(ctx)
 }
 
 func (a *ReActAgent) toolAllowedByExecutionContext(env *contextdata.Envelope, task *execution.Task, phase string, tool ports.Tool) bool {

@@ -21,7 +21,7 @@ func NewCompilerRepository(db *graphdb.Engine) *CompilerRepositoryImpl {
 
 // Close closes the repository and the underlying graphdb engine.
 func (r *CompilerRepositoryImpl) Close() error {
-	return r.db.Close()
+	return r.db.Close(context.Background())
 }
 
 // Compilation record operations
@@ -38,7 +38,7 @@ func (r *CompilerRepositoryImpl) StoreCompilationRecord(ctx context.Context, rec
 		Props:  props,
 		Labels: []string{"compilation"},
 	}
-	return r.db.UpsertNode(node)
+	return r.db.UpsertNode(ctx, node)
 }
 
 func (r *CompilerRepositoryImpl) GetCompilationRecord(ctx context.Context, requestID string) (*CompilationRecord, error) {
@@ -81,7 +81,7 @@ func (r *CompilerRepositoryImpl) StoreCacheEntry(ctx context.Context, entry Cach
 		Props:  props,
 		Labels: []string{"cache"},
 	}
-	return r.db.UpsertNode(node)
+	return r.db.UpsertNode(ctx, node)
 }
 
 func (r *CompilerRepositoryImpl) GetCacheEntry(ctx context.Context, key CacheKey) (*CacheEntry, error) {
@@ -107,7 +107,7 @@ func (r *CompilerRepositoryImpl) InvalidateCacheEntries(ctx context.Context, chu
 		// Check if this cache entry depends on any of the chunk IDs
 		for _, chunkID := range chunkIDs {
 			if _, depends := entry.Dependencies[knowledge.ChunkID(chunkID)]; depends {
-				if err := r.db.DeleteNode(node.ID); err != nil {
+				if err := r.db.DeleteNode(ctx, node.ID); err != nil {
 					return err
 				}
 				break
@@ -131,7 +131,7 @@ func (r *CompilerRepositoryImpl) StoreCompilerArtifact(ctx context.Context, arti
 		Props:  props,
 		Labels: []string{"compiler_artifact"},
 	}
-	return r.db.UpsertNode(node)
+	return r.db.UpsertNode(ctx, node)
 }
 
 func (r *CompilerRepositoryImpl) GetCompilerArtifact(ctx context.Context, artifactID string) (*CompilerArtifact, error) {

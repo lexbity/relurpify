@@ -1,6 +1,7 @@
 package testsuite
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -16,7 +17,7 @@ func (a *astCodeIndex) GetFileMetadata(string) (any, bool)                      
 func (a *astCodeIndex) ListFiles() []string                                      { return nil }
 func (a *astCodeIndex) GetSymbolsByName(string) ([]search.SymbolLocation, error) { return nil, nil }
 func (a *astCodeIndex) GetSymbolDefinition(string) (*search.SymbolLocation, error) {
-	return nil, nil
+	return nil, errors.New("mock not found")
 }
 func (a *astCodeIndex) GetSymbolReferences(string) ([]search.SymbolLocation, error) {
 	return nil, nil

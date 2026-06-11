@@ -10,7 +10,7 @@ import (
 // AgentRuntimeSpec. Returns nil (no error) when the node is absent.
 func DecodeSection(node yaml.Node) (*AgentRuntimeSpec, error) {
 	if node.Kind == 0 {
-		return nil, nil
+		return nil, fmt.Errorf("agent spec section node is absent")
 	}
 	var spec AgentRuntimeSpec
 	if err := node.Decode(&spec); err != nil {

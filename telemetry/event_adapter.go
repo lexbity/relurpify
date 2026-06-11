@@ -43,7 +43,7 @@ func (e EventTelemetry) Emit(ev Event) {
 // concrete HITL event type is owned by the authorization domain; telemetry stays
 // decoupled from it so the dependency points one way (authorization ->
 // telemetry, never the reverse).
-func (e EventTelemetry) EmitHITLEvent(resolved bool, ev any) {
+func (e EventTelemetry) EmitHITLEvent(ctx context.Context, resolved bool, ev any) {
 	if e.Log == nil {
 		return
 	}
@@ -55,7 +55,7 @@ func (e EventTelemetry) EmitHITLEvent(resolved bool, ev any) {
 	if resolved {
 		eventType = evt.EventHITLResolved
 	}
-	_, _ = e.Log.Append(context.Background(), e.partition(), []evt.FrameworkEvent{{
+	_, _ = e.Log.Append(ctx, e.partition(), []evt.FrameworkEvent{{
 		Timestamp: e.now().UTC(),
 		Type:      eventType,
 		Payload:   payload,

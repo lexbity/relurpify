@@ -1,6 +1,7 @@
 package knowledge
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -28,7 +29,7 @@ type ChunkStore struct {
 	Graph *graphdb.Engine
 }
 
-func (s *ChunkStore) Save(chunk KnowledgeChunk) (*KnowledgeChunk, error) {
+func (s *ChunkStore) Save(ctx context.Context, chunk KnowledgeChunk) (*KnowledgeChunk, error) {
 	if s == nil || s.Graph == nil {
 		return nil, errors.New("knowledge: chunk store graph is required")
 	}
@@ -59,7 +60,7 @@ func (s *ChunkStore) Save(chunk KnowledgeChunk) (*KnowledgeChunk, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := s.Graph.UpsertNode(graphdb.NodeRecord{
+	if err := s.Graph.UpsertNode(ctx, graphdb.NodeRecord{
 		ID:       string(chunk.ID),
 		Kind:     ChunkNodeKind,
 		SourceID: chunk.WorkspaceID,
@@ -103,14 +104,14 @@ func (s *ChunkStore) LoadMany(ids []ChunkID) ([]KnowledgeChunk, error) {
 	return out, nil
 }
 
-func (s *ChunkStore) Delete(id ChunkID) error {
+func (s *ChunkStore) Delete(ctx context.Context, id ChunkID) error {
 	if s == nil || s.Graph == nil || id == "" {
 		return nil
 	}
-	return s.Graph.DeleteNode(string(id))
+	return s.Graph.DeleteNode(ctx, string(id))
 }
 
-func (s *ChunkStore) SaveEdge(edge ChunkEdge) (*ChunkEdge, error) {
+func (s *ChunkStore) SaveEdge(ctx context.Context, edge ChunkEdge) (*ChunkEdge, error) {
 	if s == nil || s.Graph == nil {
 		return nil, errors.New("knowledge: chunk store graph is required")
 	}
@@ -132,7 +133,7 @@ func (s *ChunkStore) SaveEdge(edge ChunkEdge) (*ChunkEdge, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := s.Graph.LinkEdges([]graphdb.EdgeRecord{{
+	if err := s.Graph.LinkEdges(ctx, []graphdb.EdgeRecord{{
 		SourceID:  string(edge.FromChunk),
 		TargetID:  string(edge.ToChunk),
 		Kind:      graphdb.EdgeKind(edge.Kind),
@@ -298,7 +299,7 @@ func defaultEdgeID(edge ChunkEdge) EdgeID {
 }
 
 // Tombstone marks a chunk as tombstoned and records the superseding chunk ID.
-func (s *ChunkStore) Tombstone(id ChunkID, supersededBy ChunkID) error {
+func (s *ChunkStore) Tombstone(ctx context.Context, id ChunkID, supersededBy ChunkID) error {
 	if s == nil || s.Graph == nil {
 		return errors.New("knowledge: chunk store graph is required")
 	}
@@ -318,7 +319,7 @@ func (s *ChunkStore) Tombstone(id ChunkID, supersededBy ChunkID) error {
 	chunk.SupersededBy = supersededBy
 	chunk.UpdatedAt = time.Now().UTC()
 
-	_, err = s.Save(*chunk)
+	_, err = s.Save(ctx, *chunk)
 	return err
 }
 
@@ -329,7 +330,7 @@ func (s *ChunkStore) LoadIncludingTombstoned(id ChunkID) (*KnowledgeChunk, bool,
 }
 
 // MarkStale marks chunks as stale with a reason.
-func (s *ChunkStore) MarkStale(ids []ChunkID, reason string) error {
+func (s *ChunkStore) MarkStale(ctx context.Context, ids []ChunkID, reason string) error {
 	if s == nil || s.Graph == nil {
 		return errors.New("knowledge: chunk store graph is required")
 	}
@@ -353,7 +354,7 @@ func (s *ChunkStore) MarkStale(ids []ChunkID, reason string) error {
 		}
 		chunk.Body.Fields["stale_reason"] = reason
 
-		_, err = s.Save(*chunk)
+		_, err = s.Save(ctx, *chunk)
 		if err != nil {
 			return err
 		}
@@ -362,7 +363,7 @@ func (s *ChunkStore) MarkStale(ids []ChunkID, reason string) error {
 }
 
 // MarkStaleByCoverageHash marks all chunks with the given coverage hash as stale.
-func (s *ChunkStore) MarkStaleByCoverageHash(coverageHash string) error {
+func (s *ChunkStore) MarkStaleByCoverageHash(ctx context.Context, coverageHash string) error {
 	if s == nil || s.Graph == nil {
 		return errors.New("knowledge: chunk store graph is required")
 	}
@@ -380,7 +381,7 @@ func (s *ChunkStore) MarkStaleByCoverageHash(coverageHash string) error {
 		ids = append(ids, chunk.ID)
 	}
 
-	return s.MarkStale(ids, "coverage_hash_changed")
+	return s.MarkStale(ctx, ids, "coverage_hash_changed")
 }
 
 func chunkLabels(chunk KnowledgeChunk) []string {

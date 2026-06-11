@@ -14,15 +14,15 @@ import (
 
 func newTestStore(t *testing.T) *ChunkStore {
 	t.Helper()
-	engine, err := graphdb.Open(graphdb.DefaultOptions(t.TempDir()))
+	engine, err := graphdb.Open(context.Background(), graphdb.DefaultOptions(t.TempDir()))
 	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, engine.Close()) })
+	t.Cleanup(func() { require.NoError(t, engine.Close(context.Background())) })
 	return &ChunkStore{Graph: engine}
 }
 
 func TestChunkStoreSaveLoadAndEdge(t *testing.T) {
 	store := newTestStore(t)
-	saved, err := store.Save(KnowledgeChunk{
+	saved, err := store.Save(context.Background(), KnowledgeChunk{
 		ID:          ChunkID("chunk:test:1"),
 		WorkspaceID: "ws-1",
 		Provenance: ChunkProvenance{
@@ -40,7 +40,7 @@ func TestChunkStoreSaveLoadAndEdge(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, saved.ID, loaded.ID)
 
-	edge, err := store.SaveEdge(ChunkEdge{
+	edge, err := store.SaveEdge(context.Background(), ChunkEdge{
 		FromChunk: saved.ID,
 		ToChunk:   ChunkID("chunk:test:2"),
 		Kind:      EdgeKindRequiresContext,
@@ -66,7 +66,7 @@ func TestChunkStoreFindByCoverageHashAndFilePath(t *testing.T) {
 		if i >= 3 {
 			path = "src/b.go"
 		}
-		_, err := store.Save(KnowledgeChunk{
+		_, err := store.Save(context.Background(), KnowledgeChunk{
 			ID:           ChunkID(fmt.Sprintf("chunk:%d", i)),
 			WorkspaceID:  "ws",
 			CoverageHash: hash,
@@ -103,7 +103,7 @@ func TestChunkStoreFindByCoverageHashAndFilePath(t *testing.T) {
 
 func TestChunkStoreSaveAddsIndexLabels(t *testing.T) {
 	store := newTestStore(t)
-	_, err := store.Save(KnowledgeChunk{
+	_, err := store.Save(context.Background(), KnowledgeChunk{
 		ID:           ChunkID("chunk:indexed"),
 		WorkspaceID:  "ws",
 		CoverageHash: "hash-1",
@@ -136,12 +136,12 @@ func TestChunkGraphTraversalAndAmplification(t *testing.T) {
 		{ID: ChunkID("chunk:dep"), WorkspaceID: "ws", Provenance: ChunkProvenance{CompiledBy: CompilerDeterministic, Timestamp: time.Now().UTC()}, Body: ChunkBody{Raw: "dep"}},
 		{ID: ChunkID("chunk:amp"), WorkspaceID: "ws", Provenance: ChunkProvenance{CompiledBy: CompilerDeterministic, Timestamp: time.Now().UTC()}, Body: ChunkBody{Raw: "amp"}},
 	} {
-		_, err := store.Save(chunk)
+		_, err := store.Save(context.Background(), chunk)
 		require.NoError(t, err)
 	}
-	_, err := store.SaveEdge(ChunkEdge{FromChunk: ChunkID("chunk:root"), ToChunk: ChunkID("chunk:dep"), Kind: EdgeKindRequiresContext, Weight: 1})
+	_, err := store.SaveEdge(context.Background(), ChunkEdge{FromChunk: ChunkID("chunk:root"), ToChunk: ChunkID("chunk:dep"), Kind: EdgeKindRequiresContext, Weight: 1})
 	require.NoError(t, err)
-	_, err = store.SaveEdge(ChunkEdge{FromChunk: ChunkID("chunk:root"), ToChunk: ChunkID("chunk:amp"), Kind: EdgeKindAmplifies, Weight: 0.9})
+	_, err = store.SaveEdge(context.Background(), ChunkEdge{FromChunk: ChunkID("chunk:root"), ToChunk: ChunkID("chunk:amp"), Kind: EdgeKindAmplifies, Weight: 0.9})
 	require.NoError(t, err)
 
 	graph := &ChunkGraph{Store: store}
@@ -162,10 +162,10 @@ func TestStreamerSkipsStaleChunks(t *testing.T) {
 		{ID: ChunkID("chunk:seed"), WorkspaceID: "ws", Provenance: ChunkProvenance{CompiledBy: CompilerDeterministic, Timestamp: time.Now().UTC()}, Body: ChunkBody{Raw: "seed"}},
 		{ID: ChunkID("chunk:stale"), WorkspaceID: "ws", Freshness: FreshnessStale, Provenance: ChunkProvenance{CompiledBy: CompilerDeterministic, Timestamp: time.Now().UTC()}, Body: ChunkBody{Raw: "stale"}},
 	} {
-		_, err := store.Save(chunk)
+		_, err := store.Save(context.Background(), chunk)
 		require.NoError(t, err)
 	}
-	_, err := store.SaveEdge(ChunkEdge{FromChunk: ChunkID("chunk:seed"), ToChunk: ChunkID("chunk:stale"), Kind: EdgeKindRequiresContext, Weight: 1})
+	_, err := store.SaveEdge(context.Background(), ChunkEdge{FromChunk: ChunkID("chunk:seed"), ToChunk: ChunkID("chunk:stale"), Kind: EdgeKindRequiresContext, Weight: 1})
 	require.NoError(t, err)
 
 	streamer := &Streamer{Store: store}
@@ -182,14 +182,14 @@ func TestStalenessManagerDirectMarkIsLocal(t *testing.T) {
 		{ID: ChunkID("chunk:root"), WorkspaceID: "ws", Provenance: ChunkProvenance{CompiledBy: CompilerDeterministic, Timestamp: time.Now().UTC()}, Body: ChunkBody{Raw: "root"}},
 		{ID: ChunkID("chunk:child"), WorkspaceID: "ws", Provenance: ChunkProvenance{CompiledBy: CompilerDeterministic, Timestamp: time.Now().UTC()}, Body: ChunkBody{Raw: "child"}},
 	} {
-		_, err := store.Save(chunk)
+		_, err := store.Save(context.Background(), chunk)
 		require.NoError(t, err)
 	}
-	_, err := store.SaveEdge(ChunkEdge{FromChunk: ChunkID("chunk:root"), ToChunk: ChunkID("chunk:child"), Kind: EdgeKindInvalidates, Weight: 1})
+	_, err := store.SaveEdge(context.Background(), ChunkEdge{FromChunk: ChunkID("chunk:root"), ToChunk: ChunkID("chunk:child"), Kind: EdgeKindInvalidates, Weight: 1})
 	require.NoError(t, err)
 
 	manager := &StalenessManager{Store: store, Propagate: true, MaxDepth: 3}
-	marked, err := manager.MarkOneSync(ChunkID("chunk:root"), FreshnessStale)
+	marked, err := manager.MarkOneSync(context.Background(), ChunkID("chunk:root"), FreshnessStale)
 	require.NoError(t, err)
 	require.Equal(t, []ChunkID{ChunkID("chunk:root")}, marked)
 
@@ -211,19 +211,19 @@ func TestStalenessManagerPropagateSyncFollowsInvalidatesAndDerivedFrom(t *testin
 		{ID: ChunkID("chunk:child"), WorkspaceID: "ws", Provenance: ChunkProvenance{CompiledBy: CompilerDeterministic, Timestamp: time.Now().UTC()}, Body: ChunkBody{Raw: "child"}},
 		{ID: ChunkID("chunk:grand"), WorkspaceID: "ws", Provenance: ChunkProvenance{CompiledBy: CompilerDeterministic, Timestamp: time.Now().UTC()}, Body: ChunkBody{Raw: "grand"}},
 	} {
-		_, err := store.Save(chunk)
+		_, err := store.Save(context.Background(), chunk)
 		require.NoError(t, err)
 	}
-	_, err := store.SaveEdge(ChunkEdge{FromChunk: ChunkID("chunk:root"), ToChunk: ChunkID("chunk:child"), Kind: EdgeKindInvalidates, Weight: 1})
+	_, err := store.SaveEdge(context.Background(), ChunkEdge{FromChunk: ChunkID("chunk:root"), ToChunk: ChunkID("chunk:child"), Kind: EdgeKindInvalidates, Weight: 1})
 	require.NoError(t, err)
-	_, err = store.SaveEdge(ChunkEdge{FromChunk: ChunkID("chunk:child"), ToChunk: ChunkID("chunk:grand"), Kind: EdgeKindDerivesFrom, Weight: 1})
+	_, err = store.SaveEdge(context.Background(), ChunkEdge{FromChunk: ChunkID("chunk:child"), ToChunk: ChunkID("chunk:grand"), Kind: EdgeKindDerivesFrom, Weight: 1})
 	require.NoError(t, err)
 
 	manager := &StalenessManager{Store: store, MaxDepth: 3}
-	_, err = manager.MarkOneSync(ChunkID("chunk:root"), FreshnessStale)
+	_, err = manager.MarkOneSync(context.Background(), ChunkID("chunk:root"), FreshnessStale)
 	require.NoError(t, err)
 
-	propagated, err := manager.PropagateSync([]ChunkID{ChunkID("chunk:root")}, 0)
+	propagated, err := manager.PropagateSync(context.Background(), []ChunkID{ChunkID("chunk:root")}, 0)
 	require.NoError(t, err)
 	require.ElementsMatch(t, []ChunkID{"chunk:child", "chunk:grand"}, propagated)
 
@@ -242,7 +242,7 @@ func TestInvalidationPassHandleRevisionChangedIsNonBlocking(t *testing.T) {
 	store := newTestStore(t)
 	for i := 0; i < 10; i++ {
 		id := ChunkID(fmt.Sprintf("chunk:%d", i))
-		_, err := store.Save(KnowledgeChunk{
+		_, err := store.Save(context.Background(), KnowledgeChunk{
 			ID:          id,
 			WorkspaceID: "ws",
 			Provenance:  ChunkProvenance{CompiledBy: CompilerDeterministic, Timestamp: time.Now().UTC()},
@@ -250,7 +250,7 @@ func TestInvalidationPassHandleRevisionChangedIsNonBlocking(t *testing.T) {
 		})
 		require.NoError(t, err)
 		if i > 0 {
-			_, err := store.SaveEdge(ChunkEdge{FromChunk: ChunkID(fmt.Sprintf("chunk:%d", i-1)), ToChunk: id, Kind: EdgeKindInvalidates, Weight: 1})
+			_, err := store.SaveEdge(context.Background(), ChunkEdge{FromChunk: ChunkID(fmt.Sprintf("chunk:%d", i-1)), ToChunk: id, Kind: EdgeKindInvalidates, Weight: 1})
 			require.NoError(t, err)
 		}
 	}
@@ -271,7 +271,7 @@ func TestInvalidationPassHandleRevisionChangedIsNonBlocking(t *testing.T) {
 func TestInvalidationPassCoalescesChunkStaledEvents(t *testing.T) {
 	store := newTestStore(t)
 	for i := 0; i < 3; i++ {
-		_, err := store.Save(KnowledgeChunk{
+		_, err := store.Save(context.Background(), KnowledgeChunk{
 			ID:          ChunkID(fmt.Sprintf("chunk:%d", i)),
 			WorkspaceID: "ws",
 			Provenance:  ChunkProvenance{CompiledBy: CompilerDeterministic, Timestamp: time.Now().UTC()},
@@ -279,7 +279,7 @@ func TestInvalidationPassCoalescesChunkStaledEvents(t *testing.T) {
 		})
 		require.NoError(t, err)
 		if i > 0 {
-			_, err := store.SaveEdge(ChunkEdge{FromChunk: ChunkID("chunk:0"), ToChunk: ChunkID(fmt.Sprintf("chunk:%d", i)), Kind: EdgeKindInvalidates, Weight: 1})
+			_, err := store.SaveEdge(context.Background(), ChunkEdge{FromChunk: ChunkID("chunk:0"), ToChunk: ChunkID(fmt.Sprintf("chunk:%d", i)), Kind: EdgeKindInvalidates, Weight: 1})
 			require.NoError(t, err)
 		}
 	}

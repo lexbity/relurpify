@@ -71,7 +71,7 @@ func (a *BlackboardAgent) Capabilities() []string {
 // BuildGraph returns the graph-native blackboard controller loop. The
 // blackboard-specific scheduling logic lives in agent-owned nodes and state,
 // without extending framework/graph.
-func (a *BlackboardAgent) BuildGraph(task *execution.Task) (*graph.Graph, error) {
+func (a *BlackboardAgent) BuildGraph(ctx context.Context, task *execution.Task) (*graph.Graph, error) {
 	if !a.initialised {
 		if err := a.Initialize(a.Config); err != nil {
 			return nil, err
@@ -118,7 +118,7 @@ func (a *BlackboardAgent) BuildGraph(task *execution.Task) (*graph.Graph, error)
 			return nil, err
 		}
 	}
-	if catalog := a.executionCapabilityCatalog(); catalog != nil && len(catalog.InspectableCapabilities()) > 0 {
+	if catalog := a.executionCapabilityCatalog(ctx); catalog != nil && len(catalog.InspectableCapabilities()) > 0 {
 		g.SetCapabilityCatalog(catalog)
 	}
 	startNodeID := load.ID()
@@ -176,7 +176,7 @@ func envGetString(env *contextdata.Envelope, key string) string {
 func (a *BlackboardAgent) Execute(ctx context.Context, task *execution.Task, env *contextdata.Envelope) (*execution.Result, error) {
 	a.executionCatalog = nil
 	if a.Tools != nil {
-		a.executionCatalog = a.Tools.CaptureExecutionCatalogSnapshot()
+		a.executionCatalog = a.Tools.CaptureExecutionCatalogSnapshot(ctx)
 	}
 	defer func() {
 		a.executionCatalog = nil
@@ -206,7 +206,7 @@ func (a *BlackboardAgent) Execute(ctx context.Context, task *execution.Task, env
 		// })
 	}
 
-	g, err := a.BuildGraph(task)
+	g, err := a.BuildGraph(ctx, task)
 	if err != nil {
 		return nil, err
 	}
@@ -266,7 +266,7 @@ func (a *BlackboardAgent) Execute(ctx context.Context, task *execution.Task, env
 	}, nil
 }
 
-func (a *BlackboardAgent) executionCapabilityCatalog() *capability.ExecutionCapabilityCatalogSnapshot {
+func (a *BlackboardAgent) executionCapabilityCatalog(ctx context.Context) *capability.ExecutionCapabilityCatalogSnapshot {
 	if a == nil {
 		return nil
 	}
@@ -276,7 +276,7 @@ func (a *BlackboardAgent) executionCapabilityCatalog() *capability.ExecutionCapa
 	if a.Tools == nil {
 		return nil
 	}
-	return a.Tools.CaptureExecutionCatalogSnapshot()
+	return a.Tools.CaptureExecutionCatalogSnapshot(ctx)
 }
 
 func compactBlackboardPostExecutionState(env *contextdata.Envelope) {

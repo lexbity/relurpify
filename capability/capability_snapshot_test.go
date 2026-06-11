@@ -44,7 +44,7 @@ func TestAllCapabilitySnapshots_IncludesCallable(t *testing.T) {
 		Kind:          agentspec.CapabilityKindTool,
 		RuntimeFamily: agentspec.CapabilityRuntimeFamilyProvider,
 	}
-	if err := reg.RegisterCapability(desc); err != nil {
+	if err := reg.RegisterCapability(context.Background(), desc); err != nil {
 		t.Fatalf("register capability: %v", err)
 	}
 
@@ -68,7 +68,7 @@ func TestAllCapabilitySnapshots_IncludesHidden(t *testing.T) {
 		Kind:          agentspec.CapabilityKindTool,
 		RuntimeFamily: agentspec.CapabilityRuntimeFamilyProvider,
 	}
-	if err := reg.RegisterCapability(desc); err != nil {
+	if err := reg.RegisterCapability(context.Background(), desc); err != nil {
 		t.Fatalf("register capability: %v", err)
 	}
 	reg.AddExposurePolicies([]agentspec.CapabilityExposurePolicy{{
@@ -114,10 +114,10 @@ func TestAllCapabilitySnapshots_DelegateRegistry(t *testing.T) {
 		Kind:          agentspec.CapabilityKindTool,
 		RuntimeFamily: agentspec.CapabilityRuntimeFamilyProvider,
 	}
-	if err := reg.RegisterCapability(visible); err != nil {
+	if err := reg.RegisterCapability(context.Background(), visible); err != nil {
 		t.Fatalf("register visible capability: %v", err)
 	}
-	if err := reg.RegisterCapability(hidden); err != nil {
+	if err := reg.RegisterCapability(context.Background(), hidden); err != nil {
 		t.Fatalf("register hidden capability: %v", err)
 	}
 	reg.AddExposurePolicies([]agentspec.CapabilityExposurePolicy{{
@@ -152,7 +152,7 @@ func TestAllCapabilitySnapshots_ConcurrentAccess(t *testing.T) {
 				Kind:          agentspec.CapabilityKindTool,
 				RuntimeFamily: agentspec.CapabilityRuntimeFamilyProvider,
 			}
-			if err := reg.RegisterCapability(desc); err != nil {
+			if err := reg.RegisterCapability(context.Background(), desc); err != nil {
 				errCh <- err
 				return
 			}
@@ -179,20 +179,20 @@ func TestAllCapabilitySnapshots_ConcurrentAccess(t *testing.T) {
 func TestModelCallableTools_ExcludesUnavailableToolsOnRebuild(t *testing.T) {
 	reg := registry.NewRegistry()
 	tool := &availabilityToggleTool{name: "scope_read", available: true}
-	if err := reg.RegisterLegacyTool(tool); err != nil {
+	if err := reg.RegisterLegacyTool(context.Background(), tool); err != nil {
 		t.Fatalf("register scope_read: %v", err)
 	}
 
-	if got, want := len(reg.ModelCallableTools()), 1; got != want {
+	if got, want := len(reg.ModelCallableTools(context.Background())), 1; got != want {
 		t.Fatalf("callable tool count = %d, want %d", got, want)
 	}
 
 	tool.available = false
 
-	if got, want := len(reg.ModelCallableTools()), 0; got != want {
+	if got, want := len(reg.ModelCallableTools(context.Background())), 0; got != want {
 		t.Fatalf("callable tool count after disable = %d, want %d", got, want)
 	}
-	if got, want := len(reg.CaptureExecutionCatalogSnapshot().ModelCallableTools()), 0; got != want {
+	if got, want := len(reg.CaptureExecutionCatalogSnapshot(context.Background()).ModelCallableTools(context.Background())), 0; got != want {
 		t.Fatalf("snapshot callable tool count after disable = %d, want %d", got, want)
 	}
 }
@@ -200,7 +200,7 @@ func TestModelCallableTools_ExcludesUnavailableToolsOnRebuild(t *testing.T) {
 func TestInvokeCapability_ReturnsUnavailableWhenToolDisappears(t *testing.T) {
 	reg := registry.NewRegistry()
 	tool := &availabilityToggleTool{name: "scope_read", available: true}
-	if err := reg.RegisterLegacyTool(tool); err != nil {
+	if err := reg.RegisterLegacyTool(context.Background(), tool); err != nil {
 		t.Fatalf("register scope_read: %v", err)
 	}
 
@@ -218,10 +218,10 @@ func TestWithAllowlist_PreservesFilteringAndReflectsAvailabilityChanges(t *testi
 	reg := registry.NewRegistry()
 	visible := &availabilityToggleTool{name: "scope_read", available: true}
 	hidden := &availabilityToggleTool{name: "scope_write", available: true}
-	if err := reg.RegisterLegacyTool(visible); err != nil {
+	if err := reg.RegisterLegacyTool(context.Background(), visible); err != nil {
 		t.Fatalf("register scope_read: %v", err)
 	}
-	if err := reg.RegisterLegacyTool(hidden); err != nil {
+	if err := reg.RegisterLegacyTool(context.Background(), hidden); err != nil {
 		t.Fatalf("register scope_write: %v", err)
 	}
 
@@ -230,19 +230,19 @@ func TestWithAllowlist_PreservesFilteringAndReflectsAvailabilityChanges(t *testi
 		t.Fatal("expected scoped registry")
 	}
 
-	if got, want := len(scoped.ModelCallableTools()), 1; got != want {
+	if got, want := len(scoped.ModelCallableTools(context.Background())), 1; got != want {
 		t.Fatalf("scoped callable tool count = %d, want %d", got, want)
 	}
-	if got := scoped.ModelCallableTools()[0].Name(); got != "scope_read" {
+	if got := scoped.ModelCallableTools(context.Background())[0].Name(); got != "scope_read" {
 		t.Fatalf("scoped callable tool name = %q, want scope_read", got)
 	}
 
 	visible.available = false
 
-	if got, want := len(scoped.ModelCallableTools()), 0; got != want {
+	if got, want := len(scoped.ModelCallableTools(context.Background())), 0; got != want {
 		t.Fatalf("scoped callable tool count after disable = %d, want %d", got, want)
 	}
-	if got, want := len(scoped.CaptureExecutionCatalogSnapshot().ModelCallableTools()), 0; got != want {
+	if got, want := len(scoped.CaptureExecutionCatalogSnapshot(context.Background()).ModelCallableTools(context.Background())), 0; got != want {
 		t.Fatalf("scoped snapshot callable tool count after disable = %d, want %d", got, want)
 	}
 }

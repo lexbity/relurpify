@@ -136,7 +136,7 @@ func (h *RenameSymbolHandler) Invoke(ctx context.Context, env ports.State, args 
 			return failResult(fmt.Sprintf("write source file failed: %v", err)), err
 		}
 		if h.refresher != nil {
-			_ = h.refresher.RefreshFiles([]string{resolvedPath})
+			_ = h.refresher.RefreshFiles(ctx, []string{resolvedPath})
 		}
 	}
 

@@ -54,7 +54,7 @@ func TestDryRunEndToEndSimulatedDryRun(t *testing.T) {
 	handler := &countingCapabilityHandler{id: "euclo:cap.targeted_refactor"}
 	caps := capabilityRegistryWithHandler(t, handler)
 	deps := rootGraphDeps(caps)
-	graph, err := orchestrate.NewRootGraph(deps)
+	graph, err := orchestrate.NewRootGraph(context.Background(), deps)
 	if err != nil {
 		t.Fatalf("NewRootGraph failed: %v", err)
 	}
@@ -100,7 +100,7 @@ func TestDryRunEndToEndSimulatedDryRunThoughtRecipeRoute(t *testing.T) {
 	})
 	deps := rootGraphDeps(caps)
 	deps.ThoughtRecipes = thoughtrecipes
-	graph, err := orchestrate.NewRootGraph(deps)
+	graph, err := orchestrate.NewRootGraph(context.Background(), deps)
 	if err != nil {
 		t.Fatalf("NewRootGraph failed: %v", err)
 	}
@@ -144,7 +144,7 @@ func TestDryRunEndToEndSimulatedDryRunThoughtRecipeRoute(t *testing.T) {
 func capabilityRegistryWithHandler(t *testing.T, handler *countingCapabilityHandler) *registry.CapabilityRegistry {
 	t.Helper()
 	reg := registry.NewRegistry()
-	if err := reg.RegisterInvocableCapability(handler); err != nil {
+	if err := reg.RegisterInvocableCapability(context.Background(), handler); err != nil {
 		t.Fatalf("register handler: %v", err)
 	}
 	return reg

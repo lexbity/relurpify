@@ -1,6 +1,7 @@
 package toolcapabilities
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -139,7 +140,7 @@ func StringArg(args map[string]any, key string) string {
 // by a ToolParameter.
 func CoerceParameterValue(param ports.ToolParameter, v any) (any, error) {
 	if v == nil {
-		return nil, nil
+		return nil, errors.New("parameter value is nil")
 	}
 	switch param.Type {
 	case ports.ToolParamString:

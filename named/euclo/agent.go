@@ -119,7 +119,7 @@ func (a *Agent) Execute(ctx context.Context, task *execution.Task, env *contextd
 	a.seedResumeState(env)
 	defer a.clearResumeState()
 
-	graph, err := a.BuildGraph(task)
+	graph, err := a.BuildGraph(ctx, task)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build execution graph: %w", err)
 	}
@@ -132,7 +132,7 @@ func (a *Agent) Execute(ctx context.Context, task *execution.Task, env *contextd
 	return result, nil
 }
 
-func (a *Agent) BuildGraph(task *execution.Task) (*agentgraph.Graph, error) {
+func (a *Agent) BuildGraph(ctx context.Context, task *execution.Task) (*agentgraph.Graph, error) {
 	if !a.initialized {
 		if err := a.Initialize(nil); err != nil {
 			return nil, fmt.Errorf("failed to initialize agent: %w", err)
@@ -151,7 +151,7 @@ func (a *Agent) BuildGraph(task *execution.Task) (*agentgraph.Graph, error) {
 		Checkpoints:          a.config.CheckpointRepository,
 		Persistence:          a.config.PersistenceWriter,
 	}
-	rootGraph, err := orchestrate.NewRootGraph(deps)
+	rootGraph, err := orchestrate.NewRootGraph(ctx, deps)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build root graph: %w", err)
 	}

@@ -90,7 +90,7 @@ func (n *ThoughtRecipeStepNode) Execute(ctx context.Context, env *contextdata.En
 		return n.executeDelegation(ctx, env)
 	}
 
-	task, err := n.buildTask(env)
+	task, err := n.buildTask(ctx, env)
 	if err != nil {
 		return nil, err
 	}
@@ -177,7 +177,7 @@ func (n *ThoughtRecipeStepNode) executeDelegation(ctx context.Context, env *cont
 	}
 
 	childEnv := n.buildDelegationEnvelope(env)
-	task, err := n.buildTask(childEnv)
+	task, err := n.buildTask(ctx, childEnv)
 	if err != nil {
 		return nil, err
 	}
@@ -218,7 +218,7 @@ func (n *ThoughtRecipeStepNode) executeDelegation(ctx context.Context, env *cont
 	}
 
 	if execErr != nil {
-		return result, nil
+		return result, execErr
 	}
 	return result, nil
 }
@@ -350,7 +350,7 @@ func (n *ThoughtRecipeStepNode) executeCapability(ctx context.Context, env *cont
 	return result, nil
 }
 
-func (n *ThoughtRecipeStepNode) buildTask(env *contextdata.Envelope) (*execution.Task, error) {
+func (n *ThoughtRecipeStepNode) buildTask(ctx context.Context, env *contextdata.Envelope) (*execution.Task, error) {
 	data := thoughtrecipeTemplateData(env, n.step)
 	n.writeStepMetadata(env)
 
@@ -360,7 +360,7 @@ func (n *ThoughtRecipeStepNode) buildTask(env *contextdata.Envelope) (*execution
 			return nil, fmt.Errorf("thoughtrecipe step %q: prompt_id requires a registry", n.step.ID)
 		}
 		var err error
-		instruction, err = n.resolveFromRegistry(env)
+		instruction, err = n.resolveFromRegistry(ctx, env)
 		if err != nil {
 			return nil, err
 		}
@@ -541,20 +541,20 @@ func (n *ThoughtRecipeStepNode) writeDelegationCaptures(parent, child *contextda
 }
 
 // resolveFromRegistry resolves the prompt from the registry using the PromptID.
-func (n *ThoughtRecipeStepNode) resolveFromRegistry(env *contextdata.Envelope) (string, error) {
+func (n *ThoughtRecipeStepNode) resolveFromRegistry(ctx context.Context, env *contextdata.Envelope) (string, error) {
 	if n.deps.PromptRegistry == nil {
 		return "", fmt.Errorf("no prompt registry available")
 	}
 
 	// Build runtime context for prompt resolution
-	rctx := n.buildRuntimeContext(env)
+	rctx := n.buildRuntimeContext(ctx, env)
 
 	// Resolve the prompt from registry
 	return n.deps.PromptRegistry.Resolve(n.step.PromptID, rctx)
 }
 
 // buildRuntimeContext creates a prompt.RuntimeContext for thoughtrecipe step resolution.
-func (n *ThoughtRecipeStepNode) buildRuntimeContext(env *contextdata.Envelope) prompt.RuntimeContext {
+func (n *ThoughtRecipeStepNode) buildRuntimeContext(ctx context.Context, env *contextdata.Envelope) prompt.RuntimeContext {
 	data := thoughtrecipeTemplateData(env, n.step)
 	scopedRegistry := n.scopedRegistry()
 	runtime := prompt.NewRuntimeContext(env, n.step.Paradigm, "euclo").
@@ -566,7 +566,7 @@ func (n *ThoughtRecipeStepNode) buildRuntimeContext(env *contextdata.Envelope) p
 			return n.step.Prompt
 		}()).
 		WithVariable("prompt_id", n.step.PromptID).
-		WithStateMap(clarificationRuntimeState(env)).
+		WithStateMap(clarificationRuntimeState(ctx, env)).
 		WithStateMap(n.stepRuntimeState(data))
 
 	runtime.Task = &execution.Task{
@@ -576,12 +576,12 @@ func (n *ThoughtRecipeStepNode) buildRuntimeContext(env *contextdata.Envelope) p
 		Context:     data,
 	}
 	if scopedRegistry != nil {
-		runtime.Tools = scopedRegistry.ModelCallableTools()
-		if snapshot := scopedRegistry.CaptureExecutionCatalogSnapshot(); snapshot != nil {
+		runtime.Tools = scopedRegistry.ModelCallableTools(ctx)
+		if snapshot := scopedRegistry.CaptureExecutionCatalogSnapshot(ctx); snapshot != nil {
 			runtime.Capabilities = snapshot.InspectableCapabilities()
 		}
 	} else if n.deps.Registry != nil {
-		runtime.Tools = n.deps.Registry.ModelCallableTools()
+		runtime.Tools = n.deps.Registry.ModelCallableTools(ctx)
 		runtime.Capabilities = n.deps.Registry.AllCapabilities()
 	}
 	runtime.AgentSpec = nil
@@ -712,9 +712,9 @@ func writeCapabilityMetadata(env *contextdata.Envelope, stepID, capabilityID str
 	contextdata.SetTyped(env, "euclo.execution.step."+stepID+".capability_id", capabilityID)
 }
 
-func clarificationRuntimeState(env *contextdata.Envelope) map[string]any {
+func clarificationRuntimeState(ctx context.Context, env *contextdata.Envelope) map[string]any {
 	state := make(map[string]any)
-	if current, err := intentcontext.NewStateStore().Read(context.Background(), env); err == nil && current != nil {
+	if current, err := intentcontext.NewStateStore().Read(ctx, env); err == nil && current != nil {
 		state[intentcontext.ClarificationStateKey] = current.Clone()
 		state["euclo.intent.clarification.state_version"] = current.StateVersion
 		state["euclo.intent.clarification.current_turn_id"] = current.CurrentTurnID

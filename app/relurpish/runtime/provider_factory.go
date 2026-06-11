@@ -1,8 +1,12 @@
 package runtime
 
-import "codeburg.org/lexbit/relurpify/capability/provider"
+import (
+	"errors"
+
+	"codeburg.org/lexbit/relurpify/capability/provider"
+)
 
 func providerFromConfig(config provider.ProviderConfig) (RuntimeProvider, error) {
 	_ = config
-	return nil, nil
+	return nil, errors.New("provider from config not implemented")
 }

@@ -1,6 +1,7 @@
 package thoughtrecipe
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -89,7 +90,7 @@ ask user:
 	deps := &paradigm.Deps{PromptRegistry: promptRegistry}
 	runNode := NewThoughtRecipeStepNode("review_flow.run", deps, plan.Steps[0])
 	runEnv := contextdata.NewEnvelope("task-review-flow", "")
-	runTask, err := runNode.buildTask(runEnv)
+	runTask, err := runNode.buildTask(context.Background(), runEnv)
 	if err != nil {
 		t.Fatalf("buildTask(run): %v", err)
 	}
@@ -101,7 +102,7 @@ ask user:
 	}
 
 	askNode := NewThoughtRecipeStepNode("review_flow.ask", deps, plan.Steps[1])
-	askTask, err := askNode.buildTask(contextdata.NewEnvelope("task-review-flow", ""))
+	askTask, err := askNode.buildTask(context.Background(), contextdata.NewEnvelope("task-review-flow", ""))
 	if err != nil {
 		t.Fatalf("buildTask(ask): %v", err)
 	}

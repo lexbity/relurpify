@@ -404,9 +404,6 @@ func (sm *serviceManager) startService(id string, svc Service, ctx context.Conte
 	if svc == nil {
 		return fmt.Errorf("service %s unavailable", id)
 	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	if err := svc.Start(ctx); err != nil {
 		sm.setStatus(id, serviceStatusError)
 		return err

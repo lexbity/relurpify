@@ -260,7 +260,7 @@ func (s *Session) ExtractStructured(ctx context.Context) (*StructuredPageData, *
 	return data, extraction, nil
 }
 
-func (s *Session) Close() error {
+func (s *Session) Close(ctx context.Context) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.closed {
@@ -272,7 +272,7 @@ func (s *Session) Close() error {
 		}
 	}
 	s.closed = true
-	return wrapError(s.backendName, "close", s.backend.Close())
+	return wrapError(s.backendName, "close", s.backend.Close(ctx))
 }
 
 func (s *Session) ExtractText(ctx context.Context, selector string) (*Extraction, error) {

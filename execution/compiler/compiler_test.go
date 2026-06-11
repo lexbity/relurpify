@@ -608,11 +608,11 @@ func TestCompilerTrySummarySubstitution(t *testing.T) {
 }
 
 func TestCompilerFindSummaryByCoverageUsesIndexedStore(t *testing.T) {
-	engine, err := graphdb.Open(graphdb.DefaultOptions(t.TempDir()))
+	engine, err := graphdb.Open(context.Background(), graphdb.DefaultOptions(t.TempDir()))
 	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, engine.Close()) })
+	t.Cleanup(func() { require.NoError(t, engine.Close(context.Background())) })
 	store := &knowledge.ChunkStore{Graph: engine}
-	_, err = store.Save(knowledge.KnowledgeChunk{
+	_, err = store.Save(context.TODO(), knowledge.KnowledgeChunk{
 		ID:           knowledge.ChunkID("summary-1"),
 		WorkspaceID:  "ws",
 		CoverageHash: "hash123",
@@ -663,14 +663,14 @@ func TestCompiler_TwoStageUsesStreamOrder(t *testing.T) {
 			Body:        knowledge.ChunkBody{Raw: "C", Fields: map[string]any{"content": "C"}},
 		},
 	} {
-		saved, err := store.Save(chunk)
+		saved, err := store.Save(context.TODO(), chunk)
 		require.NoError(t, err)
 		require.NotNil(t, saved)
 	}
 	var err error
-	_, err = store.SaveEdge(knowledge.ChunkEdge{FromChunk: "chunk:a", ToChunk: "chunk:b", Kind: knowledge.EdgeKindRequiresContext, Weight: 1})
+	_, err = store.SaveEdge(context.TODO(), knowledge.ChunkEdge{FromChunk: "chunk:a", ToChunk: "chunk:b", Kind: knowledge.EdgeKindRequiresContext, Weight: 1})
 	require.NoError(t, err)
-	_, err = store.SaveEdge(knowledge.ChunkEdge{FromChunk: "chunk:b", ToChunk: "chunk:c", Kind: knowledge.EdgeKindRequiresContext, Weight: 1})
+	_, err = store.SaveEdge(context.TODO(), knowledge.ChunkEdge{FromChunk: "chunk:b", ToChunk: "chunk:c", Kind: knowledge.EdgeKindRequiresContext, Weight: 1})
 	require.NoError(t, err)
 
 	compiler := NewCompiler(nil, nil, store)
@@ -708,11 +708,11 @@ func TestCompiler_StaleChunkSkipped(t *testing.T) {
 		Provenance:  knowledge.ChunkProvenance{CompiledBy: knowledge.CompilerDeterministic, Timestamp: now},
 		Body:        knowledge.ChunkBody{Raw: "child", Fields: map[string]any{"content": "child"}},
 	}
-	_, err := store.Save(parent)
+	_, err := store.Save(context.TODO(), parent)
 	require.NoError(t, err)
-	_, err = store.Save(child)
+	_, err = store.Save(context.TODO(), child)
 	require.NoError(t, err)
-	_, err = store.SaveEdge(knowledge.ChunkEdge{FromChunk: parent.ID, ToChunk: child.ID, Kind: knowledge.EdgeKindRequiresContext, Weight: 1})
+	_, err = store.SaveEdge(context.TODO(), knowledge.ChunkEdge{FromChunk: parent.ID, ToChunk: child.ID, Kind: knowledge.EdgeKindRequiresContext, Weight: 1})
 	require.NoError(t, err)
 
 	compiler := NewCompiler(nil, nil, store)
@@ -748,11 +748,11 @@ func TestCompiler_AmplificationUsed(t *testing.T) {
 		Provenance:  knowledge.ChunkProvenance{CompiledBy: knowledge.CompilerDeterministic, Timestamp: now},
 		Body:        knowledge.ChunkBody{Raw: "enrich", Fields: map[string]any{"content": "enrich"}},
 	}
-	_, err := store.Save(seed)
+	_, err := store.Save(context.TODO(), seed)
 	require.NoError(t, err)
-	_, err = store.Save(enrichment)
+	_, err = store.Save(context.TODO(), enrichment)
 	require.NoError(t, err)
-	_, err = store.SaveEdge(knowledge.ChunkEdge{FromChunk: seed.ID, ToChunk: enrichment.ID, Kind: knowledge.EdgeKindAmplifies, Weight: 2})
+	_, err = store.SaveEdge(context.TODO(), knowledge.ChunkEdge{FromChunk: seed.ID, ToChunk: enrichment.ID, Kind: knowledge.EdgeKindAmplifies, Weight: 2})
 	require.NoError(t, err)
 
 	compiler := NewCompiler(nil, nil, store)
@@ -780,7 +780,7 @@ func TestCompiler_FallbackToFlatRankWhenNoAnchors(t *testing.T) {
 		Provenance:  knowledge.ChunkProvenance{CompiledBy: knowledge.CompilerDeterministic, Timestamp: now},
 		Body:        knowledge.ChunkBody{Raw: "flat", Fields: map[string]any{"content": "flat"}},
 	}
-	_, err := store.Save(chunk)
+	_, err := store.Save(context.TODO(), chunk)
 	require.NoError(t, err)
 	registry := retrieval.NewRankerRegistry()
 	registry.Register(&staticRanker{name: "flat-ranker", ids: []knowledge.ChunkID{chunk.ID}})
@@ -797,9 +797,9 @@ func TestCompiler_FallbackToFlatRankWhenNoAnchors(t *testing.T) {
 
 func newCompilerTestStore(t *testing.T) *knowledge.ChunkStore {
 	t.Helper()
-	engine, err := graphdb.Open(graphdb.DefaultOptions(t.TempDir()))
+	engine, err := graphdb.Open(context.Background(), graphdb.DefaultOptions(t.TempDir()))
 	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, engine.Close()) })
+	t.Cleanup(func() { require.NoError(t, engine.Close(context.Background())) })
 	return &knowledge.ChunkStore{Graph: engine}
 }
 

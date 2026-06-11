@@ -118,7 +118,7 @@ func (e *errorBackend) ExecuteScript(context.Context, string) (any, error)      
 func (e *errorBackend) Screenshot(context.Context) ([]byte, error)                  { return nil, e.err }
 func (e *errorBackend) WaitFor(context.Context, WaitCondition, time.Duration) error { return e.err }
 func (e *errorBackend) CurrentURL(context.Context) (string, error)                  { return "", e.err }
-func (e *errorBackend) Close() error                                                { return e.err }
+func (e *errorBackend) Close(_ context.Context) error                                                { return e.err }
 
 // stubBudget implements telemetry.BudgetManager for testing
 type stubBudget struct {

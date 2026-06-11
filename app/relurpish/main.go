@@ -137,7 +137,7 @@ func runWithRuntime(cmd *cobra.Command, fn func(context.Context, *runtimesvc.Run
 	if err != nil {
 		return err
 	}
-	defer rt.Close()
+	defer rt.Close(context.TODO())
 	return fn(ctx, rt)
 }
 

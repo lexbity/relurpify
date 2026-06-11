@@ -101,9 +101,9 @@ func TestInstrumentedModel_ProxiesProfileAwareBehavior(t *testing.T) {
 }
 
 func TestInstrumentedModel_IngestsLLMResponse(t *testing.T) {
-	engine, err := graphdb.Open(graphdb.DefaultOptions(t.TempDir()))
+	engine, err := graphdb.Open(context.Background(), graphdb.DefaultOptions(t.TempDir()))
 	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, engine.Close()) })
+	t.Cleanup(func() { require.NoError(t, engine.Close(context.Background())) })
 	store := &knowledge.ChunkStore{Graph: engine}
 	ing := knowledge.NewOutputIngester(store, &knowledge.EventBus{})
 	env := contextdata.NewEnvelope("task-1", "session-1")
@@ -121,9 +121,9 @@ func TestInstrumentedModel_IngestsLLMResponse(t *testing.T) {
 }
 
 func TestInstrumentedModel_IngestsLLMResponse_NonBlocking(t *testing.T) {
-	engine, err := graphdb.Open(graphdb.DefaultOptions(t.TempDir()))
+	engine, err := graphdb.Open(context.Background(), graphdb.DefaultOptions(t.TempDir()))
 	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, engine.Close()) })
+	t.Cleanup(func() { require.NoError(t, engine.Close(context.Background())) })
 	store := &knowledge.ChunkStore{Graph: engine}
 	ing := knowledge.NewOutputIngester(store, &knowledge.EventBus{})
 	env := contextdata.NewEnvelope("task-1", "session-1")

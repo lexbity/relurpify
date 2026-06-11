@@ -41,7 +41,7 @@ func TestCapabilityDiscovery(t *testing.T) {
 			permissions: policy.NewFileSystemPermissionSet("/test", permissions.FileSystemRead),
 		}
 
-		if err := registry.Register(tool); err != nil {
+		if err := registry.Register(context.Background(), tool); err != nil {
 			t.Fatalf("failed to register tool: %v", err)
 		}
 
@@ -76,7 +76,7 @@ func TestCapabilityRegistration(t *testing.T) {
 			permissions: policy.NewFileSystemPermissionSet("/test", permissions.FileSystemRead),
 		}
 
-		if err := registry.Register(tool); err != nil {
+		if err := registry.Register(context.Background(), tool); err != nil {
 			t.Fatalf("failed to register tool: %v", err)
 		}
 
@@ -96,12 +96,12 @@ func TestCapabilityRegistration(t *testing.T) {
 			permissions: policy.NewFileSystemPermissionSet("/test", permissions.FileSystemRead),
 		}
 
-		if err := registry.Register(tool); err != nil {
+		if err := registry.Register(context.Background(), tool); err != nil {
 			t.Fatalf("failed to register tool: %v", err)
 		}
 
 		// Try to register the same tool again
-		err := registry.Register(tool)
+		err := registry.Register(context.Background(), tool)
 		if err == nil {
 			t.Error("duplicate registration should fail")
 		}
@@ -117,7 +117,7 @@ func TestCapabilityRegistration(t *testing.T) {
 			permissions: perms,
 		}
 
-		if err := registry.Register(tool); err != nil {
+		if err := registry.Register(context.Background(), tool); err != nil {
 			t.Fatalf("failed to register tool: %v", err)
 		}
 
@@ -158,7 +158,7 @@ func TestInvocationGating(t *testing.T) {
 			permissions: policy.NewFileSystemPermissionSet("/test", permissions.FileSystemRead),
 		}
 
-		if err := registry.Register(tool); err != nil {
+		if err := registry.Register(context.Background(), tool); err != nil {
 			t.Fatalf("failed to register tool: %v", err)
 		}
 
@@ -196,7 +196,7 @@ func TestInvocationGating(t *testing.T) {
 			basePath:    env.WorkspacePath,
 		}
 
-		if err := registry.Register(tool); err != nil {
+		if err := registry.Register(context.Background(), tool); err != nil {
 			t.Fatalf("failed to register tool: %v", err)
 		}
 
@@ -237,7 +237,7 @@ func TestToolPermissionEnforcement(t *testing.T) {
 			basePath:    env.WorkspacePath,
 		}
 
-		if err := registry.Register(tool); err != nil {
+		if err := registry.Register(context.Background(), tool); err != nil {
 			t.Fatalf("failed to register tool: %v", err)
 		}
 
@@ -283,7 +283,7 @@ func TestToolPermissionEnforcement(t *testing.T) {
 			basePath:    env.WorkspacePath,
 		}
 
-		if err := registry.Register(tool); err != nil {
+		if err := registry.Register(context.Background(), tool); err != nil {
 			t.Fatalf("failed to register tool: %v", err)
 		}
 

@@ -71,7 +71,7 @@ func (d *primitiveDispatcher) Capabilities() []string {
 	return d.fallback.Capabilities()
 }
 
-func (d *primitiveDispatcher) BuildGraph(task *execution.Task) (*graph.Graph, error) {
+func (d *primitiveDispatcher) BuildGraph(ctx context.Context, task *execution.Task) (*graph.Graph, error) {
 	if d == nil || d.fallback == nil {
 		g := graph.NewGraph()
 		done := graph.NewTerminalNode("htn_dispatch_done")
@@ -83,7 +83,7 @@ func (d *primitiveDispatcher) BuildGraph(task *execution.Task) (*graph.Graph, er
 		}
 		return g, nil
 	}
-	return d.fallback.BuildGraph(task)
+	return d.fallback.BuildGraph(ctx, task)
 }
 
 func (d *primitiveDispatcher) Execute(ctx context.Context, task *execution.Task, env *contextdata.Envelope) (*execution.Result, error) {

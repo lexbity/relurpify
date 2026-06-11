@@ -1,6 +1,7 @@
 package promptprovider
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strings"
@@ -189,7 +190,7 @@ func clarificationStateFromRuntime(ctx prompt.RuntimeContext) *intentcontext.Cla
 		}
 	}
 	if ctx.Envelope != nil {
-		if state, err := intentcontext.NewStateStore().Read(nil, ctx.Envelope); err == nil {
+		if state, err := intentcontext.NewStateStore().Read(context.TODO(), ctx.Envelope); err == nil {
 			return state
 		}
 	}

@@ -71,7 +71,7 @@ func (a *compilerTriggerAdapter) Compile(ctx context.Context, req contextports.C
 		return nil, err
 	}
 	if result == nil {
-		return nil, nil
+		return nil, fmt.Errorf("compilation result is nil")
 	}
 	streamedRefs := make([]string, 0, len(result.StreamedRefs))
 	for _, ref := range result.StreamedRefs {

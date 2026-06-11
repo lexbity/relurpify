@@ -90,7 +90,9 @@ func renderJSON(diags []Diagnostic, w io.Writer) {
 	}
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
-	enc.Encode(out)
+	if err := enc.Encode(out); err != nil {
+		panic(err)
+	}
 }
 
 func ExitCode(diags []Diagnostic) int {

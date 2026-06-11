@@ -268,7 +268,9 @@ func (t *TapeModel) append(entry tapeEntry) {
 	if t.enc == nil {
 		return
 	}
-	_ = t.enc.Encode(entry)
+	if err := t.enc.Encode(entry); err != nil {
+		panic(err)
+	}
 }
 
 func (t *TapeModel) writeHeader() error {
@@ -398,7 +400,10 @@ func fingerprint(kind string, req tapeRequest) string {
 		Kind: kind,
 		Req:  req,
 	}
-	data, _ := json.Marshal(payload)
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return ""
+	}
 	sum := sha256.Sum256(data)
 	return fmt.Sprintf("%x", sum[:])
 }

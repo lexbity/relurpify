@@ -2,6 +2,7 @@
 package prompttest
 
 import (
+	"errors"
 	"io/fs"
 	"sync"
 
@@ -118,7 +119,7 @@ func (m *MockRegistry) DependsOn(_ string) ([]string, error)    { return nil, ni
 func (m *MockRegistry) DependentsOf(_ string) ([]string, error) { return nil, nil }
 
 func (m *MockRegistry) PromptVariables(id string) (map[string]prompt.VariableDecl, error) {
-	return nil, nil
+	return nil, errors.New("PromptVariables not implemented")
 }
 
 func (m *MockRegistry) Validate(id string) []prompt.ValidationIssue {

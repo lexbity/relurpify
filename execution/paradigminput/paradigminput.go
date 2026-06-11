@@ -1,6 +1,8 @@
 package paradigminput
 
 import (
+	"context"
+
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/descriptor"
 	"codeburg.org/lexbit/relurpify/capability/ports"
@@ -29,7 +31,7 @@ type ParadigmInput struct {
 func (in *ParadigmInput) BuildRuntimeContext(consumerID string, state map[string]any, env *contextdata.Envelope, caps []descriptor.CapabilityDescriptor) prompt.RuntimeContext {
 	var tools []ports.Tool
 	if in.Tools != nil {
-		tools = in.Tools.CallableTools()
+		tools = in.Tools.CallableTools(context.Background())
 	}
 	return prompt.RuntimeContext{
 		Variables:    extractVariables(in.Task),

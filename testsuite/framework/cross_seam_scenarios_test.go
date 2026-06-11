@@ -138,11 +138,11 @@ func TestFullFrameworkFlowScenario(t *testing.T) {
 
 	// Step 3: Create knowledge store and ingest result (knowledge seam)
 	opts := graphdb.DefaultOptions(env.WorkspacePath)
-	graph, err := graphdb.Open(opts)
+	graph, err := graphdb.Open(context.Background(), opts)
 	if err != nil {
 		t.Fatalf("failed to open graph engine: %v", err)
 	}
-	defer graph.Close()
+	defer graph.Close(context.Background())
 
 	store := &knowledge.ChunkStore{Graph: graph}
 	events := &knowledge.EventBus{}

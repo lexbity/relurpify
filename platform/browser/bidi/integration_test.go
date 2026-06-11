@@ -66,7 +66,7 @@ func TestChromeDriverBiDiBackendCloseCleansUpProcessAndProfile(t *testing.T) {
 	cmd := backend.process
 	userData := backend.userData
 
-	require.NoError(t, backend.Close())
+	require.NoError(t, backend.Close(ctx))
 	require.NotNil(t, cmd.ProcessState)
 	_, err = os.Stat(userData)
 	require.ErrorIs(t, err, os.ErrNotExist)
@@ -137,7 +137,7 @@ func TestChromeDriverBiDiBackendFollowsLocalRedirects(t *testing.T) {
 	}
 	require.NoError(t, err)
 	defer func() {
-		require.NoError(t, backend.Close())
+		require.NoError(t, backend.Close(ctx))
 	}()
 
 	require.NoError(t, backend.Navigate(ctx, redirectServer.URL+"/same-origin"))
@@ -176,7 +176,7 @@ func runLocalhostFlow(t *testing.T, ctx context.Context, driverPath, browserPath
 	}
 	require.NoError(t, err)
 	defer func() {
-		require.NoError(t, backend.Close())
+		require.NoError(t, backend.Close(ctx))
 	}()
 
 	require.NoError(t, backend.Navigate(ctx, server.URL))

@@ -14,7 +14,7 @@ import (
 
 func TestResolveEntityByFilePathAndName(t *testing.T) {
 	core := newIntentCoreForTest(t)
-	_, err := core.ChunkStore.Save(knowledge.KnowledgeChunk{
+	_, err := core.ChunkStore.Save(context.TODO(), knowledge.KnowledgeChunk{
 		ID:          knowledge.ChunkID("chunk:envelope"),
 		WorkspaceID: "ws",
 		Provenance:  knowledge.ChunkProvenance{CompiledBy: knowledge.CompilerDeterministic, Timestamp: time.Now().UTC()},
@@ -44,7 +44,7 @@ func TestResolveEntityByFilePathAndName(t *testing.T) {
 
 func TestGroundConfirmedDedupesAnchorsAndWritesState(t *testing.T) {
 	core := newIntentCoreForTest(t)
-	_, err := core.ChunkStore.Save(knowledge.KnowledgeChunk{
+	_, err := core.ChunkStore.Save(context.TODO(), knowledge.KnowledgeChunk{
 		ID:          knowledge.ChunkID("chunk:contextdata"),
 		WorkspaceID: "ws",
 		Provenance:  knowledge.ChunkProvenance{CompiledBy: knowledge.CompilerDeterministic, Timestamp: time.Now().UTC()},
@@ -266,11 +266,11 @@ func TestProjectionPlanValidateRejectsDuplicateStableIDs(t *testing.T) {
 
 func newIntentCoreForTest(t *testing.T) *IntentCore {
 	t.Helper()
-	graph, err := graphdb.Open(graphdb.DefaultOptions(t.TempDir()))
+	graph, err := graphdb.Open(context.Background(), graphdb.DefaultOptions(t.TempDir()))
 	if err != nil {
 		t.Fatalf("open graphdb: %v", err)
 	}
-	t.Cleanup(func() { _ = graph.Close() })
+	t.Cleanup(func() { _ = graph.Close(context.Background()) })
 	return &IntentCore{
 		Store:      NewStateStore(),
 		ChunkStore: &knowledge.ChunkStore{Graph: graph},

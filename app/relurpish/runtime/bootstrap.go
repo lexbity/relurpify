@@ -71,7 +71,7 @@ type BootstrappedAgentRuntime struct {
 // relurpic capabilities because named agents register their own. app/relurpish
 // registers them here.
 func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*BootstrappedAgentRuntime, error) {
-	boot, err := session.BootstrapAgentRuntime(workspace, session.AgentBootstrapOptions{
+	boot, err := session.BootstrapAgentRuntime(opts.Context, workspace, session.AgentBootstrapOptions{
 		Context:             opts.Context,
 		AgentID:             opts.AgentID,
 		AgentName:           opts.AgentName,
@@ -113,9 +113,6 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 // ReloadRuntimeForWorkspace rebuilds the runtime against a new workspace root
 // and closes the previous runtime only after the replacement succeeds.
 func ReloadRuntimeForWorkspace(ctx context.Context, current *Runtime, workspace string) (*Runtime, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	if current == nil {
 		return New(ctx, ConfigForWorkspace(Config{}, workspace), config.Secrets{})
 	}
@@ -124,8 +121,8 @@ func ReloadRuntimeForWorkspace(ctx context.Context, current *Runtime, workspace 
 	if err != nil {
 		return nil, err
 	}
-	if err := current.Close(); err != nil {
-		_ = newRT.Close()
+	if err := current.Close(ctx); err != nil {
+		_ = newRT.Close(ctx)
 		return nil, err
 	}
 	return newRT, nil
@@ -158,9 +155,6 @@ func ConfigForWorkspace(current Config, workspace string) Config {
 // post-bootstrap state used to decide whether the shell should start locked in
 // Doctor mode or auto-promote to Euclo chat.
 func BootstrapStartupState(ctx context.Context, cfg Config, secrets config.Secrets) (StartupState, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	state := StartupState{
 		ActiveAgent: "euclo",
 		ActiveTab:   "chat",

@@ -51,7 +51,7 @@ func (a *RewooAgent) Execute(ctx context.Context, task *execution.Task, env *con
 			return nil, err
 		}
 	}
-	g, err := a.BuildGraph(task)
+	g, err := a.BuildGraph(ctx, task)
 	if err != nil {
 		return nil, err
 	}
@@ -65,7 +65,7 @@ func (a *RewooAgent) Execute(ctx context.Context, task *execution.Task, env *con
 }
 
 // BuildGraph builds a minimal ReWOO execution graph.
-func (a *RewooAgent) BuildGraph(task *execution.Task) (*graph.Graph, error) {
+func (a *RewooAgent) BuildGraph(ctx context.Context, task *execution.Task) (*graph.Graph, error) {
 	if a == nil {
 		return nil, fmt.Errorf("rewoo agent unavailable")
 	}

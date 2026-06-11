@@ -38,19 +38,19 @@ func FromAgentSpecWithConfig(spec ports.PolicyInput, agentID string, manager *Pe
 //   - BuiltinTrusted / WorkspaceTrusted → always allow (declared in manifest or built in).
 //   - All remote / untrusted classes → apply the agent's configured default policy.
 //     Allow → pass through; Deny → hard block; Ask (default) → require approval.
-func (e *ManifestPolicyEngine) Evaluate(_ context.Context, req policy.PolicyRequest) (policy.PolicyDecision, error) {
+func (e *ManifestPolicyEngine) Evaluate(ctx context.Context, req policy.PolicyRequest) (policy.PolicyDecision, error) {
 	if e == nil {
 		return policy.PolicyDecisionAllow("no policy manager"), nil
 	}
 	if decision := evaluateCompiledRules(e.rules, req); decision != nil {
-		e.emitDecision(context.Background(), req, *decision)
+		e.emitDecision(ctx, req, *decision)
 		return *decision, nil
 	}
 	if e.manager == nil {
 		return policy.PolicyDecisionAllow("no policy manager"), nil
 	}
 	decision := e.fallbackDecision(req)
-	e.emitDecision(context.Background(), req, decision)
+	e.emitDecision(ctx, req, decision)
 	return decision, nil
 }
 

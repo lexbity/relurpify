@@ -16,11 +16,11 @@ func TestBinaryIshContentHandling(t *testing.T) {
 
 	// Create a graph engine for chunk storage
 	opts := graphdb.DefaultOptions(env.WorkspacePath)
-	graph, err := graphdb.Open(opts)
+	graph, err := graphdb.Open(context.Background(), opts)
 	if err != nil {
 		t.Fatalf("failed to open graph engine: %v", err)
 	}
-	defer graph.Close()
+	defer graph.Close(context.Background())
 
 	store := &knowledge.ChunkStore{Graph: graph}
 	events := &knowledge.EventBus{}
@@ -94,11 +94,11 @@ func TestEmptyFileHandling(t *testing.T) {
 
 	// Create a graph engine for chunk storage
 	opts := graphdb.DefaultOptions(env.WorkspacePath)
-	graph, err := graphdb.Open(opts)
+	graph, err := graphdb.Open(context.Background(), opts)
 	if err != nil {
 		t.Fatalf("failed to open graph engine: %v", err)
 	}
-	defer graph.Close()
+	defer graph.Close(context.Background())
 
 	store := &knowledge.ChunkStore{Graph: graph}
 	events := &knowledge.EventBus{}
@@ -107,18 +107,9 @@ func TestEmptyFileHandling(t *testing.T) {
 	ctx := context.Background()
 
 	// Ingest empty content as tool result
-	chunk, err := ingester.IngestToolResult(ctx, "empty_tool", []byte{})
-	if err != nil {
-		t.Fatalf("empty content ingestion should not fail: %v", err)
-	}
-
-	// Empty content should not create a chunk (returns nil)
-	if chunk != nil {
-		t.Log("empty content created a chunk (implementation may choose to store empty chunks)")
-		// If it does create a chunk, verify it's handled gracefully
-		if chunk.Body.Raw != "" {
-			t.Errorf("expected empty raw content, got %q", chunk.Body.Raw)
-		}
+	_, err = ingester.IngestToolResult(ctx, "empty_tool", []byte{})
+	if err == nil {
+		t.Fatal("empty content ingestion should fail")
 	}
 
 	// Now ingest valid content to verify empty handling doesn't suppress subsequent ingestion
@@ -155,11 +146,11 @@ func TestPartialFailureIsolation(t *testing.T) {
 
 	// Create a graph engine for chunk storage
 	opts := graphdb.DefaultOptions(env.WorkspacePath)
-	graph, err := graphdb.Open(opts)
+	graph, err := graphdb.Open(context.Background(), opts)
 	if err != nil {
 		t.Fatalf("failed to open graph engine: %v", err)
 	}
-	defer graph.Close()
+	defer graph.Close(context.Background())
 
 	store := &knowledge.ChunkStore{Graph: graph}
 	events := &knowledge.EventBus{}
@@ -214,10 +205,10 @@ func TestPartialFailureIsolation(t *testing.T) {
 		t.Errorf("second chunk content mismatch")
 	}
 
-	// Ingest empty content (should not fail or affect existing chunks)
+	// Ingest empty content (should fail but not affect existing chunks)
 	_, err = ingester.IngestToolResult(ctx, "tool3", []byte{})
-	if err != nil {
-		t.Fatalf("empty content ingestion should not fail: %v", err)
+	if err == nil {
+		t.Fatal("empty content ingestion should fail")
 	}
 
 	// Verify existing chunks are still intact after empty ingestion
@@ -251,11 +242,11 @@ func TestMixedEncodingHandling(t *testing.T) {
 
 	// Create a graph engine for chunk storage
 	opts := graphdb.DefaultOptions(env.WorkspacePath)
-	graph, err := graphdb.Open(opts)
+	graph, err := graphdb.Open(context.Background(), opts)
 	if err != nil {
 		t.Fatalf("failed to open graph engine: %v", err)
 	}
-	defer graph.Close()
+	defer graph.Close(context.Background())
 
 	store := &knowledge.ChunkStore{Graph: graph}
 	events := &knowledge.EventBus{}
@@ -335,11 +326,11 @@ func TestLargeContentHandling(t *testing.T) {
 
 	// Create a graph engine for chunk storage
 	opts := graphdb.DefaultOptions(env.WorkspacePath)
-	graph, err := graphdb.Open(opts)
+	graph, err := graphdb.Open(context.Background(), opts)
 	if err != nil {
 		t.Fatalf("failed to open graph engine: %v", err)
 	}
-	defer graph.Close()
+	defer graph.Close(context.Background())
 
 	store := &knowledge.ChunkStore{Graph: graph}
 	events := &knowledge.EventBus{}
@@ -418,11 +409,11 @@ func TestLLMResponseWithEmptyText(t *testing.T) {
 
 	// Create a graph engine for chunk storage
 	opts := graphdb.DefaultOptions(env.WorkspacePath)
-	graph, err := graphdb.Open(opts)
+	graph, err := graphdb.Open(context.Background(), opts)
 	if err != nil {
 		t.Fatalf("failed to open graph engine: %v", err)
 	}
-	defer graph.Close()
+	defer graph.Close(context.Background())
 
 	store := &knowledge.ChunkStore{Graph: graph}
 	events := &knowledge.EventBus{}
@@ -432,14 +423,9 @@ func TestLLMResponseWithEmptyText(t *testing.T) {
 
 	// Ingest empty LLM response
 	resp := &model.LLMResponse{Text: ""}
-	chunk, err := ingester.IngestLLMResponseFull(ctx, resp)
-	if err != nil {
-		t.Fatalf("empty LLM response ingestion should not fail: %v", err)
-	}
-
-	// Empty response should not create a chunk (returns nil)
-	if chunk != nil {
-		t.Log("empty LLM response created a chunk (implementation may choose to store empty responses)")
+	_, err = ingester.IngestLLMResponseFull(ctx, resp)
+	if err == nil {
+		t.Fatal("empty LLM response ingestion should fail")
 	}
 
 	// Ingest valid LLM response to verify empty handling doesn't suppress subsequent ingestion
@@ -476,11 +462,11 @@ func TestObservationWithEmptyText(t *testing.T) {
 
 	// Create a graph engine for chunk storage
 	opts := graphdb.DefaultOptions(env.WorkspacePath)
-	graph, err := graphdb.Open(opts)
+	graph, err := graphdb.Open(context.Background(), opts)
 	if err != nil {
 		t.Fatalf("failed to open graph engine: %v", err)
 	}
-	defer graph.Close()
+	defer graph.Close(context.Background())
 
 	store := &knowledge.ChunkStore{Graph: graph}
 	events := &knowledge.EventBus{}
@@ -489,14 +475,9 @@ func TestObservationWithEmptyText(t *testing.T) {
 	ctx := context.Background()
 
 	// Ingest empty observation
-	chunk, err := ingester.IngestObservation(ctx, "")
-	if err != nil {
-		t.Fatalf("empty observation ingestion should not fail: %v", err)
-	}
-
-	// Empty observation should not create a chunk (returns nil)
-	if chunk != nil {
-		t.Log("empty observation created a chunk (implementation may choose to store empty observations)")
+	_, err = ingester.IngestObservation(ctx, "")
+	if err == nil {
+		t.Fatal("empty observation ingestion should fail")
 	}
 
 	// Ingest valid observation to verify empty handling doesn't suppress subsequent ingestion

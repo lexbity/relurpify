@@ -1,6 +1,7 @@
 package ast
 
 import (
+	"context"
 	"path/filepath"
 	"testing"
 
@@ -18,13 +19,13 @@ func (s *TestStore) Close() error {
 	if s == nil || s.engine == nil {
 		return nil
 	}
-	return s.engine.Close()
+	return s.engine.Close(context.Background())
 }
 
 // NewTestStore creates a GraphIndexStore backed by a temporary GraphDB engine for testing.
 func NewTestStore(dbPath string) (*TestStore, error) {
 	dbDir := filepath.Dir(dbPath)
-	engine, err := graphdb.Open(graphdb.DefaultOptions(dbDir))
+	engine, err := graphdb.Open(context.Background(), graphdb.DefaultOptions(dbDir))
 	if err != nil {
 		return nil, err
 	}

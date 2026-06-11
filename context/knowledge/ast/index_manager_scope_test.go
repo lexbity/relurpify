@@ -1,6 +1,7 @@
 package ast
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -23,9 +24,9 @@ func TestIndexManagerRespectsFileScope(t *testing.T) {
 	manager := NewIndexManager(store, IndexConfig{WorkspacePath: workspace})
 	manager.SetFileScope(sandbox.NewFileScopePolicy(workspace, []string{protected}))
 
-	require.NoError(t, manager.IndexFile(protected))
+	require.NoError(t, manager.IndexFile(context.Background(), protected))
 
 	file, err := manager.Store().GetFileByPath(protected)
-	require.NoError(t, err)
+	require.ErrorIs(t, err, os.ErrNotExist)
 	require.Nil(t, file)
 }

@@ -18,7 +18,7 @@ type Backend interface {
 	Screenshot(ctx context.Context) ([]byte, error)
 	WaitFor(ctx context.Context, condition WaitCondition, timeout time.Duration) error
 	CurrentURL(ctx context.Context) (string, error)
-	Close() error
+	Close(ctx context.Context) error
 }
 
 // BrowserBackend preserves the more explicit external name used by design docs.

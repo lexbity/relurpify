@@ -143,7 +143,9 @@ func BackendConformanceSuite(t *testing.T, spec BackendConformanceSpec) {
 
 func writeJSONResponse(w http.ResponseWriter, body any) {
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(body)
+	if err := json.NewEncoder(w).Encode(body); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
 }
 
 func requestBodyString(r *http.Request) string {

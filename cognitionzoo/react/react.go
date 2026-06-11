@@ -71,7 +71,7 @@ func (a *ReActAgent) Execute(ctx context.Context, task *execution.Task, env *con
 	if a.StreamTrigger != nil {
 		ctx = contextstream.WithTrigger(ctx, a.StreamTrigger)
 	}
-	graph, err := a.BuildGraph(task)
+	graph, err := a.BuildGraph(ctx, task)
 	if err != nil {
 		return nil, err
 	}

@@ -280,7 +280,7 @@ func normalizedDiffScope(scope, workspace string) (string, error) {
 }
 
 func buildDiffSummaryInstruction(baseRef, headRef, scope, statOut string, changedFiles []string, additions, deletions int, riskAreas []map[string]any) string {
-	payload, _ := json.Marshal(map[string]any{
+	payload, err := json.Marshal(map[string]any{
 		"base_ref":      baseRef,
 		"head_ref":      headRef,
 		"scope":         scope,
@@ -290,6 +290,9 @@ func buildDiffSummaryInstruction(baseRef, headRef, scope, statOut string, change
 		"risk_areas":    riskAreas,
 		"stat":          statOut,
 	})
+	if err != nil {
+		payload = []byte("{}")
+	}
 	return fmt.Sprintf(`Summarize the git diff payload below for a review workflow.
 Return a short plain-language summary and keep the risk areas explicit.
 Payload:

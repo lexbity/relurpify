@@ -88,7 +88,7 @@ func (b *testBackend) ExecuteScript(_ context.Context, script string) (any, erro
 	if b.scriptFunc != nil {
 		return b.scriptFunc(script)
 	}
-	return nil, nil
+	return nil, errors.New("scriptFunc not set")
 }
 
 func (b *testBackend) Screenshot(context.Context) ([]byte, error) {
@@ -107,7 +107,7 @@ func (b *testBackend) CurrentURL(context.Context) (string, error) {
 	return b.currentURL, b.currentURLErr
 }
 
-func (b *testBackend) Close() error {
+func (b *testBackend) Close(_ context.Context) error {
 	b.closed++
 	return b.closeErr
 }
@@ -403,12 +403,12 @@ func TestSessionExtractionBudgetHelpers(t *testing.T) {
 	require.Less(t, budget.GetRemainingBudget(defaultBudgetCategory), 100)
 	require.Less(t, initialRemaining, 100)
 
-	err = session.Close()
+	err = session.Close(context.Background())
 	require.NoError(t, err)
 	require.Equal(t, 1, session.backend.(*testBackend).closed)
 	// Budget may be freed on close (exact behavior depends on implementation)
 
-	err = session.Close()
+	err = session.Close(context.Background())
 	require.NoError(t, err)
 	require.Equal(t, 1, session.backend.(*testBackend).closed)
 
@@ -539,7 +539,7 @@ func TestSessionCloseWrapsBackendError(t *testing.T) {
 	backend := &testBackend{closeErr: errors.New("close failed")}
 	session := newTestSession(t, backend)
 
-	err := session.Close()
+	err := session.Close(context.Background())
 	require.Error(t, err)
 	require.True(t, IsErrorCode(err, ErrUnknownOperation))
 }

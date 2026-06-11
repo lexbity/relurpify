@@ -39,7 +39,10 @@ type stateEntry struct {
 }
 
 func encodeCursor(c cursorState) PageToken {
-	raw, _ := json.Marshal(c)
+	raw, err := json.Marshal(c)
+	if err != nil {
+		return PageToken("")
+	}
 	return PageToken(base64.RawURLEncoding.EncodeToString(raw))
 }
 

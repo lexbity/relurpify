@@ -1,6 +1,7 @@
 package promptprovider
 
 import (
+	"context"
 	"slices"
 	"strings"
 	"testing"
@@ -68,7 +69,7 @@ func TestThoughtRecipeStepContextProviderRendersClarificationState(t *testing.T)
 		ConfidenceNote: "deterministic interpretation from request evidence",
 		ReasonCodes:    []string{"action:review"},
 	}
-	if err := intentcontext.NewStateStore().Write(nil, env, state); err != nil {
+	if err := intentcontext.NewStateStore().Write(context.TODO(), env, state); err != nil {
 		t.Fatalf("write clarification state: %v", err)
 	}
 
@@ -148,7 +149,7 @@ func TestThoughtRecipeStepContextProviderReadsClarificationStateFromEnvelope(t *
 		Rationale:      "deterministic interpretation from request evidence",
 		ConfidenceNote: "deterministic interpretation from request evidence",
 	}
-	if err := intentcontext.NewStateStore().Write(nil, env, state); err != nil {
+	if err := intentcontext.NewStateStore().Write(context.TODO(), env, state); err != nil {
 		t.Fatalf("write clarification state: %v", err)
 	}
 
@@ -221,7 +222,7 @@ func TestThoughtRecipeStepContextProviderGolden(t *testing.T) {
 		ConfidenceNote: "deterministic",
 		ReasonCodes:    []string{"action:review"},
 	}
-	if err := intentcontext.NewStateStore().Write(nil, env, state); err != nil {
+	if err := intentcontext.NewStateStore().Write(context.TODO(), env, state); err != nil {
 		t.Fatalf("write clarification state: %v", err)
 	}
 

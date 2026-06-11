@@ -1,6 +1,7 @@
 package react
 
 import (
+	"context"
 	"fmt"
 
 	"codeburg.org/lexbit/relurpify/context/contextdata"
@@ -9,7 +10,7 @@ import (
 )
 
 // BuildGraph constructs the ReAct workflow.
-func (a *ReActAgent) BuildGraph(task *execution.Task) (*graph.Graph, error) {
+func (a *ReActAgent) BuildGraph(ctx context.Context, task *execution.Task) (*graph.Graph, error) {
 	if a.Model == nil {
 		return nil, fmt.Errorf("react agent missing language model")
 	}
@@ -31,7 +32,7 @@ func (a *ReActAgent) BuildGraph(task *execution.Task) (*graph.Graph, error) {
 	}
 	done := graph.NewTerminalNode("react_done")
 	g := graph.NewGraph()
-	if catalog := a.executionCapabilityCatalog(); catalog != nil && len(catalog.InspectableCapabilities()) > 0 {
+	if catalog := a.executionCapabilityCatalog(ctx); catalog != nil && len(catalog.InspectableCapabilities()) > 0 {
 		g.SetCapabilityCatalog(catalog)
 	}
 	if err := g.AddNode(think); err != nil {

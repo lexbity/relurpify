@@ -1,6 +1,7 @@
 package ports
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -162,7 +163,7 @@ type ToolManifestCapability struct {
 
 func CoerceParameterValue(param ToolParameter, v any) (any, error) {
 	if v == nil {
-		return nil, nil
+		return nil, errors.New("parameter value is nil")
 	}
 	switch param.Type {
 	case ToolParamString:

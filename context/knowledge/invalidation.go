@@ -83,7 +83,7 @@ func (p *InvalidationPass) Start(ctx context.Context) error {
 		stopTimer()
 
 		manager := p.stalenessManager()
-		propagated, err := manager.PropagateSync(ids, 0)
+		propagated, err := manager.PropagateSync(ctx, ids, 0)
 		if err != nil {
 			return err
 		}
@@ -157,7 +157,7 @@ func (p *InvalidationPass) HandleRevisionChanged(ctx context.Context, payload Co
 		return err
 	}
 	manager := p.stalenessManager()
-	staled, err := manager.BulkMarkStaleCollect(matches)
+	staled, err := manager.BulkMarkStaleCollect(ctx, matches)
 	if err != nil || len(staled) == 0 {
 		return err
 	}

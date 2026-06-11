@@ -30,7 +30,7 @@ func RequireExecutorCallCount(tb testing.TB, f *Fixture, want int) {
 
 func RequireTelemetryEventKind(tb testing.TB, f *Fixture, kind string) {
 	tb.Helper()
-	if f == nil {
+	if f == nil || f.Telemetry == nil {
 		tb.Fatalf("fixture unavailable")
 	}
 	for _, event := range f.Telemetry.Events {
@@ -62,6 +62,7 @@ func RequireResultSuccess(tb testing.TB, result *execution.Result) {
 	tb.Helper()
 	if result == nil {
 		tb.Fatal("result unexpectedly nil")
+		return
 	}
 	if !result.Success {
 		tb.Fatalf("expected success result, got %+v", result)

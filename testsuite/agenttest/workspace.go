@@ -321,7 +321,7 @@ func ensureDerivedSkills(targetWorkspace, derivedWorkspace, manifestRef string) 
 	}
 	docSnapshot, err := config.LoadDocument(manifestPath)
 	if err != nil {
-		return nil
+		return err
 	}
 
 	var skills []string

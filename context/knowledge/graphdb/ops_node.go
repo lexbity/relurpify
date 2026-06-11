@@ -1,6 +1,7 @@
 package graphdb
 
 import (
+	"context"
 	"encoding/json"
 	"time"
 
@@ -8,12 +9,12 @@ import (
 )
 
 // UpsertNode inserts or updates a node.
-func (e *Engine) UpsertNode(node NodeRecord) error {
-	return e.UpsertNodes([]NodeRecord{node})
+func (e *Engine) UpsertNode(ctx context.Context, node NodeRecord) error {
+	return e.UpsertNodes(ctx, []NodeRecord{node})
 }
 
 // UpsertNodes inserts or updates nodes in one durable batch.
-func (e *Engine) UpsertNodes(nodes []NodeRecord) error {
+func (e *Engine) UpsertNodes(ctx context.Context, nodes []NodeRecord) error {
 	if len(nodes) == 0 {
 		return nil
 	}
@@ -30,10 +31,10 @@ func (e *Engine) UpsertNodes(nodes []NodeRecord) error {
 		batch = append(batch, node)
 	}
 	if len(batch) == 1 {
-		if err := e.persist("upsert_node", nodeOp{Node: batch[0]}); err != nil {
+		if err := e.persist(ctx, "upsert_node", nodeOp{Node: batch[0]}); err != nil {
 			return err
 		}
-	} else if err := e.persist("upsert_nodes", nodeBatchOp{Nodes: batch}); err != nil {
+	} else if err := e.persist(ctx, "upsert_nodes", nodeBatchOp{Nodes: batch}); err != nil {
 		return err
 	}
 	if err := e.applyHook(); err != nil {
@@ -49,12 +50,12 @@ func (e *Engine) UpsertNodes(nodes []NodeRecord) error {
 }
 
 // DeleteNode soft-deletes a node and all connected edges.
-func (e *Engine) DeleteNode(id string) error {
-	return e.DeleteNodes([]string{id})
+func (e *Engine) DeleteNode(ctx context.Context, id string) error {
+	return e.DeleteNodes(ctx, []string{id})
 }
 
 // DeleteNodes soft-deletes nodes and connected edges in one durable batch.
-func (e *Engine) DeleteNodes(ids []string) error {
+func (e *Engine) DeleteNodes(ctx context.Context, ids []string) error {
 	if len(ids) == 0 {
 		return nil
 	}
@@ -62,10 +63,10 @@ func (e *Engine) DeleteNodes(ids []string) error {
 		return err
 	}
 	if len(ids) == 1 {
-		if err := e.persist("delete_node", deleteNodeOp{ID: ids[0]}); err != nil {
+		if err := e.persist(ctx, "delete_node", deleteNodeOp{ID: ids[0]}); err != nil {
 			return err
 		}
-	} else if err := e.persist("delete_nodes", deleteNodesOp{IDs: ids}); err != nil {
+	} else if err := e.persist(ctx, "delete_nodes", deleteNodesOp{IDs: ids}); err != nil {
 		return err
 	}
 	if err := e.applyHook(); err != nil {
@@ -253,14 +254,14 @@ func (e *Engine) applyDeleteNode(id string, deletedAt int64) {
 }
 
 // AnnotateNode merges JSON-encoded properties into a node while preserving history.
-func (e *Engine) AnnotateNode(id string, props map[string]any) error {
+func (e *Engine) AnnotateNode(ctx context.Context, id string, props map[string]any) error {
 	if id == "" || len(props) == 0 {
 		return nil
 	}
 	if err := e.checkDirty(); err != nil {
 		return err
 	}
-	if err := e.persist("annotate_node", annotateNodeOp{ID: id, Props: props}); err != nil {
+	if err := e.persist(ctx, "annotate_node", annotateNodeOp{ID: id, Props: props}); err != nil {
 		return err
 	}
 	e.store.mu.Lock()

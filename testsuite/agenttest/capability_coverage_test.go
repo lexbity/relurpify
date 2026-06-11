@@ -41,7 +41,7 @@ func (m *mockCapabilityRegistryProvider) Capabilities() []string {
 }
 
 // BuildGraph implements graph.WorkflowExecutor
-func (m *mockCapabilityRegistryProvider) BuildGraph(task *execution.Task) (*graph.Graph, error) {
+func (m *mockCapabilityRegistryProvider) BuildGraph(ctx context.Context, task *execution.Task) (*graph.Graph, error) {
 	return nil, nil
 }
 
@@ -49,8 +49,8 @@ var _ graph.WorkflowExecutor = (*mockCapabilityRegistryProvider)(nil)
 
 func TestExtractCapabilityRegistry(t *testing.T) {
 	reg := registry.NewRegistry()
-	reg.Register(&mockTool{name: "tool1"})
-	reg.Register(&mockTool{name: "tool2"})
+	reg.Register(context.Background(), &mockTool{name: "tool1"})
+	reg.Register(context.Background(), &mockTool{name: "tool2"})
 	reg.Register(&mockTool{name: "tool3"})
 
 	agent := &mockCapabilityRegistryProvider{registry: reg}
@@ -313,7 +313,7 @@ func (m *mockNoRegistryAgent) Capabilities() []string {
 	return nil
 }
 
-func (m *mockNoRegistryAgent) BuildGraph(task *execution.Task) (*graph.Graph, error) {
+func (m *mockNoRegistryAgent) BuildGraph(ctx context.Context, task *execution.Task) (*graph.Graph, error) {
 	return nil, nil
 }
 

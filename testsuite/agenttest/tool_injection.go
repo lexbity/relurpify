@@ -176,7 +176,7 @@ func WrapRegistryWithInterceptor(reg *registry.CapabilityRegistry, overrides []T
 	}
 
 	// Get all callable tools
-	tools := reg.CallableTools()
+	tools := reg.CallableTools(context.Background())
 
 	// Create a new registry and register wrapped tools
 	wrappedRegistry := registry.NewRegistry()
@@ -186,10 +186,10 @@ func WrapRegistryWithInterceptor(reg *registry.CapabilityRegistry, overrides []T
 		if len(toolOverrides) > 0 {
 			// Wrap with interceptor
 			wrapped := NewInjectionInterceptor(tool, overrides)
-			wrappedRegistry.Register(wrapped)
+			wrappedRegistry.Register(context.Background(), wrapped)
 		} else {
 			// Register unmodified
-			wrappedRegistry.Register(tool)
+			wrappedRegistry.Register(context.Background(), tool)
 		}
 	}
 

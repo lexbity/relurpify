@@ -68,7 +68,7 @@ func (a *GoalConAgent) Capabilities() []string {
 	return []string{"goalcon"}
 }
 
-func (a *GoalConAgent) BuildGraph(_ *execution.Task) (*graph.Graph, error) {
+func (a *GoalConAgent) BuildGraph(ctx context.Context, _ *execution.Task) (*graph.Graph, error) {
 	g := graph.NewGraph()
 	nodes := []graph.Node{
 		&goalconNode{id: "goalcon_plan"},
@@ -238,7 +238,7 @@ type noopAgent struct{}
 
 func (n *noopAgent) Initialize(_ *execution.Config) error { return nil }
 func (n *noopAgent) Capabilities() []string               { return nil }
-func (n *noopAgent) BuildGraph(_ *execution.Task) (*graph.Graph, error) {
+func (n *noopAgent) BuildGraph(ctx context.Context, _ *execution.Task) (*graph.Graph, error) {
 	g := graph.NewGraph()
 	done := graph.NewTerminalNode("noop_done")
 	_ = g.AddNode(done)

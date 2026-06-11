@@ -576,12 +576,10 @@ func TestReadFileTool_NonExistent(t *testing.T) {
 	dir := t.TempDir()
 	tool := &ReadFileTool{BasePath: dir}
 
-	res, err := tool.Execute(context.Background(), map[string]any{
+	_, err := tool.Execute(context.Background(), map[string]any{
 		"path": "nonexistent.txt",
 	})
-	require.NoError(t, err)
-	assert.False(t, res.Success)
-	assert.Contains(t, res.Error, "no such file")
+	require.ErrorContains(t, err, "no such file")
 }
 
 func TestReadFileTool_BinaryFile(t *testing.T) {
@@ -1429,7 +1427,8 @@ func TestSearchInFilesTool_SandboxScopeErrorOnDir(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, res.Success)
 	// Should find no matches since the subdir is protected
-	matchesBytes, _ := json.Marshal(res.Data["matches"])
+	matchesBytes, err := json.Marshal(res.Data["matches"])
+	require.NoError(t, err)
 	var matches []map[string]any
 	json.Unmarshal(matchesBytes, &matches)
 	assert.Empty(t, matches)

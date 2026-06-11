@@ -121,7 +121,7 @@ func (h *TestRunHandler) Invoke(ctx context.Context, env ports.State, args map[s
 
 	if h.cmd.Policy != nil {
 		if err := h.cmd.Policy.AllowCommand(ctx, req); err != nil {
-			return failResult(fmt.Sprintf("test command denied: %v", err)), err
+			return failResult(fmt.Sprintf("test command denied: %v", err)), nil
 		}
 	}
 
@@ -131,18 +131,7 @@ func (h *TestRunHandler) Invoke(ctx context.Context, env ports.State, args map[s
 
 	res, err := h.cmd.Runner.Run(ctx, req)
 	if err != nil {
-		return &ports.ToolResult{
-			Success: false,
-			Data: map[string]any{
-				"success":      false,
-				"passed":       false,
-				"exit_code":    -1,
-				"stdout":       "",
-				"stderr":       "",
-				"error":        err.Error(),
-				"failed_tests": []string{},
-			},
-		}, nil
+		return failResult(fmt.Sprintf("command execution failed: %v", err)), nil
 	}
 
 	// Parse test output to determine pass/fail

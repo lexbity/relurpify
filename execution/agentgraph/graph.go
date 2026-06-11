@@ -639,7 +639,7 @@ func (n *ToolNode) Execute(ctx context.Context, env *contextdata.Envelope) (*exe
 	if err != nil {
 		return nil, err
 	}
-	envelope := attachCapabilityEnvelope(n.Registry, n.Tool, env, res, n.Args)
+	envelope := attachCapabilityEnvelope(ctx, n.Registry, n.Tool, env, res, n.Args)
 	result := resultFromToolExecution(n.id, res)
 	if envelope != nil {
 		// Build a fresh metadata map so the envelope pointer is not written back
@@ -778,7 +778,7 @@ func resultFromToolExecution(nodeID string, res *ports.ToolResult) *execution.Re
 	}
 }
 
-func attachCapabilityEnvelope(registry CapabilityInvoker, tool ports.Tool, env *contextdata.Envelope, res *ports.ToolResult, args map[string]any) *capresult.CapabilityResultEnvelope {
+func attachCapabilityEnvelope(ctx context.Context, registry CapabilityInvoker, tool ports.Tool, env *contextdata.Envelope, res *ports.ToolResult, args map[string]any) *capresult.CapabilityResultEnvelope {
 	if registry == nil || tool == nil || res == nil {
 		return nil
 	}
@@ -793,7 +793,7 @@ func attachCapabilityEnvelope(registry CapabilityInvoker, tool ports.Tool, env *
 	if !ok || desc.ID == "" {
 		desc, ok = registry.GetCapability(tool.Name())
 		if !ok || desc.ID == "" {
-			desc = descriptor.ToolDescriptor(context.Background(), tool)
+			desc = descriptor.ToolDescriptor(ctx, tool)
 		}
 	}
 

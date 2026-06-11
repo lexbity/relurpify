@@ -53,7 +53,7 @@ func TestChromiumBackendCloseCleansUpProcessAndProfile(t *testing.T) {
 	cmd := backend.process
 	userData := backend.userData
 
-	require.NoError(t, backend.Close())
+	require.NoError(t, backend.Close(ctx))
 	require.NotNil(t, cmd.ProcessState)
 	require.True(t, cmd.ProcessState.Exited())
 	_, err = os.Stat(userData)
@@ -113,7 +113,7 @@ func TestChromiumBackendFollowsLocalRedirects(t *testing.T) {
 	})
 	require.NoError(t, err)
 	defer func() {
-		require.NoError(t, backend.Close())
+		require.NoError(t, backend.Close(ctx))
 	}()
 
 	require.NoError(t, backend.Navigate(ctx, redirectServer.URL+"/same-origin"))
@@ -148,7 +148,7 @@ func runLocalhostFlow(t *testing.T, ctx context.Context, chromiumPath string) {
 	})
 	require.NoError(t, err)
 	defer func() {
-		require.NoError(t, backend.Close())
+		require.NoError(t, backend.Close(ctx))
 	}()
 
 	require.NoError(t, backend.Navigate(ctx, server.URL))

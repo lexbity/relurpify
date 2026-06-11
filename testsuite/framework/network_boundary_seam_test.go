@@ -263,7 +263,7 @@ func TestNetworkCapabilityGating(t *testing.T) {
 			agent:   "test-agent",
 		}
 
-		if err := registry.Register(tool); err != nil {
+		if err := registry.Register(context.Background(), tool); err != nil {
 			t.Fatalf("failed to register tool: %v", err)
 		}
 
@@ -313,7 +313,7 @@ func TestNetworkCapabilityGating(t *testing.T) {
 			agent:   "test-agent",
 		}
 
-		if err := registry.Register(tool); err != nil {
+		if err := registry.Register(context.Background(), tool); err != nil {
 			t.Fatalf("failed to register tool: %v", err)
 		}
 

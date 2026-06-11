@@ -33,7 +33,7 @@ func TestBatchAtomicity_upsertNodesSingleCommit(t *testing.T) {
 			Kind: "test",
 		}
 	}
-	err := engine.UpsertNodes(nodes)
+	err := engine.UpsertNodes(context.TODO(), nodes)
 	require.NoError(t, err)
 
 	count := cb.commitCount.Load()
@@ -49,7 +49,7 @@ func TestBatchAtomicity_linkEdgesSingleCommit(t *testing.T) {
 	_ = opts
 
 	// Create a source node.
-	err := engine.UpsertNode(NodeRecord{ID: "src", Kind: "test"})
+	err := engine.UpsertNode(context.TODO(), NodeRecord{ID: "src", Kind: "test"})
 	require.NoError(t, err)
 	// Reset counter after setup
 	cb.commitCount.Store(0)
@@ -64,7 +64,7 @@ func TestBatchAtomicity_linkEdgesSingleCommit(t *testing.T) {
 			CreatedAt: 1,
 		}
 	}
-	err = engine.LinkEdges(edges)
+	err = engine.LinkEdges(context.TODO(), edges)
 	require.NoError(t, err)
 
 	count := cb.commitCount.Load()
@@ -80,10 +80,10 @@ func TestBatchAtomicity_mixedOpsSeparateCommits(t *testing.T) {
 	_ = opts
 
 	// One node, then one edge — two separate commits (different op types).
-	err := engine.UpsertNode(NodeRecord{ID: "a", Kind: "test"})
+	err := engine.UpsertNode(context.TODO(), NodeRecord{ID: "a", Kind: "test"})
 	require.NoError(t, err)
 
-	err = engine.Link("a", "b", "edge-a-b", "", 1, nil)
+	err = engine.Link(context.TODO(), "a", "b", "edge-a-b", "", 1, nil)
 	require.NoError(t, err)
 
 	count := cb.commitCount.Load()
@@ -103,7 +103,7 @@ func TestBatchAtomicity_commitIsAtomic(t *testing.T) {
 			Kind: "test",
 		}
 	}
-	err := engine.UpsertNodes(nodes)
+	err := engine.UpsertNodes(context.TODO(), nodes)
 	require.NoError(t, err)
 
 	// All 50 nodes should be visible after atomic batch commit.
@@ -126,7 +126,7 @@ func TestBatchAtomicity_concurrentWriterReader(t *testing.T) {
 	for i := range nodes {
 		nodes[i] = NodeRecord{ID: "concurrent-node-" + string(rune('a'+i)), Kind: "test"}
 	}
-	err := engine.UpsertNodes(nodes)
+	err := engine.UpsertNodes(context.TODO(), nodes)
 	require.NoError(t, err)
 
 	// Reader sees all nodes after write.

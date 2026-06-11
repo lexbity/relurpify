@@ -114,7 +114,10 @@ func (t *CapabilityAuditTrail) RecordInvocation(stepID string, envelope *capresu
 			entry.ErrorMessage = envelope.Result.Error
 		}
 		if len(envelope.Result.Data) > 0 {
-			dataJSON, _ := json.Marshal(envelope.Result.Data)
+			dataJSON, err := json.Marshal(envelope.Result.Data)
+			if err != nil {
+				dataJSON = []byte("{}")
+			}
 			entry.OutputSummary = truncate(string(dataJSON), 200)
 		}
 	}
@@ -291,7 +294,10 @@ func FromJSON(jsonStr string) (*CapabilityAuditTrail, error) {
 
 	if entriesData, ok := data["entries"].([]any); ok {
 		for _, entryData := range entriesData {
-			entryJSON, _ := json.Marshal(entryData)
+			entryJSON, err := json.Marshal(entryData)
+			if err != nil {
+				continue
+			}
 			var entry AuditEntry
 			if err := json.Unmarshal(entryJSON, &entry); err != nil {
 				continue

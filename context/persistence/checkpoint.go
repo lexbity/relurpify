@@ -2,6 +2,7 @@ package persistence
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -25,10 +26,10 @@ type CheckpointSnapshot struct {
 // SaveCheckpointArtifact writes a checkpoint artifact and stores its reference back into the envelope.
 func SaveCheckpointArtifact(ctx context.Context, env *contextdata.Envelope, upsertArtifact func(contextports.WorkflowArtifactRecord) error, snapshot CheckpointSnapshot) (*relurpctx.ArtifactReference, error) {
 	if env == nil || upsertArtifact == nil {
-		return nil, nil
+		return nil, errors.New("env or upsertArtifact is nil")
 	}
 	if strings.TrimSpace(snapshot.WorkflowID) == "" || strings.TrimSpace(snapshot.RunID) == "" {
-		return nil, nil
+		return nil, errors.New("workflowID or runID is empty")
 	}
 	if snapshot.Metadata == nil {
 		snapshot.Metadata = map[string]any{}
@@ -60,7 +61,7 @@ func SaveCheckpointArtifact(ctx context.Context, env *contextdata.Envelope, upse
 // LoadLatestCheckpointArtifact returns the most recent checkpoint artifact for a run.
 func LoadLatestCheckpointArtifact(ctx context.Context, listArtifactsByRun func(runID string) ([]contextports.WorkflowArtifactRecord, error), runID string) (*contextports.WorkflowArtifactRecord, error) {
 	if listArtifactsByRun == nil || strings.TrimSpace(runID) == "" {
-		return nil, nil
+		return nil, errors.New("listArtifactsByRun is nil or runID is empty")
 	}
 	artifacts, err := listArtifactsByRun(runID)
 	if err != nil {

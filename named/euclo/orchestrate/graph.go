@@ -47,7 +47,7 @@ type RootGraph struct {
 }
 
 // NewRootGraph creates a new root graph from explicit dependencies.
-func NewRootGraph(deps RootGraphDeps) (*RootGraph, error) {
+func NewRootGraph(ctx context.Context, deps RootGraphDeps) (*RootGraph, error) {
 	if err := validateRootGraphDeps(deps); err != nil {
 		return nil, err
 	}
@@ -72,7 +72,7 @@ func NewRootGraph(deps RootGraphDeps) (*RootGraph, error) {
 	}
 
 	g := agentgraph.NewGraph()
-	nodes, err := buildNodes(buildNodeInput{
+	nodes, err := buildNodes(ctx, buildNodeInput{
 		capReg:               capReg,
 		thoughtReg:           thoughtReg,
 		paradigmDeps:         paradigmDeps,
@@ -158,7 +158,7 @@ type buildNodeInput struct {
 	persistenceWriter    *persistence.Writer
 }
 
-func buildNodes(in buildNodeInput) ([]agentgraph.Node, error) {
+func buildNodes(ctx context.Context, in buildNodeInput) ([]agentgraph.Node, error) {
 	dispatchCapReg := in.capReg
 	thoughtrecipeReg := in.thoughtReg
 	if thoughtrecipeReg == nil {
@@ -172,7 +172,7 @@ func buildNodes(in buildNodeInput) ([]agentgraph.Node, error) {
 	if thoughtrecipeCapReg == nil {
 		thoughtrecipeCapReg = registry.NewRegistry()
 	}
-	if err := registerClarificationCapability(thoughtrecipeCapReg); err != nil {
+	if err := registerClarificationCapability(ctx, thoughtrecipeCapReg); err != nil {
 		return nil, err
 	}
 	intakePipeline := intake.NewIntakePipelineNode(

@@ -81,10 +81,10 @@ run reviewer:
 `)
 
 	reg := registry.NewRegistry()
-	if err := reg.RegisterLegacyTool(semanticTestTool{name: "file_write", available: true}); err != nil {
+	if err := reg.RegisterLegacyTool(context.Background(), semanticTestTool{name: "file_write", available: true}); err != nil {
 		t.Fatalf("register file_write: %v", err)
 	}
-	if err := reg.RegisterLegacyTool(semanticTestTool{name: "file_search", available: true}); err != nil {
+	if err := reg.RegisterLegacyTool(context.Background(), semanticTestTool{name: "file_search", available: true}); err != nil {
 		t.Fatalf("register file_search: %v", err)
 	}
 
@@ -118,7 +118,7 @@ agent reviewer uses react
 `)
 
 	reg := registry.NewRegistry()
-	if err := reg.RegisterLegacyTool(semanticTestTool{name: "file_search", available: true}); err != nil {
+	if err := reg.RegisterLegacyTool(context.Background(), semanticTestTool{name: "file_search", available: true}); err != nil {
 		t.Fatalf("register file_search: %v", err)
 	}
 
@@ -141,7 +141,7 @@ agent reviewer uses react
 `)
 
 	reg := registry.NewRegistry()
-	if err := reg.RegisterLegacyTool(semanticTestTool{name: "hidden_tool", available: true}); err != nil {
+	if err := reg.RegisterLegacyTool(context.Background(), semanticTestTool{name: "hidden_tool", available: true}); err != nil {
 		t.Fatalf("register hidden_tool: %v", err)
 	}
 	reg.AddExposurePolicies([]agentspec.CapabilityExposurePolicy{{

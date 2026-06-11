@@ -20,7 +20,7 @@ func TestEndToEndUnresolvedRouteWarningAndResume(t *testing.T) {
 
 	missingCaps := registry.NewRegistry()
 	missingDeps := rootGraphDeps(missingCaps)
-	missingGraph, err := orchestrate.NewRootGraph(missingDeps)
+	missingGraph, err := orchestrate.NewRootGraph(context.Background(), missingDeps)
 	if err != nil {
 		t.Fatalf("NewRootGraph failed: %v", err)
 	}
@@ -58,7 +58,7 @@ func TestEndToEndUnresolvedRouteWarningAndResume(t *testing.T) {
 	handler := &countingCapabilityHandler{id: capabilityID}
 	resolvedCaps := capabilityRegistryWithHandler(t, handler)
 	resolvedDeps := rootGraphDeps(resolvedCaps)
-	resolvedGraph, err := orchestrate.NewRootGraph(resolvedDeps)
+	resolvedGraph, err := orchestrate.NewRootGraph(context.Background(), resolvedDeps)
 	if err != nil {
 		t.Fatalf("NewRootGraph failed: %v", err)
 	}

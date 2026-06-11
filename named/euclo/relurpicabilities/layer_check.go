@@ -121,7 +121,7 @@ func (h *LayerCheckHandler) Invoke(ctx context.Context, env ports.State, args ma
 
 	allNodes, err := h.deps.Searcher.SearchNodes(ast.NodeQuery{Categories: []ast.Category{ast.CategoryCode}})
 	if err != nil {
-		return failResult("failed to search nodes: " + err.Error()), nil
+		return nil, err
 	}
 
 	violations := make([]map[string]any, 0)

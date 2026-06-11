@@ -2,6 +2,7 @@ package ast
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 )
@@ -42,7 +43,7 @@ func (s *stubParser) Parse(content string, path string) (*ParseResult, error) {
 }
 
 func (s *stubParser) ParseIncremental(_ *ParseResult, _ []ContentChange) (*ParseResult, error) {
-	return nil, nil
+	return nil, errors.New("stub: not implemented")
 }
 
 func (s *stubParser) Language() string          { return s.language }

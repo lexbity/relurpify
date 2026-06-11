@@ -1,6 +1,7 @@
 package services
 
 import (
+	"errors"
 	"io/fs"
 	"testing"
 
@@ -163,7 +164,7 @@ func (r *countingPromptRegistry) ResolveDryRun(string, prompt.RuntimeContext) (p
 func (r *countingPromptRegistry) DependsOn(string) ([]string, error)    { return nil, nil }
 func (r *countingPromptRegistry) DependentsOf(string) ([]string, error) { return nil, nil }
 func (r *countingPromptRegistry) PromptVariables(string) (map[string]prompt.VariableDecl, error) {
-	return nil, nil
+	return nil, errors.New("mock not implemented")
 }
 func (r *countingPromptRegistry) Validate(string) []prompt.ValidationIssue { return nil }
 func (r *countingPromptRegistry) ValidateAll() map[string][]prompt.ValidationIssue {

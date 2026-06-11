@@ -68,15 +68,15 @@ func (n *StreamTriggerNode) Execute(ctx context.Context, env *contextdata.Envelo
 		}
 		env.SetWorkingValueWithClass("contextstream.job_id", job.ID, contextdata.MemoryClassTask)
 		env.SetWorkingValueWithClass("contextstream.job_mode", string(req.Mode), contextdata.MemoryClassTask)
-		go func() {
-			result, err := job.Wait(context.Background())
+		go func(ctx context.Context) {
+			result, err := job.Wait(ctx)
 			if result != nil {
 				_ = contextstream.ApplyResult(env, result)
 			}
 			if err != nil {
 				env.SetWorkingValueWithClass("contextstream.background_error", err.Error(), contextdata.MemoryClassTask)
 			}
-		}()
+		}(ctx)
 		return &execution.Result{
 			NodeID:  n.id,
 			Success: true,

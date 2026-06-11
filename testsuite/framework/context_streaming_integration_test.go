@@ -21,11 +21,11 @@ func TestStreamingSuccess(t *testing.T) {
 
 	// Create a graph engine for chunk storage
 	opts := graphdb.DefaultOptions(env.WorkspacePath)
-	graph, err := graphdb.Open(opts)
+	graph, err := graphdb.Open(context.Background(), opts)
 	if err != nil {
 		t.Fatalf("failed to open graph engine: %v", err)
 	}
-	defer graph.Close()
+	defer graph.Close(context.Background())
 
 	store := &knowledge.ChunkStore{Graph: graph}
 
@@ -54,11 +54,11 @@ func TestStreamingSuccess(t *testing.T) {
 	}
 
 	// Save chunks to store
-	_, err = store.Save(chunk1)
+	_, err = store.Save(context.TODO(), chunk1)
 	if err != nil {
 		t.Fatalf("failed to save chunk1: %v", err)
 	}
-	_, err = store.Save(chunk2)
+	_, err = store.Save(context.TODO(), chunk2)
 	if err != nil {
 		t.Fatalf("failed to save chunk2: %v", err)
 	}
@@ -116,11 +116,11 @@ func TestStreamedChunkReferenceIntegrity(t *testing.T) {
 
 	// Create a graph engine for chunk storage
 	opts := graphdb.DefaultOptions(env.WorkspacePath)
-	graph, err := graphdb.Open(opts)
+	graph, err := graphdb.Open(context.Background(), opts)
 	if err != nil {
 		t.Fatalf("failed to open graph engine: %v", err)
 	}
-	defer graph.Close()
+	defer graph.Close(context.Background())
 
 	store := &knowledge.ChunkStore{Graph: graph}
 
@@ -160,15 +160,15 @@ func TestStreamedChunkReferenceIntegrity(t *testing.T) {
 	}
 
 	// Save chunks to store
-	_, err = store.Save(chunk1)
+	_, err = store.Save(context.TODO(), chunk1)
 	if err != nil {
 		t.Fatalf("failed to save chunk1: %v", err)
 	}
-	_, err = store.Save(chunk2)
+	_, err = store.Save(context.TODO(), chunk2)
 	if err != nil {
 		t.Fatalf("failed to save chunk2: %v", err)
 	}
-	_, err = store.Save(chunk3)
+	_, err = store.Save(context.TODO(), chunk3)
 	if err != nil {
 		t.Fatalf("failed to save chunk3: %v", err)
 	}
@@ -396,11 +396,11 @@ func TestStreamingWithTelemetry(t *testing.T) {
 
 	// Create a graph engine for chunk storage
 	opts := graphdb.DefaultOptions(env.WorkspacePath)
-	graph, err := graphdb.Open(opts)
+	graph, err := graphdb.Open(context.Background(), opts)
 	if err != nil {
 		t.Fatalf("failed to open graph engine: %v", err)
 	}
-	defer graph.Close()
+	defer graph.Close(context.Background())
 
 	store := &knowledge.ChunkStore{Graph: graph}
 
@@ -418,7 +418,7 @@ func TestStreamingWithTelemetry(t *testing.T) {
 	}
 
 	// Save chunk to store
-	_, err = store.Save(chunk)
+	_, err = store.Save(context.TODO(), chunk)
 	if err != nil {
 		t.Fatalf("failed to save chunk: %v", err)
 	}

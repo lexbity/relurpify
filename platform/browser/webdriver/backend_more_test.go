@@ -162,8 +162,8 @@ func TestBackendMethodFlowWithRemoteServer(t *testing.T) {
 	require.NoError(t, process.Start())
 	backend.process = process
 	backend.userData = t.TempDir()
-	require.NoError(t, backend.Close())
-	require.NoError(t, backend.Close())
+	require.NoError(t, backend.Close(context.Background()))
+	require.NoError(t, backend.Close(context.Background()))
 }
 
 func TestBackendErrorAndConditionBranches(t *testing.T) {
@@ -251,8 +251,8 @@ func TestBackendErrorAndConditionBranches(t *testing.T) {
 	require.NoError(t, process.Start())
 	backend.process = process
 	backend.userData = t.TempDir()
-	require.NoError(t, backend.Close())
-	require.NoError(t, backend.Close())
+	require.NoError(t, backend.Close(context.Background()))
+	require.NoError(t, backend.Close(context.Background()))
 }
 
 func TestCheckConditionFalseBranches(t *testing.T) {
@@ -360,7 +360,7 @@ func TestNewMissingSessionIDAndInvalidSessionClose(t *testing.T) {
 		baseURL:   closeServer.URL,
 		sessionID: "test",
 	}
-	require.NoError(t, backend.Close())
+	require.NoError(t, backend.Close(context.Background()))
 
 	invalidServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete && r.URL.Path == "/session/test" {
@@ -376,7 +376,7 @@ func TestNewMissingSessionIDAndInvalidSessionClose(t *testing.T) {
 		baseURL:   invalidServer.URL,
 		sessionID: "test",
 	}
-	require.NoError(t, backend.Close())
+	require.NoError(t, backend.Close(context.Background()))
 }
 
 func TestLaunchChromeDriverAndWaitForDriver(t *testing.T) {
@@ -389,7 +389,9 @@ func TestLaunchChromeDriverAndWaitForDriver(t *testing.T) {
 			http.NotFound(w, r)
 			return
 		}
-		_ = json.NewEncoder(w).Encode(map[string]any{"value": map[string]any{"ready": true}})
+		if err := json.NewEncoder(w).Encode(map[string]any{"value": map[string]any{"ready": true}}); err != nil {
+				panic(err)
+			}
 	})}
 	go func() {
 		_ = httpServer.Serve(portListener)
@@ -417,7 +419,9 @@ func TestWaitForDriverAndFreePort(t *testing.T) {
 	require.NoError(t, err)
 	actualPort := portListener.Addr().(*net.TCPAddr).Port
 	server := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_ = json.NewEncoder(w).Encode(map[string]any{"value": map[string]any{"ready": true}})
+		if err := json.NewEncoder(w).Encode(map[string]any{"value": map[string]any{"ready": true}}); err != nil {
+				panic(err)
+			}
 	})}
 	go func() {
 		_ = server.Serve(portListener)

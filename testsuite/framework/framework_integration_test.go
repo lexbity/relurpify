@@ -60,7 +60,7 @@ func TestFrameworkSuiteSmoke(t *testing.T) {
 	}
 
 	registryTool := &smokeTool{name: "smoke-tool"}
-	if err := env.Registry.Register(registryTool); err != nil {
+	if err := env.Registry.Register(context.Background(), registryTool); err != nil {
 		t.Fatalf("tool registration failed: %v", err)
 	}
 	if _, ok := env.Registry.Get("smoke-tool"); !ok {

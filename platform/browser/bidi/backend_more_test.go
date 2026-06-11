@@ -125,8 +125,8 @@ func TestBackendMethodFlowWithRemoteServers(t *testing.T) {
 	require.NoError(t, closeProc.Start())
 	backend.process = closeProc
 	backend.userData = t.TempDir()
-	require.NoError(t, backend.Close())
-	require.NoError(t, backend.Close())
+	require.NoError(t, backend.Close(context.Background()))
+	require.NoError(t, backend.Close(context.Background()))
 }
 
 func TestTransportCallReadLoopAndClose(t *testing.T) {
@@ -284,7 +284,7 @@ func TestBackendCloseWithTransportError(t *testing.T) {
 	backend := &Backend{
 		transport: closingTransport{err: errors.New("transport close failed")},
 	}
-	require.Error(t, backend.Close())
+	require.Error(t, backend.Close(context.Background()))
 }
 
 func TestWaitForLoadTimeoutAndClosedStream(t *testing.T) {

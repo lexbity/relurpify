@@ -8,6 +8,7 @@ package egressproxy
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -192,7 +193,10 @@ func readCONNECT(br *bufio.Reader) (*connectRequest, error) {
 	for {
 		hdr, err := br.ReadString('\n')
 		if err != nil {
-			break
+			if errors.Is(err, io.EOF) {
+				break
+			}
+			return nil, err
 		}
 		if strings.TrimSpace(hdr) == "" {
 			break

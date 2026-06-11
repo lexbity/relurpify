@@ -74,13 +74,13 @@ func (s *BrowserService) open(ctx context.Context, env *contextdata.Envelope, ar
 	handle.sessionID = sessionID
 	sessionPaths, err := s.ensureSessionPaths(sessionID)
 	if err != nil {
-		_ = handle.Close()
+		_ = handle.Close(ctx)
 		return nil, err
 	}
 	handle.paths = sessionPaths
 	s.trackSession(sessionID, handle)
 	if err := s.recordSessionActivity(sessionID, "open"); err != nil {
-		_ = handle.Close()
+		_ = handle.Close(ctx)
 		s.untrackSession(sessionID)
 		return nil, err
 	}
@@ -225,7 +225,7 @@ func (s *BrowserService) untrackSession(sessionID string) {
 	delete(s.sessions, sessionID)
 }
 
-func (h *browserSessionHandle) Close() error {
+func (h *browserSessionHandle) Close(ctx context.Context) error {
 	h.mu.Lock()
 	if h.closed {
 		h.mu.Unlock()
@@ -238,7 +238,7 @@ func (h *browserSessionHandle) Close() error {
 	if session == nil {
 		return nil
 	}
-	return session.Close()
+	return session.Close(ctx)
 }
 
 func (h *browserSessionHandle) Navigate(ctx context.Context, url string) error {
@@ -469,7 +469,7 @@ func (h *browserSessionHandle) recover(ctx context.Context, operation string, ca
 	h.mu.Unlock()
 
 	if old != nil {
-		_ = old.Close()
+		_ = old.Close(ctx)
 	}
 	newSession, err := h.factory(ctx, h.cfg)
 	if err != nil {

@@ -853,7 +853,7 @@ func (c *Compiler) generateAndPersistSummary(ctx context.Context, chunks []knowl
 	}
 
 	// Save to chunk store
-	saved, err := c.chunkStore.Save(summaryChunk)
+	saved, err := c.chunkStore.Save(ctx, summaryChunk)
 	if err != nil {
 		return nil
 	}

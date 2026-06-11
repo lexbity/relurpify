@@ -45,7 +45,7 @@ func (a *PlanStepAgent) Capabilities() []string {
 }
 
 // BuildGraph creates an execution graph for plan steps.
-func (a *PlanStepAgent) BuildGraph(task *execution.Task) (*graph.Graph, error) {
+func (a *PlanStepAgent) BuildGraph(ctx context.Context, task *execution.Task) (*graph.Graph, error) {
 	if a.plan == nil || len(a.plan.Steps) == 0 {
 		// Empty plan: return terminal node
 		g := graph.NewGraph()

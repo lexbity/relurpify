@@ -1,6 +1,7 @@
 package promptprovider
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -36,7 +37,7 @@ func TestThoughtRecipePlanGoalProviderRendersClarificationStateView(t *testing.T
 	}
 	contextdata.SetTyped(env, intentcontext.IntentEvidenceKey, evidence)
 	contextdata.SetTyped(env, intentcontext.IntentInterpretationKey, interpretation)
-	if err := intentcontext.NewStateStore().Write(nil, env, clarificationState); err != nil {
+	if err := intentcontext.NewStateStore().Write(context.TODO(), env, clarificationState); err != nil {
 		t.Fatalf("write clarification state: %v", err)
 	}
 
@@ -91,7 +92,7 @@ func TestThoughtRecipePlanGoalProviderGolden(t *testing.T) {
 	}
 	contextdata.SetTyped(env, intentcontext.IntentEvidenceKey, evidence)
 	contextdata.SetTyped(env, intentcontext.IntentInterpretationKey, interpretation)
-	if err := intentcontext.NewStateStore().Write(nil, env, clarificationState); err != nil {
+	if err := intentcontext.NewStateStore().Write(context.TODO(), env, clarificationState); err != nil {
 		t.Fatalf("write clarification state: %v", err)
 	}
 

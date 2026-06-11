@@ -2,6 +2,7 @@ package registry
 
 import (
 	"bytes"
+	"errors"
 	"log"
 	"strings"
 	"testing"
@@ -12,15 +13,17 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/ports"
 )
 
+var errSentinel = errors.New("sentinel error")
+
 func TestPanicInToolExecuteReturnsError(t *testing.T) {
 	result, err := recoverToolPanic(func() (*ports.ToolResult, error) {
-		return nil, nil
+		return &ports.ToolResult{Success: true}, nil
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if result != nil {
-		t.Fatalf("expected nil result from nil,nil return, got %+v", result)
+	if result.Success != true {
+		t.Fatalf("expected Success=true, got %+v", result)
 	}
 
 	result, err = recoverToolPanic(func() (*ports.ToolResult, error) {
@@ -61,8 +64,8 @@ func TestPanicInToolExecuteLogsStack(t *testing.T) {
 
 func TestPanicWithNilReturnDoesNotCrash(t *testing.T) {
 	result, err := recoverToolPanic(func() (*ports.ToolResult, error) {
-		defer func() { panic("deferred panic after nil,nil return") }()
-		return nil, nil
+		defer func() { panic("deferred panic after sentinel return") }()
+		return nil, errSentinel
 	})
 	if err != nil {
 		t.Fatalf("recoverToolPanic should not propagate error: %v", err)

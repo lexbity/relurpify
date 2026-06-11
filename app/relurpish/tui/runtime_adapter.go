@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"sort"
@@ -1290,21 +1291,21 @@ func (r *runtimeAdapter) QueryConfirmedPatterns(scope string) ([]PatternRecordIn
 
 func (r *runtimeAdapter) QueryIntentGaps(filePath, scope string) ([]IntentGapInfo, error) {
 	if r == nil || r.rt == nil {
-		return nil, nil
+		return nil, errors.New("runtime not initialized")
 	}
-	return nil, nil
+	return nil, errors.New("QueryIntentGaps not implemented")
 }
 
 func (r *runtimeAdapter) QueryTensions(scope string) ([]TensionInfo, error) {
 	if r == nil || r.rt == nil {
-		return nil, nil
+		return nil, errors.New("runtime not initialized")
 	}
-	return nil, nil
+	return nil, errors.New("QueryTensions not implemented")
 }
 
 func (r *runtimeAdapter) LoadLivePlan(workflowID string) (*LivePlanInfo, error) {
 	_ = workflowID
-	return nil, nil
+	return nil, errors.New("LoadLivePlan not implemented")
 }
 
 func (r *runtimeAdapter) AddPlanNote(stepRef string, body string) error {

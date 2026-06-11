@@ -31,7 +31,7 @@ func newBadgerTestEngine(t *testing.T) (*Engine, Options) {
 	}
 	engine.lastSave.Store(time.Now().UnixNano())
 	engine.wg.Add(1)
-	go engine.background()
+	go engine.background(context.Background())
 
 	t.Cleanup(func() {
 		engine.stopOnce.Do(func() {
@@ -300,7 +300,7 @@ func TestBadgerBackend_LoadEmptyStore(t *testing.T) {
 
 func TestBadgerBackend_UpsertNodeThroughEngine(t *testing.T) {
 	engine, _ := newBadgerTestEngine(t)
-	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "n1", Kind: "function", SourceID: "x.go"}))
+	require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: "n1", Kind: "function", SourceID: "x.go"}))
 
 	node, ok := engine.GetNode("n1")
 	require.True(t, ok)
@@ -309,9 +309,9 @@ func TestBadgerBackend_UpsertNodeThroughEngine(t *testing.T) {
 
 func TestBadgerBackend_LinkEdgeThroughEngine(t *testing.T) {
 	engine, _ := newBadgerTestEngine(t)
-	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "a", Kind: "function"}))
-	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "b", Kind: "function"}))
-	require.NoError(t, engine.Link("a", "b", "calls", "", 1, nil))
+	require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: "a", Kind: "function"}))
+	require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: "b", Kind: "function"}))
+	require.NoError(t, engine.Link(context.TODO(), "a", "b", "calls", "", 1, nil))
 
 	out := engine.GetOutEdges("a", "calls")
 	require.Len(t, out, 1)
@@ -324,11 +324,11 @@ func TestBadgerBackend_LinkEdgeThroughEngine(t *testing.T) {
 
 func TestBadgerBackend_DeleteNodeThroughEngine(t *testing.T) {
 	engine, _ := newBadgerTestEngine(t)
-	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "del", Kind: "function"}))
+	require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: "del", Kind: "function"}))
 	_, ok := engine.GetNode("del")
 	require.True(t, ok)
 
-	require.NoError(t, engine.DeleteNode("del"))
+	require.NoError(t, engine.DeleteNode(context.TODO(), "del"))
 	_, ok = engine.GetNode("del")
 	require.False(t, ok)
 }

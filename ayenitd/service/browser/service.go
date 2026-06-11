@@ -120,7 +120,7 @@ func (s *BrowserService) Start(ctx context.Context) error {
 		return nil
 	}
 	if !s.registry.HasCapability("browser") {
-		if err := s.registry.RegisterInvocableCapability(&browserCapability{service: s}); err != nil {
+		if err := s.registry.RegisterInvocableCapability(ctx, &browserCapability{service: s}); err != nil {
 			return err
 		}
 	}
@@ -146,7 +146,7 @@ func (s *BrowserService) Stop() error {
 
 	var errs []error
 	for _, handle := range handles {
-		if err := handle.Close(); err != nil {
+		if err := handle.Close(context.TODO()); err != nil {
 			errs = append(errs, err)
 		}
 	}

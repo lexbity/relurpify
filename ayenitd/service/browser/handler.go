@@ -64,9 +64,11 @@ func (h *browserCapability) Tags() []string {
 }
 
 func (h *browserCapability) SetAgentSpec(spec *agentspec.AgentRuntimeSpec, _ string) {
-	h.spec = spec
-	if h != nil && h.service != nil {
-		h.service.agentSpec = spec
+	if h != nil {
+		h.spec = spec
+		if h.service != nil {
+			h.service.agentSpec = spec
+		}
 	}
 }
 

@@ -180,7 +180,7 @@ func (s *WorkspaceScanner) discoverFiles(root string) ([]string, error) {
 
 	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
-			return nil // Continue walking
+			return err
 		}
 
 		// Skip directories

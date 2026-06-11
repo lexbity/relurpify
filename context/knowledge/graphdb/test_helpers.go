@@ -1,6 +1,7 @@
 package graphdb
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -10,10 +11,10 @@ import (
 func newTestEngine(t *testing.T) (*Engine, Options) {
 	t.Helper()
 	opts := DefaultOptions(t.TempDir())
-	engine, err := Open(opts)
+	engine, err := Open(context.Background(), opts)
 	require.NoError(t, err)
 	t.Cleanup(func() {
-		require.NoError(t, engine.Close())
+		require.NoError(t, engine.Close(context.Background()))
 	})
 	return engine, opts
 }

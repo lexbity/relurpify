@@ -84,14 +84,14 @@ func (t *ReadFileTool) Execute(ctx context.Context, args map[string]any) (*ports
 
 	info, err := os.Stat(path)
 	if err != nil {
-		return &ports.ToolResult{Success: false, Error: err.Error()}, nil
+		return nil, err
 	}
 	if info.IsDir() {
 		return &ports.ToolResult{Success: false, Error: fmt.Sprintf("%s is a directory; use file_list to explore it", path)}, nil
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return &ports.ToolResult{Success: false, Error: err.Error()}, nil
+		return nil, err
 	}
 	if !isText(data) {
 		return &ports.ToolResult{Success: false, Error: "binary file detected; cannot read binary files"}, nil

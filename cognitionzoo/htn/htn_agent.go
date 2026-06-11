@@ -139,7 +139,7 @@ func (a *HTNAgent) Capabilities() []string {
 
 // BuildGraph returns a minimal single-node graph suitable for agenttest and
 // visualisation. HTN execution is driven by Execute, not a static graph walk.
-func (a *HTNAgent) BuildGraph(task *execution.Task) (*agentgraph.Graph, error) {
+func (a *HTNAgent) BuildGraph(ctx context.Context, task *execution.Task) (*agentgraph.Graph, error) {
 	g := agentgraph.NewGraph()
 	done := agentgraph.NewTerminalNode("htn_done")
 	if err := g.AddNode(done); err != nil {
@@ -444,7 +444,7 @@ type noopAgent struct{}
 
 func (n *noopAgent) Initialize(_ *execution.Config) error { return nil }
 func (n *noopAgent) Capabilities() []string               { return nil }
-func (n *noopAgent) BuildGraph(_ *execution.Task) (*agentgraph.Graph, error) {
+func (n *noopAgent) BuildGraph(ctx context.Context, _ *execution.Task) (*agentgraph.Graph, error) {
 	g := agentgraph.NewGraph()
 	done := agentgraph.NewTerminalNode("noop_done")
 	_ = g.AddNode(done)

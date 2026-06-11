@@ -1,6 +1,7 @@
 package contextdata
 
 import (
+	"context"
 	"testing"
 	"time"
 )
@@ -531,7 +532,7 @@ func TestDeduplicateChunkReferences(t *testing.T) {
 }
 
 func TestEnvelopeContextStorage(t *testing.T) {
-	ctx := WithEnvelope(nil, NewEnvelope("task-1", "session-1"))
+	ctx := WithEnvelope(context.TODO(), NewEnvelope("task-1", "session-1"))
 
 	env, ok := EnvelopeFrom(ctx)
 	if !ok {
@@ -542,7 +543,7 @@ func TestEnvelopeContextStorage(t *testing.T) {
 	}
 
 	// Empty context should return false
-	_, ok = EnvelopeFrom(nil)
+	_, ok = EnvelopeFrom(context.TODO())
 	if ok {
 		t.Error("expected nil context to return false")
 	}
@@ -555,7 +556,7 @@ func TestMustEnvelopeFromPanicsOnMissing(t *testing.T) {
 		}
 	}()
 
-	MustEnvelopeFrom(nil)
+	MustEnvelopeFrom(context.TODO())
 }
 
 func TestEnvelopeSnapshot(t *testing.T) {

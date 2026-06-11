@@ -2,6 +2,7 @@ package intentcontext
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -69,7 +70,7 @@ func (s *EnvelopeStateStore) Write(ctx context.Context, env *contextdata.Envelop
 	}
 
 	current, err := s.readCurrent(env)
-	if err != nil {
+	if err != nil && !strings.Contains(err.Error(), "not found") {
 		return err
 	}
 	if current != nil && state.StateVersion < current.StateVersion {
@@ -104,7 +105,7 @@ func (s *EnvelopeStateStore) Write(ctx context.Context, env *contextdata.Envelop
 func (s *EnvelopeStateStore) readCurrent(env *contextdata.Envelope) (*ClarificationState, error) {
 	value, ok := env.GetWorkingValue(ClarificationStateKey)
 	if !ok || value == nil {
-		return nil, nil
+		return nil, errors.New("clarification state not found")
 	}
 	state, ok := value.(*ClarificationState)
 	if !ok {

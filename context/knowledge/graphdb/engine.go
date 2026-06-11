@@ -29,7 +29,7 @@ type Engine struct {
 }
 
 // Open initializes a Badger-backed engine from durable storage.
-func Open(opts Options) (*Engine, error) {
+func Open(ctx context.Context, opts Options) (*Engine, error) {
 	start := time.Now()
 	engine := &Engine{
 		opts:   opts,
@@ -54,14 +54,14 @@ func Open(opts Options) (*Engine, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := bb.load(context.TODO(), engine.store); err != nil {
+	if err := bb.load(ctx, engine.store); err != nil {
 		bb.close()
 		return nil, err
 	}
 	engine.bk = bb
 
 	engine.wg.Add(1)
-	go engine.background()
+	go engine.background(ctx)
 
 	engine.emitEvent(Event{
 		Kind:     EventOpenComplete,
@@ -71,13 +71,13 @@ func Open(opts Options) (*Engine, error) {
 }
 
 // Close stops maintenance and closes the durable store.
-func (e *Engine) Close() error {
+func (e *Engine) Close(ctx context.Context) error {
 	var err error
 	e.stopOnce.Do(func() {
 		close(e.stopCh)
 		e.wg.Wait()
 		if e.opts.SnapshotOnClose && e.dirty.Load() > 0 {
-			err = e.Snapshot()
+			err = e.Snapshot(ctx)
 		} else {
 			err = e.Flush()
 		}
@@ -99,7 +99,7 @@ func (e *Engine) Flush() error {
 }
 
 // Snapshot writes a full snapshot and rewrites the incremental log.
-func (e *Engine) Snapshot() error {
+func (e *Engine) Snapshot(ctx context.Context) error {
 	if e == nil {
 		return nil
 	}
@@ -107,7 +107,7 @@ func (e *Engine) Snapshot() error {
 	defer e.mu.Unlock()
 
 	state := e.snapshotState()
-	if err := e.bk.snapshot(context.TODO(), state); err != nil {
+	if err := e.bk.snapshot(ctx, state); err != nil {
 		return err
 	}
 	e.dirty.Store(0)
@@ -115,7 +115,7 @@ func (e *Engine) Snapshot() error {
 	return nil
 }
 
-func (e *Engine) background() {
+func (e *Engine) background(ctx context.Context) {
 	defer e.wg.Done()
 	interval := e.opts.MaintenanceInterval
 	if interval <= 0 {
@@ -129,12 +129,12 @@ func (e *Engine) background() {
 		case <-e.stopCh:
 			return
 		case <-ticker.C:
-			e.maybeSnapshot()
+			e.maybeSnapshot(ctx)
 		}
 	}
 }
 
-func (e *Engine) maybeSnapshot() {
+func (e *Engine) maybeSnapshot(ctx context.Context) {
 	if e.opts.AutoSaveThreshold <= 0 || e.opts.AutoSaveInterval <= 0 {
 		return
 	}
@@ -145,7 +145,7 @@ func (e *Engine) maybeSnapshot() {
 	if time.Since(last) < e.opts.AutoSaveInterval {
 		return
 	}
-	_ = e.Snapshot()
+	_ = e.Snapshot(ctx)
 }
 
 // checkDirty returns the stored dirty error when a previous memory apply
@@ -237,13 +237,13 @@ func (e *Engine) snapshotState() snapshotState {
 	return state
 }
 
-func (e *Engine) persist(kind string, payload any) error {
+func (e *Engine) persist(ctx context.Context, kind string, payload any) error {
 	if e == nil || e.bk == nil {
 		return nil
 	}
 	start := time.Now()
 	batch := singleOpBatch(kind, payload)
-	if err := e.bk.commit(context.TODO(), batch); err != nil {
+	if err := e.bk.commit(ctx, batch); err != nil {
 		e.emitEvent(Event{
 			Kind:       EventBackendCommitFail,
 			BatchSize:  1,
@@ -263,7 +263,7 @@ func (e *Engine) persist(kind string, payload any) error {
 }
 
 // RecordMutationResult stores a projection or mutation audit result durably.
-func (e *Engine) RecordMutationResult(result MutationResult) error {
+func (e *Engine) RecordMutationResult(ctx context.Context, result MutationResult) error {
 	if e == nil {
 		return nil
 	}
@@ -274,7 +274,7 @@ func (e *Engine) RecordMutationResult(result MutationResult) error {
 		result.AppliedAt = time.Now().UTC()
 	}
 	result.Normalize(result.TaskID, result.SessionID)
-	if err := e.persist("record_mutation_result", mutationResultOp{Result: result}); err != nil {
+	if err := e.persist(ctx, "record_mutation_result", mutationResultOp{Result: result}); err != nil {
 		return err
 	}
 	if err := e.applyHook(); err != nil {

@@ -102,7 +102,7 @@ func newCapabilityRegistry(t *testing.T, ids ...string) *registry.CapabilityRegi
 	t.Helper()
 	reg := registry.NewRegistry()
 	for _, id := range ids {
-		if err := reg.RegisterInvocableCapability(&testCapabilityHandler{
+		if err := reg.RegisterInvocableCapability(context.Background(), &testCapabilityHandler{
 			descriptor: descriptor.CapabilityDescriptor{
 				ID:            id,
 				Name:          id,
@@ -276,12 +276,12 @@ func writeWorkspaceFile(t *testing.T, dir, name, contents string) {
 func newPersistenceWriter(t *testing.T) *persistence.Writer {
 	t.Helper()
 	dir := t.TempDir()
-	engine, err := graphdb.Open(graphdb.DefaultOptions(filepath.Join(dir, "graphdb")))
+	engine, err := graphdb.Open(context.Background(), graphdb.DefaultOptions(filepath.Join(dir, "graphdb")))
 	if err != nil {
 		t.Fatalf("open graphdb: %v", err)
 	}
 	t.Cleanup(func() {
-		_ = engine.Close()
+		_ = engine.Close(context.Background())
 	})
 	return persistence.NewWriter(&knowledge.ChunkStore{Graph: engine}, nil, nil, nil)
 }

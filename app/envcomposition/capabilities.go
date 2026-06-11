@@ -29,12 +29,12 @@ var (
 	startIndexingFn           = func(m *ast.IndexManager, ctx context.Context) error { return m.StartIndexing(ctx) }
 	newSearchEngineFn         = search.NewSearchEngine
 	attachASTSymbolProviderFn = ast.AttachASTSymbolProvider
-	cleanupCapabilityBundleFn = func(g *graphdb.Engine, manager *ast.IndexManager) {
+	cleanupCapabilityBundleFn = func(ctx context.Context, g *graphdb.Engine, manager *ast.IndexManager) {
 		if manager != nil {
-			_ = manager.Close()
+			_ = manager.Close(ctx)
 		}
 		if g != nil {
-			_ = g.Close()
+			_ = g.Close(ctx)
 		}
 	}
 )
@@ -70,7 +70,7 @@ type PermissionManager interface {
 // BuildCapabilityRuntime constructs a complete capability runtime with platform tools and AST indexing.
 // The runner must be an *fsandbox.AuthorizedRunner — a verified, policy-wrapped runner.
 // Passing a bare CommandRunner is a compile error.
-func BuildCapabilityRuntime(workspace string, runner *fsandbox.AuthorizedRunner, opts ...CapabilityRuntimeOptions) (runtime *CapabilityRuntime, err error) {
+func BuildCapabilityRuntime(ctx context.Context, workspace string, runner *fsandbox.AuthorizedRunner, opts ...CapabilityRuntimeOptions) (runtime *CapabilityRuntime, err error) {
 	if workspace == "" {
 		workspace = "."
 	}
@@ -80,10 +80,6 @@ func BuildCapabilityRuntime(workspace string, runner *fsandbox.AuthorizedRunner,
 	var cfg CapabilityRuntimeOptions
 	if len(opts) > 0 {
 		cfg = opts[0]
-	}
-	buildCtx := cfg.Context
-	if buildCtx == nil {
-		buildCtx = context.Background()
 	}
 	registry := newCapabilityRegistryFn()
 	var astEngine *graphdb.Engine
@@ -96,7 +92,7 @@ func BuildCapabilityRuntime(workspace string, runner *fsandbox.AuthorizedRunner,
 	registry.UseToolAdmission(regpkg.NewToolAdmissionPolicy(toolManifests))
 	defer func() {
 		if err != nil {
-			cleanupCapabilityBundleFn(astEngine, manager)
+			cleanupCapabilityBundleFn(ctx, astEngine, manager)
 		}
 	}()
 	if cfg.PermissionManager != nil {
@@ -120,8 +116,8 @@ func BuildCapabilityRuntime(workspace string, runner *fsandbox.AuthorizedRunner,
 		}
 	}
 
-	register := func(tool ports.Tool) error {
-		if err := registry.Register(tool); err != nil {
+	register := func(ctx context.Context, tool ports.Tool) error {
+		if err := registry.Register(ctx, tool); err != nil {
 			return err
 		}
 		return nil
@@ -149,7 +145,7 @@ func BuildCapabilityRuntime(workspace string, runner *fsandbox.AuthorizedRunner,
 	}
 
 	// Create a Badger‑backed graphdb engine for AST index storage.
-	astEngine, err = newGraphDBFn(graphdb.DefaultOptions(indexDir))
+	astEngine, err = newGraphDBFn(ctx, graphdb.DefaultOptions(indexDir))
 	if err != nil {
 		return nil, err
 	}
@@ -172,16 +168,16 @@ func BuildCapabilityRuntime(workspace string, runner *fsandbox.AuthorizedRunner,
 		if cfg.PermissionManager == nil {
 			return true
 		}
-		return cfg.PermissionManager.CheckFileAccess(context.Background(), cfg.AgentID, action, path) == nil
+		return cfg.PermissionManager.CheckFileAccess(ctx, cfg.AgentID, action, path) == nil
 	})
 	attachASTSymbolProviderFn(manager, registry)
 	addTools(ast.NewASTTool(manager))
 	for _, tool := range available {
-		if err := register(tool); err != nil {
+		if err := register(ctx, tool); err != nil {
 			return nil, err
 		}
 	}
-	if err := startIndexingFn(manager, buildCtx); err != nil {
+	if err := startIndexingFn(manager, ctx); err != nil {
 		if !shouldIgnoreBootstrapIndexError(err) {
 			return nil, err
 		}
@@ -202,7 +198,7 @@ func BuildCapabilityRuntime(workspace string, runner *fsandbox.AuthorizedRunner,
 // tools registered. Unlike BuildCapabilityRuntime, it does not set up
 // AST indexing, search, or git tools — only the CLI tool wrappers. This is
 // suitable for the tool-exec CLI command which needs a throwaway registry.
-func BuildMinimalToolRegistry(workspace string, runner fsandbox.CommandRunner) (*regpkg.CapabilityRegistry, error) {
+func BuildMinimalToolRegistry(ctx context.Context, workspace string, runner fsandbox.CommandRunner) (*regpkg.CapabilityRegistry, error) {
 	capReg := newCapabilityRegistryFn()
 
 	manifestDir := config.DefaultToolManifestDir(workspace)
@@ -223,7 +219,7 @@ func BuildMinimalToolRegistry(workspace string, runner fsandbox.CommandRunner) (
 	}
 
 	for _, tool := range tools {
-		if err := capReg.Register(tool); err != nil {
+		if err := capReg.Register(ctx, tool); err != nil {
 			return nil, fmt.Errorf("register tool %s: %w", tool.Name(), err)
 		}
 	}

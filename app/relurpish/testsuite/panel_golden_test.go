@@ -2,6 +2,7 @@ package testsuite
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"os"
 	"path/filepath"
@@ -129,7 +130,7 @@ func (r *sandboxFixtureRuntime) SessionInfo() tui.SessionInfo {
 
 func (r *sandboxFixtureRuntime) LoadSandboxManifest() (*config.ManifestSpec, error) {
 	if r.manifest == nil {
-		return nil, nil
+		return nil, errors.New("manifest not set")
 	}
 	m := *r.manifest
 	return &m, nil

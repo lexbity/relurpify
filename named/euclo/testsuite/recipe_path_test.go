@@ -26,7 +26,7 @@ func TestEndToEndRootRouteOnlyThoughtRecipeExecution(t *testing.T) {
 	})
 	deps := rootGraphDepsWithModel(caps, stubLanguageModel{})
 	deps.ThoughtRecipes = thoughtrecipes
-	graph, err := orchestrate.NewRootGraph(deps)
+	graph, err := orchestrate.NewRootGraph(context.Background(), deps)
 	if err != nil {
 		t.Fatalf("NewRootGraph failed: %v", err)
 	}
@@ -75,7 +75,7 @@ func TestEndToEndThoughtRecipeEmitsLifecycleEvents(t *testing.T) {
 	telemetrySpy := &captureTelemetry{}
 	deps := rootGraphDepsWithModel(caps, stubLanguageModel{})
 	deps.ThoughtRecipes = thoughtrecipes
-	graph, err := orchestrate.NewRootGraph(deps)
+	graph, err := orchestrate.NewRootGraph(context.Background(), deps)
 	if err != nil {
 		t.Fatalf("NewRootGraph failed: %v", err)
 	}

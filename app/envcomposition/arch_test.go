@@ -76,7 +76,10 @@ func TestNoEnvcompositionImportsInSession(t *testing.T) {
 func TestBuildBuiltinCapabilityBundleIsDeprecated(t *testing.T) {
 	root := filepath.Join("..", "..")
 	filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
-		if err != nil || info.IsDir() || !strings.HasSuffix(path, ".go") {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() || !strings.HasSuffix(path, ".go") {
 			return nil
 		}
 		if strings.HasSuffix(path, "_test.go") || strings.Contains(path, "testsuite") {
@@ -84,7 +87,7 @@ func TestBuildBuiltinCapabilityBundleIsDeprecated(t *testing.T) {
 		}
 		data, err := os.ReadFile(path)
 		if err != nil {
-			return nil
+			return err
 		}
 		if !strings.Contains(string(data), "BuildBuiltinCapabilityBundle") {
 			return nil
@@ -106,7 +109,10 @@ func TestCompositionRootOwnsBuildFunctions(t *testing.T) {
 	}
 	root := filepath.Join("..", "..")
 	filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
-		if err != nil || info.IsDir() || !strings.HasSuffix(path, ".go") {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() || !strings.HasSuffix(path, ".go") {
 			return nil
 		}
 		if strings.HasSuffix(path, "_test.go") {
@@ -114,7 +120,7 @@ func TestCompositionRootOwnsBuildFunctions(t *testing.T) {
 		}
 		data, err := os.ReadFile(path)
 		if err != nil {
-			return nil
+			return err
 		}
 		for fn, expectedLocation := range buildFuncs {
 			if !strings.Contains(string(data), "func "+fn+"(") {

@@ -17,7 +17,7 @@ func TestWithTraceContextRoundTrip(t *testing.T) {
 }
 
 func TestTraceContextFromNilContext(t *testing.T) {
-	_, ok := TraceContextFromContext(nil)
+	_, ok := TraceContextFromContext(context.TODO())
 	require.False(t, ok)
 }
 

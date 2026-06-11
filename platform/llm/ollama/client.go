@@ -124,14 +124,18 @@ func (c *Client) GenerateStream(ctx context.Context, prompt string, options *LLM
 	if err != nil {
 		return nil, err
 	}
+	defer resp.Body.Close()
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
 	ch := make(chan string)
 	go func() {
-		defer resp.Body.Close()
-		defer close(ch)
-		scanner := bufio.NewScanner(resp.Body)
+		scanner := bufio.NewScanner(bytes.NewReader(bodyBytes))
 		for scanner.Scan() {
 			ch <- scanner.Text()
 		}
+		close(ch)
 	}()
 	return ch, nil
 }

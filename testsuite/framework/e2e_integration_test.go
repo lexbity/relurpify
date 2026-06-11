@@ -22,11 +22,11 @@ func TestEndToEndAgentExecution(t *testing.T) {
 
 	// Set up graph engine for knowledge storage
 	opts := graphdb.DefaultOptions(env.WorkspacePath)
-	graph, err := graphdb.Open(opts)
+	graph, err := graphdb.Open(context.Background(), opts)
 	if err != nil {
 		t.Fatalf("failed to open graph engine: %v", err)
 	}
-	defer graph.Close()
+	defer graph.Close(context.Background())
 	knowledgeStore := &knowledge.ChunkStore{Graph: graph}
 
 	// Step 1: Create a manifest with policy (manifest seam)
@@ -59,7 +59,7 @@ func TestEndToEndAgentExecution(t *testing.T) {
 		basePath:    env.WorkspacePath,
 	}
 
-	if err := registry.Register(tool); err != nil {
+	if err := registry.Register(context.Background(), tool); err != nil {
 		t.Fatalf("failed to register tool: %v", err)
 	}
 
@@ -121,7 +121,7 @@ func TestEndToEndAgentExecution(t *testing.T) {
 		CreatedAt: time.Now().UTC(),
 	}
 
-	savedChunk, err := knowledgeStore.Save(chunk)
+	savedChunk, err := knowledgeStore.Save(context.TODO(), chunk)
 	if err != nil {
 		t.Fatalf("failed to save chunk: %v", err)
 	}

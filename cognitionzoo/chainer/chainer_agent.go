@@ -45,7 +45,7 @@ func (a *ChainerAgent) Capabilities() []string {
 	return []string{"plan", "execute", "explain"}
 }
 
-func (a *ChainerAgent) BuildGraph(task *execution.Task) (*agentgraph.Graph, error) {
+func (a *ChainerAgent) BuildGraph(ctx context.Context, task *execution.Task) (*agentgraph.Graph, error) {
 	chain, err := a.resolveChain(task)
 	if err != nil {
 		return nil, err

@@ -1,6 +1,7 @@
 package session
 
 import (
+	"errors"
 	"fmt"
 
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
@@ -54,7 +55,7 @@ func decodePermissionsSection(doc *config.Document) (permissions.PermissionSet, 
 func decodeAgentSection(doc *config.Document) (*agentspec.AgentRuntimeSpec, error) {
 	node, ok := doc.Section("agent")
 	if !ok {
-		return nil, nil
+		return nil, errors.New("agent section not found")
 	}
 	return agentspec.DecodeSection(node)
 }
@@ -62,7 +63,7 @@ func decodeAgentSection(doc *config.Document) (*agentspec.AgentRuntimeSpec, erro
 func decodeContextPolicySection(doc *config.Document) (*execctx.ContextPolicyBundle, error) {
 	node, ok := doc.Section("context")
 	if !ok {
-		return nil, nil
+		return nil, errors.New("context section not found")
 	}
 	return context.DecodeContextPolicy(node)
 }
@@ -71,7 +72,7 @@ func decodeContextPolicySection(doc *config.Document) (*execctx.ContextPolicyBun
 // the standard yaml.Node.Decode method. It panics if the node is zero-valued.
 func DecodeYAMLNode[T any](node yaml.Node) (*T, error) {
 	if node.Kind == 0 {
-		return nil, nil
+		return nil, errors.New("yaml node is zero-valued")
 	}
 	var out T
 	if err := node.Decode(&out); err != nil {

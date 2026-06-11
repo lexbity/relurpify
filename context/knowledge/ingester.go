@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -80,7 +81,7 @@ func (ing *OutputIngester) IngestLLMResponse(ctx context.Context, resp any) erro
 // IngestLLMResponseFull stores an LLM response as a knowledge chunk and returns it.
 func (ing *OutputIngester) IngestLLMResponseFull(ctx context.Context, resp *model.LLMResponse) (*KnowledgeChunk, error) {
 	if resp == nil || strings.TrimSpace(resp.Text) == "" {
-		return nil, nil
+		return nil, errors.New("LLM response is nil or empty")
 	}
 	env, _ := contextdata.EnvelopeFrom(ctx)
 	return ing.ingestText(ctx, ingestTextInput{
@@ -104,7 +105,7 @@ func (ing *OutputIngester) IngestLLMResponseFull(ctx context.Context, resp *mode
 // IngestToolResult stores a tool result as a knowledge chunk.
 func (ing *OutputIngester) IngestToolResult(ctx context.Context, toolName string, result []byte) (*KnowledgeChunk, error) {
 	if len(result) == 0 {
-		return nil, nil
+		return nil, errors.New("tool result is empty")
 	}
 	env, _ := contextdata.EnvelopeFrom(ctx)
 	return ing.ingestText(ctx, ingestTextInput{
@@ -128,7 +129,7 @@ func (ing *OutputIngester) IngestToolResult(ctx context.Context, toolName string
 // IngestObservation stores a textual observation as a knowledge chunk.
 func (ing *OutputIngester) IngestObservation(ctx context.Context, observation string) (*KnowledgeChunk, error) {
 	if strings.TrimSpace(observation) == "" {
-		return nil, nil
+		return nil, errors.New("observation is empty")
 	}
 	env, _ := contextdata.EnvelopeFrom(ctx)
 	return ing.ingestText(ctx, ingestTextInput{
@@ -153,9 +154,6 @@ func IngestToolResultAsync(ctx context.Context, ing *OutputIngester, toolName st
 	if ing == nil || len(result) == 0 {
 		return
 	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	go func() {
 		timeoutCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 		defer cancel()
@@ -167,9 +165,6 @@ func IngestToolResultAsync(ctx context.Context, ing *OutputIngester, toolName st
 func IngestObservationAsync(ctx context.Context, ing *OutputIngester, observation string) {
 	if ing == nil || strings.TrimSpace(observation) == "" {
 		return
-	}
-	if ctx == nil {
-		ctx = context.Background()
 	}
 	go func() {
 		timeoutCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
@@ -198,7 +193,7 @@ func (ing *OutputIngester) ingestText(ctx context.Context, input ingestTextInput
 	}
 	text := strings.TrimSpace(input.text)
 	if text == "" {
-		return nil, nil
+		return nil, errors.New("text is empty")
 	}
 	contentHash := contentHashForText(text)
 	existing, err := ing.Store.FindByContentHash(contentHash)
@@ -247,7 +242,7 @@ func (ing *OutputIngester) ingestText(ctx context.Context, input ingestTextInput
 		chunk.CreatedAt = existing[0].CreatedAt
 	}
 
-	saved, err := ing.Store.Save(chunk)
+	saved, err := ing.Store.Save(ctx, chunk)
 	if err != nil {
 		return nil, err
 	}
@@ -263,7 +258,7 @@ func (ing *OutputIngester) ingestText(ctx context.Context, input ingestTextInput
 			fromID = saved.ID
 			toID = sourceID
 		}
-		_, _ = ing.Store.SaveEdge(ChunkEdge{
+		_, _ = ing.Store.SaveEdge(ctx, ChunkEdge{
 			FromChunk: fromID,
 			ToChunk:   toID,
 			Kind:      edgeKind,

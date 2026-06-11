@@ -122,12 +122,12 @@ func (f *FilteredRegistry) Get(name string) (ports.Tool, bool) {
 }
 
 // ModelCallableTools returns only the allowed callable tools.
-func (f *FilteredRegistry) ModelCallableTools() []ports.Tool {
+func (f *FilteredRegistry) ModelCallableTools(ctx context.Context) []ports.Tool {
 	if f == nil || f.base == nil {
 		return nil
 	}
 
-	allTools := f.base.ModelCallableTools()
+	allTools := f.base.ModelCallableTools(ctx)
 	if f.IsPassthrough() {
 		return allTools
 	}

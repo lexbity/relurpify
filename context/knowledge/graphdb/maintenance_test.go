@@ -102,9 +102,9 @@ func TestEvent_OpenStartComplete(t *testing.T) {
 	opts := DefaultOptions(t.TempDir())
 	opts.Observer = obs
 
-	engine, err := Open(opts)
+	engine, err := Open(context.Background(), opts)
 	require.NoError(t, err)
-	engine.Close()
+	engine.Close(context.Background())
 
 	obs.mu.Lock()
 	defer obs.mu.Unlock()
@@ -123,11 +123,11 @@ func TestEvent_Commit(t *testing.T) {
 	opts := DefaultOptions(t.TempDir())
 	opts.Observer = obs
 
-	engine, err := Open(opts)
+	engine, err := Open(context.Background(), opts)
 	require.NoError(t, err)
-	defer engine.Close()
+	defer engine.Close(context.Background())
 
-	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "n1", Kind: "function"}))
+	require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: "n1", Kind: "function"}))
 
 	obs.mu.Lock()
 	defer obs.mu.Unlock()
@@ -146,16 +146,16 @@ func TestEvent_CommitFailed(t *testing.T) {
 	opts := DefaultOptions(t.TempDir())
 	opts.Observer = obs
 
-	engine, err := Open(opts)
+	engine, err := Open(context.Background(), opts)
 	require.NoError(t, err)
-	defer engine.Close()
+	defer engine.Close(context.Background())
 
 	// Inject a commit failure by using an invalid payload type through
 	// the engine's persist path. The engine itself validates, so we
 	// send a batch with invalid content that the backend will reject.
 	// We call persist directly with an invalid op that encodeBinaryOp
 	// will reject.
-	require.Error(t, engine.persist("upsert_node", "not a struct"))
+	require.Error(t, engine.persist(context.TODO(), "upsert_node", "not a struct"))
 
 	obs.mu.Lock()
 	defer obs.mu.Unlock()
@@ -175,9 +175,9 @@ func TestEvent_MemoryApplyFail(t *testing.T) {
 	opts := DefaultOptions(t.TempDir())
 	opts.Observer = obs
 
-	engine, err := Open(opts)
+	engine, err := Open(context.Background(), opts)
 	require.NoError(t, err)
-	defer engine.Close()
+	defer engine.Close(context.Background())
 
 	engine.markDirty(errors.New("apply failed"))
 
@@ -195,13 +195,13 @@ func TestEvent_MemoryApplyFail(t *testing.T) {
 }
 
 func TestSubgraphPage_TraversalSucceeds(t *testing.T) {
-	engine, err := Open(DefaultOptions(t.TempDir()))
+	engine, err := Open(context.Background(), DefaultOptions(t.TempDir()))
 	require.NoError(t, err)
-	defer engine.Close()
+	defer engine.Close(context.Background())
 
-	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "a", Kind: "function"}))
-	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "b", Kind: "function"}))
-	require.NoError(t, engine.Link("a", "b", "calls", "", 1, nil))
+	require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: "a", Kind: "function"}))
+	require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: "b", Kind: "function"}))
+	require.NoError(t, engine.Link(context.TODO(), "a", "b", "calls", "", 1, nil))
 
 	page, err := engine.SubgraphPage(context.Background(), GraphPageQuery{
 		GraphQuery: GraphQuery{
@@ -221,9 +221,9 @@ func TestEvent_TraversalCancelled(t *testing.T) {
 	opts := DefaultOptions(t.TempDir())
 	opts.Observer = obs
 
-	engine, err := Open(opts)
+	engine, err := Open(context.Background(), opts)
 	require.NoError(t, err)
-	defer engine.Close()
+	defer engine.Close(context.Background())
 
 	// Create graph and cancel context immediately.
 	buildBranchingGraph(engine, "root", 3, 3)

@@ -13,9 +13,9 @@ import (
 
 func TestNodeOperationsRoundTrip(t *testing.T) {
 	engine, _ := newTestEngine(t)
-	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "n1", Kind: "function", SourceID: "a.go", Labels: []string{"a"}}))
-	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "n2", Kind: "method", SourceID: "a.go"}))
-	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "n3", Kind: "function", SourceID: "b.go"}))
+	require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: "n1", Kind: "function", SourceID: "a.go", Labels: []string{"a"}}))
+	require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: "n2", Kind: "method", SourceID: "a.go"}))
+	require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: "n3", Kind: "function", SourceID: "b.go"}))
 
 	node, ok := engine.GetNode("n1")
 	require.True(t, ok)
@@ -31,21 +31,21 @@ func TestNodeOperationsRoundTrip(t *testing.T) {
 
 func TestBatchNodeAndEdgeOperations(t *testing.T) {
 	engine, _ := newTestEngine(t)
-	require.NoError(t, engine.UpsertNodes([]NodeRecord{
+	require.NoError(t, engine.UpsertNodes(context.TODO(), []NodeRecord{
 		{ID: "a", Kind: "function", SourceID: "a.go"},
 		{ID: "b", Kind: "function", SourceID: "a.go"},
 		{ID: "c", Kind: "function", SourceID: "b.go"},
 	}))
 	require.Len(t, engine.NodesBySource("a.go"), 2)
 
-	require.NoError(t, engine.LinkEdges([]EdgeRecord{
+	require.NoError(t, engine.LinkEdges(context.TODO(), []EdgeRecord{
 		{SourceID: "a", TargetID: "b", Kind: "calls", Weight: 1},
 		{SourceID: "b", TargetID: "c", Kind: "calls", Weight: 1},
 	}))
 	require.Len(t, engine.GetOutEdges("a", "calls"), 1)
 	require.Len(t, engine.GetOutEdges("b", "calls"), 1)
 
-	require.NoError(t, engine.DeleteNodes([]string{"a", "b"}))
+	require.NoError(t, engine.DeleteNodes(context.TODO(), []string{"a", "b"}))
 	_, okA := engine.GetNode("a")
 	_, okB := engine.GetNode("b")
 	require.False(t, okA)
@@ -54,10 +54,10 @@ func TestBatchNodeAndEdgeOperations(t *testing.T) {
 
 func TestLinkAndUnlinkOperations(t *testing.T) {
 	engine, _ := newTestEngine(t)
-	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "a", Kind: "function"}))
-	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "b", Kind: "function"}))
+	require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: "a", Kind: "function"}))
+	require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: "b", Kind: "function"}))
 
-	require.NoError(t, engine.Link("a", "b", "calls", "called_by", 1, map[string]any{"site": "x"}))
+	require.NoError(t, engine.Link(context.TODO(), "a", "b", "calls", "called_by", 1, map[string]any{"site": "x"}))
 	out := engine.GetOutEdges("a")
 	in := engine.GetInEdges("b")
 	require.Len(t, out, 1)
@@ -67,25 +67,25 @@ func TestLinkAndUnlinkOperations(t *testing.T) {
 	require.Len(t, engine.GetOutEdges("b"), 1)
 	require.Equal(t, EdgeKind("called_by"), engine.GetOutEdges("b")[0].Kind)
 
-	require.NoError(t, engine.Unlink("a", "b", "calls", false))
+	require.NoError(t, engine.Unlink(context.TODO(), "a", "b", "calls", false))
 	soft := allOutEdges(t, engine, "a")
 	require.Len(t, soft, 1)
 	require.False(t, soft[0].IsActive())
 	require.Empty(t, engine.GetOutEdges("a"))
 
-	require.NoError(t, engine.Unlink("b", "a", "called_by", true))
+	require.NoError(t, engine.Unlink(context.TODO(), "b", "a", "called_by", true))
 	require.Empty(t, allOutEdges(t, engine, "b"))
 }
 
 func TestDeleteNodeSoftDeletesConnectedEdges(t *testing.T) {
 	engine, _ := newTestEngine(t)
 	for _, id := range []string{"a", "b", "c"} {
-		require.NoError(t, engine.UpsertNode(NodeRecord{ID: id, Kind: "function"}))
+		require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: id, Kind: "function"}))
 	}
-	require.NoError(t, engine.Link("a", "b", "calls", "", 1, nil))
-	require.NoError(t, engine.Link("c", "b", "calls", "", 1, nil))
+	require.NoError(t, engine.Link(context.TODO(), "a", "b", "calls", "", 1, nil))
+	require.NoError(t, engine.Link(context.TODO(), "c", "b", "calls", "", 1, nil))
 
-	require.NoError(t, engine.DeleteNode("b"))
+	require.NoError(t, engine.DeleteNode(context.TODO(), "b"))
 	_, ok := engine.GetNode("b")
 	require.False(t, ok)
 	require.False(t, allOutEdges(t, engine, "a")[0].IsActive())
@@ -94,15 +94,15 @@ func TestDeleteNodeSoftDeletesConnectedEdges(t *testing.T) {
 
 func TestDeleteAndReopen(t *testing.T) {
 	engine, opts := newTestEngine(t)
-	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "n1", Kind: "function"}))
-	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "n2", Kind: "function"}))
-	require.NoError(t, engine.Link("n1", "n2", "calls", "", 1, nil))
-	require.NoError(t, engine.DeleteNode("n1"))
-	require.NoError(t, engine.Close())
+	require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: "n1", Kind: "function"}))
+	require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: "n2", Kind: "function"}))
+	require.NoError(t, engine.Link(context.TODO(), "n1", "n2", "calls", "", 1, nil))
+	require.NoError(t, engine.DeleteNode(context.TODO(), "n1"))
+	require.NoError(t, engine.Close(context.Background()))
 
-	reopened, err := Open(opts)
+	reopened, err := Open(context.Background(), opts)
 	require.NoError(t, err)
-	defer reopened.Close()
+	defer reopened.Close(context.Background())
 
 	_, ok := reopened.GetNode("n1")
 	require.False(t, ok)
@@ -124,7 +124,7 @@ func TestMutationResultRoundTrip(t *testing.T) {
 		Details:      map[string]any{"plan_id": "plan-1"},
 	}
 	result.Normalize(result.TaskID, result.SessionID)
-	require.NoError(t, engine.RecordMutationResult(result))
+	require.NoError(t, engine.RecordMutationResult(context.TODO(), result))
 
 	got, ok := engine.MutationResult(result.StableID)
 	require.True(t, ok)
@@ -138,12 +138,12 @@ func TestMutationResultRoundTrip(t *testing.T) {
 	require.Len(t, results, 1)
 	require.Equal(t, result.StableID, results[0].StableID)
 
-	require.NoError(t, engine.Snapshot())
-	require.NoError(t, engine.Close())
+	require.NoError(t, engine.Snapshot(context.Background()))
+	require.NoError(t, engine.Close(context.Background()))
 
-	reopened, err := Open(opts)
+	reopened, err := Open(context.Background(), opts)
 	require.NoError(t, err)
-	defer reopened.Close()
+	defer reopened.Close(context.Background())
 
 	reopenedResult, ok := reopened.MutationResult(result.StableID)
 	require.True(t, ok)
@@ -156,11 +156,11 @@ func TestMutationResultRoundTrip(t *testing.T) {
 func TestImpactSetFindPathNeighborsAndSubgraph(t *testing.T) {
 	engine, _ := newTestEngine(t)
 	for _, id := range []string{"a", "b", "c", "d"} {
-		require.NoError(t, engine.UpsertNode(NodeRecord{ID: id, Kind: "function"}))
+		require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: id, Kind: "function"}))
 	}
-	require.NoError(t, engine.Link("a", "b", "calls", "", 1, nil))
-	require.NoError(t, engine.Link("b", "c", "calls", "", 1, nil))
-	require.NoError(t, engine.Link("a", "d", "imports", "", 1, nil))
+	require.NoError(t, engine.Link(context.TODO(), "a", "b", "calls", "", 1, nil))
+	require.NoError(t, engine.Link(context.TODO(), "b", "c", "calls", "", 1, nil))
+	require.NoError(t, engine.Link(context.TODO(), "a", "d", "imports", "", 1, nil))
 
 	// ImpactSet via SubgraphPage
 	page, err := engine.SubgraphPage(context.Background(), GraphPageQuery{
@@ -218,10 +218,10 @@ func TestConcurrentUpsertAndLink(t *testing.T) {
 		go func(i int) {
 			defer wg.Done()
 			id := string(rune('a' + i))
-			require.NoError(t, engine.UpsertNode(NodeRecord{ID: id, Kind: "function"}))
+			require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: id, Kind: "function"}))
 			if i > 0 {
 				prev := string(rune('a' + i - 1))
-				require.NoError(t, engine.Link(prev, id, "calls", "", 1, nil))
+				require.NoError(t, engine.Link(context.TODO(), prev, id, "calls", "", 1, nil))
 			}
 		}(i)
 	}
@@ -246,9 +246,9 @@ func TestStableMutationIdentityAndProvenanceRoundTrip(t *testing.T) {
 		StateVersion:   11,
 		Props:          json.RawMessage(`{"kind":"node"}`),
 	}
-	require.NoError(t, engine.UpsertNode(node))
-	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "n2", Kind: "function"}))
-	require.NoError(t, engine.LinkEdges([]EdgeRecord{{
+	require.NoError(t, engine.UpsertNode(context.TODO(), node))
+	require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: "n2", Kind: "function"}))
+	require.NoError(t, engine.LinkEdges(context.TODO(), []EdgeRecord{{
 		SourceID:       "n1",
 		TargetID:       "n2",
 		Kind:           "calls",
@@ -284,13 +284,13 @@ func TestStableMutationIdentityAndProvenanceRoundTrip(t *testing.T) {
 func TestRevisionHistoryAndPersistence(t *testing.T) {
 	engine, opts := newTestEngine(t)
 
-	require.NoError(t, engine.UpsertNode(NodeRecord{
+	require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{
 		ID:    "n1",
 		Kind:  "function",
 		Props: json.RawMessage(`{"a":1}`),
 	}))
-	require.NoError(t, engine.AnnotateNode("n1", map[string]any{"b": 2}))
-	require.NoError(t, engine.UpsertNode(NodeRecord{
+	require.NoError(t, engine.AnnotateNode(context.TODO(), "n1", map[string]any{"b": 2}))
+	require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{
 		ID:    "n1",
 		Kind:  "function",
 		Props: json.RawMessage(`{"c":3}`),
@@ -302,10 +302,10 @@ func TestRevisionHistoryAndPersistence(t *testing.T) {
 	require.JSONEq(t, `{"a":1,"b":2}`, string(nodeRevisions[1].Props))
 
 	edgeProps := map[string]any{"site": "x"}
-	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "n2", Kind: "function"}))
-	require.NoError(t, engine.Link("n1", "n2", "calls", "", 1, edgeProps))
-	require.NoError(t, engine.AnnotateEdge("n1", "n2", "calls", map[string]any{"note": "y"}))
-	require.NoError(t, engine.LinkEdges([]EdgeRecord{{
+	require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: "n2", Kind: "function"}))
+	require.NoError(t, engine.Link(context.TODO(), "n1", "n2", "calls", "", 1, edgeProps))
+	require.NoError(t, engine.AnnotateEdge(context.TODO(), "n1", "n2", "calls", map[string]any{"note": "y"}))
+	require.NoError(t, engine.LinkEdges(context.TODO(), []EdgeRecord{{
 		SourceID: "n1",
 		TargetID: "n2",
 		Kind:     "calls",
@@ -320,11 +320,11 @@ func TestRevisionHistoryAndPersistence(t *testing.T) {
 	require.Equal(t, float32(2), engine.GetOutEdges("n1", "calls")[0].Weight)
 	require.JSONEq(t, `{"site":"z"}`, string(engine.GetOutEdges("n1", "calls")[0].Props))
 
-	require.NoError(t, engine.Close())
+	require.NoError(t, engine.Close(context.Background()))
 
-	reopened, err := Open(opts)
+	reopened, err := Open(context.Background(), opts)
 	require.NoError(t, err)
-	defer reopened.Close()
+	defer reopened.Close(context.Background())
 
 	reopenedNodeRevisions := reopened.NodeRevisions("n1")
 	require.Len(t, reopenedNodeRevisions, 2)

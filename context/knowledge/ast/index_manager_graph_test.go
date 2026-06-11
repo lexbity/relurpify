@@ -1,6 +1,7 @@
 package ast
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -12,10 +13,10 @@ import (
 
 func TestIndexManagerPopulatesGraphDBForGoFile(t *testing.T) {
 	manager, tmpDir := newTestIndexManager(t)
-	graphEngine, err := graphdb.Open(graphdb.DefaultOptions(filepath.Join(tmpDir, "graphdb")))
+	graphEngine, err := graphdb.Open(context.Background(), graphdb.DefaultOptions(filepath.Join(tmpDir, "graphdb")))
 	require.NoError(t, err)
 	t.Cleanup(func() {
-		require.NoError(t, graphEngine.Close())
+		require.NoError(t, graphEngine.Close(context.Background()))
 	})
 	manager.GraphDB = graphEngine
 
@@ -26,7 +27,7 @@ func Helper() {}
 func Hello() { Helper(); _ = fmt.Sprintf }
 `), 0o644))
 
-	require.NoError(t, manager.IndexFile(path))
+	require.NoError(t, manager.IndexFile(context.Background(), path))
 
 	graphNodes := manager.GraphDB.NodesBySource(path)
 	require.NotEmpty(t, graphNodes)
@@ -52,10 +53,10 @@ func Hello() { Helper(); _ = fmt.Sprintf }
 
 func TestIndexManagerReindexReplacesGraphNodesForSource(t *testing.T) {
 	manager, tmpDir := newTestIndexManager(t)
-	graphEngine, err := graphdb.Open(graphdb.DefaultOptions(filepath.Join(tmpDir, "graphdb")))
+	graphEngine, err := graphdb.Open(context.Background(), graphdb.DefaultOptions(filepath.Join(tmpDir, "graphdb")))
 	require.NoError(t, err)
 	t.Cleanup(func() {
-		require.NoError(t, graphEngine.Close())
+		require.NoError(t, graphEngine.Close(context.Background()))
 	})
 	manager.GraphDB = graphEngine
 
@@ -63,12 +64,12 @@ func TestIndexManagerReindexReplacesGraphNodesForSource(t *testing.T) {
 	require.NoError(t, os.WriteFile(path, []byte(`package sample
 func Hello() {}
 `), 0o644))
-	require.NoError(t, manager.IndexFile(path))
+	require.NoError(t, manager.IndexFile(context.Background(), path))
 
 	require.NoError(t, os.WriteFile(path, []byte(`package sample
 func Goodbye() {}
 `), 0o644))
-	require.NoError(t, manager.IndexFile(path))
+	require.NoError(t, manager.IndexFile(context.Background(), path))
 
 	graphNodes := manager.GraphDB.NodesBySource(path)
 	var ids []string
@@ -87,16 +88,16 @@ func Hello() {}
 `), 0o644))
 
 	require.NotPanics(t, func() {
-		require.NoError(t, manager.IndexFile(path))
+		require.NoError(t, manager.IndexFile(context.Background(), path))
 	})
 }
 
 func TestIndexManagerRefreshFilesRemovesGraphNodesForDeletedFile(t *testing.T) {
 	manager, tmpDir := newTestIndexManager(t)
-	graphEngine, err := graphdb.Open(graphdb.DefaultOptions(filepath.Join(tmpDir, "graphdb")))
+	graphEngine, err := graphdb.Open(context.Background(), graphdb.DefaultOptions(filepath.Join(tmpDir, "graphdb")))
 	require.NoError(t, err)
 	t.Cleanup(func() {
-		require.NoError(t, graphEngine.Close())
+		require.NoError(t, graphEngine.Close(context.Background()))
 	})
 	manager.GraphDB = graphEngine
 
@@ -104,10 +105,10 @@ func TestIndexManagerRefreshFilesRemovesGraphNodesForDeletedFile(t *testing.T) {
 	require.NoError(t, os.WriteFile(path, []byte(`package sample
 func Hello() {}
 `), 0o644))
-	require.NoError(t, manager.IndexFile(path))
+	require.NoError(t, manager.IndexFile(context.Background(), path))
 	require.NotEmpty(t, manager.GraphDB.NodesBySource(path))
 
 	require.NoError(t, os.Remove(path))
-	require.NoError(t, manager.RefreshFiles([]string{path}))
+	require.NoError(t, manager.RefreshFiles(context.Background(), []string{path}))
 	require.Empty(t, manager.GraphDB.NodesBySource(path))
 }

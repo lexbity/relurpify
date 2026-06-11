@@ -13,12 +13,12 @@ import (
 // ModelCallableTools returns callable local tools for agent-internal use such
 // as phase filtering and budget enforcement. Only local ports.Tool implementations
 // are included; non-local capabilities appear in ModelCallableLLMToolSpecs.
-func (r *CapabilityRegistry) ModelCallableTools() []ports.Tool {
+func (r *CapabilityRegistry) ModelCallableTools(ctx context.Context) []ports.Tool {
 	if r == nil {
 		return nil
 	}
 	if r.delegate != nil {
-		all := r.delegate.ModelCallableTools()
+		all := r.delegate.ModelCallableTools(ctx)
 		if r.toolIDAllowlist == nil {
 			return all
 		}
@@ -40,7 +40,7 @@ func (r *CapabilityRegistry) ModelCallableTools() []ports.Tool {
 		if r.effectiveExposureLocked(entry.descriptor) != agentspec.CapabilityExposureCallable {
 			continue
 		}
-		if !toolAvailableForPrompt(entry.legacyTool) {
+		if !toolAvailableForPrompt(ctx, entry.legacyTool) {
 			continue
 		}
 		res = append(res, entry.legacyTool)
@@ -53,7 +53,7 @@ func (r *CapabilityRegistry) ModelCallableTools() []ports.Tool {
 // (provider-backed, Relurpic). This is what callers should pass to
 // LanguageModel.ChatWithTools — Ollama-specific formatting is handled in
 // platform/llm, not here.
-func (r *CapabilityRegistry) ModelCallableLLMToolSpecs() []model.LLMToolSpec {
+func (r *CapabilityRegistry) ModelCallableLLMToolSpecs(ctx context.Context) []model.LLMToolSpec {
 	if r == nil {
 		return nil
 	}
@@ -68,7 +68,7 @@ func (r *CapabilityRegistry) ModelCallableLLMToolSpecs() []model.LLMToolSpec {
 			continue
 		}
 		if entry.legacyTool != nil {
-			if !toolAvailableForPrompt(entry.legacyTool) {
+			if !toolAvailableForPrompt(ctx, entry.legacyTool) {
 				continue
 			}
 			res = append(res, ports.LLMToolSpecFromTool(unwrapTool(entry.legacyTool)))
@@ -79,11 +79,11 @@ func (r *CapabilityRegistry) ModelCallableLLMToolSpecs() []model.LLMToolSpec {
 	return res
 }
 
-func toolAvailableForPrompt(tool ports.Tool) bool {
+func toolAvailableForPrompt(ctx context.Context, tool ports.Tool) bool {
 	if tool == nil {
 		return false
 	}
-	return tool.IsAvailable(context.Background())
+	return tool.IsAvailable(ctx)
 }
 
 // GetModelTool resolves a callable local tool by name for post-LLM dispatch.

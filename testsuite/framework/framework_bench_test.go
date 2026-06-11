@@ -63,7 +63,7 @@ func BenchmarkCapabilityDispatch(b *testing.B) {
 
 	// Register a tool for benchmarking
 	tool := &benchTool{name: "bench-tool"}
-	if err := registry.Register(tool); err != nil {
+	if err := registry.Register(context.Background(), tool); err != nil {
 		b.Fatalf("tool registration failed: %v", err)
 	}
 
@@ -100,11 +100,11 @@ func TestFunc` + string(rune('A'+i)) + `() string {
 
 	// Create graph engine for knowledge storage
 	opts := graphdb.DefaultOptions(workspace)
-	graph, err := graphdb.Open(opts)
+	graph, err := graphdb.Open(context.Background(), opts)
 	if err != nil {
 		b.Fatalf("failed to open graph engine: %v", err)
 	}
-	defer graph.Close()
+	defer graph.Close(context.Background())
 
 	store := &knowledge.ChunkStore{Graph: graph}
 	events := &knowledge.EventBus{}

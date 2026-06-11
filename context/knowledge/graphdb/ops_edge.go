@@ -1,6 +1,7 @@
 package graphdb
 
 import (
+	"context"
 	"encoding/json"
 	"time"
 
@@ -8,7 +9,7 @@ import (
 )
 
 // Link creates a directed edge and optionally its inverse.
-func (e *Engine) Link(sourceID, targetID string, kind, inverseKind EdgeKind, weight float32, props map[string]any) error {
+func (e *Engine) Link(ctx context.Context, sourceID, targetID string, kind, inverseKind EdgeKind, weight float32, props map[string]any) error {
 	raw, err := json.Marshal(props)
 	if err != nil {
 		return err
@@ -35,11 +36,11 @@ func (e *Engine) Link(sourceID, targetID string, kind, inverseKind EdgeKind, wei
 		}
 		edges = append(edges, inverse)
 	}
-	return e.LinkEdges(edges)
+	return e.LinkEdges(ctx, edges)
 }
 
 // LinkEdges creates or updates directed edges in one durable batch.
-func (e *Engine) LinkEdges(edges []EdgeRecord) error {
+func (e *Engine) LinkEdges(ctx context.Context, edges []EdgeRecord) error {
 	if len(edges) == 0 {
 		return nil
 	}
@@ -47,11 +48,11 @@ func (e *Engine) LinkEdges(edges []EdgeRecord) error {
 		return err
 	}
 	if len(edges) == 1 {
-		if err := e.persist("link_edge", edgeOp{Edge: edges[0]}); err != nil {
+		if err := e.persist(ctx, "link_edge", edgeOp{Edge: edges[0]}); err != nil {
 			return err
 		}
 	} else {
-		if err := e.persist("link_edges", edgeBatchOp{Edges: edges}); err != nil {
+		if err := e.persist(ctx, "link_edges", edgeBatchOp{Edges: edges}); err != nil {
 			return err
 		}
 	}
@@ -68,11 +69,11 @@ func (e *Engine) LinkEdges(edges []EdgeRecord) error {
 }
 
 // Unlink soft-deletes or hard-removes an edge.
-func (e *Engine) Unlink(sourceID, targetID string, kind EdgeKind, hard bool) error {
+func (e *Engine) Unlink(ctx context.Context, sourceID, targetID string, kind EdgeKind, hard bool) error {
 	if err := e.checkDirty(); err != nil {
 		return err
 	}
-	if err := e.persist("unlink_edge", unlinkOp{SourceID: sourceID, TargetID: targetID, Kind: kind, Hard: hard}); err != nil {
+	if err := e.persist(ctx, "unlink_edge", unlinkOp{SourceID: sourceID, TargetID: targetID, Kind: kind, Hard: hard}); err != nil {
 		return err
 	}
 	if err := e.applyHook(); err != nil {
@@ -175,14 +176,14 @@ func (e *Engine) applyUnlink(sourceID, targetID string, kind EdgeKind, hard bool
 }
 
 // AnnotateEdge merges JSON properties into an edge while preserving history.
-func (e *Engine) AnnotateEdge(sourceID, targetID string, kind EdgeKind, props map[string]any) error {
+func (e *Engine) AnnotateEdge(ctx context.Context, sourceID, targetID string, kind EdgeKind, props map[string]any) error {
 	if sourceID == "" || targetID == "" || kind == "" || len(props) == 0 {
 		return nil
 	}
 	if err := e.checkDirty(); err != nil {
 		return err
 	}
-	if err := e.persist("annotate_edge", annotateEdgeOp{
+	if err := e.persist(ctx, "annotate_edge", annotateEdgeOp{
 		SourceID: sourceID,
 		TargetID: targetID,
 		Kind:     kind,
@@ -225,11 +226,11 @@ func (e *Engine) annotateEdgeLocked(sourceID, targetID string, kind EdgeKind, pr
 }
 
 // ReplaceEdge supersedes an existing edge with a new revision.
-func (e *Engine) ReplaceEdge(oldSourceID, oldTargetID string, oldKind EdgeKind, replacement EdgeRecord) error {
-	if err := e.Unlink(oldSourceID, oldTargetID, oldKind, false); err != nil {
+func (e *Engine) ReplaceEdge(ctx context.Context, oldSourceID, oldTargetID string, oldKind EdgeKind, replacement EdgeRecord) error {
+	if err := e.Unlink(ctx, oldSourceID, oldTargetID, oldKind, false); err != nil {
 		return err
 	}
-	return e.LinkEdges([]EdgeRecord{replacement})
+	return e.LinkEdges(ctx, []EdgeRecord{replacement})
 }
 
 // EdgeRevisions returns the revision history for an edge from durable

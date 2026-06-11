@@ -1,6 +1,7 @@
 package graphdb
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 )
@@ -27,7 +28,7 @@ type FileMeta struct {
 // IndexFileMeta creates or updates a node in the graph that represents
 // a file or mixed-media resource. The Props field is built from the
 // FileMeta and validated against MaxInlinePropsBytes.
-func (e *Engine) IndexFileMeta(id string, sourceID string, labels []string, meta FileMeta) error {
+func (e *Engine) IndexFileMeta(ctx context.Context, id string, sourceID string, labels []string, meta FileMeta) error {
 	propsRaw, err := json.Marshal(meta)
 	if err != nil {
 		return fmt.Errorf("graphdb: marshal file meta: %w", err)
@@ -49,7 +50,7 @@ func (e *Engine) IndexFileMeta(id string, sourceID string, labels []string, meta
 		allLabels = append(allLabels, "hash:"+meta.ContentHash)
 	}
 
-	return e.UpsertNode(NodeRecord{
+	return e.UpsertNode(ctx, NodeRecord{
 		ID:       id,
 		Kind:     NodeKind(kind),
 		SourceID: sourceID,
@@ -123,7 +124,7 @@ func GenerateSyntheticRepo(e *Engine, root string, fileCount int, filesPerType i
 			filename := fmt.Sprintf("%s/file-%s-%d%s", root, mediaLabel(mt), i, suffix)
 			id := fmt.Sprintf("file:sha256:%x", []byte(filename))
 			meta := GenerateSyntheticFileMeta(filename, mt, int64(100+i*50))
-			if err := e.IndexFileMeta(id, root, nil, meta); err != nil {
+			if err := e.IndexFileMeta(context.TODO(), id, root, nil, meta); err != nil {
 				panic(err)
 			}
 			created++

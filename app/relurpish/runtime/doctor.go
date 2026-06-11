@@ -187,7 +187,7 @@ func BuildDoctorReport(ctx context.Context, cfg Config, secrets config.Secrets) 
 		SandboxBackend:             cfg.SandboxBackend,
 		Sandbox:                    cfg.Sandbox,
 	}
-	ayenitdResults := ayenitd.ProbeWorkspace(ayenitdCfg, llm.ProviderSecrets{APIKey: secrets.LLMAPIKey}, nil)
+	ayenitdResults := ayenitd.ProbeWorkspace(ctx, ayenitdCfg, llm.ProviderSecrets{APIKey: secrets.LLMAPIKey}, nil)
 	var deps []DependencyStatus
 	for _, r := range ayenitdResults {
 		deps = append(deps, DependencyStatus{

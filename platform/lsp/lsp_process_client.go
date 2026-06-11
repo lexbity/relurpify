@@ -119,8 +119,9 @@ func newProcessLSPClientInternal(cfg ProcessLSPConfig, policy sandbox.CommandPol
 			client.mu.Lock()
 			client.diagnostics[params.URI] = params.Diagnostics
 			client.mu.Unlock()
+			return struct{}{}, nil
 		}
-		return nil, nil
+		return nil, errors.New("unhandled LSP notification")
 	})
 
 	conn := jsonrpc2.NewConn(ctx, stream, handler)

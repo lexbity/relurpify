@@ -107,9 +107,8 @@ func TestExitCodeSurfaced(t *testing.T) {
 	// The exit code is now surfaced via CommandResult.ExitCode and propagated
 	// to ToolResult.Data["exit_code"]. This test uses the contracts-level
 	// helpers to verify the field exists and round-trips correctly.
-	if _, ok := any(ports.CommandResult{}).(struct{ ExitCode int }); ok {
-		// Compile-time check passes — ExitCode field exists.
-	}
+	_, _ = any(ports.CommandResult{}).(struct{ ExitCode int })
+	// Compile-time check passes — ExitCode field exists.
 }
 
 // ---------- REL-2: doom loop blocks identical calls ----------
@@ -206,7 +205,7 @@ func TestShellInjectionArgsAreInert(t *testing.T) {
 	}
 	// The tool must be available (runner can be nil for test).
 	// The key assertion: tool construction succeeds with injection in args.
-	result, err := tool.Execute(nil, map[string]any{"args": []any{"; rm -rf /"}})
+	result, err := tool.Execute(context.TODO(), map[string]any{"args": []any{"; rm -rf /"}})
 	if err != nil {
 		// We expect an error because runner is nil, but the important thing
 		// is that the error is about missing runner, not about shell injection.

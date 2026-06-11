@@ -50,7 +50,7 @@ func (a *SessionAdapter) OpenWorkspace(ctx context.Context, req OpenWorkspaceReq
 
 	id, err := workspace.New(req.WorkspaceRoot)
 	if err != nil {
-		ws.Close()
+		ws.Close(ctx)
 		return nil, err
 	}
 
@@ -63,7 +63,7 @@ func (a *SessionAdapter) OpenWorkspace(ctx context.Context, req OpenWorkspaceReq
 		Tools:     newCapabilityController(ws),
 		Telemetry: newTelemetryView(ws),
 	}
-	sess.SetCloseFn(func(ctx context.Context) error { return ws.Close() })
+	sess.SetCloseFn(func(ctx context.Context) error { return ws.Close(ctx) })
 	return sess, nil
 }
 
@@ -109,7 +109,7 @@ func (c *knowledgeController) Ingest(ctx context.Context, req IngestRequest) (In
 	if c.env.KnowledgeStore == nil || c.env.KnowledgeStore.Graph == nil {
 		return IngestResult{}, ErrKnowledgeUnavailable
 	}
-	saved, err := c.env.KnowledgeStore.Save(knowledge.KnowledgeChunk{
+	saved, err := c.env.KnowledgeStore.Save(ctx, knowledge.KnowledgeChunk{
 		ID:           knowledge.ChunkID(contentHash(req.Content)),
 		Body:         knowledge.ChunkBody{Raw: req.Content},
 		SourceOrigin: knowledge.SourceOriginTool,
@@ -233,7 +233,7 @@ func NewSessionFromWorkspace(ws *Workspace, workspaceRoot string) *WorkspaceSess
 		Tools:     newCapabilityController(ws),
 		Telemetry: newTelemetryView(ws),
 	}
-	sess.SetCloseFn(func(ctx context.Context) error { return ws.Close() })
+	sess.SetCloseFn(func(ctx context.Context) error { return ws.Close(ctx) })
 	if ws.ServiceManager != nil {
 		sess.SetServiceManager(&serviceManagerAdapter{sm: ws.ServiceManager})
 	}

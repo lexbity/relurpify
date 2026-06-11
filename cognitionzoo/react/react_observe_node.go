@@ -448,8 +448,14 @@ func repeatedReadTarget(state *contextdata.Envelope) string {
 }
 
 func observationSignature(observation ToolObservation) string {
-	args, _ := json.Marshal(observation.Args)
-	data, _ := json.Marshal(observation.Data)
+	args, err := json.Marshal(observation.Args)
+	if err != nil {
+		args = []byte("{}")
+	}
+	data, err := json.Marshal(observation.Data)
+	if err != nil {
+		data = []byte("{}")
+	}
 	return fmt.Sprintf("%s|%s|%s|%t", observation.Tool, string(args), string(data), observation.Success)
 }
 

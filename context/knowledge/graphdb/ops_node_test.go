@@ -1,6 +1,7 @@
 package graphdb
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -9,7 +10,7 @@ import (
 func TestUpsertNode_NewNode(t *testing.T) {
 	engine, _ := newTestEngine(t)
 	node := NodeRecord{ID: "id1", Kind: "function", SourceID: "file.go", Labels: []string{"label1"}}
-	require.NoError(t, engine.UpsertNode(node))
+	require.NoError(t, engine.UpsertNode(context.TODO(), node))
 
 	retrieved, ok := engine.GetNode("id1")
 	require.True(t, ok)
@@ -25,10 +26,10 @@ func TestUpsertNode_NewNode(t *testing.T) {
 func TestUpsertNode_UpdateExisting(t *testing.T) {
 	engine, _ := newTestEngine(t)
 	node1 := NodeRecord{ID: "n", Kind: "function", SourceID: "old.go"}
-	require.NoError(t, engine.UpsertNode(node1))
+	require.NoError(t, engine.UpsertNode(context.TODO(), node1))
 
 	node2 := NodeRecord{ID: "n", Kind: "method", SourceID: "new.go"}
-	require.NoError(t, engine.UpsertNode(node2))
+	require.NoError(t, engine.UpsertNode(context.TODO(), node2))
 
 	retrieved, ok := engine.GetNode("n")
 	require.True(t, ok)
@@ -47,7 +48,7 @@ func TestUpsertNodes_Batch(t *testing.T) {
 		{ID: "b", Kind: "function", SourceID: "b.go"},
 		{ID: "c", Kind: "method", SourceID: "c.go"},
 	}
-	require.NoError(t, engine.UpsertNodes(nodes))
+	require.NoError(t, engine.UpsertNodes(context.TODO(), nodes))
 
 	list := engine.ListNodes("function")
 	require.Len(t, list, 2)
@@ -57,10 +58,10 @@ func TestUpsertNodes_Batch(t *testing.T) {
 
 func TestDeleteNode_SoftDelete(t *testing.T) {
 	engine, _ := newTestEngine(t)
-	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "toDelete", Kind: "function", SourceID: "x.go"}))
-	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "other", Kind: "function", SourceID: "x.go"}))
+	require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: "toDelete", Kind: "function", SourceID: "x.go"}))
+	require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: "other", Kind: "function", SourceID: "x.go"}))
 
-	require.NoError(t, engine.DeleteNode("toDelete"))
+	require.NoError(t, engine.DeleteNode(context.TODO(), "toDelete"))
 
 	_, ok := engine.GetNode("toDelete")
 	require.False(t, ok)
@@ -74,9 +75,9 @@ func TestDeleteNode_SoftDelete(t *testing.T) {
 func TestDeleteNodes_Batch(t *testing.T) {
 	engine, _ := newTestEngine(t)
 	for _, id := range []string{"d1", "d2", "d3", "keep"} {
-		require.NoError(t, engine.UpsertNode(NodeRecord{ID: id, Kind: "function"}))
+		require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: id, Kind: "function"}))
 	}
-	require.NoError(t, engine.DeleteNodes([]string{"d1", "d3"}))
+	require.NoError(t, engine.DeleteNodes(context.TODO(), []string{"d1", "d3"}))
 
 	_, ok1 := engine.GetNode("d1")
 	_, ok2 := engine.GetNode("d2")
@@ -90,9 +91,9 @@ func TestDeleteNodes_Batch(t *testing.T) {
 
 func TestListNodes_EmptyKind(t *testing.T) {
 	engine, _ := newTestEngine(t)
-	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "f1", Kind: "function"}))
-	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "m1", Kind: "method"}))
-	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "f2", Kind: "function"}))
+	require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: "f1", Kind: "function"}))
+	require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: "m1", Kind: "method"}))
+	require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: "f2", Kind: "function"}))
 
 	all := engine.ListNodes("")
 	require.Len(t, all, 3)
@@ -108,10 +109,10 @@ func TestNodesBySource_Multiple(t *testing.T) {
 	engine, _ := newTestEngine(t)
 	for i := 0; i < 5; i++ {
 		id := string(rune('a' + i))
-		require.NoError(t, engine.UpsertNode(NodeRecord{ID: id, Kind: "function", SourceID: "common.go"}))
+		require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: id, Kind: "function", SourceID: "common.go"}))
 	}
 	// one node with different source
-	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "z", Kind: "function", SourceID: "other.go"}))
+	require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: "z", Kind: "function", SourceID: "other.go"}))
 
 	nodes := engine.NodesBySource("common.go")
 	require.Len(t, nodes, 5)
@@ -128,12 +129,12 @@ func TestGetNode_NotExist(t *testing.T) {
 
 func TestNodeSoftDeleteAlsoSoftDeletesEdges(t *testing.T) {
 	engine, _ := newTestEngine(t)
-	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "hub", Kind: "function"}))
-	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "leaf", Kind: "function"}))
-	require.NoError(t, engine.Link("hub", "leaf", "calls", "", 1, nil))
-	require.NoError(t, engine.Link("leaf", "hub", "called_by", "", 1, nil))
+	require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: "hub", Kind: "function"}))
+	require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: "leaf", Kind: "function"}))
+	require.NoError(t, engine.Link(context.TODO(), "hub", "leaf", "calls", "", 1, nil))
+	require.NoError(t, engine.Link(context.TODO(), "leaf", "hub", "called_by", "", 1, nil))
 
-	require.NoError(t, engine.DeleteNode("hub"))
+	require.NoError(t, engine.DeleteNode(context.TODO(), "hub"))
 
 	// edges should be soft‑deleted
 	out := engine.GetOutEdges("hub")

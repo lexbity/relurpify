@@ -117,7 +117,7 @@ func (im *IndexManager) SetFileScope(scope *permissions.FileScopePolicy) {
 }
 
 // IndexFile parses and stores AST for a file path.
-func (im *IndexManager) IndexFile(path string) error {
+func (im *IndexManager) IndexFile(ctx context.Context, path string) error {
 	if !im.allowedPath(permissions.FileSystemRead, path, false) {
 		return nil
 	}
@@ -154,22 +154,22 @@ func (im *IndexManager) IndexFile(path string) error {
 	}
 
 	if !ok {
-		return im.indexWithSymbols(path, string(content), language, category, contentHash)
+		return im.indexWithSymbols(ctx, path, string(content), language, category, contentHash)
 	}
 
 	result, err := parser.Parse(string(content), path)
 	if err != nil {
-		if symErr := im.indexWithSymbols(path, string(content), language, category, contentHash); symErr == nil {
+		if symErr := im.indexWithSymbols(ctx, path, string(content), language, category, contentHash); symErr == nil {
 			return nil
 		}
 		return err
 	}
-	return im.persist(result, contentHash)
+	return im.persist(ctx, result, contentHash)
 }
 
 // RefreshFiles incrementally refreshes the AST index for the provided files.
 // Missing or now-disallowed files are removed from the index.
-func (im *IndexManager) RefreshFiles(paths []string) error {
+func (im *IndexManager) RefreshFiles(ctx context.Context, paths []string) error {
 	if im == nil || len(paths) == 0 {
 		return nil
 	}
@@ -178,35 +178,41 @@ func (im *IndexManager) RefreshFiles(paths []string) error {
 		if path == "" {
 			continue
 		}
-		if err := im.refreshFile(path); err != nil {
+		if err := im.refreshFile(ctx, path); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (im *IndexManager) refreshFile(path string) error {
+func (im *IndexManager) refreshFile(ctx context.Context, path string) error {
 	if !im.allowedPath(permissions.FileSystemRead, path, false) {
-		return im.removeIndexedFile(path)
+		return im.removeIndexedFile(ctx, path)
 	}
 	if _, err := os.Stat(path); err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return im.removeIndexedFile(path)
+			return im.removeIndexedFile(ctx, path)
 		}
 		return err
 	}
-	return im.IndexFile(path)
+	return im.IndexFile(ctx, path)
 }
 
-func (im *IndexManager) removeIndexedFile(path string) error {
+func (im *IndexManager) removeIndexedFile(ctx context.Context, path string) error {
 	existing, err := im.store.GetFileByPath(path)
-	if err != nil || existing == nil {
-		return err
+	if err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+		return nil
+	}
+	if existing == nil {
+		return nil
 	}
 	if err := im.store.DeleteFile(existing.ID); err != nil {
 		return err
 	}
-	return im.syncGraphDelete(path)
+	return im.syncGraphDelete(ctx, path)
 }
 
 // StartIndexing launches a background workspace index pass unless one is
@@ -296,9 +302,6 @@ func (im *IndexManager) IndexWorkspaceContext(ctx context.Context) error {
 }
 
 func (im *IndexManager) runWorkspaceIndex(ctx context.Context) error {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	root := im.config.WorkspacePath
 	if root == "" {
 		root = "."
@@ -367,7 +370,7 @@ func (im *IndexManager) indexFilesSequential(ctx context.Context, files []string
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		if err := im.IndexFile(file); err != nil {
+		if err := im.IndexFile(ctx, file); err != nil {
 			log.Printf("AST index warning: %v", err)
 		}
 	}
@@ -408,7 +411,7 @@ func (im *IndexManager) indexFilesParallel(ctx context.Context, files []string) 
 					if !ok {
 						return
 					}
-					if err := im.IndexFile(file); err != nil {
+					if err := im.IndexFile(ctx, file); err != nil {
 						recordErr(fmt.Errorf("%s: %w", file, err))
 					}
 				}
@@ -462,7 +465,7 @@ func (im *IndexManager) finishWorkspaceIndex(err error) {
 }
 
 // Close releases any underlying resources owned by the store.
-func (im *IndexManager) Close() error {
+func (im *IndexManager) Close(ctx context.Context) error {
 	if im == nil {
 		return nil
 	}
@@ -475,7 +478,7 @@ func (im *IndexManager) Close() error {
 	}
 	var firstErr error
 	if im.GraphDB != nil {
-		if err := im.GraphDB.Close(); err != nil {
+		if err := im.GraphDB.Close(ctx); err != nil {
 			firstErr = err
 		}
 	}
@@ -492,16 +495,16 @@ func (im *IndexManager) Close() error {
 	return firstErr
 }
 
-func (im *IndexManager) indexWithSymbols(path, content, language string, category Category, contentHash string) error {
+func (im *IndexManager) indexWithSymbols(ctx context.Context, path, content, language string, category Category, contentHash string) error {
 	im.mu.Lock()
 	provider := im.symbolProvider
 	im.mu.Unlock()
 	if provider == nil {
 		return fmt.Errorf("no parser for %s", language)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx2, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	symbols, err := provider.DocumentSymbols(ctx, path)
+	symbols, err := provider.DocumentSymbols(ctx2, path)
 	if err != nil {
 		return err
 	}
@@ -549,7 +552,7 @@ func (im *IndexManager) indexWithSymbols(path, content, language string, categor
 			ParserVersion: "lsp_symbols",
 		},
 	}
-	return im.persist(result, contentHash)
+	return im.persist(ctx, result, contentHash)
 }
 
 func (im *IndexManager) buildSymbolNodes(symbols []DocumentSymbol, parentID, fileID string, category Category, language string, timestamp time.Time) []*Node {
@@ -599,7 +602,7 @@ func sanitizeSymbolName(name string) string {
 	return strings.ToLower(name)
 }
 
-func (im *IndexManager) persist(result *ParseResult, contentHash string) error {
+func (im *IndexManager) persist(ctx context.Context, result *ParseResult, contentHash string) error {
 	if result.Metadata == nil {
 		return fmt.Errorf("parse result missing metadata")
 	}
@@ -624,7 +627,7 @@ func (im *IndexManager) persist(result *ParseResult, contentHash string) error {
 	if err := tx.Commit(); err != nil {
 		return err
 	}
-	return im.syncGraphResult(result)
+	return im.syncGraphResult(ctx, result)
 }
 
 // QuerySymbol looks up nodes whose name matches the pattern.
@@ -713,7 +716,10 @@ func (im *IndexManager) Stats() (*IndexStats, error) {
 func (im *IndexManager) LastIndexedAt(path string) (time.Time, error) {
 	file, err := im.store.GetFileByPath(path)
 	if err != nil {
-		return time.Time{}, err
+		if !errors.Is(err, os.ErrNotExist) {
+			return time.Time{}, err
+		}
+		return time.Time{}, nil
 	}
 	if file == nil {
 		return time.Time{}, nil
@@ -729,7 +735,7 @@ func (im *IndexManager) Store() IndexStore {
 	return im.store
 }
 
-func (im *IndexManager) syncGraphDelete(path string) error {
+func (im *IndexManager) syncGraphDelete(ctx context.Context, path string) error {
 	if im == nil || im.GraphDB == nil || path == "" {
 		return nil
 	}
@@ -738,10 +744,10 @@ func (im *IndexManager) syncGraphDelete(path string) error {
 	for _, node := range nodes {
 		ids = append(ids, node.ID)
 	}
-	return im.GraphDB.DeleteNodes(ids)
+	return im.GraphDB.DeleteNodes(ctx, ids)
 }
 
-func (im *IndexManager) syncGraphResult(result *ParseResult) error {
+func (im *IndexManager) syncGraphResult(ctx context.Context, result *ParseResult) error {
 	if im == nil || im.GraphDB == nil || result == nil || result.Metadata == nil {
 		return nil
 	}
@@ -754,7 +760,7 @@ func (im *IndexManager) syncGraphResult(result *ParseResult) error {
 	for _, node := range existing {
 		deleteIDs = append(deleteIDs, node.ID)
 	}
-	if err := im.GraphDB.DeleteNodes(deleteIDs); err != nil {
+	if err := im.GraphDB.DeleteNodes(ctx, deleteIDs); err != nil {
 		return err
 	}
 	nodeBatch := make([]graphdb.NodeRecord, 0, len(result.Nodes))
@@ -765,7 +771,7 @@ func (im *IndexManager) syncGraphResult(result *ParseResult) error {
 		}
 		nodeBatch = append(nodeBatch, record)
 	}
-	if err := im.GraphDB.UpsertNodes(nodeBatch); err != nil {
+	if err := im.GraphDB.UpsertNodes(ctx, nodeBatch); err != nil {
 		return err
 	}
 	edgeBatch := make([]graphdb.EdgeRecord, 0, len(result.Edges)*2+len(result.Nodes)*2)
@@ -789,5 +795,5 @@ func (im *IndexManager) syncGraphResult(result *ParseResult) error {
 			graphdb.EdgeRecord{SourceID: node.ID, TargetID: node.ParentID, Kind: EdgeKindContainedBy, Weight: 1},
 		)
 	}
-	return im.GraphDB.LinkEdges(edgeBatch)
+	return im.GraphDB.LinkEdges(ctx, edgeBatch)
 }

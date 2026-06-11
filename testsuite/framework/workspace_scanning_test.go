@@ -28,8 +28,7 @@ func ScanWorkspace(root string) ([]FileMetadata, error) {
 	// Use production-style file discovery logic (similar to WorkspaceScanner.discoverFiles)
 	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
-			// Continue walking on error
-			return nil
+			return err
 		}
 
 		// Skip the root directory itself

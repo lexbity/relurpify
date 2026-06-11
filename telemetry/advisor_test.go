@@ -1,6 +1,7 @@
 package telemetry
 
 import (
+	"context"
 	"sync"
 	"testing"
 
@@ -37,7 +38,7 @@ func TestContextBudgetAdvisor_ConcurrentRecordCall(t *testing.T) {
 
 func TestContextBudgetAdvisor_ContextValueRoundTrip(t *testing.T) {
 	advisor := &ContextBudgetAdvisor{ModelContextSize: 1024}
-	ctx := WithAdvisor(nil, advisor)
+	ctx := WithAdvisor(context.TODO(), advisor)
 	require.Same(t, advisor, AdvisorFromContext(ctx))
-	require.Nil(t, AdvisorFromContext(nil))
+	require.Nil(t, AdvisorFromContext(context.TODO()))
 }

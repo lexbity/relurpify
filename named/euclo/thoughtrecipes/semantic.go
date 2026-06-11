@@ -1,6 +1,7 @@
 package thoughtrecipe
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -20,7 +21,7 @@ type CapabilityRegistryLookup interface {
 // ToolRegistryLookup exposes the callable tool surface for semantic validation.
 type ToolRegistryLookup interface {
 	GetCapability(idOrName string) (descriptor.CapabilityDescriptor, bool)
-	ModelCallableTools() []ports.Tool
+	ModelCallableTools(ctx context.Context) []ports.Tool
 }
 
 // SemanticWarning captures a non-fatal semantic diagnostic.
@@ -317,7 +318,7 @@ func (s *SymbolTable) resolveToolNames(decl *ToolInvokePolicyDecl) ([]string, er
 	}
 
 	callable := make(map[string]struct{}, len(entries))
-	for _, tool := range s.tools.ModelCallableTools() {
+	for _, tool := range s.tools.ModelCallableTools(context.Background()) {
 		name := strings.TrimSpace(tool.Name())
 		if name == "" {
 			continue

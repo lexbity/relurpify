@@ -408,7 +408,10 @@ func (s *RewooCheckpointStore) persistSynthesisArtifact(ctx context.Context, che
 }
 
 func mustJSON(v any) []byte {
-	data, _ := json.Marshal(v)
+	data, err := json.Marshal(v)
+	if err != nil {
+		panic(err)
+	}
 	return data
 }
 

@@ -194,8 +194,7 @@ func (r *MetricsRecorder) RecordExecution(execMetrics ExecutionMetrics) error {
 	// Auto-save on interval
 	if r.autoSave && r.recordingCount >= r.saveInterval {
 		if err := r.Save(); err != nil {
-			// Log error, but don't fail the agent
-			return nil
+			return err
 		}
 		r.recordingCount = 0
 	}

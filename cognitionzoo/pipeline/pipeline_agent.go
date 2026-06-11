@@ -49,7 +49,7 @@ func (a *PipelineAgent) Initialize(cfg *execution.Config) error {
 func (a *PipelineAgent) Execute(ctx context.Context, task *execution.Task, env *contextdata.Envelope) (*execution.Result, error) {
 	a.executionCatalog = nil
 	if a.Tools != nil {
-		a.executionCatalog = a.Tools.CaptureExecutionCatalogSnapshot()
+		a.executionCatalog = a.Tools.CaptureExecutionCatalogSnapshot(ctx)
 	}
 	defer func() {
 		a.executionCatalog = nil
@@ -78,7 +78,7 @@ func (a *PipelineAgent) Execute(ctx context.Context, task *execution.Task, env *
 	runner := &Runner{Options: RunnerOptions{
 		Model:             a.Model,
 		ModelName:         a.modelName(),
-		Tools:             a.availableTools(),
+		Tools:             a.availableTools(ctx),
 		EnableToolCalling: a.toolCallingEnabled(),
 		AgentSpec:         a.Config.AgentSpec,
 		Telemetry:         a.telemetry(),
@@ -167,7 +167,7 @@ func (a *PipelineAgent) Capabilities() []string {
 // The returned graph is not executable; stage nodes are stubs that record
 // inspection metadata but do not invoke stage logic. Use Execute for actual
 // pipeline execution. A fully executable graph integration is planned for Phase 8.
-func (a *PipelineAgent) BuildGraph(task *execution.Task) (*graph.Graph, error) {
+func (a *PipelineAgent) BuildGraph(ctx context.Context, task *execution.Task) (*graph.Graph, error) {
 	stages, err := a.stagesForTask(task)
 	if err != nil {
 		return nil, err
@@ -233,17 +233,17 @@ func (a *PipelineAgent) telemetry() telemetry.Telemetry {
 	return a.Config.Telemetry
 }
 
-func (a *PipelineAgent) availableTools() []ports.Tool {
+func (a *PipelineAgent) availableTools(ctx context.Context) []ports.Tool {
 	if a == nil {
 		return nil
 	}
 	if a.executionCatalog != nil {
-		return a.executionCatalog.ModelCallableTools()
+		return a.executionCatalog.ModelCallableTools(ctx)
 	}
 	if a.Tools == nil {
 		return nil
 	}
-	return a.Tools.ModelCallableTools()
+	return a.Tools.ModelCallableTools(ctx)
 }
 
 func (a *PipelineAgent) modelName() string {
@@ -282,7 +282,7 @@ func (a *PipelineAgent) persistResultsArtifact(ctx context.Context, store any, w
 	_ = workflowID
 	_ = runID
 	_ = results
-	return nil, nil
+	return nil, errors.New("persistResultsArtifact not implemented")
 }
 
 func (a *PipelineAgent) persistFinalOutputArtifact(ctx context.Context, store any, workflowID, runID string, final map[string]any) (*relurpctx.ArtifactReference, error) {
@@ -291,7 +291,7 @@ func (a *PipelineAgent) persistFinalOutputArtifact(ctx context.Context, store an
 	_ = workflowID
 	_ = runID
 	_ = final
-	return nil, nil
+	return nil, errors.New("persistFinalOutputArtifact not implemented")
 }
 
 func summarizePipelineResults(results []StageResult) string {

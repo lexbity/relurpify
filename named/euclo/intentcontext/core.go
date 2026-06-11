@@ -46,8 +46,7 @@ func NewIntentCore(chunkStore *knowledge.ChunkStore, graph *graphdb.Engine) *Int
 
 // BuildClarificationRequest creates a traversal-aware context stream request.
 func (c *IntentCore) BuildClarificationRequest(ctx context.Context, env *contextdata.Envelope, instruction string, maxTokens int, mode contextstream.Mode) (*contextstream.Request, error) {
-	_ = ctx
-	state, err := c.readState(env)
+	state, err := c.readState(ctx, env)
 	if err != nil {
 		return nil, err
 	}
@@ -80,13 +79,12 @@ func (c *IntentCore) BuildClarificationRequest(ctx context.Context, env *context
 
 // GroundConfirmed resolves a scope declaration into grounded anchors and writes them back.
 func (c *IntentCore) GroundConfirmed(ctx context.Context, env *contextdata.Envelope, scope ScopeDeclaration) (*GroundingResult, error) {
-	_ = ctx
-	state, err := c.readState(env)
+	state, err := c.readState(ctx, env)
 	if err != nil {
 		return nil, err
 	}
 	scope.Normalize(state.TaskID, state.SessionID)
-	resolution, err := c.ResolveScope(context.Background(), scope)
+	resolution, err := c.ResolveScope(ctx, scope)
 	if err != nil {
 		return nil, err
 	}
@@ -145,7 +143,7 @@ func (c *IntentCore) GroundConfirmed(ctx context.Context, env *contextdata.Envel
 
 	state.StateVersion = NextStateVersion(state.StateVersion)
 	result.StateVersion = state.StateVersion
-	if err := c.writeState(env, state); err != nil {
+	if err := c.writeState(ctx, env, state); err != nil {
 		return nil, err
 	}
 	return result, nil
@@ -227,8 +225,7 @@ func (c *IntentCore) ResolveScope(ctx context.Context, decl ScopeDeclaration) (*
 
 // BuildProjectionPlan constructs projection intents from clarification state.
 func (c *IntentCore) BuildProjectionPlan(ctx context.Context, env *contextdata.Envelope) (*ProjectionPlan, error) {
-	_ = ctx
-	state, err := c.readState(env)
+	state, err := c.readState(ctx, env)
 	if err != nil {
 		return nil, err
 	}
@@ -267,11 +264,10 @@ func (c *IntentCore) BuildProjectionPlan(ctx context.Context, env *contextdata.E
 
 // ApplyProjection applies a projection plan to the graph and updates clarification state.
 func (c *IntentCore) ApplyProjection(ctx context.Context, env *contextdata.Envelope, plan *ProjectionPlan) (*ProjectionResult, error) {
-	_ = ctx
 	if c == nil || c.Graph == nil {
 		return nil, errors.New("projection requires a graph engine")
 	}
-	state, err := c.readState(env)
+	state, err := c.readState(ctx, env)
 	if err != nil {
 		return nil, err
 	}
@@ -295,7 +291,7 @@ func (c *IntentCore) ApplyProjection(ctx context.Context, env *contextdata.Envel
 		StateVersion: state.StateVersion,
 	}
 	for _, intent := range plan.Intents {
-		graphIDs, applied, mutationStatus, err := c.applyProjectionIntent(state, intent)
+		graphIDs, applied, mutationStatus, err := c.applyProjectionIntent(ctx, state, intent)
 		if err != nil {
 			result.Conflicts = append(result.Conflicts, ProjectionConflict{
 				Reason:             err.Error(),
@@ -346,7 +342,7 @@ func (c *IntentCore) ApplyProjection(ctx context.Context, env *contextdata.Envel
 		state.StateVersion = NextStateVersion(state.StateVersion)
 	}
 	state.LastUpdatedAt = time.Now().UTC()
-	if err := c.writeState(env, state); err != nil {
+	if err := c.writeState(ctx, env, state); err != nil {
 		return nil, err
 	}
 	if mutationResult.Status == graphdb.MutationStatusNoop {
@@ -354,7 +350,7 @@ func (c *IntentCore) ApplyProjection(ctx context.Context, env *contextdata.Envel
 	}
 	mutationResult.Reason = "projection pass completed"
 	mutationResult.Normalize(state.TaskID, state.SessionID)
-	if err := c.Graph.RecordMutationResult(*mutationResult); err != nil {
+	if err := c.Graph.RecordMutationResult(ctx, *mutationResult); err != nil {
 		if mutationResult.Details == nil {
 			mutationResult.Details = map[string]any{}
 		}
@@ -374,25 +370,25 @@ func (c *IntentCore) ApplyProjection(ctx context.Context, env *contextdata.Envel
 
 // GroundedAnchors returns the current grounded anchors in working memory.
 func (c *IntentCore) GroundedAnchors(env *contextdata.Envelope) []retrieval.AnchorRef {
-	state, err := c.readState(env)
+	state, err := c.readState(context.TODO(), env)
 	if err != nil || state == nil {
 		return nil
 	}
 	return cloneAnchors(state.GroundedAnchors)
 }
 
-func (c *IntentCore) readState(env *contextdata.Envelope) (*ClarificationState, error) {
+func (c *IntentCore) readState(ctx context.Context, env *contextdata.Envelope) (*ClarificationState, error) {
 	if c != nil && c.Store != nil {
-		return c.Store.Read(context.Background(), env)
+		return c.Store.Read(ctx, env)
 	}
-	return NewStateStore().Read(context.Background(), env)
+	return NewStateStore().Read(ctx, env)
 }
 
-func (c *IntentCore) writeState(env *contextdata.Envelope, state *ClarificationState) error {
+func (c *IntentCore) writeState(ctx context.Context, env *contextdata.Envelope, state *ClarificationState) error {
 	if c != nil && c.Store != nil {
-		return c.Store.Write(context.Background(), env, state)
+		return c.Store.Write(ctx, env, state)
 	}
-	return NewStateStore().Write(context.Background(), env, state)
+	return NewStateStore().Write(ctx, env, state)
 }
 
 func traversalFromAnchors(anchors []retrieval.AnchorRef) *retrieval.TraversalSpec {
@@ -528,7 +524,7 @@ func normalizePath(path string) string {
 	return filepath.ToSlash(filepath.Clean(strings.TrimSpace(path)))
 }
 
-func (c *IntentCore) applyProjectionIntent(state *ClarificationState, intent ProjectionIntent) ([]string, bool, graphdb.MutationStatus, error) {
+func (c *IntentCore) applyProjectionIntent(ctx context.Context, state *ClarificationState, intent ProjectionIntent) ([]string, bool, graphdb.MutationStatus, error) {
 	intent.Normalize(state.TaskID, state.SessionID)
 	if intent.MutationKind == "" {
 		return nil, false, graphdb.MutationStatusRejected, errors.New("projection intent missing mutation kind")
@@ -583,7 +579,7 @@ func (c *IntentCore) applyProjectionIntent(state *ClarificationState, intent Pro
 			nodes = append(nodes, node)
 		}
 		if len(nodes) > 0 {
-			if err := c.Graph.UpsertNodes(nodes); err != nil {
+			if err := c.Graph.UpsertNodes(ctx, nodes); err != nil {
 				return nil, false, graphdb.MutationStatusRejected, err
 			}
 		}
@@ -621,7 +617,7 @@ func (c *IntentCore) applyProjectionIntent(state *ClarificationState, intent Pro
 			}
 		}
 		if applied {
-			if err := c.Graph.LinkEdges([]graphdb.EdgeRecord{edge}); err != nil {
+			if err := c.Graph.LinkEdges(ctx, []graphdb.EdgeRecord{edge}); err != nil {
 				return nil, false, graphdb.MutationStatusRejected, err
 			}
 		}

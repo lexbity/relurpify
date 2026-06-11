@@ -9,12 +9,9 @@ import (
 // === Phase 3 Unit Tests (exact spec requirements) ===
 
 func TestNormalizeNilTask(t *testing.T) {
-	result, err := NormalizeTaskEnvelope(nil, nil)
-	if err != nil {
-		t.Errorf("Expected no error for nil task, got %v", err)
-	}
-	if result != nil {
-		t.Error("Expected nil result for nil task")
+	_, err := NormalizeTaskEnvelope(nil, nil)
+	if err == nil {
+		t.Error("Expected error for nil task")
 	}
 }
 

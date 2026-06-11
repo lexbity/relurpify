@@ -3,6 +3,7 @@ package relurpicabilities
 import (
 	"context"
 	"errors"
+	"os"
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
@@ -22,11 +23,11 @@ func (m *mockIndexStore) SaveFile(metadata *ast.FileMetadata) error {
 }
 
 func (m *mockIndexStore) GetFile(fileID string) (*ast.FileMetadata, error) {
-	return nil, nil
+	return nil, errors.New("mock not found")
 }
 
 func (m *mockIndexStore) GetFileByPath(path string) (*ast.FileMetadata, error) {
-	return nil, nil
+	return nil, errors.New("mock not found")
 }
 
 func (m *mockIndexStore) ListFiles(category ast.Category) ([]*ast.FileMetadata, error) {
@@ -48,7 +49,7 @@ func (m *mockIndexStore) GetNode(nodeID string) (*ast.Node, error) {
 			return node, nil
 		}
 	}
-	return nil, nil
+	return nil, os.ErrNotExist
 }
 
 func (m *mockIndexStore) GetNodesByFile(fileID string) ([]*ast.Node, error) {
@@ -79,7 +80,7 @@ func (m *mockIndexStore) SaveEdges(edges []*ast.Edge) error {
 }
 
 func (m *mockIndexStore) GetEdge(edgeID string) (*ast.Edge, error) {
-	return nil, nil
+	return nil, errors.New("mock not found")
 }
 
 func (m *mockIndexStore) GetEdgesBySource(sourceID string) ([]*ast.Edge, error) {
@@ -139,7 +140,7 @@ func (m *mockIndexStore) GetDependents(nodeID string) ([]*ast.Node, error) {
 }
 
 func (m *mockIndexStore) BeginTransaction() (ast.Transaction, error) {
-	return nil, nil
+	return nil, errors.New("mock not implemented")
 }
 
 func (m *mockIndexStore) Vacuum() error {
@@ -147,7 +148,7 @@ func (m *mockIndexStore) Vacuum() error {
 }
 
 func (m *mockIndexStore) GetStats() (*ast.IndexStats, error) {
-	return nil, nil
+	return nil, errors.New("mock not implemented")
 }
 
 func TestASTQueryHandlerDescriptor(t *testing.T) {

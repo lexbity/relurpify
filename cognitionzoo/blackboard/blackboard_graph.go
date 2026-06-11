@@ -64,9 +64,9 @@ func (n *blackboardLoadNode) Contract() graph.NodeContract {
 	return contract
 }
 
-func (n *blackboardLoadNode) Execute(_ context.Context, state *contextdata.Envelope) (*execution.Result, error) {
+func (n *blackboardLoadNode) Execute(ctx context.Context, state *contextdata.Envelope) (*execution.Result, error) {
 	if n.store != nil && strings.TrimSpace(n.taskID) != "" {
-		if err := hydrateBlackboardFromWorkingMemoryStore(state, n.store, n.taskID); err != nil {
+		if err := hydrateBlackboardFromWorkingMemoryStore(ctx, state, n.store, n.taskID); err != nil {
 			return nil, err
 		}
 	}
@@ -280,7 +280,7 @@ func activeBlackboard(state *contextdata.Envelope) (*Blackboard, error) {
 	return bb, nil
 }
 
-func hydrateBlackboardFromWorkingMemoryStore(state *contextdata.Envelope, store *memory.WorkingMemoryStore, taskID string) error {
+func hydrateBlackboardFromWorkingMemoryStore(ctx context.Context, state *contextdata.Envelope, store *memory.WorkingMemoryStore, taskID string) error {
 	if state == nil || store == nil {
 		return nil
 	}
@@ -288,11 +288,11 @@ func hydrateBlackboardFromWorkingMemoryStore(state *contextdata.Envelope, store 
 	if taskID == "" {
 		return nil
 	}
-	results, err := store.Retrieve(context.Background(), memory.MemoryQuery{TaskID: taskID})
+	results, err := store.Retrieve(ctx, memory.MemoryQuery{TaskID: taskID})
 	if err != nil {
 		return err
 	}
-	return store.HydrateIntoEnvelope(context.Background(), state, results)
+	return store.HydrateIntoEnvelope(ctx, state, results)
 }
 
 func currentCycle(state *contextdata.Envelope) int {

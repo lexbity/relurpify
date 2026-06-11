@@ -61,7 +61,7 @@ type Workspace struct {
 // Close releases all resources held by the Workspace. This includes:
 // 1. Stopping all services via ServiceManager (clearing registry)
 // 2. Closing database stores, files, and loggers
-func (w *Workspace) Close() error {
+func (w *Workspace) Close(ctx context.Context) error {
 	var errs []error
 
 	// Stop all registered services first, but keep closing owned resources even
@@ -96,7 +96,7 @@ func (w *Workspace) Close() error {
 
 	// Close IndexManager if present (allocated in BootstrapAgentRuntime).
 	if w.Environment.IndexManager != nil {
-		if err := w.Environment.IndexManager.Close(); err != nil {
+		if err := w.Environment.IndexManager.Close(ctx); err != nil {
 			errs = append(errs, fmt.Errorf("close index manager: %w", err))
 		}
 	}
@@ -218,7 +218,7 @@ type BootstrappedAgentRuntime struct {
 
 // BootstrapAgentRuntime bootstraps the agent runtime including resolving the
 // effective contract and building the capability bundle.
-func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*BootstrappedAgentRuntime, error) {
+func BootstrapAgentRuntime(ctx context.Context, workspace string, opts AgentBootstrapOptions) (*BootstrappedAgentRuntime, error) {
 	if workspace == "" {
 		return nil, fmt.Errorf("workspace required")
 	}
@@ -302,6 +302,7 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 	}
 	registry.UseAgentSpec(opts.AgentID, agentSpec)
 	admissionResults, err := regpkg.AdmitCandidates(
+		ctx,
 		registry,
 		nil,
 		agentspec.EffectiveAllowedCapabilitySelectors(agentSpec),
@@ -593,7 +594,7 @@ func OpenWorkspace(ctx context.Context, cfg WorkspaceConfig) (_ *Workspace, err 
 		bootstrapOpts.CapabilityIndexManager = cfg.CapabilityProduct.IndexManager
 		bootstrapOpts.CapabilitySearchEngine = cfg.CapabilityProduct.SearchEngine
 	}
-	boot, err := BootstrapAgentRuntime(cfg.Workspace, bootstrapOpts)
+	boot, err := BootstrapAgentRuntime(ctx, cfg.Workspace, bootstrapOpts)
 	if err != nil {
 		return nil, err
 	}

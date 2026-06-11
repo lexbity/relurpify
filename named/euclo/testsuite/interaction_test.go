@@ -18,7 +18,7 @@ import (
 func TestEndToEndClarificationFirstRouteSelection(t *testing.T) {
 	caps := newCapabilityRegistry(t)
 	deps := rootGraphDepsWithModel(caps, stubLanguageModel{})
-	graph, err := orchestrate.NewRootGraph(deps)
+	graph, err := orchestrate.NewRootGraph(context.Background(), deps)
 	if err != nil {
 		t.Fatalf("NewRootGraph failed: %v", err)
 	}
@@ -80,7 +80,7 @@ func TestDryRunEndToEndAmbiguousInteractionAndHITL(t *testing.T) {
 	broker := authorization.NewHITLBroker(5 * time.Second)
 	deps := rootGraphDepsWithModel(caps, stubLanguageModel{})
 	deps.HITLBroker = broker
-	graph, err := orchestrate.NewRootGraph(deps)
+	graph, err := orchestrate.NewRootGraph(context.Background(), deps)
 	if err != nil {
 		t.Fatalf("NewRootGraph failed: %v", err)
 	}

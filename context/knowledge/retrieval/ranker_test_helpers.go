@@ -1,6 +1,7 @@
 package retrieval
 
 import (
+	"context"
 	"path/filepath"
 	"testing"
 	"time"
@@ -12,11 +13,11 @@ import (
 
 func newRankerTestStore(t *testing.T) *knowledge.ChunkStore {
 	t.Helper()
-	engine, err := graphdb.Open(graphdb.DefaultOptions(t.TempDir()))
+	engine, err := graphdb.Open(context.Background(), graphdb.DefaultOptions(t.TempDir()))
 	if err != nil {
 		t.Fatalf("open graphdb: %v", err)
 	}
-	t.Cleanup(func() { _ = engine.Close() })
+	t.Cleanup(func() { _ = engine.Close(context.Background()) })
 	return &knowledge.ChunkStore{Graph: engine}
 }
 
@@ -38,7 +39,7 @@ func saveRankerChunk(t *testing.T, store *knowledge.ChunkStore, id, raw string, 
 		CreatedAt: updatedAt,
 		UpdatedAt: updatedAt,
 	}
-	if _, err := store.Save(chunk); err != nil {
+	if _, err := store.Save(context.TODO(), chunk); err != nil {
 		t.Fatalf("save chunk %s: %v", id, err)
 	}
 }

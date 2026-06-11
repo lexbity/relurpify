@@ -2,6 +2,7 @@ package llm
 
 import (
 	"context"
+	"errors"
 
 	lmstudiobackend "codeburg.org/lexbit/relurpify/platform/llm/lmstudio"
 )
@@ -57,7 +58,7 @@ func (a lmStudioBackendAdapter) ModelContextSize(ctx context.Context) (int, erro
 
 func (a lmStudioBackendAdapter) Health(ctx context.Context) (*HealthReport, error) {
 	if a.inner == nil {
-		return nil, nil
+		return nil, errors.New("lmStudio backend adapter inner is nil")
 	}
 	report, err := a.inner.Health(ctx)
 	if report == nil {

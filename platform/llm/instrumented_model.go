@@ -220,11 +220,7 @@ func (m *InstrumentedModel) emitResponse(ctx context.Context, kind string, resp 
 	}
 	if ing := telemetry.ResponseIngesterFromContext(ctx); ing != nil && resp != nil && err == nil {
 		go func() {
-			baseCtx := ctx
-			if baseCtx == nil {
-				baseCtx = context.Background()
-			}
-			timeoutCtx, cancel := context.WithTimeout(baseCtx, 5*time.Second)
+			timeoutCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 			defer cancel()
 			_ = ing.IngestLLMResponse(timeoutCtx, resp)
 		}()
@@ -244,8 +240,10 @@ func (m *InstrumentedModel) emitResponse(ctx context.Context, kind string, resp 
 		metadata["text_preview"] = clip(resp.Text, 1024)
 		metadata["usage"] = resp.Usage
 		if len(resp.ToolCalls) > 0 {
-			toolCalls, _ := json.Marshal(resp.ToolCalls)
-			metadata["tool_calls"] = string(toolCalls)
+			toolCalls, err := json.Marshal(resp.ToolCalls)
+			if err == nil {
+				metadata["tool_calls"] = string(toolCalls)
+			}
 		}
 	}
 	if err != nil {

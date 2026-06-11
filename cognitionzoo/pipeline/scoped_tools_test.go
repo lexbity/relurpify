@@ -70,16 +70,16 @@ func pipelineToolCapabilityID(name string) string {
 
 func TestResolveStageToolsRespectsScopedRegistry(t *testing.T) {
 	reg := frameworktools.NewRegistry()
-	if err := reg.RegisterLegacyTool(scopedPipelineTool{name: "scope_read"}); err != nil {
+	if err := reg.RegisterLegacyTool(context.Background(), scopedPipelineTool{name: "scope_read"}); err != nil {
 		t.Fatalf("register scope_read: %v", err)
 	}
-	if err := reg.RegisterLegacyTool(scopedPipelineTool{name: "scope_write"}); err != nil {
+	if err := reg.RegisterLegacyTool(context.Background(), scopedPipelineTool{name: "scope_write"}); err != nil {
 		t.Fatalf("register scope_write: %v", err)
 	}
 
 	scoped := reg.WithAllowlist([]string{pipelineToolCapabilityID("scope_read")})
 	stage := scopedPipelineStage{allowed: []string{"scope_read", "scope_write"}}
-	tools := resolveStageTools(context.Background(), nil, stage, scoped.ModelCallableTools())
+	tools := resolveStageTools(context.Background(), nil, stage, scoped.ModelCallableTools(context.Background()))
 	if got, want := len(tools), 1; got != want {
 		t.Fatalf("stage tools count = %d, want %d", got, want)
 	}

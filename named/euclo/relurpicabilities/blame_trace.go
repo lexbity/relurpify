@@ -147,7 +147,7 @@ func (h *BlameTraceHandler) Invoke(ctx context.Context, env ports.State, args ma
 	}
 	if h.cmd.Policy != nil {
 		if err := h.cmd.Policy.AllowCommand(ctx, req); err != nil {
-			return failResult(fmt.Sprintf("blame command denied: %v", err)), err
+			return failResult(fmt.Sprintf("blame command denied: %v", err)), nil
 		}
 	}
 	req.Args[len(req.Args)-1] = resolvedFile
@@ -158,14 +158,7 @@ func (h *BlameTraceHandler) Invoke(ctx context.Context, env ports.State, args ma
 
 	res, err := h.cmd.Runner.Run(ctx, req)
 	if err != nil {
-		return &ports.ToolResult{
-			Success: false,
-			Data: map[string]any{
-				"success": false,
-				"error":   err.Error(),
-				"stderr":  "",
-			},
-		}, nil
+		return failResult(fmt.Sprintf("command execution failed: %v", err)), nil
 	}
 	if res.ExitCode != 0 {
 		return &ports.ToolResult{

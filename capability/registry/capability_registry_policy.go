@@ -372,6 +372,9 @@ func (r *CapabilityRegistry) capturePolicySnapshotLocked(now time.Time) *capresu
 		return nil
 	}
 	policy := r.currentRuntimePolicyLocked()
+	if policy == nil {
+		policy = &compiledRuntimePolicy{}
+	}
 	snapshot := &capresult.PolicySnapshot{
 		ID:                 fmt.Sprintf("policy-%d", now.UnixNano()),
 		CapturedAt:         now,
@@ -380,11 +383,9 @@ func (r *CapabilityRegistry) capturePolicySnapshotLocked(now time.Time) *capresu
 		CapabilityPolicies: append([]agentspec.CapabilityPolicy{}, policy.capabilityPolicies...),
 		ExposurePolicies:   append([]agentspec.CapabilityExposurePolicy{}, policy.exposurePolicies...),
 		GlobalPolicies:     cloneGlobalPolicies(policy.globalPolicies),
-	}
-	if policy != nil {
-		snapshot.InsertionPolicies = cloneInsertionPolicies(policy.insertionPolicies)
-		snapshot.ProviderPolicies = cloneProviderPolicies(policy.providerPolicies)
-		snapshot.RuntimeSafety = cloneRuntimeSafetySpec(policy.runtimeSafety)
+		InsertionPolicies:  cloneInsertionPolicies(policy.insertionPolicies),
+		ProviderPolicies:   cloneProviderPolicies(policy.providerPolicies),
+		RuntimeSafety:      cloneRuntimeSafetySpec(policy.runtimeSafety),
 	}
 	if r.safety != nil {
 		snapshot.Revocations = r.safety.RevocationSnapshot()

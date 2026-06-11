@@ -1,6 +1,7 @@
 package framework
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -109,11 +110,11 @@ func TestChunkStorage(t *testing.T) {
 
 		// Create a graph engine for testing
 		opts := graphdb.DefaultOptions(env.WorkspacePath)
-		graph, err := graphdb.Open(opts)
+		graph, err := graphdb.Open(context.Background(), opts)
 		if err != nil {
 			t.Fatalf("failed to open graph engine: %v", err)
 		}
-		defer graph.Close()
+		defer graph.Close(context.Background())
 		store := &knowledge.ChunkStore{Graph: graph}
 
 		chunk := knowledge.KnowledgeChunk{
@@ -130,7 +131,7 @@ func TestChunkStorage(t *testing.T) {
 			CreatedAt: time.Now().UTC(),
 		}
 
-		saved, err := store.Save(chunk)
+		saved, err := store.Save(context.TODO(), chunk)
 		if err != nil {
 			t.Fatalf("failed to save chunk: %v", err)
 		}
@@ -146,11 +147,11 @@ func TestChunkStorage(t *testing.T) {
 	t.Run("chunk without ID cannot be saved", func(t *testing.T) {
 		env := NewTestEnvironment(t)
 		opts := graphdb.DefaultOptions(env.WorkspacePath)
-		graph, err := graphdb.Open(opts)
+		graph, err := graphdb.Open(context.Background(), opts)
 		if err != nil {
 			t.Fatalf("failed to open graph engine: %v", err)
 		}
-		defer graph.Close()
+		defer graph.Close(context.Background())
 		store := &knowledge.ChunkStore{Graph: graph}
 
 		chunk := knowledge.KnowledgeChunk{
@@ -165,7 +166,7 @@ func TestChunkStorage(t *testing.T) {
 			CreatedAt: time.Now().UTC(),
 		}
 
-		_, err = store.Save(chunk)
+		_, err = store.Save(context.TODO(), chunk)
 		if err == nil {
 			t.Error("saving chunk without ID should fail")
 		}
@@ -174,11 +175,11 @@ func TestChunkStorage(t *testing.T) {
 	t.Run("chunk version increments on update", func(t *testing.T) {
 		env := NewTestEnvironment(t)
 		opts := graphdb.DefaultOptions(env.WorkspacePath)
-		graph, err := graphdb.Open(opts)
+		graph, err := graphdb.Open(context.Background(), opts)
 		if err != nil {
 			t.Fatalf("failed to open graph engine: %v", err)
 		}
-		defer graph.Close()
+		defer graph.Close(context.Background())
 		store := &knowledge.ChunkStore{Graph: graph}
 
 		chunk := knowledge.KnowledgeChunk{
@@ -194,14 +195,14 @@ func TestChunkStorage(t *testing.T) {
 		}
 
 		// Save initial version
-		saved1, err := store.Save(chunk)
+		saved1, err := store.Save(context.TODO(), chunk)
 		if err != nil {
 			t.Fatalf("failed to save initial chunk: %v", err)
 		}
 
 		// Update the chunk
 		saved1.Body.Raw = "updated content"
-		saved2, err := store.Save(*saved1)
+		saved2, err := store.Save(context.TODO(), *saved1)
 		if err != nil {
 			t.Fatalf("failed to save updated chunk: %v", err)
 		}
@@ -218,11 +219,11 @@ func TestChunkRetrieval(t *testing.T) {
 	t.Run("chunk can be retrieved by ID", func(t *testing.T) {
 		env := NewTestEnvironment(t)
 		opts := graphdb.DefaultOptions(env.WorkspacePath)
-		graph, err := graphdb.Open(opts)
+		graph, err := graphdb.Open(context.Background(), opts)
 		if err != nil {
 			t.Fatalf("failed to open graph engine: %v", err)
 		}
-		defer graph.Close()
+		defer graph.Close(context.Background())
 		store := &knowledge.ChunkStore{Graph: graph}
 
 		chunk := knowledge.KnowledgeChunk{
@@ -239,7 +240,7 @@ func TestChunkRetrieval(t *testing.T) {
 			CreatedAt: time.Now().UTC(),
 		}
 
-		_, err = store.Save(chunk)
+		_, err = store.Save(context.TODO(), chunk)
 		if err != nil {
 			t.Fatalf("failed to save chunk: %v", err)
 		}
@@ -263,11 +264,11 @@ func TestChunkRetrieval(t *testing.T) {
 	t.Run("non-existent chunk returns not found", func(t *testing.T) {
 		env := NewTestEnvironment(t)
 		opts := graphdb.DefaultOptions(env.WorkspacePath)
-		graph, err := graphdb.Open(opts)
+		graph, err := graphdb.Open(context.Background(), opts)
 		if err != nil {
 			t.Fatalf("failed to open graph engine: %v", err)
 		}
-		defer graph.Close()
+		defer graph.Close(context.Background())
 		store := &knowledge.ChunkStore{Graph: graph}
 
 		_, ok, err := store.Load(knowledge.ChunkID("non-existent"))
@@ -282,11 +283,11 @@ func TestChunkRetrieval(t *testing.T) {
 	t.Run("multiple chunks can be retrieved", func(t *testing.T) {
 		env := NewTestEnvironment(t)
 		opts := graphdb.DefaultOptions(env.WorkspacePath)
-		graph, err := graphdb.Open(opts)
+		graph, err := graphdb.Open(context.Background(), opts)
 		if err != nil {
 			t.Fatalf("failed to open graph engine: %v", err)
 		}
-		defer graph.Close()
+		defer graph.Close(context.Background())
 		store := &knowledge.ChunkStore{Graph: graph}
 
 		ids := []knowledge.ChunkID{
@@ -307,7 +308,7 @@ func TestChunkRetrieval(t *testing.T) {
 				Freshness: knowledge.FreshnessValid,
 				CreatedAt: time.Now().UTC(),
 			}
-			if _, err := store.Save(chunk); err != nil {
+			if _, err := store.Save(context.TODO(), chunk); err != nil {
 				t.Fatalf("failed to save chunk %s: %v", id, err)
 			}
 		}
@@ -329,11 +330,11 @@ func TestKnowledgeGraphQuery(t *testing.T) {
 	t.Run("extract requires context subgraph", func(t *testing.T) {
 		env := NewTestEnvironment(t)
 		opts := graphdb.DefaultOptions(env.WorkspacePath)
-		graph, err := graphdb.Open(opts)
+		graph, err := graphdb.Open(context.Background(), opts)
 		if err != nil {
 			t.Fatalf("failed to open graph engine: %v", err)
 		}
-		defer graph.Close()
+		defer graph.Close(context.Background())
 		store := &knowledge.ChunkStore{Graph: graph}
 		chunkGraph := &knowledge.ChunkGraph{Store: store}
 
@@ -349,7 +350,7 @@ func TestKnowledgeGraphQuery(t *testing.T) {
 			Freshness: knowledge.FreshnessValid,
 			CreatedAt: time.Now().UTC(),
 		}
-		if _, err := store.Save(seed); err != nil {
+		if _, err := store.Save(context.TODO(), seed); err != nil {
 			t.Fatalf("failed to save seed: %v", err)
 		}
 
@@ -373,11 +374,11 @@ func TestKnowledgeGraphQuery(t *testing.T) {
 	t.Run("order requires context", func(t *testing.T) {
 		env := NewTestEnvironment(t)
 		opts := graphdb.DefaultOptions(env.WorkspacePath)
-		graph, err := graphdb.Open(opts)
+		graph, err := graphdb.Open(context.Background(), opts)
 		if err != nil {
 			t.Fatalf("failed to open graph engine: %v", err)
 		}
-		defer graph.Close()
+		defer graph.Close(context.Background())
 		store := &knowledge.ChunkStore{Graph: graph}
 		chunkGraph := &knowledge.ChunkGraph{Store: store}
 
@@ -405,10 +406,10 @@ func TestKnowledgeGraphQuery(t *testing.T) {
 			CreatedAt: time.Now().UTC(),
 		}
 
-		if _, err := store.Save(chunk1); err != nil {
+		if _, err := store.Save(context.TODO(), chunk1); err != nil {
 			t.Fatalf("failed to save chunk1: %v", err)
 		}
-		if _, err := store.Save(chunk2); err != nil {
+		if _, err := store.Save(context.TODO(), chunk2); err != nil {
 			t.Fatalf("failed to save chunk2: %v", err)
 		}
 
@@ -426,11 +427,11 @@ func TestKnowledgeGraphQuery(t *testing.T) {
 	t.Run("amplify from chunks", func(t *testing.T) {
 		env := NewTestEnvironment(t)
 		opts := graphdb.DefaultOptions(env.WorkspacePath)
-		graph, err := graphdb.Open(opts)
+		graph, err := graphdb.Open(context.Background(), opts)
 		if err != nil {
 			t.Fatalf("failed to open graph engine: %v", err)
 		}
-		defer graph.Close()
+		defer graph.Close(context.Background())
 		store := &knowledge.ChunkStore{Graph: graph}
 		chunkGraph := &knowledge.ChunkGraph{Store: store}
 
@@ -446,7 +447,7 @@ func TestKnowledgeGraphQuery(t *testing.T) {
 			Freshness: knowledge.FreshnessValid,
 			CreatedAt: time.Now().UTC(),
 		}
-		if _, err := store.Save(seed); err != nil {
+		if _, err := store.Save(context.TODO(), seed); err != nil {
 			t.Fatalf("failed to save seed: %v", err)
 		}
 

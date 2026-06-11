@@ -58,7 +58,7 @@ func (h *stubCapabilityHandler) Invoke(ctx context.Context, env ports.State, arg
 func TestThoughtRecipeStepNodeExecuteCapability(t *testing.T) {
 	reg := regpkg.NewRegistry()
 	handler := &stubCapabilityHandler{id: "euclo:cap.ast_query"}
-	if err := reg.RegisterInvocableCapability(handler); err != nil {
+	if err := reg.RegisterInvocableCapability(context.Background(), handler); err != nil {
 		t.Fatalf("register invocable capability: %v", err)
 	}
 
@@ -141,7 +141,7 @@ func TestThoughtRecipeStepNodeBuildRuntimeContextClarificationState(t *testing.T
 	}
 	node := NewThoughtRecipeStepNode("clarify.step", &paradigm.Deps{}, step)
 
-	rctx := node.buildRuntimeContext(env)
+	rctx := node.buildRuntimeContext(context.Background(), env)
 	clarState, ok := rctx.State[intentcontext.ClarificationStateKey].(*intentcontext.ClarificationState)
 	if !ok {
 		t.Fatalf("expected clarification state in prompt runtime, got %#v", rctx.State[intentcontext.ClarificationStateKey])
@@ -188,7 +188,7 @@ func TestThoughtRecipeStepNodeUsesRegistryPromptID(t *testing.T) {
 	}
 	node := NewThoughtRecipeStepNode("clarify.step", &paradigm.Deps{PromptRegistry: registry}, step)
 
-	task, err := node.buildTask(env)
+	task, err := node.buildTask(context.Background(), env)
 	if err != nil {
 		t.Fatalf("buildTask: %v", err)
 	}
@@ -211,10 +211,10 @@ func TestThoughtRecipeStepNodeUsesRegistryPromptID(t *testing.T) {
 
 func TestThoughtRecipeStepNodeScopesRuntimeToolsFromEffectiveToolNames(t *testing.T) {
 	reg := regpkg.NewRegistry()
-	if err := reg.RegisterLegacyTool(semanticTestTool{name: "file_read", available: true}); err != nil {
+	if err := reg.RegisterLegacyTool(context.Background(), semanticTestTool{name: "file_read", available: true}); err != nil {
 		t.Fatalf("register file_read: %v", err)
 	}
-	if err := reg.RegisterLegacyTool(semanticTestTool{name: "file_write", available: true}); err != nil {
+	if err := reg.RegisterLegacyTool(context.Background(), semanticTestTool{name: "file_write", available: true}); err != nil {
 		t.Fatalf("register file_write: %v", err)
 	}
 
@@ -229,7 +229,7 @@ func TestThoughtRecipeStepNodeScopesRuntimeToolsFromEffectiveToolNames(t *testin
 		},
 	}
 	scopedNode := NewThoughtRecipeStepNode("scope.step", deps, scopedStep)
-	rctx := scopedNode.buildRuntimeContext(baseEnv)
+	rctx := scopedNode.buildRuntimeContext(context.Background(), baseEnv)
 
 	if got, want := runtimeToolNames(rctx.Tools), []string{"file_write"}; !equalStringSlices(got, want) {
 		t.Fatalf("scoped runtime tools = %#v, want %#v", got, want)
@@ -242,7 +242,7 @@ func TestThoughtRecipeStepNodeScopesRuntimeToolsFromEffectiveToolNames(t *testin
 	if scopedRegistry == nil {
 		t.Fatal("expected scoped registry")
 	}
-	if got, want := runtimeToolNames(scopedRegistry.ModelCallableTools()), []string{"file_write"}; !equalStringSlices(got, want) {
+	if got, want := runtimeToolNames(scopedRegistry.ModelCallableTools(context.Background())), []string{"file_write"}; !equalStringSlices(got, want) {
 		t.Fatalf("scoped registry tools = %#v, want %#v", got, want)
 	}
 	if _, err := scopedRegistry.InvokeCapability(context.Background(), baseEnv.State(), "file_write", map[string]any{}); err != nil {
@@ -260,7 +260,7 @@ func TestThoughtRecipeStepNodeScopesRuntimeToolsFromEffectiveToolNames(t *testin
 		},
 	}
 	nextNode := NewThoughtRecipeStepNode("scope.next", deps, nextStep)
-	nextRctx := nextNode.buildRuntimeContext(baseEnv)
+	nextRctx := nextNode.buildRuntimeContext(context.Background(), baseEnv)
 	if got, want := runtimeToolNames(nextRctx.Tools), []string{"file_read", "file_write"}; !equalStringSlices(got, want) {
 		t.Fatalf("unscoped runtime tools = %#v, want %#v", got, want)
 	}
@@ -282,7 +282,7 @@ func TestThoughtRecipeStepNodePromptIDRequiresRegistry(t *testing.T) {
 	}
 	node := NewThoughtRecipeStepNode("clarify.step", &paradigm.Deps{}, step)
 
-	if _, err := node.buildTask(env); err == nil {
+	if _, err := node.buildTask(context.Background(), env); err == nil {
 		t.Fatal("expected buildTask to fail without a prompt registry")
 	}
 }
@@ -343,7 +343,7 @@ func TestThoughtRecipeStepNodeWritesClarificationMetadata(t *testing.T) {
 	}
 
 	node := NewThoughtRecipeStepNode("extract.step", &paradigm.Deps{}, step)
-	task, err := node.buildTask(env)
+	task, err := node.buildTask(context.Background(), env)
 	if err != nil {
 		t.Fatalf("buildTask failed: %v", err)
 	}
@@ -362,7 +362,7 @@ func TestThoughtRecipeStepNodeWritesClarificationMetadata(t *testing.T) {
 	if got, ok := env.GetWorkingValue("euclo.execution.step.extract.step.clarification_allowed_statuses"); !ok || got == nil {
 		t.Fatalf("expected allowed statuses in envelope, got %#v (ok=%v)", got, ok)
 	}
-	rctx := node.buildRuntimeContext(env)
+	rctx := node.buildRuntimeContext(context.Background(), env)
 	if got := rctx.State["execution_step_type"]; got != string(ClarificationStepTypeExtract) {
 		t.Fatalf("expected runtime step type metadata, got %#v", got)
 	}
@@ -426,7 +426,7 @@ func TestThoughtRecipeStepNodeDelegationFiltersChildEnvelopeAndReturnsCaptures(t
 		t.Fatalf("expected parent scratch to be isolated, got %#v (ok=%v)", got, ok)
 	}
 
-	task, err := node.buildTask(child)
+	task, err := node.buildTask(context.Background(), child)
 	if err != nil {
 		t.Fatalf("buildTask failed: %v", err)
 	}

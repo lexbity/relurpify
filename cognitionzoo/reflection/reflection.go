@@ -38,7 +38,7 @@ func (a *ReflectionAgent) Initialize(cfg *execution.Config) error {
 
 // Execute runs the review workflow.
 func (a *ReflectionAgent) Execute(ctx context.Context, task *execution.Task, env *contextdata.Envelope) (*execution.Result, error) {
-	graph, err := a.BuildGraph(task)
+	graph, err := a.BuildGraph(ctx, task)
 	if err != nil {
 		return nil, err
 	}
@@ -57,7 +57,7 @@ func (a *ReflectionAgent) Capabilities() []string {
 }
 
 // BuildGraph builds the review workflow.
-func (a *ReflectionAgent) BuildGraph(task *execution.Task) (*graph.Graph, error) {
+func (a *ReflectionAgent) BuildGraph(ctx context.Context, task *execution.Task) (*graph.Graph, error) {
 	if a.Delegate == nil {
 		return nil, fmt.Errorf("reflection agent missing delegate")
 	}

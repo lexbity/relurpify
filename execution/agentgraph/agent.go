@@ -15,5 +15,5 @@ type WorkflowExecutor interface {
 	Initialize(config *execution.Config) error
 	Execute(ctx context.Context, task *execution.Task, env *contextdata.Envelope) (*execution.Result, error)
 	Capabilities() []string
-	BuildGraph(task *execution.Task) (*Graph, error)
+	BuildGraph(ctx context.Context, task *execution.Task) (*Graph, error)
 }

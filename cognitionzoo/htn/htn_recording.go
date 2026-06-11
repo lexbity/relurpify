@@ -2,6 +2,7 @@ package htn
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -47,8 +48,8 @@ func (a *recordingPrimitiveAgent) Initialize(_ *execution.Config) error { return
 
 func (a *recordingPrimitiveAgent) Capabilities() []string { return nil }
 
-func (a *recordingPrimitiveAgent) BuildGraph(_ *execution.Task) (*graph.Graph, error) {
-	return nil, nil
+func (a *recordingPrimitiveAgent) BuildGraph(ctx context.Context, _ *execution.Task) (*graph.Graph, error) {
+	return nil, errors.New("BuildGraph not implemented")
 }
 
 func (a *recordingPrimitiveAgent) Execute(ctx context.Context, task *execution.Task, state *contextdata.Envelope) (*execution.Result, error) {

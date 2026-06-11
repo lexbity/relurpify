@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -80,7 +81,7 @@ func (r *recordingExecutor) Execute(ctx context.Context, task *execution.Task, e
 
 func (r *recordingExecutor) Capabilities() []string { return nil }
 
-func (r *recordingExecutor) BuildGraph(*execution.Task) (*agentgraph.Graph, error) { return nil, nil }
+func (r *recordingExecutor) BuildGraph(ctx context.Context, _ *execution.Task) (*agentgraph.Graph, error) { return nil, errors.New("not implemented") }
 
 func TestResolveInteractionFrameResumesClarificationTask(t *testing.T) {
 	env := contextdata.NewEnvelope("task-1", "session-1")

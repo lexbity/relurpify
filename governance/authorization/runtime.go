@@ -129,7 +129,7 @@ func RegisterAgent(ctx context.Context, cfg RuntimeConfig) (*AgentRegistration, 
 				permManager.SetDefaultPolicy(string(policy))
 			}
 		}
-		permManager.AttachRuntime(runtime)
+		permManager.AttachRuntime(ctx, runtime)
 	}
 	sboxPolicy := buildSandboxPolicy(spec, cfg.SecurityBundle.Sandbox.ProtectedPaths)
 	if err := runtime.ValidatePolicy(sboxPolicy); err != nil {

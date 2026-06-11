@@ -1,6 +1,7 @@
 package jobs
 
 import (
+	"context"
 	"testing"
 	"time"
 )
@@ -136,7 +137,7 @@ func TestCheckpointValid(t *testing.T) {
 
 func TestNoopSubmitter(t *testing.T) {
 	s := NoopSubmitter{}
-	job, err := s.Submit(nil, Spec{Kind: "k", Payload: "p", Queue: "q"})
+	job, err := s.Submit(context.TODO(), Spec{Kind: "k", Payload: "p", Queue: "q"})
 	if err != nil {
 		t.Fatalf("noop submit: %v", err)
 	}

@@ -49,7 +49,9 @@ func (j *JSONFileTelemetry) Emit(event Event) {
 	j.mu.Lock()
 	defer j.mu.Unlock()
 	if j.enc != nil {
-		_ = j.enc.Encode(event)
+		if err := j.enc.Encode(event); err != nil {
+			panic(err)
+		}
 	}
 }
 

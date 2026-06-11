@@ -58,13 +58,13 @@ type ExecutionCapabilityCatalogSnapshot struct {
 // CaptureExecutionCatalogSnapshot compiles an execution-scoped descriptive
 // capability catalog from the registry's current admitted capabilities and
 // effective runtime policy.
-func (r *CapabilityRegistry) CaptureExecutionCatalogSnapshot() *ExecutionCapabilityCatalogSnapshot {
+func (r *CapabilityRegistry) CaptureExecutionCatalogSnapshot(ctx context.Context) *ExecutionCapabilityCatalogSnapshot {
 	if r == nil {
 		return nil
 	}
 	if r.delegate != nil {
 		// Capture from base then filter to the declared allowlist.
-		base := r.delegate.CaptureExecutionCatalogSnapshot()
+		base := r.delegate.CaptureExecutionCatalogSnapshot(ctx)
 		if base == nil || r.toolIDAllowlist == nil {
 			return base
 		}
@@ -102,7 +102,7 @@ func (r *CapabilityRegistry) CaptureExecutionCatalogSnapshot() *ExecutionCapabil
 		exposure := r.effectiveExposureLocked(entry.descriptor)
 		available := true
 		if entry.legacyTool != nil {
-			available = entry.legacyTool.IsAvailable(context.Background())
+			available = entry.legacyTool.IsAvailable(ctx)
 		}
 		catalogEntry := ExecutionCapabilityCatalogEntry{
 			Descriptor:    entry.descriptor,
@@ -173,7 +173,7 @@ func (s *ExecutionCapabilityCatalogSnapshot) ModelCallableLLMToolSpecs() []model
 }
 
 // ModelCallableTools returns the callable local tools for this execution.
-func (s *ExecutionCapabilityCatalogSnapshot) ModelCallableTools() []ports.Tool {
+func (s *ExecutionCapabilityCatalogSnapshot) ModelCallableTools(ctx context.Context) []ports.Tool {
 	if s == nil {
 		return nil
 	}

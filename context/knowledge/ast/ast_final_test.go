@@ -1,6 +1,8 @@
 package ast
 
 import (
+	"context"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -36,7 +38,7 @@ func TestIndexManagerPersistWithTransactionError(t *testing.T) {
 		},
 	}
 
-	err = manager.persist(result, "hash")
+	err = manager.persist(context.Background(), result, "hash")
 	assert.Error(t, err)
 }
 
@@ -63,7 +65,7 @@ func TestIndexManagerPersistWithContentHash(t *testing.T) {
 	}
 
 	// Should set content hash if empty
-	err = manager.persist(result, "newhash")
+	err = manager.persist(context.Background(), result, "newhash")
 	require.NoError(t, err)
 	assert.Equal(t, "newhash", result.Metadata.ContentHash)
 }
@@ -272,7 +274,7 @@ func TestIndexManagerCloseWhileRunning(t *testing.T) {
 	// Close in background
 	done := make(chan error)
 	go func() {
-		done <- manager.Close()
+		done <- manager.Close(context.Background())
 	}()
 
 	// Close the ready channel to unblock
@@ -345,7 +347,7 @@ func TestGetFileByPathNotFound(t *testing.T) {
 	defer store.Close()
 
 	file, err := store.GetFileByPath("/nonexistent.go")
-	assert.NoError(t, err)
+	assert.ErrorIs(t, err, os.ErrNotExist)
 	assert.Nil(t, file)
 }
 
@@ -356,6 +358,6 @@ func TestGetEdgeNotFound(t *testing.T) {
 	defer store.Close()
 
 	edge, err := store.GetEdge("nonexistent")
-	assert.NoError(t, err)
+	assert.ErrorIs(t, err, os.ErrNotExist)
 	assert.Nil(t, edge)
 }

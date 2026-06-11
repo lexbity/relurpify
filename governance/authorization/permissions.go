@@ -106,11 +106,11 @@ func NewPermissionManager(basePath string, declared *permissions.PermissionSet, 
 }
 
 // AttachRuntime allows the manager to push policy updates to the sandbox.
-func (m *PermissionManager) AttachRuntime(runtime governanceports.SandboxRuntime) {
+func (m *PermissionManager) AttachRuntime(ctx context.Context, runtime governanceports.SandboxRuntime) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.runtime = runtime
-	m.applyRuntimePolicyLocked()
+	m.applyRuntimePolicyLocked(ctx)
 }
 
 // SetDefaultPolicy configures how undeclared permissions are handled.
@@ -143,12 +143,12 @@ func (m *PermissionManager) effectiveDefaultPolicy() string {
 	return m.defaultPolicy
 }
 
-func (m *PermissionManager) applyRuntimePolicyLocked() {
+func (m *PermissionManager) applyRuntimePolicyLocked(ctx context.Context) {
 	if m == nil || m.runtime == nil {
 		return
 	}
 	policy := m.currentSandboxPolicyLocked()
-	m.runtimePolicyErr = m.runtime.ApplyPolicy(context.Background(), policy)
+	m.runtimePolicyErr = m.runtime.ApplyPolicy(ctx, policy)
 }
 
 // Policy returns the merged sandbox policy currently known to the

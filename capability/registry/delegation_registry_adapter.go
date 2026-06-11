@@ -2,6 +2,7 @@ package registry
 
 import (
 	"context"
+	"errors"
 
 	capresult "codeburg.org/lexbit/relurpify/capability/result"
 
@@ -58,11 +59,11 @@ func (r *DelegationRegistry) CoordinationTargets(selectors ...governanceports.Ca
 
 func (r *DelegationRegistry) InvokeCapability(ctx context.Context, state governanceports.InvocationState, idOrName string, args map[string]any) (any, error) {
 	if r.inner == nil {
-		return nil, nil
+		return nil, errors.New("delegation registry inner is nil")
 	}
 	ps, ok := state.(ports.State)
 	if !ok {
-		return nil, nil
+		return nil, errors.New("invocation state is not a valid state")
 	}
 	return r.inner.InvokeCapability(ctx, ps, idOrName, args)
 }

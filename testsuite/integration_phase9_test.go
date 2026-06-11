@@ -83,9 +83,9 @@ func (r *phase9StaticRanker) Rank(context.Context, retrieval.RetrievalQuery, *kn
 }
 
 func TestCompilationReplay_Determinism(t *testing.T) {
-	engine, err := graphdb.Open(graphdb.DefaultOptions(t.TempDir()))
+	engine, err := graphdb.Open(context.Background(), graphdb.DefaultOptions(t.TempDir()))
 	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, engine.Close()) })
+	t.Cleanup(func() { require.NoError(t, engine.Close(context.Background())) })
 
 	store := &knowledge.ChunkStore{Graph: engine}
 	now := time.Date(2024, 4, 1, 12, 0, 0, 0, time.UTC)
@@ -96,7 +96,7 @@ func TestCompilationReplay_Determinism(t *testing.T) {
 		Freshness:   knowledge.FreshnessValid,
 		Provenance:  knowledge.ChunkProvenance{CompiledBy: knowledge.CompilerDeterministic, Timestamp: now},
 	}
-	_, err = store.Save(source)
+	_, err = store.Save(context.TODO(), source)
 	require.NoError(t, err)
 
 	registry := retrieval.NewRankerRegistry()
@@ -120,7 +120,7 @@ func TestCompilationReplay_Determinism(t *testing.T) {
 
 	data, err := json.Marshal(record)
 	require.NoError(t, err)
-	_, err = store.Save(knowledge.KnowledgeChunk{
+	_, err = store.Save(context.TODO(), knowledge.KnowledgeChunk{
 		ID:           knowledge.ChunkID(record.RequestID),
 		SourceOrigin: knowledge.SourceOrigin("compilation_record"),
 		Body:         knowledge.ChunkBody{Raw: string(data), Fields: map[string]any{"content": string(data)}},
@@ -147,9 +147,9 @@ func TestCompilationReplay_Determinism(t *testing.T) {
 }
 
 func TestProvenance_FullChain(t *testing.T) {
-	engine, err := graphdb.Open(graphdb.DefaultOptions(t.TempDir()))
+	engine, err := graphdb.Open(context.Background(), graphdb.DefaultOptions(t.TempDir()))
 	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, engine.Close()) })
+	t.Cleanup(func() { require.NoError(t, engine.Close(context.Background())) })
 
 	store := &knowledge.ChunkStore{Graph: engine}
 	now := time.Date(2024, 4, 1, 12, 0, 0, 0, time.UTC)
@@ -161,7 +161,7 @@ func TestProvenance_FullChain(t *testing.T) {
 		Freshness:    knowledge.FreshnessValid,
 		Provenance:   knowledge.ChunkProvenance{CompiledBy: knowledge.CompilerDeterministic, Timestamp: now},
 	}
-	_, err = store.Save(fileChunk)
+	_, err = store.Save(context.TODO(), fileChunk)
 	require.NoError(t, err)
 
 	summaryChunk := knowledge.KnowledgeChunk{
@@ -178,9 +178,9 @@ func TestProvenance_FullChain(t *testing.T) {
 			Timestamp:  now,
 		},
 	}
-	_, err = store.Save(summaryChunk)
+	_, err = store.Save(context.TODO(), summaryChunk)
 	require.NoError(t, err)
-	_, err = store.SaveEdge(knowledge.ChunkEdge{FromChunk: fileChunk.ID, ToChunk: summaryChunk.ID, Kind: knowledge.EdgeKindDerivesFrom, Weight: 1})
+	_, err = store.SaveEdge(context.TODO(), knowledge.ChunkEdge{FromChunk: fileChunk.ID, ToChunk: summaryChunk.ID, Kind: knowledge.EdgeKindDerivesFrom, Weight: 1})
 	require.NoError(t, err)
 
 	ing := knowledge.NewOutputIngester(store, nil)

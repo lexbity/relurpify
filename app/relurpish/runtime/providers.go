@@ -108,9 +108,6 @@ func (r *Runtime) RegisterProvider(ctx context.Context, provider RuntimeProvider
 	if provider == nil {
 		return fmt.Errorf("provider required")
 	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	if described, ok := provider.(DescribedRuntimeProvider); ok {
 		desc := described.Descriptor()
 		if desc.ID != "" || desc.Kind != "" {
@@ -248,9 +245,6 @@ func (r *Runtime) RevokeSession(ctx context.Context, sessionID, reason string) e
 	sessionID = strings.TrimSpace(sessionID)
 	if sessionID == "" {
 		return fmt.Errorf("session id required")
-	}
-	if ctx == nil {
-		ctx = context.Background()
 	}
 	if r.Tools != nil {
 		r.Tools.RevokeSession(sessionID, reason)

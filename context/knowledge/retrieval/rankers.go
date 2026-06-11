@@ -36,7 +36,7 @@ func (r *BM25Ranker) Rank(ctx context.Context, query RetrievalQuery, store *know
 		MaxResults: query.Limit,
 	}
 
-	results, err := r.engine.Search(searchQuery)
+	results, err := r.engine.Search(ctx, searchQuery)
 	if err != nil {
 		return nil, fmt.Errorf("bm25 search failed: %w", err)
 	}

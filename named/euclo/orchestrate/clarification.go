@@ -77,14 +77,14 @@ func clarificationRouteRequested(env *contextdata.Envelope) bool {
 	return false
 }
 
-func registerClarificationCapability(reg *registry.CapabilityRegistry) error {
+func registerClarificationCapability(ctx context.Context, reg *registry.CapabilityRegistry) error {
 	if reg == nil {
 		return nil
 	}
 	if _, ok := reg.GetCapability(clarificationCapabilityID); ok {
 		return nil
 	}
-	return reg.RegisterInvocableCapability(&clarificationCapabilityHandler{})
+	return reg.RegisterInvocableCapability(ctx, &clarificationCapabilityHandler{})
 }
 
 type clarificationCapabilityHandler struct{}
@@ -102,8 +102,7 @@ func (h *clarificationCapabilityHandler) Descriptor(context.Context, ports.State
 
 func (h *clarificationCapabilityHandler) Invoke(ctx context.Context, st ports.State, args map[string]any) (*ports.ToolResult, error) {
 	env := contextdata.EnvelopeFromState(st)
-	_ = ctx
-	state, err := intentcontext.NewStateStore().Read(context.Background(), env)
+	state, err := intentcontext.NewStateStore().Read(ctx, env)
 	if err != nil {
 		state = intentcontext.NewState(env.TaskID, env.SessionID)
 	}
@@ -141,7 +140,7 @@ func (h *clarificationCapabilityHandler) Invoke(ctx context.Context, st ports.St
 		state.ActiveThoughtRecipeID = clarificationThoughtRecipeID
 		state.LastUpdatedAt = time.Now().UTC()
 		state.Normalize()
-		if err := intentcontext.NewStateStore().Write(context.Background(), env, state); err != nil {
+		if err := intentcontext.NewStateStore().Write(ctx, env, state); err != nil {
 			return nil, err
 		}
 		if env != nil {
@@ -173,7 +172,7 @@ func (h *clarificationCapabilityHandler) Invoke(ctx context.Context, st ports.St
 		state.StateVersion = intentcontext.NextStateVersion(state.StateVersion)
 		state.LastUpdatedAt = time.Now().UTC()
 		state.Normalize()
-		if err := intentcontext.NewStateStore().Write(context.Background(), env, state); err != nil {
+		if err := intentcontext.NewStateStore().Write(ctx, env, state); err != nil {
 			return nil, err
 		}
 		emitClarificationAnsweredAndGrounded(ctx, env, state, grounding, nil)
@@ -194,7 +193,7 @@ func (h *clarificationCapabilityHandler) Invoke(ctx context.Context, st ports.St
 		result["grounding"] = grounding
 		result["requery"] = req
 	case clarificationActionProject:
-		plan, planErr := buildProjectionPlanFromState(state)
+		plan, planErr := buildProjectionPlanFromState(ctx, state)
 		if planErr != nil {
 			return &ports.ToolResult{
 				Success: false,
@@ -205,7 +204,7 @@ func (h *clarificationCapabilityHandler) Invoke(ctx context.Context, st ports.St
 		state.ActiveThoughtRecipeID = clarificationThoughtRecipeID
 		state.LastUpdatedAt = time.Now().UTC()
 		state.Normalize()
-		if err := intentcontext.NewStateStore().Write(context.Background(), env, state); err != nil {
+		if err := intentcontext.NewStateStore().Write(ctx, env, state); err != nil {
 			return nil, err
 		}
 		if env != nil {
@@ -236,7 +235,7 @@ func (h *clarificationCapabilityHandler) Invoke(ctx context.Context, st ports.St
 			state.ActiveThoughtRecipeID = nextThoughtRecipeID
 			state.LastUpdatedAt = time.Now().UTC()
 			state.Normalize()
-			if err := intentcontext.NewStateStore().Write(context.Background(), env, state); err != nil {
+			if err := intentcontext.NewStateStore().Write(ctx, env, state); err != nil {
 				return nil, err
 			}
 			euclostate.SetClarificationNextThoughtRecipeID(env, nextThoughtRecipeID)
@@ -634,18 +633,18 @@ func dedupeAnchors(anchors []retrieval.AnchorRef) []retrieval.AnchorRef {
 	return out
 }
 
-func buildProjectionPlanFromState(state *intentcontext.ClarificationState) (*intentcontext.ProjectionPlan, error) {
+func buildProjectionPlanFromState(ctx context.Context, state *intentcontext.ClarificationState) (*intentcontext.ProjectionPlan, error) {
 	if state == nil {
 		return nil, fmt.Errorf("clarification state is nil")
 	}
 	env := contextdata.NewEnvelope(state.TaskID, state.SessionID)
 	env.SetWorkingValueWithClass(intentcontext.ClarificationStateKey, state.Clone(), contextdata.MemoryClassTask)
-	plan, err := intentcontext.NewIntentCore(nil, nil).BuildProjectionPlan(context.Background(), env)
+	plan, err := intentcontext.NewIntentCore(nil, nil).BuildProjectionPlan(ctx, env)
 	if err != nil {
 		return &intentcontext.ProjectionPlan{
 			PlanID:       intentcontext.StableID(state.TaskID, state.SessionID, "projection_plan", fmt.Sprint(state.StateVersion), state.CurrentTurnID),
 			StateVersion: state.StateVersion,
-		}, nil
+		}, err
 	}
 	if plan == nil {
 		return &intentcontext.ProjectionPlan{

@@ -1,6 +1,7 @@
 package graphdb
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -8,10 +9,10 @@ import (
 
 func TestLink_SingleEdge(t *testing.T) {
 	engine, _ := newTestEngine(t)
-	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "src", Kind: "function"}))
-	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "tgt", Kind: "function"}))
+	require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: "src", Kind: "function"}))
+	require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: "tgt", Kind: "function"}))
 
-	err := engine.Link("src", "tgt", "calls", "", 1.5, map[string]any{"site": "x"})
+	err := engine.Link(context.TODO(), "src", "tgt", "calls", "", 1.5, map[string]any{"site": "x"})
 	require.NoError(t, err)
 
 	out := engine.GetOutEdges("src", "calls")
@@ -23,10 +24,10 @@ func TestLink_SingleEdge(t *testing.T) {
 
 func TestLink_WithInverse(t *testing.T) {
 	engine, _ := newTestEngine(t)
-	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "a", Kind: "function"}))
-	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "b", Kind: "function"}))
+	require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: "a", Kind: "function"}))
+	require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: "b", Kind: "function"}))
 
-	err := engine.Link("a", "b", "calls", "called_by", 1, nil)
+	err := engine.Link(context.TODO(), "a", "b", "calls", "called_by", 1, nil)
 	require.NoError(t, err)
 
 	outA := engine.GetOutEdges("a", "calls")
@@ -41,7 +42,7 @@ func TestLink_WithInverse(t *testing.T) {
 func TestLinkEdges_Batch(t *testing.T) {
 	engine, _ := newTestEngine(t)
 	for _, id := range []string{"n1", "n2", "n3"} {
-		require.NoError(t, engine.UpsertNode(NodeRecord{ID: id, Kind: "function"}))
+		require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: id, Kind: "function"}))
 	}
 
 	edges := []EdgeRecord{
@@ -49,7 +50,7 @@ func TestLinkEdges_Batch(t *testing.T) {
 		{SourceID: "n2", TargetID: "n3", Kind: "calls", Weight: 1},
 		{SourceID: "n3", TargetID: "n1", Kind: "calls", Weight: 1},
 	}
-	require.NoError(t, engine.LinkEdges(edges))
+	require.NoError(t, engine.LinkEdges(context.TODO(), edges))
 
 	require.Len(t, engine.GetOutEdges("n1"), 1)
 	require.Len(t, engine.GetOutEdges("n2"), 1)
@@ -58,12 +59,12 @@ func TestLinkEdges_Batch(t *testing.T) {
 
 func TestUnlink_SoftDelete(t *testing.T) {
 	engine, _ := newTestEngine(t)
-	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "a", Kind: "function"}))
-	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "b", Kind: "function"}))
-	require.NoError(t, engine.Link("a", "b", "calls", "", 1, nil))
+	require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: "a", Kind: "function"}))
+	require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: "b", Kind: "function"}))
+	require.NoError(t, engine.Link(context.TODO(), "a", "b", "calls", "", 1, nil))
 
 	// soft delete
-	require.NoError(t, engine.Unlink("a", "b", "calls", false))
+	require.NoError(t, engine.Unlink(context.TODO(), "a", "b", "calls", false))
 
 	out := engine.GetOutEdges("a", "calls")
 	require.Empty(t, out) // filtered out because edge is inactive
@@ -78,11 +79,11 @@ func TestUnlink_SoftDelete(t *testing.T) {
 
 func TestUnlink_HardDelete(t *testing.T) {
 	engine, _ := newTestEngine(t)
-	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "x", Kind: "function"}))
-	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "y", Kind: "function"}))
-	require.NoError(t, engine.Link("x", "y", "imports", "", 1, nil))
+	require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: "x", Kind: "function"}))
+	require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: "y", Kind: "function"}))
+	require.NoError(t, engine.Link(context.TODO(), "x", "y", "imports", "", 1, nil))
 
-	require.NoError(t, engine.Unlink("x", "y", "imports", true))
+	require.NoError(t, engine.Unlink(context.TODO(), "x", "y", "imports", true))
 
 	engine.store.mu.RLock()
 	forward := engine.store.forward["x"]
@@ -92,10 +93,10 @@ func TestUnlink_HardDelete(t *testing.T) {
 
 func TestGetOutEdges_KindFilter(t *testing.T) {
 	engine, _ := newTestEngine(t)
-	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "p", Kind: "function"}))
-	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "q", Kind: "function"}))
-	require.NoError(t, engine.Link("p", "q", "calls", "", 1, nil))
-	require.NoError(t, engine.Link("p", "q", "imports", "", 1, nil))
+	require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: "p", Kind: "function"}))
+	require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: "q", Kind: "function"}))
+	require.NoError(t, engine.Link(context.TODO(), "p", "q", "calls", "", 1, nil))
+	require.NoError(t, engine.Link(context.TODO(), "p", "q", "imports", "", 1, nil))
 
 	outCalls := engine.GetOutEdges("p", "calls")
 	require.Len(t, outCalls, 1)
@@ -111,9 +112,9 @@ func TestGetOutEdges_KindFilter(t *testing.T) {
 
 func TestGetInEdges(t *testing.T) {
 	engine, _ := newTestEngine(t)
-	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "from", Kind: "function"}))
-	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "to", Kind: "function"}))
-	require.NoError(t, engine.Link("from", "to", "calls", "", 1, nil))
+	require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: "from", Kind: "function"}))
+	require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: "to", Kind: "function"}))
+	require.NoError(t, engine.Link(context.TODO(), "from", "to", "calls", "", 1, nil))
 
 	in := engine.GetInEdges("to", "calls")
 	require.Len(t, in, 1)
@@ -122,16 +123,16 @@ func TestGetInEdges(t *testing.T) {
 
 func TestEdgeUpsert_UpdateExisting(t *testing.T) {
 	engine, _ := newTestEngine(t)
-	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "u", Kind: "function"}))
-	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "v", Kind: "function"}))
+	require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: "u", Kind: "function"}))
+	require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: "v", Kind: "function"}))
 
 	// first edge
 	edge1 := EdgeRecord{SourceID: "u", TargetID: "v", Kind: "calls", Weight: 1, Props: []byte(`{"a":1}`)}
-	require.NoError(t, engine.LinkEdges([]EdgeRecord{edge1}))
+	require.NoError(t, engine.LinkEdges(context.TODO(), []EdgeRecord{edge1}))
 
 	// second edge with same source/target/kind but different weight
 	edge2 := EdgeRecord{SourceID: "u", TargetID: "v", Kind: "calls", Weight: 2, Props: []byte(`{"a":2}`)}
-	require.NoError(t, engine.LinkEdges([]EdgeRecord{edge2}))
+	require.NoError(t, engine.LinkEdges(context.TODO(), []EdgeRecord{edge2}))
 
 	out := engine.GetOutEdges("u", "calls")
 	require.Len(t, out, 1)

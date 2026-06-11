@@ -62,7 +62,7 @@ func TestIndexManagerRefreshFileWithPathFilter(t *testing.T) {
 	require.NoError(t, os.WriteFile(path, []byte(`package main
 func Hello() {}
 `), 0o644))
-	require.NoError(t, manager.IndexFile(path))
+	require.NoError(t, manager.IndexFile(context.Background(), path))
 
 	// Verify file was indexed
 	meta, err := manager.Store().GetFileByPath(path)
@@ -78,12 +78,12 @@ func Hello() {}
 	require.NoError(t, os.Remove(path))
 
 	// Refresh should remove the file because filter blocks it
-	err = manager.RefreshFiles([]string{path})
+	err = manager.RefreshFiles(context.Background(), []string{path})
 	assert.NoError(t, err)
 
 	// File should be removed from index
 	file, err := manager.Store().GetFileByPath(path)
-	assert.NoError(t, err)
+	assert.ErrorIs(t, err, os.ErrNotExist)
 	assert.Nil(t, file)
 }
 
@@ -96,7 +96,7 @@ func TestIndexManagerRemoveIndexedFileNotFound(t *testing.T) {
 	manager := NewIndexManager(store, IndexConfig{WorkspacePath: tmpDir})
 
 	// Remove a file that was never indexed - should not error under graphdb
-	err = manager.removeIndexedFile("/nonexistent/path.go")
+	err = manager.removeIndexedFile(context.Background(), "/nonexistent/path.go")
 	assert.NoError(t, err)
 }
 
@@ -112,13 +112,13 @@ func TestIndexManagerRemoveIndexedFileWithError(t *testing.T) {
 	require.NoError(t, os.WriteFile(path, []byte(`package main
 func Hello() {}
 `), 0o644))
-	require.NoError(t, manager.IndexFile(path))
+	require.NoError(t, manager.IndexFile(context.Background(), path))
 
 	// Close the store to cause errors
 	store.Close()
 
 	// This should return an error because store is closed
-	err = manager.removeIndexedFile(path)
+	err = manager.removeIndexedFile(context.Background(), path)
 	assert.Error(t, err)
 }
 
@@ -132,7 +132,7 @@ func TestIndexManagerCloseWithGraphDB(t *testing.T) {
 
 	// Create a mock graph DB (can't easily test actual one without more setup)
 	// Just verify Close works without GraphDB
-	err = manager.Close()
+	err = manager.Close(context.Background())
 	assert.NoError(t, err)
 }
 
@@ -154,7 +154,7 @@ func TestIndexManagerPersistErrorCases(t *testing.T) {
 	manager := NewIndexManager(store, IndexConfig{WorkspacePath: tmpDir})
 
 	// Test persist with nil metadata
-	err = manager.persist(&ParseResult{Metadata: nil}, "hash")
+	err = manager.persist(context.Background(), &ParseResult{Metadata: nil}, "hash")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "missing metadata")
 }
@@ -168,7 +168,7 @@ func TestIndexManagerIndexFileReadError(t *testing.T) {
 	manager := NewIndexManager(store, IndexConfig{WorkspacePath: tmpDir})
 
 	// Try to index a non-existent file
-	err = manager.IndexFile("/nonexistent/path.go")
+	err = manager.IndexFile(context.Background(), "/nonexistent/path.go")
 	assert.Error(t, err)
 }
 
@@ -185,7 +185,7 @@ func Hello() {}
 	manager.mu.Unlock()
 
 	// This should fail because indexing is "already in progress"
-	err := manager.IndexFile(path)
+	err := manager.IndexFile(context.Background(), path)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "index already running")
 
@@ -335,7 +335,7 @@ func A() {}
 func B() { A() }
 func C() { A() }
 `), 0o644))
-	require.NoError(t, manager.IndexFile(path))
+	require.NoError(t, manager.IndexFile(context.Background(), path))
 
 	// Get call graph for A
 	graph, err := manager.GetCallGraph("A")
@@ -356,7 +356,7 @@ func TestIndexManagerGetCallGraphStoreError(t *testing.T) {
 	require.NoError(t, os.WriteFile(path, []byte(`package main
 func Hello() {}
 `), 0o644))
-	require.NoError(t, manager.IndexFile(path))
+	require.NoError(t, manager.IndexFile(context.Background(), path))
 
 	// Close store to cause errors
 	store.Close()
@@ -463,7 +463,7 @@ func TestIndexManagerIndexFileParseErrorFallbackToSymbols(t *testing.T) {
 	require.NoError(t, os.WriteFile(path, []byte(`some content`), 0o644))
 
 	// Without a symbol provider, this should fail
-	err = manager.IndexFile(path)
+	err = manager.IndexFile(context.Background(), path)
 	assert.Error(t, err)
 }
 

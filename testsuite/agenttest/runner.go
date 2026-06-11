@@ -246,7 +246,7 @@ func (r *Runner) RunSuite(ctx context.Context, suite *Suite, opts RunOptions) (*
 		models = []ModelSpec{{Name: "", Endpoint: ""}}
 	}
 	matrixModels := expandSuiteModelMatrix(models, suite.Spec.Providers, suite.Spec.Execution.MatrixOrder)
-	if err := r.preflightSuite(suite, opts, targetWorkspace, models); err != nil {
+	if err := r.preflightSuite(ctx, suite, opts, targetWorkspace, models); err != nil {
 		return nil, err
 	}
 
@@ -302,8 +302,10 @@ func (r *Runner) RunSuite(ctx context.Context, suite *Suite, opts RunOptions) (*
 		}
 	}
 
-	data, _ := json.MarshalIndent(report, "", "  ")
-	_ = os.WriteFile(filepath.Join(outDir, "report.json"), data, 0o644)
+	data, err := json.MarshalIndent(report, "", "  ")
+	if err == nil {
+		_ = os.WriteFile(filepath.Join(outDir, "report.json"), data, 0o644)
+	}
 	return report, nil
 }
 
@@ -350,7 +352,7 @@ func (r *Runner) runPreparedCase(ctx context.Context, suite *Suite, c CaseSpec, 
 	return report
 }
 
-func (r *Runner) preflightSuite(suite *Suite, opts RunOptions, targetWorkspace string, models []ModelSpec) error {
+func (r *Runner) preflightSuite(ctx context.Context, suite *Suite, opts RunOptions, targetWorkspace string, models []ModelSpec) error {
 	manifestModel := ""
 	if suite != nil {
 		suiteManifestAbs := suite.ResolvePath(suite.Spec.Manifest)
@@ -399,7 +401,7 @@ func (r *Runner) preflightSuite(suite *Suite, opts RunOptions, targetWorkspace s
 			if r.Logger != nil {
 				r.Logger.Printf("[preflight-suite] starting suite-level preflight timeout=%v model=%q endpoint=%q", preflightTimeout, exec.Model, exec.Endpoint)
 			}
-			preflightCtx, preflightCancel := context.WithTimeout(context.Background(), preflightTimeout)
+			preflightCtx, preflightCancel := context.WithTimeout(ctx, preflightTimeout)
 			_, err = preflightCaseBackend(preflightCtx, backend, exec.Model, nil, r.Logger)
 			preflightCancel()
 			if err != nil {

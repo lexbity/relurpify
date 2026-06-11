@@ -1,6 +1,8 @@
 package ast
 
-import "testing"
+import (
+	"testing"
+)
 
 func TestGraphSchemaConstantsCompileAndRemainDistinct(t *testing.T) {
 	if NodeKindFunction == "" || NodeKindMethod == "" || NodeKindInterface == "" || NodeKindStruct == "" || NodeKindPackage == "" || NodeKindFile == "" {

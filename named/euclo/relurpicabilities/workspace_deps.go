@@ -1,6 +1,9 @@
 package relurpicabilities
 
-import "os"
+import (
+	"context"
+	"os"
+)
 
 // WorkspaceFiles provides scoped file read/write/resolve for workspace mutation handlers.
 type WorkspaceFiles interface {
@@ -11,5 +14,5 @@ type WorkspaceFiles interface {
 
 // IndexRefresher refreshes the index for a set of file paths.
 type IndexRefresher interface {
-	RefreshFiles(paths []string) error
+	RefreshFiles(ctx context.Context, paths []string) error
 }

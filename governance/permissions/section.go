@@ -11,7 +11,7 @@ import (
 // owns a manifest section provides its own DecodeSection function.
 func DecodeSection(node yaml.Node) (*PermissionSet, error) {
 	if node.Kind == 0 {
-		return nil, nil
+		return nil, fmt.Errorf("permissions section node is absent")
 	}
 	var ps PermissionSet
 	if err := node.Decode(&ps); err != nil {

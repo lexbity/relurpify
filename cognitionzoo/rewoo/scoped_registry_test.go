@@ -40,10 +40,10 @@ func rewooToolCapabilityID(name string) string {
 
 func TestExecutePlanUsesScopedRegistryDirectly(t *testing.T) {
 	reg := capability.NewRegistry()
-	if err := reg.RegisterLegacyTool(scopedRewooTool{name: "scope_read"}); err != nil {
+	if err := reg.RegisterLegacyTool(context.Background(), scopedRewooTool{name: "scope_read"}); err != nil {
 		t.Fatalf("register scope_read: %v", err)
 	}
-	if err := reg.RegisterLegacyTool(scopedRewooTool{name: "scope_write"}); err != nil {
+	if err := reg.RegisterLegacyTool(context.Background(), scopedRewooTool{name: "scope_write"}); err != nil {
 		t.Fatalf("register scope_write: %v", err)
 	}
 

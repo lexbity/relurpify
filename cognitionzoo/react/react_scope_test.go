@@ -96,10 +96,10 @@ func toolCapabilityID(name string) string {
 
 func TestReActUsesScopedRegistryForPromptAndNativeToolCalling(t *testing.T) {
 	reg := capability.NewRegistry()
-	if err := reg.RegisterLegacyTool(scopeAwareReactTool{name: "scope_read"}); err != nil {
+	if err := reg.RegisterLegacyTool(context.Background(), scopeAwareReactTool{name: "scope_read"}); err != nil {
 		t.Fatalf("register scope_read: %v", err)
 	}
-	if err := reg.RegisterLegacyTool(scopeAwareReactTool{name: "scope_write"}); err != nil {
+	if err := reg.RegisterLegacyTool(context.Background(), scopeAwareReactTool{name: "scope_write"}); err != nil {
 		t.Fatalf("register scope_write: %v", err)
 	}
 	scoped := reg.WithAllowlist([]string{toolCapabilityID("scope_read")})
@@ -119,7 +119,7 @@ func TestReActUsesScopedRegistryForPromptAndNativeToolCalling(t *testing.T) {
 		task: task,
 	}
 
-	runtimeCtx := step.buildRuntimeContext(env, scoped.ModelCallableTools())
+	runtimeCtx := step.buildRuntimeContext(env, scoped.ModelCallableTools(context.Background()))
 	if got, want := toolNames(runtimeCtx.Tools), []string{"scope_read"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("runtime tools = %#v, want %#v", got, want)
 	}

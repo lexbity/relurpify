@@ -1,6 +1,7 @@
 package intake
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -18,7 +19,7 @@ type ResumeState struct {
 // It extracts hints from the instruction, pulls context values, and applies resume state.
 func NormalizeTaskEnvelope(task *execution.Task, resume *ResumeState) (*TaskEnvelope, error) {
 	if task == nil {
-		return nil, nil
+		return nil, errors.New("nil task")
 	}
 
 	// Create base normalizer and parse the instruction

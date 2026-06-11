@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -30,7 +31,7 @@ func (f *sandboxPaneRuntimeFake) SessionInfo() SessionInfo {
 
 func (f *sandboxPaneRuntimeFake) LoadSandboxManifest() (*config.ManifestSpec, error) {
 	if f.manifest == nil {
-		return nil, nil
+		return nil, errors.New("manifest not set")
 	}
 	m := *f.manifest
 	return &m, nil

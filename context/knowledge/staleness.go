@@ -1,6 +1,9 @@
 package knowledge
 
-import "sort"
+import (
+	"context"
+	"sort"
+)
 
 // StalenessManager applies freshness transitions and propagation.
 type StalenessManager struct {
@@ -10,29 +13,29 @@ type StalenessManager struct {
 	propagateHook func([]ChunkID, int)
 }
 
-func (m *StalenessManager) MarkStale(id ChunkID) error {
-	_, err := m.MarkOneSync(id, FreshnessStale)
+func (m *StalenessManager) MarkStale(ctx context.Context, id ChunkID) error {
+	_, err := m.MarkOneSync(ctx, id, FreshnessStale)
 	return err
 }
 
-func (m *StalenessManager) MarkInvalid(id ChunkID) error {
-	_, err := m.MarkOneSync(id, FreshnessInvalid)
+func (m *StalenessManager) MarkInvalid(ctx context.Context, id ChunkID) error {
+	_, err := m.MarkOneSync(ctx, id, FreshnessInvalid)
 	return err
 }
 
-func (m *StalenessManager) BulkMarkStale(ids []ChunkID) error {
-	_, err := m.BulkMarkStaleCollect(ids)
+func (m *StalenessManager) BulkMarkStale(ctx context.Context, ids []ChunkID) error {
+	_, err := m.BulkMarkStaleCollect(ctx, ids)
 	return err
 }
 
-func (m *StalenessManager) BulkMarkStaleCollect(ids []ChunkID) ([]ChunkID, error) {
+func (m *StalenessManager) BulkMarkStaleCollect(ctx context.Context, ids []ChunkID) ([]ChunkID, error) {
 	if len(ids) == 0 {
 		return nil, nil
 	}
 	seen := make(map[ChunkID]struct{}, len(ids))
 	changed := make([]ChunkID, 0, len(ids))
 	for _, id := range ids {
-		marked, err := m.MarkOneSync(id, FreshnessStale)
+		marked, err := m.MarkOneSync(ctx, id, FreshnessStale)
 		if err != nil {
 			return nil, err
 		}
@@ -49,7 +52,7 @@ func (m *StalenessManager) BulkMarkStaleCollect(ids []ChunkID) ([]ChunkID, error
 }
 
 // MarkOneSync updates a single chunk freshness without propagation.
-func (m *StalenessManager) MarkOneSync(id ChunkID, freshness FreshnessState) ([]ChunkID, error) {
+func (m *StalenessManager) MarkOneSync(ctx context.Context, id ChunkID, freshness FreshnessState) ([]ChunkID, error) {
 	if m == nil || m.Store == nil || id == "" {
 		return nil, nil
 	}
@@ -61,7 +64,7 @@ func (m *StalenessManager) MarkOneSync(id ChunkID, freshness FreshnessState) ([]
 		return nil, nil
 	}
 	chunk.Freshness = freshness
-	if _, err := m.Store.Save(*chunk); err != nil {
+	if _, err := m.Store.Save(ctx, *chunk); err != nil {
 		return nil, err
 	}
 	return []ChunkID{id}, nil
@@ -80,7 +83,7 @@ func (m *StalenessManager) PropagateAsync(bus *EventBus, ids []ChunkID, reason s
 
 // PropagateSync performs BFS propagation over invalidates and derives-from links.
 // It returns newly marked chunk IDs, excluding the origin set.
-func (m *StalenessManager) PropagateSync(ids []ChunkID, depth int) ([]ChunkID, error) {
+func (m *StalenessManager) PropagateSync(ctx context.Context, ids []ChunkID, depth int) ([]ChunkID, error) {
 	if m == nil || m.Store == nil || len(ids) == 0 {
 		return nil, nil
 	}
@@ -132,7 +135,7 @@ func (m *StalenessManager) PropagateSync(ids []ChunkID, depth int) ([]ChunkID, e
 			}
 			if ok && nextChunk != nil && nextChunk.Freshness != FreshnessStale {
 				nextChunk.Freshness = FreshnessStale
-				if _, err := m.Store.Save(*nextChunk); err != nil {
+				if _, err := m.Store.Save(ctx, *nextChunk); err != nil {
 					return nil, err
 				}
 				changed = append(changed, edge.ToChunk)

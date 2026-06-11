@@ -33,7 +33,7 @@ func TestTelemetryFromContext_absent(t *testing.T) {
 }
 
 func TestTelemetryFromContext_nilContext(t *testing.T) {
-	if got := TelemetryFromContext(nil); got != nil {
+	if got := TelemetryFromContext(context.TODO()); got != nil {
 		t.Fatalf("expected nil telemetry, got %#v", got)
 	}
 }

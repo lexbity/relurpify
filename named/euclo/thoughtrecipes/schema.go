@@ -1,6 +1,7 @@
 package thoughtrecipe
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -44,7 +45,7 @@ func IsClarificationStepType(stepType string) bool {
 // DecodeClarificationStepConfig converts a raw step config into the typed clarification config.
 func DecodeClarificationStepConfig(step surface.ThoughtRecipeStep) (*ClarificationStepConfig, error) {
 	if len(step.Config) == 0 {
-		return nil, nil
+		return nil, errors.New("clarification step config is empty")
 	}
 	cfg := &ClarificationStepConfig{}
 	if value, ok := step.Config["output_schema_id"]; ok {

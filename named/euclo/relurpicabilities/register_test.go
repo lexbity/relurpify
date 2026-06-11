@@ -183,8 +183,8 @@ func TestRegisterAllEmptyToolRegistryMarksAllUnavailable(t *testing.T) {
 
 func TestRegisterAllAvailabilityDependsOnRequiredTools(t *testing.T) {
 	reg := registry.NewRegistry()
-	requireNoError(t, reg.RegisterLegacyTool(availabilityTool{name: "file_read", available: true}))
-	requireNoError(t, reg.RegisterLegacyTool(availabilityTool{name: "file_write", available: true}))
+	requireNoError(t, reg.RegisterLegacyTool(context.Background(), availabilityTool{name: "file_read", available: true}))
+	requireNoError(t, reg.RegisterLegacyTool(context.Background(), availabilityTool{name: "file_write", available: true}))
 
 	if err := RegisterAll(RegistrationDeps{
 		Registry: reg,
@@ -221,7 +221,7 @@ func TestRegisterAllAvailabilityDependsOnRequiredTools(t *testing.T) {
 
 func TestRegisterAllUnavailableWhenRequiredToolMissing(t *testing.T) {
 	reg := registry.NewRegistry()
-	requireNoError(t, reg.RegisterLegacyTool(availabilityTool{name: "file_read", available: true}))
+	requireNoError(t, reg.RegisterLegacyTool(context.Background(), availabilityTool{name: "file_read", available: true}))
 
 	if err := RegisterAll(RegistrationDeps{
 		Registry: reg,
@@ -257,7 +257,7 @@ func TestComputeAvailability_EmptyRequirements(t *testing.T) {
 
 func TestComputeAvailability_NonCallableToolCounts(t *testing.T) {
 	reg := registry.NewRegistry()
-	requireNoError(t, reg.RegisterLegacyTool(availabilityTool{name: "file_write", available: true}))
+	requireNoError(t, reg.RegisterLegacyTool(context.Background(), availabilityTool{name: "file_write", available: true}))
 	reg.AddExposurePolicies([]agentspec.CapabilityExposurePolicy{{
 		Selector: agentspec.CapabilitySelector{Name: "file_write"},
 		Access:   agentspec.CapabilityExposureHidden,

@@ -1,6 +1,8 @@
 package rewoo
 
 import (
+	"context"
+
 	capability "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 )
@@ -24,7 +26,7 @@ func DefaultPermissionSet(registry *capability.CapabilityRegistry, workspacePath
 
 	// Add all registered tools as capabilities
 	if registry != nil {
-		tools := registry.All()
+		tools := registry.All(context.Background())
 		for _, tool := range tools {
 			perm.Capabilities = append(perm.Capabilities, permissions.CapabilityPermission{
 				Capability: tool.Name(),

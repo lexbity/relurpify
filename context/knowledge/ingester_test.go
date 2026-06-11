@@ -17,7 +17,7 @@ func TestOutputIngester_IngestLLMResponse(t *testing.T) {
 	store := newTestStore(t)
 	ing := NewOutputIngester(store, &EventBus{})
 
-	source, err := store.Save(KnowledgeChunk{
+	source, err := store.Save(context.TODO(), KnowledgeChunk{
 		ID:          ChunkID("chunk:source"),
 		WorkspaceID: "ws",
 		Provenance:  ChunkProvenance{CompiledBy: CompilerDeterministic, Timestamp: time.Now().UTC()},

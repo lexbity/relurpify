@@ -1,6 +1,7 @@
 package thoughtrecipe
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -450,10 +451,10 @@ run writer:
 `)
 
 	reg := registry.NewRegistry()
-	if err := reg.RegisterLegacyTool(semanticTestTool{name: "file_write", available: true}); err != nil {
+	if err := reg.RegisterLegacyTool(context.Background(), semanticTestTool{name: "file_write", available: true}); err != nil {
 		t.Fatalf("register file_write: %v", err)
 	}
-	if err := reg.RegisterLegacyTool(semanticTestTool{name: "file_search", available: true}); err != nil {
+	if err := reg.RegisterLegacyTool(context.Background(), semanticTestTool{name: "file_search", available: true}); err != nil {
 		t.Fatalf("register file_search: %v", err)
 	}
 	if err := NewSymbolTable(doc).WithToolRegistry(reg).Resolve(); err != nil {

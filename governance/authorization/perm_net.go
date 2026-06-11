@@ -77,13 +77,13 @@ func (m *PermissionManager) CheckNetwork(ctx context.Context, agentID string, di
 		Action:   fmt.Sprintf("net:%s", direction),
 		Resource: fmt.Sprintf("%s:%d", host, port),
 	}, "granted", nil)
-	m.recordNetworkRule(direction, protocol, host, port)
+	m.recordNetworkRule(ctx, direction, protocol, host, port)
 	return nil
 }
 
 // recordNetworkRule stores approved network scopes and forwards them to the
 // sandbox runtime so OS-level enforcement mirrors permission checks.
-func (m *PermissionManager) recordNetworkRule(direction, protocol, host string, port int) {
+func (m *PermissionManager) recordNetworkRule(ctx context.Context, direction, protocol, host string, port int) {
 	if m == nil {
 		return
 	}
@@ -96,7 +96,7 @@ func (m *PermissionManager) recordNetworkRule(direction, protocol, host string, 
 		Port:      port,
 	}
 	m.netPolicy = append(m.netPolicy, rule)
-	m.applyRuntimePolicyLocked()
+	m.applyRuntimePolicyLocked(ctx)
 }
 
 // findNetworkPermission resolves whether the host/port pair is authorized for

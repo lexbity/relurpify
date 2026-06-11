@@ -84,7 +84,7 @@ type ProviderSessionSnapshot struct {
 }
 
 type CapabilityRegistrar interface {
-	RegisterCapability(descriptor descriptor.CapabilityDescriptor) error
+	RegisterCapability(ctx context.Context, descriptor descriptor.CapabilityDescriptor) error
 }
 
 type Provider interface {

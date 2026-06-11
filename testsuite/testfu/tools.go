@@ -25,7 +25,7 @@ func (a *Agent) registerTools() {
 		if _, ok := a.Tools.Get(tool.Name()); ok {
 			continue
 		}
-		_ = a.Tools.Register(tool)
+		_ = a.Tools.Register(context.Background(), tool)
 	}
 }
 

@@ -1,6 +1,7 @@
 package registry
 
 import (
+	"context"
 	"fmt"
 
 	"codeburg.org/lexbit/relurpify/capability/descriptor"
@@ -29,7 +30,7 @@ type Candidate struct {
 
 // AdmitCandidates admits capability candidates against the final selector set
 // and records explicit results.
-func AdmitCandidates(registry *CapabilityRegistry, candidates []Candidate, allowed []agentspec.CapabilitySelector) ([]AdmissionResult, error) {
+func AdmitCandidates(ctx context.Context, registry *CapabilityRegistry, candidates []Candidate, allowed []agentspec.CapabilitySelector) ([]AdmissionResult, error) {
 	if registry == nil {
 		return nil, fmt.Errorf("capability registry required")
 	}
@@ -54,7 +55,7 @@ func AdmitCandidates(registry *CapabilityRegistry, candidates []Candidate, allow
 		}
 		items = append(items, item)
 	}
-	if err := registry.RegisterBatch(items); err != nil {
+	if err := registry.RegisterBatch(ctx, items); err != nil {
 		for idx, candidate := range candidates {
 			if idx >= len(results) || !results[idx].Admitted {
 				continue

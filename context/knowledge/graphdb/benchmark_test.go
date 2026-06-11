@@ -181,35 +181,35 @@ func BenchmarkOpenReplay(b *testing.B) {
 			dir := b.TempDir()
 			opts := DefaultOptions(filepath.Join(dir, "graphdb"))
 			opts.SnapshotOnClose = snapshotOnClose
-			engine, err := Open(opts)
+			engine, err := Open(context.Background(), opts)
 			if err != nil {
 				b.Fatal(err)
 			}
 			for i := 0; i < 512; i++ {
 				sourceID := fmt.Sprintf("node-%03d", i)
 				targetID := fmt.Sprintf("node-%03d", i+1)
-				if err := engine.UpsertNode(NodeRecord{ID: sourceID, Kind: "function"}); err != nil {
+				if err := engine.UpsertNode(context.TODO(), NodeRecord{ID: sourceID, Kind: "function"}); err != nil {
 					b.Fatal(err)
 				}
-				if err := engine.UpsertNode(NodeRecord{ID: targetID, Kind: "function"}); err != nil {
+				if err := engine.UpsertNode(context.TODO(), NodeRecord{ID: targetID, Kind: "function"}); err != nil {
 					b.Fatal(err)
 				}
-				if err := engine.Link(sourceID, targetID, "calls", "", 1, nil); err != nil {
+				if err := engine.Link(context.TODO(), sourceID, targetID, "calls", "", 1, nil); err != nil {
 					b.Fatal(err)
 				}
 			}
-			if err := engine.Close(); err != nil {
+			if err := engine.Close(context.Background()); err != nil {
 				b.Fatal(err)
 			}
 
 			b.ReportAllocs()
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				reopened, err := Open(opts)
+				reopened, err := Open(context.Background(), opts)
 				if err != nil {
 					b.Fatal(err)
 				}
-				if err := reopened.Close(); err != nil {
+				if err := reopened.Close(context.Background()); err != nil {
 					b.Fatal(err)
 				}
 			}
@@ -239,10 +239,10 @@ func BenchmarkBatchUpsertAndLink(b *testing.B) {
 		b.StopTimer()
 		engine := newBenchmarkEngine()
 		b.StartTimer()
-		if err := engine.UpsertNodes(nodes); err != nil {
+		if err := engine.UpsertNodes(context.TODO(), nodes); err != nil {
 			b.Fatal(err)
 		}
-		if err := engine.LinkEdges(edges); err != nil {
+		if err := engine.LinkEdges(context.TODO(), edges); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -254,16 +254,16 @@ func BenchmarkPersistSyncMode(b *testing.B) {
 			dir := b.TempDir()
 			opts := DefaultOptions(filepath.Join(dir, "graphdb"))
 			opts.SyncMode = mode
-			engine, err := Open(opts)
+			engine, err := Open(context.Background(), opts)
 			if err != nil {
 				b.Fatal(err)
 			}
-			defer engine.Close()
+			defer engine.Close(context.Background())
 
 			b.ReportAllocs()
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				if err := engine.UpsertNode(NodeRecord{ID: fmt.Sprintf("node-%d", i), Kind: "function"}); err != nil {
+				if err := engine.UpsertNode(context.TODO(), NodeRecord{ID: fmt.Sprintf("node-%d", i), Kind: "function"}); err != nil {
 					b.Fatal(err)
 				}
 			}

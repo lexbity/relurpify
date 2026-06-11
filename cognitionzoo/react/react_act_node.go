@@ -80,7 +80,7 @@ func (n *reactActNode) Execute(ctx context.Context, env *contextdata.Envelope) (
 							Error:   fmt.Sprintf("tool %q does not exist. Only use tools from the available list.", call.Name),
 						}
 						envelope := n.capabilityEnvelope(ctx, env, nil, call, errResult)
-						n.recordObservation(env, call, errResult, envelope)
+						n.recordObservation(ctx, env, call, errResult, envelope)
 						envelopes[callID] = envelope
 						overallSuccess = false
 						toolErrors = append(toolErrors, fmt.Sprintf("unknown tool %s", call.Name))
@@ -92,7 +92,7 @@ func (n *reactActNode) Execute(ctx context.Context, env *contextdata.Envelope) (
 							Error:   fmt.Sprintf("tool %q is unavailable right now.", call.Name),
 						}
 						envelope := n.capabilityEnvelope(ctx, env, nil, call, errResult)
-						n.recordObservation(env, call, errResult, envelope)
+						n.recordObservation(ctx, env, call, errResult, envelope)
 						envelopes[callID] = envelope
 						overallSuccess = false
 						toolErrors = append(toolErrors, fmt.Sprintf("unavailable tool %s", call.Name))
@@ -108,9 +108,9 @@ func (n *reactActNode) Execute(ctx context.Context, env *contextdata.Envelope) (
 					if res != nil {
 						envelope := n.capabilityEnvelope(ctx, env, nil, call, res)
 						envelopes[callID] = envelope
-						n.recordObservation(env, call, res, envelope)
+						n.recordObservation(ctx, env, call, res, envelope)
 						n.latchVerificationSuccess(env, call.Name, res)
-						n.refreshIndexesAfterMutation(call, res)
+						n.refreshIndexesAfterMutation(ctx, call, res)
 						results[callID] = map[string]any{
 							"success": res.Success,
 							"data":    res.Data,
@@ -193,7 +193,7 @@ func (n *reactActNode) Execute(ctx context.Context, env *contextdata.Envelope) (
 		Args: decision.Arguments,
 	}
 	envelope := n.capabilityEnvelope(ctx, env, nil, call, res)
-	n.recordObservation(env, call, res, envelope)
+	n.recordObservation(ctx, env, call, res, envelope)
 	n.latchVerificationSuccess(env, call.Name, res)
 	env.SetWorkingValueWithClass("react.last_tool_result", res.Data, contextdata.MemoryClassTask)
 	env.SetWorkingValueWithClass("react.last_tool_result_envelope", envelope, contextdata.MemoryClassTask)
@@ -207,7 +207,7 @@ func (n *reactActNode) Execute(ctx context.Context, env *contextdata.Envelope) (
 		},
 		Error: strings.TrimSpace(res.Error),
 	}
-	n.refreshIndexesAfterMutation(call, res)
+	n.refreshIndexesAfterMutation(ctx, call, res)
 	env.SetWorkingValueWithClass("react.last_result", result, contextdata.MemoryClassTask)
 	return result, nil
 }
@@ -250,7 +250,7 @@ func (n *reactActNode) capabilityEnvelope(ctx context.Context, env *contextdata.
 	}
 	if desc.ID == "" {
 		if n != nil && n.agent != nil {
-			if resolved, ok := n.agent.executionCapabilityDescriptor(call.Name); ok {
+			if resolved, ok := n.agent.executionCapabilityDescriptor(ctx, call.Name); ok {
 				desc = resolved
 			}
 		}
@@ -285,10 +285,12 @@ func (n *reactActNode) capabilityEnvelope(ctx context.Context, env *contextdata.
 	}
 	var snapshot *capresult.PolicySnapshot
 	if n != nil && n.agent != nil {
-		snapshot = n.agent.executionPolicySnapshot()
+		snapshot = n.agent.executionPolicySnapshot(ctx)
 	}
 	envelope := capresult.NewCapabilityResultEnvelope(desc, res, capresult.ContentDispositionRaw, snapshot, approval)
-	envelope = capresult.ApplyInsertionDecision(envelope, resolveInsertionDecision(n.agent, n.task, envelope))
+	if n != nil && n.agent != nil && n.task != nil {
+		envelope = capresult.ApplyInsertionDecision(envelope, resolveInsertionDecision(n.agent, n.task, envelope))
+	}
 	if n != nil && n.agent != nil && n.agent.Config != nil && n.agent.Config.Telemetry != nil {
 		metadata := map[string]any{
 			"security_event": "insertion_decision",
@@ -322,11 +324,22 @@ func (n *reactActNode) capabilityEnvelope(ctx context.Context, env *contextdata.
 	return envelope
 }
 
-func (n *reactActNode) recordObservation(env *contextdata.Envelope, call model.ToolCall, res *ports.ToolResult, envelope *capresult.CapabilityResultEnvelope) {
-	appendToolMessage(n.agent, n.task, env, call, res, envelope)
-	decision := resolveInsertionDecision(n.agent, n.task, envelope)
+func (n *reactActNode) recordObservation(ctx context.Context, env *contextdata.Envelope, call model.ToolCall, res *ports.ToolResult, envelope *capresult.CapabilityResultEnvelope) {
+	if n == nil {
+		return
+	}
+	agent := n.agent
+	if agent == nil {
+		return
+	}
+	task := n.task
+	if task == nil {
+		return
+	}
+	appendToolMessage(agent, task, env, call, res, envelope)
+	decision := resolveInsertionDecision(agent, task, envelope)
 	observation := summarizeToolResult(env, call, res, decision)
-	displaySummary, visible := renderInsertionFilteredSummary(n.agent, n.task, call.Name, res, envelope)
+	displaySummary, visible := renderInsertionFilteredSummary(agent, task, call.Name, res, envelope)
 	if visible {
 		observation.Summary = displaySummary
 		switch decision.Action {
@@ -345,7 +358,7 @@ func (n *reactActNode) recordObservation(env *contextdata.Envelope, call model.T
 	env.SetWorkingValueWithClass("react.tool_observations", history, contextdata.MemoryClassTask)
 	if n != nil && n.agent != nil && n.agent.outputIngestionEnabled() {
 		summary := strings.TrimSpace(observation.Summary)
-		knowledge.IngestObservationAsync(contextdata.WithEnvelope(context.Background(), env), n.agent.OutputIngester, summary)
+		knowledge.IngestObservationAsync(contextdata.WithEnvelope(ctx, env), n.agent.OutputIngester, summary)
 	}
 	// TODO: ContextManager integration requires framework-level fixes for missing types
 	// (core.ToolResultContextItem, core.FileContextItem)
@@ -377,7 +390,7 @@ func (n *reactActNode) recordObservation(env *contextdata.Envelope, call model.T
 	// }
 }
 
-func (n *reactActNode) refreshIndexesAfterMutation(call model.ToolCall, res *ports.ToolResult) {
+func (n *reactActNode) refreshIndexesAfterMutation(ctx context.Context, call model.ToolCall, res *ports.ToolResult) {
 	if n == nil || n.agent == nil || res == nil || !res.Success {
 		return
 	}
@@ -386,7 +399,7 @@ func (n *reactActNode) refreshIndexesAfterMutation(call model.ToolCall, res *por
 		return
 	}
 	if n.agent.IndexManager != nil {
-		if err := n.agent.IndexManager.RefreshFiles(paths); err != nil {
+		if err := n.agent.IndexManager.RefreshFiles(ctx, paths); err != nil {
 			n.agent.debugf("ast index refresh failed for %v: %v", paths, err)
 		}
 	}

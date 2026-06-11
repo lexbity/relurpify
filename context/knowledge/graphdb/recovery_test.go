@@ -14,7 +14,7 @@ import (
 
 func TestBackendCommitFailure_LeavesMemoryUnchanged(t *testing.T) {
 	engine, _ := newTestEngine(t)
-	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "before", Kind: "function"}))
+	require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: "before", Kind: "function"}))
 
 	// Inject a commit failure by sending an invalid type through the
 	// backend directly. This simulates a backend-level failure.
@@ -50,23 +50,23 @@ func TestBackendCommitFailure_DoesNotApplyToMemory(t *testing.T) {
 
 func TestDirtyMemory_RejectsFurtherMutations(t *testing.T) {
 	engine, _ := newTestEngine(t)
-	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "before", Kind: "function"}))
+	require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: "before", Kind: "function"}))
 
 	// Simulate a memory apply failure after a successful commit.
 	engine.markDirty(errors.New("simulated: memory apply failed"))
 
 	// Further mutations must be rejected.
-	err := engine.UpsertNode(NodeRecord{ID: "after", Kind: "function"})
+	err := engine.UpsertNode(context.TODO(), NodeRecord{ID: "after", Kind: "function"})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "simulated: memory apply failed")
 
-	err = engine.Link("before", "after", "calls", "", 1, nil)
+	err = engine.Link(context.TODO(), "before", "after", "calls", "", 1, nil)
 	require.Error(t, err)
 
-	err = engine.DeleteNode("before")
+	err = engine.DeleteNode(context.TODO(), "before")
 	require.Error(t, err)
 
-	err = engine.RecordMutationResult(MutationResult{
+	err = engine.RecordMutationResult(context.TODO(), MutationResult{
 		StableID: "m1",
 		Scope:    MutationScopeNode,
 		Status:   MutationStatusCreated,
@@ -77,12 +77,12 @@ func TestDirtyMemory_RejectsFurtherMutations(t *testing.T) {
 func TestDirtyMemory_RebuildClearsAndRestores(t *testing.T) {
 	dir := t.TempDir()
 	opts := DefaultOptions(dir)
-	engine, err := Open(opts)
+	engine, err := Open(context.Background(), opts)
 	require.NoError(t, err)
 
-	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "keep", Kind: "function"}))
-	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "also-keep", Kind: "function"}))
-	require.NoError(t, engine.Link("keep", "also-keep", "calls", "", 1, nil))
+	require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: "keep", Kind: "function"}))
+	require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: "also-keep", Kind: "function"}))
+	require.NoError(t, engine.Link(context.TODO(), "keep", "also-keep", "calls", "", 1, nil))
 
 	// Mark dirty to block mutations.
 	engine.markDirty(errors.New("simulated failure"))
@@ -94,7 +94,7 @@ func TestDirtyMemory_RebuildClearsAndRestores(t *testing.T) {
 	require.True(t, ok, "node should survive rebuild")
 
 	// Mutations should work again.
-	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "new", Kind: "function"}))
+	require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: "new", Kind: "function"}))
 	_, ok = engine.GetNode("new")
 	require.True(t, ok)
 }
@@ -102,10 +102,10 @@ func TestDirtyMemory_RebuildClearsAndRestores(t *testing.T) {
 func TestDirtyMemory_RebuildDoesNotSeeUncommittedData(t *testing.T) {
 	dir := t.TempDir()
 	opts := DefaultOptions(dir)
-	engine, err := Open(opts)
+	engine, err := Open(context.Background(), opts)
 	require.NoError(t, err)
 
-	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "persist", Kind: "function"}))
+	require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: "persist", Kind: "function"}))
 
 	// Mark dirty before a second mutation that we'll deliberately skip persisting.
 	engine.markDirty(errors.New("simulated failure"))
@@ -122,12 +122,12 @@ func TestDirtyMemory_RebuildDoesNotSeeUncommittedData(t *testing.T) {
 
 func TestDirtyMemory_MutationRejectedAfterFailedApply(t *testing.T) {
 	engine, _ := newTestEngine(t)
-	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "x", Kind: "function"}))
+	require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: "x", Kind: "function"}))
 
 	// Inject an apply hook that will fail after the next commit.
 	engine.testHookApplyFailure = errors.New("hook: apply failed")
 
-	err := engine.UpsertNode(NodeRecord{ID: "y", Kind: "function"})
+	err := engine.UpsertNode(context.TODO(), NodeRecord{ID: "y", Kind: "function"})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "hook: apply failed")
 
@@ -136,7 +136,7 @@ func TestDirtyMemory_MutationRejectedAfterFailedApply(t *testing.T) {
 	require.Error(t, engine.dirtyErr, "dirtyErr must be set after failed apply")
 
 	// Further mutations are rejected.
-	err = engine.UpsertNode(NodeRecord{ID: "z", Kind: "function"})
+	err = engine.UpsertNode(context.TODO(), NodeRecord{ID: "z", Kind: "function"})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "hook: apply failed")
 
@@ -149,7 +149,7 @@ func TestDirtyMemory_MutationRejectedAfterFailedApply(t *testing.T) {
 	require.True(t, ok, "committed node must survive rebuild after failed apply")
 
 	// Mutations work again.
-	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "z", Kind: "function"}))
+	require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: "z", Kind: "function"}))
 	_, ok = engine.GetNode("z")
 	require.True(t, ok)
 }
@@ -160,16 +160,16 @@ func TestDirtyMemory_MultipleApplyHooks(t *testing.T) {
 	// Inject hook that fails on the second mutation.
 	engine.testHookApplyFailure = errors.New("hook: apply failed")
 
-	err := engine.UpsertNode(NodeRecord{ID: "n1", Kind: "function"})
+	err := engine.UpsertNode(context.TODO(), NodeRecord{ID: "n1", Kind: "function"})
 	require.Error(t, err)
 
 	// Engine is dirty; all subsequent mutations are also rejected.
-	err = engine.LinkEdges([]EdgeRecord{
+	err = engine.LinkEdges(context.TODO(), []EdgeRecord{
 		{SourceID: "n1", TargetID: "n2", Kind: "calls"},
 	})
 	require.Error(t, err)
 
-	err = engine.DeleteNode("n1")
+	err = engine.DeleteNode(context.TODO(), "n1")
 	require.Error(t, err)
 }
 
@@ -182,19 +182,19 @@ func TestCrashReopen_CommittedDataSurvives(t *testing.T) {
 	opts := DefaultOptions(dir)
 
 	// Open, write data, close WITHOUT snapshot (simulating a crash).
-	engine, err := Open(opts)
+	engine, err := Open(context.Background(), opts)
 	require.NoError(t, err)
-	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "survivor", Kind: "function"}))
-	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "edge-src", Kind: "function"}))
-	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "edge-tgt", Kind: "function"}))
-	require.NoError(t, engine.Link("edge-src", "edge-tgt", "calls", "", 1, nil))
+	require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: "survivor", Kind: "function"}))
+	require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: "edge-src", Kind: "function"}))
+	require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: "edge-tgt", Kind: "function"}))
+	require.NoError(t, engine.Link(context.TODO(), "edge-src", "edge-tgt", "calls", "", 1, nil))
 	// Close without snapshot to simulate crash.
-	require.NoError(t, engine.Close())
+	require.NoError(t, engine.Close(context.Background()))
 
 	// Reopen.
-	engine2, err := Open(opts)
+	engine2, err := Open(context.Background(), opts)
 	require.NoError(t, err)
-	defer engine2.Close()
+	defer engine2.Close(context.Background())
 
 	_, ok := engine2.GetNode("survivor")
 	require.True(t, ok, "committed node must survive crash/reopen")
@@ -211,10 +211,10 @@ func TestCrashReopen_UncommittedDataDoesNotAppear(t *testing.T) {
 	dir := t.TempDir()
 	opts := DefaultOptions(dir)
 
-	engine, err := Open(opts)
+	engine, err := Open(context.Background(), opts)
 	require.NoError(t, err)
 
-	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "committed", Kind: "function"}))
+	require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: "committed", Kind: "function"}))
 
 	// Simulate: the next persist fails (backend unavailable).
 	// We create a node through the engine but make persist fail by
@@ -228,11 +228,11 @@ func TestCrashReopen_UncommittedDataDoesNotAppear(t *testing.T) {
 	})
 	require.Error(t, err)
 
-	require.NoError(t, engine.Close())
+	require.NoError(t, engine.Close(context.Background()))
 
-	engine2, err := Open(opts)
+	engine2, err := Open(context.Background(), opts)
 	require.NoError(t, err)
-	defer engine2.Close()
+	defer engine2.Close(context.Background())
 
 	_, ok := engine2.GetNode("committed")
 	require.True(t, ok, "committed node must survive")
@@ -242,15 +242,15 @@ func TestCrashReopen_DeletedDataStaysDeleted(t *testing.T) {
 	dir := t.TempDir()
 	opts := DefaultOptions(dir)
 
-	engine, err := Open(opts)
+	engine, err := Open(context.Background(), opts)
 	require.NoError(t, err)
-	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "gone", Kind: "function"}))
-	require.NoError(t, engine.DeleteNode("gone"))
-	require.NoError(t, engine.Close())
+	require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: "gone", Kind: "function"}))
+	require.NoError(t, engine.DeleteNode(context.TODO(), "gone"))
+	require.NoError(t, engine.Close(context.Background()))
 
-	engine2, err := Open(opts)
+	engine2, err := Open(context.Background(), opts)
 	require.NoError(t, err)
-	defer engine2.Close()
+	defer engine2.Close(context.Background())
 
 	_, ok := engine2.GetNode("gone")
 	require.False(t, ok, "deleted node must not reappear after crash/reopen")

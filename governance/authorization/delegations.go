@@ -97,9 +97,6 @@ func (m *DelegationManager) ExecuteDelegation(ctx context.Context, request polic
 	if m == nil {
 		return nil, fmt.Errorf("delegation manager unavailable")
 	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	if opts.Registry == nil {
 		return nil, fmt.Errorf("delegation registry required")
 	}
@@ -271,9 +268,6 @@ func (m *DelegationManager) CancelDelegation(ctx context.Context, id, reason str
 	if m == nil {
 		return nil, fmt.Errorf("delegation manager unavailable")
 	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	id = strings.TrimSpace(id)
 	if id == "" {
 		return nil, fmt.Errorf("delegation id required")
@@ -359,9 +353,6 @@ func (m *DelegationManager) PersistDelegations(ctx context.Context, repo governa
 	}
 	if repo == nil {
 		return fmt.Errorf("lifecycle repository required")
-	}
-	if ctx == nil {
-		ctx = context.Background()
 	}
 	for _, snapshot := range m.SnapshotDelegations() {
 		if strings.TrimSpace(workflowID) != "" && snapshot.Request.WorkflowID != "" && snapshot.Request.WorkflowID != workflowID {

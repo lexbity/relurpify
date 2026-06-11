@@ -86,7 +86,7 @@ func TestTargetedRefactorRequiresWritePermission(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = store.Close() })
 	manager := ast.NewIndexManager(store, ast.IndexConfig{WorkspacePath: dir})
-	require.NoError(t, manager.IndexFile(path))
+	require.NoError(t, manager.IndexFile(context.Background(), path))
 
 	handler := NewTargetedRefactorHandler(manager, store, &workspaceFileSystem{workspace: dir}, manager, nil)
 	result, err := handler.Invoke(context.Background(), nil, map[string]any{
@@ -112,7 +112,7 @@ func TestTargetedRefactorRespectsFileScopeProtection(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = store.Close() })
 	manager := ast.NewIndexManager(store, ast.IndexConfig{WorkspacePath: dir})
-	require.NoError(t, manager.IndexFile(path))
+	require.NoError(t, manager.IndexFile(context.Background(), path))
 
 	handler := NewTargetedRefactorHandler(manager, store, &workspaceFileSystem{workspace: dir}, manager, nil)
 	result, err := handler.Invoke(context.Background(), nil, map[string]any{
@@ -139,8 +139,8 @@ func TestRenameSymbolFindsAllOccurrences(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = store.Close() })
 	manager := ast.NewIndexManager(store, ast.IndexConfig{WorkspacePath: dir})
-	require.NoError(t, manager.IndexFile(aPath))
-	require.NoError(t, manager.IndexFile(bPath))
+	require.NoError(t, manager.IndexFile(context.Background(), aPath))
+	require.NoError(t, manager.IndexFile(context.Background(), bPath))
 
 	handler := NewRenameSymbolHandler(manager, store, &workspaceFileSystem{workspace: dir}, manager)
 	result, err := handler.Invoke(context.Background(), nil, map[string]any{

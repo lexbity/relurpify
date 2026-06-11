@@ -1,9 +1,11 @@
 package ast
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"regexp"
 	"slices"
 	"sort"
@@ -68,7 +70,7 @@ func (s *GraphIndexStore) SaveFile(metadata *FileMetadata) error {
 		labels = append(labels, "hash:"+metadata.ContentHash)
 	}
 
-	return s.g.UpsertNode(graphdb.NodeRecord{
+	return s.g.UpsertNode(context.TODO(), graphdb.NodeRecord{
 		ID:       metadata.ID,
 		Kind:     "ast_file",
 		SourceID: metadata.Path,
@@ -84,7 +86,7 @@ func (s *GraphIndexStore) GetFile(fileID string) (*FileMetadata, error) {
 	}
 	node, ok := s.g.GetNode(fileID)
 	if !ok || node.Kind != "ast_file" {
-		return nil, nil
+		return nil, os.ErrNotExist
 	}
 	return nodeToFileMetadata(node)
 }
@@ -96,7 +98,7 @@ func (s *GraphIndexStore) GetFileByPath(path string) (*FileMetadata, error) {
 	// Use the stable ID which is "path:{path}".
 	nodes := s.g.ListNodesByLabel("ast_file", "file:"+path)
 	if len(nodes) == 0 {
-		return nil, nil
+		return nil, os.ErrNotExist
 	}
 	return nodeToFileMetadata(nodes[0])
 }
@@ -126,7 +128,7 @@ func (s *GraphIndexStore) DeleteFile(fileID string) error {
 	if s.g.IsClosed() {
 		return errors.New("store is closed")
 	}
-	return s.g.DeleteNode(fileID)
+	return s.g.DeleteNode(context.TODO(), fileID)
 }
 
 // ────────────────────────────────────────────────────────────────────
@@ -147,7 +149,7 @@ func (s *GraphIndexStore) SaveNodes(nodes []*Node) error {
 	if len(records) == 0 {
 		return nil
 	}
-	return s.g.UpsertNodes(records)
+	return s.g.UpsertNodes(context.TODO(), records)
 }
 
 func nodeToRecord(n *Node) graphdb.NodeRecord {
@@ -191,7 +193,7 @@ func (s *GraphIndexStore) GetNode(nodeID string) (*Node, error) {
 	}
 	node, ok := s.g.GetNode(nodeID)
 	if !ok || node.Kind != "ast_node" {
-		return nil, nil
+		return nil, os.ErrNotExist
 	}
 	return nodeToASTNode(node)
 }
@@ -320,7 +322,7 @@ func queryMatches(n *Node, q NodeQuery) bool {
 }
 
 func (s *GraphIndexStore) DeleteNode(nodeID string) error {
-	return s.g.DeleteNode(nodeID)
+	return s.g.DeleteNode(context.TODO(), nodeID)
 }
 
 // ────────────────────────────────────────────────────────────────────
@@ -341,7 +343,7 @@ func (s *GraphIndexStore) SaveEdges(edges []*Edge) error {
 	if len(records) == 0 {
 		return nil
 	}
-	return s.g.LinkEdges(records)
+	return s.g.LinkEdges(context.TODO(), records)
 }
 
 func edgeToRecord(e *Edge) graphdb.EdgeRecord {
@@ -380,7 +382,7 @@ func (s *GraphIndexStore) GetEdge(edgeID string) (*Edge, error) {
 			}
 		}
 	}
-	return nil, nil
+	return nil, os.ErrNotExist
 }
 
 func (s *GraphIndexStore) GetEdgesBySource(sourceID string) ([]*Edge, error) {
@@ -470,10 +472,16 @@ func (s *GraphIndexStore) DeleteEdge(edgeID string) error {
 		return errors.New("store is closed")
 	}
 	edge, err := s.GetEdge(edgeID)
-	if err != nil || edge == nil {
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
 		return err
 	}
-	return s.g.Unlink(edge.SourceID, edge.TargetID, graphdb.EdgeKind(edge.Type), true)
+	if edge == nil {
+		return nil
+	}
+	return s.g.Unlink(context.TODO(), edge.SourceID, edge.TargetID, graphdb.EdgeKind(edge.Type), true)
 }
 
 // ────────────────────────────────────────────────────────────────────
@@ -558,6 +566,9 @@ func (s *GraphIndexStore) traverseNodesRecursive(startNodeID string, dir graphdb
 	for id := range visited {
 		n, err := s.GetNode(id)
 		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				continue
+			}
 			return nil, err
 		}
 		if n != nil {
@@ -582,6 +593,9 @@ func (s *GraphIndexStore) traverseNodes(nodeID string, edgeType EdgeType, dir gr
 	for _, nid := range neighborIDs {
 		n, err := s.GetNode(nid)
 		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				continue
+			}
 			return nil, err
 		}
 		if n != nil {
@@ -704,7 +718,10 @@ func (t *graphTransaction) Rollback() error {
 }
 
 func mustMarshal(v any) json.RawMessage {
-	data, _ := json.Marshal(v)
+	data, err := json.Marshal(v)
+	if err != nil {
+		panic(err)
+	}
 	return data
 }
 

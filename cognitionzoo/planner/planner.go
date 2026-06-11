@@ -73,7 +73,7 @@ func (a *PlannerAgent) Initialize(cfg *execution.Config) error {
 
 // Execute runs the planner workflow.
 func (a *PlannerAgent) Execute(ctx context.Context, task *execution.Task, env *contextdata.Envelope) (*execution.Result, error) {
-	graph, err := a.BuildGraph(task)
+	graph, err := a.BuildGraph(ctx, task)
 	if err != nil {
 		return nil, err
 	}
@@ -219,7 +219,7 @@ func (a *PlannerAgent) Capabilities() []string {
 // BuildGraph builds planning pipeline with explicit plan→execute→verify stages.
 // Returning a Graph instead of hiding the workflow inside Execute keeps the
 // system debuggable and allows other packages to analyze the structure.
-func (a *PlannerAgent) BuildGraph(task *execution.Task) (*graph.Graph, error) {
+func (a *PlannerAgent) BuildGraph(ctx context.Context, task *execution.Task) (*graph.Graph, error) {
 	if a.Model == nil {
 		return nil, fmt.Errorf("planner agent missing model")
 	}
@@ -230,7 +230,7 @@ func (a *PlannerAgent) BuildGraph(task *execution.Task) (*graph.Graph, error) {
 	done := graph.NewTerminalNode("planner_done")
 	g := graph.NewGraph()
 	if a.Tools != nil {
-		catalog := a.Tools.CaptureExecutionCatalogSnapshot()
+		catalog := a.Tools.CaptureExecutionCatalogSnapshot(ctx)
 		if catalog != nil && len(catalog.InspectableCapabilities()) > 0 {
 			g.SetCapabilityCatalog(catalog)
 		}

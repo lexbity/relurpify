@@ -187,7 +187,7 @@ func (h *TargetedRefactorHandler) Invoke(ctx context.Context, env ports.State, a
 		return failResult(fmt.Sprintf("write source file failed: %v", err)), err
 	}
 	if h.refresher != nil {
-		_ = h.refresher.RefreshFiles([]string{resolvedSourcePath})
+		_ = h.refresher.RefreshFiles(ctx, []string{resolvedSourcePath})
 	}
 	result["applied"] = true
 	return &ports.ToolResult{Success: true, Data: result}, nil

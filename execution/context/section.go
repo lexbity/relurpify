@@ -10,7 +10,7 @@ import (
 // typed ContextPolicyBundle. Returns nil (no error) when the node is absent.
 func DecodeContextPolicy(node yaml.Node) (*ContextPolicyBundle, error) {
 	if node.Kind == 0 {
-		return nil, nil
+		return nil, fmt.Errorf("context policy section node is absent")
 	}
 	var bundle ContextPolicyBundle
 	if err := node.Decode(&bundle); err != nil {

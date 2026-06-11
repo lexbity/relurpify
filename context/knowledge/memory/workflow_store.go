@@ -2,6 +2,7 @@ package memory
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	capresult "codeburg.org/lexbit/relurpify/capability/result"
@@ -149,7 +150,7 @@ type WorkflowProjectionService struct {
 // Project projects a workflow resource based on the provided URI.
 func (s *WorkflowProjectionService) Project(ctx context.Context, uri WorkflowResourceURI) (*handler.ResourceReadResult, error) {
 	if s.Store == nil {
-		return nil, nil
+		return nil, errors.New("workflow store is nil")
 	}
 	return &handler.ResourceReadResult{
 		Contents: []capresult.ContentBlock{},

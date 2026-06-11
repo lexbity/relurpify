@@ -62,9 +62,9 @@ func TestImpactSet_EmptyOrigin(t *testing.T) {
 
 func TestImpactSet_MaxDepthZero(t *testing.T) {
 	engine, _ := newTestEngine(t)
-	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "a", Kind: "function"}))
-	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "b", Kind: "function"}))
-	require.NoError(t, engine.Link("a", "b", "calls", "", 1, nil))
+	require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: "a", Kind: "function"}))
+	require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: "b", Kind: "function"}))
+	require.NoError(t, engine.Link(context.TODO(), "a", "b", "calls", "", 1, nil))
 
 	page, err := engine.SubgraphPage(context.Background(), GraphPageQuery{
 		GraphQuery: GraphQuery{
@@ -84,10 +84,10 @@ func TestImpactSet_MaxDepthZero(t *testing.T) {
 func TestImpactSet_EdgeKindFiltering(t *testing.T) {
 	engine, _ := newTestEngine(t)
 	for _, id := range []string{"a", "b", "c"} {
-		require.NoError(t, engine.UpsertNode(NodeRecord{ID: id, Kind: "function"}))
+		require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: id, Kind: "function"}))
 	}
-	require.NoError(t, engine.Link("a", "b", "calls", "", 1, nil))
-	require.NoError(t, engine.Link("b", "c", "imports", "", 1, nil))
+	require.NoError(t, engine.Link(context.TODO(), "a", "b", "calls", "", 1, nil))
+	require.NoError(t, engine.Link(context.TODO(), "b", "c", "imports", "", 1, nil))
 
 	// only follow "calls" edges
 	page, err := engine.SubgraphPage(context.Background(), GraphPageQuery{
@@ -110,10 +110,10 @@ func TestImpactSet_EdgeKindFiltering(t *testing.T) {
 func TestImpactSet_MultipleOrigins(t *testing.T) {
 	engine, _ := newTestEngine(t)
 	for _, id := range []string{"a", "b", "c", "d"} {
-		require.NoError(t, engine.UpsertNode(NodeRecord{ID: id, Kind: "function"}))
+		require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: id, Kind: "function"}))
 	}
-	require.NoError(t, engine.Link("a", "c", "calls", "", 1, nil))
-	require.NoError(t, engine.Link("b", "d", "calls", "", 1, nil))
+	require.NoError(t, engine.Link(context.TODO(), "a", "c", "calls", "", 1, nil))
+	require.NoError(t, engine.Link(context.TODO(), "b", "d", "calls", "", 1, nil))
 
 	page, err := engine.SubgraphPage(context.Background(), GraphPageQuery{
 		GraphQuery: GraphQuery{
@@ -137,10 +137,10 @@ func TestImpactSet_MultipleOrigins(t *testing.T) {
 func TestNeighbors_DirectionIn(t *testing.T) {
 	engine, _ := newTestEngine(t)
 	for _, id := range []string{"a", "b", "c"} {
-		require.NoError(t, engine.UpsertNode(NodeRecord{ID: id, Kind: "function"}))
+		require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: id, Kind: "function"}))
 	}
-	require.NoError(t, engine.Link("a", "b", "calls", "", 1, nil))
-	require.NoError(t, engine.Link("c", "b", "calls", "", 1, nil))
+	require.NoError(t, engine.Link(context.TODO(), "a", "b", "calls", "", 1, nil))
+	require.NoError(t, engine.Link(context.TODO(), "c", "b", "calls", "", 1, nil))
 
 	neighbors := engine.Neighbors("b", DirectionIn, "calls")
 	require.ElementsMatch(t, []string{"a", "c"}, neighbors)
@@ -148,10 +148,10 @@ func TestNeighbors_DirectionIn(t *testing.T) {
 
 func TestNeighbors_EmptyKinds(t *testing.T) {
 	engine, _ := newTestEngine(t)
-	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "a", Kind: "function"}))
-	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "b", Kind: "function"}))
-	require.NoError(t, engine.Link("a", "b", "calls", "", 1, nil))
-	require.NoError(t, engine.Link("a", "b", "imports", "", 1, nil))
+	require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: "a", Kind: "function"}))
+	require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: "b", Kind: "function"}))
+	require.NoError(t, engine.Link(context.TODO(), "a", "b", "calls", "", 1, nil))
+	require.NoError(t, engine.Link(context.TODO(), "a", "b", "imports", "", 1, nil))
 
 	neighbors := engine.Neighbors("a", DirectionOut)
 	require.ElementsMatch(t, []string{"b"}, neighbors) // both edges go to same target
@@ -163,9 +163,9 @@ func TestNeighbors_EmptyKinds(t *testing.T) {
 
 func TestSubgraph_DepthZero(t *testing.T) {
 	engine, _ := newTestEngine(t)
-	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "root", Kind: "function"}))
-	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "other", Kind: "function"}))
-	require.NoError(t, engine.Link("root", "other", "calls", "", 1, nil))
+	require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: "root", Kind: "function"}))
+	require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: "other", Kind: "function"}))
+	require.NoError(t, engine.Link(context.TODO(), "root", "other", "calls", "", 1, nil))
 
 	page, err := engine.SubgraphPage(context.Background(), GraphPageQuery{
 		GraphQuery: GraphQuery{
@@ -187,10 +187,10 @@ func TestSubgraph_DepthZero(t *testing.T) {
 func TestSubgraph_DirectionBoth(t *testing.T) {
 	engine, _ := newTestEngine(t)
 	for _, id := range []string{"a", "b", "c"} {
-		require.NoError(t, engine.UpsertNode(NodeRecord{ID: id, Kind: "function"}))
+		require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: id, Kind: "function"}))
 	}
-	require.NoError(t, engine.Link("a", "b", "calls", "", 1, nil))
-	require.NoError(t, engine.Link("c", "b", "calls", "", 1, nil))
+	require.NoError(t, engine.Link(context.TODO(), "a", "b", "calls", "", 1, nil))
+	require.NoError(t, engine.Link(context.TODO(), "c", "b", "calls", "", 1, nil))
 
 	page, err := engine.SubgraphPage(context.Background(), GraphPageQuery{
 		GraphQuery: GraphQuery{
@@ -313,9 +313,9 @@ func TestImpactSetContext_EmptyOrigin(t *testing.T) {
 
 func TestImpactSetContext_NoErrorWhenWithinLimit(t *testing.T) {
 	engine, _ := newTestEngine(t)
-	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "a", Kind: "function"}))
-	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "b", Kind: "function"}))
-	require.NoError(t, engine.Link("a", "b", "calls", "", 1, nil))
+	require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: "a", Kind: "function"}))
+	require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: "b", Kind: "function"}))
+	require.NoError(t, engine.Link(context.TODO(), "a", "b", "calls", "", 1, nil))
 
 	page, err := engine.SubgraphPage(context.Background(), GraphPageQuery{
 		GraphQuery: GraphQuery{
@@ -430,17 +430,17 @@ func TestSubgraphContext_Cancellation(t *testing.T) {
 
 func TestSubgraphContext_IncludePropsFalse(t *testing.T) {
 	engine, _ := newTestEngine(t)
-	require.NoError(t, engine.UpsertNode(NodeRecord{
+	require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{
 		ID:    "a",
 		Kind:  "function",
 		Props: []byte(`{"key":"val"}`),
 	}))
-	require.NoError(t, engine.UpsertNode(NodeRecord{
+	require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{
 		ID:    "b",
 		Kind:  "function",
 		Props: []byte(`{"other":1}`),
 	}))
-	require.NoError(t, engine.LinkEdges([]EdgeRecord{
+	require.NoError(t, engine.LinkEdges(context.TODO(), []EdgeRecord{
 		{SourceID: "a", TargetID: "b", Kind: "calls", Weight: 1, Props: []byte(`{"w":1}`)},
 	}))
 
@@ -467,17 +467,17 @@ func TestSubgraphContext_IncludePropsFalse(t *testing.T) {
 
 func TestSubgraphContext_IncludePropsTrue(t *testing.T) {
 	engine, _ := newTestEngine(t)
-	require.NoError(t, engine.UpsertNode(NodeRecord{
+	require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{
 		ID:    "a",
 		Kind:  "function",
 		Props: []byte(`{"key":"val"}`),
 	}))
-	require.NoError(t, engine.UpsertNode(NodeRecord{
+	require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{
 		ID:    "b",
 		Kind:  "function",
 		Props: []byte(`{"other":1}`),
 	}))
-	require.NoError(t, engine.LinkEdges([]EdgeRecord{
+	require.NoError(t, engine.LinkEdges(context.TODO(), []EdgeRecord{
 		{SourceID: "a", TargetID: "b", Kind: "calls", Weight: 1, Props: []byte(`{"w":1}`)},
 	}))
 
@@ -503,7 +503,7 @@ func TestSubgraphContext_IncludePropsTrue(t *testing.T) {
 
 func TestSubgraphContext_CursorReturnedEmpty(t *testing.T) {
 	engine, _ := newTestEngine(t)
-	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "a", Kind: "function"}))
+	require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: "a", Kind: "function"}))
 
 	page, err := engine.SubgraphPage(context.Background(), GraphPageQuery{
 		GraphQuery: GraphQuery{
@@ -545,9 +545,9 @@ func TestDefaultMaxEdges(t *testing.T) {
 
 func TestImpactSetContext_LargeLimitDoesNotError(t *testing.T) {
 	engine, _ := newTestEngine(t)
-	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "a", Kind: "function"}))
-	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "b", Kind: "function"}))
-	require.NoError(t, engine.Link("a", "b", "calls", "", 1, nil))
+	require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: "a", Kind: "function"}))
+	require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: "b", Kind: "function"}))
+	require.NoError(t, engine.Link(context.TODO(), "a", "b", "calls", "", 1, nil))
 
 	page, err := engine.SubgraphPage(context.Background(), GraphPageQuery{
 		GraphQuery: GraphQuery{
@@ -566,7 +566,7 @@ func TestImpactSetContext_LargeLimitDoesNotError(t *testing.T) {
 func TestSubgraphContext_MaxEdgesDefault(t *testing.T) {
 	engine, _ := newTestEngine(t)
 	for range 10 {
-		require.NoError(t, engine.UpsertNode(NodeRecord{ID: t.Name() + "a", Kind: "function"}))
+		require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: t.Name() + "a", Kind: "function"}))
 	}
 
 	page, err := engine.SubgraphPage(context.Background(), GraphPageQuery{
@@ -620,7 +620,7 @@ func TestImpactSetContext_NegativeMaxDepth(t *testing.T) {
 
 func TestImpactSetContext_OnlyOriginWithinLimit(t *testing.T) {
 	engine, _ := newTestEngine(t)
-	require.NoError(t, engine.UpsertNode(NodeRecord{ID: "a", Kind: "function"}))
+	require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: "a", Kind: "function"}))
 
 	page, err := engine.SubgraphPage(context.Background(), GraphPageQuery{
 		GraphQuery: GraphQuery{

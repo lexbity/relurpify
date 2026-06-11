@@ -1,6 +1,7 @@
 package security
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -280,7 +281,7 @@ func TestReadOnlyRoot(t *testing.T) {
 			ReadOnlyRoot: true,
 		}
 
-		err := runtime.ApplyPolicy(nil, policy)
+		err := runtime.ApplyPolicy(context.TODO(), policy)
 		if err != nil {
 			t.Fatalf("failed to apply read-only root policy: %v", err)
 		}
@@ -303,7 +304,7 @@ func TestReadOnlyRoot(t *testing.T) {
 			ReadOnlyRoot: false,
 		}
 
-		err := runtime.ApplyPolicy(nil, policy)
+		err := runtime.ApplyPolicy(context.TODO(), policy)
 		if err != nil {
 			t.Fatalf("failed to apply policy: %v", err)
 		}
@@ -328,7 +329,7 @@ func TestReadOnlyRoot(t *testing.T) {
 			NoNewPrivileges: true,
 		}
 
-		err := runtime.ApplyPolicy(nil, policy)
+		err := runtime.ApplyPolicy(context.TODO(), policy)
 		if err != nil {
 			t.Fatalf("failed to apply policy: %v", err)
 		}
@@ -358,7 +359,7 @@ func TestNoNewPrivileges(t *testing.T) {
 			NoNewPrivileges: true,
 		}
 
-		err := runtime.ApplyPolicy(nil, policy)
+		err := runtime.ApplyPolicy(context.TODO(), policy)
 		if err != nil {
 			t.Fatalf("failed to apply no-new-privileges policy: %v", err)
 		}
@@ -381,7 +382,7 @@ func TestNoNewPrivileges(t *testing.T) {
 			NoNewPrivileges: false,
 		}
 
-		err := runtime.ApplyPolicy(nil, policy)
+		err := runtime.ApplyPolicy(context.TODO(), policy)
 		if err != nil {
 			t.Fatalf("failed to apply policy: %v", err)
 		}
@@ -405,7 +406,7 @@ func TestNoNewPrivileges(t *testing.T) {
 			ReadOnlyRoot:    true,
 		}
 
-		err := runtime.ApplyPolicy(nil, policy)
+		err := runtime.ApplyPolicy(context.TODO(), policy)
 		if err != nil {
 			t.Fatalf("failed to apply policy: %v", err)
 		}

@@ -61,7 +61,7 @@ func testThoughtRecipe(id string) *surface.ThoughtRecipe {
 func TestDispatch_ExplicitCapabilityRoute_SelectsRequestedCapability(t *testing.T) {
 	reg := registry.NewRegistry()
 	desc := testCapabilityDescriptor("euclo:cap.ast_query", 10, descriptor.AvailabilitySpec{Available: true})
-	if err := reg.RegisterCapability(desc); err != nil {
+	if err := reg.RegisterCapability(context.Background(), desc); err != nil {
 		t.Fatalf("register capability: %v", err)
 	}
 
@@ -169,10 +169,10 @@ func TestDispatch_FamilyRoute_SelectsBestCandidate(t *testing.T) {
 	reg := registry.NewRegistry()
 	low := testCapabilityDescriptor("euclo:cap.ast_query", 5, descriptor.AvailabilitySpec{Available: true})
 	high := testCapabilityDescriptor("euclo:cap.symbol_trace", 20, descriptor.AvailabilitySpec{Available: true})
-	if err := reg.RegisterCapability(low); err != nil {
+	if err := reg.RegisterCapability(context.Background(), low); err != nil {
 		t.Fatalf("register low capability: %v", err)
 	}
-	if err := reg.RegisterCapability(high); err != nil {
+	if err := reg.RegisterCapability(context.Background(), high); err != nil {
 		t.Fatalf("register high capability: %v", err)
 	}
 
@@ -223,10 +223,10 @@ func TestDryRun_EmitsRouteDryRunEvent(t *testing.T) {
 	reg := registry.NewRegistry()
 	low := testCapabilityDescriptor("euclo:cap.ast_query", 5, descriptor.AvailabilitySpec{Available: true})
 	high := testCapabilityDescriptor("euclo:cap.symbol_trace", 20, descriptor.AvailabilitySpec{Available: true})
-	if err := reg.RegisterCapability(low); err != nil {
+	if err := reg.RegisterCapability(context.Background(), low); err != nil {
 		t.Fatalf("register low capability: %v", err)
 	}
-	if err := reg.RegisterCapability(high); err != nil {
+	if err := reg.RegisterCapability(context.Background(), high); err != nil {
 		t.Fatalf("register high capability: %v", err)
 	}
 
@@ -259,7 +259,7 @@ func TestDryRun_EmitsRouteDryRunEvent(t *testing.T) {
 func TestDispatch_EmitsRouteSelectedEvent(t *testing.T) {
 	reg := registry.NewRegistry()
 	desc := testCapabilityDescriptor("euclo:cap.ast_query", 10, descriptor.AvailabilitySpec{Available: true})
-	if err := reg.RegisterCapability(desc); err != nil {
+	if err := reg.RegisterCapability(context.Background(), desc); err != nil {
 		t.Fatalf("register capability: %v", err)
 	}
 
@@ -293,7 +293,7 @@ func TestDispatch_UnavailableRoute_ReturnsError(t *testing.T) {
 		Available: false,
 		Reason:    "tool dependency missing: file_write",
 	})
-	if err := reg.RegisterCapability(desc); err != nil {
+	if err := reg.RegisterCapability(context.Background(), desc); err != nil {
 		t.Fatalf("register capability: %v", err)
 	}
 
@@ -310,10 +310,10 @@ func TestDispatch_UnavailableCapability_RemainsUnresolved(t *testing.T) {
 		Reason:    "tool dependency missing: file_write",
 	})
 	fallback := testCapabilityDescriptor("euclo:cap.ast_query", 1, descriptor.AvailabilitySpec{Available: true})
-	if err := reg.RegisterCapability(primary); err != nil {
+	if err := reg.RegisterCapability(context.Background(), primary); err != nil {
 		t.Fatalf("register primary: %v", err)
 	}
-	if err := reg.RegisterCapability(fallback); err != nil {
+	if err := reg.RegisterCapability(context.Background(), fallback); err != nil {
 		t.Fatalf("register fallback: %v", err)
 	}
 
@@ -340,7 +340,7 @@ func TestDispatch_AllUnavailable_HardFailure(t *testing.T) {
 		Available: false,
 		Reason:    "tool dependency missing: file_write",
 	})
-	if err := reg.RegisterCapability(desc); err != nil {
+	if err := reg.RegisterCapability(context.Background(), desc); err != nil {
 		t.Fatalf("register capability: %v", err)
 	}
 

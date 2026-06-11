@@ -53,7 +53,7 @@ func (w *Writer) Persist(ctx context.Context, req PersistenceRequest) (*Persiste
 
 	// 6. Build and commit chunk
 	chunk := w.buildChunk(req, trustClass, contentHash)
-	savedChunk, err := w.Store.Save(*chunk)
+	savedChunk, err := w.Store.Save(ctx, *chunk)
 	if err != nil {
 		result.Action = ActionRejected
 		result.Error = fmt.Errorf("commit failed: %w", err)

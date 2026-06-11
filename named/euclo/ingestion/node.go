@@ -61,7 +61,7 @@ func (n *IngestionNode) Execute(ctx context.Context, env *contextdata.Envelope) 
 	}
 
 	mode := n.resolveMode(taskEnvelope)
-	store, cleanup, err := n.ensureStore()
+	store, cleanup, err := n.ensureStore(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -225,18 +225,18 @@ func (n *IngestionNode) ingestWorkspace(ctx context.Context, env *contextdata.En
 	return nil
 }
 
-func (n *IngestionNode) ensureStore() (*knowledge.ChunkStore, func(), error) {
+func (n *IngestionNode) ensureStore(ctx context.Context) (*knowledge.ChunkStore, func(), error) {
 	tempDir, err := os.MkdirTemp("", "euclo-ingestion-*")
 	if err != nil {
 		return nil, nil, err
 	}
-	engine, err := graphdb.Open(graphdb.DefaultOptions(tempDir))
+	engine, err := graphdb.Open(ctx, graphdb.DefaultOptions(tempDir))
 	if err != nil {
 		_ = os.RemoveAll(tempDir)
 		return nil, nil, err
 	}
 	cleanup := func() {
-		_ = engine.Close()
+		_ = engine.Close(ctx)
 		_ = os.RemoveAll(tempDir)
 	}
 	return &knowledge.ChunkStore{Graph: engine}, cleanup, nil

@@ -157,6 +157,9 @@ func (b *badgerBackend) commitInTxn(txn *badger.Txn, batch mutationBatch) error 
 		}
 		old, err := b.getNodeRecordInTxn(txn, op.ID)
 		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				return nil
+			}
 			return err
 		}
 		if old != nil {
@@ -180,6 +183,9 @@ func (b *badgerBackend) commitInTxn(txn *badger.Txn, batch mutationBatch) error 
 		for _, id := range op.IDs {
 			old, err := b.getNodeRecordInTxn(txn, id)
 			if err != nil {
+				if errors.Is(err, os.ErrNotExist) {
+					continue
+				}
 				return err
 			}
 			if old != nil {
@@ -250,6 +256,9 @@ func (b *badgerBackend) commitInTxn(txn *badger.Txn, batch mutationBatch) error 
 		}
 		existing, err := b.getNodeRecordInTxn(txn, op.ID)
 		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				return nil
+			}
 			return err
 		}
 		if existing == nil {
@@ -278,6 +287,9 @@ func (b *badgerBackend) commitInTxn(txn *badger.Txn, batch mutationBatch) error 
 		}
 		existing, err := b.getEdgeRecord(txn, op.SourceID, op.TargetID, op.Kind)
 		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				return nil
+			}
 			return err
 		}
 		if existing == nil {
@@ -519,7 +531,7 @@ func (b *badgerBackend) getNodeRecordInTxn(txn *badger.Txn, id string) (*NodeRec
 	key := keyNodeByID(id)
 	item, err := txn.Get(key)
 	if errors.Is(err, badger.ErrKeyNotFound) {
-		return nil, nil
+		return nil, os.ErrNotExist
 	}
 	if err != nil {
 		return nil, err
@@ -546,7 +558,7 @@ func (b *badgerBackend) getEdgeRecord(txn *badger.Txn, sourceID, targetID string
 	key := keyEdgeOut(sourceID, kind, targetID)
 	item, err := txn.Get(key)
 	if errors.Is(err, badger.ErrKeyNotFound) {
-		return nil, nil
+		return nil, os.ErrNotExist
 	}
 	if err != nil {
 		return nil, err
@@ -684,7 +696,7 @@ func (b *badgerBackend) getEdgeHistory(sourceID, targetID string, kind EdgeKind)
 // getMutationResult reads a single mutation result from Badger.
 func (b *badgerBackend) getMutationResult(stableID string) (*MutationResult, error) {
 	if stableID == "" {
-		return nil, nil
+		return nil, errors.New("stableID is empty")
 	}
 	key := keyMutationByStable(stableID)
 	var result MutationResult
@@ -703,7 +715,7 @@ func (b *badgerBackend) getMutationResult(stableID string) (*MutationResult, err
 		return nil, err
 	}
 	if result.StableID == "" {
-		return nil, nil
+		return nil, errors.New("mutation result has empty StableID")
 	}
 	return &result, nil
 }
@@ -734,7 +746,7 @@ func (b *badgerBackend) listMutationResults() ([]MutationResult, error) {
 // getNodeRecord reads a single canonical node record from Badger.
 func (b *badgerBackend) getNodeRecord(id string) (*NodeRecord, error) {
 	if id == "" {
-		return nil, nil
+		return nil, errors.New("node id is empty")
 	}
 	key := keyNodeByID(id)
 	var node NodeRecord
@@ -753,7 +765,7 @@ func (b *badgerBackend) getNodeRecord(id string) (*NodeRecord, error) {
 		return nil, err
 	}
 	if node.ID == "" {
-		return nil, nil
+		return nil, errors.New("node record has empty ID")
 	}
 	return &node, nil
 }

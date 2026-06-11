@@ -504,7 +504,7 @@ func containsAllStrings(haystack string, want ...string) bool {
 func TestThoughtRecipeExecutorNodeUsesScopedToolsFromSource(t *testing.T) {
 	toolReg := regpkg.NewRegistry()
 	for _, name := range []string{"scope_read", "scope_write"} {
-		if err := toolReg.RegisterLegacyTool(recordingThoughtRecipeTool{name: name}); err != nil {
+		if err := toolReg.RegisterLegacyTool(context.Background(), recordingThoughtRecipeTool{name: name}); err != nil {
 			t.Fatalf("register %s: %v", name, err)
 		}
 	}
@@ -539,7 +539,7 @@ run reviewer:
 func TestThoughtRecipeExecutorNodeAppliesRunLocalOverlay(t *testing.T) {
 	toolReg := regpkg.NewRegistry()
 	for _, name := range []string{"scope_read", "scope_write"} {
-		if err := toolReg.RegisterLegacyTool(recordingThoughtRecipeTool{name: name}); err != nil {
+		if err := toolReg.RegisterLegacyTool(context.Background(), recordingThoughtRecipeTool{name: name}); err != nil {
 			t.Fatalf("register %s: %v", name, err)
 		}
 	}
@@ -575,7 +575,7 @@ run reviewer:
 func TestThoughtRecipeExecutorNodeSupportsFallbackPromptModeWithScopedTools(t *testing.T) {
 	toolReg := regpkg.NewRegistry()
 	for _, name := range []string{"scope_read", "scope_write"} {
-		if err := toolReg.RegisterLegacyTool(recordingThoughtRecipeTool{name: name}); err != nil {
+		if err := toolReg.RegisterLegacyTool(context.Background(), recordingThoughtRecipeTool{name: name}); err != nil {
 			t.Fatalf("register %s: %v", name, err)
 		}
 	}
@@ -604,7 +604,7 @@ run reviewer:
 func TestThoughtRecipeExecutorNodeKeepsUnscopedRecipesAtFullToolSurface(t *testing.T) {
 	toolReg := regpkg.NewRegistry()
 	for _, name := range []string{"scope_read", "scope_write"} {
-		if err := toolReg.RegisterLegacyTool(recordingThoughtRecipeTool{name: name}); err != nil {
+		if err := toolReg.RegisterLegacyTool(context.Background(), recordingThoughtRecipeTool{name: name}); err != nil {
 			t.Fatalf("register %s: %v", name, err)
 		}
 	}
@@ -633,7 +633,7 @@ run reviewer:
 func TestThoughtRecipeExecutorNodeStillInvokesDirectCapabilities(t *testing.T) {
 	capHandler := &recordingCapabilityHandler{}
 	capReg := regpkg.NewRegistry()
-	if err := capReg.RegisterInvocableCapability(capHandler); err != nil {
+	if err := capReg.RegisterInvocableCapability(context.Background(), capHandler); err != nil {
 		t.Fatalf("register invocable capability: %v", err)
 	}
 	semanticCaps := ecap.NewRegistry()
@@ -666,7 +666,7 @@ run reviewer:
 func TestThoughtRecipeExecutorNodeCombinesScopedToolsAndNestedCapabilityInvocation(t *testing.T) {
 	toolReg := regpkg.NewRegistry()
 	for _, name := range []string{"scope_read", "scope_write"} {
-		if err := toolReg.RegisterLegacyTool(recordingThoughtRecipeTool{name: name}); err != nil {
+		if err := toolReg.RegisterLegacyTool(context.Background(), recordingThoughtRecipeTool{name: name}); err != nil {
 			t.Fatalf("register %s: %v", name, err)
 		}
 	}
@@ -694,7 +694,7 @@ run reviewer:
 
 	capHandler := &recordingCapabilityHandler{}
 	runtimeReg := regpkg.NewRegistry()
-	if err := runtimeReg.RegisterInvocableCapability(capHandler); err != nil {
+	if err := runtimeReg.RegisterInvocableCapability(context.Background(), capHandler); err != nil {
 		t.Fatalf("register invocable capability: %v", err)
 	}
 	semanticCaps := ecap.NewRegistry()

@@ -24,7 +24,7 @@ func newTargetedRefactorTestDeps(t *testing.T) (SymbolQuerier, EdgeStore, Worksp
 	t.Cleanup(func() { _ = store.Close() })
 
 	manager := ast.NewIndexManager(store, ast.IndexConfig{WorkspacePath: tmpDir})
-	require.NoError(t, manager.IndexFile(path))
+	require.NoError(t, manager.IndexFile(context.Background(), path))
 
 	return manager, store, &workspaceFileSystem{workspace: tmpDir}, manager, path
 }

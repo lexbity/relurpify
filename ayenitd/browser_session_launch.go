@@ -52,7 +52,7 @@ func newBrowserSession(ctx context.Context, cfg browsersvc.BrowserSessionConfig)
 			Policy:       browserLaunchPolicy(cfg),
 		})
 		if err != nil {
-			_ = sandboxed.close()
+			_ = sandboxed.close(ctx)
 			return nil, err
 		}
 		maxTokens := cfg.MaxTokens
@@ -74,7 +74,7 @@ func newBrowserSession(ctx context.Context, cfg browsersvc.BrowserSessionConfig)
 			Policy:      browserLaunchPolicy(cfg),
 		})
 		if err != nil {
-			_ = sandboxed.close()
+			_ = sandboxed.close(ctx)
 			return nil, err
 		}
 		return platformbrowser.NewSession(platformbrowser.SessionConfig{
@@ -92,7 +92,7 @@ func newBrowserSession(ctx context.Context, cfg browsersvc.BrowserSessionConfig)
 			Policy:      browserLaunchPolicy(cfg),
 		})
 		if err != nil {
-			_ = sandboxed.close()
+			_ = sandboxed.close(ctx)
 			return nil, err
 		}
 		return platformbrowser.NewSession(platformbrowser.SessionConfig{
@@ -154,7 +154,7 @@ func newSandboxedBrowserBackend(ctx context.Context, cfg browsersvc.BrowserSessi
 		wsURL, err := waitForCDPWebSocket(ctx, hostPort)
 		if err != nil {
 			_ = os.RemoveAll(launchDir)
-			_ = removeSandboxBrowserContainer(context.Background(), cfg, containerID)
+			_ = removeSandboxBrowserContainer(ctx, cfg, containerID)
 			return nil, err
 		}
 		return &sandboxedBrowserBackend{
@@ -180,7 +180,7 @@ func newSandboxedBrowserBackend(ctx context.Context, cfg browsersvc.BrowserSessi
 		}
 		remoteURL := fmt.Sprintf("http://127.0.0.1:%d", hostPort)
 		if err := waitForHTTPReady(ctx, remoteURL+"/status"); err != nil {
-			_ = removeSandboxBrowserContainer(context.Background(), cfg, containerID)
+			_ = removeSandboxBrowserContainer(ctx, cfg, containerID)
 			return nil, err
 		}
 		return &sandboxedBrowserBackend{
@@ -194,7 +194,7 @@ func newSandboxedBrowserBackend(ctx context.Context, cfg browsersvc.BrowserSessi
 	}
 }
 
-func (b *sandboxedBrowserBackend) close() error {
+func (b *sandboxedBrowserBackend) close(ctx context.Context) error {
 	if b == nil || b.containerID == "" {
 		if b != nil && b.launchDir != "" {
 			_ = os.RemoveAll(b.launchDir)
@@ -202,7 +202,7 @@ func (b *sandboxedBrowserBackend) close() error {
 		}
 		return nil
 	}
-	cmdCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	cmdCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	if err := allowBrowserCommand(cmdCtx, b.cfg, b.runtimeBinary, []string{"rm", "-f", b.containerID}); err != nil {
 		return err
@@ -385,7 +385,7 @@ func (b budgetItemAdapter) CanCompress() bool {
 
 func (b budgetItemAdapter) Compress() (telemetry.BudgetItem, error) {
 	if b.item == nil {
-		return nil, nil
+		return nil, errors.New("budget item is nil")
 	}
 	next, err := b.item.Compress()
 	if err != nil || next == nil {
@@ -480,10 +480,10 @@ func reservePort() (int, error) {
 
 type managedBrowserBackend struct {
 	backend platformbrowser.Backend
-	cleanup func() error
+	cleanup func(context.Context) error
 }
 
-func wrapManagedBrowserBackend(backend platformbrowser.Backend, cleanup func() error) platformbrowser.Backend {
+func wrapManagedBrowserBackend(backend platformbrowser.Backend, cleanup func(context.Context) error) platformbrowser.Backend {
 	return &managedBrowserBackend{backend: backend, cleanup: cleanup}
 }
 
@@ -534,13 +534,13 @@ func (m *managedBrowserBackend) Capabilities() platformbrowser.Capabilities {
 	return platformbrowser.Capabilities{ArbitraryEval: true}
 }
 
-func (m *managedBrowserBackend) Close() error {
+func (m *managedBrowserBackend) Close(ctx context.Context) error {
 	var errs []error
 	if m.backend != nil {
-		errs = append(errs, m.backend.Close())
+		errs = append(errs, m.backend.Close(ctx))
 	}
 	if m.cleanup != nil {
-		errs = append(errs, m.cleanup())
+		errs = append(errs, m.cleanup(ctx))
 	}
 	return errors.Join(errs...)
 }

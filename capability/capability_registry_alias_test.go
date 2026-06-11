@@ -1,6 +1,7 @@
 package capability
 
 import (
+	"context"
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/capability/descriptor"
@@ -19,7 +20,7 @@ func TestCapabilityRegistry_DefaultAliases(t *testing.T) {
 		Kind:          agentspec.CapabilityKindTool,
 		RuntimeFamily: agentspec.CapabilityRuntimeFamilyLocalTool,
 	}
-	if err := reg.RegisterCapability(desc); err != nil {
+	if err := reg.RegisterCapability(context.Background(), desc); err != nil {
 		t.Fatalf("register capability: %v", err)
 	}
 
@@ -51,13 +52,13 @@ func TestCapabilityRegistry_DefaultAliases(t *testing.T) {
 		Kind:          agentspec.CapabilityKindTool,
 		RuntimeFamily: agentspec.CapabilityRuntimeFamilyLocalTool,
 	}
-	if err := reg.RegisterCapability(descList); err != nil {
+	if err := reg.RegisterCapability(context.Background(), descList); err != nil {
 		t.Fatalf("register file_list: %v", err)
 	}
-	if err := reg.RegisterCapability(descTests); err != nil {
+	if err := reg.RegisterCapability(context.Background(), descTests); err != nil {
 		t.Fatalf("register exec_run_tests: %v", err)
 	}
-	if err := reg.RegisterCapability(descCreate); err != nil {
+	if err := reg.RegisterCapability(context.Background(), descCreate); err != nil {
 		t.Fatalf("register file_create: %v", err)
 	}
 
@@ -97,7 +98,7 @@ func TestCapabilityRegistry_ModelProfileAliasesOverride(t *testing.T) {
 		Kind:          agentspec.CapabilityKindTool,
 		RuntimeFamily: agentspec.CapabilityRuntimeFamilyLocalTool,
 	}
-	if err := reg.RegisterCapability(desc); err != nil {
+	if err := reg.RegisterCapability(context.Background(), desc); err != nil {
 		t.Fatalf("register capability: %v", err)
 	}
 
@@ -154,7 +155,7 @@ func TestCapabilityRegistry_ComprehensiveDefaultAliases(t *testing.T) {
 			Kind:          agentspec.CapabilityKindTool,
 			RuntimeFamily: agentspec.CapabilityRuntimeFamilyLocalTool,
 		}
-		if err := reg.RegisterCapability(desc); err != nil {
+		if err := reg.RegisterCapability(context.Background(), desc); err != nil {
 			t.Fatalf("register capability %q: %v", name, err)
 		}
 	}

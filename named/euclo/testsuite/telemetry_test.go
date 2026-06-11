@@ -14,7 +14,7 @@ import (
 func TestDryRunEndToEndTelemetryOrder(t *testing.T) {
 	caps := newCapabilityRegistry(t, "euclo:cap.targeted_refactor")
 	deps := rootGraphDeps(caps)
-	graph, err := orchestrate.NewRootGraph(deps)
+	graph, err := orchestrate.NewRootGraph(context.Background(), deps)
 	if err != nil {
 		t.Fatalf("NewRootGraph failed: %v", err)
 	}

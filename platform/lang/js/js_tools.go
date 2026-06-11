@@ -53,7 +53,7 @@ func (t *NodeWorkspaceDetectTool) Execute(ctx context.Context, args map[string]a
 	resolved = filepath.Clean(resolved)
 	info, err := os.Stat(resolved)
 	if err != nil {
-		return &ports.ToolResult{Success: false, Error: err.Error()}, nil
+		return nil, err
 	}
 	searchDir := resolved
 	if !info.IsDir() {
@@ -122,7 +122,7 @@ func (t *NodeProjectMetadataTool) Execute(ctx context.Context, args map[string]a
 	}
 	meta, err := parseNodeProjectMetadata(projectRoot, manifestPath, markers)
 	if err != nil {
-		return &ports.ToolResult{Success: false, Error: err.Error()}, nil
+		return nil, err
 	}
 	return &ports.ToolResult{Success: true, Data: meta}, nil
 }

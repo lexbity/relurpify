@@ -64,7 +64,7 @@ func TestProbeWorkspace_WorkspaceNotFound(t *testing.T) {
 	if err := os.RemoveAll(absent); err != nil {
 		t.Fatal(err)
 	}
-	results := ayenitd.ProbeWorkspace(probeCfg(absent), llm.ProviderSecrets{}, fakeBackend{
+	results := ayenitd.ProbeWorkspace(context.Background(), probeCfg(absent), llm.ProviderSecrets{}, fakeBackend{
 		models: []llm.ModelInfo{{Name: "qwen2.5-coder:14b"}},
 	})
 	r := findResult(t, results, "workspace_directory")
@@ -84,7 +84,7 @@ func TestProbeWorkspace_WorkspaceIsFile(t *testing.T) {
 	f.Close()
 	defer os.Remove(f.Name())
 
-	results := ayenitd.ProbeWorkspace(probeCfg(f.Name()), llm.ProviderSecrets{}, fakeBackend{
+	results := ayenitd.ProbeWorkspace(context.Background(), probeCfg(f.Name()), llm.ProviderSecrets{}, fakeBackend{
 		models: []llm.ModelInfo{{Name: "qwen2.5-coder:14b"}},
 	})
 	r := findResult(t, results, "workspace_directory")
@@ -94,7 +94,7 @@ func TestProbeWorkspace_WorkspaceIsFile(t *testing.T) {
 }
 
 func TestProbeWorkspace_WorkspaceExists(t *testing.T) {
-	results := ayenitd.ProbeWorkspace(probeCfg(t.TempDir()), llm.ProviderSecrets{}, fakeBackend{
+	results := ayenitd.ProbeWorkspace(context.Background(), probeCfg(t.TempDir()), llm.ProviderSecrets{}, fakeBackend{
 		models: []llm.ModelInfo{{Name: "qwen2.5-coder:14b"}},
 	})
 	r := findResult(t, results, "workspace_directory")
@@ -104,7 +104,7 @@ func TestProbeWorkspace_WorkspaceExists(t *testing.T) {
 }
 
 func TestProbeWorkspace_InferenceUnhealthy(t *testing.T) {
-	results := ayenitd.ProbeWorkspace(probeCfg(t.TempDir()), llm.ProviderSecrets{}, fakeBackend{
+	results := ayenitd.ProbeWorkspace(context.Background(), probeCfg(t.TempDir()), llm.ProviderSecrets{}, fakeBackend{
 		warmErr: errors.New("backend unavailable"),
 	})
 	r := findResult(t, results, "inference_backend")
@@ -118,7 +118,7 @@ func TestProbeWorkspace_InferenceUnhealthy(t *testing.T) {
 
 func TestProbeWorkspace_InferenceModelPresent(t *testing.T) {
 	const model = "qwen2.5-coder:14b"
-	results := ayenitd.ProbeWorkspace(func() ayenitd.WorkspaceConfig {
+	results := ayenitd.ProbeWorkspace(context.Background(), func() ayenitd.WorkspaceConfig {
 		cfg := probeCfg(t.TempDir())
 		cfg.InferenceModel = model
 		return cfg
@@ -132,7 +132,7 @@ func TestProbeWorkspace_InferenceModelPresent(t *testing.T) {
 }
 
 func TestProbeWorkspace_InferenceModelMissing(t *testing.T) {
-	results := ayenitd.ProbeWorkspace(func() ayenitd.WorkspaceConfig {
+	results := ayenitd.ProbeWorkspace(context.Background(), func() ayenitd.WorkspaceConfig {
 		cfg := probeCfg(t.TempDir())
 		cfg.InferenceModel = "qwen2.5-coder:14b"
 		return cfg
@@ -146,7 +146,7 @@ func TestProbeWorkspace_InferenceModelMissing(t *testing.T) {
 }
 
 func TestProbeWorkspace_DiskSpaceIsNonRequired(t *testing.T) {
-	results := ayenitd.ProbeWorkspace(probeCfg(t.TempDir()), llm.ProviderSecrets{}, fakeBackend{
+	results := ayenitd.ProbeWorkspace(context.Background(), probeCfg(t.TempDir()), llm.ProviderSecrets{}, fakeBackend{
 		models: []llm.ModelInfo{{Name: "qwen2.5-coder:14b"}},
 	})
 	r := findResult(t, results, "disk_space")
@@ -156,7 +156,7 @@ func TestProbeWorkspace_DiskSpaceIsNonRequired(t *testing.T) {
 }
 
 func TestProbeWorkspace_AllResultNamesPresent(t *testing.T) {
-	results := ayenitd.ProbeWorkspace(probeCfg(t.TempDir()), llm.ProviderSecrets{}, fakeBackend{
+	results := ayenitd.ProbeWorkspace(context.Background(), probeCfg(t.TempDir()), llm.ProviderSecrets{}, fakeBackend{
 		models: []llm.ModelInfo{{Name: "qwen2.5-coder:14b"}},
 	})
 	want := []string{"workspace_directory", "inference_backend", "disk_space"}

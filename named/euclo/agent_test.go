@@ -32,6 +32,7 @@ func TestAgentImplementsWorkflowExecutor(t *testing.T) {
 }
 
 func TestBuildGraphReturnsGraph(t *testing.T) {
+	t.Parallel()
 	deps := &paradigm.Deps{
 		Config: &execution.Config{
 			AgentSpec: &agentspec.AgentRuntimeSpec{
@@ -48,7 +49,7 @@ func TestBuildGraphReturnsGraph(t *testing.T) {
 		Instruction: "test instruction",
 	}
 
-	graph, err := agent.BuildGraph(task)
+	graph, err := agent.BuildGraph(context.Background(), task)
 	if err != nil {
 		t.Fatalf("BuildGraph returned error: %v", err)
 	}
@@ -139,7 +140,7 @@ func TestBuildGraphResumeStateSkipsIntake(t *testing.T) {
 	agent.captureResumeState(envelope)
 	agent.seedResumeState(envelope)
 
-	graph, err := agent.BuildGraph(task)
+	graph, err := agent.BuildGraph(context.Background(), task)
 	if err != nil {
 		t.Fatalf("BuildGraph returned error: %v", err)
 	}

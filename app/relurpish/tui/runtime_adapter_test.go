@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/context/contextdata"
@@ -14,12 +15,12 @@ type profileAgent struct{}
 func (profileAgent) Initialize(*execution.Config) error { return nil }
 
 func (profileAgent) Execute(context.Context, *execution.Task, *contextdata.Envelope) (*execution.Result, error) {
-	return nil, nil
+	return nil, errors.New("mock not implemented")
 }
 
 func (profileAgent) Capabilities() []string { return nil }
 
-func (profileAgent) BuildGraph(*execution.Task) (*agentgraph.Graph, error) { return nil, nil }
+func (profileAgent) BuildGraph(context.Context, *execution.Task) (*agentgraph.Graph, error) { return nil, errors.New("mock not implemented") }
 
 func (profileAgent) RuntimeProfile() (string, string) { return "analysis", "route-dispatch" }
 
@@ -28,12 +29,12 @@ type plainAgent struct{}
 func (plainAgent) Initialize(*execution.Config) error { return nil }
 
 func (plainAgent) Execute(context.Context, *execution.Task, *contextdata.Envelope) (*execution.Result, error) {
-	return nil, nil
+	return nil, errors.New("mock not implemented")
 }
 
 func (plainAgent) Capabilities() []string { return nil }
 
-func (plainAgent) BuildGraph(*execution.Task) (*agentgraph.Graph, error) { return nil, nil }
+func (plainAgent) BuildGraph(context.Context, *execution.Task) (*agentgraph.Graph, error) { return nil, errors.New("mock not implemented") }
 
 func TestDescribeAgentRuntimeUsesOptionalProfileInterface(t *testing.T) {
 	mode, strategy := describeAgentRuntime(profileAgent{})

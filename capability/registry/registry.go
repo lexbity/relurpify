@@ -341,28 +341,28 @@ func (r *CapabilityRegistry) registerEntryLocked(desc descriptor.CapabilityDescr
 }
 
 // RegisterCapability adds a non-tool capability descriptor to the shared registry.
-func (r *CapabilityRegistry) RegisterCapability(descriptor descriptor.CapabilityDescriptor) error {
-	return r.RegisterBatch([]RegistrationBatchItem{{Descriptor: descriptor}})
+func (r *CapabilityRegistry) RegisterCapability(ctx context.Context, descriptor descriptor.CapabilityDescriptor) error {
+	return r.RegisterBatch(ctx, []RegistrationBatchItem{{Descriptor: descriptor}})
 }
 
 // RegisterInvocableCapability registers a runtime-backed invocable
-func (r *CapabilityRegistry) RegisterInvocableCapability(handler handler.InvocableCapabilityHandler) error {
-	return r.RegisterBatch([]RegistrationBatchItem{{InvocableHandler: handler}})
+func (r *CapabilityRegistry) RegisterInvocableCapability(ctx context.Context, handler handler.InvocableCapabilityHandler) error {
+	return r.RegisterBatch(ctx, []RegistrationBatchItem{{InvocableHandler: handler}})
 }
 
 // RegisterPromptCapability registers a runtime-backed prompt
-func (r *CapabilityRegistry) RegisterPromptCapability(handler handler.PromptCapabilityHandler) error {
-	return r.RegisterBatch([]RegistrationBatchItem{{PromptHandler: handler}})
+func (r *CapabilityRegistry) RegisterPromptCapability(ctx context.Context, handler handler.PromptCapabilityHandler) error {
+	return r.RegisterBatch(ctx, []RegistrationBatchItem{{PromptHandler: handler}})
 }
 
 // RegisterResourceCapability registers a runtime-backed resource
-func (r *CapabilityRegistry) RegisterResourceCapability(handler handler.ResourceCapabilityHandler) error {
-	return r.RegisterBatch([]RegistrationBatchItem{{ResourceHandler: handler}})
+func (r *CapabilityRegistry) RegisterResourceCapability(ctx context.Context, handler handler.ResourceCapabilityHandler) error {
+	return r.RegisterBatch(ctx, []RegistrationBatchItem{{ResourceHandler: handler}})
 }
 
 // ProviderCapabilityRegistrar returns a registrar that normalizes provider-
 // backed capabilities against provider metadata and agent policy before
-// registration.
+// registration. The returned registrar's methods require a context parameter.
 func (r *CapabilityRegistry) ProviderCapabilityRegistrar(provider provider.ProviderDescriptor, policy agentspec.ProviderPolicy) (provider.CapabilityRegistrar, error) {
 	if r == nil {
 		return nil, fmt.Errorf("registry unavailable")
@@ -386,15 +386,15 @@ type providerCapabilityRegistrar struct {
 	policy   agentspec.ProviderPolicy
 }
 
-func (r providerCapabilityRegistrar) RegisterCapability(descriptor descriptor.CapabilityDescriptor) error {
+func (r providerCapabilityRegistrar) RegisterCapability(ctx context.Context, descriptor descriptor.CapabilityDescriptor) error {
 	normalized, err := provider.NormalizeProviderCapability(descriptor, r.provider, r.policy)
 	if err != nil {
 		return err
 	}
-	return r.registry.RegisterCapability(normalized)
+	return r.registry.RegisterCapability(ctx, normalized)
 }
 
-func (r providerCapabilityRegistrar) RegisterCapabilitiesBatch(descriptors []descriptor.CapabilityDescriptor) error {
+func (r providerCapabilityRegistrar) RegisterCapabilitiesBatch(ctx context.Context, descriptors []descriptor.CapabilityDescriptor) error {
 	items := make([]RegistrationBatchItem, 0, len(descriptors))
 	for _, descriptor := range descriptors {
 		normalized, err := provider.NormalizeProviderCapability(descriptor, r.provider, r.policy)
@@ -403,29 +403,29 @@ func (r providerCapabilityRegistrar) RegisterCapabilitiesBatch(descriptors []des
 		}
 		items = append(items, RegistrationBatchItem{Descriptor: normalized})
 	}
-	return r.registry.RegisterBatch(items)
+	return r.registry.RegisterBatch(ctx, items)
 }
 
 // Register adds a tool to the registry.
-func (r *CapabilityRegistry) Register(tool ports.Tool) error {
-	return r.RegisterLegacyTool(tool)
+func (r *CapabilityRegistry) Register(ctx context.Context, tool ports.Tool) error {
+	return r.RegisterLegacyTool(ctx, tool)
 }
 
 // RegisterLegacyTool adds a legacy ports.Tool implementation to the registry by
 // adapting it into a tool-kind capability entry.
-func (r *CapabilityRegistry) RegisterLegacyTool(tool ports.Tool) error {
-	return r.RegisterBatch([]RegistrationBatchItem{{LegacyTool: tool}})
+func (r *CapabilityRegistry) RegisterLegacyTool(ctx context.Context, tool ports.Tool) error {
+	return r.RegisterBatch(ctx, []RegistrationBatchItem{{LegacyTool: tool}})
 }
 
-func (r *CapabilityRegistry) RegisterCapabilitiesBatch(descriptors []descriptor.CapabilityDescriptor) error {
+func (r *CapabilityRegistry) RegisterCapabilitiesBatch(ctx context.Context, descriptors []descriptor.CapabilityDescriptor) error {
 	items := make([]RegistrationBatchItem, 0, len(descriptors))
 	for _, descriptor := range descriptors {
 		items = append(items, RegistrationBatchItem{Descriptor: descriptor})
 	}
-	return r.RegisterBatch(items)
+	return r.RegisterBatch(ctx, items)
 }
 
-func (r *CapabilityRegistry) RegisterBatch(items []RegistrationBatchItem) error {
+func (r *CapabilityRegistry) RegisterBatch(ctx context.Context, items []RegistrationBatchItem) error {
 	if r == nil {
 		return fmt.Errorf("registry unavailable")
 	}
@@ -438,7 +438,7 @@ func (r *CapabilityRegistry) RegisterBatch(items []RegistrationBatchItem) error 
 	seenIDs := make(map[string]struct{}, len(items))
 	seenToolNames := make(map[string]struct{}, len(items))
 	for _, item := range items {
-		desc, entry, err := r.prepareBatchEntryLocked(item, seenIDs, seenToolNames)
+		desc, entry, err := r.prepareBatchEntryLocked(ctx, item, seenIDs, seenToolNames)
 		if err != nil {
 			r.mu.Unlock()
 			return err
@@ -459,16 +459,16 @@ func (r *CapabilityRegistry) RegisterBatch(items []RegistrationBatchItem) error 
 	return nil
 }
 
-func (r *CapabilityRegistry) prepareBatchEntryLocked(item RegistrationBatchItem, seenIDs, seenToolNames map[string]struct{}) (descriptor.CapabilityDescriptor, *capabilityEntry, error) {
+func (r *CapabilityRegistry) prepareBatchEntryLocked(ctx context.Context, item RegistrationBatchItem, seenIDs, seenToolNames map[string]struct{}) (descriptor.CapabilityDescriptor, *capabilityEntry, error) {
 	switch {
 	case item.LegacyTool != nil:
-		return r.prepareLegacyToolBatchEntryLocked(item.LegacyTool, seenIDs, seenToolNames)
+		return r.prepareLegacyToolBatchEntryLocked(ctx, item.LegacyTool, seenIDs, seenToolNames)
 	case item.InvocableHandler != nil:
-		return r.prepareHandlerBatchEntryLocked(item.InvocableHandler, seenIDs)
+		return r.prepareHandlerBatchEntryLocked(ctx, item.InvocableHandler, seenIDs)
 	case item.PromptHandler != nil:
-		return r.prepareHandlerBatchEntryLocked(item.PromptHandler, seenIDs)
+		return r.prepareHandlerBatchEntryLocked(ctx, item.PromptHandler, seenIDs)
 	case item.ResourceHandler != nil:
-		return r.prepareHandlerBatchEntryLocked(item.ResourceHandler, seenIDs)
+		return r.prepareHandlerBatchEntryLocked(ctx, item.ResourceHandler, seenIDs)
 	case item.Descriptor.ID != "" || item.Descriptor.Name != "":
 		return r.prepareDescriptorBatchEntryLocked(item.Descriptor, seenIDs)
 	default:
@@ -503,11 +503,11 @@ func (r *CapabilityRegistry) prepareDescriptorBatchEntryLocked(desc descriptor.C
 	}, nil
 }
 
-func (r *CapabilityRegistry) prepareHandlerBatchEntryLocked(handler handler.CapabilityHandler, seenIDs map[string]struct{}) (descriptor.CapabilityDescriptor, *capabilityEntry, error) {
+func (r *CapabilityRegistry) prepareHandlerBatchEntryLocked(ctx context.Context, handler handler.CapabilityHandler, seenIDs map[string]struct{}) (descriptor.CapabilityDescriptor, *capabilityEntry, error) {
 	if handler == nil {
 		return descriptor.CapabilityDescriptor{}, nil, fmt.Errorf("capability handler required")
 	}
-	desc := descriptor.NormalizeCapabilityDescriptor(handler.Descriptor(context.Background(), nil))
+	desc := descriptor.NormalizeCapabilityDescriptor(handler.Descriptor(ctx, nil))
 	if desc.ID == "" {
 		return descriptor.CapabilityDescriptor{}, nil, fmt.Errorf("capability id required")
 	}
@@ -534,7 +534,7 @@ func (r *CapabilityRegistry) prepareHandlerBatchEntryLocked(handler handler.Capa
 	}, nil
 }
 
-func (r *CapabilityRegistry) prepareLegacyToolBatchEntryLocked(tool ports.Tool, seenIDs, seenToolNames map[string]struct{}) (descriptor.CapabilityDescriptor, *capabilityEntry, error) {
+func (r *CapabilityRegistry) prepareLegacyToolBatchEntryLocked(ctx context.Context, tool ports.Tool, seenIDs, seenToolNames map[string]struct{}) (descriptor.CapabilityDescriptor, *capabilityEntry, error) {
 	if tool == nil {
 		return descriptor.CapabilityDescriptor{}, nil, fmt.Errorf("tool required")
 	}
@@ -547,7 +547,7 @@ func (r *CapabilityRegistry) prepareLegacyToolBatchEntryLocked(tool ports.Tool, 
 			return descriptor.CapabilityDescriptor{}, nil, nil
 		}
 	}
-	desc := descriptor.NormalizeCapabilityDescriptor(descriptor.ToolDescriptor(context.Background(), tool))
+	desc := descriptor.NormalizeCapabilityDescriptor(descriptor.ToolDescriptor(ctx, tool))
 	if desc.RuntimeFamily != agentspec.CapabilityRuntimeFamilyLocalTool {
 		return descriptor.CapabilityDescriptor{}, nil, fmt.Errorf("legacy tool registration only supports local-tool runtime family; %s is %s", desc.ID, desc.RuntimeFamily)
 	}
@@ -610,12 +610,12 @@ func (r *CapabilityRegistry) HasCapability(idOrName string) bool {
 }
 
 // All returns tools exposed as callable to the active agent.
-func (r *CapabilityRegistry) All() []ports.Tool {
-	return r.CallableTools()
+func (r *CapabilityRegistry) All(ctx context.Context) []ports.Tool {
+	return r.CallableTools(ctx)
 }
 
 // CallableTools returns only tools exposed as callable to agents.
-func (r *CapabilityRegistry) CallableTools() []ports.Tool {
+func (r *CapabilityRegistry) CallableTools(ctx context.Context) []ports.Tool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	entries := r.localToolEntriesLocked()
@@ -624,7 +624,7 @@ func (r *CapabilityRegistry) CallableTools() []ports.Tool {
 		if r.effectiveExposureLocked(entry.descriptor) != agentspec.CapabilityExposureCallable {
 			continue
 		}
-		if !toolAvailableForPrompt(entry.legacyTool) {
+		if !toolAvailableForPrompt(ctx, entry.legacyTool) {
 			continue
 		}
 		res = append(res, entry.legacyTool)

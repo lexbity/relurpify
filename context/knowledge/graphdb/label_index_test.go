@@ -1,6 +1,7 @@
 package graphdb
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -31,22 +32,22 @@ func TestLabelIndex_Remove(t *testing.T) {
 
 func TestLabelIndex_RebuildFromAOF(t *testing.T) {
 	engine, opts := newTestEngine(t)
-	require.NoError(t, engine.UpsertNode(NodeRecord{
+	require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{
 		ID:     "n1",
 		Kind:   "chunk",
 		Labels: []string{"coverage_hash:abc", "file_path:src/main.go"},
 	}))
-	require.NoError(t, engine.UpsertNode(NodeRecord{
+	require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{
 		ID:     "n2",
 		Kind:   "chunk",
 		Labels: []string{"coverage_hash:def"},
 	}))
-	require.NoError(t, engine.DeleteNode("n2"))
-	require.NoError(t, engine.Close())
+	require.NoError(t, engine.DeleteNode(context.TODO(), "n2"))
+	require.NoError(t, engine.Close(context.Background()))
 
-	reopened, err := Open(opts)
+	reopened, err := Open(context.Background(), opts)
 	require.NoError(t, err)
-	defer reopened.Close()
+	defer reopened.Close(context.Background())
 
 	coverage := reopened.ListNodesByLabel("chunk", "coverage_hash:abc")
 	require.Len(t, coverage, 1)

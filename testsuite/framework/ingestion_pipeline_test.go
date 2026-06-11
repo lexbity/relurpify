@@ -20,11 +20,11 @@ func TestTextIngestion(t *testing.T) {
 
 	// Create a graph engine for chunk storage
 	opts := graphdb.DefaultOptions(env.WorkspacePath)
-	graph, err := graphdb.Open(opts)
+	graph, err := graphdb.Open(context.Background(), opts)
 	if err != nil {
 		t.Fatalf("failed to open graph engine: %v", err)
 	}
-	defer graph.Close()
+	defer graph.Close(context.Background())
 
 	store := &knowledge.ChunkStore{Graph: graph}
 	events := &knowledge.EventBus{}
@@ -95,11 +95,11 @@ func TestMetadataPropagation(t *testing.T) {
 
 	// Create a graph engine for chunk storage
 	opts := graphdb.DefaultOptions(env.WorkspacePath)
-	graph, err := graphdb.Open(opts)
+	graph, err := graphdb.Open(context.Background(), opts)
 	if err != nil {
 		t.Fatalf("failed to open graph engine: %v", err)
 	}
-	defer graph.Close()
+	defer graph.Close(context.Background())
 
 	store := &knowledge.ChunkStore{Graph: graph}
 	events := &knowledge.EventBus{}
@@ -172,7 +172,7 @@ func TestMetadataPropagation(t *testing.T) {
 	chunk.Body.Fields["file_extension"] = ".txt"
 
 	// Save chunk with metadata
-	saved, err := store.Save(*chunk)
+	saved, err := store.Save(context.TODO(), *chunk)
 	if err != nil {
 		t.Fatalf("failed to save chunk with metadata: %v", err)
 	}
@@ -228,11 +228,11 @@ func TestChunkSourceRetention(t *testing.T) {
 
 	// Create a graph engine for chunk storage
 	opts := graphdb.DefaultOptions(env.WorkspacePath)
-	graph, err := graphdb.Open(opts)
+	graph, err := graphdb.Open(context.Background(), opts)
 	if err != nil {
 		t.Fatalf("failed to open graph engine: %v", err)
 	}
-	defer graph.Close()
+	defer graph.Close(context.Background())
 
 	store := &knowledge.ChunkStore{Graph: graph}
 	events := &knowledge.EventBus{}
@@ -306,7 +306,7 @@ func TestChunkSourceRetention(t *testing.T) {
 	}
 
 	// Save and verify persistence
-	saved, err := store.Save(*chunk)
+	saved, err := store.Save(context.TODO(), *chunk)
 	if err != nil {
 		t.Fatalf("failed to save chunk: %v", err)
 	}
@@ -338,11 +338,11 @@ func TestRepeatIngestionConsistency(t *testing.T) {
 
 	// Create a graph engine for chunk storage
 	opts := graphdb.DefaultOptions(env.WorkspacePath)
-	graph, err := graphdb.Open(opts)
+	graph, err := graphdb.Open(context.Background(), opts)
 	if err != nil {
 		t.Fatalf("failed to open graph engine: %v", err)
 	}
-	defer graph.Close()
+	defer graph.Close(context.Background())
 
 	store := &knowledge.ChunkStore{Graph: graph}
 	events := &knowledge.EventBus{}
@@ -416,11 +416,11 @@ func TestIngestionWithDifferentContent(t *testing.T) {
 
 	// Create a graph engine for chunk storage
 	opts := graphdb.DefaultOptions(env.WorkspacePath)
-	graph, err := graphdb.Open(opts)
+	graph, err := graphdb.Open(context.Background(), opts)
 	if err != nil {
 		t.Fatalf("failed to open graph engine: %v", err)
 	}
-	defer graph.Close()
+	defer graph.Close(context.Background())
 
 	store := &knowledge.ChunkStore{Graph: graph}
 	events := &knowledge.EventBus{}
@@ -481,11 +481,11 @@ func TestToolResultIngestion(t *testing.T) {
 
 	// Create a graph engine for chunk storage
 	opts := graphdb.DefaultOptions(env.WorkspacePath)
-	graph, err := graphdb.Open(opts)
+	graph, err := graphdb.Open(context.Background(), opts)
 	if err != nil {
 		t.Fatalf("failed to open graph engine: %v", err)
 	}
-	defer graph.Close()
+	defer graph.Close(context.Background())
 
 	store := &knowledge.ChunkStore{Graph: graph}
 	events := &knowledge.EventBus{}
@@ -545,11 +545,11 @@ func TestObservationIngestion(t *testing.T) {
 
 	// Create a graph engine for chunk storage
 	opts := graphdb.DefaultOptions(env.WorkspacePath)
-	graph, err := graphdb.Open(opts)
+	graph, err := graphdb.Open(context.Background(), opts)
 	if err != nil {
 		t.Fatalf("failed to open graph engine: %v", err)
 	}
-	defer graph.Close()
+	defer graph.Close(context.Background())
 
 	store := &knowledge.ChunkStore{Graph: graph}
 	events := &knowledge.EventBus{}
@@ -595,11 +595,11 @@ func TestChunkVersionIncrement(t *testing.T) {
 
 	// Create a graph engine for chunk storage
 	opts := graphdb.DefaultOptions(env.WorkspacePath)
-	graph, err := graphdb.Open(opts)
+	graph, err := graphdb.Open(context.Background(), opts)
 	if err != nil {
 		t.Fatalf("failed to open graph engine: %v", err)
 	}
-	defer graph.Close()
+	defer graph.Close(context.Background())
 
 	store := &knowledge.ChunkStore{Graph: graph}
 
@@ -616,14 +616,14 @@ func TestChunkVersionIncrement(t *testing.T) {
 		CreatedAt: time.Now().UTC(),
 	}
 
-	saved1, err := store.Save(chunk)
+	saved1, err := store.Save(context.TODO(), chunk)
 	if err != nil {
 		t.Fatalf("failed to save initial chunk: %v", err)
 	}
 
 	// Update the chunk
 	saved1.Body.Raw = "updated content"
-	saved2, err := store.Save(*saved1)
+	saved2, err := store.Save(context.TODO(), *saved1)
 	if err != nil {
 		t.Fatalf("failed to save updated chunk: %v", err)
 	}

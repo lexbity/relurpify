@@ -315,7 +315,7 @@ func (p *Pipeline) stage6Commit(ctx context.Context, typed *TypedIngestion, edge
 			chunk.Body.Fields["file_path"] = filepath.Clean(p.raw.FilePath)
 		}
 
-		_, err := p.store.Save(chunk)
+		_, err := p.store.Save(ctx, chunk)
 		if err != nil {
 			return result, fmt.Errorf("save chunk: %w", err)
 		}
@@ -331,7 +331,7 @@ func (p *Pipeline) stage6Commit(ctx context.Context, typed *TypedIngestion, edge
 					ToChunk:   targetID,
 					Kind:      "calls",
 				}
-				_, err := p.store.SaveEdge(edge)
+				_, err := p.store.SaveEdge(ctx, edge)
 				if err != nil {
 					return result, fmt.Errorf("save edge: %w", err)
 				}

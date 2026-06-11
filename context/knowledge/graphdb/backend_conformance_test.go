@@ -24,7 +24,7 @@ func testBackendConformance(t *testing.T, factory engineFactory) {
 
 	t.Run("node_upsert_and_get", func(t *testing.T) {
 		eng, _ := factory(t)
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "n1", Kind: "function", SourceID: "a.go"}))
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: "n1", Kind: "function", SourceID: "a.go"}))
 		node, ok := eng.GetNode("n1")
 		require.True(t, ok)
 		require.Equal(t, "n1", node.ID)
@@ -37,8 +37,8 @@ func testBackendConformance(t *testing.T, factory engineFactory) {
 
 	t.Run("node_upsert_update_existing", func(t *testing.T) {
 		eng, _ := factory(t)
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "n", Kind: "function", SourceID: "old.go"}))
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "n", Kind: "method", SourceID: "new.go"}))
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: "n", Kind: "function", SourceID: "old.go"}))
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: "n", Kind: "method", SourceID: "new.go"}))
 
 		node, ok := eng.GetNode("n")
 		require.True(t, ok)
@@ -50,8 +50,8 @@ func testBackendConformance(t *testing.T, factory engineFactory) {
 
 	t.Run("node_upsert_and_reopen", func(t *testing.T) {
 		eng, reopen := factory(t)
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "persist", Kind: "function", SourceID: "x.go"}))
-		require.NoError(t, eng.Close())
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: "persist", Kind: "function", SourceID: "x.go"}))
+		require.NoError(t, eng.Close(context.Background()))
 
 		eng2 := reopen(t)
 		node, ok := eng2.GetNode("persist")
@@ -61,9 +61,9 @@ func testBackendConformance(t *testing.T, factory engineFactory) {
 
 	t.Run("edge_link_and_get", func(t *testing.T) {
 		eng, _ := factory(t)
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "a", Kind: "function"}))
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "b", Kind: "function"}))
-		require.NoError(t, eng.Link("a", "b", "calls", "", 1, map[string]any{"line": 42}))
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: "a", Kind: "function"}))
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: "b", Kind: "function"}))
+		require.NoError(t, eng.Link(context.TODO(), "a", "b", "calls", "", 1, map[string]any{"line": 42}))
 
 		out := eng.GetOutEdges("a", "calls")
 		require.Len(t, out, 1)
@@ -78,10 +78,10 @@ func testBackendConformance(t *testing.T, factory engineFactory) {
 
 	t.Run("edge_link_and_reopen", func(t *testing.T) {
 		eng, reopen := factory(t)
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "x", Kind: "function"}))
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "y", Kind: "function"}))
-		require.NoError(t, eng.Link("x", "y", "depends", "", 1, nil))
-		require.NoError(t, eng.Close())
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: "x", Kind: "function"}))
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: "y", Kind: "function"}))
+		require.NoError(t, eng.Link(context.TODO(), "x", "y", "depends", "", 1, nil))
+		require.NoError(t, eng.Close(context.Background()))
 
 		eng2 := reopen(t)
 		out := eng2.GetOutEdges("x", "depends")
@@ -95,9 +95,9 @@ func testBackendConformance(t *testing.T, factory engineFactory) {
 
 	t.Run("edge_link_with_inverse", func(t *testing.T) {
 		eng, _ := factory(t)
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "a", Kind: "function"}))
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "b", Kind: "function"}))
-		require.NoError(t, eng.Link("a", "b", "calls", "called_by", 1, nil))
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: "a", Kind: "function"}))
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: "b", Kind: "function"}))
+		require.NoError(t, eng.Link(context.TODO(), "a", "b", "calls", "called_by", 1, nil))
 
 		outA := eng.GetOutEdges("a", "calls")
 		require.Len(t, outA, 1)
@@ -110,12 +110,12 @@ func testBackendConformance(t *testing.T, factory engineFactory) {
 	t.Run("soft_delete_node_soft_deletes_edges", func(t *testing.T) {
 		eng, _ := factory(t)
 		for _, id := range []string{"a", "b", "c"} {
-			require.NoError(t, eng.UpsertNode(NodeRecord{ID: id, Kind: "function"}))
+			require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: id, Kind: "function"}))
 		}
-		require.NoError(t, eng.Link("a", "b", "calls", "", 1, nil))
-		require.NoError(t, eng.Link("c", "b", "calls", "", 1, nil))
+		require.NoError(t, eng.Link(context.TODO(), "a", "b", "calls", "", 1, nil))
+		require.NoError(t, eng.Link(context.TODO(), "c", "b", "calls", "", 1, nil))
 
-		require.NoError(t, eng.DeleteNode("b"))
+		require.NoError(t, eng.DeleteNode(context.TODO(), "b"))
 
 		_, ok := eng.GetNode("b")
 		require.False(t, ok)
@@ -133,11 +133,11 @@ func testBackendConformance(t *testing.T, factory engineFactory) {
 
 	t.Run("soft_delete_node_reopen", func(t *testing.T) {
 		eng, reopen := factory(t)
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "del", Kind: "function"}))
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "keep", Kind: "function"}))
-		require.NoError(t, eng.Link("del", "keep", "calls", "", 1, nil))
-		require.NoError(t, eng.DeleteNode("del"))
-		require.NoError(t, eng.Close())
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: "del", Kind: "function"}))
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: "keep", Kind: "function"}))
+		require.NoError(t, eng.Link(context.TODO(), "del", "keep", "calls", "", 1, nil))
+		require.NoError(t, eng.DeleteNode(context.TODO(), "del"))
+		require.NoError(t, eng.Close(context.Background()))
 
 		eng2 := reopen(t)
 		_, ok := eng2.GetNode("del")
@@ -153,17 +153,17 @@ func testBackendConformance(t *testing.T, factory engineFactory) {
 
 	t.Run("label_lookup", func(t *testing.T) {
 		eng, _ := factory(t)
-		require.NoError(t, eng.UpsertNode(NodeRecord{
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{
 			ID:     "n1",
 			Kind:   "function",
 			Labels: []string{"tag:a", "tag:b"},
 		}))
-		require.NoError(t, eng.UpsertNode(NodeRecord{
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{
 			ID:     "n2",
 			Kind:   "method",
 			Labels: []string{"tag:a"},
 		}))
-		require.NoError(t, eng.UpsertNode(NodeRecord{
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{
 			ID:     "n3",
 			Kind:   "function",
 			Labels: []string{"tag:c"},
@@ -179,12 +179,12 @@ func testBackendConformance(t *testing.T, factory engineFactory) {
 
 	t.Run("label_prefix_lookup", func(t *testing.T) {
 		eng, _ := factory(t)
-		require.NoError(t, eng.UpsertNode(NodeRecord{
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{
 			ID:     "n1",
 			Kind:   "file",
 			Labels: []string{"path:/src/main.go"},
 		}))
-		require.NoError(t, eng.UpsertNode(NodeRecord{
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{
 			ID:     "n2",
 			Kind:   "file",
 			Labels: []string{"path:/src/util.go"},
@@ -200,18 +200,18 @@ func testBackendConformance(t *testing.T, factory engineFactory) {
 
 	t.Run("label_lookup_reopen", func(t *testing.T) {
 		eng, reopen := factory(t)
-		require.NoError(t, eng.UpsertNode(NodeRecord{
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{
 			ID:     "keep",
 			Kind:   "file",
 			Labels: []string{"tag:persist"},
 		}))
-		require.NoError(t, eng.UpsertNode(NodeRecord{
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{
 			ID:     "gone",
 			Kind:   "file",
 			Labels: []string{"tag:removed"},
 		}))
-		require.NoError(t, eng.DeleteNode("gone"))
-		require.NoError(t, eng.Close())
+		require.NoError(t, eng.DeleteNode(context.TODO(), "gone"))
+		require.NoError(t, eng.Close(context.Background()))
 
 		eng2 := reopen(t)
 		nodes := eng2.ListNodesByLabel("", "tag:persist")
@@ -224,9 +224,9 @@ func testBackendConformance(t *testing.T, factory engineFactory) {
 
 	t.Run("nodes_by_source", func(t *testing.T) {
 		eng, _ := factory(t)
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "a", Kind: "function", SourceID: "src.go"}))
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "b", Kind: "method", SourceID: "src.go"}))
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "c", Kind: "function", SourceID: "other.go"}))
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: "a", Kind: "function", SourceID: "src.go"}))
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: "b", Kind: "method", SourceID: "src.go"}))
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: "c", Kind: "function", SourceID: "other.go"}))
 
 		nodes := eng.NodesBySource("src.go")
 		require.Len(t, nodes, 2)
@@ -240,9 +240,9 @@ func testBackendConformance(t *testing.T, factory engineFactory) {
 
 	t.Run("nodes_by_source_reopen", func(t *testing.T) {
 		eng, reopen := factory(t)
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "x", Kind: "function", SourceID: "work.go"}))
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "y", Kind: "function", SourceID: "work.go"}))
-		require.NoError(t, eng.Close())
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: "x", Kind: "function", SourceID: "work.go"}))
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: "y", Kind: "function", SourceID: "work.go"}))
+		require.NoError(t, eng.Close(context.Background()))
 
 		eng2 := reopen(t)
 		nodes := eng2.NodesBySource("work.go")
@@ -263,7 +263,7 @@ func testBackendConformance(t *testing.T, factory engineFactory) {
 		result.Normalize(result.TaskID, result.SessionID)
 		stableID := result.StableID
 		require.NotEmpty(t, stableID)
-		require.NoError(t, eng.RecordMutationResult(result))
+		require.NoError(t, eng.RecordMutationResult(context.TODO(), result))
 
 		got, ok := eng.MutationResult(stableID)
 		require.True(t, ok)
@@ -271,7 +271,7 @@ func testBackendConformance(t *testing.T, factory engineFactory) {
 		require.Equal(t, MutationScopeNode, got.Scope)
 		require.Equal(t, "val", got.Details["key"])
 		require.NotEmpty(t, got.AppliedAt)
-		require.NoError(t, eng.Close())
+		require.NoError(t, eng.Close(context.Background()))
 
 		eng2 := reopen(t)
 		got2, ok := eng2.MutationResult(stableID)
@@ -283,11 +283,11 @@ func testBackendConformance(t *testing.T, factory engineFactory) {
 		eng, _ := factory(t)
 		r1 := MutationResult{Scope: MutationScopeNode, Status: MutationStatusCreated, TaskID: "t1", SessionID: "s1"}
 		r1.Normalize(r1.TaskID, r1.SessionID)
-		require.NoError(t, eng.RecordMutationResult(r1))
+		require.NoError(t, eng.RecordMutationResult(context.TODO(), r1))
 
 		r2 := MutationResult{Scope: MutationScopeEdge, Status: MutationStatusUpdated, TaskID: "t1", SessionID: "s1"}
 		r2.Normalize(r2.TaskID, r2.SessionID)
-		require.NoError(t, eng.RecordMutationResult(r2))
+		require.NoError(t, eng.RecordMutationResult(context.TODO(), r2))
 
 		results := eng.MutationResults()
 		require.Len(t, results, 2)
@@ -297,13 +297,13 @@ func testBackendConformance(t *testing.T, factory engineFactory) {
 
 	t.Run("node_revision_history", func(t *testing.T) {
 		eng, _ := factory(t)
-		require.NoError(t, eng.UpsertNode(NodeRecord{
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{
 			ID:    "n",
 			Kind:  "function",
 			Props: json.RawMessage(`{"v":1}`),
 		}))
-		require.NoError(t, eng.AnnotateNode("n", map[string]any{"note": "a"}))
-		require.NoError(t, eng.UpsertNode(NodeRecord{
+		require.NoError(t, eng.AnnotateNode(context.TODO(), "n", map[string]any{"note": "a"}))
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{
 			ID:    "n",
 			Kind:  "function",
 			Props: json.RawMessage(`{"v":2}`),
@@ -317,13 +317,13 @@ func testBackendConformance(t *testing.T, factory engineFactory) {
 
 	t.Run("node_revision_history_reopen", func(t *testing.T) {
 		eng, reopen := factory(t)
-		require.NoError(t, eng.UpsertNode(NodeRecord{
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{
 			ID:    "n",
 			Kind:  "function",
 			Props: json.RawMessage(`{"v":1}`),
 		}))
-		require.NoError(t, eng.AnnotateNode("n", map[string]any{"note": "x"}))
-		require.NoError(t, eng.Close())
+		require.NoError(t, eng.AnnotateNode(context.TODO(), "n", map[string]any{"note": "x"}))
+		require.NoError(t, eng.Close(context.Background()))
 
 		eng2 := reopen(t)
 		revs := eng2.NodeRevisions("n")
@@ -333,11 +333,11 @@ func testBackendConformance(t *testing.T, factory engineFactory) {
 
 	t.Run("edge_revision_history", func(t *testing.T) {
 		eng, _ := factory(t)
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "a", Kind: "function"}))
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "b", Kind: "function"}))
-		require.NoError(t, eng.Link("a", "b", "calls", "", 1, map[string]any{"v": 1}))
-		require.NoError(t, eng.AnnotateEdge("a", "b", "calls", map[string]any{"note": "x"}))
-		require.NoError(t, eng.LinkEdges([]EdgeRecord{
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: "a", Kind: "function"}))
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: "b", Kind: "function"}))
+		require.NoError(t, eng.Link(context.TODO(), "a", "b", "calls", "", 1, map[string]any{"v": 1}))
+		require.NoError(t, eng.AnnotateEdge(context.TODO(), "a", "b", "calls", map[string]any{"note": "x"}))
+		require.NoError(t, eng.LinkEdges(context.TODO(), []EdgeRecord{
 			{SourceID: "a", TargetID: "b", Kind: "calls", Weight: 2, Props: json.RawMessage(`{"v":2}`)},
 		}))
 
@@ -350,11 +350,11 @@ func testBackendConformance(t *testing.T, factory engineFactory) {
 	t.Run("impact_set", func(t *testing.T) {
 		eng, _ := factory(t)
 		for _, id := range []string{"a", "b", "c", "d"} {
-			require.NoError(t, eng.UpsertNode(NodeRecord{ID: id, Kind: "function"}))
+			require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: id, Kind: "function"}))
 		}
-		require.NoError(t, eng.Link("a", "b", "calls", "", 1, nil))
-		require.NoError(t, eng.Link("b", "c", "calls", "", 1, nil))
-		require.NoError(t, eng.Link("a", "d", "imports", "", 1, nil))
+		require.NoError(t, eng.Link(context.TODO(), "a", "b", "calls", "", 1, nil))
+		require.NoError(t, eng.Link(context.TODO(), "b", "c", "calls", "", 1, nil))
+		require.NoError(t, eng.Link(context.TODO(), "a", "d", "imports", "", 1, nil))
 
 		page, err := eng.SubgraphPage(context.Background(), GraphPageQuery{
 			GraphQuery: GraphQuery{
@@ -395,10 +395,10 @@ func testBackendConformance(t *testing.T, factory engineFactory) {
 	t.Run("neighbors", func(t *testing.T) {
 		eng, _ := factory(t)
 		for _, id := range []string{"a", "b", "c"} {
-			require.NoError(t, eng.UpsertNode(NodeRecord{ID: id, Kind: "function"}))
+			require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: id, Kind: "function"}))
 		}
-		require.NoError(t, eng.Link("a", "b", "calls", "", 1, nil))
-		require.NoError(t, eng.Link("a", "c", "calls", "", 1, nil))
+		require.NoError(t, eng.Link(context.TODO(), "a", "b", "calls", "", 1, nil))
+		require.NoError(t, eng.Link(context.TODO(), "a", "c", "calls", "", 1, nil))
 
 		n := eng.Neighbors("a", DirectionOut)
 		require.ElementsMatch(t, []string{"b", "c"}, n)
@@ -407,10 +407,10 @@ func testBackendConformance(t *testing.T, factory engineFactory) {
 	t.Run("neighbors_direction_in", func(t *testing.T) {
 		eng, _ := factory(t)
 		for _, id := range []string{"a", "b", "c"} {
-			require.NoError(t, eng.UpsertNode(NodeRecord{ID: id, Kind: "function"}))
+			require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: id, Kind: "function"}))
 		}
-		require.NoError(t, eng.Link("a", "b", "calls", "", 1, nil))
-		require.NoError(t, eng.Link("c", "b", "calls", "", 1, nil))
+		require.NoError(t, eng.Link(context.TODO(), "a", "b", "calls", "", 1, nil))
+		require.NoError(t, eng.Link(context.TODO(), "c", "b", "calls", "", 1, nil))
 
 		n := eng.Neighbors("b", DirectionIn)
 		require.ElementsMatch(t, []string{"a", "c"}, n)
@@ -419,10 +419,10 @@ func testBackendConformance(t *testing.T, factory engineFactory) {
 	t.Run("subgraph", func(t *testing.T) {
 		eng, _ := factory(t)
 		for _, id := range []string{"a", "b", "c"} {
-			require.NoError(t, eng.UpsertNode(NodeRecord{ID: id, Kind: "function"}))
+			require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: id, Kind: "function"}))
 		}
-		require.NoError(t, eng.Link("a", "b", "calls", "", 1, nil))
-		require.NoError(t, eng.Link("b", "c", "calls", "", 1, nil))
+		require.NoError(t, eng.Link(context.TODO(), "a", "b", "calls", "", 1, nil))
+		require.NoError(t, eng.Link(context.TODO(), "b", "c", "calls", "", 1, nil))
 
 		page, err := eng.SubgraphPage(context.Background(), GraphPageQuery{
 			GraphQuery: GraphQuery{
@@ -450,8 +450,8 @@ func testBackendConformance(t *testing.T, factory engineFactory) {
 
 	t.Run("subgraph_depth_zero", func(t *testing.T) {
 		eng, _ := factory(t)
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "root", Kind: "function"}))
-		require.NoError(t, eng.LinkEdges([]EdgeRecord{
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: "root", Kind: "function"}))
+		require.NoError(t, eng.LinkEdges(context.TODO(), []EdgeRecord{
 			{SourceID: "root", TargetID: "leaf", Kind: "calls"},
 		}))
 
@@ -478,10 +478,10 @@ func testBackendConformance(t *testing.T, factory engineFactory) {
 	t.Run("subgraph_direction_both", func(t *testing.T) {
 		eng, _ := factory(t)
 		for _, id := range []string{"a", "b", "c"} {
-			require.NoError(t, eng.UpsertNode(NodeRecord{ID: id, Kind: "function"}))
+			require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: id, Kind: "function"}))
 		}
-		require.NoError(t, eng.Link("a", "b", "calls", "", 1, nil))
-		require.NoError(t, eng.Link("c", "b", "calls", "", 1, nil))
+		require.NoError(t, eng.Link(context.TODO(), "a", "b", "calls", "", 1, nil))
+		require.NoError(t, eng.Link(context.TODO(), "c", "b", "calls", "", 1, nil))
 
 		page, err := eng.SubgraphPage(context.Background(), GraphPageQuery{
 			GraphQuery: GraphQuery{
@@ -510,7 +510,7 @@ func testBackendConformance(t *testing.T, factory engineFactory) {
 
 	t.Run("batch_upsert_nodes", func(t *testing.T) {
 		eng, _ := factory(t)
-		require.NoError(t, eng.UpsertNodes([]NodeRecord{
+		require.NoError(t, eng.UpsertNodes(context.TODO(), []NodeRecord{
 			{ID: "a", Kind: "function", SourceID: "src.go"},
 			{ID: "b", Kind: "function", SourceID: "src.go"},
 			{ID: "c", Kind: "method", SourceID: "src.go"},
@@ -521,12 +521,12 @@ func testBackendConformance(t *testing.T, factory engineFactory) {
 
 	t.Run("batch_link_edges", func(t *testing.T) {
 		eng, _ := factory(t)
-		require.NoError(t, eng.UpsertNodes([]NodeRecord{
+		require.NoError(t, eng.UpsertNodes(context.TODO(), []NodeRecord{
 			{ID: "a", Kind: "function"},
 			{ID: "b", Kind: "function"},
 			{ID: "c", Kind: "function"},
 		}))
-		require.NoError(t, eng.LinkEdges([]EdgeRecord{
+		require.NoError(t, eng.LinkEdges(context.TODO(), []EdgeRecord{
 			{SourceID: "a", TargetID: "b", Kind: "calls", Weight: 1},
 			{SourceID: "b", TargetID: "c", Kind: "calls", Weight: 1},
 		}))
@@ -537,10 +537,10 @@ func testBackendConformance(t *testing.T, factory engineFactory) {
 
 	t.Run("soft_unlink_edge", func(t *testing.T) {
 		eng, _ := factory(t)
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "a", Kind: "function"}))
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "b", Kind: "function"}))
-		require.NoError(t, eng.Link("a", "b", "calls", "", 1, nil))
-		require.NoError(t, eng.Unlink("a", "b", "calls", false))
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: "a", Kind: "function"}))
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: "b", Kind: "function"}))
+		require.NoError(t, eng.Link(context.TODO(), "a", "b", "calls", "", 1, nil))
+		require.NoError(t, eng.Unlink(context.TODO(), "a", "b", "calls", false))
 
 		out := eng.GetOutEdges("a")
 		require.Empty(t, out)
@@ -552,10 +552,10 @@ func testBackendConformance(t *testing.T, factory engineFactory) {
 
 	t.Run("hard_unlink_edge", func(t *testing.T) {
 		eng, _ := factory(t)
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "x", Kind: "function"}))
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "y", Kind: "function"}))
-		require.NoError(t, eng.Link("x", "y", "imports", "", 1, nil))
-		require.NoError(t, eng.Unlink("x", "y", "imports", true))
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: "x", Kind: "function"}))
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: "y", Kind: "function"}))
+		require.NoError(t, eng.Link(context.TODO(), "x", "y", "imports", "", 1, nil))
+		require.NoError(t, eng.Unlink(context.TODO(), "x", "y", "imports", true))
 
 		raw := allOutEdges(t, eng, "x")
 		require.Empty(t, raw)
@@ -563,8 +563,8 @@ func testBackendConformance(t *testing.T, factory engineFactory) {
 
 	t.Run("annotate_node", func(t *testing.T) {
 		eng, _ := factory(t)
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "n", Kind: "function", Props: json.RawMessage(`{"a":1}`)}))
-		require.NoError(t, eng.AnnotateNode("n", map[string]any{"b": 2}))
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: "n", Kind: "function", Props: json.RawMessage(`{"a":1}`)}))
+		require.NoError(t, eng.AnnotateNode(context.TODO(), "n", map[string]any{"b": 2}))
 
 		node, ok := eng.GetNode("n")
 		require.True(t, ok)
@@ -573,10 +573,10 @@ func testBackendConformance(t *testing.T, factory engineFactory) {
 
 	t.Run("edge_kind_filter", func(t *testing.T) {
 		eng, _ := factory(t)
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "a", Kind: "function"}))
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "b", Kind: "function"}))
-		require.NoError(t, eng.Link("a", "b", "calls", "", 1, nil))
-		require.NoError(t, eng.Link("a", "b", "imports", "", 1, nil))
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: "a", Kind: "function"}))
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: "b", Kind: "function"}))
+		require.NoError(t, eng.Link(context.TODO(), "a", "b", "calls", "", 1, nil))
+		require.NoError(t, eng.Link(context.TODO(), "a", "b", "imports", "", 1, nil))
 
 		outCalls := eng.GetOutEdges("a", "calls")
 		require.Len(t, outCalls, 1)
@@ -588,11 +588,11 @@ func testBackendConformance(t *testing.T, factory engineFactory) {
 
 	t.Run("delete_then_reopen", func(t *testing.T) {
 		eng, reopen := factory(t)
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "n1", Kind: "function"}))
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "n2", Kind: "function"}))
-		require.NoError(t, eng.Link("n1", "n2", "calls", "", 1, nil))
-		require.NoError(t, eng.DeleteNode("n1"))
-		require.NoError(t, eng.Close())
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: "n1", Kind: "function"}))
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: "n2", Kind: "function"}))
+		require.NoError(t, eng.Link(context.TODO(), "n1", "n2", "calls", "", 1, nil))
+		require.NoError(t, eng.DeleteNode(context.TODO(), "n1"))
+		require.NoError(t, eng.Close(context.Background()))
 
 		eng2 := reopen(t)
 		_, ok := eng2.GetNode("n1")
@@ -608,11 +608,11 @@ func testBackendConformance(t *testing.T, factory engineFactory) {
 
 	t.Run("snapshot_and_recover", func(t *testing.T) {
 		eng, reopen := factory(t)
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "s1", Kind: "function"}))
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "s2", Kind: "function"}))
-		require.NoError(t, eng.Link("s1", "s2", "calls", "", 1, nil))
-		require.NoError(t, eng.Snapshot())
-		require.NoError(t, eng.Close())
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: "s1", Kind: "function"}))
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: "s2", Kind: "function"}))
+		require.NoError(t, eng.Link(context.TODO(), "s1", "s2", "calls", "", 1, nil))
+		require.NoError(t, eng.Snapshot(context.Background()))
+		require.NoError(t, eng.Close(context.Background()))
 
 		eng2 := reopen(t)
 		_, ok := eng2.GetNode("s1")
@@ -635,7 +635,7 @@ func runBadgerConformance(t *testing.T) {
 	// node_upsert_and_get
 	t.Run("node_upsert_and_get", func(t *testing.T) {
 		eng := newBadgerEngine(t)
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "n1", Kind: "function", SourceID: "a.go"}))
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: "n1", Kind: "function", SourceID: "a.go"}))
 		node, ok := eng.GetNode("n1")
 		require.True(t, ok)
 		require.Equal(t, "n1", node.ID)
@@ -649,8 +649,8 @@ func runBadgerConformance(t *testing.T) {
 	// node_upsert_update_existing
 	t.Run("node_upsert_update_existing", func(t *testing.T) {
 		eng := newBadgerEngine(t)
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "n", Kind: "function", SourceID: "old.go"}))
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "n", Kind: "method", SourceID: "new.go"}))
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: "n", Kind: "function", SourceID: "old.go"}))
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: "n", Kind: "method", SourceID: "new.go"}))
 		node, ok := eng.GetNode("n")
 		require.True(t, ok)
 		require.Equal(t, NodeKind("method"), node.Kind)
@@ -663,8 +663,8 @@ func runBadgerConformance(t *testing.T) {
 	t.Run("node_upsert_and_reopen", func(t *testing.T) {
 		dir := t.TempDir()
 		eng := newBadgerEngineAt(t, dir)
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "persist", Kind: "function", SourceID: "x.go"}))
-		require.NoError(t, eng.Close())
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: "persist", Kind: "function", SourceID: "x.go"}))
+		require.NoError(t, eng.Close(context.Background()))
 		eng2 := newBadgerEngineAt(t, dir)
 		node, ok := eng2.GetNode("persist")
 		require.True(t, ok)
@@ -674,9 +674,9 @@ func runBadgerConformance(t *testing.T) {
 	// edge_link_and_get
 	t.Run("edge_link_and_get", func(t *testing.T) {
 		eng := newBadgerEngine(t)
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "a", Kind: "function"}))
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "b", Kind: "function"}))
-		require.NoError(t, eng.Link("a", "b", "calls", "", 1, map[string]any{"line": 42}))
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: "a", Kind: "function"}))
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: "b", Kind: "function"}))
+		require.NoError(t, eng.Link(context.TODO(), "a", "b", "calls", "", 1, map[string]any{"line": 42}))
 		out := eng.GetOutEdges("a", "calls")
 		require.Len(t, out, 1)
 		require.Equal(t, "b", out[0].TargetID)
@@ -691,10 +691,10 @@ func runBadgerConformance(t *testing.T) {
 	t.Run("edge_link_and_reopen", func(t *testing.T) {
 		dir := t.TempDir()
 		eng := newBadgerEngineAt(t, dir)
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "x", Kind: "function"}))
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "y", Kind: "function"}))
-		require.NoError(t, eng.Link("x", "y", "depends", "", 1, nil))
-		require.NoError(t, eng.Close())
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: "x", Kind: "function"}))
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: "y", Kind: "function"}))
+		require.NoError(t, eng.Link(context.TODO(), "x", "y", "depends", "", 1, nil))
+		require.NoError(t, eng.Close(context.Background()))
 		eng2 := newBadgerEngineAt(t, dir)
 		out := eng2.GetOutEdges("x", "depends")
 		require.Len(t, out, 1)
@@ -707,9 +707,9 @@ func runBadgerConformance(t *testing.T) {
 	// edge_link_with_inverse
 	t.Run("edge_link_with_inverse", func(t *testing.T) {
 		eng := newBadgerEngine(t)
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "a", Kind: "function"}))
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "b", Kind: "function"}))
-		require.NoError(t, eng.Link("a", "b", "calls", "called_by", 1, nil))
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: "a", Kind: "function"}))
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: "b", Kind: "function"}))
+		require.NoError(t, eng.Link(context.TODO(), "a", "b", "calls", "called_by", 1, nil))
 		outA := eng.GetOutEdges("a", "calls")
 		require.Len(t, outA, 1)
 		outB := eng.GetOutEdges("b", "called_by")
@@ -721,11 +721,11 @@ func runBadgerConformance(t *testing.T) {
 	t.Run("soft_delete_node_soft_deletes_edges", func(t *testing.T) {
 		eng := newBadgerEngine(t)
 		for _, id := range []string{"a", "b", "c"} {
-			require.NoError(t, eng.UpsertNode(NodeRecord{ID: id, Kind: "function"}))
+			require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: id, Kind: "function"}))
 		}
-		require.NoError(t, eng.Link("a", "b", "calls", "", 1, nil))
-		require.NoError(t, eng.Link("c", "b", "calls", "", 1, nil))
-		require.NoError(t, eng.DeleteNode("b"))
+		require.NoError(t, eng.Link(context.TODO(), "a", "b", "calls", "", 1, nil))
+		require.NoError(t, eng.Link(context.TODO(), "c", "b", "calls", "", 1, nil))
+		require.NoError(t, eng.DeleteNode(context.TODO(), "b"))
 		_, ok := eng.GetNode("b")
 		require.False(t, ok)
 		out := allOutEdges(t, eng, "a")
@@ -742,11 +742,11 @@ func runBadgerConformance(t *testing.T) {
 	t.Run("soft_delete_node_reopen", func(t *testing.T) {
 		dir := t.TempDir()
 		eng := newBadgerEngineAt(t, dir)
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "del", Kind: "function"}))
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "keep", Kind: "function"}))
-		require.NoError(t, eng.Link("del", "keep", "calls", "", 1, nil))
-		require.NoError(t, eng.DeleteNode("del"))
-		require.NoError(t, eng.Close())
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: "del", Kind: "function"}))
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: "keep", Kind: "function"}))
+		require.NoError(t, eng.Link(context.TODO(), "del", "keep", "calls", "", 1, nil))
+		require.NoError(t, eng.DeleteNode(context.TODO(), "del"))
+		require.NoError(t, eng.Close(context.Background()))
 		eng2 := newBadgerEngineAt(t, dir)
 		_, ok := eng2.GetNode("del")
 		require.False(t, ok)
@@ -760,9 +760,9 @@ func runBadgerConformance(t *testing.T) {
 	// label_lookup
 	t.Run("label_lookup", func(t *testing.T) {
 		eng := newBadgerEngine(t)
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "n1", Kind: "function", Labels: []string{"tag:a", "tag:b"}}))
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "n2", Kind: "method", Labels: []string{"tag:a"}}))
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "n3", Kind: "function", Labels: []string{"tag:c"}}))
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: "n1", Kind: "function", Labels: []string{"tag:a", "tag:b"}}))
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: "n2", Kind: "method", Labels: []string{"tag:a"}}))
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: "n3", Kind: "function", Labels: []string{"tag:c"}}))
 		nodes := eng.ListNodesByLabel("", "tag:a")
 		require.Len(t, nodes, 2)
 		nodes = eng.ListNodesByLabel("function", "tag:a")
@@ -773,8 +773,8 @@ func runBadgerConformance(t *testing.T) {
 	// label_prefix_lookup
 	t.Run("label_prefix_lookup", func(t *testing.T) {
 		eng := newBadgerEngine(t)
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "n1", Kind: "file", Labels: []string{"path:/src/main.go"}}))
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "n2", Kind: "file", Labels: []string{"path:/src/util.go"}}))
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: "n1", Kind: "file", Labels: []string{"path:/src/main.go"}}))
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: "n2", Kind: "file", Labels: []string{"path:/src/util.go"}}))
 		nodes := eng.ListNodesByLabelPrefix("", "path:/src")
 		require.Len(t, nodes, 2)
 		nodes = eng.ListNodesByLabelPrefix("", "path:/src/main")
@@ -786,10 +786,10 @@ func runBadgerConformance(t *testing.T) {
 	t.Run("label_lookup_reopen", func(t *testing.T) {
 		dir := t.TempDir()
 		eng := newBadgerEngineAt(t, dir)
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "keep", Kind: "file", Labels: []string{"tag:persist"}}))
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "gone", Kind: "file", Labels: []string{"tag:removed"}}))
-		require.NoError(t, eng.DeleteNode("gone"))
-		require.NoError(t, eng.Close())
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: "keep", Kind: "file", Labels: []string{"tag:persist"}}))
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: "gone", Kind: "file", Labels: []string{"tag:removed"}}))
+		require.NoError(t, eng.DeleteNode(context.TODO(), "gone"))
+		require.NoError(t, eng.Close(context.Background()))
 		eng2 := newBadgerEngineAt(t, dir)
 		nodes := eng2.ListNodesByLabel("", "tag:persist")
 		require.Len(t, nodes, 1)
@@ -801,9 +801,9 @@ func runBadgerConformance(t *testing.T) {
 	// nodes_by_source
 	t.Run("nodes_by_source", func(t *testing.T) {
 		eng := newBadgerEngine(t)
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "a", Kind: "function", SourceID: "src.go"}))
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "b", Kind: "method", SourceID: "src.go"}))
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "c", Kind: "function", SourceID: "other.go"}))
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: "a", Kind: "function", SourceID: "src.go"}))
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: "b", Kind: "method", SourceID: "src.go"}))
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: "c", Kind: "function", SourceID: "other.go"}))
 		nodes := eng.NodesBySource("src.go")
 		require.Len(t, nodes, 2)
 	})
@@ -812,9 +812,9 @@ func runBadgerConformance(t *testing.T) {
 	t.Run("nodes_by_source_reopen", func(t *testing.T) {
 		dir := t.TempDir()
 		eng := newBadgerEngineAt(t, dir)
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "x", Kind: "function", SourceID: "work.go"}))
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "y", Kind: "function", SourceID: "work.go"}))
-		require.NoError(t, eng.Close())
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: "x", Kind: "function", SourceID: "work.go"}))
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: "y", Kind: "function", SourceID: "work.go"}))
+		require.NoError(t, eng.Close(context.Background()))
 		eng2 := newBadgerEngineAt(t, dir)
 		nodes := eng2.NodesBySource("work.go")
 		require.Len(t, nodes, 2)
@@ -832,14 +832,14 @@ func runBadgerConformance(t *testing.T) {
 		result.Normalize(result.TaskID, result.SessionID)
 		stableID := result.StableID
 		require.NotEmpty(t, stableID)
-		require.NoError(t, eng.RecordMutationResult(result))
+		require.NoError(t, eng.RecordMutationResult(context.TODO(), result))
 		got, ok := eng.MutationResult(stableID)
 		require.True(t, ok)
 		require.Equal(t, stableID, got.StableID)
 		require.Equal(t, MutationScopeNode, got.Scope)
 		require.Equal(t, "val", got.Details["key"])
 		require.NotEmpty(t, got.AppliedAt)
-		require.NoError(t, eng.Close())
+		require.NoError(t, eng.Close(context.Background()))
 		eng2 := newBadgerEngineAt(t, dir)
 		got2, ok := eng2.MutationResult(stableID)
 		require.True(t, ok)
@@ -851,10 +851,10 @@ func runBadgerConformance(t *testing.T) {
 		eng := newBadgerEngine(t)
 		r1 := MutationResult{Scope: MutationScopeNode, Status: MutationStatusCreated, TaskID: "t1", SessionID: "s1"}
 		r1.Normalize(r1.TaskID, r1.SessionID)
-		require.NoError(t, eng.RecordMutationResult(r1))
+		require.NoError(t, eng.RecordMutationResult(context.TODO(), r1))
 		r2 := MutationResult{Scope: MutationScopeEdge, Status: MutationStatusUpdated, TaskID: "t1", SessionID: "s1"}
 		r2.Normalize(r2.TaskID, r2.SessionID)
-		require.NoError(t, eng.RecordMutationResult(r2))
+		require.NoError(t, eng.RecordMutationResult(context.TODO(), r2))
 		results := eng.MutationResults()
 		require.Len(t, results, 2)
 		require.Equal(t, r1.StableID, results[0].StableID)
@@ -864,9 +864,9 @@ func runBadgerConformance(t *testing.T) {
 	// node_revision_history
 	t.Run("node_revision_history", func(t *testing.T) {
 		eng := newBadgerEngine(t)
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "n", Kind: "function", Props: []byte(`{"v":1}`)}))
-		require.NoError(t, eng.AnnotateNode("n", map[string]any{"note": "a"}))
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "n", Kind: "function", Props: []byte(`{"v":2}`)}))
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: "n", Kind: "function", Props: []byte(`{"v":1}`)}))
+		require.NoError(t, eng.AnnotateNode(context.TODO(), "n", map[string]any{"note": "a"}))
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: "n", Kind: "function", Props: []byte(`{"v":2}`)}))
 		revs := eng.NodeRevisions("n")
 		require.Len(t, revs, 2)
 		require.JSONEq(t, `{"v":1}`, string(revs[0].Props))
@@ -877,9 +877,9 @@ func runBadgerConformance(t *testing.T) {
 	t.Run("node_revision_history_reopen", func(t *testing.T) {
 		dir := t.TempDir()
 		eng := newBadgerEngineAt(t, dir)
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "n", Kind: "function", Props: []byte(`{"v":1}`)}))
-		require.NoError(t, eng.AnnotateNode("n", map[string]any{"note": "x"}))
-		require.NoError(t, eng.Close())
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: "n", Kind: "function", Props: []byte(`{"v":1}`)}))
+		require.NoError(t, eng.AnnotateNode(context.TODO(), "n", map[string]any{"note": "x"}))
+		require.NoError(t, eng.Close(context.Background()))
 		eng2 := newBadgerEngineAt(t, dir)
 		revs := eng2.NodeRevisions("n")
 		require.Len(t, revs, 1)
@@ -889,11 +889,11 @@ func runBadgerConformance(t *testing.T) {
 	// edge_revision_history
 	t.Run("edge_revision_history", func(t *testing.T) {
 		eng := newBadgerEngine(t)
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "a", Kind: "function"}))
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "b", Kind: "function"}))
-		require.NoError(t, eng.Link("a", "b", "calls", "", 1, map[string]any{"v": 1}))
-		require.NoError(t, eng.AnnotateEdge("a", "b", "calls", map[string]any{"note": "x"}))
-		require.NoError(t, eng.LinkEdges([]EdgeRecord{
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: "a", Kind: "function"}))
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: "b", Kind: "function"}))
+		require.NoError(t, eng.Link(context.TODO(), "a", "b", "calls", "", 1, map[string]any{"v": 1}))
+		require.NoError(t, eng.AnnotateEdge(context.TODO(), "a", "b", "calls", map[string]any{"note": "x"}))
+		require.NoError(t, eng.LinkEdges(context.TODO(), []EdgeRecord{
 			{SourceID: "a", TargetID: "b", Kind: "calls", Weight: 2, Props: []byte(`{"v":2}`)},
 		}))
 		revs := eng.EdgeRevisions("a", "b", "calls")
@@ -906,11 +906,11 @@ func runBadgerConformance(t *testing.T) {
 	t.Run("impact_set", func(t *testing.T) {
 		eng := newBadgerEngine(t)
 		for _, id := range []string{"a", "b", "c", "d"} {
-			require.NoError(t, eng.UpsertNode(NodeRecord{ID: id, Kind: "function"}))
+			require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: id, Kind: "function"}))
 		}
-		require.NoError(t, eng.Link("a", "b", "calls", "", 1, nil))
-		require.NoError(t, eng.Link("b", "c", "calls", "", 1, nil))
-		require.NoError(t, eng.Link("a", "d", "imports", "", 1, nil))
+		require.NoError(t, eng.Link(context.TODO(), "a", "b", "calls", "", 1, nil))
+		require.NoError(t, eng.Link(context.TODO(), "b", "c", "calls", "", 1, nil))
+		require.NoError(t, eng.Link(context.TODO(), "a", "d", "imports", "", 1, nil))
 		page, err := eng.SubgraphPage(context.Background(), GraphPageQuery{
 			GraphQuery: GraphQuery{
 				RootIDs:   []string{"a"},
@@ -952,10 +952,10 @@ func runBadgerConformance(t *testing.T) {
 	t.Run("neighbors", func(t *testing.T) {
 		eng := newBadgerEngine(t)
 		for _, id := range []string{"a", "b", "c"} {
-			require.NoError(t, eng.UpsertNode(NodeRecord{ID: id, Kind: "function"}))
+			require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: id, Kind: "function"}))
 		}
-		require.NoError(t, eng.Link("a", "b", "calls", "", 1, nil))
-		require.NoError(t, eng.Link("a", "c", "calls", "", 1, nil))
+		require.NoError(t, eng.Link(context.TODO(), "a", "b", "calls", "", 1, nil))
+		require.NoError(t, eng.Link(context.TODO(), "a", "c", "calls", "", 1, nil))
 		n := eng.Neighbors("a", DirectionOut)
 		require.ElementsMatch(t, []string{"b", "c"}, n)
 	})
@@ -964,10 +964,10 @@ func runBadgerConformance(t *testing.T) {
 	t.Run("neighbors_direction_in", func(t *testing.T) {
 		eng := newBadgerEngine(t)
 		for _, id := range []string{"a", "b", "c"} {
-			require.NoError(t, eng.UpsertNode(NodeRecord{ID: id, Kind: "function"}))
+			require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: id, Kind: "function"}))
 		}
-		require.NoError(t, eng.Link("a", "b", "calls", "", 1, nil))
-		require.NoError(t, eng.Link("c", "b", "calls", "", 1, nil))
+		require.NoError(t, eng.Link(context.TODO(), "a", "b", "calls", "", 1, nil))
+		require.NoError(t, eng.Link(context.TODO(), "c", "b", "calls", "", 1, nil))
 		n := eng.Neighbors("b", DirectionIn)
 		require.ElementsMatch(t, []string{"a", "c"}, n)
 	})
@@ -976,10 +976,10 @@ func runBadgerConformance(t *testing.T) {
 	t.Run("subgraph", func(t *testing.T) {
 		eng := newBadgerEngine(t)
 		for _, id := range []string{"a", "b", "c"} {
-			require.NoError(t, eng.UpsertNode(NodeRecord{ID: id, Kind: "function"}))
+			require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: id, Kind: "function"}))
 		}
-		require.NoError(t, eng.Link("a", "b", "calls", "", 1, nil))
-		require.NoError(t, eng.Link("b", "c", "calls", "", 1, nil))
+		require.NoError(t, eng.Link(context.TODO(), "a", "b", "calls", "", 1, nil))
+		require.NoError(t, eng.Link(context.TODO(), "b", "c", "calls", "", 1, nil))
 		page, err := eng.SubgraphPage(context.Background(), GraphPageQuery{
 			GraphQuery: GraphQuery{
 				RootIDs:   []string{"a"},
@@ -1007,8 +1007,8 @@ func runBadgerConformance(t *testing.T) {
 	// subgraph_depth_zero
 	t.Run("subgraph_depth_zero", func(t *testing.T) {
 		eng := newBadgerEngine(t)
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "root", Kind: "function"}))
-		require.NoError(t, eng.LinkEdges([]EdgeRecord{
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: "root", Kind: "function"}))
+		require.NoError(t, eng.LinkEdges(context.TODO(), []EdgeRecord{
 			{SourceID: "root", TargetID: "leaf", Kind: "calls"},
 		}))
 		page, err := eng.SubgraphPage(context.Background(), GraphPageQuery{
@@ -1035,10 +1035,10 @@ func runBadgerConformance(t *testing.T) {
 	t.Run("subgraph_direction_both", func(t *testing.T) {
 		eng := newBadgerEngine(t)
 		for _, id := range []string{"a", "b", "c"} {
-			require.NoError(t, eng.UpsertNode(NodeRecord{ID: id, Kind: "function"}))
+			require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: id, Kind: "function"}))
 		}
-		require.NoError(t, eng.Link("a", "b", "calls", "", 1, nil))
-		require.NoError(t, eng.Link("c", "b", "calls", "", 1, nil))
+		require.NoError(t, eng.Link(context.TODO(), "a", "b", "calls", "", 1, nil))
+		require.NoError(t, eng.Link(context.TODO(), "c", "b", "calls", "", 1, nil))
 		page, err := eng.SubgraphPage(context.Background(), GraphPageQuery{
 			GraphQuery: GraphQuery{
 				RootIDs:   []string{"b"},
@@ -1067,7 +1067,7 @@ func runBadgerConformance(t *testing.T) {
 	// batch_upsert_nodes
 	t.Run("batch_upsert_nodes", func(t *testing.T) {
 		eng := newBadgerEngine(t)
-		require.NoError(t, eng.UpsertNodes([]NodeRecord{
+		require.NoError(t, eng.UpsertNodes(context.TODO(), []NodeRecord{
 			{ID: "a", Kind: "function", SourceID: "src.go"},
 			{ID: "b", Kind: "function", SourceID: "src.go"},
 			{ID: "c", Kind: "method", SourceID: "src.go"},
@@ -1079,10 +1079,10 @@ func runBadgerConformance(t *testing.T) {
 	// batch_link_edges
 	t.Run("batch_link_edges", func(t *testing.T) {
 		eng := newBadgerEngine(t)
-		require.NoError(t, eng.UpsertNodes([]NodeRecord{
+		require.NoError(t, eng.UpsertNodes(context.TODO(), []NodeRecord{
 			{ID: "a", Kind: "function"}, {ID: "b", Kind: "function"}, {ID: "c", Kind: "function"},
 		}))
-		require.NoError(t, eng.LinkEdges([]EdgeRecord{
+		require.NoError(t, eng.LinkEdges(context.TODO(), []EdgeRecord{
 			{SourceID: "a", TargetID: "b", Kind: "calls", Weight: 1},
 			{SourceID: "b", TargetID: "c", Kind: "calls", Weight: 1},
 		}))
@@ -1094,10 +1094,10 @@ func runBadgerConformance(t *testing.T) {
 	// soft_unlink_edge
 	t.Run("soft_unlink_edge", func(t *testing.T) {
 		eng := newBadgerEngine(t)
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "a", Kind: "function"}))
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "b", Kind: "function"}))
-		require.NoError(t, eng.Link("a", "b", "calls", "", 1, nil))
-		require.NoError(t, eng.Unlink("a", "b", "calls", false))
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: "a", Kind: "function"}))
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: "b", Kind: "function"}))
+		require.NoError(t, eng.Link(context.TODO(), "a", "b", "calls", "", 1, nil))
+		require.NoError(t, eng.Unlink(context.TODO(), "a", "b", "calls", false))
 		out := eng.GetOutEdges("a")
 		require.Empty(t, out)
 		raw := allOutEdges(t, eng, "a")
@@ -1108,10 +1108,10 @@ func runBadgerConformance(t *testing.T) {
 	// hard_unlink_edge
 	t.Run("hard_unlink_edge", func(t *testing.T) {
 		eng := newBadgerEngine(t)
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "x", Kind: "function"}))
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "y", Kind: "function"}))
-		require.NoError(t, eng.Link("x", "y", "imports", "", 1, nil))
-		require.NoError(t, eng.Unlink("x", "y", "imports", true))
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: "x", Kind: "function"}))
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: "y", Kind: "function"}))
+		require.NoError(t, eng.Link(context.TODO(), "x", "y", "imports", "", 1, nil))
+		require.NoError(t, eng.Unlink(context.TODO(), "x", "y", "imports", true))
 		raw := allOutEdges(t, eng, "x")
 		require.Empty(t, raw)
 	})
@@ -1119,8 +1119,8 @@ func runBadgerConformance(t *testing.T) {
 	// annotate_node
 	t.Run("annotate_node", func(t *testing.T) {
 		eng := newBadgerEngine(t)
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "n", Kind: "function", Props: []byte(`{"a":1}`)}))
-		require.NoError(t, eng.AnnotateNode("n", map[string]any{"b": 2}))
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: "n", Kind: "function", Props: []byte(`{"a":1}`)}))
+		require.NoError(t, eng.AnnotateNode(context.TODO(), "n", map[string]any{"b": 2}))
 		node, ok := eng.GetNode("n")
 		require.True(t, ok)
 		require.JSONEq(t, `{"a":1,"b":2}`, string(node.Props))
@@ -1129,10 +1129,10 @@ func runBadgerConformance(t *testing.T) {
 	// edge_kind_filter
 	t.Run("edge_kind_filter", func(t *testing.T) {
 		eng := newBadgerEngine(t)
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "a", Kind: "function"}))
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "b", Kind: "function"}))
-		require.NoError(t, eng.Link("a", "b", "calls", "", 1, nil))
-		require.NoError(t, eng.Link("a", "b", "imports", "", 1, nil))
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: "a", Kind: "function"}))
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: "b", Kind: "function"}))
+		require.NoError(t, eng.Link(context.TODO(), "a", "b", "calls", "", 1, nil))
+		require.NoError(t, eng.Link(context.TODO(), "a", "b", "imports", "", 1, nil))
 		outCalls := eng.GetOutEdges("a", "calls")
 		require.Len(t, outCalls, 1)
 		outAll := eng.GetOutEdges("a")
@@ -1143,11 +1143,11 @@ func runBadgerConformance(t *testing.T) {
 	t.Run("delete_then_reopen", func(t *testing.T) {
 		dir := t.TempDir()
 		eng := newBadgerEngineAt(t, dir)
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "n1", Kind: "function"}))
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "n2", Kind: "function"}))
-		require.NoError(t, eng.Link("n1", "n2", "calls", "", 1, nil))
-		require.NoError(t, eng.DeleteNode("n1"))
-		require.NoError(t, eng.Close())
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: "n1", Kind: "function"}))
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: "n2", Kind: "function"}))
+		require.NoError(t, eng.Link(context.TODO(), "n1", "n2", "calls", "", 1, nil))
+		require.NoError(t, eng.DeleteNode(context.TODO(), "n1"))
+		require.NoError(t, eng.Close(context.Background()))
 		eng2 := newBadgerEngineAt(t, dir)
 		_, ok := eng2.GetNode("n1")
 		require.False(t, ok)
@@ -1162,11 +1162,11 @@ func runBadgerConformance(t *testing.T) {
 	t.Run("snapshot_and_recover", func(t *testing.T) {
 		dir := t.TempDir()
 		eng := newBadgerEngineAt(t, dir)
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "s1", Kind: "function"}))
-		require.NoError(t, eng.UpsertNode(NodeRecord{ID: "s2", Kind: "function"}))
-		require.NoError(t, eng.Link("s1", "s2", "calls", "", 1, nil))
-		require.NoError(t, eng.Snapshot())
-		require.NoError(t, eng.Close())
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: "s1", Kind: "function"}))
+		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: "s2", Kind: "function"}))
+		require.NoError(t, eng.Link(context.TODO(), "s1", "s2", "calls", "", 1, nil))
+		require.NoError(t, eng.Snapshot(context.Background()))
+		require.NoError(t, eng.Close(context.Background()))
 		eng2 := newBadgerEngineAt(t, dir)
 		_, ok := eng2.GetNode("s1")
 		require.True(t, ok)
@@ -1203,7 +1203,7 @@ func newBadgerEngineAt(t *testing.T, dir string) *Engine {
 	}
 	eng.lastSave.Store(time.Now().UnixNano())
 	eng.wg.Add(1)
-	go eng.background()
+	go eng.background(context.Background())
 
 	t.Cleanup(func() {
 		eng.stopOnce.Do(func() {

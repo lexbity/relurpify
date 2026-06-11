@@ -47,7 +47,7 @@ func (t *GoWorkspaceDetectTool) Execute(ctx context.Context, args map[string]any
 	resolved = filepath.Clean(resolved)
 	info, err := os.Stat(resolved)
 	if err != nil {
-		return &ports.ToolResult{Success: false, Error: err.Error()}, nil
+		return nil, err
 	}
 	searchDir := resolved
 	if !info.IsDir() {

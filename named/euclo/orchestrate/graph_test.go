@@ -33,7 +33,7 @@ func testGraphDeps(t *testing.T) RootGraphDeps {
 }
 
 func TestRootGraphExecute(t *testing.T) {
-	rootGraph, err := NewRootGraph(testGraphDeps(t))
+	rootGraph, err := NewRootGraph(context.Background(), testGraphDeps(t))
 	if err != nil {
 		t.Fatalf("NewRootGraph failed: %v", err)
 	}
@@ -68,7 +68,7 @@ func TestRootGraphValidate(t *testing.T) {
 		ThoughtRecipes:       thoughtrecipepkg.NewThoughtRecipeRegistry(),
 		Paradigm:             &paradigm.Deps{},
 	}
-	rootGraph, err := NewRootGraph(deps)
+	rootGraph, err := NewRootGraph(context.Background(), deps)
 	if err != nil {
 		t.Fatalf("NewRootGraph failed: %v", err)
 	}
@@ -81,7 +81,7 @@ func TestRootGraphValidate(t *testing.T) {
 }
 
 func TestRootGraphThoughtRecipeRoute(t *testing.T) {
-	rootGraph, err := NewRootGraph(testGraphDeps(t))
+	rootGraph, err := NewRootGraph(context.Background(), testGraphDeps(t))
 	if err != nil {
 		t.Fatalf("NewRootGraph failed: %v", err)
 	}
@@ -104,7 +104,7 @@ func TestRootGraphThoughtRecipeRoute(t *testing.T) {
 }
 
 func TestRootGraphCapabilityRoute(t *testing.T) {
-	rootGraph, err := NewRootGraph(testGraphDeps(t))
+	rootGraph, err := NewRootGraph(context.Background(), testGraphDeps(t))
 	if err != nil {
 		t.Fatalf("NewRootGraph failed: %v", err)
 	}
@@ -130,7 +130,7 @@ func TestRootGraphCapabilityRoute(t *testing.T) {
 }
 
 func TestRootGraphPolicyDecision(t *testing.T) {
-	rootGraph, err := NewRootGraph(testGraphDeps(t))
+	rootGraph, err := NewRootGraph(context.Background(), testGraphDeps(t))
 	if err != nil {
 		t.Fatalf("NewRootGraph failed: %v", err)
 	}
@@ -160,7 +160,7 @@ func TestRootGraphReturnsErrorOnNilParadigmDeps(t *testing.T) {
 		DispatchCapabilities: registry.NewRegistry(),
 		ThoughtRecipes:       thoughtrecipepkg.NewThoughtRecipeRegistry(),
 	}
-	_, err := NewRootGraph(deps)
+	_, err := NewRootGraph(context.Background(), deps)
 	if err == nil {
 		t.Fatal("expected error for nil paradigm deps")
 	}
@@ -169,7 +169,7 @@ func TestRootGraphReturnsErrorOnNilParadigmDeps(t *testing.T) {
 func testGraphCapabilityRegistry(t *testing.T) *registry.CapabilityRegistry {
 	t.Helper()
 	reg := registry.NewRegistry()
-	if err := reg.RegisterInvocableCapability(testGraphCapability{}); err != nil {
+	if err := reg.RegisterInvocableCapability(context.Background(), testGraphCapability{}); err != nil {
 		t.Fatalf("register capability: %v", err)
 	}
 	return reg

@@ -17,7 +17,7 @@ func TestEndToEndRootRouteOnlyCapabilityExecution(t *testing.T) {
 	handler := &countingCapabilityHandler{id: "euclo:cap.targeted_refactor"}
 	caps := capabilityRegistryWithHandler(t, handler)
 	deps := rootGraphDeps(caps)
-	graph, err := orchestrate.NewRootGraph(deps)
+	graph, err := orchestrate.NewRootGraph(context.Background(), deps)
 	if err != nil {
 		t.Fatalf("NewRootGraph failed: %v", err)
 	}

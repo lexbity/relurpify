@@ -124,7 +124,7 @@ func (p *backgroundDelegationProvider) StartBackgroundDelegation(ctx context.Con
 	if p == nil || p.runtime == nil || p.runtime.Tools == nil {
 		return nil, fmt.Errorf("background delegation provider unavailable")
 	}
-	sessionCtx, cancel := context.WithCancel(context.Background())
+	sessionCtx, cancel := context.WithCancel(ctx)
 	if ctx != nil {
 		go func() {
 			select {

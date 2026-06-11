@@ -95,5 +95,5 @@ func registerRelurpicCapability(reg *registry.CapabilityRegistry, spec relurpicC
 		handler:    spec.Handler,
 		descriptor: desc,
 	}
-	return reg.RegisterInvocableCapability(wrapped)
+	return reg.RegisterInvocableCapability(context.Background(), wrapped)
 }

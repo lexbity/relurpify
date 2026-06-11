@@ -23,7 +23,7 @@ func TestEndToEndCheckpointResumeFromPersistedArtifact(t *testing.T) {
 	deps := rootGraphDeps(caps)
 	deps.Checkpoints = repo
 	deps.Persistence = writer
-	graph, err := orchestrate.NewRootGraph(deps)
+	graph, err := orchestrate.NewRootGraph(context.Background(), deps)
 	if err != nil {
 		t.Fatalf("NewRootGraph failed: %v", err)
 	}
@@ -100,7 +100,7 @@ func TestEndToEndCheckpointResumeThoughtRecipePath(t *testing.T) {
 	deps.ThoughtRecipes = thoughtrecipes
 	deps.Checkpoints = repo
 	deps.Persistence = writer
-	graph, err := orchestrate.NewRootGraph(deps)
+	graph, err := orchestrate.NewRootGraph(context.Background(), deps)
 	if err != nil {
 		t.Fatalf("NewRootGraph failed: %v", err)
 	}

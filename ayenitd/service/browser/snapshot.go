@@ -2,6 +2,7 @@ package browser
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -47,7 +48,7 @@ type BrowserSessionSnapshot struct {
 // Snapshot returns a workspace-level browser service view.
 func (s *BrowserService) Snapshot(context.Context) (*BrowserServiceSnapshot, error) {
 	if s == nil {
-		return nil, nil
+		return nil, errors.New("browser service is nil")
 	}
 	s.mu.Lock()
 	handles := make([]*browserSessionHandle, 0, len(s.sessions))

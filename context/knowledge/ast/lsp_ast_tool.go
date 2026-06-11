@@ -68,9 +68,6 @@ func (t *ASTTool) waitUntilReady(ctx context.Context, timeout time.Duration) err
 		return nil
 	}
 	waitCtx := ctx
-	if waitCtx == nil {
-		waitCtx = context.Background()
-	}
 	if timeout > 0 {
 		var cancel context.CancelFunc
 		waitCtx, cancel = context.WithTimeout(waitCtx, timeout)

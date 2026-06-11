@@ -50,9 +50,12 @@ type requestEnvelope struct {
 
 func newWebsocketTransport(ctx context.Context, wsURL string) (*websocketTransport, error) {
 	dialer := websocket.Dialer{}
-	conn, _, err := dialer.DialContext(ctx, wsURL, nil)
+	conn, resp, err := dialer.DialContext(ctx, wsURL, nil)
 	if err != nil {
 		return nil, err
+	}
+	if resp != nil {
+		resp.Body.Close()
 	}
 	t := &websocketTransport{
 		conn:    conn,
