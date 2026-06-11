@@ -116,28 +116,20 @@ func MixedLanguageWorkspace(basePath string) *WorkspaceBuilder {
 
 // ManifestBuilder builds deterministic manifest fixtures.
 type ManifestBuilder struct {
-	manifest *config.AgentManifest
+	manifestSpec *config.ManifestSpec
 }
 
 // NewManifestBuilder creates a new manifest builder with defaults.
 func NewManifestBuilder() *ManifestBuilder {
 	return &ManifestBuilder{
-		manifest: &config.AgentManifest{
-			APIVersion: "relurpify/v1alpha1",
-			Kind:       "AgentManifest",
-			Metadata: config.ManifestMetadata{
-				Name:    "test-agent",
-				Version: "1.0.0",
-			},
-			Spec: config.ManifestSpec{
-				Image:   "test-image:latest",
-				Runtime: "gvisor",
-				Policy: &config.ManifestPolicySpec{
-					Permissions: permissions.PermissionSet{
-						FileSystem: []permissions.FileSystemPermission{
-							{Action: permissions.FileSystemRead, Path: "${workspace}/**"},
-							{Action: permissions.FileSystemWrite, Path: "${workspace}/**"},
-						},
+		manifestSpec: &config.ManifestSpec{
+			Image:   "test-image:latest",
+			Runtime: "gvisor",
+			Policy: &config.ManifestPolicySpec{
+				Permissions: permissions.PermissionSet{
+					FileSystem: []permissions.FileSystemPermission{
+						{Action: permissions.FileSystemRead, Path: "${workspace}/**"},
+						{Action: permissions.FileSystemWrite, Path: "${workspace}/**"},
 					},
 				},
 			},
@@ -145,25 +137,23 @@ func NewManifestBuilder() *ManifestBuilder {
 	}
 }
 
-// WithName sets the manifest name.
+// WithName is retained for compatibility but no longer stored.
 func (b *ManifestBuilder) WithName(name string) *ManifestBuilder {
-	b.manifest.Metadata.Name = name
 	return b
 }
 
-// WithVersion sets the manifest version.
+// WithVersion is retained for compatibility but no longer stored.
 func (b *ManifestBuilder) WithVersion(version string) *ManifestBuilder {
-	b.manifest.Metadata.Version = version
 	return b
 }
 
 // WithFileSystemPermission adds a filesystem permission.
 func (b *ManifestBuilder) WithFileSystemPermission(action permissions.FileSystemAction, path string) *ManifestBuilder {
-	if b.manifest.Spec.Policy == nil {
-		b.manifest.Spec.Policy = &config.ManifestPolicySpec{}
+	if b.manifestSpec.Policy == nil {
+		b.manifestSpec.Policy = &config.ManifestPolicySpec{}
 	}
-	b.manifest.Spec.Policy.Permissions.FileSystem = append(
-		b.manifest.Spec.Policy.Permissions.FileSystem,
+	b.manifestSpec.Policy.Permissions.FileSystem = append(
+		b.manifestSpec.Policy.Permissions.FileSystem,
 		permissions.FileSystemPermission{Action: action, Path: path},
 	)
 	return b
@@ -171,11 +161,11 @@ func (b *ManifestBuilder) WithFileSystemPermission(action permissions.FileSystem
 
 // WithNetworkPermission adds a network permission.
 func (b *ManifestBuilder) WithNetworkPermission(direction, protocol, host string, port int) *ManifestBuilder {
-	if b.manifest.Spec.Policy == nil {
-		b.manifest.Spec.Policy = &config.ManifestPolicySpec{}
+	if b.manifestSpec.Policy == nil {
+		b.manifestSpec.Policy = &config.ManifestPolicySpec{}
 	}
-	b.manifest.Spec.Policy.Permissions.Network = append(
-		b.manifest.Spec.Policy.Permissions.Network,
+	b.manifestSpec.Policy.Permissions.Network = append(
+		b.manifestSpec.Policy.Permissions.Network,
 		permissions.NetworkPermission{Direction: direction, Protocol: protocol, Host: host, Port: port},
 	)
 	return b
@@ -183,25 +173,22 @@ func (b *ManifestBuilder) WithNetworkPermission(direction, protocol, host string
 
 // WithHITLRequired marks a permission as requiring HITL approval.
 func (b *ManifestBuilder) WithHITLRequired() *ManifestBuilder {
-	if len(b.manifest.Spec.Policy.Permissions.FileSystem) > 0 {
-		b.manifest.Spec.Policy.Permissions.FileSystem[len(b.manifest.Spec.Policy.Permissions.FileSystem)-1].HITLRequired = true
+	if len(b.manifestSpec.Policy.Permissions.FileSystem) > 0 {
+		b.manifestSpec.Policy.Permissions.FileSystem[len(b.manifestSpec.Policy.Permissions.FileSystem)-1].HITLRequired = true
 	}
-	if len(b.manifest.Spec.Policy.Permissions.Network) > 0 {
-		b.manifest.Spec.Policy.Permissions.Network[len(b.manifest.Spec.Policy.Permissions.Network)-1].HITLRequired = true
+	if len(b.manifestSpec.Policy.Permissions.Network) > 0 {
+		b.manifestSpec.Policy.Permissions.Network[len(b.manifestSpec.Policy.Permissions.Network)-1].HITLRequired = true
 	}
 	return b
 }
 
-// Build returns the constructed manifest.
-func (b *ManifestBuilder) Build() *config.AgentManifest {
-	if b == nil || b.manifest == nil {
+// Build returns a copy of the constructed manifest spec.
+func (b *ManifestBuilder) Build() *config.ManifestSpec {
+	if b == nil || b.manifestSpec == nil {
 		return nil
 	}
-	clone, err := config.CloneAgentManifest(b.manifest)
-	if err != nil {
-		return b.manifest
-	}
-	return clone
+	m := *b.manifestSpec
+	return &m
 }
 
 // ValidManifest returns a builder for a valid manifest fixture.
@@ -209,36 +196,21 @@ func ValidManifest() *ManifestBuilder {
 	return NewManifestBuilder()
 }
 
-// InvalidManifestMissingAPIVersion returns a builder for an invalid manifest (missing apiVersion).
-func InvalidManifestMissingAPIVersion() *ManifestBuilder {
+// InvalidManifestMissingImage returns a builder for a manifest missing the image.
+func InvalidManifestMissingImage() *ManifestBuilder {
 	return &ManifestBuilder{
-		manifest: &config.AgentManifest{
-			Kind: "AgentManifest",
-			Metadata: config.ManifestMetadata{
-				Name:    "test-agent",
-				Version: "1.0.0",
-			},
-			Spec: config.ManifestSpec{
-				Image:   "test-image:latest",
-				Runtime: "gvisor",
-			},
+		manifestSpec: &config.ManifestSpec{
+			Runtime: "gvisor",
 		},
 	}
 }
 
-// InvalidManifestMissingKind returns a builder for an invalid manifest (missing kind).
-func InvalidManifestMissingKind() *ManifestBuilder {
+// InvalidManifestWrongRuntime returns a builder for a manifest with invalid runtime.
+func InvalidManifestWrongRuntime() *ManifestBuilder {
 	return &ManifestBuilder{
-		manifest: &config.AgentManifest{
-			APIVersion: "relurpify/v1alpha1",
-			Metadata: config.ManifestMetadata{
-				Name:    "test-agent",
-				Version: "1.0.0",
-			},
-			Spec: config.ManifestSpec{
-				Image:   "test-image:latest",
-				Runtime: "gvisor",
-			},
+		manifestSpec: &config.ManifestSpec{
+			Image:   "test-image:latest",
+			Runtime: "docker",
 		},
 	}
 }

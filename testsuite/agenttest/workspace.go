@@ -319,12 +319,20 @@ func ensureDerivedSkills(targetWorkspace, derivedWorkspace, manifestRef string) 
 	if !filepath.IsAbs(manifestPath) {
 		manifestPath = filepath.Join(derivedWorkspace, filepath.FromSlash(manifestRef))
 	}
-	loadedManifest, err := config.LoadAgentManifest(manifestPath)
+	docSnapshot, err := config.LoadDocument(manifestPath)
 	if err != nil {
 		return nil
 	}
 
-	for _, name := range loadedManifest.Spec.Skills {
+	var skills []string
+	if node, ok := docSnapshot.Document.Section("skills"); ok {
+		var raw []string
+		if err := node.Decode(&raw); err == nil {
+			skills = raw
+		}
+	}
+
+	for _, name := range skills {
 		name = strings.TrimSpace(name)
 		if name == "" {
 			continue

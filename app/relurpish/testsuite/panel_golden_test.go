@@ -119,7 +119,7 @@ func normalizeGoldenText(s string) string {
 
 type sandboxFixtureRuntime struct {
 	workspace string
-	manifest  *config.AgentManifest
+	manifest  *config.ManifestSpec
 	backend   string
 }
 
@@ -127,11 +127,15 @@ func (r *sandboxFixtureRuntime) SessionInfo() tui.SessionInfo {
 	return tui.SessionInfo{Workspace: r.workspace}
 }
 
-func (r *sandboxFixtureRuntime) LoadSandboxManifest() (*config.AgentManifest, error) {
-	return config.CloneAgentManifest(r.manifest)
+func (r *sandboxFixtureRuntime) LoadSandboxManifest() (*config.ManifestSpec, error) {
+	if r.manifest == nil {
+		return nil, nil
+	}
+	m := *r.manifest
+	return &m, nil
 }
 
-func (r *sandboxFixtureRuntime) SaveSandboxManifest(m *config.AgentManifest) (string, error) {
+func (r *sandboxFixtureRuntime) SaveSandboxManifest(m *config.ManifestSpec) (string, error) {
 	r.manifest = m
 	return filepath.Join(r.workspace, "relurpify_cfg", "agent.yaml.bak"), nil
 }
@@ -169,37 +173,26 @@ func (f *sessionInfoFixture) ReloadWorkspace(context.Context, string) error {
 	return nil
 }
 
-func testManifest() *config.AgentManifest {
-	return &config.AgentManifest{
-		APIVersion: "relurpify/v1alpha1",
-		Kind:       "AgentManifest",
-		Metadata: config.ManifestMetadata{
-			Name:        "coding",
-			Version:     "1.0.0",
-			Description: "sandbox test manifest",
-		},
-		Spec: config.ManifestSpec{
-			Image:   "ghcr.io/example/runtime:0.4.1",
-			Runtime: "gvisor",
-			Policy: &config.ManifestPolicySpec{
-				Permissions: permissions.PermissionSet{
-					FileSystem: []permissions.FileSystemPermission{
-						{Action: permissions.FileSystemRead, Path: "/workspace/**"},
-						{Action: permissions.FileSystemWrite, Path: "/workspace/**"},
-					},
-				},
+func testManifest() *config.ManifestSpec {
+	return &config.ManifestSpec{
+		Image:   "ghcr.io/example/runtime:0.4.1",
+		Runtime: "gvisor",
+		Permissions: permissions.PermissionSet{
+			FileSystem: []permissions.FileSystemPermission{
+				{Action: permissions.FileSystemRead, Path: "/workspace/**"},
+				{Action: permissions.FileSystemWrite, Path: "/workspace/**"},
 			},
-			Agent: &agentspec.AgentRuntimeSpec{
-				Implementation: "coding",
-				Mode:           agentspec.AgentModePrimary,
-				Model: agentspec.AgentModelConfig{
-					Provider: "ollama",
-					Name:     "qwen2.5-coder:14b",
-				},
-				Bash: agentspec.AgentBashPermissions{
-					AllowPatterns: []string{"git status"},
-					Default:       agentspec.AgentPermissionAsk,
-				},
+		},
+		Agent: &agentspec.AgentRuntimeSpec{
+			Implementation: "coding",
+			Mode:           agentspec.AgentModePrimary,
+			Model: agentspec.AgentModelConfig{
+				Provider: "ollama",
+				Name:     "qwen2.5-coder:14b",
+			},
+			Bash: agentspec.AgentBashPermissions{
+				AllowPatterns: []string{"git status"},
+				Default:       agentspec.AgentPermissionAsk,
 			},
 		},
 	}
@@ -259,7 +252,7 @@ func TestPanelGoldenViews(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(sandboxDir, "relurpify_cfg"), 0o755); err != nil {
 		t.Fatalf("mkdir sandbox config: %v", err)
 	}
-	if err := config.SaveAgentManifest(filepath.Join(sandboxDir, "relurpify_cfg", "agent.yaml"), testManifest()); err != nil {
+	if err := config.SaveYAML(filepath.Join(sandboxDir, "relurpify_cfg", "agent.yaml"), testManifest()); err != nil {
 		t.Fatalf("seed sandbox manifest: %v", err)
 	}
 	sandboxPane := tui.NewSandboxPane(&sandboxFixtureRuntime{

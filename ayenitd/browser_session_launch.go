@@ -113,7 +113,7 @@ func newBrowserSession(ctx context.Context, cfg browsersvc.BrowserSessionConfig)
 }
 
 func newSandboxedBrowserBackend(ctx context.Context, cfg browsersvc.BrowserSessionConfig) (*sandboxedBrowserBackend, error) {
-	if cfg.Registration == nil || cfg.Registration.Runtime == nil || cfg.Registration.Manifest == nil {
+	if cfg.Registration == nil || cfg.Registration.Runtime == nil || cfg.Registration.ManifestSpec == nil {
 		return nil, fmt.Errorf("sandboxed browser runtime unavailable")
 	}
 	backendName := strings.ToLower(strings.TrimSpace(cfg.BackendName))
@@ -246,22 +246,22 @@ func runSandboxBrowserContainer(ctx context.Context, cfg browsersvc.BrowserSessi
 		"--tmpfs", "/tmp:exec,mode=1777",
 		"--tmpfs", "/var/tmp:exec,mode=1777",
 	}
-	if user := cfg.Registration.Manifest.Spec.Security.RunAsUser; user > 0 {
+	if user := cfg.Registration.ManifestSpec.Security.RunAsUser; user > 0 {
 		args = append(args, "-u", strconv.Itoa(user))
 	}
-	if cfg.Registration.Manifest.Spec.Security.ReadOnlyRoot {
+	if cfg.Registration.ManifestSpec.Security.ReadOnlyRoot {
 		args = append(args, "--read-only")
 	}
-	if cfg.Registration.Manifest.Spec.Security.NoNewPrivileges {
+	if cfg.Registration.ManifestSpec.Security.NoNewPrivileges {
 		args = append(args, "--security-opt", "no-new-privileges")
 	}
 	if rtCfg.SeccompProfile != "" {
 		args = append(args, "--security-opt", "seccomp="+rtCfg.SeccompProfile)
 	}
-	if rtCfg.NetworkIsolation && len(cfg.Registration.Manifest.Spec.Permissions.Network) == 0 {
+	if rtCfg.NetworkIsolation && len(cfg.Registration.ManifestSpec.Permissions.Network) == 0 {
 		args = append(args, "--network", "none")
 	}
-	image := strings.TrimSpace(cfg.Registration.Manifest.Spec.Image)
+	image := strings.TrimSpace(cfg.Registration.ManifestSpec.Image)
 	if image == "" {
 		image = "ghcr.io/relurpify/runtime:latest"
 	}

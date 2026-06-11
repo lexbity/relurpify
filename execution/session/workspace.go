@@ -173,7 +173,7 @@ type AgentBootstrapOptions struct {
 	AgentName            string
 	ConfigName           string
 	AgentSpec            *agentspec.AgentRuntimeSpec
-	ManifestSnapshot     *config.AgentManifestSnapshot
+	ManifestSnapshot     *config.ManifestSnapshot
 	SecurityBundle       *cfgsecurity.Bundle
 	ProfileResolution    modelselect.ProfileResolution
 	PermissionManager    permissions.PermissionManager
@@ -228,24 +228,18 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 		}
 		opts.ManifestSnapshot = synthesizeManifestSnapshot(opts.AgentName, opts.AgentSpec)
 	}
-	if opts.ManifestSnapshot.Manifest == nil {
-		return nil, fmt.Errorf("agent manifest missing")
-	}
-	if opts.ManifestSnapshot.Manifest.Spec.Agent == nil && opts.AgentSpec == nil {
-		return nil, fmt.Errorf("agent manifest missing spec.agent configuration")
-	}
 	if opts.SecurityBundle == nil {
 		return nil, fmt.Errorf("security bundle required")
 	}
 
-	manifestForResolution := opts.ManifestSnapshot.Manifest
+	specForResolution := &opts.ManifestSnapshot.Spec
 	if opts.AgentSpec != nil {
-		clone := *opts.ManifestSnapshot.Manifest
-		clone.Spec.Agent = opts.AgentSpec
-		manifestForResolution = &clone
+		clone := opts.ManifestSnapshot.Spec
+		clone.Agent = opts.AgentSpec
+		specForResolution = &clone
 	}
 	resolveOpts := config.ResolveOptions{}
-	effectiveContract, err := config.ResolveEffectiveAgentContract(workspace, manifestForResolution, resolveOpts)
+	effectiveContract, err := config.ResolveEffectiveAgentContract(workspace, specForResolution, resolveOpts)
 	if err != nil {
 		return nil, err
 	}
@@ -294,7 +288,7 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 	}
 	configName := opts.ConfigName
 	if configName == "" {
-		configName = opts.ManifestSnapshot.Manifest.Metadata.Name
+		configName = opts.AgentName
 	}
 	agentCfg := &execution.Config{
 		Name:              configName,
@@ -536,8 +530,8 @@ func OpenWorkspace(ctx context.Context, cfg WorkspaceConfig) (_ *Workspace, err 
 
 	// Resolve model from manifest if not overridden in manifest.
 	inferenceModel := cfg.InferenceModel
-	if registration.Manifest != nil && registration.Manifest.Spec.Agent != nil {
-		if specModel := registration.Manifest.Spec.Agent.Model.Name; specModel != "" && inferenceModel == "" {
+	if registration.ManifestSpec != nil && registration.ManifestSpec.Agent != nil {
+		if specModel := registration.ManifestSpec.Agent.Model.Name; specModel != "" && inferenceModel == "" {
 			inferenceModel = specModel
 		}
 	}
@@ -547,9 +541,9 @@ func OpenWorkspace(ctx context.Context, cfg WorkspaceConfig) (_ *Workspace, err 
 	profileResolution := cfg.ProfileResolution
 	if cfg.Scope.LLMBackend && backend != nil {
 		logLLM = cfg.DebugLLM
-		if registration.Manifest != nil && registration.Manifest.Spec.Agent != nil {
-			if registration.Manifest.Spec.Agent.Logging != nil && registration.Manifest.Spec.Agent.Logging.LLM != nil {
-				logLLM = *registration.Manifest.Spec.Agent.Logging.LLM
+		if registration.ManifestSpec != nil && registration.ManifestSpec.Agent != nil {
+			if registration.ManifestSpec.Agent.Logging != nil && registration.ManifestSpec.Agent.Logging.LLM != nil {
+				logLLM = *registration.ManifestSpec.Agent.Logging.LLM
 			}
 		}
 		backend.SetDebugLogging(logLLM)

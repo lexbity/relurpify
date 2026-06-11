@@ -1,9 +1,7 @@
 package config
 
 import (
-	"crypto/sha256"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -196,19 +194,9 @@ func (p Paths) GovernanceRoots(extra ...string) []string {
 	return roots
 }
 
-// AgentManifest defines the file-backed security contract for an agent.
-type AgentManifest struct {
-	APIVersion string           `yaml:"apiVersion" json:"apiVersion"`
-	Kind       string           `yaml:"kind" json:"kind"`
-	Metadata   ManifestMetadata `yaml:"metadata" json:"metadata"`
-	Spec       ManifestSpec     `yaml:"spec" json:"spec"`
-	SourcePath string           `yaml:"-" json:"-"`
-}
-
-// AgentManifestSnapshot captures a validated manifest together with its load
-// fingerprint and timestamp.
-type AgentManifestSnapshot struct {
-	Manifest    *AgentManifest
+// ManifestSnapshot stores a validated manifest spec with fingerprint metadata.
+type ManifestSnapshot struct {
+	Spec        ManifestSpec
 	Fingerprint [32]byte
 	LoadedAt    time.Time
 	SourcePath  string
@@ -281,88 +269,6 @@ type SecuritySpec struct {
 type AuditSpec struct {
 	Level         string `yaml:"level" json:"level"`
 	RetentionDays int    `yaml:"retention_days" json:"retention_days"`
-}
-
-// SaveAgentManifest marshals m to YAML and overwrites path.
-func SaveAgentManifest(path string, m *AgentManifest) error {
-	return WriteWithSchema(path, "relurpify/agent/v1", m)
-}
-
-// manifestSchemaRegistry returns a schema registry that includes the legacy
-// agent manifest schema kind alongside current kinds. Used only for loading
-// runtime manifest files that were written with schema: relurpify/agent/v1.
-func manifestSchemaRegistry() *SchemaRegistry {
-	reg := NewSchemaRegistry()
-	_ = reg.Register("agent", 1)
-	return reg
-}
-
-// LoadAgentManifestSnapshot parses, validates, and fingerprints a manifest file.
-func LoadAgentManifestSnapshot(path string) (*AgentManifestSnapshot, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	var loaded AgentManifest
-	if _, err := DecodeWithSchema(path, data, manifestSchemaRegistry(), &loaded); err != nil {
-		return nil, err
-	}
-	if err := loaded.Validate(); err != nil {
-		return nil, err
-	}
-	loaded.SourcePath = path
-	sum := sha256.Sum256(data)
-	return &AgentManifestSnapshot{
-		Manifest:    &loaded,
-		Fingerprint: sum,
-		LoadedAt:    time.Now().UTC(),
-		SourcePath:  path,
-		Warnings:    append([]string{}, loaded.Spec.CompatibilityWarnings...),
-	}, nil
-}
-
-// LoadAgentManifest parses and validates a manifest file.
-func LoadAgentManifest(path string) (*AgentManifest, error) {
-	snapshot, err := LoadAgentManifestSnapshot(path)
-	if err != nil {
-		return nil, err
-	}
-	return snapshot.Manifest, nil
-}
-
-// CloneAgentManifest returns a deep copy of m so callers can mutate the clone
-// without affecting the original manifest or snapshot.
-func CloneAgentManifest(m *AgentManifest) (*AgentManifest, error) {
-	if m == nil {
-		return nil, nil
-	}
-	data, err := yaml.Marshal(m)
-	if err != nil {
-		return nil, fmt.Errorf("marshal manifest clone: %w", err)
-	}
-	var out AgentManifest
-	if err := yaml.Unmarshal(data, &out); err != nil {
-		return nil, fmt.Errorf("unmarshal manifest clone: %w", err)
-	}
-	out.SourcePath = m.SourcePath
-	return &out, nil
-}
-
-// Validate enforces manifest semantics.
-func (m *AgentManifest) Validate() error {
-	if m.APIVersion == "" {
-		return fmt.Errorf("manifest missing apiVersion")
-	}
-	if m.Kind == "" {
-		return fmt.Errorf("manifest missing kind")
-	}
-	if m.Metadata.Name == "" {
-		return fmt.Errorf("manifest missing metadata.name")
-	}
-	if err := m.Spec.Validate(); err != nil {
-		return err
-	}
-	return nil
 }
 
 // Validate enforces manifest spec semantics, including the policy/agent split.

@@ -11,8 +11,6 @@ import (
 	"codeburg.org/lexbit/relurpify/context/knowledge/retrieval"
 	contextports "codeburg.org/lexbit/relurpify/context/ports"
 	"codeburg.org/lexbit/relurpify/execution/compiler"
-	execctx "codeburg.org/lexbit/relurpify/execution/context"
-	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
 // KnowledgeRuntime bundles the knowledge, retrieval, and compilation products.
@@ -26,9 +24,8 @@ type KnowledgeRuntime struct {
 
 // KnowledgeRuntimeInput carries parameters for BuildKnowledgeRuntime.
 type KnowledgeRuntimeInput struct {
-	GraphDB  *graphdb.Engine
-	Index    *ast.IndexManager
-	Manifest *config.AgentManifest
+	GraphDB *graphdb.Engine
+	Index   *ast.IndexManager
 }
 
 // BuildKnowledgeRuntime assembles knowledge store, retriever, and compiler.
@@ -38,10 +35,6 @@ func BuildKnowledgeRuntime(input KnowledgeRuntimeInput) (*KnowledgeRuntime, erro
 	}
 	bkcEvents := &knowledge.EventBus{}
 	knowledgeStore := &knowledge.ChunkStore{Graph: input.GraphDB}
-	policyBundle, err := execctx.Compile(input.Manifest, execctx.DefaultContextPolicy())
-	if err != nil {
-		return nil, fmt.Errorf("compile context policy: %w", err)
-	}
 	rankerRegistry := retrieval.NewRankerRegistry()
 	rankerRegistry.Register(&retrieval.KeywordRanker{K1: 1.2, B: 0.75})
 	rankerRegistry.Register(&retrieval.RecencyRanker{HalfLifeHours: 24.0})
@@ -49,8 +42,8 @@ func BuildKnowledgeRuntime(input KnowledgeRuntimeInput) (*KnowledgeRuntime, erro
 		rankerRegistry.Register(&retrieval.ASTProximityRanker{Index: input.Index})
 	}
 	rankerRegistry.Register(&retrieval.TrustRanker{})
-	retriever := retrieval.NewRetriever(rankerRegistry, knowledgeStore).WithPolicy(toContextPortsPolicy(policyBundle))
-	comp := compiler.NewCompiler(retriever, policyBundle, knowledgeStore)
+	retriever := retrieval.NewRetriever(rankerRegistry, knowledgeStore)
+	comp := compiler.NewCompiler(retriever, nil, knowledgeStore)
 	return &KnowledgeRuntime{
 		KnowledgeStore:  knowledgeStore,
 		KnowledgeEvents: bkcEvents,
@@ -108,15 +101,4 @@ func (a *compilerTriggerAdapter) Compile(ctx context.Context, req contextports.C
 	}, nil
 }
 
-// toContextPortsPolicy converts an execution/context ContextPolicyBundle to a context/ports PolicyBundle.
-func toContextPortsPolicy(bundle *execctx.ContextPolicyBundle) *contextports.PolicyBundle {
-	if bundle == nil {
-		return nil
-	}
-	return &contextports.PolicyBundle{
-		DefaultTrustClass:      string(bundle.DefaultTrustClass),
-		MaxTokensPerWindow:     bundle.Quota.MaxTokensPerWindow,
-		DegradedChunkPolicy:    string(bundle.DegradedChunkPolicy),
-		MaxTraversalCandidates: 500,
-	}
-}
+

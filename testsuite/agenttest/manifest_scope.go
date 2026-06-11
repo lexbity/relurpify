@@ -11,11 +11,11 @@ import (
 // ManifestCoversFileAction returns true if the manifest explicitly permits
 // the given action on the given path. Path may be absolute or relative to workspace.
 func ManifestCoversFileAction(
-	m *config.AgentManifest,
+	spec *config.ManifestSpec,
 	action permissions.FileSystemAction,
 	path, workspace string,
 ) bool {
-	if m == nil {
+	if spec == nil {
 		return false
 	}
 
@@ -27,7 +27,7 @@ func ManifestCoversFileAction(
 	absPath = filepath.Clean(absPath)
 
 	// Check each filesystem permission
-	for _, fsPerm := range m.Spec.Permissions.FileSystem {
+	for _, fsPerm := range spec.Permissions.FileSystem {
 		// Check if action matches (single Action field, not Actions array)
 		if fsPerm.Action != action {
 			continue
@@ -46,15 +46,15 @@ func ManifestCoversFileAction(
 }
 
 // ManifestCoversExecutable returns true if the manifest declares the given binary.
-func ManifestCoversExecutable(m *config.AgentManifest, binary string) bool {
-	if m == nil {
+func ManifestCoversExecutable(spec *config.ManifestSpec, binary string) bool {
+	if spec == nil {
 		return false
 	}
 
 	// Normalize binary name (remove path)
 	binaryName := filepath.Base(binary)
 
-	for _, exec := range m.Spec.Permissions.Executables {
+	for _, exec := range spec.Permissions.Executables {
 		// Check exact match (Binary field, not Name)
 		if exec.Binary == binaryName {
 			return true
@@ -69,12 +69,12 @@ func ManifestCoversExecutable(m *config.AgentManifest, binary string) bool {
 }
 
 // ManifestCoversNetworkCall returns true if the manifest declares the given host:port.
-func ManifestCoversNetworkCall(m *config.AgentManifest, host string, port int) bool {
-	if m == nil {
+func ManifestCoversNetworkCall(spec *config.ManifestSpec, host string, port int) bool {
+	if spec == nil {
 		return false
 	}
 
-	for _, net := range m.Spec.Permissions.Network {
+	for _, net := range spec.Permissions.Network {
 		// Check host match (exact or glob)
 		hostMatches := net.Host == host
 		if !hostMatches {

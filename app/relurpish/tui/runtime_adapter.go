@@ -82,10 +82,10 @@ type RuntimeAdapter interface {
 	// SaveToolPolicy persists a per-tool execution policy to the agent manifest.
 	// toolName is the bare tool name (e.g. "cli_mkdir"); level is typically AgentPermissionAllow.
 	SaveToolPolicy(toolName string, level agentspec.AgentPermissionLevel) error
-	// LoadSandboxManifest returns a mutable clone of the current workspace manifest.
-	LoadSandboxManifest() (*config.AgentManifest, error)
-	// SaveSandboxManifest persists a sandbox manifest clone with backup.
-	SaveSandboxManifest(m *config.AgentManifest) (string, error)
+	// LoadSandboxManifest returns the current workspace manifest spec.
+	LoadSandboxManifest() (*config.ManifestSpec, error)
+	// SaveSandboxManifest persists a sandbox manifest spec with backup.
+	SaveSandboxManifest(m *config.ManifestSpec) (string, error)
 	// SandboxBackend returns the active sandbox backend name.
 	SandboxBackend() string
 	// SaveSandboxBackend persists the active sandbox backend in workspace config.
@@ -224,21 +224,20 @@ func (r *runtimeAdapter) SessionInfo() SessionInfo {
 		}
 	}
 
-	if r.rt.AgentWorkspace().Registration != nil && r.rt.AgentWorkspace().Registration.Manifest != nil {
-		manifest := r.rt.AgentWorkspace().Registration.Manifest
-		info.Agent = manifest.Metadata.Name
-		if manifest.Spec.Agent != nil {
-			if manifest.Spec.Agent.Model.Provider != "" {
-				info.Provider = manifest.Spec.Agent.Model.Provider
+	if r.rt.AgentWorkspace().Registration != nil && r.rt.AgentWorkspace().Registration.ManifestSpec != nil {
+		spec := r.rt.AgentWorkspace().Registration.ManifestSpec
+		if spec.Agent != nil {
+			if spec.Agent.Model.Provider != "" {
+				info.Provider = spec.Agent.Model.Provider
 			}
-			if manifest.Spec.Agent.Model.Name != "" {
-				info.Model = manifest.Spec.Agent.Model.Name
+			if spec.Agent.Model.Name != "" {
+				info.Model = spec.Agent.Model.Name
 			}
-			if manifest.Spec.Agent.Mode != "" {
-				info.Role = string(manifest.Spec.Agent.Mode)
+			if spec.Agent.Mode != "" {
+				info.Role = string(spec.Agent.Mode)
 			}
-			if manifest.Spec.Agent.Context.MaxTokens > 0 {
-				info.MaxTokens = manifest.Spec.Agent.Context.MaxTokens
+			if spec.Agent.Context.MaxTokens > 0 {
+				info.MaxTokens = spec.Agent.Context.MaxTokens
 			}
 		}
 	}
@@ -854,63 +853,59 @@ func (r *runtimeAdapter) SaveToolPolicy(toolName string, level agentspec.AgentPe
 	if manifestPath == "" {
 		return fmt.Errorf("manifest path not set")
 	}
-	current := r.rt.AgentWorkspace().Registration.Manifest
-	clone, err := config.CloneAgentManifest(current)
-	if err != nil {
-		return err
+	spec := r.rt.AgentWorkspace().Registration.ManifestSpec
+	if spec == nil {
+		spec = &config.ManifestSpec{}
 	}
-	if clone == nil {
-		return fmt.Errorf("manifest unavailable")
+	if spec.Agent == nil {
+		spec.Agent = &agentspec.AgentRuntimeSpec{}
 	}
-	if clone.Spec.Agent == nil {
-		clone.Spec.Agent = &agentspec.AgentRuntimeSpec{}
+	if spec.Agent.ToolExecutionPolicy == nil {
+		spec.Agent.ToolExecutionPolicy = make(map[string]agentspec.ToolPolicy)
 	}
-	if clone.Spec.Agent.ToolExecutionPolicy == nil {
-		clone.Spec.Agent.ToolExecutionPolicy = make(map[string]agentspec.ToolPolicy)
-	}
-	clone.Spec.Agent.ToolExecutionPolicy[strings.TrimSpace(toolName)] = agentspec.ToolPolicy{Execute: agentspec.AgentPermissionLevel(level)}
-	if err := clone.Validate(); err != nil {
-		return err
-	}
-	if _, err := runtimesvc.SaveAgentManifestWithBackup(manifestPath, clone); err != nil {
+	spec.Agent.ToolExecutionPolicy[strings.TrimSpace(toolName)] = agentspec.ToolPolicy{Execute: agentspec.AgentPermissionLevel(level)}
+	if _, err := runtimesvc.SaveManifestSpecWithBackup(manifestPath, spec); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (r *runtimeAdapter) LoadSandboxManifest() (*config.AgentManifest, error) {
+func (r *runtimeAdapter) LoadSandboxManifest() (*config.ManifestSpec, error) {
 	if r == nil || r.rt == nil {
 		return nil, fmt.Errorf("runtime unavailable")
 	}
-	current := r.rt.AgentWorkspace().Registration.Manifest
-	clone, err := config.CloneAgentManifest(current)
-	if err != nil {
-		return nil, err
-	}
-	if clone != nil {
-		return clone, nil
+	if r.rt.AgentWorkspace().Registration != nil && r.rt.AgentWorkspace().Registration.ManifestSpec != nil {
+		return r.rt.AgentWorkspace().Registration.ManifestSpec, nil
 	}
 	if r.rt.Config.ManifestPath == "" {
 		return nil, fmt.Errorf("manifest unavailable")
 	}
-	return config.LoadAgentManifest(r.rt.Config.ManifestPath)
+	docSnapshot, err := config.LoadDocument(r.rt.Config.ManifestPath)
+	if err != nil {
+		return nil, err
+	}
+	spec := &config.ManifestSpec{}
+	if node, ok := docSnapshot.Document.Section("agent"); ok {
+		var agentSpec agentspec.AgentRuntimeSpec
+		if err := node.Decode(&agentSpec); err == nil {
+			spec.Agent = &agentSpec
+		}
+	}
+	return spec, nil
 }
 
-func (r *runtimeAdapter) SaveSandboxManifest(m *config.AgentManifest) (string, error) {
+func (r *runtimeAdapter) SaveSandboxManifest(spec *config.ManifestSpec) (string, error) {
 	if r == nil || r.rt == nil {
 		return "", fmt.Errorf("runtime unavailable")
 	}
-	if m == nil {
+	if spec == nil {
 		return "", fmt.Errorf("manifest required")
-	}
-	if err := m.Validate(); err != nil {
-		return "", err
 	}
 	path := strings.TrimSpace(r.rt.Config.ManifestPath)
 	if path == "" {
 		return "", fmt.Errorf("manifest path not set")
 	}
-	return runtimesvc.SaveAgentManifestWithBackup(path, m)
+	return runtimesvc.SaveManifestSpecWithBackup(path, spec)
 }
 
 func (r *runtimeAdapter) SandboxBackend() string {
@@ -1171,21 +1166,21 @@ func (r *runtimeAdapter) Diagnostics() DiagnosticsInfo {
 			r.rt.Config.ConfigPath,
 		)
 	}
-	if r.rt.AgentWorkspace().Registration != nil && r.rt.AgentWorkspace().Registration.Manifest != nil {
-		d.ManifestPolicy = manifestPolicySummary(r.rt.AgentWorkspace().Registration.Manifest)
-		d.DeprecationNotices = append([]string(nil), r.rt.AgentWorkspace().Registration.Manifest.Spec.CompatibilityWarnings...)
+	if r.rt.AgentWorkspace().Registration != nil && r.rt.AgentWorkspace().Registration.ManifestSpec != nil {
+		d.ManifestPolicy = manifestPolicySummary(r.rt.AgentWorkspace().Registration.ManifestSpec)
+		d.DeprecationNotices = append([]string(nil), r.rt.AgentWorkspace().Registration.ManifestSpec.CompatibilityWarnings...)
 	}
 
 	return d
 }
 
-func manifestPolicySummary(m *config.AgentManifest) string {
-	if m == nil {
+func manifestPolicySummary(spec *config.ManifestSpec) string {
+	if spec == nil {
 		return ""
 	}
 	parts := []string{}
-	if m.Spec.Policy != nil {
-		policy := m.Spec.Policy
+	if spec.Policy != nil {
+		policy := spec.Policy
 		permCount := len(policy.Permissions.FileSystem) + len(policy.Permissions.Executables) + len(policy.Permissions.Network)
 		if permCount > 0 {
 			parts = append(parts, fmt.Sprintf("policy-perms=%d", permCount))
@@ -1200,8 +1195,8 @@ func manifestPolicySummary(m *config.AgentManifest) string {
 			}
 		}
 	}
-	if m.Spec.Agent != nil {
-		parts = append(parts, fmt.Sprintf("tool-calling=%s", m.Spec.Agent.ResolveToolCallingIntent()))
+	if spec.Agent != nil {
+		parts = append(parts, fmt.Sprintf("tool-calling=%s", spec.Agent.ResolveToolCallingIntent()))
 	}
 	return strings.Join(parts, ", ")
 }

@@ -19,8 +19,7 @@ type DocumentMetadata struct {
 // Document is a content-agnostic envelope for agent config files. It knows
 // that a config file has an apiVersion, kind, metadata, and named spec sections,
 // but it does not know what any section means. Each domain owns its section
-// decoder (Slice 8+). This replaces the AgentManifest god-struct's envelope
-// without importing any domain types.
+// decoder (Slice 8+).
 type Document struct {
 	APIVersion string               `yaml:"apiVersion"`
 	Kind       string               `yaml:"kind"`

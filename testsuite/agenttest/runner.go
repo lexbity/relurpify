@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/telemetry/perfstats"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
@@ -355,8 +356,13 @@ func (r *Runner) preflightSuite(suite *Suite, opts RunOptions, targetWorkspace s
 		suiteManifestAbs := suite.ResolvePath(suite.Spec.Manifest)
 		suiteManifestAbs = resolveAgainstWorkspace(targetWorkspace, suiteManifestAbs, suite.Spec.Manifest)
 		suiteManifestAbs = fallbackManifestPath(suiteManifestAbs, targetWorkspace)
-		if loadedManifest, err := config.LoadAgentManifest(suiteManifestAbs); err == nil && loadedManifest.Spec.Agent != nil {
-			manifestModel = loadedManifest.Spec.Agent.Model.Name
+		if docSnapshot, err := config.LoadDocument(suiteManifestAbs); err == nil {
+			if node, ok := docSnapshot.Document.Section("agent"); ok {
+				var agentSpec agentspec.AgentRuntimeSpec
+				if err := node.Decode(&agentSpec); err == nil {
+					manifestModel = agentSpec.Model.Name
+				}
+			}
 		}
 	}
 	checked := map[string]struct{}{}

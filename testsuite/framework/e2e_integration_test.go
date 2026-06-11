@@ -39,7 +39,7 @@ func TestEndToEndAgentExecution(t *testing.T) {
 	}
 
 	// Step 2: Create permission manager from manifest policy (permission seam)
-	manager, err := authorization.NewPermissionManager(env.WorkspacePath, &m.Spec.Policy.Permissions, env.AuditSink, nil)
+	manager, err := authorization.NewPermissionManager(env.WorkspacePath, &m.Policy.Permissions, env.AuditSink, nil)
 	if err != nil {
 		t.Fatalf("failed to create permission manager: %v", err)
 	}
@@ -170,7 +170,7 @@ func TestEndToEndAgentExecution(t *testing.T) {
 	}
 
 	// Manifest policy was compiled correctly (manifest seam)
-	if len(m.Spec.Policy.Permissions.FileSystem) == 0 {
+	if len(m.Policy.Permissions.FileSystem) == 0 {
 		t.Error("expected filesystem permissions in manifest")
 	}
 

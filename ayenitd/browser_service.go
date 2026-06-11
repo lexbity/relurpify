@@ -53,10 +53,10 @@ func registerBrowserWorkspaceService(cfg WorkspaceConfig, registration *fauthori
 }
 
 func browserWorkspaceAgentSpec(registration *fauthorization.AgentRegistration) *agentspec.AgentRuntimeSpec {
-	if registration == nil || registration.Manifest == nil {
+	if registration == nil || registration.ManifestSpec == nil {
 		return nil
 	}
-	return registration.Manifest.Spec.Agent
+	return registration.ManifestSpec.Agent
 }
 
 func shouldEnableBrowserWorkspaceService(spec *agentspec.AgentRuntimeSpec) bool {

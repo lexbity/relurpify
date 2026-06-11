@@ -155,33 +155,22 @@ func TestSaveAgentManifestWithBackup(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatalf("mkdir manifest dir: %v", err)
 	}
-	seed := &config.AgentManifest{
-		APIVersion: "relurpify/v1alpha1",
-		Kind:       "AgentManifest",
-		Metadata: config.ManifestMetadata{
-			Name:    "coding",
-			Version: "1.0.0",
-		},
-		Spec: config.ManifestSpec{
-			Image:   "ghcr.io/example/runtime:0.4.1",
-			Runtime: "gvisor",
-			Policy: &config.ManifestPolicySpec{
-				Permissions: permissions.PermissionSet{
-					FileSystem: []permissions.FileSystemPermission{{Action: permissions.FileSystemRead, Path: "/workspace/**"}},
-				},
+	seed := &config.ManifestSpec{
+		Image:   "ghcr.io/example/runtime:0.4.1",
+		Runtime: "gvisor",
+		Policy: &config.ManifestPolicySpec{
+			Permissions: permissions.PermissionSet{
+				FileSystem: []permissions.FileSystemPermission{{Action: permissions.FileSystemRead, Path: "/workspace/**"}},
 			},
 		},
 	}
-	if err := config.SaveAgentManifest(path, seed); err != nil {
+	if err := config.SaveYAML(path, seed); err != nil {
 		t.Fatalf("seed manifest: %v", err)
 	}
-	updated, err := config.CloneAgentManifest(seed)
-	if err != nil {
-		t.Fatalf("clone manifest: %v", err)
-	}
-	updated.Metadata.Description = "updated"
+	updated := *seed
+	updated.Image = "ghcr.io/example/runtime:0.5.0"
 
-	backup, err := SaveAgentManifestWithBackup(path, updated)
+	backup, err := SaveManifestSpecWithBackup(path, &updated)
 	if err != nil {
 		t.Fatalf("save with backup: %v", err)
 	}
@@ -195,7 +184,7 @@ func TestSaveAgentManifestWithBackup(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read manifest: %v", err)
 	}
-	if string(data) == "" || !strings.Contains(string(data), "updated") {
+	if string(data) == "" || !strings.Contains(string(data), "0.5.0") {
 		t.Fatalf("manifest not updated after save: %s", string(data))
 	}
 }

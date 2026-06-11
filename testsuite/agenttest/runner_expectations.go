@@ -652,7 +652,7 @@ func evaluateFileContentExpectations(expectations []FileContentExpectation, work
 }
 
 // evaluateSecurityExpectations evaluates security boundary assertions.
-func evaluateSecurityExpectations(spec SecuritySpec, m *config.AgentManifest, workspace string, transcript *ToolTranscriptArtifact) ([]AssertionResult, []SecurityObservation, error) {
+func evaluateSecurityExpectations(spec SecuritySpec, m *config.ManifestSpec, workspace string, transcript *ToolTranscriptArtifact) ([]AssertionResult, []SecurityObservation, error) {
 	var results []AssertionResult
 	var observations []SecurityObservation
 	var failures []string

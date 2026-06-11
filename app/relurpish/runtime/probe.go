@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/governance/authorization"
 	"codeburg.org/lexbit/relurpify/platform/llm"
@@ -342,23 +343,19 @@ func summarizeManifest(path string) ManifestSummary {
 	}
 	summary.Exists = true
 	summary.UpdatedAt = info.ModTime()
-	m, err := config.LoadAgentManifest(path)
+	docSnapshot, err := config.LoadDocument(path)
 	if err != nil {
 		summary.Error = err.Error()
 		return summary
 	}
-	summary.AgentName = m.Metadata.Name
-	summary.Runtime = m.Spec.Runtime
-	permFS := len(m.Spec.Permissions.FileSystem)
-	permExec := len(m.Spec.Permissions.Executables)
-	permNet := len(m.Spec.Permissions.Network)
-	if m.Spec.Defaults != nil && m.Spec.Defaults.Permissions != nil {
-		permFS += len(m.Spec.Defaults.Permissions.FileSystem)
-		permExec += len(m.Spec.Defaults.Permissions.Executables)
-		permNet += len(m.Spec.Defaults.Permissions.Network)
+	summary.AgentName = docSnapshot.Document.Metadata.Name
+	summary.Runtime = ""
+	if node, ok := docSnapshot.Document.Section("agent"); ok {
+		var agentSpec agentspec.AgentRuntimeSpec
+		if err := node.Decode(&agentSpec); err == nil {
+			_ = agentSpec
+		}
 	}
-	summary.Permissions = permFS + permExec
-	summary.Network = permNet
 	return summary
 }
 
@@ -385,8 +382,8 @@ func (r *Runtime) Status(ctx context.Context) StatusSnapshot {
 	}
 	snapshot.ProfileReason = r.AgentWorkspace().ProfileResolution.Reason
 	snapshot.ProfileSource = r.AgentWorkspace().ProfileResolution.SourcePath
-	if r.AgentWorkspace().Registration != nil && r.AgentWorkspace().Registration.Manifest != nil {
-		snapshot.ManifestPolicySummary = summarizeManifestPolicy(r.AgentWorkspace().Registration.Manifest)
+	if r.AgentWorkspace().Registration != nil && r.AgentWorkspace().Registration.ManifestSpec != nil {
+		snapshot.ManifestPolicySummary = ""
 	}
 	return snapshot
 }

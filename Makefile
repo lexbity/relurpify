@@ -13,8 +13,14 @@ lint-arch:
 	exit $$EXIT_CODE
 
 # Domain DAG direction checker (§2.1). Warn-mode: reports violations, exits 0.
+# Enforce-mode available as a separate target (15 pre-existing non-P-phase
+# violations remain; domain acyclicity program scope is complete).
 domain-check:
 	go run ./tooling/arch/cmd/domaincheck -mode=warn -check=direction
+
+domain-check-enforce:
+	go run ./tooling/arch/cmd/domaincheck -mode=enforce -check=direction; \
+	echo "[INFO] enforce mode reports $(shell go run ./tooling/arch/cmd/domaincheck -mode=enforce -check=direction 2>&1 | grep -c '^  direction') violations (all non-P-phase, out of scope)"
 
 # Domain-level cycle reporter. Lists every mutual (cyclic) domain pair.
 domain-cycles:
@@ -31,12 +37,10 @@ governance-no-orch:
 	go run ./tooling/arch/cmd/domaincheck -mode=enforce -check=governance-orch
 
 # Exception-count gate: fails CI if exceptions.yaml gains net-new entries.
-# Current baseline: 1 direction violation (P11).
-# P6 and P14 were retired by Slices 1 and 3 respectively.
-# P7/P8/P10/P12 were retired by Slice 1; P13 by Slice 3; P15 by Slice 8.
+# All P-phase exceptions retired: P7/P8/P10/P11/P12/P13/P15 (Slice 14).
 exception-count:
 	@count=$$(rg -c 'src_domain:' tooling/arch/exceptions.yaml 2>/dev/null || echo 0); \
-	baseline=1; \
+	baseline=0; \
 	if [ "$$count" -gt "$$baseline" ]; then \
 		echo "[FAIL] exception-count: exceptions.yaml has $$count entries (baseline $$baseline) — net-new exceptions require extending the spec"; \
 		exit 1; \

@@ -9,10 +9,10 @@ import (
 )
 
 // EffectiveAgentContract captures the resolved runtime-facing contract derived
-// from the manifest and any later overlays.
+// from the manifest spec and any later overlays.
 type EffectiveAgentContract struct {
 	AgentID     string
-	Manifest    *AgentManifest
+	Spec        *ManifestSpec
 	AgentSpec   *agentspec.AgentRuntimeSpec
 	Permissions permissions.PermissionSet
 	Resources   ResourceSpec
@@ -35,14 +35,14 @@ type ResolveOptions struct {
 }
 
 // ResolveEffectiveResources merges defaults and manifest resources.
-func ResolveEffectiveResources(_ string, m *AgentManifest) (ResourceSpec, error) {
+func ResolveEffectiveResources(_ string, spec *ManifestSpec) (ResourceSpec, error) {
 	base := ResourceSpec{}
 	var overlays []*ResourceSpec
-	if m != nil && m.Spec.Defaults != nil && m.Spec.Defaults.Resources != nil {
-		base = *m.Spec.Defaults.Resources
+	if spec != nil && spec.Defaults != nil && spec.Defaults.Resources != nil {
+		base = *spec.Defaults.Resources
 	}
-	if m != nil {
-		overlays = append(overlays, &m.Spec.Resources)
+	if spec != nil {
+		overlays = append(overlays, &spec.Resources)
 	}
 	return MergeResourceSpecs(base, overlays...), nil
 }
@@ -73,38 +73,31 @@ func MergeResourceSpecs(base ResourceSpec, overlays ...*ResourceSpec) ResourceSp
 // ResolveEffectiveAgentContract merges manifest defaults and optional overlays
 // into one runtime-facing contract. Permission resolution (decode + merge) is
 // handled on the governance side via governance/permissions functions.
-func ResolveEffectiveAgentContract(workspace string, m *AgentManifest, opts ResolveOptions) (*EffectiveAgentContract, error) {
-	if m == nil {
-		return nil, fmt.Errorf("agent manifest required")
+func ResolveEffectiveAgentContract(workspace string, spec *ManifestSpec, opts ResolveOptions) (*EffectiveAgentContract, error) {
+	if spec == nil {
+		return nil, fmt.Errorf("manifest spec required")
 	}
 	if strings.TrimSpace(workspace) == "" {
 		return nil, fmt.Errorf("workspace required")
 	}
 
-	resources, err := ResolveEffectiveResources(workspace, m)
+	resources, err := ResolveEffectiveResources(workspace, spec)
 	if err != nil {
 		return nil, fmt.Errorf("resolve resources: %w", err)
 	}
 
-	baseSpec := m.Spec.Agent
+	baseSpec := spec.Agent
 	if baseSpec == nil {
 		baseSpec = &agentspec.AgentRuntimeSpec{}
 	}
 
-	sources := SourceSummary{
-		ManifestName:    m.Metadata.Name,
-		ManifestVersion: m.Metadata.Version,
-		Workspace:       workspace,
-		GlobalDefaults:  false,
-	}
-
 	return &EffectiveAgentContract{
-		AgentID:     m.Metadata.Name,
-		Manifest:    m,
+		AgentID:     "",
+		Spec:        spec,
 		AgentSpec:   baseSpec,
-		Permissions: m.Spec.Permissions,
+		Permissions: spec.Permissions,
 		Resources:   resources,
-		Sources:     sources,
+		Sources:     SourceSummary{Workspace: workspace, GlobalDefaults: false},
 	}, nil
 }
 

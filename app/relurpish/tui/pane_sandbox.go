@@ -17,8 +17,8 @@ import (
 
 type sandboxRuntime interface {
 	SessionInfo() SessionInfo
-	LoadSandboxManifest() (*config.AgentManifest, error)
-	SaveSandboxManifest(*config.AgentManifest) (string, error)
+	LoadSandboxManifest() (*config.ManifestSpec, error)
+	SaveSandboxManifest(*config.ManifestSpec) (string, error)
 	SandboxBackend() string
 	SaveSandboxBackend(string) (string, error)
 	ReloadWorkspace(context.Context, string) error
@@ -79,7 +79,7 @@ type sandboxNode struct {
 type SandboxPane struct {
 	runtime sandboxRuntime
 
-	manifest *config.AgentManifest
+	manifest *config.ManifestSpec
 	root     *sandboxNode
 	visible  []sandboxVisibleNode
 
@@ -282,7 +282,7 @@ func (p *SandboxPane) buildFileCategory() *sandboxNode {
 		Expandable: true,
 		Expanded:   p.expandedState("files", true),
 	}
-	for i, perm := range p.manifest.Spec.Permissions.FileSystem {
+	for i, perm := range p.manifest.Permissions.FileSystem {
 		state := agentspec.AgentPermissionAllow
 		if perm.HITLRequired {
 			state = agentspec.AgentPermissionAsk
@@ -310,8 +310,8 @@ func (p *SandboxPane) buildCommandCategory() *sandboxNode {
 		Expandable: true,
 		Expanded:   p.expandedState("commands", true),
 	}
-	if p.manifest.Spec.Agent != nil {
-		bash := p.manifest.Spec.Agent.Bash
+	if p.manifest.Agent != nil {
+		bash := p.manifest.Agent.Bash
 		cat.Children = append(cat.Children, &sandboxNode{
 			ID:           "command:default",
 			Label:        "Default",
@@ -363,7 +363,7 @@ func (p *SandboxPane) buildNetworkCategory() *sandboxNode {
 		Expandable: true,
 		Expanded:   p.expandedState("network", true),
 	}
-	for i, perm := range p.manifest.Spec.Permissions.Network {
+	for i, perm := range p.manifest.Permissions.Network {
 		state := agentspec.AgentPermissionAllow
 		if perm.HITLRequired {
 			state = agentspec.AgentPermissionAsk
@@ -394,14 +394,14 @@ func (p *SandboxPane) buildProviderCategory() *sandboxNode {
 		Expandable: true,
 		Expanded:   p.expandedState("providers", true),
 	}
-	if p.manifest.Spec.Agent != nil {
-		keys := make([]string, 0, len(p.manifest.Spec.Agent.ProviderPolicies))
-		for key := range p.manifest.Spec.Agent.ProviderPolicies {
+	if p.manifest.Agent != nil {
+		keys := make([]string, 0, len(p.manifest.Agent.ProviderPolicies))
+		for key := range p.manifest.Agent.ProviderPolicies {
 			keys = append(keys, key)
 		}
 		sort.Strings(keys)
 		for _, key := range keys {
-			pol := p.manifest.Spec.Agent.ProviderPolicies[key]
+			pol := p.manifest.Agent.ProviderPolicies[key]
 			state := pol.Activate
 			if strings.TrimSpace(string(state)) == "" {
 				state = agentspec.AgentPermissionAsk
@@ -429,14 +429,14 @@ func (p *SandboxPane) buildToolCategory() *sandboxNode {
 		Expandable: true,
 		Expanded:   p.expandedState("tools", true),
 	}
-	if p.manifest.Spec.Agent != nil {
-		keys := make([]string, 0, len(p.manifest.Spec.Agent.ToolExecutionPolicy))
-		for key := range p.manifest.Spec.Agent.ToolExecutionPolicy {
+	if p.manifest.Agent != nil {
+		keys := make([]string, 0, len(p.manifest.Agent.ToolExecutionPolicy))
+		for key := range p.manifest.Agent.ToolExecutionPolicy {
 			keys = append(keys, key)
 		}
 		sort.Strings(keys)
 		for _, key := range keys {
-			pol := p.manifest.Spec.Agent.ToolExecutionPolicy[key]
+			pol := p.manifest.Agent.ToolExecutionPolicy[key]
 			state := pol.Execute
 			if strings.TrimSpace(string(state)) == "" {
 				state = agentspec.AgentPermissionAsk
@@ -717,34 +717,31 @@ func (p *SandboxPane) persistManifestCmd() tea.Cmd {
 	}
 }
 
-func (p *SandboxPane) buildSavedManifest() (*config.AgentManifest, error) {
-	clone, err := config.CloneAgentManifest(p.manifest)
-	if err != nil {
-		return nil, err
-	}
-	if clone == nil {
+func (p *SandboxPane) buildSavedManifest() (*config.ManifestSpec, error) {
+	spec := p.manifest
+	if spec == nil {
 		return nil, fmt.Errorf("manifest unavailable")
 	}
 	if p.root != nil {
 		for _, child := range p.root.Children {
 			switch child.ID {
 			case "files":
-				p.applyFileCategory(clone, child)
+				p.applyFileCategory(spec, child)
 			case "commands":
-				p.applyCommandCategory(clone, child)
+				p.applyCommandCategory(spec, child)
 			case "network":
-				p.applyNetworkCategory(clone, child)
+				p.applyNetworkCategory(spec, child)
 			case "providers":
-				p.applyProviderCategory(clone, child)
+				p.applyProviderCategory(spec, child)
 			case "tools":
-				p.applyToolCategory(clone, child)
+				p.applyToolCategory(spec, child)
 			}
 		}
 	}
-	return clone, nil
+	return spec, nil
 }
 
-func (p *SandboxPane) applyFileCategory(clone *config.AgentManifest, cat *sandboxNode) {
+func (p *SandboxPane) applyFileCategory(spec *config.ManifestSpec, cat *sandboxNode) {
 	perms := make([]permissions.FileSystemPermission, 0, len(cat.Children))
 	for _, child := range cat.Children {
 		if child.State == agentspec.AgentPermissionDeny {
@@ -756,16 +753,16 @@ func (p *SandboxPane) applyFileCategory(clone *config.AgentManifest, cat *sandbo
 		perms = append(perms, perm)
 	}
 	sort.Slice(perms, func(i, j int) bool { return perms[i].Path < perms[j].Path })
-	policy := ensureSandboxPolicy(&clone.Spec)
+	policy := ensureSandboxPolicy(spec)
 	policy.Permissions.FileSystem = perms
-	clone.Spec.Permissions.FileSystem = perms
+	spec.Permissions.FileSystem = perms
 }
 
-func (p *SandboxPane) applyCommandCategory(clone *config.AgentManifest, cat *sandboxNode) {
-	if clone.Spec.Agent == nil {
-		clone.Spec.Agent = &agentspec.AgentRuntimeSpec{}
+func (p *SandboxPane) applyCommandCategory(spec *config.ManifestSpec, cat *sandboxNode) {
+	if spec.Agent == nil {
+		spec.Agent = &agentspec.AgentRuntimeSpec{}
 	}
-	bash := clone.Spec.Agent.Bash
+	bash := spec.Agent.Bash
 	bash.AllowPatterns = bash.AllowPatterns[:0]
 	bash.DenyPatterns = bash.DenyPatterns[:0]
 	for _, child := range cat.Children {
@@ -785,10 +782,10 @@ func (p *SandboxPane) applyCommandCategory(clone *config.AgentManifest, cat *san
 	}
 	sort.Strings(bash.AllowPatterns)
 	sort.Strings(bash.DenyPatterns)
-	clone.Spec.Agent.Bash = bash
+	spec.Agent.Bash = bash
 }
 
-func (p *SandboxPane) applyNetworkCategory(clone *config.AgentManifest, cat *sandboxNode) {
+func (p *SandboxPane) applyNetworkCategory(spec *config.ManifestSpec, cat *sandboxNode) {
 	perms := make([]permissions.NetworkPermission, 0, len(cat.Children))
 	for _, child := range cat.Children {
 		if child.State == agentspec.AgentPermissionDeny {
@@ -808,9 +805,9 @@ func (p *SandboxPane) applyNetworkCategory(clone *config.AgentManifest, cat *san
 		}
 		return perms[i].Direction < perms[j].Direction
 	})
-	policy := ensureSandboxPolicy(&clone.Spec)
+	policy := ensureSandboxPolicy(spec)
 	policy.Permissions.Network = perms
-	clone.Spec.Permissions.Network = perms
+	spec.Permissions.Network = perms
 }
 
 func ensureSandboxPolicy(spec *config.ManifestSpec) *config.ManifestPolicySpec {
@@ -831,39 +828,39 @@ func ensureSandboxPolicy(spec *config.ManifestSpec) *config.ManifestPolicySpec {
 	return spec.Policy
 }
 
-func (p *SandboxPane) applyProviderCategory(clone *config.AgentManifest, cat *sandboxNode) {
-	if clone.Spec.Agent == nil {
-		clone.Spec.Agent = &agentspec.AgentRuntimeSpec{}
+func (p *SandboxPane) applyProviderCategory(spec *config.ManifestSpec, cat *sandboxNode) {
+	if spec.Agent == nil {
+		spec.Agent = &agentspec.AgentRuntimeSpec{}
 	}
-	if clone.Spec.Agent.ProviderPolicies == nil {
-		clone.Spec.Agent.ProviderPolicies = make(map[string]agentspec.ProviderPolicy)
+	if spec.Agent.ProviderPolicies == nil {
+		spec.Agent.ProviderPolicies = make(map[string]agentspec.ProviderPolicy)
 	}
 	for _, child := range cat.Children {
 		pol := child.providerPol
 		if child.State == agentspec.AgentPermissionDeny {
-			delete(clone.Spec.Agent.ProviderPolicies, child.Label)
+			delete(spec.Agent.ProviderPolicies, child.Label)
 			continue
 		}
 		pol.Activate = child.State
-		clone.Spec.Agent.ProviderPolicies[child.Label] = pol
+		spec.Agent.ProviderPolicies[child.Label] = pol
 	}
 }
 
-func (p *SandboxPane) applyToolCategory(clone *config.AgentManifest, cat *sandboxNode) {
-	if clone.Spec.Agent == nil {
-		clone.Spec.Agent = &agentspec.AgentRuntimeSpec{}
+func (p *SandboxPane) applyToolCategory(spec *config.ManifestSpec, cat *sandboxNode) {
+	if spec.Agent == nil {
+		spec.Agent = &agentspec.AgentRuntimeSpec{}
 	}
-	if clone.Spec.Agent.ToolExecutionPolicy == nil {
-		clone.Spec.Agent.ToolExecutionPolicy = make(map[string]agentspec.ToolPolicy)
+	if spec.Agent.ToolExecutionPolicy == nil {
+		spec.Agent.ToolExecutionPolicy = make(map[string]agentspec.ToolPolicy)
 	}
 	for _, child := range cat.Children {
 		if child.State == agentspec.AgentPermissionDeny {
-			delete(clone.Spec.Agent.ToolExecutionPolicy, child.Label)
+			delete(spec.Agent.ToolExecutionPolicy, child.Label)
 			continue
 		}
 		pol := child.toolPol
 		pol.Execute = child.State
-		clone.Spec.Agent.ToolExecutionPolicy[child.Label] = pol
+		spec.Agent.ToolExecutionPolicy[child.Label] = pol
 	}
 }
 

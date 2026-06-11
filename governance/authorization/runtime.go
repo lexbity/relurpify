@@ -22,7 +22,7 @@ type SandboxBackendFactory func(ctx context.Context, backend string, cfg governa
 // RuntimeConfig describes configuration for agent runtime registration.
 type RuntimeConfig struct {
 	ManifestPath     string
-	ManifestSnapshot *config.AgentManifestSnapshot
+	ManifestSnapshot *config.ManifestSnapshot
 	SecurityBundle   *cfgsecurity.Bundle
 	ConfigPath       string
 	Image            string
@@ -38,8 +38,8 @@ type RuntimeConfig struct {
 // AgentRegistration stores runtime metadata.
 type AgentRegistration struct {
 	ID               string
-	Manifest         *config.AgentManifest
-	ManifestSnapshot *config.AgentManifestSnapshot
+	ManifestSpec     *config.ManifestSpec
+	ManifestSnapshot *config.ManifestSnapshot
 	Runtime          governanceports.SandboxRuntime
 	Permissions      *PermissionManager
 	Policy           PolicyEngine
@@ -58,34 +58,34 @@ func RegisterAgent(ctx context.Context, cfg RuntimeConfig) (*AgentRegistration, 
 	manifestSnapshot := cfg.ManifestSnapshot
 	var err error
 	if manifestSnapshot == nil {
-		manifestSnapshot, err = config.LoadAgentManifestSnapshot(cfg.ManifestPath)
-		if err != nil {
-			return nil, fmt.Errorf("load manifest: %w", err)
+		docSnapshot, docErr := config.LoadDocument(cfg.ManifestPath)
+		if docErr != nil {
+			return nil, fmt.Errorf("load manifest: %w", docErr)
+		}
+		manifestSnapshot = &config.ManifestSnapshot{
+			Spec:        config.ManifestSpec{},
+			Fingerprint: docSnapshot.Fingerprint,
+			LoadedAt:    docSnapshot.LoadedAt,
+			SourcePath:  docSnapshot.SourcePath,
+			Warnings:    docSnapshot.Warnings,
 		}
 	}
-	agentManifest, err := config.CloneAgentManifest(manifestSnapshot.Manifest)
-	if err != nil {
-		return nil, fmt.Errorf("clone manifest: %w", err)
-	}
-	if agentManifest == nil {
+	if manifestSnapshot == nil {
 		return nil, errors.New("manifest missing")
 	}
-	effectiveResources, err := config.ResolveEffectiveResources(cfg.BaseFS, agentManifest)
-	if err != nil {
-		return nil, fmt.Errorf("resolve resources: %w", err)
-	}
-	agentManifest.Spec.Resources = effectiveResources
+
+	spec := &manifestSnapshot.Spec
 
 	// Resolve effective permissions via governance/permissions
 	var defaultPerms *permissions.PermissionSet
-	if agentManifest.Spec.Defaults != nil {
-		defaultPerms = agentManifest.Spec.Defaults.Permissions
+	if spec.Defaults != nil {
+		defaultPerms = spec.Defaults.Permissions
 	}
-	specPerms := &agentManifest.Spec.Permissions
+	specPerms := &spec.Permissions
 	effectivePerms := permissions.ResolveEffective(defaultPerms, specPerms)
 	image := cfg.Image
-	if image == "" && agentManifest != nil {
-		image = agentManifest.Spec.Image
+	if image == "" {
+		image = spec.Image
 	}
 	runtime, err := selectSandboxRuntime(ctx, cfg.Backend, cfg.SandboxCfg, image, cfg.BaseFS, cfg.BackendFactory)
 	if err != nil {
@@ -119,8 +119,8 @@ func RegisterAgent(ctx context.Context, cfg RuntimeConfig) (*AgentRegistration, 
 			},
 			[]string{stateDir},
 		)
-		if agentManifest.Spec.Policies != nil {
-			if policy, ok := agentManifest.Spec.Policies["default_tool_policy"]; ok {
+		if spec.Policies != nil {
+			if policy, ok := spec.Policies["default_tool_policy"]; ok {
 				if string(policy) == "allow" {
 					return nil, errors.New(
 						"agent spec sets default_policy=allow which is not permitted; " +
@@ -131,7 +131,7 @@ func RegisterAgent(ctx context.Context, cfg RuntimeConfig) (*AgentRegistration, 
 		}
 		permManager.AttachRuntime(runtime)
 	}
-	sboxPolicy := buildSandboxPolicy(agentManifest, cfg.SecurityBundle.Sandbox.ProtectedPaths)
+	sboxPolicy := buildSandboxPolicy(spec, cfg.SecurityBundle.Sandbox.ProtectedPaths)
 	if err := runtime.ValidatePolicy(sboxPolicy); err != nil {
 		return nil, fmt.Errorf("sandbox policy validation failed: %w", err)
 	}
@@ -139,8 +139,8 @@ func RegisterAgent(ctx context.Context, cfg RuntimeConfig) (*AgentRegistration, 
 		return nil, fmt.Errorf("sandbox policy application failed: %w", err)
 	}
 	return &AgentRegistration{
-		ID:               agentManifest.Metadata.Name,
-		Manifest:         agentManifest,
+		ID:               "",
+		ManifestSpec:     spec,
 		ManifestSnapshot: manifestSnapshot,
 		Runtime:          runtime,
 		Permissions:      permManager,
@@ -157,18 +157,18 @@ func selectSandboxRuntime(ctx context.Context, backend string, sandboxCfg govern
 	return nil, fmt.Errorf("no sandbox backend factory configured")
 }
 
-// buildSandboxPolicy constructs a sandbox policy from an agent manifest and
+// buildSandboxPolicy constructs a sandbox policy from a manifest spec and
 // protected paths.
-func buildSandboxPolicy(agentManifest *config.AgentManifest, protectedPaths []string) governanceports.SandboxPolicy {
+func buildSandboxPolicy(spec *config.ManifestSpec, protectedPaths []string) governanceports.SandboxPolicy {
 	policy := governanceports.SandboxPolicy{
 		ProtectedPaths: append([]string(nil), protectedPaths...),
 	}
-	if agentManifest == nil {
+	if spec == nil {
 		return policy
 	}
-	policy.NetworkRules = buildNetworkPolicy(agentManifest.Spec.Permissions.Network)
-	policy.ReadOnlyRoot = agentManifest.Spec.Security.ReadOnlyRoot
-	policy.NoNewPrivileges = agentManifest.Spec.Security.NoNewPrivileges
+	policy.NetworkRules = buildNetworkPolicy(spec.Permissions.Network)
+	policy.ReadOnlyRoot = spec.Security.ReadOnlyRoot
+	policy.NoNewPrivileges = spec.Security.NoNewPrivileges
 	return policy
 }
 

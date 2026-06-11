@@ -33,7 +33,7 @@ func TestRepeatedFixtureEquivalence(t *testing.T) {
 		m1 := ValidManifest().Build()
 		m2 := ValidManifest().Build()
 
-		AssertNormalizedFileSystemPermissionsEqual(t, m1.Spec.Policy.Permissions.FileSystem, m2.Spec.Policy.Permissions.FileSystem)
+		AssertNormalizedFileSystemPermissionsEqual(t, m1.Policy.Permissions.FileSystem, m2.Policy.Permissions.FileSystem)
 	})
 
 	t.Run("policy rule fixture equivalence", func(t *testing.T) {

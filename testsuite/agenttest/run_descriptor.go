@@ -124,9 +124,16 @@ func BuildPreparedRunDescriptor(suite *Suite, c CaseSpec, model ModelSpec, opts 
 		return nil, fmt.Errorf("manifest path required")
 	}
 	manifestPath = cleanAbsolutePath(manifestPath)
-	loadedManifest, err := config.LoadAgentManifest(manifestPath)
+	docSnapshot, err := config.LoadDocument(manifestPath)
 	if err != nil {
 		return nil, err
+	}
+	var sandboxBackend string
+	if node, ok := docSnapshot.Document.Spec["runtime"]; ok {
+		var runtimeStr string
+		if err := node.Decode(&runtimeStr); err == nil {
+			sandboxBackend = strings.TrimSpace(runtimeStr)
+		}
 	}
 
 	backendTargets := buildPreparedBackendTargets(suite, c, model, opts)
@@ -191,7 +198,7 @@ func BuildPreparedRunDescriptor(suite *Suite, c CaseSpec, model ModelSpec, opts 
 		StrictMode:            suite.IsStrictRun(opts.Profile, opts.Strict),
 		MaxIterations:         resolveCaseMaxIterations(opts, c),
 		MaxRetries:            resolveCaseMaxRetries(opts),
-		SandboxBackend:        strings.TrimSpace(loadedManifest.Spec.Runtime),
+		SandboxBackend:        sandboxBackend,
 		SetupOverlays:         setupOverlays,
 		SeededState:           seededState,
 		Verification:          verification,

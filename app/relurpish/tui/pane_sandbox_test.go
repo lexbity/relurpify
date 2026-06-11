@@ -17,7 +17,7 @@ import (
 
 type sandboxPaneRuntimeFake struct {
 	workspace    string
-	manifest     *config.AgentManifest
+	manifest     *config.ManifestSpec
 	manifestPath string
 	configPath   string
 	backend      string
@@ -28,22 +28,19 @@ func (f *sandboxPaneRuntimeFake) SessionInfo() SessionInfo {
 	return SessionInfo{Workspace: f.workspace}
 }
 
-func (f *sandboxPaneRuntimeFake) LoadSandboxManifest() (*config.AgentManifest, error) {
-	if f.manifest == nil && f.manifestPath != "" {
-		loaded, err := config.LoadAgentManifest(f.manifestPath)
-		if err != nil {
-			return nil, err
-		}
-		f.manifest = loaded
+func (f *sandboxPaneRuntimeFake) LoadSandboxManifest() (*config.ManifestSpec, error) {
+	if f.manifest == nil {
+		return nil, nil
 	}
-	return config.CloneAgentManifest(f.manifest)
+	m := *f.manifest
+	return &m, nil
 }
 
-func (f *sandboxPaneRuntimeFake) SaveSandboxManifest(m *config.AgentManifest) (string, error) {
+func (f *sandboxPaneRuntimeFake) SaveSandboxManifest(m *config.ManifestSpec) (string, error) {
 	if f.manifestPath == "" {
 		return "", os.ErrInvalid
 	}
-	backup, err := runtimesvc.SaveAgentManifestWithBackup(f.manifestPath, m)
+	backup, err := runtimesvc.SaveManifestSpecWithBackup(f.manifestPath, m)
 	if err != nil {
 		return "", err
 	}
@@ -74,55 +71,39 @@ func (f *sandboxPaneRuntimeFake) ReloadWorkspace(ctx context.Context, workspace 
 	_ = ctx
 	f.workspace = workspace
 	f.reloads++
-	if f.manifestPath != "" {
-		loaded, err := config.LoadAgentManifest(f.manifestPath)
-		if err != nil {
-			return err
-		}
-		f.manifest = loaded
-	}
 	return nil
 }
 
-func testSandboxManifest() *config.AgentManifest {
-	return &config.AgentManifest{
-		APIVersion: "relurpify/v1alpha1",
-		Kind:       "AgentManifest",
-		Metadata: config.ManifestMetadata{
-			Name:        "coding",
-			Version:     "1.0.0",
-			Description: "sandbox test manifest",
-		},
-		Spec: config.ManifestSpec{
-			Image:   "ghcr.io/example/runtime:0.4.1",
-			Runtime: "gvisor",
-			Permissions: permissions.PermissionSet{
-				FileSystem: []permissions.FileSystemPermission{
-					{Action: permissions.FileSystemRead, Path: "/workspace/**"},
-					{Action: permissions.FileSystemWrite, Path: "/workspace/**"},
-				},
-				Network: []permissions.NetworkPermission{
-					{Direction: "egress", Protocol: "tcp", Host: "localhost", Port: 11434},
-				},
+func testSandboxManifest() *config.ManifestSpec {
+	return &config.ManifestSpec{
+		Image:   "ghcr.io/example/runtime:0.4.1",
+		Runtime: "gvisor",
+		Permissions: permissions.PermissionSet{
+			FileSystem: []permissions.FileSystemPermission{
+				{Action: permissions.FileSystemRead, Path: "/workspace/**"},
+				{Action: permissions.FileSystemWrite, Path: "/workspace/**"},
 			},
-			Agent: &agentspec.AgentRuntimeSpec{
-				Implementation: "coding",
-				Mode:           agentspec.AgentModePrimary,
-				Model: agentspec.AgentModelConfig{
-					Provider: "ollama",
-					Name:     "qwen2.5-coder:14b",
-				},
-				Bash: agentspec.AgentBashPermissions{
-					AllowPatterns: []string{"git status"},
-					DenyPatterns:  []string{"rm -rf .*"},
-					Default:       agentspec.AgentPermissionAsk,
-				},
-				ProviderPolicies: map[string]agentspec.ProviderPolicy{
-					"remote-plugin": {Activate: agentspec.AgentPermissionAsk, DefaultTrust: "remote-declared-untrusted"},
-				},
-				ToolExecutionPolicy: map[string]agentspec.ToolPolicy{
-					"cli_mkdir": {Execute: agentspec.AgentPermissionAllow},
-				},
+			Network: []permissions.NetworkPermission{
+				{Direction: "egress", Protocol: "tcp", Host: "localhost", Port: 11434},
+			},
+		},
+		Agent: &agentspec.AgentRuntimeSpec{
+			Implementation: "coding",
+			Mode:           agentspec.AgentModePrimary,
+			Model: agentspec.AgentModelConfig{
+				Provider: "ollama",
+				Name:     "qwen2.5-coder:14b",
+			},
+			Bash: agentspec.AgentBashPermissions{
+				AllowPatterns: []string{"git status"},
+				DenyPatterns:  []string{"rm -rf .*"},
+				Default:       agentspec.AgentPermissionAsk,
+			},
+			ProviderPolicies: map[string]agentspec.ProviderPolicy{
+				"remote-plugin": {Activate: agentspec.AgentPermissionAsk, DefaultTrust: "remote-declared-untrusted"},
+			},
+			ToolExecutionPolicy: map[string]agentspec.ToolPolicy{
+				"cli_mkdir": {Execute: agentspec.AgentPermissionAllow},
 			},
 		},
 	}
@@ -138,7 +119,7 @@ func TestSandboxPaneCyclesAndPersists(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
 		t.Fatalf("mkdir config dir: %v", err)
 	}
-	if err := config.SaveAgentManifest(manifestPath, testSandboxManifest()); err != nil {
+	if err := config.SaveYAML(manifestPath, testSandboxManifest()); err != nil {
 		t.Fatalf("seed manifest: %v", err)
 	}
 	if err := os.WriteFile(configPath, []byte("sandbox_backend: gvisor\n"), 0o644); err != nil {
@@ -147,6 +128,7 @@ func TestSandboxPaneCyclesAndPersists(t *testing.T) {
 
 	rt := &sandboxPaneRuntimeFake{
 		workspace:    dir,
+		manifest:     testSandboxManifest(),
 		manifestPath: manifestPath,
 		configPath:   configPath,
 		backend:      "gvisor",
@@ -174,12 +156,12 @@ func TestSandboxPaneCyclesAndPersists(t *testing.T) {
 	if err != nil {
 		t.Fatalf("build saved manifest: %v", err)
 	}
-	if clone.Spec.Policy == nil {
-		t.Fatalf("serialized policy permissions = %#v, want HITLRequired=true", clone.Spec.Policy)
+	if clone.Policy == nil {
+		t.Fatalf("serialized policy permissions = %#v, want HITLRequired=true", clone.Policy)
 	}
-	ps := &clone.Spec.Policy.Permissions
+	ps := &clone.Policy.Permissions
 	if len(ps.FileSystem) == 0 || !ps.FileSystem[0].HITLRequired {
-		t.Fatalf("serialized policy permissions = %#v, want HITLRequired=true", clone.Spec.Policy)
+		t.Fatalf("serialized policy permissions = %#v, want HITLRequired=true", clone.Policy)
 	}
 
 	pane, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}})

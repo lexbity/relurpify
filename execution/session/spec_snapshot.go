@@ -11,23 +11,16 @@ import (
 // from an agent spec. This allows BootstrapAgentRuntime to work without a
 // file-backed manifest, enabling embedded agents (rex/nexus) to go through
 // the same security foundation as full entry points.
-func synthesizeManifestSnapshot(agentName string, spec *agentspec.AgentRuntimeSpec) *config.AgentManifestSnapshot {
+func synthesizeManifestSnapshot(agentName string, spec *agentspec.AgentRuntimeSpec) *config.ManifestSnapshot {
 	name := agentName
 	if name == "" {
 		name = "agent"
 	}
 	log.Printf("synthesizing minimal manifest snapshot for agent %q (spec-only bootstrap)", name)
 
-	return &config.AgentManifestSnapshot{
-		Manifest: &config.AgentManifest{
-			APIVersion: "relurpify/v1alpha1",
-			Kind:       "AgentManifest",
-			Metadata: config.ManifestMetadata{
-				Name: name,
-			},
-			Spec: config.ManifestSpec{
-				Agent: spec,
-			},
+	return &config.ManifestSnapshot{
+		Spec: config.ManifestSpec{
+			Agent: spec,
 		},
 	}
 }

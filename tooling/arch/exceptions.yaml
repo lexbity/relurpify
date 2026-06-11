@@ -1,12 +1,8 @@
-# Phase 1: 1 remaining domain-direction violation (P15 retired in Slice 8).
-# Each exception lists the importing domain (src_domain), the imported domain (dst_domain),
-# and the phase that retires it. In warn mode these are suppressed; enforce mode reports them.
-# Domains not listed: testsuite, tooling (unrestricted).
-# (Locked: no-contracts-bucket; GP-2/GP-3 framework-domain-rearchitecture)
+# All domain-direction violations have been retired.
+# P7/P8/P10/P11/P12/P13/P15 are all dead (zero non-test imports).
+# Remaining direction violations (model→telemetry, platform→telemetry,
+# telemetry→governance, userconfig→capability, etc.) are outside this
+# program's scope and are tracked in future programs.
 version: 1
-direction_violations:
-  # 1. execution ↔ context — minority: context→execution
-  - src_domain: context
-    dst_domain: execution
-    phase: P11
+direction_violations: []
 

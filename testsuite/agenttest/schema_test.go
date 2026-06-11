@@ -212,14 +212,12 @@ spec:
 
 // TestManifestCoversFileAction verifies permission checking for file actions
 func TestManifestCoversFileAction(t *testing.T) {
-	m := &config.AgentManifest{
-		Spec: config.ManifestSpec{
-			Permissions: permissions.PermissionSet{
-				FileSystem: []permissions.FileSystemPermission{
-					{Action: permissions.FileSystemWrite, Path: "${workspace}/**"},
-					{Action: permissions.FileSystemRead, Path: "/tmp/*.log"},
-					{Action: permissions.FileSystemDelete, Path: "/var/data/*"},
-				},
+	m := &config.ManifestSpec{
+		Permissions: permissions.PermissionSet{
+			FileSystem: []permissions.FileSystemPermission{
+				{Action: permissions.FileSystemWrite, Path: "${workspace}/**"},
+				{Action: permissions.FileSystemRead, Path: "/tmp/*.log"},
+				{Action: permissions.FileSystemDelete, Path: "/var/data/*"},
 			},
 		},
 	}
@@ -259,14 +257,12 @@ func TestManifestCoversFileAction(t *testing.T) {
 
 // TestManifestCoversExecutable verifies binary permission checking
 func TestManifestCoversExecutable(t *testing.T) {
-	m := &config.AgentManifest{
-		Spec: config.ManifestSpec{
-			Permissions: permissions.PermissionSet{
-				Executables: []permissions.ExecutablePermission{
-					{Binary: "go"},
-					{Binary: "git"},
-					{Binary: "python*"},
-				},
+	m := &config.ManifestSpec{
+		Permissions: permissions.PermissionSet{
+			Executables: []permissions.ExecutablePermission{
+				{Binary: "go"},
+				{Binary: "git"},
+				{Binary: "python*"},
 			},
 		},
 	}
@@ -299,14 +295,12 @@ func TestManifestCoversExecutable(t *testing.T) {
 
 // TestManifestCoversNetworkCall verifies network permission checking
 func TestManifestCoversNetworkCall(t *testing.T) {
-	m := &config.AgentManifest{
-		Spec: config.ManifestSpec{
-			Permissions: permissions.PermissionSet{
-				Network: []permissions.NetworkPermission{
-					{Host: "api.example.com", Port: 443},
-					{Host: "*.local", Port: 0}, // any port
-					{Host: "localhost", Port: 8080},
-				},
+	m := &config.ManifestSpec{
+		Permissions: permissions.PermissionSet{
+			Network: []permissions.NetworkPermission{
+				{Host: "api.example.com", Port: 443},
+				{Host: "*.local", Port: 0}, // any port
+				{Host: "localhost", Port: 8080},
 			},
 		},
 	}

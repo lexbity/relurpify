@@ -6,10 +6,10 @@ import (
 	"testing"
 )
 
-// TestNoStaleDirectionEdges verifies that the domain-direction exceptions
-// retired in earlier slices that would be DAG-illegal if reintroduced remain
-// absent. P7 (capability→platform) and P8 (governance→platform) are DAG-legal
-// directions and are not checked here.
+// TestNoStaleDirectionEdges verifies that every retired P-phase edge (all 7
+// P-phase exceptions: P7/P8/P10/P11/P12/P13/P15) has zero non-test imports.
+// Directions that are DAG-legal (capability→platform, governance→platform)
+// are NOT checked — they are allowed by the domain DAG.
 func TestNoStaleDirectionEdges(t *testing.T) {
 	root := filepath.Join("..", "..")
 	pkgs, err := ListPackages(root)
@@ -24,6 +24,7 @@ func TestNoStaleDirectionEdges(t *testing.T) {
 	}{
 		{"capability", "context", "P10 retired: capability→context"},
 		{"capability", "execution", "P12 retired: capability→execution"},
+		{"context", "execution", "P11 retired: context→execution"},
 	}
 
 	var failures []string

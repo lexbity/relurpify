@@ -22,8 +22,8 @@ func ValidateSecurityRuntimeInput(in SecurityRuntimeInput) error {
 	// must be compatible. A gvisor manifest with a docker backend would
 	// bypass gvisor's security model (protected paths, no-new-privileges,
 	// seccomp).
-	if in.Manifest != nil {
-		manifestRuntime := strings.ToLower(strings.TrimSpace(in.Manifest.Spec.Runtime))
+	if in.ManifestSpec != nil {
+		manifestRuntime := strings.ToLower(strings.TrimSpace(in.ManifestSpec.Runtime))
 		if manifestRuntime != "" {
 			resolvedBackend := resolveEffectiveBackend(in.SandboxBackend)
 			if !backendsCompatible(manifestRuntime, resolvedBackend) {

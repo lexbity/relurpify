@@ -162,8 +162,8 @@ spec:
 `), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := config.LoadAgentManifest(manifestPath); err != nil {
-		t.Fatalf("LoadAgentManifest: %v", err)
+	if _, err := config.LoadDocument(manifestPath); err != nil {
+		t.Fatalf("LoadDocument: %v", err)
 	}
 
 	derived := filepath.Join(t.TempDir(), "run", "workspace")

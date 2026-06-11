@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/ayenitd"
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/platform/llm"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
@@ -101,11 +102,11 @@ func BuildDoctorReport(ctx context.Context, cfg Config, secrets config.Secrets) 
 	}
 	if _, err := os.Stat(cfg.ManifestPath); err == nil {
 		report.ManifestExists = true
-		if snapshot, err := config.LoadAgentManifestSnapshot(cfg.ManifestPath); err != nil {
+		if snapshot, err := config.LoadDocument(cfg.ManifestPath); err != nil {
 			report.ManifestError = err.Error()
 		} else {
 			report.ManifestFingerprint = hex.EncodeToString(snapshot.Fingerprint[:])
-			report.ManifestPolicySummary = summarizeManifestPolicy(snapshot.Manifest)
+			report.ManifestPolicySummary = summarizeManifestPolicy(snapshot.Document)
 			if len(snapshot.Warnings) > 0 {
 				report.ManifestWarnings = append(report.ManifestWarnings, snapshot.Warnings...)
 				report.DeprecationNotices = append(report.DeprecationNotices, snapshot.Warnings...)
@@ -374,27 +375,34 @@ func firstNonEmpty(values ...string) string {
 	return ""
 }
 
-func summarizeManifestPolicy(m *config.AgentManifest) string {
-	if m == nil {
+func summarizeManifestPolicy(doc *config.Document) string {
+	if doc == nil {
 		return ""
 	}
 	var parts []string
-	if m.Spec.Policy != nil {
-		policy := m.Spec.Policy
-		permCount := len(policy.Permissions.FileSystem) + len(policy.Permissions.Executables) + len(policy.Permissions.Network)
-		if permCount > 0 {
-			parts = append(parts, fmt.Sprintf("policy-perms=%d", permCount))
-		}
-		if len(policy.Policies) > 0 {
-			parts = append(parts, fmt.Sprintf("policy-rules=%d", len(policy.Policies)))
-		}
-		if policy.Defaults != nil && policy.Defaults.Permissions != nil {
-			defaultPerms := policy.Defaults.Permissions
-			parts = append(parts, fmt.Sprintf("defaults=%d/%d/%d", len(defaultPerms.FileSystem), len(defaultPerms.Executables), len(defaultPerms.Network)))
+	policyNode, ok := doc.Section("policy")
+	if ok {
+		var policySpec config.ManifestPolicySpec
+		if err := policyNode.Decode(&policySpec); err == nil {
+			permCount := len(policySpec.Permissions.FileSystem) + len(policySpec.Permissions.Executables) + len(policySpec.Permissions.Network)
+			if permCount > 0 {
+				parts = append(parts, fmt.Sprintf("policy-perms=%d", permCount))
+			}
+			if len(policySpec.Policies) > 0 {
+				parts = append(parts, fmt.Sprintf("policy-rules=%d", len(policySpec.Policies)))
+			}
+			if policySpec.Defaults != nil && policySpec.Defaults.Permissions != nil {
+				defaultPerms := policySpec.Defaults.Permissions
+				parts = append(parts, fmt.Sprintf("defaults=%d/%d/%d", len(defaultPerms.FileSystem), len(defaultPerms.Executables), len(defaultPerms.Network)))
+			}
 		}
 	}
-	if m.Spec.Agent != nil {
-		parts = append(parts, fmt.Sprintf("tool-calling=%s", m.Spec.Agent.ResolveToolCallingIntent()))
+	agentNode, ok := doc.Section("agent")
+	if ok {
+		var agentSpec agentspec.AgentRuntimeSpec
+		if err := agentNode.Decode(&agentSpec); err == nil {
+			parts = append(parts, fmt.Sprintf("tool-calling=%s", agentSpec.ResolveToolCallingIntent()))
+		}
 	}
 	return strings.Join(parts, ", ")
 }

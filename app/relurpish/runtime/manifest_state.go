@@ -8,13 +8,14 @@ import (
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
-// SaveAgentManifestWithBackup writes the manifest to path after snapshotting
+
+// SaveManifestSpecWithBackup writes the manifest spec to path after snapshotting
 // the previous file into relurpify_cfg/backups.
-func SaveAgentManifestWithBackup(path string, m *config.AgentManifest) (string, error) {
+func SaveManifestSpecWithBackup(path string, spec *config.ManifestSpec) (string, error) {
 	if path == "" {
 		return "", fmt.Errorf("manifest path required")
 	}
-	if m == nil {
+	if spec == nil {
 		return "", fmt.Errorf("manifest required")
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
@@ -24,8 +25,19 @@ func SaveAgentManifestWithBackup(path string, m *config.AgentManifest) (string, 
 	if err != nil {
 		return "", err
 	}
-	if err := config.SaveAgentManifest(path, m); err != nil {
-		return "", err
+	out := struct {
+		APIVersion string                    `yaml:"apiVersion"`
+		Kind       string                    `yaml:"kind"`
+		Metadata   config.DocumentMetadata   `yaml:"metadata"`
+		Spec       *config.ManifestSpec      `yaml:"spec"`
+	}{
+		APIVersion: "relurpify/v1alpha1",
+		Kind:       "AgentManifest",
+		Metadata:   config.DocumentMetadata{Name: "agent"},
+		Spec:       spec,
+	}
+	if err := config.SaveYAML(path, out); err != nil {
+		return "", fmt.Errorf("write manifest: %w", err)
 	}
 	return backup, nil
 }

@@ -230,10 +230,7 @@ func TestManifestFixtureBuilder(t *testing.T) {
 		if err := m.Validate(); err != nil {
 			t.Errorf("valid manifest should validate: %v", err)
 		}
-		if m.APIVersion != "relurpify/v1alpha1" || m.Kind != "AgentManifest" || m.Metadata.Name != "test-agent" {
-			t.Fatalf("unexpected manifest identity: %+v", m.Metadata)
-		}
-		AssertNormalizedFileSystemPermissionsEqual(t, m.Spec.Policy.Permissions.FileSystem, []permissions.FileSystemPermission{
+		AssertNormalizedFileSystemPermissionsEqual(t, m.Policy.Permissions.FileSystem, []permissions.FileSystemPermission{
 			{Action: permissions.FileSystemRead, Path: "${workspace}/**"},
 			{Action: permissions.FileSystemWrite, Path: "${workspace}/**"},
 		})
@@ -243,30 +240,12 @@ func TestManifestFixtureBuilder(t *testing.T) {
 		}
 	})
 
-	t.Run("manifest with custom name", func(t *testing.T) {
-		builder := ValidManifest().WithName("custom-agent")
-		m := builder.Build()
-
-		if m.Metadata.Name != "custom-agent" {
-			t.Errorf("name not set: got %s", m.Metadata.Name)
-		}
-	})
-
-	t.Run("manifest with custom version", func(t *testing.T) {
-		builder := ValidManifest().WithVersion("2.0.0")
-		m := builder.Build()
-
-		if m.Metadata.Version != "2.0.0" {
-			t.Errorf("version not set: got %s", m.Metadata.Version)
-		}
-	})
-
 	t.Run("manifest with filesystem permission", func(t *testing.T) {
 		builder := ValidManifest().
 			WithFileSystemPermission(permissions.FileSystemRead, "${workspace}/src/**")
 		m := builder.Build()
 
-		AssertNormalizedFileSystemPermissionsEqual(t, m.Spec.Policy.Permissions.FileSystem, []permissions.FileSystemPermission{
+		AssertNormalizedFileSystemPermissionsEqual(t, m.Policy.Permissions.FileSystem, []permissions.FileSystemPermission{
 			{Action: permissions.FileSystemRead, Path: "${workspace}/**"},
 			{Action: permissions.FileSystemWrite, Path: "${workspace}/**"},
 			{Action: permissions.FileSystemRead, Path: "${workspace}/src/**"},
@@ -278,7 +257,7 @@ func TestManifestFixtureBuilder(t *testing.T) {
 			WithNetworkPermission("egress", "tcp", "example.com", 443)
 		m := builder.Build()
 
-		AssertNormalizedNetworkPermissionsEqual(t, m.Spec.Policy.Permissions.Network, []permissions.NetworkPermission{{Direction: "egress", Protocol: "tcp", Host: "example.com", Port: 443}})
+		AssertNormalizedNetworkPermissionsEqual(t, m.Policy.Permissions.Network, []permissions.NetworkPermission{{Direction: "egress", Protocol: "tcp", Host: "example.com", Port: 443}})
 	})
 
 	t.Run("manifest with HITL required", func(t *testing.T) {
@@ -287,7 +266,7 @@ func TestManifestFixtureBuilder(t *testing.T) {
 			WithHITLRequired()
 		m := builder.Build()
 
-		perms := m.Spec.Policy.Permissions.FileSystem
+		perms := m.Policy.Permissions.FileSystem
 		if len(perms) == 0 {
 			t.Fatal("no filesystem permissions found")
 		}
@@ -296,21 +275,21 @@ func TestManifestFixtureBuilder(t *testing.T) {
 		}
 	})
 
-	t.Run("invalid manifest missing apiVersion", func(t *testing.T) {
-		builder := InvalidManifestMissingAPIVersion()
+	t.Run("invalid manifest missing image", func(t *testing.T) {
+		builder := InvalidManifestMissingImage()
 		m := builder.Build()
 
 		if err := m.Validate(); err == nil {
-			t.Error("manifest without apiVersion should fail validation")
+			t.Error("manifest without image should fail validation")
 		}
 	})
 
-	t.Run("invalid manifest missing kind", func(t *testing.T) {
-		builder := InvalidManifestMissingKind()
+	t.Run("invalid manifest wrong runtime", func(t *testing.T) {
+		builder := InvalidManifestWrongRuntime()
 		m := builder.Build()
 
 		if err := m.Validate(); err == nil {
-			t.Error("manifest without kind should fail validation")
+			t.Error("manifest with wrong runtime should fail validation")
 		}
 	})
 }

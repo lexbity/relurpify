@@ -36,7 +36,7 @@ type AgentBootstrapOptions struct {
 	AgentName           string
 	ConfigName          string
 	AgentSpec           *agentspec.AgentRuntimeSpec
-	ManifestSnapshot    *config.AgentManifestSnapshot
+	ManifestSnapshot    *config.ManifestSnapshot
 	SecurityBundle      *cfgsecurity.Bundle
 	ProfileResolution   modelselect.ProfileResolution
 	PermissionManager   permissions.PermissionManager
