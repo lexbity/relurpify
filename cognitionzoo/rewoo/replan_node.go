@@ -43,7 +43,7 @@ func (n *ReplanNode) Type() graph.NodeType {
 // Execute decides the next node based on execution results.
 func (n *ReplanNode) Execute(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 	// Get tool results from state
-	results, ok := env.GetWorkingValue("rewoo.tool_results")
+	results, ok := contextdata.GetTyped[any](env, "rewoo.tool_results")
 	if !ok {
 		// No results yet (early in execution)
 		return &execution.Result{

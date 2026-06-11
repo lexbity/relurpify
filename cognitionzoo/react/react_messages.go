@@ -23,7 +23,7 @@ func envelopeGet(state *contextdata.Envelope, key string) (any, bool) {
 		return nil, false
 	}
 	// Check working memory first
-	if val, ok := state.GetWorkingValue(key); ok {
+	if val, ok := contextdata.GetTyped[any](state, key); ok {
 		return val, true
 	}
 	// TODO: Check streamed context references if needed
@@ -35,7 +35,7 @@ func getWorkingValueAsString(state *contextdata.Envelope, key string) string {
 	if state == nil {
 		return ""
 	}
-	raw, ok := state.GetWorkingValue(key)
+	raw, ok := contextdata.GetTyped[any](state, key)
 	if !ok || raw == nil {
 		return ""
 	}
@@ -55,7 +55,7 @@ type Interaction struct {
 
 // getReactMessages reads a copy of the stored chat transcript.
 func getReactMessages(state *contextdata.Envelope) []model.Message {
-	raw, ok := state.GetWorkingValue(reactMessagesKey)
+	raw, ok := contextdata.GetTyped[any](state, reactMessagesKey)
 	if !ok {
 		return nil
 	}
@@ -119,7 +119,7 @@ func getToolObservations(state *contextdata.Envelope) []ToolObservation {
 	if state == nil {
 		return nil
 	}
-	raw, ok := state.GetWorkingValue("react.tool_observations")
+	raw, ok := contextdata.GetTyped[any](state, "react.tool_observations")
 	if !ok || raw == nil {
 		return nil
 	}

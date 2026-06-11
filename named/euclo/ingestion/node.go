@@ -277,10 +277,8 @@ func (n *IngestionNode) storeFileSummary(env *contextdata.Envelope, path string,
 }
 
 func taskEnvelopeFromEnv(env *contextdata.Envelope) *intake.TaskEnvelope {
-	if value, ok := env.GetWorkingValue("euclo.task_envelope"); ok {
-		if task, ok := value.(*intake.TaskEnvelope); ok {
-			return task
-		}
+	if task, ok := contextdata.GetTyped[*intake.TaskEnvelope](env, "euclo.task_envelope"); ok {
+		return task
 	}
 	return nil
 }

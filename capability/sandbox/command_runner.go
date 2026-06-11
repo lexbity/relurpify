@@ -186,28 +186,25 @@ func (r *SandboxCommandRunner) Run(ctx context.Context, req CommandRequest) (*po
 	go func() {
 		timer := time.NewTimer(req.Timeout)
 		defer timer.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-			case <-timer.C:
-			case <-done:
-				return
-			}
-			tornDown.Store(true)
-
-			_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM)
-			select {
-			case <-done:
-				return
-			case <-time.After(grace):
-			}
-
-			_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
-			select {
-			case <-done:
-			case <-time.After(5 * time.Second):
-			}
+		select {
+		case <-ctx.Done():
+		case <-timer.C:
+		case <-done:
 			return
+		}
+		tornDown.Store(true)
+
+		_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM)
+		select {
+		case <-done:
+			return
+		case <-time.After(grace):
+		}
+
+		_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+		select {
+		case <-done:
+		case <-time.After(5 * time.Second):
 		}
 	}()
 

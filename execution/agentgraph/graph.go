@@ -19,7 +19,6 @@ import (
 	relurpctx "codeburg.org/lexbit/relurpify/context"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
-	ftelemetry "codeburg.org/lexbit/relurpify/telemetry"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 	"codeburg.org/lexbit/relurpify/telemetry/perfstats"
 )
@@ -352,7 +351,7 @@ func taskMetaValue(env *contextdata.Envelope, key string) any {
 	if env == nil {
 		return nil
 	}
-	if v, ok := env.GetWorkingValue(key); ok {
+	if v, ok := contextdata.GetTyped[any](env, key); ok {
 		return v
 	}
 	return nil
@@ -576,12 +575,12 @@ func (n *ToolNode) SetTraceID(traceID string) {
 // nextSpanID generates a unique child span ID for each tool call.
 func (n *ToolNode) nextSpanID() string {
 	n.spanCount++
-	return ftelemetry.NewSpanID()
+	return telemetry.NewSpanID()
 }
 
 // nextTraceContext derives a child trace context for a tool invocation.
-func (n *ToolNode) nextTraceContext() ftelemetry.TraceContext {
-	return ftelemetry.TraceContext{
+func (n *ToolNode) nextTraceContext() telemetry.TraceContext {
+	return telemetry.TraceContext{
 		TraceID: n.traceID,
 		SpanID:  n.nextSpanID(),
 	}
@@ -630,10 +629,10 @@ func (n *ToolNode) Execute(ctx context.Context, env *contextdata.Envelope) (*exe
 	}
 	// Attach trace context for child span generation in instrumentedTool.
 	if n.traceID == "" {
-		n.traceID = ftelemetry.NewTraceID()
+		n.traceID = telemetry.NewTraceID()
 	}
 	tc := n.nextTraceContext()
-	ctx = ftelemetry.WithTraceContext(ctx, tc)
+	ctx = telemetry.WithTraceContext(ctx, tc)
 	res, err := n.Registry.InvokeCapability(ctx, env, n.Tool.Name(), n.Args)
 	if err != nil {
 		return nil, err

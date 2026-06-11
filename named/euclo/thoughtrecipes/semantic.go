@@ -633,13 +633,11 @@ func (s *SymbolTable) resolvePredicateExpr(pred PredicateExpr) error {
 	if err := s.validateReference(pred.Subject); err != nil {
 		return err
 	}
-	if pred.Value != nil {
-		if expr, ok := pred.Value.(ValueExpr); ok {
-			if err := s.validateReference(expr); err != nil {
+		if pred.Value != nil {
+			if err := s.validateReference(pred.Value); err != nil {
 				return err
 			}
 		}
-	}
 	return nil
 }
 

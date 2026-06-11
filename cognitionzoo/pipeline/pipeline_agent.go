@@ -98,10 +98,10 @@ func (a *PipelineAgent) Execute(ctx context.Context, task *execution.Task, env *
 		final["stage_name"] = last.StageName
 		final["decoded_output"] = last.DecodedOutput
 	}
-	if _, ok := env.GetWorkingValue("pipeline.results"); !ok {
+	if _, ok := contextdata.GetTyped[any](env, "pipeline.results"); !ok {
 		env.SetWorkingValueWithClass("pipeline.results", results, contextdata.MemoryClassTask)
 	}
-	if _, ok := env.GetWorkingValue("pipeline.final_output"); !ok {
+	if _, ok := contextdata.GetTyped[any](env, "pipeline.final_output"); !ok {
 		env.SetWorkingValueWithClass("pipeline.final_output", final, contextdata.MemoryClassTask)
 	}
 	env.SetWorkingValueWithClass("pipeline.results_summary", summarizePipelineResults(results), contextdata.MemoryClassTask)

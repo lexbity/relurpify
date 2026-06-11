@@ -43,20 +43,6 @@ func (e *Envelope) SetWorkingValueWithClass(key string, value any, class MemoryC
 	}
 }
 
-// GetWorkingValue retrieves a value from working memory.
-//
-// Deprecated: use GetTyped or TypedOverlay instead.
-func (e *Envelope) GetWorkingValue(key string) (any, bool) {
-	e.mu.RLock()
-	defer e.mu.RUnlock()
-
-	if e.WorkingData == nil {
-		return nil, false
-	}
-	val, ok := e.WorkingData[key]
-	return val, ok
-}
-
 // DeleteWorkingValue removes a value from working memory.
 func (e *Envelope) DeleteWorkingValue(key string) {
 	e.mu.Lock()
@@ -136,7 +122,7 @@ func (e *Envelope) Snapshot() map[string]any {
 
 // StringSliceFromContext extracts a string slice from working memory.
 func (e *Envelope) StringSliceFromContext(key string) []string {
-	val, _ := e.GetWorkingValue(key)
+	val, _ := e.getWorkingValue(key)
 	if arr, ok := val.([]string); ok {
 		return arr
 	}

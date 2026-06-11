@@ -53,15 +53,15 @@ func TestPlanExecutorSerializesReadyStepsWithoutBranchIsolation(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
-	val, ok := state.GetWorkingValue("completed.step-1")
+	val, ok := contextdata.GetTyped[bool](state, "completed.step-1")
 	require.True(t, ok)
 	require.Equal(t, true, val)
 
-	val, ok = state.GetWorkingValue("completed.step-2")
+	val, ok = contextdata.GetTyped[bool](state, "completed.step-2")
 	require.True(t, ok)
 	require.Equal(t, true, val)
 
-	conflict, ok := state.GetWorkingValue("conflict")
+	conflict, ok := contextdata.GetTyped[string](state, "conflict")
 	require.True(t, ok)
 	require.Equal(t, "step-2", conflict)
 

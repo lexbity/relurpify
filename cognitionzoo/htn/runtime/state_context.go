@@ -115,14 +115,14 @@ func completedStepsFromEnvelope(env *contextdata.Envelope) []string {
 	if env == nil {
 		return nil
 	}
-	if raw, ok := env.GetWorkingValue(contextKeyCompletedSteps); ok {
+	if raw, ok := contextdata.GetTyped[any](env, contextKeyCompletedSteps); ok {
 		var typed []string
 		if decodeContextValue(raw, &typed) {
 			return append([]string(nil), typed...)
 		}
 	}
 	// Legacy fallback - try working memory with legacy key
-	if raw, ok := env.GetWorkingValue(legacyPlanCompletedStepsKey); ok {
+	if raw, ok := contextdata.GetTyped[any](env, legacyPlanCompletedStepsKey); ok {
 		var typed []string
 		if decodeContextValue(raw, &typed) {
 			return append([]string(nil), typed...)
@@ -145,10 +145,8 @@ func publishExecutionState(env *contextdata.Envelope, execution ExecutionState) 
 	env.SetWorkingValueWithClass(contextKeyCompletedSteps, append([]string(nil), execution.CompletedSteps...), contextdata.MemoryClassTask)
 	env.SetWorkingValueWithClass(legacyPlanCompletedStepsKey, append([]string(nil), execution.CompletedSteps...), contextdata.MemoryClassTask)
 	termination := ""
-	if raw, ok := env.GetWorkingValue(contextKeyTermination); ok {
-		if s, ok := raw.(string); ok {
-			termination = s
-		}
+	if s, ok := contextdata.GetTyped[string](env, contextKeyTermination); ok {
+		termination = s
 	}
 	publishMetricsAndSummary(env, execution, termination)
 	mustPublishHTNState(env)
@@ -178,7 +176,7 @@ func publishMetricsAndSummary(env *contextdata.Envelope, execution ExecutionStat
 	env.SetWorkingValueWithClass(contextKeyMetrics, metrics, contextdata.MemoryClassTask)
 	taskType := fmt.Sprint(executionTaskType(env))
 	methodName := ""
-	if raw, ok := env.GetWorkingValue(contextKeySelectedMethod); ok {
+	if raw, ok := contextdata.GetTyped[any](env, contextKeySelectedMethod); ok {
 		var method MethodState
 		if decodeContextValue(raw, &method) {
 			methodName = method.Name
@@ -201,17 +199,15 @@ func loadExecutionState(env *contextdata.Envelope) ExecutionState {
 		return ExecutionState{}
 	}
 	var execution ExecutionState
-	if raw, ok := env.GetWorkingValue(contextKeyExecution); ok && decodeContextValue(raw, &execution) {
+	if raw, ok := contextdata.GetTyped[any](env, contextKeyExecution); ok && decodeContextValue(raw, &execution) {
 		execution.CompletedSteps = completedStepsFromEnvelope(env)
 		execution.CompletedStepCount = len(execution.CompletedSteps)
 		return execution
 	}
 	execution.CompletedSteps = completedStepsFromEnvelope(env)
 	execution.CompletedStepCount = len(execution.CompletedSteps)
-	if raw, ok := env.GetWorkingValue(contextKeyResumeCheckpointID); ok {
-		if checkpointID, ok := raw.(string); ok {
-			execution.ResumeCheckpointID = checkpointID
-		}
+	if checkpointID, ok := contextdata.GetTyped[string](env, contextKeyResumeCheckpointID); ok {
+		execution.ResumeCheckpointID = checkpointID
 	}
 	execution.Resumed = execution.ResumeCheckpointID != ""
 	return execution
@@ -222,7 +218,7 @@ func executionTaskType(env *contextdata.Envelope) execution.TaskType {
 	if env == nil {
 		return ""
 	}
-	if raw, ok := env.GetWorkingValue(contextKeyTaskType); ok {
+	if raw, ok := contextdata.GetTyped[any](env, contextKeyTaskType); ok {
 		var taskType execution.TaskType
 		if decodeContextValue(raw, &taskType) {
 			return taskType

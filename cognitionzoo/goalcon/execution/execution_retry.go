@@ -188,11 +188,7 @@ func (re *RetryExecutor) ShouldReplan(
 
 	// Replan if we exhausted retries
 	policy := PolicyForOperator(result.ToolName, re.policies)
-	if result.Retries >= policy.MaxAttempts {
-		return true
-	}
-
-	return false
+	return result.Retries >= policy.MaxAttempts
 }
 
 // ExecutionAttempt represents a single execution attempt.

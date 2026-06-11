@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
-	"codeburg.org/lexbit/relurpify/execution/context"
 	execctx "codeburg.org/lexbit/relurpify/execution/context"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
@@ -65,7 +64,7 @@ func decodeContextPolicySection(doc *config.Document) (*execctx.ContextPolicyBun
 	if !ok {
 		return nil, errors.New("context section not found")
 	}
-	return context.DecodeContextPolicy(node)
+	return execctx.DecodeContextPolicy(node)
 }
 
 // DecodeYAMLNode is a helper that decodes a yaml.Node into a typed value via

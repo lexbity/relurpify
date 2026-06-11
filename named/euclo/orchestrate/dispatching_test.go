@@ -154,13 +154,9 @@ func TestDispatch_AmbiguousClassificationRoutesToClarificationThoughtRecipe(t *t
 
 func mustStringRouteValue(t *testing.T, env *contextdata.Envelope, key string) string {
 	t.Helper()
-	value, ok := env.GetWorkingValue(key)
+	s, ok := contextdata.GetTyped[string](env, key)
 	if !ok {
 		t.Fatalf("missing envelope value %q", key)
-	}
-	s, ok := value.(string)
-	if !ok {
-		t.Fatalf("envelope value %q is %T, want string", key, value)
 	}
 	return s
 }

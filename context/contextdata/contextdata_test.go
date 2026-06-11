@@ -29,7 +29,7 @@ func TestSetWorkingValueStoresAndRetrieves(t *testing.T) {
 	env := NewEnvelope("task-1", "session-1")
 	env.SetWorkingValueWithClass("key1", "value1", MemoryClassEphemeral)
 
-	val, ok := env.GetWorkingValue("key1")
+	val, ok := env.getWorkingValue("key1")
 	if !ok {
 		t.Fatal("expected to find key1")
 	}
@@ -43,7 +43,7 @@ func TestDeleteWorkingValueRemovesEntry(t *testing.T) {
 	env.SetWorkingValueWithClass("key1", "value1", MemoryClassEphemeral)
 	env.DeleteWorkingValue("key1")
 
-	_, ok := env.GetWorkingValue("key1")
+	_, ok := env.getWorkingValue("key1")
 	if ok {
 		t.Error("expected key1 to be deleted")
 	}
@@ -69,7 +69,7 @@ func TestCloneEnvelopeCopiesWorkingData(t *testing.T) {
 	}
 
 	// Working data should be copied
-	val, ok := clone.GetWorkingValue("key1")
+	val, ok := clone.getWorkingValue("key1")
 	if !ok {
 		t.Fatal("expected cloned envelope to have key1")
 	}
@@ -98,16 +98,16 @@ func TestCloneEnvelopeIsIndependent(t *testing.T) {
 	clone.SetWorkingValueWithClass("key2", "value2", MemoryClassEphemeral)
 
 	// Parent should not have key2
-	_, ok := parent.GetWorkingValue("key2")
+	_, ok := parent.getWorkingValue("key2")
 	if ok {
 		t.Error("expected parent to not have key2 after clone modification")
 	}
 
 	// Clone should have both keys
-	if _, ok := clone.GetWorkingValue("key1"); !ok {
+	if _, ok := clone.getWorkingValue("key1"); !ok {
 		t.Error("expected clone to have key1")
 	}
-	if _, ok := clone.GetWorkingValue("key2"); !ok {
+	if _, ok := clone.getWorkingValue("key2"); !ok {
 		t.Error("expected clone to have key2")
 	}
 }
@@ -139,7 +139,7 @@ func TestHandoffCloneCopiesDefaultEnvelopeState(t *testing.T) {
 	if clone.NodeID != "node-1" {
 		t.Errorf("expected node ID to be preserved, got %s", clone.NodeID)
 	}
-	if val, ok := clone.GetWorkingValue("key1"); !ok || val != "value1" {
+	if val, ok := clone.getWorkingValue("key1"); !ok || val != "value1" {
 		t.Fatalf("expected cloned working value key1=value1, got %v, %v", val, ok)
 	}
 	if len(clone.References.StreamedContext) != 1 {
@@ -200,13 +200,13 @@ func TestHandoffSnapshotFiltersByPolicy(t *testing.T) {
 	if snapshot.AssemblyMetadata != (AssemblyMeta{}) {
 		t.Errorf("expected assembly metadata to be omitted, got %#v", snapshot.AssemblyMetadata)
 	}
-	if _, ok := snapshot.GetWorkingValue("keep"); !ok {
+	if _, ok := snapshot.getWorkingValue("keep"); !ok {
 		t.Error("expected exact working key to be preserved")
 	}
-	if _, ok := snapshot.GetWorkingValue("keep.local"); !ok {
+	if _, ok := snapshot.getWorkingValue("keep.local"); !ok {
 		t.Error("expected prefix working key to be preserved")
 	}
-	if _, ok := snapshot.GetWorkingValue("drop"); ok {
+	if _, ok := snapshot.getWorkingValue("drop"); ok {
 		t.Error("expected non-matching working key to be filtered out")
 	}
 	if len(snapshot.References.WorkingMemory) != 4 {
@@ -242,10 +242,10 @@ func TestMergeBranchEnvelopesUnionsWorkingMemory(t *testing.T) {
 	}
 
 	// Should have both keys
-	if _, ok := merged.GetWorkingValue("key1"); !ok {
+	if _, ok := merged.getWorkingValue("key1"); !ok {
 		t.Error("expected merged to have key1")
 	}
-	if _, ok := merged.GetWorkingValue("key2"); !ok {
+	if _, ok := merged.getWorkingValue("key2"); !ok {
 		t.Error("expected merged to have key2")
 	}
 }
@@ -263,7 +263,7 @@ func TestMergeBranchEnvelopesLastWriteWins(t *testing.T) {
 	}
 
 	// Last write wins
-	val, _ := merged.GetWorkingValue("key1")
+	val, _ := merged.getWorkingValue("key1")
 	if val != "value2" {
 		t.Errorf("expected value2 (last write), got %v", val)
 	}
@@ -570,7 +570,7 @@ func TestEnvelopeSnapshot(t *testing.T) {
 
 	// Modifying snapshot should not affect envelope
 	snapshot["key2"] = "value2"
-	if _, ok := env.GetWorkingValue("key2"); ok {
+	if _, ok := env.getWorkingValue("key2"); ok {
 		t.Error("expected snapshot modification to not affect envelope")
 	}
 }
@@ -738,7 +738,7 @@ func TestSetWorkingValueUpdatesReferenceNotDuplicate(t *testing.T) {
 	}
 
 	// Value should be updated
-	val, _ := env.GetWorkingValue("key1")
+	val, _ := env.getWorkingValue("key1")
 	if val != "value2" {
 		t.Errorf("expected value2, got %v", val)
 	}
@@ -758,10 +758,10 @@ func TestMergeBranchEnvelopesSkipsNilEntries(t *testing.T) {
 	}
 
 	// Should have both keys, nil entries skipped
-	if _, ok := merged.GetWorkingValue("key1"); !ok {
+	if _, ok := merged.getWorkingValue("key1"); !ok {
 		t.Error("expected merged to have key1")
 	}
-	if _, ok := merged.GetWorkingValue("key2"); !ok {
+	if _, ok := merged.getWorkingValue("key2"); !ok {
 		t.Error("expected merged to have key2")
 	}
 }
@@ -792,7 +792,7 @@ func TestNilEnvelopeMethodsPanic(t *testing.T) {
 	assertPanics("ClearCheckpointRequest", func() { nilEnv.ClearCheckpointRequest() })
 	assertPanics("AddRetrievalReference", func() { nilEnv.AddRetrievalReference(RetrievalReference{}) })
 	assertPanics("AddStreamedContextReference", func() { nilEnv.AddStreamedContextReference(ChunkReference{}) })
-	assertPanics("GetWorkingValue", func() { _, _ = nilEnv.GetWorkingValue("key") })
+	assertPanics("GetWorkingValue", func() { _, _ = nilEnv.getWorkingValue("key") })
 	assertPanics("StreamedChunkIDs", func() { _ = nilEnv.StreamedChunkIDs() })
 	assertPanics("WorkingMemoryKeys", func() { _ = nilEnv.WorkingMemoryKeys() })
 	assertPanics("IsEmpty", func() { _ = nilEnv.IsEmpty() })

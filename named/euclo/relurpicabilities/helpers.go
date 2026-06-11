@@ -300,7 +300,7 @@ func parsePorcelainBlame(output string) []map[string]any {
 // isHex checks if a string is hexadecimal.
 func isHex(s string) bool {
 	for _, c := range s {
-		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') && (c < 'A' || c > 'F') {
 			return false
 		}
 	}

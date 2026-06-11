@@ -158,11 +158,6 @@ func TestVerify_SkipsIfAlreadyVerified(t *testing.T) {
 	defer cancel()
 
 	// First call verifies and sets verified=true
-	if err := gt.Verify(ctx); err != nil && !errorsAsBinaryNotFound(t, err) {
-		// We expect error if no binaries exist, but we want to test idempotency
-		// So only proceed if at least one binary check passes
-	}
-
 	// Second call should be fast and skip checks
 	if err := gt.Verify(ctx); err != nil && !errorsAsBinaryNotFound(t, err) {
 		t.Errorf("Verify() second call skipped as expected but got error: %v", err)

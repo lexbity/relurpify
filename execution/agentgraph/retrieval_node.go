@@ -70,7 +70,7 @@ func (n *RetrievalNode) Execute(ctx context.Context, env *contextdata.Envelope) 
 	// Get query text from working memory
 	queryText := ""
 	if n.queryKey != "" {
-		if val, ok := env.GetWorkingValue(n.queryKey); ok {
+		if val, ok := contextdata.GetTyped[any](env, n.queryKey); ok {
 			queryText = fmt.Sprint(val)
 		}
 	}

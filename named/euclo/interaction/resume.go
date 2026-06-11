@@ -11,7 +11,7 @@ import (
 // It scans envelope working memory for the highest-seq frame with nil RespondedAt.
 func ResumeFrame(env *contextdata.Envelope) (*InteractionFrame, bool) {
 	// Get the highest sequence number
-	seqVal, ok := env.GetWorkingValue("euclo.interaction.frame_seq")
+	seqVal, ok := contextdata.GetTyped[any](env, "euclo.interaction.frame_seq")
 	if !ok {
 		return nil, false
 	}
@@ -23,7 +23,7 @@ func ResumeFrame(env *contextdata.Envelope) (*InteractionFrame, bool) {
 	// Check frames from highest to lowest to find pending one
 	for i := seq - 1; i >= 0; i-- {
 		frameKey := fmt.Sprintf("euclo.interaction.frame.%d", i)
-		frameVal, ok := env.GetWorkingValue(frameKey)
+		frameVal, ok := contextdata.GetTyped[any](env, frameKey)
 		if !ok {
 			continue
 		}

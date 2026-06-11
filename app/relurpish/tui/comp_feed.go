@@ -129,7 +129,7 @@ func (f *Feed) FilterMessages(query string) []Message {
 // ScrollUp scrolls the feed up by one line.
 func (f *Feed) ScrollUp() {
 	if f.ready {
-		f.vp.LineUp(1)
+		f.vp.ScrollUp(1)
 		f.autoFollow = f.vp.AtBottom()
 	}
 }
@@ -137,7 +137,7 @@ func (f *Feed) ScrollUp() {
 // ScrollDown scrolls the feed down by one line.
 func (f *Feed) ScrollDown() {
 	if f.ready {
-		f.vp.LineDown(1)
+		f.vp.ScrollDown(1)
 		f.autoFollow = f.vp.AtBottom()
 	}
 }

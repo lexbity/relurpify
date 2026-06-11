@@ -227,9 +227,6 @@ func BuildBenchmarkReport(suite *Suite, suiteReport *SuiteReport) (*BenchmarkRep
 				artifactTotals[name]++
 			}
 		}
-		if !cr.Success {
-			// The benchmark report records correctness separately from scoring.
-		}
 	}
 	report.Summary.TotalCases = len(suiteReport.Cases)
 	if len(report.Cases) > 0 {

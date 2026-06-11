@@ -114,7 +114,7 @@ func (s *BrowserService) close(env *contextdata.Envelope, args map[string]any) (
 	handle := s.sessionHandle(sessionID)
 	s.untrackSession(sessionID)
 	if env != nil {
-		if current, ok := env.GetWorkingValue(browserDefaultSessionKey); ok {
+		if current, ok := contextdata.GetTyped[any](env, browserDefaultSessionKey); ok {
 			if strings.TrimSpace(fmt.Sprint(current)) == sessionID {
 				env.SetWorkingValueWithClass(browserDefaultSessionKey, "", contextdata.MemoryClassTask)
 			}

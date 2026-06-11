@@ -466,11 +466,9 @@ func hasVerificationEvidence(env *contextdata.Envelope) bool {
 		return false
 	}
 	if observations, ok := contextdata.GetTyped[[]reactpkg.ToolObservation](env, "react.tool_observations"); ok {
-		if observations != nil {
 			for _, obs := range observations {
-				if obs.Success && (strings.Contains(strings.ToLower(obs.Tool), "test") || strings.Contains(strings.ToLower(obs.Tool), "build") || strings.Contains(strings.ToLower(obs.Tool), "check") || strings.Contains(strings.ToLower(obs.Tool), "query")) {
-					return true
-				}
+			if obs.Success && (strings.Contains(strings.ToLower(obs.Tool), "test") || strings.Contains(strings.ToLower(obs.Tool), "build") || strings.Contains(strings.ToLower(obs.Tool), "check") || strings.Contains(strings.ToLower(obs.Tool), "query")) {
+				return true
 			}
 		}
 	}

@@ -69,19 +69,19 @@ func (s *RewooCheckpointStore) SaveCheckpoint(ctx context.Context, checkpointID 
 		"rewoo.synthesis_ref",
 		"rewoo.attempt",
 	}
-	if _, ok := env.GetWorkingValue("rewoo.plan_ref"); !ok {
+	if _, ok := contextdata.GetTyped[any](env, "rewoo.plan_ref"); !ok {
 		stateKeys = append(stateKeys, "rewoo.plan")
 	}
-	if _, ok := env.GetWorkingValue("rewoo.tool_results_ref"); !ok {
+	if _, ok := contextdata.GetTyped[any](env, "rewoo.tool_results_ref"); !ok {
 		stateKeys = append(stateKeys, "rewoo.tool_results")
 	}
-	if _, ok := env.GetWorkingValue("rewoo.synthesis_ref"); !ok {
+	if _, ok := contextdata.GetTyped[any](env, "rewoo.synthesis_ref"); !ok {
 		stateKeys = append(stateKeys, "rewoo.synthesis")
 	}
 
 	stateSnapshot := make(map[string]any)
 	for _, key := range stateKeys {
-		if val, ok := env.GetWorkingValue(key); ok {
+		if val, ok := contextdata.GetTyped[any](env, key); ok {
 			stateSnapshot[key] = val
 		}
 	}
@@ -209,11 +209,9 @@ func extractExecutedSteps(env *contextdata.Envelope) []string {
 	var executed []string
 
 	// Extract step IDs from aggregated results
-	if resultsVal, ok := env.GetWorkingValue("rewoo.tool_results"); ok {
-		if results, ok := resultsVal.([]RewooStepResult); ok {
-			for _, result := range results {
-				executed = append(executed, result.StepID)
-			}
+	if results, ok := contextdata.GetTyped[[]RewooStepResult](env, "rewoo.tool_results"); ok {
+		for _, result := range results {
+			executed = append(executed, result.StepID)
 		}
 	}
 
@@ -224,9 +222,8 @@ func (s *RewooCheckpointStore) restoreArtifactBackedState(ctx context.Context, e
 	if env == nil || s == nil || s.lifecycleRepo == nil {
 		return nil
 	}
-	if _, ok := env.GetWorkingValue("rewoo.tool_results"); !ok {
-		if rawRef, ok := env.GetWorkingValue("rewoo.tool_results_ref"); ok {
-			ref, ok := rawRef.(relurpctx.ArtifactReference)
+	if _, ok := contextdata.GetTyped[any](env, "rewoo.tool_results"); !ok {
+		if ref, ok := contextdata.GetTyped[relurpctx.ArtifactReference](env, "rewoo.tool_results_ref"); ok {
 			if ok {
 				var results []RewooStepResult
 				if err := s.loadWorkflowArtifactJSON(ctx, ref, &results); err != nil {
@@ -236,9 +233,8 @@ func (s *RewooCheckpointStore) restoreArtifactBackedState(ctx context.Context, e
 			}
 		}
 	}
-	if _, ok := env.GetWorkingValue("rewoo.plan"); !ok {
-		if rawRef, ok := env.GetWorkingValue("rewoo.plan_ref"); ok {
-			ref, ok := rawRef.(relurpctx.ArtifactReference)
+	if _, ok := contextdata.GetTyped[any](env, "rewoo.plan"); !ok {
+		if ref, ok := contextdata.GetTyped[relurpctx.ArtifactReference](env, "rewoo.plan_ref"); ok {
 			if ok {
 				var plan RewooPlan
 				if err := s.loadWorkflowArtifactJSON(ctx, ref, &plan); err != nil {
@@ -248,9 +244,8 @@ func (s *RewooCheckpointStore) restoreArtifactBackedState(ctx context.Context, e
 			}
 		}
 	}
-	if _, ok := env.GetWorkingValue("rewoo.synthesis"); !ok {
-		if rawRef, ok := env.GetWorkingValue("rewoo.synthesis_ref"); ok {
-			ref, ok := rawRef.(relurpctx.ArtifactReference)
+	if _, ok := contextdata.GetTyped[any](env, "rewoo.synthesis"); !ok {
+		if ref, ok := contextdata.GetTyped[relurpctx.ArtifactReference](env, "rewoo.synthesis_ref"); ok {
 			if ok {
 				var payload struct {
 					Synthesis string `json:"synthesis"`
@@ -278,30 +273,28 @@ func (s *RewooCheckpointStore) ensureCheckpointArtifactRefs(ctx context.Context,
 	if workflowID == "" || runID == "" {
 		return
 	}
-	if _, ok := env.GetWorkingValue("rewoo.plan_ref"); !ok {
-		if rawPlan, ok := env.GetWorkingValue("rewoo.plan"); ok && rawPlan != nil {
+	if _, ok := contextdata.GetTyped[any](env, "rewoo.plan_ref"); !ok {
+		if rawPlan, ok := contextdata.GetTyped[any](env, "rewoo.plan"); ok && rawPlan != nil {
 			if ref := s.persistPlanArtifact(ctx, checkpointID, workflowID, runID, rawPlan); ref != nil {
 				env.SetWorkingValueWithClass("rewoo.plan_ref", *ref, contextdata.MemoryClassTask)
 			}
 		}
 	}
-	if _, ok := env.GetWorkingValue("rewoo.tool_results_ref"); !ok {
-		if rawResults, ok := env.GetWorkingValue("rewoo.tool_results"); ok && rawResults != nil {
-			if results, ok := rawResults.([]RewooStepResult); ok && len(results) > 0 {
+	if _, ok := contextdata.GetTyped[any](env, "rewoo.tool_results_ref"); !ok {
+		if results, ok := contextdata.GetTyped[[]RewooStepResult](env, "rewoo.tool_results"); ok && len(results) > 0 {
 				if ref := s.persistToolResultsArtifact(ctx, checkpointID, workflowID, runID, results); ref != nil {
 					env.SetWorkingValueWithClass("rewoo.tool_results_ref", *ref, contextdata.MemoryClassTask)
 					env.SetWorkingValueWithClass("rewoo.tool_results_summary", summarizeRewooStepResults(results), contextdata.MemoryClassTask)
 				}
-			}
 		}
 	}
-	if _, ok := env.GetWorkingValue("rewoo.synthesis_ref"); !ok {
-		if rawSynthesis, ok := env.GetWorkingValue("rewoo.synthesis"); ok && rawSynthesis != nil {
+	if _, ok := contextdata.GetTyped[any](env, "rewoo.synthesis_ref"); !ok {
+		if rawSynthesis, ok := contextdata.GetTyped[any](env, "rewoo.synthesis"); ok && rawSynthesis != nil {
 			synthesis := strings.TrimSpace(fmt.Sprint(rawSynthesis))
 			if synthesis != "" && synthesis != "<nil>" {
 				var results []RewooStepResult
-				if rawResults, ok := env.GetWorkingValue("rewoo.tool_results"); ok {
-					results, _ = rawResults.([]RewooStepResult)
+				if r, ok := contextdata.GetTyped[[]RewooStepResult](env, "rewoo.tool_results"); ok {
+					results = r
 				}
 				if ref := s.persistSynthesisArtifact(ctx, checkpointID, workflowID, runID, synthesis, results); ref != nil {
 					env.SetWorkingValueWithClass("rewoo.synthesis_ref", *ref, contextdata.MemoryClassTask)
@@ -312,11 +305,11 @@ func (s *RewooCheckpointStore) ensureCheckpointArtifactRefs(ctx context.Context,
 }
 
 func envGetString(env *contextdata.Envelope, key string) string {
-	val, _ := env.GetWorkingValue(key)
-	if s, ok := val.(string); ok {
-		return s
+	s, ok := contextdata.GetTyped[string](env, key)
+	if !ok {
+		return ""
 	}
-	return ""
+	return s
 }
 
 func (s *RewooCheckpointStore) persistPlanArtifact(ctx context.Context, checkpointID, workflowID, runID string, rawPlan any) *relurpctx.ArtifactReference {

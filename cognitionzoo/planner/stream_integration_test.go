@@ -87,10 +87,10 @@ func TestPlannerExecuteBlockingContextStreamAppliesTrimmedMetadataBeforePlanning
 	require.NotNil(t, result)
 
 	require.Equal(t, []contextdata.ChunkID{"chunk-1"}, env.StreamedChunkIDs())
-	shortfall, ok := env.GetWorkingValue("contextstream.shortfall_tokens")
+	shortfall, ok := contextdata.GetTyped[int](env, "contextstream.shortfall_tokens")
 	require.True(t, ok)
 	require.Equal(t, 7, shortfall)
-	trimmed, ok := env.GetWorkingValue("contextstream.trimmed")
+	trimmed, ok := contextdata.GetTyped[bool](env, "contextstream.trimmed")
 	require.True(t, ok)
 	require.Equal(t, true, trimmed)
 
@@ -134,7 +134,7 @@ func TestPlannerExecuteBackgroundContextStreamPublishesJobMetadata(t *testing.T)
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
-	jobID, ok := env.GetWorkingValue("contextstream.job_id")
+	jobID, ok := contextdata.GetTyped[string](env, "contextstream.job_id")
 	require.True(t, ok)
 	require.NotEmpty(t, jobID)
 	require.Equal(t, "background", envGetString(env, "contextstream.job_mode"))

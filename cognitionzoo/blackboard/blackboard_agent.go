@@ -163,11 +163,11 @@ func (a *BlackboardAgent) BuildGraph(ctx context.Context, task *execution.Task) 
 }
 
 func envGetString(env *contextdata.Envelope, key string) string {
-	val, _ := env.GetWorkingValue(key)
-	if s, ok := val.(string); ok {
-		return s
+	s, ok := contextdata.GetTyped[string](env, key)
+	if !ok {
+		return ""
 	}
-	return ""
+	return s
 }
 
 // Execute initialises the blackboard with the task goal and runs the controller
@@ -196,15 +196,6 @@ func (a *BlackboardAgent) Execute(ctx context.Context, task *execution.Task, env
 	if a.Memory != nil {
 		env.SetWorkingValueWithClass(contextKeyWorkingMemoryStore, a.Memory, contextdata.MemoryClassTask)
 	}
-	if cfg := a.Config; cfg != nil {
-		// Telemetry event emission - keep commented until envelope equivalent available
-		// emitBlackboardEvent(cfg.Telemetry, env, telemetry.EventAgentStart, "", taskID(task), "blackboard agent start", map[string]any{
-		// 	"checkpoint_path": a.CheckpointPath,
-		// 	"max_cycles":      maxCycles(a.MaxCycles),
-		// 	"source_count":    len(a.Sources),
-		// })
-	}
-
 	g, err := a.BuildGraph(ctx, task)
 	if err != nil {
 		return nil, err
@@ -216,10 +207,8 @@ func (a *BlackboardAgent) Execute(ctx context.Context, task *execution.Task, env
 		return nil, fmt.Errorf("blackboard: graph execution failed: %w", err)
 	}
 	controllerState := ControllerState{Termination: "goal_satisfied"}
-	if raw, ok := env.GetWorkingValue(contextKeyController); ok {
-		if typed, ok := raw.(ControllerState); ok {
-			controllerState = typed
-		}
+	if typed, ok := contextdata.GetTyped[ControllerState](env, contextKeyController); ok {
+		controllerState = typed
 	}
 	switch controllerState.Termination {
 	case "goal_satisfied":
@@ -235,18 +224,6 @@ func (a *BlackboardAgent) Execute(ctx context.Context, task *execution.Task, env
 		}
 		return nil, fmt.Errorf("blackboard: controller terminated without status")
 	}
-	if cfg := a.Config; cfg != nil {
-		// Telemetry event emission - agent-specific
-		// emitBlackboardEvent(cfg.Telemetry, env, telemetry.EventAgentFinish, "", taskID(task), "blackboard agent finished", map[string]any{
-		// 	"status":          "success",
-		// 	"termination":     controllerState.Termination,
-		// 	"cycle":           controllerState.Cycle,
-		// 	"goal_satisfied":  controllerState.GoalSatisfied,
-		// 	"artifact_count":  len(bb.Artifacts),
-		// 	"completed_count": len(bb.CompletedActions),
-		// })
-	}
-
 	// Collect artifact contents for the result payload.
 	// Framework: load artifacts from context
 	// bb := LoadFromContext(env, taskInstruction(task))

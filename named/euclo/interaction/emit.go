@@ -54,7 +54,7 @@ func EmitFrame(ctx context.Context, frame *InteractionFrame, env *contextdata.En
 
 // getNextFrameSeq gets the next frame sequence number from the envelope.
 func getNextFrameSeq(env *contextdata.Envelope) int {
-	seqVal, ok := env.GetWorkingValue("euclo.interaction.frame_seq")
+	seqVal, ok := contextdata.GetTyped[any](env, "euclo.interaction.frame_seq")
 	if !ok {
 		return 0
 	}

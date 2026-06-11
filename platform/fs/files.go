@@ -732,9 +732,7 @@ func enforceFileMatrix(ctx context.Context, checker FilePermissionChecker, agent
 		}
 	}
 	rel = filepath.ToSlash(filepath.Clean(rel))
-	if strings.HasPrefix(rel, "./") {
-		rel = strings.TrimPrefix(rel, "./")
-	}
+	rel = strings.TrimPrefix(rel, "./")
 	perm := matrix.Write
 	if action == "edit" {
 		perm = matrix.Edit

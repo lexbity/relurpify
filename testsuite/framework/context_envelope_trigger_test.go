@@ -82,7 +82,7 @@ func TestEnvelopeWorkingValues(t *testing.T) {
 	env.SetWorkingValueWithClass("key1", "value1", contextdata.MemoryClassTask)
 
 	// Retrieve the value
-	val, ok := env.GetWorkingValue("key1")
+	val, ok := contextdata.GetTyped[string](env, "key1")
 	if !ok {
 		t.Error("expected working value to be found")
 	}
@@ -102,7 +102,7 @@ func TestEnvelopeWorkingValues(t *testing.T) {
 	env.SetWorkingValueWithClass("key1", "newvalue", contextdata.MemoryClassTask)
 
 	// Verify overwrite worked
-	val, ok = env.GetWorkingValue("key1")
+	val, ok = contextdata.GetTyped[string](env, "key1")
 	if !ok {
 		t.Error("expected working value to be found after overwrite")
 	}
@@ -400,7 +400,7 @@ func TestEnvelopeStateStability(t *testing.T) {
 	}
 
 	// Validate values remain unchanged
-	val, ok := env.GetWorkingValue("key1")
+	val, ok := contextdata.GetTyped[string](env, "key1")
 	if !ok || val != "value1" {
 		t.Error("expected working value to remain unchanged")
 	}

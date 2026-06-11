@@ -17,17 +17,17 @@ func LoadStateFromEnvelope(env *contextdata.Envelope) (*HTNState, bool, error) {
 	}
 	snapshot := HTNState{SchemaVersion: htnSchemaVersion}
 	loaded := false
-	if raw, ok := env.GetWorkingValue(contextKeyTask); ok {
+	if raw, ok := contextdata.GetTyped[any](env, contextKeyTask); ok {
 		if decodeContextValue(raw, &snapshot.Task) {
 			loaded = true
 		}
 	}
-	if raw, ok := env.GetWorkingValue(contextKeySelectedMethod); ok {
+	if raw, ok := contextdata.GetTyped[any](env, contextKeySelectedMethod); ok {
 		if decodeContextValue(raw, &snapshot.Method) {
 			loaded = true
 		}
 	}
-	if raw, ok := env.GetWorkingValue(contextKeyPlan); ok {
+	if raw, ok := contextdata.GetTyped[any](env, contextKeyPlan); ok {
 		var planValue plan.Plan
 		if decodeContextValue(raw, &planValue) {
 			snapshot.Plan = clonePlan(&planValue)
@@ -35,32 +35,26 @@ func LoadStateFromEnvelope(env *contextdata.Envelope) (*HTNState, bool, error) {
 		}
 	}
 	snapshot.Execution = loadExecutionState(env)
-	if raw, ok := env.GetWorkingValue(contextKeyMetrics); ok {
+	if raw, ok := contextdata.GetTyped[any](env, contextKeyMetrics); ok {
 		_ = decodeContextValue(raw, &snapshot.Metrics)
 	}
-	if raw, ok := env.GetWorkingValue(contextKeyPreflightReport); ok && raw != nil {
+	if raw, ok := contextdata.GetTyped[any](env, contextKeyPreflightReport); ok && raw != nil {
 		var report graph.PreflightReport
 		if decodeContextValue(raw, &report) {
 			snapshot.Preflight.Report = &report
 		}
 	}
-	if raw, ok := env.GetWorkingValue(contextKeyPreflightError); ok {
-		if s, ok := raw.(string); ok {
-			snapshot.Preflight.Error = s
-		}
+	if s, ok := contextdata.GetTyped[string](env, contextKeyPreflightError); ok {
+		snapshot.Preflight.Error = s
 	}
-	if raw, ok := env.GetWorkingValue(contextKeyRetrievalApplied); ok {
+	if raw, ok := contextdata.GetTyped[any](env, contextKeyRetrievalApplied); ok {
 		_ = decodeContextValue(raw, &snapshot.RetrievalApplied)
 	}
-	if raw, ok := env.GetWorkingValue(contextKeyResumeCheckpointID); ok {
-		if s, ok := raw.(string); ok {
-			snapshot.ResumeCheckpointID = s
-		}
+	if s, ok := contextdata.GetTyped[string](env, contextKeyResumeCheckpointID); ok {
+		snapshot.ResumeCheckpointID = s
 	}
-	if raw, ok := env.GetWorkingValue(contextKeyTermination); ok {
-		if s, ok := raw.(string); ok {
-			snapshot.Termination = s
-		}
+	if s, ok := contextdata.GetTyped[string](env, contextKeyTermination); ok {
+		snapshot.Termination = s
 	}
 	if !loaded && len(snapshot.Execution.CompletedSteps) == 0 && snapshot.Termination == "" && !snapshot.RetrievalApplied {
 		return nil, false, nil

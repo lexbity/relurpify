@@ -194,7 +194,7 @@ func (c *processLSPClient) initialize(ctx context.Context, root string) error {
 				PublishDiagnostics: &protocol.PublishDiagnosticsClientCapabilities{},
 			},
 			Workspace: &protocol.WorkspaceClientCapabilities{
-				Symbol: &protocol.WorkspaceClientCapabilitiesSymbol{},
+				Symbol: &protocol.WorkspaceSymbolClientCapabilities{},
 			},
 		},
 	}

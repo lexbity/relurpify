@@ -210,69 +210,67 @@ func New(ctx context.Context, cfg Config, secrets config.Secrets) (*Runtime, err
 	var capabilityProduct *session.CapabilityProduct
 	var knowledgeProduct *session.KnowledgeProduct
 	var modelProduct *envcomposition.ModelRuntime
-	if manifestSnapshot != nil {
-		agentSpec := manifestSnapshot.Spec.Agent
-		securityProduct, err := envcomposition.BuildSecurityRuntime(ctx, envcomposition.SecurityRuntimeInput{
-			Context:           ctx,
-			Workspace:         cfg.Workspace,
-			SandboxBackend:    cfg.SandboxBackend,
-			AgentID:           registration.ID,
-			AgentSpec:         agentSpec,
-			SecurityBundle:    &securityBundle,
-			ManifestSpec:      &manifestSnapshot.Spec,
-			PermissionManager: registration.Permissions,
-		})
-		if err != nil {
-			return nil, fmt.Errorf("compose security runtime: %w", err)
-		}
-		securityRuntime = &session.RuntimeSecurity{
-			Runner:        securityProduct.Runner,
-			PolicyEngine:  securityProduct.PolicyEngine,
-			CommandPolicy: securityProduct.CommandPolicy,
-			Permissions:   securityProduct.Permissions,
-			RunnerConfig:  securityProduct.RunnerConfig,
-		}
-		capProduct, err := envcomposition.BuildCapabilityRuntime(ctx, cfg.Workspace, securityProduct.Runner, envcomposition.CapabilityRuntimeOptions{
-			AgentID:           registration.ID,
-			PermissionManager: registration.Permissions,
-			AgentSpec:         agentSpec,
-			ProtectedPaths:    securityBundle.Sandbox.ProtectedPaths,
-			InferenceEndpoint: cfg.InferenceEndpoint,
-			InferenceModel:    cfg.InferenceModel,
-		})
-		if err != nil {
-			return nil, fmt.Errorf("compose capability runtime: %w", err)
-		}
-		capabilityProduct = &session.CapabilityProduct{
-			Registry:     capProduct.Registry,
-			IndexManager: capProduct.IndexManager,
-			SearchEngine: capProduct.SearchEngine,
-		}
-		knowledgeRuntime, err := envcomposition.BuildKnowledgeRuntime(envcomposition.KnowledgeRuntimeInput{
-			GraphDB: capProduct.IndexManager.GraphDB,
-			Index:   capProduct.IndexManager,
-		})
-		if err != nil {
-			return nil, fmt.Errorf("compose knowledge runtime: %w", err)
-		}
-		knowledgeProduct = &session.KnowledgeProduct{
-			KnowledgeStore:  knowledgeRuntime.KnowledgeStore,
-			KnowledgeEvents: knowledgeRuntime.KnowledgeEvents,
-			Retriever:       knowledgeRuntime.Retriever,
-			Compiler:        knowledgeRuntime.Compiler,
-			StreamTrigger:   knowledgeRuntime.StreamTrigger,
-		}
-		modelProduct, err = envcomposition.BuildModelRuntime(envcomposition.ModelRuntimeInput{
-			Provider:          cfg.InferenceProvider,
-			Endpoint:          cfg.InferenceEndpoint,
-			ModelName:         cfg.InferenceModel,
-			NativeToolCalling: cfg.InferenceNativeToolCalling,
-			Secrets:           llm.ProviderSecrets{APIKey: secrets.LLMAPIKey},
-			Profile:           profileResolution.Profile,
-		})
-		if err != nil {
-			return nil, fmt.Errorf("compose model runtime: %w", err)
-		}
+	agentSpec := manifestSnapshot.Spec.Agent
+	securityProduct, err := envcomposition.BuildSecurityRuntime(ctx, envcomposition.SecurityRuntimeInput{
+		Context:           ctx,
+		Workspace:         cfg.Workspace,
+		SandboxBackend:    cfg.SandboxBackend,
+		AgentID:           registration.ID,
+		AgentSpec:         agentSpec,
+		SecurityBundle:    &securityBundle,
+		ManifestSpec:      &manifestSnapshot.Spec,
+		PermissionManager: registration.Permissions,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("compose security runtime: %w", err)
+	}
+	securityRuntime = &session.RuntimeSecurity{
+		Runner:        securityProduct.Runner,
+		PolicyEngine:  securityProduct.PolicyEngine,
+		CommandPolicy: securityProduct.CommandPolicy,
+		Permissions:   securityProduct.Permissions,
+		RunnerConfig:  securityProduct.RunnerConfig,
+	}
+	capProduct, err := envcomposition.BuildCapabilityRuntime(ctx, cfg.Workspace, securityProduct.Runner, envcomposition.CapabilityRuntimeOptions{
+		AgentID:           registration.ID,
+		PermissionManager: registration.Permissions,
+		AgentSpec:         agentSpec,
+		ProtectedPaths:    securityBundle.Sandbox.ProtectedPaths,
+		InferenceEndpoint: cfg.InferenceEndpoint,
+		InferenceModel:    cfg.InferenceModel,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("compose capability runtime: %w", err)
+	}
+	capabilityProduct = &session.CapabilityProduct{
+		Registry:     capProduct.Registry,
+		IndexManager: capProduct.IndexManager,
+		SearchEngine: capProduct.SearchEngine,
+	}
+	knowledgeRuntime, err := envcomposition.BuildKnowledgeRuntime(envcomposition.KnowledgeRuntimeInput{
+		GraphDB: capProduct.IndexManager.GraphDB,
+		Index:   capProduct.IndexManager,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("compose knowledge runtime: %w", err)
+	}
+	knowledgeProduct = &session.KnowledgeProduct{
+		KnowledgeStore:  knowledgeRuntime.KnowledgeStore,
+		KnowledgeEvents: knowledgeRuntime.KnowledgeEvents,
+		Retriever:       knowledgeRuntime.Retriever,
+		Compiler:        knowledgeRuntime.Compiler,
+		StreamTrigger:   knowledgeRuntime.StreamTrigger,
+	}
+	modelProduct, err = envcomposition.BuildModelRuntime(envcomposition.ModelRuntimeInput{
+		Provider:          cfg.InferenceProvider,
+		Endpoint:          cfg.InferenceEndpoint,
+		ModelName:         cfg.InferenceModel,
+		NativeToolCalling: cfg.InferenceNativeToolCalling,
+		Secrets:           llm.ProviderSecrets{APIKey: secrets.LLMAPIKey},
+		Profile:           profileResolution.Profile,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("compose model runtime: %w", err)
 	}
 	registrationView := &session.Registration{
 		ID:               registration.ID,
@@ -809,7 +807,7 @@ func (r *Runtime) resumeInteractionTask(ctx context.Context, env *contextdata.En
 	if env == nil {
 		return nil, fmt.Errorf("interaction envelope unavailable")
 	}
-	value, ok := env.GetWorkingValue("task.input")
+	value, ok := contextdata.GetTyped[any](env, "task.input")
 	if !ok || value == nil {
 		return nil, fmt.Errorf("task input unavailable for resume")
 	}
@@ -832,7 +830,7 @@ func findInteractionFrame(env *contextdata.Envelope, frameID string) (*interacti
 		return nil, false
 	}
 	for _, key := range env.WorkingMemoryKeys() {
-		value, ok := env.GetWorkingValue(key)
+		value, ok := contextdata.GetTyped[any](env, key)
 		if !ok {
 			continue
 		}

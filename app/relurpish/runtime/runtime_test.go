@@ -114,10 +114,10 @@ func TestResolveInteractionFrameResumesClarificationTask(t *testing.T) {
 	if frame.Response == nil || frame.Response.ChosenSlot != "implement" {
 		t.Fatalf("frame response = %#v", frame.Response)
 	}
-	if got, ok := env.GetWorkingValue(intentcontext.ClarificationStateKey); !ok || got == nil {
+	if got, ok := contextdata.GetTyped[any](env, intentcontext.ClarificationStateKey); !ok || got == nil {
 		t.Fatal("expected clarification state to be written back")
 	}
-	if got, ok := env.GetWorkingValue("euclo.interaction.frame_requested"); !ok || got != false {
+	if got, ok := contextdata.GetTyped[bool](env, "euclo.interaction.frame_requested"); !ok || got != false {
 		t.Fatalf("frame_requested = %#v ok=%v, want false", got, ok)
 	}
 }
@@ -146,7 +146,7 @@ func TestResolveInteractionFrameDoesNotResumeOutcomeFeedback(t *testing.T) {
 	if frame.Response == nil || frame.Response.ChosenSlot != "negative" {
 		t.Fatalf("frame response = %#v", frame.Response)
 	}
-	if got, ok := env.GetWorkingValue("euclo.interaction.frame_requested"); !ok || got != false {
+	if got, ok := contextdata.GetTyped[bool](env, "euclo.interaction.frame_requested"); !ok || got != false {
 		t.Fatalf("frame_requested = %#v ok=%v, want false", got, ok)
 	}
 }

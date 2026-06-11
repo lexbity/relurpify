@@ -109,7 +109,7 @@ func (a *ChainerAgent) executeChain(ctx context.Context, task *execution.Task, e
 	env.SetWorkingValueWithClass("chainer.links_executed", len(chain.Links), contextdata.MemoryClassTask)
 	data := map[string]any{"links_executed": len(chain.Links)}
 	for _, link := range chain.Links {
-		if value, ok := env.GetWorkingValue(link.OutputKey); ok {
+		if value, ok := contextdata.GetTyped[any](env, link.OutputKey); ok {
 			data[link.OutputKey] = value
 		}
 	}

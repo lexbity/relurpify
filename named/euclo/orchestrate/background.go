@@ -177,8 +177,8 @@ func (n *BackgroundJobNode) Execute(ctx context.Context, env *contextdata.Envelo
 }
 
 func (n *BackgroundJobNode) buildJobSpec(env *contextdata.Envelope) (jobs.Spec, error) {
-	if value, ok := env.GetWorkingValue(euclostate.KeyBackgroundJobSpec); ok {
-		switch spec := value.(type) {
+	if spec, ok := contextdata.GetTyped[any](env, euclostate.KeyBackgroundJobSpec); ok {
+		switch spec := spec.(type) {
 		case jobs.Spec:
 			if err := spec.Valid(); err != nil {
 				return jobs.Spec{}, err
@@ -196,23 +196,23 @@ func (n *BackgroundJobNode) buildJobSpec(env *contextdata.Envelope) (jobs.Spec, 
 	}
 
 	queue := n.defaultQueue
-	if value, ok := env.GetWorkingValue(euclostate.KeyBackgroundJobQueue); ok {
+	if value, ok := contextdata.GetTyped[any](env, euclostate.KeyBackgroundJobQueue); ok {
 		if s, ok := value.(string); ok && strings.TrimSpace(s) != "" {
 			queue = strings.TrimSpace(s)
 		}
 	}
 	kind := n.defaultKind
-	if value, ok := env.GetWorkingValue(euclostate.KeyBackgroundJobKind); ok {
+	if value, ok := contextdata.GetTyped[any](env, euclostate.KeyBackgroundJobKind); ok {
 		if s, ok := value.(string); ok && strings.TrimSpace(s) != "" {
 			kind = strings.TrimSpace(s)
 		}
 	}
 	payload := n.defaultPayload
-	if value, ok := env.GetWorkingValue(euclostate.KeyBackgroundJobPayload); ok {
+	if value, ok := contextdata.GetTyped[any](env, euclostate.KeyBackgroundJobPayload); ok {
 		payload = value
 	}
 	if payload == nil {
-		if task, ok := env.GetWorkingValue(euclostate.KeyTaskInputLegacy); ok {
+		if task, ok := contextdata.GetTyped[any](env, euclostate.KeyTaskInputLegacy); ok {
 			payload = task
 		}
 	}

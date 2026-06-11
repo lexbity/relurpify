@@ -88,11 +88,11 @@ func (a *PlannerAgent) Execute(ctx context.Context, task *execution.Task, env *c
 }
 
 func envGetString(env *contextdata.Envelope, key string) string {
-	val, _ := env.GetWorkingValue(key)
-	if s, ok := val.(string); ok {
-		return s
+	s, ok := contextdata.GetTyped[string](env, key)
+	if !ok {
+		return ""
 	}
-	return ""
+	return s
 }
 
 func preservePlannerExecutionResult(env *contextdata.Envelope, result *execution.Result) {
@@ -103,10 +103,10 @@ func preservePlannerExecutionResult(env *contextdata.Envelope, result *execution
 	if fields == nil {
 		fields = map[string]any{}
 	}
-	if raw, ok := env.GetWorkingValue("planner.results"); ok {
+	if raw, ok := contextdata.GetTyped[any](env, "planner.results"); ok {
 		fields["results"] = raw
 	}
-	if raw, ok := env.GetWorkingValue("planner.skipped_tools"); ok {
+	if raw, ok := contextdata.GetTyped[any](env, "planner.skipped_tools"); ok {
 		fields["skipped_tools"] = raw
 	}
 	if summary := strings.TrimSpace(envGetString(env, "planner.summary")); summary != "" {
@@ -122,10 +122,8 @@ func mirrorPlannerSummaryReference(env *contextdata.Envelope) {
 	if strings.TrimSpace(envGetString(env, "planner.summary")) == "" {
 		return
 	}
-	if rawRef, ok := env.GetWorkingValue("graph.summary_ref"); ok {
-		if ref, ok := rawRef.(relurpctx.ArtifactReference); ok {
-			env.SetWorkingValueWithClass("planner.summary_ref", ref, contextdata.MemoryClassTask)
-		}
+	if ref, ok := contextdata.GetTyped[relurpctx.ArtifactReference](env, "graph.summary_ref"); ok {
+		env.SetWorkingValueWithClass("planner.summary_ref", ref, contextdata.MemoryClassTask)
 	}
 	if summary := strings.TrimSpace(envGetString(env, "graph.summary")); summary != "" {
 		env.SetWorkingValueWithClass("planner.summary_artifact_summary", summary, contextdata.MemoryClassTask)
@@ -136,10 +134,8 @@ func mirrorPlannerCheckpointReference(env *contextdata.Envelope) {
 	if env == nil {
 		return
 	}
-	if rawRef, ok := env.GetWorkingValue("graph.checkpoint_ref"); ok {
-		if ref, ok := rawRef.(relurpctx.ArtifactReference); ok {
-			env.SetWorkingValueWithClass("planner.checkpoint_ref", ref, contextdata.MemoryClassTask)
-		}
+	if ref, ok := contextdata.GetTyped[relurpctx.ArtifactReference](env, "graph.checkpoint_ref"); ok {
+		env.SetWorkingValueWithClass("planner.checkpoint_ref", ref, contextdata.MemoryClassTask)
 	}
 }
 
@@ -147,17 +143,17 @@ func compactPlannerResultsStateInContext(env *contextdata.Envelope) {
 	if env == nil {
 		return
 	}
-	if _, ok := env.GetWorkingValue("planner.summary_ref"); !ok {
+	if _, ok := contextdata.GetTyped[any](env, "planner.summary_ref"); !ok {
 		return
 	}
-	raw, ok := env.GetWorkingValue("planner.results")
+	raw, ok := contextdata.GetTyped[any](env, "planner.results")
 	if !ok {
 		return
 	}
 	if compact := compactPlannerResultsState(raw); compact != nil {
 		env.SetWorkingValueWithClass("planner.results", compact, contextdata.MemoryClassTask)
 	}
-	if rawSkipped, ok := env.GetWorkingValue("planner.skipped_tools"); ok {
+	if rawSkipped, ok := contextdata.GetTyped[any](env, "planner.skipped_tools"); ok {
 		if compact := compactPlannerSkippedToolsState(rawSkipped); compact != nil {
 			env.SetWorkingValueWithClass("planner.skipped_tools", compact, contextdata.MemoryClassTask)
 		}
@@ -340,12 +336,10 @@ func (n *plannerPlanNode) Execute(ctx context.Context, env *contextdata.Envelope
 	if policy := plannerSkillHints(n.agent); policy != "" {
 		extraPrompt += "Skill Policy:\n" + policy + "\n\n"
 	}
-	if trimmed, _ := env.GetWorkingValue("contextstream.trimmed"); trimmed == true {
+	if trimmed, _ := contextdata.GetTyped[bool](env, "contextstream.trimmed"); trimmed {
 		shortfall := 0
-		if raw, ok := env.GetWorkingValue("contextstream.shortfall_tokens"); ok {
-			if value, ok := raw.(int); ok {
-				shortfall = value
-			}
+		if value, ok := contextdata.GetTyped[int](env, "contextstream.shortfall_tokens"); ok {
+			shortfall = value
 		}
 		extraPrompt += fmt.Sprintf("Streaming note: context was trimmed to fit budget (shortfall=%d tokens).\n\n", shortfall)
 	}
@@ -541,7 +535,7 @@ func (n *plannerExecuteNode) Contract() graph.NodeContract {
 // might propose before the step executor handles the real work.
 func (n *plannerExecuteNode) Execute(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 	env.SetWorkingValueWithClass("execution_phase", "executing", contextdata.MemoryClassTask)
-	value, ok := env.GetWorkingValue("planner.plan")
+	value, ok := contextdata.GetTyped[any](env, "planner.plan")
 	if !ok {
 		return nil, fmt.Errorf("plan not available")
 	}
@@ -670,10 +664,9 @@ func (n *plannerVerifyNode) Type() graph.NodeType { return graph.NodeTypeObserva
 // messages without parsing the entire state map.
 func (n *plannerVerifyNode) Execute(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 	env.SetWorkingValueWithClass("execution_phase", "validating", contextdata.MemoryClassTask)
-	results, _ := env.GetWorkingValue("planner.results")
+	results, _ := contextdata.GetTyped[any](env, "planner.results")
 	_ = results
-	planVal, _ := env.GetWorkingValue("planner.plan")
-	plan, _ := planVal.(pl.Plan)
+	plan, _ := contextdata.GetTyped[pl.Plan](env, "planner.plan")
 	summary := fmt.Sprintf("Executed plan for task '%s' with %d steps.", n.task.Instruction, len(plan.Steps))
 	env.SetWorkingValueWithClass("planner.summary", summary, contextdata.MemoryClassTask)
 	if n.agent.Memory != nil {
@@ -1240,7 +1233,7 @@ func resolvePlannerOutputReference(env *contextdata.Envelope, ref string) (any, 
 	if stepID == "" {
 		return nil, false
 	}
-	value, ok := env.GetWorkingValue("planner.step." + stepID)
+	value, ok := contextdata.GetTyped[any](env, "planner.step." + stepID)
 	if !ok {
 		return nil, false
 	}

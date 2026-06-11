@@ -30,14 +30,11 @@ func (n *reactObserveNode) Type() agentgraph.NodeType { return agentgraph.NodeTy
 // the ReAct loop should continue.
 func (n *reactObserveNode) Execute(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 	env.SetWorkingValueWithClass("react.execution_phase", "validating", contextdata.MemoryClassTask)
-	iterVal, _ := env.GetWorkingValue("react.iteration")
-	iter, _ := iterVal.(int)
+	iter, _ := contextdata.GetTyped[int](env, "react.iteration")
 	iter++
 	env.SetWorkingValueWithClass("react.iteration", iter, contextdata.MemoryClassTask)
-	decisionVal, _ := env.GetWorkingValue("react.decision")
-	decision, _ := decisionVal.(decisionPayload)
-	lastRes, _ := env.GetWorkingValue("react.last_tool_result")
-	lastMap, _ := lastRes.(map[string]any)
+	decision, _ := contextdata.GetTyped[decisionPayload](env, "react.decision")
+	lastMap, _ := contextdata.GetTyped[map[string]any](env, "react.last_tool_result")
 	if summary := strings.TrimSpace(envGetString(env, "react.verification_latched_summary")); summary != "" {
 		env.SetWorkingValueWithClass("react.done", true, contextdata.MemoryClassTask)
 		env.SetWorkingValueWithClass("react.incomplete_reason", "", contextdata.MemoryClassTask)
@@ -94,7 +91,7 @@ func (n *reactObserveNode) Execute(ctx context.Context, env *contextdata.Envelop
 	}
 	repeated, repeatReason := detectRepeatedToolLoop(env, n.task)
 	completed := decision.Complete
-	if res, ok := env.GetWorkingValue("react.tool_calls"); ok {
+	if res, ok := contextdata.GetTyped[any](env, "react.tool_calls"); ok {
 		if calls, ok := res.([]model.ToolCall); ok && len(calls) > 0 {
 			completed = false
 		}
@@ -193,7 +190,7 @@ func (n *reactObserveNode) scheduleRecoveryProbe(env *contextdata.Envelope, last
 	if env == nil || taskNeedsEditing(n.task) || !hasFailure(lastMap) {
 		return false
 	}
-	if pending, ok := env.GetWorkingValue("react.tool_calls"); ok {
+	if pending, ok := contextdata.GetTyped[any](env, "react.tool_calls"); ok {
 		if calls, ok := pending.([]model.ToolCall); ok && len(calls) > 0 {
 			return false
 		}
@@ -349,8 +346,7 @@ func hasFailureFromState(env *contextdata.Envelope) bool {
 	if env == nil {
 		return false
 	}
-	raw, _ := env.GetWorkingValue("react.last_tool_result")
-	lastMap, _ := raw.(map[string]any)
+	lastMap, _ := contextdata.GetTyped[map[string]any](env, "react.last_tool_result")
 	return hasFailure(lastMap)
 }
 
@@ -388,10 +384,7 @@ func taskNeedsEditing(task *execution.Task) bool {
 		}
 	}
 	editPattern := regexp.MustCompile(`\b(change|implement|fix|modify|edit|write|refactor|update|create|append|add|replace)\b`)
-	if editPattern.MatchString(text) {
-		return true
-	}
-	return false
+	return editPattern.MatchString(text)
 }
 
 func detectRepeatedToolLoop(env *contextdata.Envelope, task *execution.Task) (bool, string) {

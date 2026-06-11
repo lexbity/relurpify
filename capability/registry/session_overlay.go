@@ -42,10 +42,10 @@ func LookupSessionCapability(env ports.State, id string) (handler.InvocableCapab
 	if env == nil || id == "" {
 		return nil, false
 	}
-	v, ok := env.GetWorkingValue(sessionCapKeyPrefix + id)
-	if !ok || v == nil {
+	val, ok := env.GetWorkingValue(sessionCapKeyPrefix + id)
+	if !ok {
 		return nil, false
 	}
-	h, ok := v.(handler.InvocableCapabilityHandler)
+	h, ok := val.(handler.InvocableCapabilityHandler)
 	return h, ok
 }

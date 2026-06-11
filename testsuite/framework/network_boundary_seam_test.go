@@ -11,7 +11,6 @@ import (
 	regpkg "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/governance/authorization"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
-	govpolicy "codeburg.org/lexbit/relurpify/governance/policy"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
 )
 
@@ -22,7 +21,7 @@ func TestNetworkBoundaryEnforcement(t *testing.T) {
 		env := NewTestEnvironment(t)
 
 		// Create permission manager with network permission
-		perms := govpolicy.NewFileSystemPermissionSet(env.WorkspacePath, permissions.FileSystemRead)
+		perms := policy.NewFileSystemPermissionSet(env.WorkspacePath, permissions.FileSystemRead)
 		perms.Network = []permissions.NetworkPermission{
 			{Direction: "egress", Protocol: "tcp", Host: "example.com", Port: 443},
 		}
@@ -116,7 +115,7 @@ func TestNetworkBoundaryEnforcement(t *testing.T) {
 					Action:   "net:egress",
 					Resource: "api.service.local:443",
 				},
-				Scope: govpolicy.GrantScopeSession,
+				Scope: policy.GrantScopeSession,
 			}},
 		}
 
@@ -150,7 +149,7 @@ func TestNetworkBoundaryEnforcement(t *testing.T) {
 			if req.Permission.Resource != "api.service.local:443" {
 				t.Errorf("expected HITL request resource api.service.local:443, got %s", req.Permission.Resource)
 			}
-			if req.Scope != govpolicy.GrantScopeSession {
+			if req.Scope != policy.GrantScopeSession {
 				t.Errorf("expected HITL request scope session, got %s", req.Scope)
 			}
 		}
@@ -181,7 +180,7 @@ func TestNetworkBoundaryEnforcement(t *testing.T) {
 					Action:   "net:egress",
 					Resource: "api.service.local:443",
 				},
-				Scope: govpolicy.GrantScopeSession,
+				Scope: policy.GrantScopeSession,
 			}},
 		}
 

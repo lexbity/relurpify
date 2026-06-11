@@ -37,10 +37,8 @@ func (n *CheckpointNode) Type() graph.NodeType {
 // Execute requests a checkpoint and records the request metadata in the envelope.
 func (n *CheckpointNode) Execute(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 	attempt := 0
-	if attemptVal, ok := env.GetWorkingValue("rewoo.attempt"); ok {
-		if a, ok := attemptVal.(int); ok {
-			attempt = a
-		}
+	if a, ok := contextdata.GetTyped[int](env, "rewoo.attempt"); ok {
+		attempt = a
 	}
 	env.RequestCheckpoint("rewoo:"+n.phase, 50, false)
 	env.SetWorkingValueWithClass("rewoo.checkpoint_phase", n.phase, contextdata.MemoryClassTask)

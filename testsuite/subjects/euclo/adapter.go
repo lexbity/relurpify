@@ -88,7 +88,7 @@ func workingValue(snapshot *contextdata.Envelope, key string) any {
 	if snapshot == nil {
 		return nil
 	}
-	value, _ := snapshot.GetWorkingValue(key)
+	value, _ := contextdata.GetTyped[any](snapshot, key)
 	return value
 }
 

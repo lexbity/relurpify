@@ -49,7 +49,7 @@ exception-count:
 
 # Dead-code gate: asserts removed symbols never reappear.
 no-dead:
-	@if grep -rn 'InvokeOnBestNode\|RegisterNodeProvider\|NodeSelectionCriteria\|RateLimiter' --include='*.go' . 2>/dev/null | grep -v '.gomodcache' | grep -v 'tooling/arch' ; then echo "[FAIL] no-dead: found removed symbols" ; exit 1 ; fi
+	@if grep -rn 'InvokeOnBestNode\|RegisterNodeProvider\|NodeSelectionCriteria\|RateLimiter\|GetWorkingValue' --include='*.go' . 2>/dev/null | grep -v '.gomodcache' | grep -v 'tooling/arch' | grep -v 'state.go' | grep -v 'state_test.go' | grep -v 'runner_test.go'; then echo "[FAIL] no-dead: found removed symbols" ; exit 1 ; fi
 	@echo "[PASS] no-dead: no removed symbols found"
 
 

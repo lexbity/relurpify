@@ -217,7 +217,7 @@ func hasIntentGrounding(env *contextdata.Envelope) bool {
 	if interpretation, ok := euclostate.GetIntentInterpretation(env); ok && interpretation != nil {
 		return true
 	}
-	if v, ok := env.GetWorkingValue(intentcontext.ClarificationStateKey); ok {
+	if v, ok := contextdata.GetTyped[any](env, intentcontext.ClarificationStateKey); ok {
 		if state, ok := v.(*intentcontext.ClarificationState); ok && state != nil {
 			return true
 		}

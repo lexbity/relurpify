@@ -52,10 +52,8 @@ func (e *historyMutatingExecutor) BranchExecutor() (WorkflowExecutor, error) {
 func (e *historyMutatingExecutor) Execute(ctx context.Context, task *execution.Task, env *contextdata.Envelope) (*Result, error) {
 	// Add interaction to history stored in _history key.
 	var history []any
-	if h, ok := env.GetWorkingValue("_history"); ok {
-		if hSlice, ok := h.([]any); ok {
-			history = hSlice
-		}
+	if h, ok := contextdata.GetTyped[[]any](env, "_history"); ok {
+		history = h
 	}
 	history = append(history, map[string]any{"role": "assistant", "content": "branch note"})
 	env.SetWorkingValueWithClass("_history", history, contextdata.MemoryClassTask)
@@ -94,7 +92,7 @@ func TestPlanExecutorAllowsCustomParallelMergePolicy(t *testing.T) {
 		},
 	}}).Execute(context.Background(), executor, task, plan, state)
 	require.NoError(t, err)
-	val, _ := state.GetWorkingValue("parallel.merge_policy")
+	val, _ := contextdata.GetTyped[string](state, "parallel.merge_policy")
 	require.Equal(t, "custom", val)
 }
 
@@ -110,8 +108,8 @@ func TestBranchMergeHelperMergesBranchEnvelopes(t *testing.T) {
 		{Step: PlanStep{ID: "right"}, State: right},
 	})
 	require.NoError(t, err)
-	_, leftOK := parent.GetWorkingValue("left.value")
-	_, rightOK := parent.GetWorkingValue("right.value")
+	_, leftOK := contextdata.GetTyped[any](parent, "left.value")
+	_, rightOK := contextdata.GetTyped[any](parent, "right.value")
 	require.True(t, leftOK)
 	require.True(t, rightOK)
 }

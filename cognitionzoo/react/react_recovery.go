@@ -87,7 +87,7 @@ func recoveryProbesForSignature(env *contextdata.Envelope, signature string) map
 	if env == nil || signature == "" {
 		return out
 	}
-	raw, ok := env.GetWorkingValue("react.recovery_probes")
+	raw, ok := contextdata.GetTyped[any](env, "react.recovery_probes")
 	if !ok || raw == nil {
 		return out
 	}
@@ -106,11 +106,9 @@ func recordRecoveryProbeUsage(env *contextdata.Envelope, signature, toolName str
 		return
 	}
 	store := map[string][]string{}
-	if raw, ok := env.GetWorkingValue("react.recovery_probes"); ok && raw != nil {
-		if current, ok := raw.(map[string][]string); ok {
-			for k, v := range current {
-				store[k] = append([]string{}, v...)
-			}
+	if current, ok := contextdata.GetTyped[map[string][]string](env, "react.recovery_probes"); ok {
+		for k, v := range current {
+			store[k] = append([]string{}, v...)
 		}
 	}
 	store[signature] = append(store[signature], toolName)

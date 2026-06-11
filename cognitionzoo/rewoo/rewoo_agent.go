@@ -151,7 +151,7 @@ func (n *rewooExecuteNode) ID() string           { return n.id }
 func (n *rewooExecuteNode) Type() graph.NodeType { return graph.NodeTypeTool }
 
 func (n *rewooExecuteNode) Execute(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
-	raw, ok := env.GetWorkingValue("rewoo.plan")
+	raw, ok := contextdata.GetTyped[any](env, "rewoo.plan")
 	if !ok || raw == nil {
 		return nil, fmt.Errorf("rewoo: plan unavailable")
 	}

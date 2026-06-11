@@ -254,13 +254,6 @@ func (c *Compiler) Replay(ctx context.Context, compilationID string, mode Replay
 			return nil, nil, nil, err
 		}
 
-		// Check determinism: compare digests
-		if newRecord.DeterministicDigest != originalRecord.DeterministicDigest {
-			// Determinism mismatch - log as bug but still return results
-			// In production, this would emit a structured warning event
-			// For now, we note it in the diff
-		}
-
 		diff := c.computeDiff(&originalRecord.Result, result)
 		diff.DeterminismMatch = newRecord.DeterministicDigest == originalRecord.DeterministicDigest
 		return result, newRecord, diff, nil

@@ -143,7 +143,7 @@ func TestCheckpointNodeMaterializesCheckpointFromStreamHook(t *testing.T) {
 
 func mustWorkingValue(t *testing.T, env *contextdata.Envelope, key string) any {
 	t.Helper()
-	got, ok := env.GetWorkingValue(key)
+	got, ok := contextdata.GetTyped[any](env, key)
 	if !ok {
 		t.Fatalf("missing working value %q", key)
 	}
@@ -215,7 +215,7 @@ func TestCheckpointNodeMirrorsStreamResultToEnvelope(t *testing.T) {
 	if result == nil || !result.Success {
 		t.Fatalf("expected success, got %#v", result)
 	}
-	if got, ok := env.GetWorkingValue("checkpoint.snapshot"); !ok || got == nil {
+	if got, ok := contextdata.GetTyped[any](env, "checkpoint.snapshot"); !ok || got == nil {
 		t.Fatal("expected checkpoint snapshot to be written")
 	}
 }

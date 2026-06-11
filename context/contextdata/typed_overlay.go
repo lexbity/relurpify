@@ -32,7 +32,12 @@ func (o TypedOverlay[T]) Get(env *Envelope) (T, bool) {
 	if env == nil {
 		return zero, false
 	}
-	v, ok := env.GetWorkingValue(o.key)
+	env.mu.RLock()
+	defer env.mu.RUnlock()
+	if env.WorkingData == nil {
+		return zero, false
+	}
+	v, ok := env.WorkingData[o.key]
 	if !ok {
 		return zero, false
 	}
@@ -77,7 +82,12 @@ func GetTyped[T any](env *Envelope, key string) (T, bool) {
 	if env == nil {
 		return zero, false
 	}
-	v, ok := env.GetWorkingValue(key)
+	env.mu.RLock()
+	defer env.mu.RUnlock()
+	if env.WorkingData == nil {
+		return zero, false
+	}
+	v, ok := env.WorkingData[key]
 	if !ok {
 		return zero, false
 	}

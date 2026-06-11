@@ -215,10 +215,8 @@ func newClarificationFrame(taskID, sessionID string, frameType FrameType, questi
 	if selection.Default == "" && len(selection.Options) > 0 {
 		selection.Default = strings.TrimSpace(selection.Options[0].ID)
 	}
-	if payload != nil {
-		for k, v := range payload {
-			frame.Payload[k] = v
-		}
+	for k, v := range payload {
+		frame.Payload[k] = v
 	}
 	if frame.Question != "" {
 		frame.Payload["question"] = frame.Question

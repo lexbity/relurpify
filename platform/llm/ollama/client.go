@@ -213,10 +213,7 @@ func (c *Client) MaxToolsPerCall() int {
 
 // UsesNativeToolCalling implements ProfiledModel.
 func (c *Client) UsesNativeToolCalling() bool {
-	if !c.nativeToolCallingEnabled() {
-		return false
-	}
-	return true
+	return c.nativeToolCallingEnabled()
 }
 
 func (c *Client) nativeToolCallingEnabled() bool {

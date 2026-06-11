@@ -14,7 +14,7 @@ import (
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 )
 
-var rewooErrReplanRequired = errors.New("rewoo: replan required")
+var errReplanRequired = errors.New("rewoo: replan required")
 
 type rewooExecutor struct {
 	Registry           *capability.CapabilityRegistry
@@ -82,7 +82,7 @@ func (e *rewooExecutor) Execute(ctx context.Context, plan *RewooPlan, env *conte
 				continue
 			}
 			switch {
-			case errors.Is(err, rewooErrReplanRequired):
+			case errors.Is(err, errReplanRequired):
 				return results, err
 			case result.Success:
 				continue
@@ -130,7 +130,7 @@ func (e *rewooExecutor) executeStep(ctx context.Context, env *contextdata.Envelo
 			case StepOnFailureAbort:
 				return result, fmt.Errorf("rewoo: permission denied for tool %s: %w", step.Tool, err)
 			case StepOnFailureReplan:
-				return result, rewooErrReplanRequired
+				return result, errReplanRequired
 			default:
 				// Skip: record failure but continue
 				return result, nil
@@ -169,7 +169,7 @@ func (e *rewooExecutor) executeStep(ctx context.Context, env *contextdata.Envelo
 	case StepOnFailureAbort:
 		return result, fmt.Errorf("rewoo: step %s failed: %w", step.ID, err)
 	case StepOnFailureReplan:
-		return result, rewooErrReplanRequired
+		return result, errReplanRequired
 	default:
 		return result, nil
 	}

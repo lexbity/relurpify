@@ -1,9 +1,11 @@
 package surface
 
 import (
+	"go/ast"
 	"go/parser"
 	"go/token"
-	"os"
+	"io/fs"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -24,19 +26,25 @@ var bannedPrefixes = []string{
 
 func TestSurfaceImportsStdlibOnly(t *testing.T) {
 	fset := token.NewFileSet()
-	pkgs, err := parser.ParseDir(fset, ".", func(fi os.FileInfo) bool {
-		return !strings.HasSuffix(fi.Name(), "_test.go")
-	}, parser.ImportsOnly)
-	if err != nil {
-		t.Fatalf("parsing surface package: %v", err)
+	pkg := make(map[string]*ast.File)
+	if err := filepath.WalkDir(".", func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+			return nil
+		}
+		f, err := parser.ParseFile(fset, path, nil, parser.ImportsOnly)
+		if err != nil {
+			return err
+		}
+		pkg[path] = f
+		return nil
+	}); err != nil {
+		t.Fatalf("walking surface package: %v", err)
 	}
 
-	pkg, ok := pkgs["surface"]
-	if !ok {
-		t.Fatal("no surface package found in .")
-	}
-
-	for _, f := range pkg.Files {
+	for _, f := range pkg {
 		for _, imp := range f.Imports {
 			path := strings.Trim(imp.Path.Value, `"`)
 			if isStdlib(path) {

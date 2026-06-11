@@ -39,7 +39,7 @@ func (n *AggregateNode) Type() graph.NodeType {
 func (n *AggregateNode) Execute(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 	plan := n.Plan
 	if plan == nil {
-		if v, ok := env.GetWorkingValue("rewoo.plan"); ok {
+		if v, ok := contextdata.GetTyped[any](env, "rewoo.plan"); ok {
 			plan, _ = v.(*RewooPlan)
 		}
 	}
@@ -52,7 +52,7 @@ func (n *AggregateNode) Execute(ctx context.Context, env *contextdata.Envelope) 
 	results := make([]RewooStepResult, 0, len(n.Plan.Steps))
 	for _, step := range n.Plan.Steps {
 		key := fmt.Sprintf("rewoo.step.%s", step.ID)
-		val, ok := env.GetWorkingValue(key)
+		val, ok := contextdata.GetTyped[any](env, key)
 		if !ok {
 			// Step not executed (e.g., skipped due to dependency failure)
 			results = append(results, RewooStepResult{

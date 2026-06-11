@@ -28,7 +28,7 @@ func NewStateStore() *EnvelopeStateStore {
 // Read extracts the canonical clarification state from the envelope.
 func (s *EnvelopeStateStore) Read(ctx context.Context, env *contextdata.Envelope) (*ClarificationState, error) {
 	_ = ctx
-	value, ok := env.GetWorkingValue(ClarificationStateKey)
+	value, ok := contextdata.GetTyped[any](env, ClarificationStateKey)
 	if !ok || value == nil {
 		return NewState(env.TaskID, env.SessionID), nil
 	}
@@ -103,7 +103,7 @@ func (s *EnvelopeStateStore) Write(ctx context.Context, env *contextdata.Envelop
 }
 
 func (s *EnvelopeStateStore) readCurrent(env *contextdata.Envelope) (*ClarificationState, error) {
-	value, ok := env.GetWorkingValue(ClarificationStateKey)
+	value, ok := contextdata.GetTyped[any](env, ClarificationStateKey)
 	if !ok || value == nil {
 		return nil, errors.New("clarification state not found")
 	}

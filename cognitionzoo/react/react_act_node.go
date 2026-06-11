@@ -59,7 +59,7 @@ func (n *reactActNode) Contract() agentgraph.NodeContract {
 func (n *reactActNode) Execute(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 	env.SetWorkingValueWithClass("react.execution_phase", "executing", contextdata.MemoryClassTask)
 	activeTools := activeToolSet(env)
-	if pending, ok := env.GetWorkingValue("react.tool_calls"); ok {
+	if pending, ok := contextdata.GetTyped[any](env, "react.tool_calls"); ok {
 		if calls, ok := pending.([]model.ToolCall); ok && len(calls) > 0 {
 			calls = filterToolCalls(calls)
 			if len(calls) == 0 {
@@ -149,7 +149,7 @@ func (n *reactActNode) Execute(ctx context.Context, env *contextdata.Envelope) (
 			env.SetWorkingValueWithClass("react.tool_calls", []model.ToolCall{}, contextdata.MemoryClassTask)
 		}
 	}
-	val, ok := env.GetWorkingValue("react.decision")
+	val, ok := contextdata.GetTyped[any](env, "react.decision")
 	if !ok {
 		return nil, fmt.Errorf("missing decision from think step")
 	}

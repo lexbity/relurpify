@@ -373,7 +373,7 @@ func normalizeSearchTokens(tokens ...string) map[string]struct{} {
 	normalized := make(map[string]struct{})
 	for _, token := range tokens {
 		for _, part := range strings.FieldsFunc(strings.ToLower(strings.TrimSpace(token)), func(r rune) bool {
-			return !(r == '_' || r == '-' || r == ':' || r == '.' || r == '/' || r == '\\' || ('a' <= r && r <= 'z') || ('0' <= r && r <= '9'))
+			return r != '_' && r != '-' && r != ':' && r != '.' && r != '/' && r != '\\' && (r < 'a' || r > 'z') && (r < '0' || r > '9')
 		}) {
 			if normalizedToken := normalizeTriggerTag(part); normalizedToken != "" {
 				normalized[normalizedToken] = struct{}{}

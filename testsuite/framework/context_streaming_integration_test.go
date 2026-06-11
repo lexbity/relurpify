@@ -283,7 +283,7 @@ func TestEnvelopeMutation(t *testing.T) {
 	envelope.AddStreamedContextReference(newRef2)
 
 	// Validate existing working values are still present
-	val1, ok := envelope.GetWorkingValue("existing-key-1")
+	val1, ok := contextdata.GetTyped[string](envelope, "existing-key-1")
 	if !ok {
 		t.Error("expected existing-key-1 to still be present")
 	}
@@ -291,7 +291,7 @@ func TestEnvelopeMutation(t *testing.T) {
 		t.Errorf("expected existing-key-1 value 'existing-value-1', got %v", val1)
 	}
 
-	val2, ok := envelope.GetWorkingValue("existing-key-2")
+	val2, ok := contextdata.GetTyped[int](envelope, "existing-key-2")
 	if !ok {
 		t.Error("expected existing-key-2 to still be present")
 	}

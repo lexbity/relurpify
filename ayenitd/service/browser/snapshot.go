@@ -202,10 +202,8 @@ func recordBrowserObservation(env *contextdata.Envelope, pageState *platformbrow
 	}
 	env.SetWorkingValueWithClass(browserLastPageStateKey, pageState, contextdata.MemoryClassTask)
 	var snapshots []*platformbrowser.PageState
-	if existing, ok := env.GetWorkingValue(browserPageStateListKey); ok {
-		if typed, ok := existing.([]*platformbrowser.PageState); ok {
-			snapshots = append(snapshots, typed...)
-		}
+	if typed, ok := contextdata.GetTyped[[]*platformbrowser.PageState](env, browserPageStateListKey); ok {
+		snapshots = append(snapshots, typed...)
 	}
 	snapshots = append(snapshots, pageState)
 	env.SetWorkingValueWithClass(browserPageStateListKey, snapshots, contextdata.MemoryClassTask)
@@ -306,7 +304,7 @@ func defaultSessionID(env *contextdata.Envelope, args map[string]any) string {
 	if env == nil {
 		return ""
 	}
-	if current, ok := env.GetWorkingValue(browserDefaultSessionKey); ok {
+	if current, ok := contextdata.GetTyped[any](env, browserDefaultSessionKey); ok {
 		return strings.TrimSpace(fmt.Sprint(current))
 	}
 	return ""

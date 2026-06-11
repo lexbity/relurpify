@@ -420,13 +420,13 @@ func TestApplyCaptureBindingsWritesExplicitNamespaces(t *testing.T) {
 	if got, want := len(writes), 2; got != want {
 		t.Fatalf("write count = %d, want %d", got, want)
 	}
-	if got, _ := env.GetWorkingValue("output.result"); got != "summary data" {
+	if got, _ := contextdata.GetTyped[string](env, "output.result"); got != "summary data" {
 		t.Fatalf("output.result = %#v, want %q", got, "summary data")
 	}
-	if got, _ := env.GetWorkingValue("state.plan"); got != "workspace.txt" {
+	if got, _ := contextdata.GetTyped[string](env, "state.plan"); got != "workspace.txt" {
 		t.Fatalf("state.plan = %#v, want %q", got, "workspace.txt")
 	}
-	if got, ok := env.GetWorkingValue("euclo.thoughtrecipe.demo.output.result"); ok {
+	if got, ok := contextdata.GetTyped[any](env, "euclo.thoughtrecipe.demo.output.result"); ok {
 		t.Fatalf("unexpected legacy capture key present: %#v", got)
 	}
 }

@@ -82,7 +82,7 @@ func TestGraphExecutionStatePropagation(t *testing.T) {
 	}
 
 	// Validate final state
-	finalValue, ok := env.GetWorkingValue("propagated-key")
+	finalValue, ok := contextdata.GetTyped[string](env, "propagated-key")
 	if !ok {
 		t.Fatal("expected propagated-key to be in envelope")
 	}
@@ -137,7 +137,7 @@ func TestNodeToEnvelopeStateTransfer(t *testing.T) {
 	}
 
 	// Validate transfer happened
-	outputValue, ok := env.GetWorkingValue("output-data")
+	outputValue, ok := contextdata.GetTyped[string](env, "output-data")
 	if !ok {
 		t.Fatal("expected output-data to be in envelope")
 	}
@@ -146,7 +146,7 @@ func TestNodeToEnvelopeStateTransfer(t *testing.T) {
 	}
 
 	// Validate input data is still present (transfer is additive)
-	inputValue, ok := env.GetWorkingValue("input-data")
+	inputValue, ok := contextdata.GetTyped[string](env, "input-data")
 	if !ok {
 		t.Fatal("expected input-data to still be in envelope")
 	}
@@ -210,17 +210,17 @@ func TestEnvelopeAdditiveMutation(t *testing.T) {
 	}
 
 	// Validate all three keys are present
-	val1, ok1 := env.GetWorkingValue("key1")
+	val1, ok1 := contextdata.GetTyped[string](env, "key1")
 	if !ok1 || val1 != "value1" {
 		t.Error("expected key1 to still be present with value1")
 	}
 
-	val2, ok2 := env.GetWorkingValue("key2")
+	val2, ok2 := contextdata.GetTyped[string](env, "key2")
 	if !ok2 || val2 != "value2" {
 		t.Error("expected key2 to still be present with value2")
 	}
 
-	val3, ok3 := env.GetWorkingValue("key3")
+	val3, ok3 := contextdata.GetTyped[string](env, "key3")
 	if !ok3 || val3 != "value3" {
 		t.Error("expected key3 to be present with value3")
 	}
@@ -275,7 +275,7 @@ func (n *stateReaderNode) ID() string           { return n.id }
 func (n *stateReaderNode) Type() graph.NodeType { return graph.NodeTypeConditional }
 
 func (n *stateReaderNode) Execute(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
-	value, ok := env.GetWorkingValue(n.key)
+	value, ok := contextdata.GetTyped[any](env, n.key)
 	if !ok {
 		return nil, &permissions.PermissionDeniedError{
 			Message: "key not found in envelope",
@@ -336,7 +336,7 @@ func (n *stateTransferNode) ID() string           { return n.id }
 func (n *stateTransferNode) Type() graph.NodeType { return graph.NodeTypeTool }
 
 func (n *stateTransferNode) Execute(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
-	inputValue, ok := env.GetWorkingValue(n.inputKey)
+	inputValue, ok := contextdata.GetTyped[any](env, n.inputKey)
 	if !ok {
 		return nil, &permissions.PermissionDeniedError{
 			Message: "input key not found in envelope",

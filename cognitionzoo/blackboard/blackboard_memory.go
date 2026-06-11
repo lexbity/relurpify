@@ -51,9 +51,8 @@ func hydrateBlackboardFromMemory(state *contextdata.Envelope, bb *Blackboard) in
 				}
 			}
 		}
-	} else if raw, ok := state.GetWorkingValue("graph.declarative_memory"); ok {
-		if payload, ok := raw.(map[string]any); ok {
-			if results, ok := payload["results"].([]relurpctx.MemoryRecordEnvelope); ok {
+	} else if payload, ok := contextdata.GetTyped[map[string]any](state, "graph.declarative_memory"); ok {
+		if results, ok := payload["results"].([]relurpctx.MemoryRecordEnvelope); ok {
 				for _, record := range results {
 					if bb.AddFact("memory:"+record.Key, strings.TrimSpace(record.Summary), "memory:declarative") {
 						// Stamp derivation and origin on the newly added fact
@@ -76,11 +75,9 @@ func hydrateBlackboardFromMemory(state *contextdata.Envelope, bb *Blackboard) in
 					}
 				}
 			}
-		}
 	}
-	if raw, ok := state.GetWorkingValue("graph.procedural_memory_payload"); ok {
-		if payload, ok := raw.(map[string]any); ok {
-			if results, ok := payload["results"].([]map[string]any); ok {
+	if payload, ok := contextdata.GetTyped[map[string]any](state, "graph.procedural_memory_payload"); ok {
+		if results, ok := payload["results"].([]map[string]any); ok {
 				for _, record := range results {
 					key := strings.TrimSpace(fmt.Sprint(record["record_id"]))
 					if key == "" {
@@ -113,20 +110,18 @@ func hydrateBlackboardFromMemory(state *contextdata.Envelope, bb *Blackboard) in
 					}
 				}
 			}
-		}
-	} else if raw, ok := state.GetWorkingValue("graph.procedural_memory"); ok {
-		if payload, ok := raw.(map[string]any); ok {
-			if results, ok := payload["results"].([]relurpctx.MemoryRecordEnvelope); ok {
-				for _, record := range results {
-					id := "memory:routine:" + strings.TrimSpace(record.Key)
-					description := strings.TrimSpace(record.Summary)
-					if description == "" {
-						description = "consider learned routine " + strings.TrimSpace(record.Key)
-					}
-					if err := bb.AddHypothesis(id, description, 0.55, "memory:procedural"); err == nil {
-						// Stamp derivation and origin on the newly added hypothesis
-						if len(bb.Hypotheses) > 0 {
-							lastHyp := &bb.Hypotheses[len(bb.Hypotheses)-1]
+	} else if payload, ok := contextdata.GetTyped[map[string]any](state, "graph.procedural_memory"); ok {
+		if results, ok := payload["results"].([]relurpctx.MemoryRecordEnvelope); ok {
+			for _, record := range results {
+				id := "memory:routine:" + strings.TrimSpace(record.Key)
+				description := strings.TrimSpace(record.Summary)
+				if description == "" {
+					description = "consider learned routine " + strings.TrimSpace(record.Key)
+				}
+				if err := bb.AddHypothesis(id, description, 0.55, "memory:procedural"); err == nil {
+					// Stamp derivation and origin on the newly added hypothesis
+					if len(bb.Hypotheses) > 0 {
+						lastHyp := &bb.Hypotheses[len(bb.Hypotheses)-1]
 							origin := relurpctx.OriginDerivation("memory")
 							derived := origin.Derive("memory_store", "memory", 0.0, fmt.Sprintf("record_key=%s", record.Key))
 							lastHyp.Derivation = &derived
@@ -143,7 +138,6 @@ func hydrateBlackboardFromMemory(state *contextdata.Envelope, bb *Blackboard) in
 						added++
 					}
 				}
-			}
 		}
 	}
 	return added

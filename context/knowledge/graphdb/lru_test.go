@@ -249,10 +249,7 @@ func TestLRU_IndexIntegrity_ListNodesByLabel(t *testing.T) {
 		t.Errorf("expected 10 nodes from ListNodesByLabel under LRU, got %d", len(nodes))
 	}
 	// NodesBySource should also work (indexes built at boot).
-	nodesBySrc := engine.NodesBySource("source-x")
-	if nodesBySrc == nil {
-		// No nodes with source-x — this is fine, just check no error.
-	}
+	_ = engine.NodesBySource("source-x")
 }
 
 func TestLRU_IndexIntegrity_AfterChurn(t *testing.T) {

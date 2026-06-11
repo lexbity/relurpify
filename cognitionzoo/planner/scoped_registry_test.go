@@ -74,13 +74,9 @@ func TestPlannerExecuteNodeUsesScopedRegistryDirectly(t *testing.T) {
 	if result == nil || !result.Success {
 		t.Fatalf("expected planner success, got %+v", result)
 	}
-	raw, ok := env.GetWorkingValue("planner.step.step-1")
+	output, ok := contextdata.GetTyped[map[string]any](env, "planner.step.step-1")
 	if !ok {
 		t.Fatal("expected planner step output")
-	}
-	output, ok := raw.(map[string]any)
-	if !ok {
-		t.Fatalf("unexpected planner step output type: %T", raw)
 	}
 	if output["name"] != "scope_read" {
 		t.Fatalf("unexpected planner step output: %#v", output)

@@ -341,10 +341,8 @@ func GetPublishedOperatorMetadata(state *contextdata.Envelope, operator string) 
 		return OperatorMetadata{}, false
 	}
 	key := "htn.operator_metadata." + operator
-	if raw, ok := state.GetWorkingValue(key); ok {
-		if typed, ok := raw.(OperatorMetadata); ok {
-			return typed, true
-		}
+	if typed, ok := contextdata.GetTyped[OperatorMetadata](state, key); ok {
+		return typed, true
 	}
 	return OperatorMetadata{}, false
 }

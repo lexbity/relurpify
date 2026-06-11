@@ -70,7 +70,7 @@ func TestFrameworkSuiteSmoke(t *testing.T) {
 
 	envelope := contextdata.NewEnvelope("smoke-task", "smoke-session")
 	envelope.SetWorkingValueWithClass("smoke-key", "smoke-value", contextdata.MemoryClassTask)
-	if value, ok := envelope.GetWorkingValue("smoke-key"); !ok || value != "smoke-value" {
+	if value, ok := contextdata.GetTyped[string](envelope, "smoke-key"); !ok || value != "smoke-value" {
 		t.Fatal("envelope state manipulation failed")
 	}
 

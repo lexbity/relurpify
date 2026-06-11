@@ -21,7 +21,13 @@ func (s *EnvelopeState) GetWorkingValue(key string) (any, bool) {
 	if s.env == nil {
 		return nil, false
 	}
-	return s.env.GetWorkingValue(key)
+	s.env.mu.RLock()
+	defer s.env.mu.RUnlock()
+	if s.env.WorkingData == nil {
+		return nil, false
+	}
+	val, ok := s.env.WorkingData[key]
+	return val, ok
 }
 
 func (s *EnvelopeState) SetWorkingValue(key string, value any) {

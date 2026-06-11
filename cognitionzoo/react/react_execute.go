@@ -13,7 +13,7 @@ func envGetString(env *contextdata.Envelope, key string) string {
 	if env == nil {
 		return ""
 	}
-	val, ok := env.GetWorkingValue(key)
+	val, ok := contextdata.GetTyped[any](env, key)
 	if !ok {
 		return ""
 	}

@@ -143,10 +143,8 @@ func ClassifyGoalWithContext(
 
 	// Use cached classifier config if available in context
 	if coreCtx != nil {
-		if raw, ok := coreCtx.GetWorkingValue("goalcon.classifier_config"); ok {
-			if cachedConfig, ok := raw.(ClassifierConfig); ok {
-				config = cachedConfig
-			}
+		if cachedConfig, ok := contextdata.GetTyped[ClassifierConfig](coreCtx, "goalcon.classifier_config"); ok {
+			config = cachedConfig
 		}
 	}
 

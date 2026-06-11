@@ -51,9 +51,7 @@ func TestDiffPaneGroupsByFileAndShowsVerificationAlerts(t *testing.T) {
 		}
 	}
 
-	if cmd := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}}); cmd != nil {
-		// mode toggle only
-	}
+	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}})
 	view = pane.View()
 	for _, want := range []string{"view by-cause", "Step: step-1", "Step: step-2"} {
 		if !strings.Contains(view, want) {
@@ -89,10 +87,7 @@ func TestDiffPaneAppliesAndRevertsCausalChanges(t *testing.T) {
 
 	pane := NewDiffPane(router, workspace, nil)
 	pane.SetSize(140, 40)
-	if cmd := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}}); cmd != nil {
-		// switch to by-cause for step-scoped apply assertions
-	}
-
+	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}})
 	if cmd := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}}); cmd == nil {
 		t.Fatal("expected apply-step command")
 	}
@@ -107,9 +102,7 @@ func TestDiffPaneAppliesAndRevertsCausalChanges(t *testing.T) {
 	assertFileContents(t, filepath.Join(workspace, "b.txt"), "alpha-b\n")
 	assertFileContents(t, filepath.Join(workspace, "c.txt"), "alpha-c\n")
 
-	if cmd := pane.Update(tea.KeyMsg{Type: tea.KeyDown}); cmd != nil {
-		// movement only
-	}
+	pane.Update(tea.KeyMsg{Type: tea.KeyDown})
 	if cmd := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}}); cmd == nil {
 		t.Fatal("expected apply-file command")
 	}

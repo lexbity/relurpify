@@ -55,7 +55,7 @@ func validateGlobPath(path string) error {
 		return errors.New("glob cannot be empty")
 	}
 	if strings.Contains(path, "..") {
-		return errors.New("glob cannot contain ..")
+		return errors.New("glob cannot contain '..'")
 	}
 	clean := filepath.ToSlash(filepath.Clean(path))
 	if strings.HasPrefix(clean, "../") || clean == ".." {

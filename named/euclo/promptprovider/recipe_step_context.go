@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 
+	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/context/knowledge/retrieval"
 	"codeburg.org/lexbit/relurpify/execution/prompt"
 	"codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
@@ -149,10 +150,8 @@ func intentEvidenceFromRuntime(ctx prompt.RuntimeContext) *intentcontext.IntentE
 		}
 	}
 	if ctx.Envelope != nil {
-		if value, ok := ctx.Envelope.GetWorkingValue(intentcontext.IntentEvidenceKey); ok && value != nil {
-			if evidence, ok := value.(*intentcontext.IntentEvidence); ok {
-				return evidence
-			}
+		if evidence, ok := contextdata.GetTyped[*intentcontext.IntentEvidence](ctx.Envelope, intentcontext.IntentEvidenceKey); ok {
+			return evidence
 		}
 	}
 	return nil
@@ -167,10 +166,8 @@ func intentInterpretationFromRuntime(ctx prompt.RuntimeContext) *intentcontext.I
 		}
 	}
 	if ctx.Envelope != nil {
-		if value, ok := ctx.Envelope.GetWorkingValue(intentcontext.IntentInterpretationKey); ok && value != nil {
-			if interpretation, ok := value.(*intentcontext.IntentInterpretation); ok {
-				return interpretation
-			}
+		if interpretation, ok := contextdata.GetTyped[*intentcontext.IntentInterpretation](ctx.Envelope, intentcontext.IntentInterpretationKey); ok {
+			return interpretation
 		}
 	}
 	return nil

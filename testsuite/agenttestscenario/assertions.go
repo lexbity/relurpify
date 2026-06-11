@@ -74,7 +74,7 @@ func RequireContextKey(tb testing.TB, state *contextdata.Envelope, key string, w
 	if state == nil {
 		tb.Fatalf("context unavailable")
 	}
-	got, ok := state.GetWorkingValue(key)
+	got, ok := contextdata.GetTyped[any](state, key)
 	if !ok {
 		tb.Fatalf("missing context key %q", key)
 	}

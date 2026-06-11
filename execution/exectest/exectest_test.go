@@ -106,7 +106,7 @@ func TestFakeKnowledgeController_Query(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Query: %v", err)
 	}
-	if result.Results != nil && len(result.Results) != 0 {
+	if len(result.Results) != 0 {
 		t.Errorf("Results = %v", result.Results)
 	}
 }

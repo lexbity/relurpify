@@ -13,7 +13,7 @@ func envelopeGet(env *contextdata.Envelope, key string) (any, bool) {
 	if env == nil {
 		return nil, false
 	}
-	return env.GetWorkingValue(key)
+	return contextdata.GetTyped[any](env, key)
 }
 
 // envelopeGetString reads a key and converts to string.

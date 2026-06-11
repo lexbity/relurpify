@@ -107,12 +107,12 @@ func TestThoughtRecipeStepNodeExecuteCapability(t *testing.T) {
 	if handler.args["limit"] != 5 {
 		t.Fatalf("expected config to populate limit, got %v", handler.args["limit"])
 	}
-	if got, ok := env.GetWorkingValue("euclo.execution.step.step1.success"); !ok || got != true {
+	if got, ok := contextdata.GetTyped[bool](env, "euclo.execution.step.step1.success"); !ok || got != true {
 		t.Fatalf("expected success marker in envelope, got %v (ok=%v)", got, ok)
 	}
-	if got, ok := env.GetWorkingValue("euclo.execution.step.step1.result"); !ok {
+	if got, ok := contextdata.GetTyped[map[string]any](env, "euclo.execution.step.step1.result"); !ok {
 		t.Fatal("expected step result in envelope")
-	} else if data, ok := got.(map[string]any); !ok || data["capability_id"] != "euclo:cap.ast_query" {
+	} else if got["capability_id"] != "euclo:cap.ast_query" {
 		t.Fatalf("unexpected envelope step result: %#v", got)
 	}
 }
@@ -201,10 +201,10 @@ func TestThoughtRecipeStepNodeUsesRegistryPromptID(t *testing.T) {
 	if got := task.Metadata["execution_step_type"]; got != "" {
 		t.Fatalf("expected step type metadata to be empty for ad hoc step, got %#v", got)
 	}
-	if got, ok := env.GetWorkingValue("euclo.execution.step.clarify.step.type"); !ok || got != "" {
+	if got, ok := contextdata.GetTyped[string](env, "euclo.execution.step.clarify.step.type"); !ok || got != "" {
 		t.Fatalf("expected step type metadata in envelope, got %#v (ok=%v)", got, ok)
 	}
-	if got, ok := env.GetWorkingValue("euclo.execution.step.clarify.step.prompt_id"); !ok || got != "euclo.intent.clarify.question.v1" {
+	if got, ok := contextdata.GetTyped[string](env, "euclo.execution.step.clarify.step.prompt_id"); !ok || got != "euclo.intent.clarify.question.v1" {
 		t.Fatalf("expected prompt_id metadata in envelope, got %#v (ok=%v)", got, ok)
 	}
 }
@@ -353,13 +353,13 @@ func TestThoughtRecipeStepNodeWritesClarificationMetadata(t *testing.T) {
 	if got := task.Metadata["execution_clarification_type"]; got != string(ClarificationStepTypeExtract) {
 		t.Fatalf("expected clarification type metadata, got %#v", got)
 	}
-	if got, ok := env.GetWorkingValue("euclo.execution.step.extract.step.clarification_schema_id"); !ok || got != "clarification.answer.v1" {
+	if got, ok := contextdata.GetTyped[string](env, "euclo.execution.step.extract.step.clarification_schema_id"); !ok || got != "clarification.answer.v1" {
 		t.Fatalf("expected clarification schema metadata in envelope, got %#v (ok=%v)", got, ok)
 	}
-	if got, ok := env.GetWorkingValue("euclo.execution.step.extract.step.clarification_config"); !ok || got == nil {
+	if got, ok := contextdata.GetTyped[any](env, "euclo.execution.step.extract.step.clarification_config"); !ok || got == nil {
 		t.Fatalf("expected clarification config in envelope, got %#v (ok=%v)", got, ok)
 	}
-	if got, ok := env.GetWorkingValue("euclo.execution.step.extract.step.clarification_allowed_statuses"); !ok || got == nil {
+	if got, ok := contextdata.GetTyped[any](env, "euclo.execution.step.extract.step.clarification_allowed_statuses"); !ok || got == nil {
 		t.Fatalf("expected allowed statuses in envelope, got %#v (ok=%v)", got, ok)
 	}
 	rctx := node.buildRuntimeContext(context.Background(), env)
@@ -410,19 +410,19 @@ func TestThoughtRecipeStepNodeDelegationFiltersChildEnvelopeAndReturnsCaptures(t
 	if child.TaskID == parent.TaskID {
 		t.Fatalf("expected delegated child task id to differ from parent, got %q", child.TaskID)
 	}
-	if got, ok := child.GetWorkingValue("input.findings"); !ok || got != "parent findings" {
+	if got, ok := contextdata.GetTyped[string](child, "input.findings"); !ok || got != "parent findings" {
 		t.Fatalf("expected delegated child to inherit declared source, got %#v (ok=%v)", got, ok)
 	}
-	if got, ok := child.GetWorkingValue(intentcontext.ClarificationStateKey); !ok || got == nil {
+	if got, ok := contextdata.GetTyped[any](child, intentcontext.ClarificationStateKey); !ok || got == nil {
 		t.Fatalf("expected clarification state on child, got %#v (ok=%v)", got, ok)
 	}
-	if got, ok := child.GetWorkingValue("euclo.handoff.continuation"); !ok || got == nil {
+	if got, ok := contextdata.GetTyped[any](child, "euclo.handoff.continuation"); !ok || got == nil {
 		t.Fatalf("expected handoff continuation metadata on child, got %#v (ok=%v)", got, ok)
 	}
-	if got, ok := child.GetWorkingValue("state.unrelated"); ok || got != nil {
+	if got, ok := contextdata.GetTyped[any](child, "state.unrelated"); ok || got != nil {
 		t.Fatalf("expected unrelated parent state to be filtered out, got %#v (ok=%v)", got, ok)
 	}
-	if got, ok := child.GetWorkingValue("scratch.parent_only"); ok || got != nil {
+	if got, ok := contextdata.GetTyped[any](child, "scratch.parent_only"); ok || got != nil {
 		t.Fatalf("expected parent scratch to be isolated, got %#v (ok=%v)", got, ok)
 	}
 
@@ -450,10 +450,10 @@ func TestThoughtRecipeStepNodeDelegationFiltersChildEnvelopeAndReturnsCaptures(t
 	if err := node.writeDelegationCaptures(parent, child, result); err != nil {
 		t.Fatalf("writeDelegationCaptures failed: %v", err)
 	}
-	if got, ok := parent.GetWorkingValue("state.plan"); !ok || got != "child summary" {
+	if got, ok := contextdata.GetTyped[string](parent, "state.plan"); !ok || got != "child summary" {
 		t.Fatalf("expected capture to return to parent state, got %#v (ok=%v)", got, ok)
 	}
-	if got, ok := parent.GetWorkingValue("euclo.execution.delegate.step.state.plan"); ok {
+	if got, ok := contextdata.GetTyped[any](parent, "euclo.execution.delegate.step.state.plan"); ok {
 		t.Fatalf("unexpected legacy delegated capture key present: %#v", got)
 	}
 }
@@ -487,13 +487,9 @@ func TestThoughtRecipeStepNodeAskPausesAndResumesWithCapture(t *testing.T) {
 	if first == nil || func() bool { v, _ := execution.ResultField(first.Data, "paused"); return v != true }() {
 		t.Fatalf("expected paused ask result, got %+v", first)
 	}
-	frameValue, ok := env.GetWorkingValue(askFrameKey(step.ID))
-	if !ok {
-		t.Fatal("expected ask frame in envelope")
-	}
-	frame, ok := frameValue.(*interaction.InteractionFrame)
+	frame, ok := contextdata.GetTyped[*interaction.InteractionFrame](env, askFrameKey(step.ID))
 	if !ok || frame == nil {
-		t.Fatalf("expected interaction frame, got %#v", frameValue)
+		t.Fatal("expected ask frame in envelope")
 	}
 	now := time.Now().UTC()
 	frame.Response = &interaction.FrameResult{
@@ -511,7 +507,7 @@ func TestThoughtRecipeStepNodeAskPausesAndResumesWithCapture(t *testing.T) {
 	if second == nil || func() bool { v, _ := execution.ResultField(second.Data, "answer"); return v != "refactor" }() {
 		t.Fatalf("expected answered ask result, got %+v", second)
 	}
-	if got, ok := env.GetWorkingValue("state.intent"); !ok || got != "refactor" {
+	if got, ok := contextdata.GetTyped[string](env, "state.intent"); !ok || got != "refactor" {
 		t.Fatalf("expected captured state.intent refactor, got %#v (ok=%v)", got, ok)
 	}
 	if got := state.GetInteractionResumeNodeID(env); got != "" {

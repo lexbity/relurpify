@@ -82,10 +82,8 @@ func DiagnoseStepFailure(ctx context.Context, env *contextdata.Envelope, results
 	if failureRatio > 0.25 && failureRatio <= 0.75 {
 		// Check for checkpoint to resume from
 		checkpointID := ""
-		if cpID, ok := env.GetWorkingValue("rewoo.checkpoint_id"); ok {
-			if id, ok := cpID.(string); ok {
-				checkpointID = id
-			}
+		if id, ok := contextdata.GetTyped[string](env, "rewoo.checkpoint_id"); ok {
+			checkpointID = id
 		}
 
 		diagnosis.Scenarios = append(diagnosis.Scenarios, RecoveryScenario{

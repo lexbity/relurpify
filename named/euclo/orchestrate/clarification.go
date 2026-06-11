@@ -40,7 +40,7 @@ const (
 )
 
 func needsClarificationRoute(env *contextdata.Envelope) bool {
-	if v, ok := env.GetWorkingValue(intentcontext.ClarificationStateKey); ok {
+	if v, ok := contextdata.GetTyped[any](env, intentcontext.ClarificationStateKey); ok {
 		if state, ok := v.(*intentcontext.ClarificationState); ok && state != nil {
 			if strings.TrimSpace(state.ActiveThoughtRecipeID) != "" {
 				return true
@@ -263,7 +263,7 @@ func (h *clarificationCapabilityHandler) Invoke(ctx context.Context, st ports.St
 }
 
 func instructionFromEnvelope(env *contextdata.Envelope) string {
-	if v, ok := env.GetWorkingValue(euclostate.KeyTaskInputLegacy); ok {
+	if v, ok := contextdata.GetTyped[any](env, euclostate.KeyTaskInputLegacy); ok {
 		if task, ok := v.(*execution.Task); ok && task != nil {
 			return strings.TrimSpace(task.Instruction)
 		}
@@ -424,8 +424,8 @@ func stateCandidateFamiliesFromEnvelope(env *contextdata.Envelope) []string {
 		}
 		addFamily(classification.WinningFamily)
 	}
-	if v, ok := env.GetWorkingValue(euclostate.KeyFamilySelection); ok {
-		switch value := v.(type) {
+	if value, ok := contextdata.GetTyped[any](env, euclostate.KeyFamilySelection); ok {
+		switch value := value.(type) {
 		case map[string]any:
 			if winning, ok := value["winning_family"].(string); ok {
 				addFamily(winning)

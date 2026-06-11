@@ -28,3 +28,8 @@ unused
 # Persistence/fs/network paths handle errors properly; non-IO paths use
 # _ = f() // ignore: <reason> pattern.
 errcheck
+
+# Slice 7 — GetWorkingValue migration + delete deprecated API (193 SA1019 → 0).
+# All callers migrated to GetTyped[T]; Envelope.GetWorkingValue deleted; no-dead
+# gate extended. Remaining staticcheck codes (35 issues) also fixed.
+staticcheck

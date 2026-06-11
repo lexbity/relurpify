@@ -21,7 +21,7 @@ func envelopeGet(state *contextdata.Envelope, key string) (any, bool) {
 	if state == nil {
 		return nil, false
 	}
-	return state.GetWorkingValue(key)
+	return contextdata.GetTyped[any](state, key)
 }
 
 // envelopeSet stores a value in envelope working memory with task scope.

@@ -144,7 +144,7 @@ func mirrorBlackboardToWorkingMemoryStore(state *contextdata.Envelope) {
 	if state == nil {
 		return
 	}
-	rawStore, ok := state.GetWorkingValue(contextKeyWorkingMemoryStore)
+	rawStore, ok := contextdata.GetTyped[any](state, contextKeyWorkingMemoryStore)
 	if !ok || rawStore == nil {
 		return
 	}
@@ -188,7 +188,7 @@ func mirrorBlackboardToWorkingMemoryStore(state *contextdata.Envelope) {
 		contextKeyCheckpointRef,
 	}
 	for _, key := range keys {
-		if value, ok := state.GetWorkingValue(key); ok {
+		if value, ok := contextdata.GetTyped[any](state, key); ok {
 			task.Set(key, value, relurpctx.MemoryClassWorking)
 		}
 	}

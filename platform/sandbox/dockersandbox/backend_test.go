@@ -87,6 +87,7 @@ func TestBackendPolicyRoundTrip(t *testing.T) {
 	}
 }
 
+// Permission issues may block this test - consider a warning if so
 func TestBackendVerifyUsesDockerBinary(t *testing.T) {
 	dir := t.TempDir()
 	docker := writeDockerScript(t, dir, "docker", "#!/bin/sh\ncase \"$1\" in\nversion) printf 'Docker version 25.0';;\n*) printf 'unexpected %s' \"$*\";;\nesac\n")
@@ -102,7 +103,7 @@ func TestBackendVerifyUsesDockerBinary(t *testing.T) {
 func writeDockerScript(t *testing.T, dir, name, body string) string {
 	t.Helper()
 	path := filepath.Join(dir, name)
-	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte(body), 0o755); err != nil {
 		t.Fatalf("write script: %v", err)
 	}
 	return path

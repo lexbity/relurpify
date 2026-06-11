@@ -18,10 +18,10 @@ func StatePayload(state any, key string) []byte {
 	}
 	// Handle *contextdata.Envelope
 	if env, ok := state.(*contextdata.Envelope); ok {
-		if raw, ok := env.GetWorkingValue(key); ok && raw != nil {
-			if bytes, ok := raw.([]byte); ok {
-				return bytes
-			}
+		if bytes, ok := contextdata.GetTyped[[]byte](env, key); ok {
+			return bytes
+		}
+		if raw, ok := contextdata.GetTyped[any](env, key); ok && raw != nil {
 			if data, err := json.Marshal(raw); err == nil {
 				return data
 			}
@@ -82,7 +82,7 @@ func recentPipelineOutputs(state *contextdata.Envelope) string {
 	}
 	var sections []string
 	for _, key := range keys {
-		raw, ok := state.GetWorkingValue(key)
+		raw, ok := contextdata.GetTyped[any](state, key)
 		if !ok || raw == nil {
 			continue
 		}
@@ -103,7 +103,7 @@ func workflowRetrievalContext(state *contextdata.Envelope) string {
 			}
 		}
 	}
-	raw, ok := state.GetWorkingValue("pipeline.workflow_retrieval")
+	raw, ok := contextdata.GetTyped[any](state, "pipeline.workflow_retrieval")
 	if !ok || raw == nil {
 		return ""
 	}

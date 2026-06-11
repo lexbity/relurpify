@@ -189,11 +189,9 @@ func buildNodes(ctx context.Context, in buildNodeInput) ([]agentgraph.Node, erro
 
 	familySelectNode := newStageNode("euclo.family_select", agentgraph.NodeTypeSystem, func(_ context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 		family := ""
-		if v, ok := env.GetWorkingValue(euclostate.KeyFamilySelection); ok {
-			if m, ok := v.(map[string]any); ok {
-				if s, ok := m["winning_family"].(string); ok {
-					family = strings.TrimSpace(s)
-				}
+		if m, ok := contextdata.GetTyped[map[string]any](env, euclostate.KeyFamilySelection); ok {
+			if s, ok := m["winning_family"].(string); ok {
+				family = strings.TrimSpace(s)
 			}
 		}
 		if family != "" {
@@ -209,7 +207,7 @@ func buildNodes(ctx context.Context, in buildNodeInput) ([]agentgraph.Node, erro
 	ingestionNode := NewIngestionNode("euclo.ingest")
 
 	streamNode := newStageNode("euclo.stream", agentgraph.NodeTypeSystem, func(_ context.Context, env *contextdata.Envelope) (*execution.Result, error) {
-		_, hasStream := env.GetWorkingValue(euclostate.KeyStreamResult)
+		_, hasStream := contextdata.GetTyped[any](env, euclostate.KeyStreamResult)
 		euclostate.SetStreamRequested(env, hasStream)
 		return &execution.Result{
 			NodeID:  "euclo.stream",
@@ -448,13 +446,13 @@ func seedPolicyDefaults(env *contextdata.Envelope) {
 }
 
 func seedDefaultTask(env *contextdata.Envelope) {
-	if _, ok := env.GetWorkingValue(euclostate.KeyTaskInputLegacy); ok {
+	if _, ok := contextdata.GetTyped[any](env, euclostate.KeyTaskInputLegacy); ok {
 		return
 	}
-	if _, ok := env.GetWorkingValue(euclostate.KeyTaskInput); ok {
+	if _, ok := contextdata.GetTyped[any](env, euclostate.KeyTaskInput); ok {
 		return
 	}
-	if _, ok := env.GetWorkingValue(euclostate.KeyTaskRaw); ok {
+	if _, ok := contextdata.GetTyped[any](env, euclostate.KeyTaskRaw); ok {
 		return
 	}
 	task := &execution.Task{

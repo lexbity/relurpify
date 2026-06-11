@@ -7,7 +7,6 @@ import (
 
 	"codeburg.org/lexbit/relurpify/governance/authorization"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
-	govpolicy "codeburg.org/lexbit/relurpify/governance/policy"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
 	"codeburg.org/lexbit/relurpify/platform/fs"
 )
@@ -388,7 +387,7 @@ func TestHITLRequiredPath(t *testing.T) {
 					Action:   string(permissions.FileSystemRead),
 					Resource: testFile,
 				},
-				Scope: govpolicy.GrantScopeSession,
+				Scope: policy.GrantScopeSession,
 			}},
 		}
 
@@ -525,7 +524,7 @@ type stubHITL struct {
 func (s *stubHITL) RequestPermission(ctx context.Context, req authorization.PermissionRequest) (*authorization.PermissionGrant, error) {
 	s.requests = append(s.requests, req)
 	if len(s.grants) == 0 {
-		return &authorization.PermissionGrant{Permission: req.Permission, Scope: govpolicy.GrantScopeSession}, nil
+		return &authorization.PermissionGrant{Permission: req.Permission, Scope: policy.GrantScopeSession}, nil
 	}
 	grant := s.grants[0]
 	s.grants = s.grants[1:]

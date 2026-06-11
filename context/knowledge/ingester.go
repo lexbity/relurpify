@@ -333,11 +333,11 @@ func workflowIDFromEnvelope(env *contextdata.Envelope) string {
 	if env == nil {
 		return ""
 	}
-	val, _ := env.GetWorkingValue("workflow.id")
-	if s, ok := val.(string); ok {
-		return s
+	s, ok := contextdata.GetTyped[string](env, "workflow.id")
+	if !ok {
+		return ""
 	}
-	return ""
+	return s
 }
 
 func nodeIDFromEnvelope(env *contextdata.Envelope) string {

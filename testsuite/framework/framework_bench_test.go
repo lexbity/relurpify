@@ -139,7 +139,7 @@ func BenchmarkContextStreaming(b *testing.B) {
 		key := "bench-key"
 		value := "bench-value"
 		envelope.SetWorkingValueWithClass(key, value, contextdata.MemoryClassTask)
-		_, ok := envelope.GetWorkingValue(key)
+		_, ok := contextdata.GetTyped[any](envelope, key)
 		if !ok {
 			b.Fatal("working value not found")
 		}

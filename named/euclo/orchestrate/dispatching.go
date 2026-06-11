@@ -511,7 +511,7 @@ func uniqueStrings(values []string) []string {
 }
 
 func envRouteEvidence(env *contextdata.Envelope) (*intentcontext.IntentEvidence, bool) {
-	v, ok := env.GetWorkingValue(intentcontext.IntentEvidenceKey)
+	v, ok := contextdata.GetTyped[any](env, intentcontext.IntentEvidenceKey)
 	if !ok {
 		return nil, false
 	}
@@ -520,7 +520,7 @@ func envRouteEvidence(env *contextdata.Envelope) (*intentcontext.IntentEvidence,
 }
 
 func envRouteInterpretation(env *contextdata.Envelope) (*intentcontext.IntentInterpretation, bool) {
-	v, ok := env.GetWorkingValue(intentcontext.IntentInterpretationKey)
+	v, ok := contextdata.GetTyped[any](env, intentcontext.IntentInterpretationKey)
 	if !ok {
 		return nil, false
 	}
@@ -529,7 +529,7 @@ func envRouteInterpretation(env *contextdata.Envelope) (*intentcontext.IntentInt
 }
 
 func routeClarificationState(env *contextdata.Envelope) *intentcontext.ClarificationState {
-	v, ok := env.GetWorkingValue(intentcontext.ClarificationStateKey)
+	v, ok := contextdata.GetTyped[any](env, intentcontext.ClarificationStateKey)
 	if !ok {
 		return nil
 	}

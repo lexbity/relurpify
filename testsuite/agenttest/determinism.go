@@ -289,7 +289,7 @@ func CheckStateKeyStability(snapshots []*contextdata.Envelope, keys []string) []
 		for i, snapshot := range snapshots {
 			value := ""
 			if snapshot != nil {
-				if v, ok := snapshot.GetWorkingValue(key); ok {
+				if v, ok := contextdata.GetTyped[any](snapshot, key); ok {
 					value = fmt.Sprint(v)
 				}
 			}

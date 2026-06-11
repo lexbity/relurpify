@@ -42,10 +42,10 @@ func TestContextStreamNodeBlockingAppliesRefsToEnvelope(t *testing.T) {
 	require.NotNil(t, result)
 	require.Equal(t, "stream-node", result.NodeID)
 	require.Equal(t, []contextdata.ChunkID{"chunk-1"}, env.StreamedChunkIDs())
-	requestID, ok := env.GetWorkingValue("contextstream.request_id")
+	requestID, ok := contextdata.GetTyped[string](env, "contextstream.request_id")
 	require.True(t, ok)
 	require.Equal(t, "stream-node.stream", requestID)
-	shortfall, ok := env.GetWorkingValue("contextstream.shortfall_tokens")
+	shortfall, ok := contextdata.GetTyped[int](env, "contextstream.shortfall_tokens")
 	require.True(t, ok)
 	require.Equal(t, 9, shortfall)
 }

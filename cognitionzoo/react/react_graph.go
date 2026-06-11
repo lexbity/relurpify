@@ -68,13 +68,13 @@ func (a *ReActAgent) BuildGraph(ctx context.Context, task *execution.Task) (*gra
 		}
 	}
 	if err := g.AddEdge(observe.ID(), think.ID(), func(result *execution.Result, env *contextdata.Envelope) bool {
-		done, _ := env.GetWorkingValue("react.done")
+		done, _ := contextdata.GetTyped[any](env, "react.done")
 		return done == false || done == nil
 	}, false); err != nil {
 		return nil, err
 	}
 	if err := g.AddEdge(observe.ID(), done.ID(), func(result *execution.Result, env *contextdata.Envelope) bool {
-		done, _ := env.GetWorkingValue("react.done")
+		done, _ := contextdata.GetTyped[any](env, "react.done")
 		return done == true
 	}, false); err != nil {
 		return nil, err

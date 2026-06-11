@@ -25,7 +25,7 @@ func activeToolSet(env *contextdata.Envelope) map[string]struct{} {
 	if env == nil {
 		return out
 	}
-	raw, ok := env.GetWorkingValue("react.active_tools")
+	raw, ok := contextdata.GetTyped[any](env, "react.active_tools")
 	if !ok {
 		return out
 	}

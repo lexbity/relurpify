@@ -153,7 +153,7 @@ func (s *AnalyzeStage) BuildPrompt(ctx *contextdata.Envelope) (string, error) {
 	}
 
 	// Existing imperative build logic
-	raw, _ := ctx.GetWorkingValue("pipeline.explore")
+	raw, _ := contextdata.GetTyped[any](ctx, "pipeline.explore")
 	return buildStagePrompt("analyze", s.Task, ctx, "Explore output", map[string]any{
 		"explore_output": raw,
 		"instructions":   "You MUST return a concrete issue summary for the failing task. If the bug is unclear, call file_read or diagnostics/search tools before returning JSON. Identify the real failing issue from the code and tests, not a hypothetical one.",
@@ -220,7 +220,7 @@ func (s *PlanStage) BuildPrompt(ctx *contextdata.Envelope) (string, error) {
 	}
 
 	// Existing imperative build logic
-	raw, _ := ctx.GetWorkingValue("pipeline.analyze")
+	raw, _ := contextdata.GetTyped[any](ctx, "pipeline.analyze")
 	return buildStagePrompt("plan", s.Task, ctx, "Issue list", raw, nil, `{
   "strategy":"...",
   "steps":[{"id":"...","title":"...","description":"...","files":["..."]}],
@@ -293,7 +293,7 @@ func (s *CodeStage) BuildPrompt(ctx *contextdata.Envelope) (string, error) {
 	}
 
 	// Existing imperative build logic
-	raw, _ := ctx.GetWorkingValue("pipeline.plan")
+	raw, _ := contextdata.GetTyped[any](ctx, "pipeline.plan")
 	return buildStagePrompt("code", s.Task, ctx, "Fix plan", map[string]any{
 		"fix_plan":     raw,
 		"instructions": "Return requested edit intents only. Do not mutate files in this stage. For every update action, content must be the complete final file contents, not a partial snippet. Use file_read first if you need the current file.",
@@ -424,9 +424,9 @@ func (s *VerifyStage) BuildPrompt(ctx *contextdata.Envelope) (string, error) {
 	}
 
 	// Existing imperative build logic
-	raw, _ := ctx.GetWorkingValue("pipeline.code")
+	raw, _ := contextdata.GetTyped[any](ctx, "pipeline.code")
 	if raw == nil {
-		raw, _ = ctx.GetWorkingValue("pipeline.explore")
+		raw, _ = contextdata.GetTyped[any](ctx, "pipeline.explore")
 	}
 	return buildStagePrompt("verify", s.Task, ctx, "Verification target", map[string]any{
 		"target":       raw,

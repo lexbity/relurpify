@@ -249,9 +249,9 @@ func (n *CheckpointNode) buildSnapshot(ctx context.Context, env *contextdata.Env
 	if req == nil {
 		return persistence.CheckpointSnapshot{}, false, nil
 	}
-	streamResult, _ := env.GetWorkingValue("contextstream.result")
+	streamResult, _ := contextdata.GetTyped[any](env, "contextstream.result")
 	if streamResult == nil {
-		streamResult, _ = env.GetWorkingValue("euclo.stream_result")
+		streamResult, _ = contextdata.GetTyped[any](env, "euclo.stream_result")
 	}
 	workflowID := ""
 	runID := ""
