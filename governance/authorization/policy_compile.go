@@ -9,7 +9,6 @@ import (
 	pol "codeburg.org/lexbit/relurpify/governance/policy"
 	"codeburg.org/lexbit/relurpify/governance/ports"
 	"codeburg.org/lexbit/relurpify/governance/risk"
-	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
 const (
@@ -19,17 +18,10 @@ const (
 	policyPriorityProvider = 500
 )
 
-// CompileManifestPolicyRules compiles manifest policy surfaces into normalized policy rules.
-func CompileManifestPolicyRules(m *config.AgentManifest) ([]pol.PolicyRule, error) {
-	if m == nil {
-		return nil, nil
-	}
-	return CompileAgentSpecPolicyRules(m.Spec.Agent)
-}
-
-// CompileAgentSpecPolicyRules compiles policy surfaces from an effective agent
-// spec rather than a raw manifest.
-func CompileAgentSpecPolicyRules(spec ports.SpecView) ([]pol.PolicyRule, error) {
+// CompileAgentSpecPolicyRules compiles policy rules from a governance-owned
+// PolicyInput interface. The caller (capability/execution) is responsible for
+// adapting its agent spec to satisfy PolicyInput before passing it in.
+func CompileAgentSpecPolicyRules(spec ports.PolicyInput) ([]pol.PolicyRule, error) {
 	if spec == nil {
 		return nil, nil
 	}

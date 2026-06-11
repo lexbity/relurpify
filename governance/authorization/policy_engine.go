@@ -7,7 +7,6 @@ import (
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
 	"codeburg.org/lexbit/relurpify/governance/ports"
-	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
 // PolicyEngine evaluates whether a capability invocation is permitted.
@@ -23,23 +22,9 @@ type ManifestPolicyEngine struct {
 	rules   []policy.PolicyRule
 }
 
-// FromManifestWithConfig constructs a ManifestPolicyEngine for the given agent.
-// agentID identifies the agent in audit logs; manager carries the declared policy.
-func FromManifestWithConfig(m *config.AgentManifest, agentID string, manager *PermissionManager) (*ManifestPolicyEngine, error) {
-	id := agentID
-	if id == "" && m != nil {
-		id = m.Metadata.Name
-	}
-	rules, err := CompileManifestPolicyRules(m)
-	if err != nil {
-		return nil, err
-	}
-	return &ManifestPolicyEngine{agentID: id, manager: manager, rules: rules}, nil
-}
-
 // FromAgentSpecWithConfig constructs a ManifestPolicyEngine from an effective
-// runtime spec rather than a raw manifest.
-func FromAgentSpecWithConfig(spec ports.SpecView, agentID string, manager *PermissionManager) (*ManifestPolicyEngine, error) {
+// runtime spec via the governance-owned PolicyInput interface.
+func FromAgentSpecWithConfig(spec ports.PolicyInput, agentID string, manager *PermissionManager) (*ManifestPolicyEngine, error) {
 	rules, err := CompileAgentSpecPolicyRules(spec)
 	if err != nil {
 		return nil, err

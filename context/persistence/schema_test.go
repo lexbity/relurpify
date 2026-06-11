@@ -157,8 +157,8 @@ func TestSchemaMetadataValidate(t *testing.T) {
 				t.Errorf("Validate() error = %v, wantErr %v", err, tt.wantErr)
 			}
 			if err != nil && tt.errMsg != "" {
-				validationError := &ValidationError{}
-				if errors.As(err, &validationError) {
+				var validationError *ValidationError
+				if !errors.As(err, &validationError) {
 					t.Errorf("Error should be ValidationError, got %T", err)
 				}
 				if !strings.Contains(err.Error(), tt.errMsg) {

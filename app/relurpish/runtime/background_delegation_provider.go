@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/capability/provider"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
@@ -183,11 +184,12 @@ func (p *backgroundDelegationProvider) StartBackgroundDelegation(ctx context.Con
 
 func (p *backgroundDelegationProvider) runDelegationSession(ctx context.Context, sessionID string, request policy.DelegationRequest, target governanceports.DescriptorView, args map[string]any, opts fauthorization.DelegationExecutionOptions, session *backgroundDelegationSession) {
 	defer close(session.results)
-	state := opts.State
-	if state == nil {
-		state = contextdata.NewEnvelopeState(contextdata.NewEnvelope(request.ID, sessionID))
+	invState := opts.State
+	if invState == nil {
+		invState = contextdata.NewEnvelopeState(contextdata.NewEnvelope(request.ID, sessionID))
 	}
-	result, err := p.runtime.Tools.InvokeCapability(ctx, state, target.CapabilityID(), args)
+	ps, _ := invState.(ports.State)
+	result, err := p.runtime.Tools.InvokeCapability(ctx, ps, target.CapabilityID(), args)
 	status := "completed"
 	if err != nil {
 		status = "failed"

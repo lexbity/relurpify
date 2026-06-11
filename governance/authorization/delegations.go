@@ -10,7 +10,6 @@ import (
 	"sync"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/governance/classification"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
 	governanceports "codeburg.org/lexbit/relurpify/governance/ports"
@@ -21,7 +20,7 @@ var ErrDelegationNotFound = errors.New("delegation not found")
 type DelegationCapabilityRegistry interface {
 	GetCoordinationTarget(idOrName string) (governanceports.DescriptorView, bool)
 	CoordinationTargets(selectors ...governanceports.CapabilitySelectorView) []governanceports.DescriptorView
-	InvokeCapability(ctx context.Context, state ports.State, idOrName string, args map[string]any) (any, error)
+	InvokeCapability(ctx context.Context, state governanceports.InvocationState, idOrName string, args map[string]any) (any, error)
 	CapturePolicySnapshot() *policy.PolicySnapshot
 	EffectiveCoordination(spec governanceports.SpecView) governanceports.CoordinationSpecView
 	BuildDelegationResult(request policy.DelegationRequest, target governanceports.DescriptorView, result any, invokeErr error, snapshot *policy.PolicySnapshot, spec governanceports.SpecView, callerTrust string) *policy.DelegationResult
@@ -48,7 +47,7 @@ type DelegationExecutionOptions struct {
 	Registry         DelegationCapabilityRegistry
 	BackgroundRunner DelegationBackgroundRunner
 	AgentSpec        governanceports.SpecView
-	State            ports.State
+	State            governanceports.InvocationState
 	LifecycleRepo    governanceports.DelegationRepository
 	WorkflowRunID    string
 	WorkflowStepID   string
@@ -589,7 +588,7 @@ func firstRecoverability(values ...policy.RecoverabilityMode) policy.Recoverabil
 	return ""
 }
 
-func effectiveDelegationState(state ports.State) ports.State {
+func effectiveDelegationState(state governanceports.InvocationState) governanceports.InvocationState {
 	return state
 }
 

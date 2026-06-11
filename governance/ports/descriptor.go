@@ -38,15 +38,22 @@ type DescriptorView interface {
 	CoordinationMaxRuntimeSeconds() int
 }
 
+// PolicyInput is the governance-owned interface for policy compilation.
+// capability/agentspec.AgentRuntimeSpec satisfies this interface structurally,
+// so no import of capability is needed.
+type PolicyInput interface {
+	GetToolExecutionPolicy() map[string]ToolPolicyView
+	GetCapabilityPolicies() []CapabilityPolicyView
+	GetProviderPolicies() map[string]ProviderPolicyView
+	GetSessionPolicies() []SessionPolicyView
+	GetGlobalPolicies() map[string]string
+}
+
 // SpecView is the governance-owned view of an AgentRuntimeSpec for policy
 // compilation. capability/agentspec satisfies this interface.
 type SpecView interface {
+	PolicyInput
 	GetAllowedCapabilities() []CapabilitySelectorView
-	GetToolExecutionPolicy() map[string]ToolPolicyView
-	GetCapabilityPolicies() []CapabilityPolicyView
-	GetSessionPolicies() []SessionPolicyView
-	GetProviderPolicies() map[string]ProviderPolicyView
-	GetGlobalPolicies() map[string]string
 	GetBrowser() BrowserSpecView
 	GetOrchestration() OrchestrationConfigView
 }

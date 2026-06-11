@@ -107,3 +107,17 @@ func ResolveEffectiveAgentContract(workspace string, m *AgentManifest, opts Reso
 		Sources:     sources,
 	}, nil
 }
+
+// BuildEffectiveAgentContract constructs an EffectiveAgentContract from
+// pre-resolved inputs. Callers (typically execution/session) are responsible
+// for decoding each section via the appropriate domain's DecodeSection.
+// The Manifest field is left nil — it is not needed for the Document path.
+func BuildEffectiveAgentContract(agentID string, agentSpec *agentspec.AgentRuntimeSpec, perms permissions.PermissionSet, resources ResourceSpec, sources SourceSummary) *EffectiveAgentContract {
+	return &EffectiveAgentContract{
+		AgentID:     agentID,
+		AgentSpec:   agentSpec,
+		Permissions: perms,
+		Resources:   resources,
+		Sources:     sources,
+	}
+}

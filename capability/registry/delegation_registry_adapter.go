@@ -56,11 +56,15 @@ func (r *DelegationRegistry) CoordinationTargets(selectors ...governanceports.Ca
 	return out
 }
 
-func (r *DelegationRegistry) InvokeCapability(ctx context.Context, state ports.State, idOrName string, args map[string]any) (any, error) {
+func (r *DelegationRegistry) InvokeCapability(ctx context.Context, state governanceports.InvocationState, idOrName string, args map[string]any) (any, error) {
 	if r.inner == nil {
 		return nil, nil
 	}
-	return r.inner.InvokeCapability(ctx, state, idOrName, args)
+	ps, ok := state.(ports.State)
+	if !ok {
+		return nil, nil
+	}
+	return r.inner.InvokeCapability(ctx, ps, idOrName, args)
 }
 
 func (r *DelegationRegistry) CapturePolicySnapshot() *policy.PolicySnapshot {
