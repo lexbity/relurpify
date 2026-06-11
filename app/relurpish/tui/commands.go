@@ -185,8 +185,6 @@ func registerPlannerCommands(_ *CommandRegistry) {
 	// Planner-specific commands to be added here as they are implemented.
 }
 
-func registerDebugCommands(_ *CommandRegistry) {}
-
 func init() {
 	rootCommandRegistry = NewCommandRegistry()
 	registerUniversalCommands(rootCommandRegistry)
@@ -919,25 +917,6 @@ func rootHandleResume(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 	return m, cmd
 }
 
-// pendingHITLSummaryCmd surfaces pending HITL via /hitl command.
-func pendingHITLSummaryCmd(svc HITLServiceIface) tea.Cmd {
-	if svc == nil {
-		return nil
-	}
-	return func() tea.Msg {
-		pending := svc.PendingHITL()
-		if len(pending) == 0 {
-			return chatSystemMsg{Text: "No pending approvals"}
-		}
-		var b strings.Builder
-		b.WriteString("Pending approvals:\n")
-		for _, req := range pending {
-			fmt.Fprintf(&b, " - %s %s (%s)\n", req.ID, req.Permission.Action, req.Justification)
-		}
-		return chatSystemMsg{Text: b.String()}
-	}
-}
-
 // approveHITLRootCmd approves a HITL request with the given scope.
 func approveHITLRootCmd(svc HITLServiceIface, requestID string, scope policy.GrantScope) tea.Cmd {
 	return func() tea.Msg {
@@ -1100,16 +1079,6 @@ func rootHandleResetBindings(m *RootModel, args []string) (*RootModel, tea.Cmd) 
 	_ = args
 	m.setActiveTab(TabKeybindings)
 	m.addSystemMessage("Reset bindings requested (not yet implemented as palette command)")
-	return m, nil
-}
-
-func rootHandleRefresh(m *RootModel, args []string) (*RootModel, tea.Cmd) {
-	_ = args
-	m.setActiveTab(TabDoctor)
-	if m.baseSurface != nil {
-		m.baseSurface.OpenDoctor()
-	}
-	m.addSystemMessage("Refreshing doctor report...")
 	return m, nil
 }
 

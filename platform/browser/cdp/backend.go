@@ -66,13 +66,6 @@ type evaluateResponse struct {
 	} `json:"exceptionDetails,omitempty"`
 }
 
-type currentURLResponse struct {
-	Result struct {
-		Type  string `json:"type"`
-		Value string `json:"value"`
-	} `json:"result"`
-}
-
 type outerHTMLResponse struct {
 	OuterHTML string `json:"outerHTML"`
 }
@@ -430,7 +423,16 @@ func launchChromium(ctx context.Context, cfg Config) (*launchedBrowser, error) {
 			return nil, err
 		}
 	}
-	cmd := exec.CommandContext(ctx, executable, args...)
+	cmd := &exec.Cmd{
+		Path: executable,
+		Args: append([]string{executable}, args...),
+	}
+	go func() {
+		<-ctx.Done()
+		if cmd.Process != nil {
+			cmd.Process.Kill()
+		}
+	}()
 	cmd.Stdout = io.Discard
 	cmd.Stderr = io.Discard
 	if err := cmd.Start(); err != nil {

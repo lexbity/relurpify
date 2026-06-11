@@ -2,13 +2,10 @@ package framework
 
 import (
 	"context"
-	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/capability/ports"
-	"codeburg.org/lexbit/relurpify/capability/toolcapabilities"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/context/knowledge"
 	"codeburg.org/lexbit/relurpify/context/knowledge/graphdb"
@@ -16,6 +13,7 @@ import (
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
 	"codeburg.org/lexbit/relurpify/model"
+	"codeburg.org/lexbit/relurpify/platform/fs"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
@@ -37,7 +35,7 @@ func TestPermissionToAuditToTelemetryFlow(t *testing.T) {
 
 	// Step 3: Create a test file
 	testFile := filepath.Join(env.WorkspacePath, "test.txt")
-	if err := os.WriteFile(testFile, []byte("test content"), 0o644); err != nil {
+	if err := fs.WriteFileSecure(testFile, []byte("test content")); err != nil {
 		t.Fatalf("failed to write test file: %v", err)
 	}
 
@@ -126,7 +124,7 @@ func TestFullFrameworkFlowScenario(t *testing.T) {
 	// Step 2: Check file permission directly (permission enforcement seam)
 	testFile := filepath.Join(env.WorkspacePath, "config.yaml")
 	configContent := "version: 1.0\nname: test\n"
-	if err := os.WriteFile(testFile, []byte(configContent), 0o644); err != nil {
+	if err := fs.WriteFileSecure(testFile, []byte(configContent)); err != nil {
 		t.Fatalf("failed to write config file: %v", err)
 	}
 
@@ -242,42 +240,3 @@ func TestFullFrameworkFlowScenario(t *testing.T) {
 		t.Errorf("chunk ID mismatch: expected %s, got %s", savedChunk.ID, loadedChunk.ID)
 	}
 }
-
-// mockFileTool is a minimal tool implementation for testing.
-type mockFileTool struct {
-	name string
-	path string
-}
-
-func (t *mockFileTool) Name() string        { return t.name }
-func (t *mockFileTool) Description() string { return "reads a file" }
-func (t *mockFileTool) Category() string    { return "filesystem" }
-func (t *mockFileTool) Parameters() []ports.ToolParameter {
-	return []ports.ToolParameter{
-		{Name: "path", Type: "string", Description: "file path"},
-	}
-}
-
-func (t *mockFileTool) Execute(ctx context.Context, args map[string]any) (*ports.ToolResult, error) {
-	data, err := os.ReadFile(t.path)
-	if err != nil {
-		return nil, err
-	}
-	return &ports.ToolResult{
-		Success: true,
-		Data: map[string]any{
-			"content": string(data),
-		},
-	}, nil
-}
-
-func (t *mockFileTool) Permissions() ports.ToolPermissions {
-	// Return nil permissions for simplicity - the permission manager handles enforcement
-	return ports.ToolPermissions{}
-}
-
-func (t *mockFileTool) Tags() []string {
-	return []string{toolcapabilities.TagReadOnly}
-}
-
-func (t *mockFileTool) IsAvailable(context.Context) bool { return true }

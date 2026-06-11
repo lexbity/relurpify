@@ -8,20 +8,6 @@ import (
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 )
 
-type recordingOverlay struct {
-	keys []string
-}
-
-func (o *recordingOverlay) Render(width, height int) string {
-	_, _ = width, height
-	return "overlay"
-}
-
-func (o *recordingOverlay) HandleKey(msg tea.KeyMsg) (tea.Cmd, bool) {
-	o.keys = append(o.keys, msg.String())
-	return nil, true
-}
-
 type gatedSubmitChatPane struct {
 	fakeChatPane
 	submits []string

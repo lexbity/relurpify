@@ -138,7 +138,7 @@ func (im *IndexManager) IndexFile(ctx context.Context, path string) error {
 	category := im.languageDetector.DetectCategory(language)
 	parser, ok := im.parserRegistry.GetParser(language)
 
-	content, err := os.ReadFile(path)
+	content, err := os.ReadFile(filepath.Clean(path))
 	if err != nil {
 		return err
 	}

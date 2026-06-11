@@ -1,7 +1,6 @@
 package agenttest
 
 import (
-	"regexp"
 	"strings"
 )
 
@@ -11,27 +10,6 @@ type BackendModelProvenance struct {
 	LoadedModel    string         `json:"loaded_model,omitempty"`
 	Digest         string         `json:"digest,omitempty"`
 	Details        map[string]any `json:"details,omitempty"`
-}
-
-func shouldResetBackend(err error, patterns []string) bool {
-	if err == nil || len(patterns) == 0 {
-		return false
-	}
-	msg := err.Error()
-	for _, raw := range patterns {
-		raw = strings.TrimSpace(raw)
-		if raw == "" {
-			continue
-		}
-		re, reErr := regexp.Compile(raw)
-		if reErr != nil {
-			continue
-		}
-		if re.MatchString(msg) {
-			return true
-		}
-	}
-	return false
 }
 
 func shouldPreflightBackend(recordingMode string) bool {

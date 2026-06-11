@@ -210,12 +210,6 @@ func convertSessionOperations(values []string) []pol.SessionOperation {
 	return out
 }
 
-func convertExternalProvidersToStrings(values []string) []string {
-	out := make([]string, 0, len(values))
-	out = append(out, values...)
-	return out
-}
-
 func compileGlobalPolicy(key string, level string) (*pol.PolicyRule, error) {
 	key = strings.TrimSpace(strings.ToLower(key))
 	if key == "" || key == "default_tool_policy" || level == "" {

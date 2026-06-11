@@ -8,7 +8,6 @@ import (
 
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	capability "codeburg.org/lexbit/relurpify/capability/registry"
-	relurpctx "codeburg.org/lexbit/relurpify/context"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/context/contextstream"
 	"codeburg.org/lexbit/relurpify/context/knowledge/retrieval"
@@ -115,49 +114,6 @@ func (a *PipelineAgent) Execute(ctx context.Context, task *execution.Task, env *
 	}, nil
 }
 
-func compactPipelineResultsState(results []StageResult) map[string]any {
-	value := map[string]any{
-		"stage_count": len(results),
-	}
-	if len(results) == 0 {
-		return value
-	}
-	stages := make([]map[string]any, 0, len(results))
-	for _, result := range results {
-		stages = append(stages, map[string]any{
-			"name":          result.StageName,
-			"validation_ok": result.ValidationOK,
-			"error_text":    result.ErrorText,
-			"transition":    result.Transition.Kind,
-		})
-	}
-	value["stages"] = stages
-	last := results[len(results)-1]
-	value["last_stage"] = map[string]any{
-		"name":          last.StageName,
-		"validation_ok": last.ValidationOK,
-		"error_text":    last.ErrorText,
-		"transition":    last.Transition.Kind,
-	}
-	return value
-}
-
-func compactPipelineFinalOutputState(final map[string]any, results []StageResult) map[string]any {
-	value := map[string]any{
-		"stages":  len(results),
-		"summary": summarizePipelineResults(results),
-	}
-	if stageName := strings.TrimSpace(fmt.Sprint(final["stage_name"])); stageName != "" && stageName != "<nil>" {
-		value["stage_name"] = stageName
-	}
-	if workflowID := strings.TrimSpace(fmt.Sprint(final["workflow_id"])); workflowID != "" && workflowID != "<nil>" {
-		value["workflow_id"] = workflowID
-	}
-	if runID := strings.TrimSpace(fmt.Sprint(final["run_id"])); runID != "" && runID != "<nil>" {
-		value["run_id"] = runID
-	}
-	return value
-}
 
 func (a *PipelineAgent) Capabilities() []string {
 	return []string{"pipeline"}
@@ -260,39 +216,6 @@ func (a *PipelineAgent) toolCallingEnabled() bool {
 	return a.Config.NativeToolCalling
 }
 
-func (a *PipelineAgent) openWorkflowStore(ctx context.Context, task *execution.Task, env *contextdata.Envelope) (any, string, string, error) {
-	_ = ctx
-	_ = task
-	_ = env
-	return nil, "", "", fmt.Errorf("workflow store temporarily unavailable")
-}
-
-func (a *PipelineAgent) persistStageResults(ctx context.Context, store any, workflowID, runID string, results []StageResult) error {
-	_ = ctx
-	_ = store
-	_ = workflowID
-	_ = runID
-	_ = results
-	return nil
-}
-
-func (a *PipelineAgent) persistResultsArtifact(ctx context.Context, store any, workflowID, runID string, results []StageResult) (*relurpctx.ArtifactReference, error) {
-	_ = ctx
-	_ = store
-	_ = workflowID
-	_ = runID
-	_ = results
-	return nil, errors.New("persistResultsArtifact not implemented")
-}
-
-func (a *PipelineAgent) persistFinalOutputArtifact(ctx context.Context, store any, workflowID, runID string, final map[string]any) (*relurpctx.ArtifactReference, error) {
-	_ = ctx
-	_ = store
-	_ = workflowID
-	_ = runID
-	_ = final
-	return nil, errors.New("persistFinalOutputArtifact not implemented")
-}
 
 func summarizePipelineResults(results []StageResult) string {
 	if len(results) == 0 {
@@ -310,17 +233,6 @@ func summarizePipelineResults(results []StageResult) string {
 		parts = append(parts, fmt.Sprintf("%s [%s]", result.StageName, status))
 	}
 	return strings.Join(parts, "; ")
-}
-
-func summarizePipelineFinalOutput(final map[string]any) string {
-	if len(final) == 0 {
-		return ""
-	}
-	stage := strings.TrimSpace(fmt.Sprint(final["stage_name"]))
-	if stage == "" || stage == "<nil>" {
-		stage = "pipeline"
-	}
-	return fmt.Sprintf("%s final output", stage)
 }
 
 type pipelineStageNode struct {
@@ -348,27 +260,6 @@ func sanitizePipelineName(name string) string {
 		return "stage"
 	}
 	return name
-}
-
-func fallbackTaskID(task *execution.Task) string {
-	if task != nil && strings.TrimSpace(task.ID) != "" {
-		return strings.TrimSpace(task.ID)
-	}
-	return "task"
-}
-
-func taskType(task *execution.Task) execution.TaskType {
-	if task == nil || task.Type == "" {
-		return execution.TaskTypeCodeGeneration
-	}
-	return execution.TaskType(task.Type)
-}
-
-func taskInstruction(task *execution.Task) string {
-	if task == nil {
-		return ""
-	}
-	return task.Instruction
 }
 
 // streamMode returns the streaming mode, defaulting to blocking.

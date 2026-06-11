@@ -49,37 +49,53 @@ func (h *ContainerHandle) teardownDocker(ctx context.Context, grace time.Duratio
 	if h.binary == "" {
 		h.binary = "docker"
 	}
+	binaryPath, err := exec.LookPath(h.binary)
+	if err != nil {
+		binaryPath = h.binary
+	}
 	// docker stop -t <grace_secs> sends SIGTERM, waits up to grace, then SIGKILLs.
-	stopCtx, cancel := context.WithTimeout(ctx, grace+5*time.Second)
+	_, cancel := context.WithTimeout(ctx, grace+5*time.Second)
 	defer cancel()
-	_ = exec.CommandContext(stopCtx, h.binary,
-		"stop", "-t", fmt.Sprintf("%.0f", grace.Seconds()), h.Name,
-	).Run()
+	_ = (&exec.Cmd{
+		Path: binaryPath,
+		Args: []string{
+			binaryPath,
+			"stop", "-t", fmt.Sprintf("%.0f", grace.Seconds()), h.Name,
+		},
+	}).Run()
 
 	// Force-remove in case --rm wasn't set or didn't clean up.
-	rmCtx, cancel2 := context.WithTimeout(ctx, 5*time.Second)
+	_, cancel2 := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel2()
-	_ = exec.CommandContext(rmCtx, h.binary, "rm", "-f", h.Name).Run()
+	_ = (&exec.Cmd{
+		Path: binaryPath,
+		Args: []string{binaryPath, "rm", "-f", h.Name},
+	}).Run()
 }
 
 func (h *ContainerHandle) teardownRunsc(ctx context.Context, grace time.Duration) {
 	if h.binary == "" {
 		h.binary = "runsc"
 	}
+	binaryPath, err := exec.LookPath(h.binary)
+	if err != nil {
+		binaryPath = h.binary
+	}
 	// runsc kill <id> TERM
-	killCtx, cancel := context.WithTimeout(ctx, grace+2*time.Second)
+	_, cancel := context.WithTimeout(ctx, grace+2*time.Second)
 	defer cancel()
-	_ = exec.CommandContext(killCtx, h.binary, "kill", h.Name, "TERM").Run()
+	_ = (&exec.Cmd{
+		Path: binaryPath,
+		Args: []string{binaryPath, "kill", h.Name, "TERM"},
+	}).Run()
 
 	// Give the process a chance to flush, then force-delete.
-	sleepCtx, cancel2 := context.WithTimeout(ctx, grace)
-	defer cancel2()
-	select {
-	case <-sleepCtx.Done():
-	case <-time.After(grace):
-	}
+	time.Sleep(grace)
 
-	delCtx, cancel3 := context.WithTimeout(ctx, 5*time.Second)
+	_, cancel3 := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel3()
-	_ = exec.CommandContext(delCtx, h.binary, "delete", "--force", h.Name).Run()
+	_ = (&exec.Cmd{
+		Path: binaryPath,
+		Args: []string{binaryPath, "delete", "--force", h.Name},
+	}).Run()
 }

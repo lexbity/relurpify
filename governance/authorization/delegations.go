@@ -552,12 +552,6 @@ func delegationMatchesFilter(snapshot policy.DelegationSnapshot, filter policy.D
 	return true
 }
 
-func projectDelegationResources(ctx context.Context, refs []string, repo governanceports.DelegationRepository) ([]string, error) {
-	// TODO: Implement resource projection via lifecycle repository in Phase 4
-	// For now, return nil
-	return nil, nil
-}
-
 func effectiveDelegationRecoverability(mode policy.RecoverabilityMode) policy.RecoverabilityMode {
 	switch mode {
 	case policy.RecoverabilityEphemeral, policy.RecoverabilityInProcess, policy.RecoverabilityPersistedRestore:
@@ -574,10 +568,6 @@ func firstRecoverability(values ...policy.RecoverabilityMode) policy.Recoverabil
 		}
 	}
 	return ""
-}
-
-func effectiveDelegationState(state governanceports.InvocationState) governanceports.InvocationState {
-	return state
 }
 
 func delegationRequestedRole(request policy.DelegationRequest) string {

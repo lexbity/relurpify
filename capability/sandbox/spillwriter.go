@@ -40,10 +40,6 @@ func (w *spillWriter) Write(p []byte) (int, error) {
 	return n, nil
 }
 
-func (w *spillWriter) exceededCeiling() bool {
-	return w != nil && w.exceeded.Load()
-}
-
 func (w *spillWriter) String() string {
 	if w == nil {
 		return ""

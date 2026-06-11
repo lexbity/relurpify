@@ -408,7 +408,7 @@ type WorkflowCheckpointSeedSpec struct {
 }
 
 func LoadSuite(path string) (*Suite, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(filepath.Clean(path))
 	if err != nil {
 		return nil, err
 	}

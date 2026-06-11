@@ -4,12 +4,13 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"io"
-	"io/fs"
+	iofs "io/fs"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 
+	"codeburg.org/lexbit/relurpify/platform/fs"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 	"codeburg.org/lexbit/relurpify/userconfig/templates"
 )
@@ -21,7 +22,7 @@ type WorkspaceSnapshot struct {
 func SnapshotWorkspace(root string, exclude []string) (*WorkspaceSnapshot, error) {
 	root = filepath.Clean(root)
 	files := make(map[string]string)
-	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+	err := filepath.WalkDir(root, func(path string, d iofs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -108,7 +109,7 @@ func FilterChangedFiles(changed []string, ignore []string) []string {
 func CopyWorkspace(src, dst string, exclude []string) error {
 	src = filepath.Clean(src)
 	dst = filepath.Clean(dst)
-	return filepath.WalkDir(src, func(path string, d fs.DirEntry, err error) error {
+	return filepath.WalkDir(src, func(path string, d iofs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -132,21 +133,21 @@ func CopyWorkspace(src, dst string, exclude []string) error {
 
 		target := filepath.Join(dst, rel)
 		if d.IsDir() {
-			return os.MkdirAll(target, 0o755)
+			return fs.MkdirAllSecure(target)
 		}
 		info, err := d.Info()
 		if err != nil {
 			return err
 		}
-		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		if err := fs.MkdirAllSecure(filepath.Dir(target)); err != nil {
 			return err
 		}
-		in, err := os.Open(path)
+		in, err := os.Open(filepath.Clean(path))
 		if err != nil {
 			return err
 		}
 		defer in.Close()
-		out, err := os.OpenFile(target, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, info.Mode().Perm())
+		out, err := os.OpenFile(filepath.Clean(target), os.O_CREATE|os.O_TRUNC|os.O_WRONLY, info.Mode().Perm())
 		if err != nil {
 			return err
 		}
@@ -164,7 +165,7 @@ func MaterializeDerivedWorkspace(targetWorkspace, derivedWorkspace, sharedRoot, 
 	if err := os.RemoveAll(derivedWorkspace); err != nil {
 		return err
 	}
-	if err := os.MkdirAll(derivedWorkspace, 0o755); err != nil {
+	if err := fs.MkdirAllSecure(derivedWorkspace); err != nil {
 		return err
 	}
 	if err := CopyWorkspace(targetWorkspace, derivedWorkspace, append([]string{config.DirName + "/**"}, exclude...)); err != nil {
@@ -199,7 +200,7 @@ func MaterializeDerivedWorkspace(targetWorkspace, derivedWorkspace, sharedRoot, 
 		paths.SessionsDir(),
 		paths.TestRunsDir(),
 	} {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
+		if err := fs.MkdirAllSecure(dir); err != nil {
 			return err
 		}
 	}
@@ -228,7 +229,7 @@ func ensureDerivedManifest(resolver templates.Resolver, targetWorkspace, derived
 }
 
 func copyRenderedTree(srcRoot, dstRoot, workspace, sourceWorkspace string) error {
-	return filepath.WalkDir(srcRoot, func(path string, d fs.DirEntry, err error) error {
+	return filepath.WalkDir(srcRoot, func(path string, d iofs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -237,27 +238,27 @@ func copyRenderedTree(srcRoot, dstRoot, workspace, sourceWorkspace string) error
 			return err
 		}
 		if rel == "." {
-			return os.MkdirAll(dstRoot, 0o755)
+			return fs.MkdirAllSecure(dstRoot)
 		}
 		target := filepath.Join(dstRoot, rel)
 		if d.IsDir() {
-			return os.MkdirAll(target, 0o755)
+			return fs.MkdirAllSecure(target)
 		}
 		return copyRenderedFile(path, target, workspace, sourceWorkspace)
 	})
 }
 
 func copyRenderedFile(src, dst, workspace, sourceWorkspace string) error {
-	data, err := os.ReadFile(src)
+	data, err := os.ReadFile(filepath.Clean(src))
 	if err != nil {
 		return err
 	}
 	rendered := renderWorkspaceContent(data, workspace, sourceWorkspace)
-	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+	if err := fs.MkdirAllSecure(filepath.Dir(dst)); err != nil {
 		return err
 	}
-	info, err := os.Stat(src)
-	mode := fs.FileMode(0o644)
+	info, err := os.Stat(filepath.Clean(src))
+	mode := iofs.FileMode(0o644)
 	if err == nil {
 		mode = info.Mode().Perm()
 	}
@@ -293,13 +294,13 @@ func applyWorkspaceFiles(workspace, targetWorkspace string, files []SetupFileSpe
 		} else {
 			// Copy from source fixtures
 			srcPath := filepath.Join(targetWorkspace, f.Path)
-			content, err = os.ReadFile(srcPath)
+			content, err = os.ReadFile(filepath.Clean(srcPath))
 			if err != nil {
 				return fmt.Errorf("read fixture from %s (targetWorkspace=%s): %w", srcPath, targetWorkspace, err)
 			}
 		}
 
-		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		if err := fs.MkdirAllSecure(filepath.Dir(target)); err != nil {
 			return err
 		}
 		if err := os.WriteFile(target, content, mode); err != nil {
@@ -353,7 +354,7 @@ func ensureDerivedSkills(targetWorkspace, derivedWorkspace, manifestRef string) 
 }
 
 func hashFile(path string) (string, error) {
-	f, err := os.Open(path)
+	f, err := os.Open(filepath.Clean(path))
 	if err != nil {
 		return "", err
 	}

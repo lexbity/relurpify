@@ -3,7 +3,6 @@ package euclotui
 import (
 	"cmp"
 	"fmt"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -583,26 +582,6 @@ type RecipeResumeData struct {
 	RecipeID    string                         `json:"recipe_id"`
 	StepRuntime map[string]surface.StepRuntime `json:"step_runtime,omitempty"`
 	Macro       surface.MacroPhase             `json:"macro"`
-}
-
-func cloneScores(in map[string]float64) map[string]float64 {
-	if len(in) == 0 {
-		return nil
-	}
-	out := make(map[string]float64, len(in))
-	for k, v := range in {
-		out[k] = v
-	}
-	return out
-}
-
-func sortedScoreKeys(scores map[string]float64) []string {
-	keys := make([]string, 0, len(scores))
-	for k := range scores {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	return keys
 }
 
 func stringPayload(payload map[string]any, key string) string {

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
+	"codeburg.org/lexbit/relurpify/platform/fs"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
@@ -42,7 +43,7 @@ func TestEnvironmentConstruction(t *testing.T) {
 	}
 
 	probe := filepath.Join(env.WorkspacePath, "construction-probe.txt")
-	if err := os.WriteFile(probe, []byte("probe"), 0o644); err != nil {
+	if err := fs.WriteFileSecure(probe, []byte("probe")); err != nil {
 		t.Fatalf("failed to create cleanup probe: %v", err)
 	}
 
@@ -59,7 +60,7 @@ func TestEnvironmentTeardownOnFailure(t *testing.T) {
 	env := NewTestEnvironment(t)
 
 	probe := filepath.Join(env.WorkspacePath, "teardown-probe.txt")
-	if err := os.WriteFile(probe, []byte("teardown"), 0o644); err != nil {
+	if err := fs.WriteFileSecure(probe, []byte("teardown")); err != nil {
 		t.Fatalf("failed to create teardown probe: %v", err)
 	}
 

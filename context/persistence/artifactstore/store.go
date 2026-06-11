@@ -177,7 +177,7 @@ func (s *DiskStore) Put(_ context.Context, kind string, meta map[string]string, 
 	ref := Ref("artifact://" + session + "/" + id)
 	dataPath := s.artifactPath(ref)
 
-	f, err := os.Create(dataPath)
+	f, err := os.Create(filepath.Clean(dataPath))
 	if err != nil {
 		return "", fmt.Errorf("create artifact: %w", err)
 	}
@@ -230,7 +230,7 @@ func (s *DiskStore) Put(_ context.Context, kind string, meta map[string]string, 
 // Open retrieves an artifact by ref.
 func (s *DiskStore) Open(_ context.Context, ref Ref) (io.ReadCloser, ArtifactMeta, error) {
 	dataPath := s.artifactPath(ref)
-	f, err := os.Open(dataPath)
+	f, err := os.Open(filepath.Clean(dataPath))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, ArtifactMeta{}, fmt.Errorf("artifact %q not found", ref)

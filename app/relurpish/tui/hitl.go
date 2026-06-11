@@ -42,26 +42,6 @@ type hitlResolvedMsg struct {
 	err       error
 }
 
-func approveHITLCmd(svc HITLServiceIface, requestID string, scope policy.GrantScope) tea.Cmd {
-	return func() tea.Msg {
-		if svc == nil {
-			return hitlResolvedMsg{requestID: requestID, approved: true, err: fmt.Errorf("hitl service unavailable")}
-		}
-		err := svc.ApproveHITL(requestID, "tui", scope, 0)
-		return hitlResolvedMsg{requestID: requestID, approved: true, err: err}
-	}
-}
-
-func denyHITLCmd(svc HITLServiceIface, requestID string) tea.Cmd {
-	return func() tea.Msg {
-		if svc == nil {
-			return hitlResolvedMsg{requestID: requestID, approved: false, err: fmt.Errorf("hitl service unavailable")}
-		}
-		err := svc.DenyHITL(requestID, "denied in TUI")
-		return hitlResolvedMsg{requestID: requestID, approved: false, err: err}
-	}
-}
-
 func (m *RootModel) trackInteractionFrame(notificationID string, frame interaction.InteractionFrame) {
 	if m == nil {
 		return

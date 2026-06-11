@@ -5,9 +5,10 @@ package agenttest
 
 import (
 	"encoding/json"
-	"os"
 	"path/filepath"
 	"testing"
+
+	"codeburg.org/lexbit/relurpify/platform/fs"
 )
 
 // TestRepresentativeSuitesLoad verifies that the committed catalog now loads
@@ -29,7 +30,7 @@ func TestRepresentativeSuitesLoad(t *testing.T) {
 func TestGenericSuiteLoadsWithoutLegacyFields(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "suite.yaml")
-	err := os.WriteFile(path, []byte(`
+	err := fs.WriteFileSecure(path, []byte(`
 apiVersion: relurpify/v1alpha1
 kind: AgentTestSuite
 metadata:
@@ -56,7 +57,7 @@ spec:
         benchmark:
           tools_expected:
             - file_read
-`), 0o644)
+`))
 	if err != nil {
 		t.Fatal(err)
 	}

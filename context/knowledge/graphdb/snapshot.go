@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"path/filepath"
 )
 
 type snapshotState struct {
@@ -27,7 +28,7 @@ func writeSnapshot(path string, state snapshotState) error {
 }
 
 func readSnapshot(path string) (snapshotState, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(filepath.Clean(path))
 	if errors.Is(err, os.ErrNotExist) {
 		return snapshotState{}, nil
 	}

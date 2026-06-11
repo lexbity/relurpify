@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"syscall"
 
 	"codeburg.org/lexbit/relurpify/platform/llm"
@@ -60,7 +61,7 @@ func checkWorkspaceDirectory(workspace string) (bool, string) {
 	if !info.IsDir() {
 		return false, "workspace path is not a directory"
 	}
-	f, err := os.Open(workspace)
+	f, err := os.Open(filepath.Clean(workspace))
 	if err != nil {
 		return false, fmt.Sprintf("workspace not readable: %s", err)
 	}

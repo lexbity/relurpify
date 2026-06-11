@@ -4,13 +4,13 @@
 package agenttest
 
 import (
-	"os"
 	"path/filepath"
 	"testing"
 
 	"gopkg.in/yaml.v3"
 
 	"codeburg.org/lexbit/relurpify/governance/permissions"
+	"codeburg.org/lexbit/relurpify/platform/fs"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
@@ -155,7 +155,7 @@ func TestBenchmarkSpecRoundTrip(t *testing.T) {
 func TestLoadSuiteRejectsLegacyExpectFields(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "suite.yaml")
-	err := os.WriteFile(path, []byte(`
+	err := fs.WriteFileSecure(path, []byte(`
 apiVersion: relurpify/v1alpha1
 kind: AgentTestSuite
 metadata:
@@ -168,7 +168,7 @@ spec:
       prompt: summarize
       expect:
         must_succeed: true
-`), 0o644)
+`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -181,7 +181,7 @@ spec:
 func TestLoadSuiteRejectsLegacyEucloAndControlFlowFields(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "suite.yaml")
-	err := os.WriteFile(path, []byte(`
+	err := fs.WriteFileSecure(path, []byte(`
 apiVersion: relurpify/v1alpha1
 kind: AgentTestSuite
 metadata:
@@ -200,7 +200,7 @@ spec:
             profile: trace_execute_analyze
       overrides:
         control_flow: pipeline
-`), 0o644)
+`))
 	if err != nil {
 		t.Fatal(err)
 	}

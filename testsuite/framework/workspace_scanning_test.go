@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"codeburg.org/lexbit/relurpify/platform/fs"
 )
 
 // FileMetadata represents the metadata captured during workspace scanning.
@@ -99,7 +101,7 @@ func TestSmallWorkspaceScan(t *testing.T) {
 
 	for path, content := range workspaceFiles {
 		fullPath := filepath.Join(env.WorkspacePath, path)
-		if err := os.WriteFile(fullPath, []byte(content), 0o644); err != nil {
+		if err := fs.WriteFileSecure(fullPath, []byte(content)); err != nil {
 			t.Fatalf("failed to create file %s: %v", path, err)
 		}
 	}
@@ -171,10 +173,10 @@ func TestMixedWorkspaceScan(t *testing.T) {
 	for path, content := range workspaceStructure {
 		fullPath := filepath.Join(env.WorkspacePath, path)
 		dir := filepath.Dir(fullPath)
-		if err := os.MkdirAll(dir, 0o755); err != nil {
+		if err := fs.MkdirAllSecure(dir); err != nil {
 			t.Fatalf("failed to create directory %s: %v", dir, err)
 		}
-		if err := os.WriteFile(fullPath, []byte(content), 0o644); err != nil {
+		if err := fs.WriteFileSecure(fullPath, []byte(content)); err != nil {
 			t.Fatalf("failed to create file %s: %v", path, err)
 		}
 	}
@@ -244,10 +246,10 @@ func TestNestedDirectoryScan(t *testing.T) {
 	for path, content := range nestedStructure {
 		fullPath := filepath.Join(env.WorkspacePath, path)
 		dir := filepath.Dir(fullPath)
-		if err := os.MkdirAll(dir, 0o755); err != nil {
+		if err := fs.MkdirAllSecure(dir); err != nil {
 			t.Fatalf("failed to create directory %s: %v", dir, err)
 		}
-		if err := os.WriteFile(fullPath, []byte(content), 0o644); err != nil {
+		if err := fs.WriteFileSecure(fullPath, []byte(content)); err != nil {
 			t.Fatalf("failed to create file %s: %v", path, err)
 		}
 	}
@@ -311,7 +313,7 @@ func TestMalformedFileHandling(t *testing.T) {
 
 	for path, content := range workspaceFiles {
 		fullPath := filepath.Join(env.WorkspacePath, path)
-		if err := os.WriteFile(fullPath, []byte(content), 0o644); err != nil {
+		if err := fs.WriteFileSecure(fullPath, []byte(content)); err != nil {
 			t.Fatalf("failed to create file %s: %v", path, err)
 		}
 	}
@@ -398,10 +400,10 @@ func TestScanDeterminism(t *testing.T) {
 	for path, content := range workspaceFiles {
 		fullPath := filepath.Join(env.WorkspacePath, path)
 		dir := filepath.Dir(fullPath)
-		if err := os.MkdirAll(dir, 0o755); err != nil {
+		if err := fs.MkdirAllSecure(dir); err != nil {
 			t.Fatalf("failed to create directory %s: %v", dir, err)
 		}
-		if err := os.WriteFile(fullPath, []byte(content), 0o644); err != nil {
+		if err := fs.WriteFileSecure(fullPath, []byte(content)); err != nil {
 			t.Fatalf("failed to create file %s: %v", path, err)
 		}
 	}
@@ -472,10 +474,10 @@ func TestScanHiddenFiles(t *testing.T) {
 	for path, content := range hiddenFiles {
 		fullPath := filepath.Join(env.WorkspacePath, path)
 		dir := filepath.Dir(fullPath)
-		if err := os.MkdirAll(dir, 0o755); err != nil {
+		if err := fs.MkdirAllSecure(dir); err != nil {
 			t.Fatalf("failed to create directory %s: %v", dir, err)
 		}
-		if err := os.WriteFile(fullPath, []byte(content), 0o644); err != nil {
+		if err := fs.WriteFileSecure(fullPath, []byte(content)); err != nil {
 			t.Fatalf("failed to create file %s: %v", path, err)
 		}
 	}

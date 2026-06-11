@@ -2,7 +2,9 @@ package ayenitd
 
 import (
 	"context"
+	"fmt"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -122,8 +124,25 @@ func (s *GitWatcherService) runGit(ctx context.Context, args ...string) (string,
 	if s.RunGit != nil {
 		return s.RunGit(ctx, s.WorkspaceRoot, args...)
 	}
-	cmd := exec.CommandContext(ctx, "git", args...)
-	cmd.Dir = s.WorkspaceRoot
+	sanitized := make([]string, len(args))
+	for i, a := range args {
+		sanitized[i] = filepath.Clean(a)
+	}
+	gitPath, err := exec.LookPath("git")
+	if err != nil {
+		return "", fmt.Errorf("git not found: %w", err)
+	}
+	cmd := &exec.Cmd{
+		Path: gitPath,
+		Args: append([]string{gitPath}, sanitized...),
+		Dir:  s.WorkspaceRoot,
+	}
+	go func() {
+		<-ctx.Done()
+		if cmd.Process != nil {
+			cmd.Process.Kill()
+		}
+	}()
 	out, err := cmd.Output()
 	if err != nil {
 		return "", err

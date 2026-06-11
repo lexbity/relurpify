@@ -187,7 +187,7 @@ func (p *SecurityGuardPane) loadShellRules() {
 		workspace = p.runtime.SessionInfo().Workspace
 	}
 	path := filepath.Join(config.New(workspace).ConfigRoot(), "security", "shell.policy.yaml")
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(filepath.Clean(path))
 	if err != nil {
 		if os.IsNotExist(err) {
 			p.shellRules = nil
@@ -217,7 +217,7 @@ func (p *SecurityGuardPane) loadGuardRules() {
 		workspace = p.runtime.SessionInfo().Workspace
 	}
 	path := filepath.Join(config.New(workspace).ConfigRoot(), "policy_rules.yaml")
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(filepath.Clean(path))
 	if err != nil {
 		if os.IsNotExist(err) {
 			p.guardRules = nil

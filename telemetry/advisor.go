@@ -22,8 +22,6 @@ type ContextBudgetAdvisor struct {
 	resetNotified    bool
 }
 
-type advisorContextKey struct{}
-
 // WithAdvisor stores the advisor in the context via the telemetry.UsageObserver
 // interface key so that platform/llm.InstrumentedModel can retrieve it without
 // importing framework packages.
@@ -186,13 +184,6 @@ func (a *ContextBudgetAdvisor) reservedOutputTokensLocked() int {
 		return a.ReservedOutputTokens
 	}
 	return 512
-}
-
-func (a *ContextBudgetAdvisor) estimationFallbackLocked() int {
-	if a.EstimationFallback > 0 {
-		return a.EstimationFallback
-	}
-	return 4096
 }
 
 func clampNonNegative(v int) int {

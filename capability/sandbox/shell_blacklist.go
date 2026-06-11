@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -73,7 +74,7 @@ func NewShellBlacklist(rules []BlacklistRule) (*ShellBlacklist, error) {
 
 // Load reads and compiles rules from path. Missing file returns empty blacklist, no error.
 func Load(path string) (*ShellBlacklist, error) {
-	f, err := os.Open(path)
+	f, err := os.Open(filepath.Clean(path))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return &ShellBlacklist{}, nil

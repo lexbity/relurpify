@@ -2,7 +2,6 @@ package framework
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -14,6 +13,7 @@ import (
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
 	"codeburg.org/lexbit/relurpify/governance/risk"
+	"codeburg.org/lexbit/relurpify/platform/fs"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
@@ -60,14 +60,14 @@ func (b *WorkspaceBuilder) Build() error {
 	if strings.TrimSpace(b.basePath) == "" {
 		return fmt.Errorf("workspace builder base path is empty")
 	}
-	if err := os.MkdirAll(b.basePath, 0o755); err != nil {
+	if err := fs.MkdirAllSecure(b.basePath); err != nil {
 		return err
 	}
 
 	// Create directories first
 	for _, dir := range uniqueSortedStrings(b.dirs) {
 		fullPath := filepath.Join(b.basePath, dir)
-		if err := os.MkdirAll(fullPath, 0o755); err != nil {
+		if err := fs.MkdirAllSecure(fullPath); err != nil {
 			return err
 		}
 	}
@@ -82,11 +82,11 @@ func (b *WorkspaceBuilder) Build() error {
 		fullPath := filepath.Join(b.basePath, path)
 		dir := filepath.Dir(fullPath)
 		if dir != b.basePath && dir != "." {
-			if err := os.MkdirAll(dir, 0o755); err != nil {
+			if err := fs.MkdirAllSecure(dir); err != nil {
 				return err
 			}
 		}
-		if err := os.WriteFile(fullPath, []byte(content), 0o644); err != nil {
+		if err := fs.WriteFileSecure(fullPath, []byte(content)); err != nil {
 			return err
 		}
 	}

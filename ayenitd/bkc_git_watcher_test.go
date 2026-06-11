@@ -105,13 +105,15 @@ func TestGitWatcherServiceHelpersAndStart(t *testing.T) {
 		}
 
 		dir := t.TempDir()
-		require.NoError(t, exec.Command("git", "init", dir).Run())
+		gitPath, err := exec.LookPath("git")
+		require.NoError(t, err)
+		require.NoError(t, (&exec.Cmd{Path: gitPath, Args: []string{gitPath, "init", filepath.Clean(dir)}}).Run())
 		require.NoError(t, os.WriteFile(filepath.Join(dir, "tracked.txt"), []byte("one"), 0o644))
-		require.NoError(t, exec.Command("git", "-C", dir, "add", "tracked.txt").Run())
-		require.NoError(t, exec.Command("git", "-C", dir, "-c", "user.name=test", "-c", "user.email=test@example.com", "commit", "-m", "init").Run())
+		require.NoError(t, (&exec.Cmd{Path: gitPath, Args: []string{gitPath, "-C", filepath.Clean(dir), "add", "tracked.txt"}}).Run())
+		require.NoError(t, (&exec.Cmd{Path: gitPath, Args: []string{gitPath, "-C", filepath.Clean(dir), "-c", "user.name=test", "-c", "user.email=test@example.com", "commit", "-m", "init"}}).Run())
 		require.NoError(t, os.WriteFile(filepath.Join(dir, "tracked.txt"), []byte("two"), 0o644))
-		require.NoError(t, exec.Command("git", "-C", dir, "add", "tracked.txt").Run())
-		require.NoError(t, exec.Command("git", "-C", dir, "-c", "user.name=test", "-c", "user.email=test@example.com", "commit", "-m", "update").Run())
+		require.NoError(t, (&exec.Cmd{Path: gitPath, Args: []string{gitPath, "-C", filepath.Clean(dir), "add", "tracked.txt"}}).Run())
+		require.NoError(t, (&exec.Cmd{Path: gitPath, Args: []string{gitPath, "-C", filepath.Clean(dir), "-c", "user.name=test", "-c", "user.email=test@example.com", "commit", "-m", "update"}}).Run())
 
 		svc := &GitWatcherService{WorkspaceRoot: dir}
 		rev, err := svc.currentRevision(context.Background())

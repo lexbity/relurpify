@@ -126,7 +126,7 @@ func TestTapeModelRecordWritesHeaderFirst(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	f, err := os.Open(tape)
+	f, err := os.Open(filepath.Clean(tape))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -305,7 +305,7 @@ func TestInspectTapeReturnsHeaderAndRecordedAt(t *testing.T) {
 func writeTapeFixture(t *testing.T, entries []tapeEntry) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "tape.jsonl")
-	f, err := os.Create(path)
+	f, err := os.Create(filepath.Clean(path))
 	if err != nil {
 		t.Fatal(err)
 	}

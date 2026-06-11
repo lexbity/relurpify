@@ -153,20 +153,6 @@ func (h *CodeReviewHandler) Invoke(ctx context.Context, st ports.State, args map
 	}, nil
 }
 
-type codeReviewFinding struct {
-	File        string `json:"file,omitempty"`
-	Line        int    `json:"line,omitempty"`
-	Severity    string `json:"severity"`
-	Category    string `json:"category"`
-	Description string `json:"description"`
-	Suggestion  string `json:"suggestion,omitempty"`
-}
-
-type codeReviewPayload struct {
-	Findings []codeReviewFinding `json:"findings"`
-	Summary  string              `json:"summary"`
-}
-
 type reflectionReviewPayload struct {
 	Issues []struct {
 		Severity    string `json:"severity"`
@@ -204,20 +190,6 @@ func buildReviewContext(env *contextdata.Envelope) (string, int) {
 	}
 
 	return strings.Join(parts, "\n"), fileCount
-}
-
-func buildCodeReviewPrompt(focus, contextText string) string {
-	var b strings.Builder
-	b.WriteString("Review the provided workspace context.\n")
-	b.WriteString("Focus: ")
-	b.WriteString(focus)
-	b.WriteString("\n")
-	b.WriteString("Return JSON with keys: summary, findings.\n")
-	b.WriteString("Each finding should include file, line, severity, category, description, suggestion.\n")
-	b.WriteString("Severity must be one of error, warning, info.\n")
-	b.WriteString("Context:\n")
-	b.WriteString(contextText)
-	return b.String()
 }
 
 func buildReflectionReviewTask(focus, contextText string) *execution.Task {
@@ -294,26 +266,6 @@ func (h *CodeReviewHandler) runReflectionReview(ctx context.Context, env *contex
 	}
 
 	return findings, summary, nil
-}
-
-func parseCodeReviewResponse(raw string) ([]map[string]any, string, bool) {
-	var payload codeReviewPayload
-	if err := json.Unmarshal([]byte(reactpkg.ExtractJSON(raw)), &payload); err != nil {
-		return nil, "", false
-	}
-
-	findings := make([]map[string]any, 0, len(payload.Findings))
-	for _, finding := range payload.Findings {
-		findings = append(findings, map[string]any{
-			"file":        finding.File,
-			"line":        finding.Line,
-			"severity":    normalizeReviewSeverity(finding.Severity),
-			"category":    finding.Category,
-			"description": finding.Description,
-			"suggestion":  finding.Suggestion,
-		})
-	}
-	return findings, strings.TrimSpace(payload.Summary), true
 }
 
 func extractReflectionReview(env *contextdata.Envelope) ([]map[string]any, string, bool) {

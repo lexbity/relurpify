@@ -3,6 +3,7 @@ package relurpicabilities
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -96,7 +97,7 @@ func (w *workspaceFileSystem) Read(candidate string) ([]byte, string, error) {
 	if resolved == "" {
 		return nil, "", fmt.Errorf("path resolution failed: %s", candidate)
 	}
-	content, err := os.ReadFile(resolved)
+	content, err := os.ReadFile(filepath.Clean(resolved))
 	if err != nil {
 		return nil, "", err
 	}

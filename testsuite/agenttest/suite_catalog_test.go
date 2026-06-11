@@ -4,9 +4,10 @@
 package agenttest
 
 import (
-	"os"
 	"path/filepath"
 	"testing"
+
+	"codeburg.org/lexbit/relurpify/platform/fs"
 )
 
 func TestRepresentativeSuitesLoadCatalog(t *testing.T) {
@@ -26,7 +27,7 @@ func TestRepresentativeSuitesLoadCatalog(t *testing.T) {
 func TestGenericSuiteCatalogMetadata(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "suite.yaml")
-	err := os.WriteFile(path, []byte(`
+	err := fs.WriteFileSecure(path, []byte(`
 apiVersion: relurpify/v1alpha1
 kind: AgentTestSuite
 metadata:
@@ -47,7 +48,7 @@ spec:
       expect:
         outcome:
           must_succeed: true
-`), 0o644)
+`))
 	if err != nil {
 		t.Fatal(err)
 	}

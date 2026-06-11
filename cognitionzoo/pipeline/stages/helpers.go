@@ -14,20 +14,6 @@ func taskInstruction(task *execution.Task) string {
 	return strings.TrimSpace(task.Instruction)
 }
 
-func workspaceRoot(task *execution.Task) string {
-	if task == nil || task.Context == nil {
-		return ""
-	}
-	raw, ok := task.Context["workspace"]
-	if !ok || raw == nil {
-		return ""
-	}
-	s, ok := raw.(string)
-	if !ok {
-		return ""
-	}
-	return strings.TrimSpace(s)
-}
 
 func renderContextFiles(task *execution.Task, maxBytes int) string {
 	if task == nil || task.Context == nil {

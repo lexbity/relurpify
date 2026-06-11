@@ -165,11 +165,4 @@ func isOptionalStep(stepID string, groups []ConditionalGroup) bool {
 	return false
 }
 
-func stringSliceContains(slice []string, item string) bool {
-	for _, s := range slice {
-		if s == item {
-			return true
-		}
-	}
-	return false
-}
+

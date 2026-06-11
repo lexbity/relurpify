@@ -211,30 +211,6 @@ func taskFromEnvelope(env *contextdata.Envelope) (*execution.Task, error) {
 	return nil, fmt.Errorf("no task input in envelope")
 }
 
-func serializeStreamResult(result *contextstream.Result) string {
-	if result == nil {
-		return ""
-	}
-	var b strings.Builder
-	if result.Request.ID != "" {
-		b.WriteString("request:")
-		b.WriteString(result.Request.ID)
-		b.WriteString(" ")
-	}
-	if result.Err != nil {
-		b.WriteString("error:")
-		b.WriteString(result.Err.Error())
-		b.WriteString(" ")
-	}
-	if result.Compilation != nil {
-		b.WriteString("chunks:")
-		fmt.Fprintf(&b, "%d", len(result.Compilation.StreamedRefs))
-		b.WriteString(" tokens:")
-		fmt.Fprintf(&b, "%d", result.Compilation.Record.FinalTokens)
-	}
-	return strings.TrimSpace(b.String())
-}
-
 func missingFields(evidence *intentcontext.IntentEvidence) []string {
 	if evidence == nil {
 		return nil

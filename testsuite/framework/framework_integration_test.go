@@ -11,6 +11,7 @@ import (
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
+	"codeburg.org/lexbit/relurpify/platform/fs"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
@@ -38,7 +39,7 @@ func TestFrameworkSuiteSmoke(t *testing.T) {
 	}
 
 	testFile := filepath.Join(env.WorkspacePath, "smoke-test.txt")
-	if err := os.WriteFile(testFile, []byte("smoke test"), 0o644); err != nil {
+	if err := fs.WriteFileSecure(testFile, []byte("smoke test")); err != nil {
 		t.Fatalf("failed to write test file: %v", err)
 	}
 
@@ -91,7 +92,7 @@ func TestFrameworkPackageDiscovery(t *testing.T) {
 		t.Error("manifest root should be set")
 	}
 	probe := filepath.Join(env.ManifestRoot, "discovery-probe.txt")
-	if err := os.WriteFile(probe, []byte("probe"), 0o644); err != nil {
+	if err := fs.WriteFileSecure(probe, []byte("probe")); err != nil {
 		t.Fatalf("failed to write manifest probe: %v", err)
 	}
 	if _, err := os.Stat(probe); err != nil {

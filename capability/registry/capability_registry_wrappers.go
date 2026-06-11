@@ -14,7 +14,6 @@ import (
 
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
-	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/governance/policy"
 	fwtelemetry "codeburg.org/lexbit/relurpify/telemetry"
@@ -99,30 +98,6 @@ func (h instrumentCapabilityHandler) runtimeState() executionRuntimeState {
 	return h.registry.executionRuntimeState()
 }
 
-func toolParametersFromSchema(schema *schemacoerce.Schema) []ports.ToolParameter {
-	if schema == nil || schema.Type != "object" || len(schema.Properties) == 0 {
-		return nil
-	}
-	required := make(map[string]struct{}, len(schema.Required))
-	for _, name := range schema.Required {
-		required[strings.TrimSpace(name)] = struct{}{}
-	}
-	out := make([]ports.ToolParameter, 0, len(schema.Properties))
-	for name, prop := range schema.Properties {
-		param := ports.ToolParameter{
-			Name:        name,
-			Description: prop.Description,
-			Default:     prop.Default,
-		}
-		param.Type = ports.ToolParameterType(strings.TrimSpace(prop.Type))
-		if param.Type == "" {
-			param.Type = ports.ToolParamString
-		}
-		_, param.Required = required[name]
-		out = append(out, param)
-	}
-	return out
-}
 
 func (h instrumentCapabilityHandler) Descriptor(ctx context.Context, env ports.State) descriptor.CapabilityDescriptor {
 	if h.descriptor.ID != "" {

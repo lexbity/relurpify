@@ -33,21 +33,6 @@ func publishTaskState(env *contextdata.Envelope, task *execution.Task) {
 	mustPublishHTNState(env)
 }
 
-// publishMethodState records the selected method in envelope working memory.
-func publishMethodState(env *contextdata.Envelope, method *Method) {
-	if env == nil {
-		return
-	}
-	summary := MethodState{}
-	if method != nil {
-		resolved := ResolveMethod(*method)
-		summary = methodStateFromResolved(resolved)
-	}
-	env.SetWorkingValueWithClass(contextKeySelectedMethod, summary, contextdata.MemoryClassTask)
-	env.SetWorkingValueWithClass(contextKnowledgeMethod, summary.Name, contextdata.MemoryClassTask)
-	mustPublishHTNState(env)
-}
-
 // publishResolvedMethodState records a resolved method in envelope working memory.
 func publishResolvedMethodState(env *contextdata.Envelope, method *ResolvedMethod) {
 	if env == nil {
@@ -113,29 +98,6 @@ func publishPreflightState(env *contextdata.Envelope, report *graph.PreflightRep
 	mustPublishHTNState(env)
 }
 
-// publishCheckpointState records a checkpoint snapshot in envelope working memory.
-func publishCheckpointState(env *contextdata.Envelope, checkpointID, stageName string, stageIndex int, workflowID, runID string) {
-	if env == nil {
-		return
-	}
-	snapshot, _, err := LoadStateFromEnvelope(env)
-	if err != nil {
-		env.SetWorkingValueWithClass(contextKeyStateError, err.Error(), contextdata.MemoryClassTask)
-		return
-	}
-	checkpoint := CheckpointState{
-		SchemaVersion:  htnSchemaVersion,
-		CheckpointID:   checkpointID,
-		StageName:      stageName,
-		StageIndex:     stageIndex,
-		WorkflowID:     workflowID,
-		RunID:          runID,
-		CompletedSteps: append([]string(nil), completedStepsFromEnvelope(env)...),
-		Snapshot:       snapshot,
-	}
-	env.SetWorkingValueWithClass(contextKeyCheckpoint, checkpoint, contextdata.MemoryClassTask)
-}
-
 // publishResumeState records checkpoint resume information in envelope working memory.
 func publishResumeState(env *contextdata.Envelope, checkpointID string) {
 	if env == nil || checkpointID == "" {
@@ -167,22 +129,6 @@ func completedStepsFromEnvelope(env *contextdata.Envelope) []string {
 		}
 	}
 	return nil
-}
-
-// appendCompletedStep adds a step ID to the completed steps list in envelope.
-func appendCompletedStep(env *contextdata.Envelope, stepID string) {
-	if env == nil || stepID == "" {
-		return
-	}
-	completed := completedStepsFromEnvelope(env)
-	completed = append(completed, stepID)
-	env.SetWorkingValueWithClass(legacyPlanCompletedStepsKey, completed, contextdata.MemoryClassTask)
-	env.SetWorkingValueWithClass(contextKeyCompletedSteps, completed, contextdata.MemoryClassTask)
-	execution := loadExecutionState(env)
-	execution.CompletedSteps = append([]string(nil), completed...)
-	execution.CompletedStepCount = len(completed)
-	execution.LastCompletedStep = stepID
-	publishExecutionState(env, execution)
 }
 
 // publishExecutionState records execution progress in envelope working memory.
@@ -269,29 +215,6 @@ func loadExecutionState(env *contextdata.Envelope) ExecutionState {
 	}
 	execution.Resumed = execution.ResumeCheckpointID != ""
 	return execution
-}
-
-// loadCheckpointState extracts CheckpointState from envelope working memory.
-func loadCheckpointState(env *contextdata.Envelope) (*CheckpointState, bool) {
-	if env == nil {
-		return nil, false
-	}
-	raw, ok := env.GetWorkingValue(contextKeyCheckpoint)
-	if !ok || raw == nil {
-		return nil, false
-	}
-	var checkpoint CheckpointState
-	if !decodeContextValue(raw, &checkpoint) {
-		return nil, false
-	}
-	if checkpoint.SchemaVersion == 0 {
-		checkpoint.SchemaVersion = htnSchemaVersion
-	}
-	checkpoint.CompletedSteps = append([]string(nil), checkpoint.CompletedSteps...)
-	if checkpoint.Snapshot != nil {
-		normalizeHTNState(checkpoint.Snapshot)
-	}
-	return &checkpoint, true
 }
 
 // executionTaskType extracts the current task type from envelope working memory.

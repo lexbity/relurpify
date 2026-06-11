@@ -109,21 +109,6 @@ func renderChunkRefs(refs []contextdata.ChunkReference) string {
 	return strings.Join(lines, "\n")
 }
 
-// renderGenericMemoryResults extracts summaries from a results slice that may
-// hold core.MemoryRecordEnvelope values (accessed via JSON bridge).
-func renderGenericMemoryResults(results []any) string {
-	var parts []string
-	for _, r := range results {
-		summary := extractStringField(r, "Summary")
-		if summary == "" {
-			summary = extractStringField(r, "summary")
-		}
-		if summary = strings.TrimSpace(summary); summary != "" {
-			parts = append(parts, "- "+summary)
-		}
-	}
-	return strings.Join(parts, "\n")
-}
 
 // Ensure unused import doesn't slip through — used in renderChunkRefs.
 var _ = fmt.Sprintf

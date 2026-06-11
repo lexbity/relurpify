@@ -95,47 +95,7 @@ func parseFailedTests(stdout, stderr string) []string {
 	return failed
 }
 
-// filterNodes filters AST nodes by type and language.
-func filterNodes(nodes []*ast.Node, types []ast.NodeType, languages []string) []*ast.Node {
-	if len(types) == 0 && len(languages) == 0 {
-		return nodes
-	}
 
-	var filtered []*ast.Node
-	for _, node := range nodes {
-		// Check type filter
-		if len(types) > 0 {
-			typeMatch := false
-			for _, t := range types {
-				if node.Type == t {
-					typeMatch = true
-					break
-				}
-			}
-			if !typeMatch {
-				continue
-			}
-		}
-
-		// Check language filter
-		if len(languages) > 0 {
-			langMatch := false
-			for _, lang := range languages {
-				if node.Language == lang {
-					langMatch = true
-					break
-				}
-			}
-			if !langMatch {
-				continue
-			}
-		}
-
-		filtered = append(filtered, node)
-	}
-
-	return filtered
-}
 
 // nodesToMatchEntries converts AST nodes to match entry maps for output.
 func nodesToMatchEntries(nodes []*ast.Node) []map[string]any {

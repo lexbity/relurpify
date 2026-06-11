@@ -33,7 +33,7 @@ func assertGolden(t *testing.T, name, actual string) {
 		return
 	}
 
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(filepath.Clean(path))
 	if err != nil {
 		t.Fatalf("read golden file %s: %v (run with -update to create)", path, err)
 	}

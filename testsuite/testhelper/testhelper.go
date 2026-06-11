@@ -1,10 +1,11 @@
 package testhelper
 
 import (
-	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
+
+	"codeburg.org/lexbit/relurpify/platform/fs"
 )
 
 func RepoRoot(t *testing.T) string {
@@ -18,14 +19,14 @@ func RepoRoot(t *testing.T) string {
 
 func MustWrite(t *testing.T, path, content string) {
 	t.Helper()
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+	if err := fs.WriteFileSecure(path, []byte(content)); err != nil {
 		t.Fatal(err)
 	}
 }
 
 func MustMkdirAll(t *testing.T, dir string) {
 	t.Helper()
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := fs.MkdirAllSecure(dir); err != nil {
 		t.Fatal(err)
 	}
 }

@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"codeburg.org/lexbit/relurpify/platform/fs"
 )
 
 // PreparedRun bundles the descriptor and its run-scoped artifact layout.
@@ -82,10 +84,10 @@ func touchPreparedRunArtifactFiles(desc *PreparedRunDescriptor) error {
 		filepath.Join(desc.VerificationDir, "verification.json"),
 	}
 	for _, path := range paths {
-		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		if err := fs.MkdirAllSecure(filepath.Dir(path)); err != nil {
 			return err
 		}
-		f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
+		f, err := os.OpenFile(filepath.Clean(path), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, fs.PublicFileMode)
 		if err != nil {
 			return err
 		}

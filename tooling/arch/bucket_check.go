@@ -111,7 +111,7 @@ func isTypeOnlyPackage(pkg GoPackage, root string) (bool, error) {
 			continue
 		}
 
-		src, err := os.ReadFile(filepath.Join(pkgDir, f.Name()))
+		src, err := os.ReadFile(filepath.Clean(filepath.Join(pkgDir, f.Name())))
 		if err != nil {
 			return false, err
 		}

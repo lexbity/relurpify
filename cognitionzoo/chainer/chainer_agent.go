@@ -76,13 +76,6 @@ func (a *ChainerAgent) BuildGraph(ctx context.Context, task *execution.Task) (*a
 	return g, nil
 }
 
-func envGetString(env *contextdata.Envelope, key string) string {
-	val, _ := env.GetWorkingValue(key)
-	if s, ok := val.(string); ok {
-		return s
-	}
-	return ""
-}
 
 func (a *ChainerAgent) Execute(ctx context.Context, task *execution.Task, env *contextdata.Envelope) (*execution.Result, error) {
 	if !a.initialised {

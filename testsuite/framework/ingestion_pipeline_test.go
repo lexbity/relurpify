@@ -11,6 +11,7 @@ import (
 	"codeburg.org/lexbit/relurpify/context/knowledge"
 	"codeburg.org/lexbit/relurpify/context/knowledge/graphdb"
 	"codeburg.org/lexbit/relurpify/model"
+	"codeburg.org/lexbit/relurpify/platform/fs"
 )
 
 // TestTextIngestion validates that text content can be ingested
@@ -108,7 +109,7 @@ func TestMetadataPropagation(t *testing.T) {
 	// Create a test file with known metadata
 	testPath := filepath.Join(env.WorkspacePath, "test.txt")
 	testContent := "Test file content for metadata propagation."
-	if err := os.WriteFile(testPath, []byte(testContent), 0o644); err != nil {
+	if err := fs.WriteFileSecure(testPath, []byte(testContent)); err != nil {
 		t.Fatalf("failed to create test file: %v", err)
 	}
 

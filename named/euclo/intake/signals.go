@@ -217,27 +217,6 @@ func ClassifyTaskScored(envelope *TaskEnvelope, registry *families.KeywordFamily
 	}
 }
 
-// collectKeywordSignals extracts keyword signals from instruction text.
-func collectKeywordSignals(instruction string, registry *families.KeywordFamilyRegistry) []ClassificationSignal {
-	var signals []ClassificationSignal
-	lowerInstruction := strings.ToLower(instruction)
-
-	for _, family := range registry.All() {
-		for _, kw := range family.Keywords {
-			if strings.Contains(lowerInstruction, strings.ToLower(kw)) {
-				signals = append(signals, ClassificationSignal{
-					Kind:     SignalKindKeyword,
-					FamilyID: family.ID,
-					Weight:   WeightKeyword,
-					Source:   "keyword:" + kw,
-				})
-			}
-		}
-	}
-
-	return signals
-}
-
 // calculateConfidence computes confidence and ambiguity from candidates.
 func calculateConfidence(candidates []families.FamilyCandidate) (float64, bool) {
 	if len(candidates) == 0 {

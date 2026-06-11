@@ -246,20 +246,6 @@ func generateCheckpointID() string {
 	return fmt.Sprintf("htn_checkpoint_%d", time.Now().UnixNano())
 }
 
-// persistDispatchMetadata saves the last dispatch decision to envelope for recovery purposes.
-func persistDispatchMetadata(env *contextdata.Envelope, dispatcher string, target string, reason string) {
-	if env == nil {
-		return
-	}
-	metadata := map[string]any{
-		"requested_target": target,
-		"resolved_target":  target,
-		"mode":             dispatcher,
-		"reason":           reason,
-		"timestamp":        time.Now().UTC().Unix(),
-	}
-	env.SetWorkingValueWithClass(runtime.ContextKeyCheckpoint, metadata, contextdata.MemoryClassTask)
-}
 
 func taskMetadataToAny(input map[string]string) map[string]any {
 	if len(input) == 0 {
@@ -272,18 +258,7 @@ func taskMetadataToAny(input map[string]string) map[string]any {
 	return out
 }
 
-// persistRecoveryMetadata saves recovery diagnosis to envelope for resume.
-func persistRecoveryMetadata(env *contextdata.Envelope, diagnosis string, notes []string, stepID string, err error) {
-	if env == nil {
-		return
-	}
-	env.SetWorkingValueWithClass(runtime.ContextKeyLastRecoveryDiag, diagnosis, contextdata.MemoryClassTask)
-	env.SetWorkingValueWithClass(runtime.ContextKeyLastRecoveryNotes, append([]string{}, notes...), contextdata.MemoryClassTask)
-	env.SetWorkingValueWithClass(runtime.ContextKeyLastFailureStep, stepID, contextdata.MemoryClassTask)
-	if err != nil {
-		env.SetWorkingValueWithClass(runtime.ContextKeyLastFailureError, err.Error(), contextdata.MemoryClassTask)
-	}
-}
+
 
 // marshalJSON encodes a value to JSON bytes.
 func marshalJSON(v any) ([]byte, error) {

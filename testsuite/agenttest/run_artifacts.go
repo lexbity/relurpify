@@ -1,10 +1,10 @@
 package agenttest
 
 import (
-	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
+
+	"codeburg.org/lexbit/relurpify/platform/fs"
 )
 
 // PreparedRunArtifacts captures the canonical on-disk layout for a prepared
@@ -76,7 +76,7 @@ func (a PreparedRunArtifacts) Ensure() error {
 		if dir == "" {
 			continue
 		}
-		if err := os.MkdirAll(dir, 0o755); err != nil {
+		if err := fs.MkdirAllSecure(dir); err != nil {
 			return err
 		}
 	}
@@ -126,18 +126,4 @@ func cleanAbsolutePath(path string) string {
 	return filepath.Clean(path)
 }
 
-func ensureRunArtifactLayout(root string, dirs ...string) error {
-	root = cleanAbsolutePath(root)
-	if root == "" {
-		return fmt.Errorf("workspace root required")
-	}
-	for _, dir := range dirs {
-		if strings.TrimSpace(dir) == "" {
-			continue
-		}
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			return err
-		}
-	}
-	return nil
-}
+

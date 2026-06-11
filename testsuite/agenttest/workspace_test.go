@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/platform/fs"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
@@ -16,10 +17,10 @@ func TestSnapshotAndDiffWorkspace(t *testing.T) {
 	root := t.TempDir()
 	mustWrite := func(rel, content string) {
 		path := filepath.Join(root, rel)
-		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		if err := fs.MkdirAllSecure(filepath.Dir(path)); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		if err := fs.WriteFileSecure(path, []byte(content)); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -60,28 +61,28 @@ func TestMaterializeDerivedWorkspaceCreatesIsolatedConfigFromTemplate(t *testing
 	profileRoot := filepath.Join(shared, "templates", "testsuite", "default", config.DirName)
 	agentTemplate := filepath.Join(shared, "templates", "agents", "coding-go.yaml")
 	for _, dir := range []string{profileRoot, filepath.Dir(agentTemplate)} {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
+		if err := fs.MkdirAllSecure(dir); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if err := os.WriteFile(filepath.Join(profileRoot, "manifest.yaml"), []byte("model: derived\n"), 0o644); err != nil {
+	if err := fs.WriteFileSecure(filepath.Join(profileRoot, "manifest.yaml"), []byte("model: derived\n")); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(profileRoot, "agent.yaml"), []byte("path: ${workspace}\n"), 0o644); err != nil {
+	if err := fs.WriteFileSecure(filepath.Join(profileRoot, "agent.yaml"), []byte("path: ${workspace}\n")); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(agentTemplate, []byte("path: ${workspace}\n"), 0o644); err != nil {
+	if err := fs.WriteFileSecure(agentTemplate, []byte("path: ${workspace}\n")); err != nil {
 		t.Fatal(err)
 	}
 
 	target := t.TempDir()
-	if err := os.WriteFile(filepath.Join(target, "README.md"), []byte("workspace"), 0o644); err != nil {
+	if err := fs.WriteFileSecure(filepath.Join(target, "README.md"), []byte("workspace")); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.MkdirAll(filepath.Join(target, config.DirName), 0o755); err != nil {
+	if err := fs.MkdirAllSecure(filepath.Join(target, config.DirName)); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(target, config.DirName, "manifest.yaml"), []byte("model: live\n"), 0o644); err != nil {
+	if err := fs.WriteFileSecure(filepath.Join(target, config.DirName, "manifest.yaml"), []byte("model: live\n")); err != nil {
 		t.Fatal(err)
 	}
 
@@ -127,19 +128,19 @@ func TestMaterializeDerivedWorkspace(t *testing.T) {
 	shared := t.TempDir()
 
 	profileRoot := filepath.Join(shared, "templates", "testsuite", "default", config.DirName)
-	if err := os.MkdirAll(profileRoot, 0o755); err != nil {
+	if err := fs.MkdirAllSecure(profileRoot); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(profileRoot, "agent.yaml"), []byte("name: ${workspace}\n"), 0o644); err != nil {
+	if err := fs.WriteFileSecure(filepath.Join(profileRoot, "agent.yaml"), []byte("name: ${workspace}\n")); err != nil {
 		t.Fatal(err)
 	}
 
 	target := t.TempDir()
 	manifestPath := filepath.Join(target, config.DirName, "agent.yaml")
-	if err := os.MkdirAll(filepath.Dir(manifestPath), 0o755); err != nil {
+	if err := fs.MkdirAllSecure(filepath.Dir(manifestPath)); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(manifestPath, []byte(`schema: relurpify/agent/v1
+	if err := fs.WriteFileSecure(manifestPath, []byte(`schema: relurpify/agent/v1
 apiVersion: relurpify/v1alpha1
 kind: AgentManifest
 metadata:
@@ -159,7 +160,7 @@ spec:
         - action: fs:read
           path: /tmp/**
           justification: Read workspace
-`), 0o644); err != nil {
+`)); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := config.LoadDocument(manifestPath); err != nil {

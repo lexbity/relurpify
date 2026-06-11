@@ -24,7 +24,6 @@ import (
 	"codeburg.org/lexbit/relurpify/governance/policy"
 	"codeburg.org/lexbit/relurpify/governance/policyresolve"
 	"codeburg.org/lexbit/relurpify/model"
-	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 // TaskPayload retrieves workflow retrieval payload from task context.
@@ -718,26 +717,6 @@ func plannerSkillHints(agent *PlannerAgent) string {
 	})
 }
 
-func plannerWorkflowID(task *execution.Task) string {
-	if task == nil {
-		return ""
-	}
-	return strings.TrimSpace(task.ID)
-}
-
-func plannerRunID(task *execution.Task) string {
-	return ""
-}
-
-func plannerUsesExplicitCheckpointNodes(cfg *execution.Config) bool {
-	_ = cfg
-	return true
-}
-
-func plannerUsesStructuredPersistence(cfg *execution.Config) bool {
-	_ = cfg
-	return true
-}
 
 func normalizePlannerPlan(agent *PlannerAgent, task *execution.Task, plan pl.Plan) (pl.Plan, []string) {
 	if agent == nil {
@@ -983,19 +962,6 @@ func PlannerSkillHints(agent *PlannerAgent) string {
 	return plannerSkillHints(agent)
 }
 
-func telemetryForConfig(cfg *execution.Config) telemetry.Telemetry {
-	if cfg == nil {
-		return nil
-	}
-	return cfg.Telemetry
-}
-
-func taskID(task *execution.Task) string {
-	if task == nil {
-		return ""
-	}
-	return strings.TrimSpace(task.ID)
-}
 
 func taskInstructionText(task *execution.Task) string {
 	if task == nil {

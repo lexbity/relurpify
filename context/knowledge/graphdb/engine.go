@@ -175,22 +175,6 @@ func (e *Engine) emitEvent(ev Event) {
 	}
 }
 
-// emitEventSync is a convenience wrapper for emitting an event with a
-// duration computed from start.
-func (e *Engine) emitEventSync(kind string, nodeCount, edgeCount, batchSize int, err error, start time.Time) {
-	ev := Event{
-		Kind:      kind,
-		NodeCount: nodeCount,
-		EdgeCount: edgeCount,
-		BatchSize: batchSize,
-		Duration:  time.Since(start),
-	}
-	if err != nil {
-		ev.ErrorClass = err.Error()
-	}
-	e.emitEvent(ev)
-}
-
 // applyHook returns the test-only apply failure error if set, or nil.
 // It is checked after a successful backend commit but before applying
 // mutations to the in-memory store.

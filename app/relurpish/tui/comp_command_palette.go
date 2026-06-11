@@ -3,8 +3,6 @@ package tui
 import (
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
-
 	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 )
 
@@ -90,16 +88,6 @@ func (p *CommandPalette) View() string {
 		width = 1
 	}
 	return p.th.Panel().Width(width).Render(content)
-}
-
-func overlayPanelView(parts ...string) string {
-	var visible []string
-	for _, part := range parts {
-		if strings.TrimSpace(part) != "" {
-			visible = append(visible, part)
-		}
-	}
-	return lipgloss.JoinVertical(lipgloss.Left, visible...)
 }
 
 // SetTheme sets the active semantic style source.

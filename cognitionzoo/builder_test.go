@@ -1,14 +1,12 @@
 package agents
 
 import (
-	"context"
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	capability "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/cognitionzoo/paradigm"
 	execution "codeburg.org/lexbit/relurpify/execution"
-	"codeburg.org/lexbit/relurpify/model"
 )
 
 func TestBuildFromSpec_ReturnsReActForReactType(t *testing.T) {
@@ -64,28 +62,4 @@ func TestAgentBuilder_RequiresEnvironment(t *testing.T) {
 	}
 }
 
-// Mock types for testing
 
-type mockModel struct{}
-
-func (m *mockModel) Complete(ctx context.Context, prompt string, opts *model.LLMOptions) (*model.LLMResponse, error) {
-	return &model.LLMResponse{Text: "mock response"}, nil
-}
-
-type mockMemory struct{}
-
-func (m *mockMemory) Get(ctx context.Context, key string) (any, bool) {
-	return nil, false
-}
-
-func (m *mockMemory) Set(ctx context.Context, key string, value any) error {
-	return nil
-}
-
-func (m *mockMemory) Delete(ctx context.Context, key string) error {
-	return nil
-}
-
-func (m *mockMemory) List(ctx context.Context, prefix string) ([]string, error) {
-	return nil, nil
-}

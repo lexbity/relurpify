@@ -78,8 +78,22 @@ func newProcessLSPClientInternal(cfg ProcessLSPConfig, policy sandbox.CommandPol
 			return nil, err
 		}
 	}
-	cmd := exec.CommandContext(ctx, cfg.Command, cfg.Args...)
-	cmd.Dir = absRoot
+	commandPath, err := exec.LookPath(cfg.Command)
+	if err != nil {
+		cancel()
+		return nil, fmt.Errorf("LSP command %q not found: %w", cfg.Command, err)
+	}
+	cmd := &exec.Cmd{
+		Path: commandPath,
+		Args: append([]string{commandPath}, cfg.Args...),
+		Dir:  absRoot,
+	}
+	go func() {
+		<-ctx.Done()
+		if cmd.Process != nil {
+			cmd.Process.Kill()
+		}
+	}()
 
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
@@ -238,7 +252,7 @@ func (c *processLSPClient) ensureOpen(ctx context.Context, file string) error {
 	c.openedFiles[uri] = true
 	c.mu.Unlock()
 
-	data, err := os.ReadFile(file)
+	data, err := os.ReadFile(filepath.Clean(file))
 	if err != nil {
 		return err
 	}
@@ -464,7 +478,7 @@ func uriToPath(uri string) string {
 }
 
 func (c *processLSPClient) readSnippet(path string, rng protocol.Range) (string, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(filepath.Clean(path))
 	if err != nil {
 		return "", err
 	}

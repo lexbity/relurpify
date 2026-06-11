@@ -3,7 +3,6 @@ package framework
 import (
 	"context"
 	"fmt"
-	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -18,6 +17,7 @@ import (
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
 	"codeburg.org/lexbit/relurpify/model"
+	"codeburg.org/lexbit/relurpify/platform/fs"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
@@ -29,7 +29,7 @@ func BenchmarkPolicyEvaluation(b *testing.B) {
 
 	// Create a test file for permission checks
 	testFile := filepath.Join(workspace, "bench-test.txt")
-	if err := os.WriteFile(testFile, []byte("benchmark test content"), 0o644); err != nil {
+	if err := fs.WriteFileSecure(testFile, []byte("benchmark test content")); err != nil {
 		b.Fatalf("failed to write test file: %v", err)
 	}
 
@@ -93,7 +93,7 @@ func TestFunc` + string(rune('A'+i)) + `() string {
 	return "test"
 }
 `
-		if err := os.WriteFile(testFile, []byte(content), 0o644); err != nil {
+		if err := fs.WriteFileSecure(testFile, []byte(content)); err != nil {
 			b.Fatalf("failed to write test file: %v", err)
 		}
 	}

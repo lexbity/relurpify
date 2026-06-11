@@ -55,17 +55,6 @@ func executionParadigmForStep(step surface.ThoughtRecipeStep) string {
 	return ""
 }
 
-func cloneAnyMap(m map[string]any) map[string]any {
-	if len(m) == 0 {
-		return nil
-	}
-	cp := make(map[string]any, len(m))
-	for k, v := range m {
-		cp[k] = v
-	}
-	return cp
-}
-
 func cloneStreamSpec(spec *surface.ThoughtRecipeStreamSpec) *surface.ThoughtRecipeStreamSpec {
 	if spec == nil {
 		return nil

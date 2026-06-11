@@ -181,7 +181,7 @@ func TestSaveAgentManifestWithBackup(t *testing.T) {
 	if _, err := os.Stat(backup); err != nil {
 		t.Fatalf("backup missing: %v", err)
 	}
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(filepath.Clean(path))
 	if err != nil {
 		t.Fatalf("read manifest: %v", err)
 	}

@@ -168,7 +168,7 @@ func writeFile(t *testing.T, path, content string) {
 
 func assertFileContents(t *testing.T, path, want string) {
 	t.Helper()
-	got, err := os.ReadFile(path)
+	got, err := os.ReadFile(filepath.Clean(path))
 	if err != nil {
 		t.Fatalf("read %s: %v", path, err)
 	}

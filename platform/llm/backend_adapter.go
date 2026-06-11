@@ -2,7 +2,9 @@ package llm
 
 import (
 	"context"
+	"fmt"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -98,6 +100,11 @@ func (a managedBackendAdapter) Reset(ctx context.Context, strategy string) error
 		return nil
 	}
 
+	ollamaPath, err := exec.LookPath("ollama")
+	if err != nil {
+		return fmt.Errorf("ollama not found: %w", err)
+	}
+
 	switch strategy {
 	case "model":
 		// Unload the specific model from VRAM
@@ -105,19 +112,29 @@ func (a managedBackendAdapter) Reset(ctx context.Context, strategy string) error
 		if model == "" {
 			return nil
 		}
-		cmd := execCommandContext(ctx, "ollama", "stop", model)
+		cmd := &exec.Cmd{
+			Path: ollamaPath,
+			Args: []string{ollamaPath, "stop", filepath.Clean(model)},
+		}
 		_ = cmd.Run()
 		sleepFn(200 * time.Millisecond)
 		return nil
 	case "server":
 		// Restart the Ollama service
-		cmd := execCommandContext(ctx, "systemctl", "restart", "ollama")
-		err := cmd.Run()
+		systemctlPath, err := exec.LookPath("systemctl")
+		if err != nil {
+			return fmt.Errorf("systemctl not found: %w", err)
+		}
+		cmd := &exec.Cmd{Path: systemctlPath, Args: []string{systemctlPath, "restart", "ollama"}}
+		err = cmd.Run()
 		if err != nil {
 			// Fallback: try to stop the model if systemctl fails
 			model := strings.TrimSpace(a.modelName)
 			if model != "" {
-				_ = execCommandContext(ctx, "ollama", "stop", model).Run()
+				_ = (&exec.Cmd{
+					Path: ollamaPath,
+					Args: []string{ollamaPath, "stop", filepath.Clean(model)},
+				}).Run()
 			}
 		}
 		sleepFn(500 * time.Millisecond)

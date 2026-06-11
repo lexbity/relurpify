@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"sort"
 	"strings"
 	"text/template"
 	"time"
@@ -32,7 +31,6 @@ import (
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	"codeburg.org/lexbit/relurpify/named/euclo/reporting"
 	"codeburg.org/lexbit/relurpify/named/euclo/state"
-	"codeburg.org/lexbit/relurpify/named/euclo/surface"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
@@ -1083,40 +1081,6 @@ func lookupTemplateValue(data map[string]any, ref string) (any, bool) {
 	return value, ok
 }
 
-func lookupCaptureValue(data map[string]any, alias string) (any, bool) {
-	alias = strings.TrimSpace(alias)
-	if alias == "" || data == nil {
-		return nil, false
-	}
-	value, ok := data[alias]
-	return value, ok
-}
-
-func extractAllowedCapabilities(step surface.ThoughtRecipeStep) []string {
-	if len(step.Config) == 0 {
-		return nil
-	}
-	return extractAllowedCapabilitiesFromMap(step.Config)
-}
-
-func extractAllowedCapabilitiesFromMap(data map[string]any) []string {
-	if len(data) == 0 {
-		return nil
-	}
-	if nested, ok := data["capabilities"].(map[string]any); ok {
-		if allowed := stringsFromAny(nested["allowed"]); len(allowed) > 0 {
-			return allowed
-		}
-	}
-	if allowed := stringsFromAny(data["capabilities.allowed"]); len(allowed) > 0 {
-		return allowed
-	}
-	if allowed := stringsFromAny(data["allowed_capabilities"]); len(allowed) > 0 {
-		return allowed
-	}
-	return nil
-}
-
 func stringsFromAny(v any) []string {
 	switch typed := v.(type) {
 	case nil:
@@ -1141,11 +1105,4 @@ func stringsFromAny(v any) []string {
 	}
 }
 
-func sortedKeys(data map[string]any) []string {
-	keys := make([]string, 0, len(data))
-	for key := range data {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	return keys
-}
+

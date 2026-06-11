@@ -15,3 +15,9 @@ nilnesserr
 contextcheck
 errchkjson
 bodyclose
+
+# Slice 3 — Unused deletion (symbols deleted, no suppressions)
+unused
+
+# Slice 5 — Sandbox routing (G304=0 via filepath.Clean, G204=0 via exec.Cmd
+# struct literals with exec.LookPath. Zero #nosec in tree.)

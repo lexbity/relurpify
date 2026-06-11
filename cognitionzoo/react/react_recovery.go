@@ -167,50 +167,6 @@ func inferFailureSymbol(lastMap map[string]any) string {
 	return ""
 }
 
-// --- Manifest / path inference from observations ---
-
-type manifestInferenceRule struct {
-	tools      []string
-	dataKeys   []string
-	pathSuffix []string
-}
-
-func inferredManifestFromObservations(env *contextdata.Envelope, rule manifestInferenceRule) string {
-	observations := getToolObservations(env)
-	for i := len(observations) - 1; i >= 0; i-- {
-		obs := observations[i]
-		if len(rule.tools) > 0 {
-			matched := false
-			for _, tool := range rule.tools {
-				if strings.EqualFold(strings.TrimSpace(obs.Tool), tool) {
-					matched = true
-					break
-				}
-			}
-			if matched {
-				for _, key := range rule.dataKeys {
-					if manifest := strings.TrimSpace(fmt.Sprint(obs.Data[key])); manifest != "" && manifest != "<nil>" {
-						return manifest
-					}
-				}
-			}
-		}
-		if obs.Tool != "file_read" {
-			continue
-		}
-		path := strings.TrimSpace(fmt.Sprint(obs.Args["path"]))
-		if path == "" || path == "<nil>" {
-			continue
-		}
-		for _, suffix := range rule.pathSuffix {
-			if strings.HasSuffix(path, suffix) {
-				return path
-			}
-		}
-	}
-	return ""
-}
-
 func inferredPathFromObservations(env *contextdata.Envelope, keys ...string) string {
 	observations := getToolObservations(env)
 	for i := len(observations) - 1; i >= 0; i-- {
@@ -237,34 +193,4 @@ func inferredPathFromObservations(env *contextdata.Envelope, keys ...string) str
 	return ""
 }
 
-func inferredCargoManifest(env *contextdata.Envelope) string {
-	return inferredManifestFromObservations(env, manifestInferenceRule{
-		tools:      []string{"rust_workspace_detect"},
-		dataKeys:   []string{"manifest_path"},
-		pathSuffix: []string{"Cargo.toml"},
-	})
-}
 
-func inferredPythonManifest(env *contextdata.Envelope) string {
-	return inferredManifestFromObservations(env, manifestInferenceRule{
-		tools:      []string{"python_workspace_detect", "python_project_metadata"},
-		dataKeys:   []string{"manifest_path"},
-		pathSuffix: []string{"pyproject.toml", "setup.py", "setup.cfg", "requirements.txt"},
-	})
-}
-
-func inferredNodeManifest(env *contextdata.Envelope) string {
-	return inferredManifestFromObservations(env, manifestInferenceRule{
-		tools:      []string{"node_workspace_detect", "node_project_metadata"},
-		dataKeys:   []string{"manifest_path"},
-		pathSuffix: []string{"package.json", "package-lock.json", "pnpm-lock.yaml", "yarn.lock", "tsmanifest.json"},
-	})
-}
-
-func inferredGoManifest(env *contextdata.Envelope) string {
-	return inferredManifestFromObservations(env, manifestInferenceRule{
-		tools:      []string{"go_workspace_detect", "go_module_metadata"},
-		dataKeys:   []string{"module_path", "workspace_path", "go_mod"},
-		pathSuffix: []string{"go.mod", "go.work"},
-	})
-}

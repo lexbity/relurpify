@@ -22,7 +22,7 @@ func AcquireFromFile(ctx context.Context, path string, principal identity.Subjec
 			return nil, fmt.Errorf("file scope denied: %w", err)
 		}
 	}
-	content, err := os.ReadFile(path)
+	content, err := os.ReadFile(filepath.Clean(path))
 	if err != nil {
 		return nil, fmt.Errorf("read file: %w", err)
 	}

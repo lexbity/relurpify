@@ -49,7 +49,7 @@ func TestTargetedRefactorPreviewUsesExplicitReplacement(t *testing.T) {
 	require.Contains(t, data["before"].(string), "return \"old\"")
 	require.Contains(t, data["after"].(string), "return \"goodbye\"")
 
-	content, err := os.ReadFile(path)
+	content, err := os.ReadFile(filepath.Clean(path))
 	require.NoError(t, err)
 	require.Contains(t, string(content), "return \"old\"")
 	require.NotContains(t, string(content), "return \"goodbye\"")
@@ -72,7 +72,7 @@ func TestTargetedRefactorWritesReplacementAndRefreshesIndex(t *testing.T) {
 	require.Equal(t, true, data["applied"])
 	require.Equal(t, false, data["preview"])
 
-	content, err := os.ReadFile(path)
+	content, err := os.ReadFile(filepath.Clean(path))
 	require.NoError(t, err)
 	require.Contains(t, string(content), "return \"goodbye\"")
 	require.NotContains(t, string(content), "return \"old\"")

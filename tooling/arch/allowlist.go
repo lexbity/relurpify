@@ -3,6 +3,7 @@ package arch
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"gopkg.in/yaml.v3"
 )
@@ -29,7 +30,7 @@ type AllowlistFile struct {
 // LoadAllowlist reads the allowlist from a YAML file.
 func LoadAllowlist(path string) (Allowlist, error) {
 	a := Allowlist{entries: make(map[string]map[string]bool)}
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(filepath.Clean(path))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return a, nil

@@ -55,7 +55,7 @@ func (p *fakeChatPane) AddFile(string) tea.Cmd                                  
 type fakeSurface struct {
 	name         string
 	chat         ChatPaner
-	resolveHit   *int
+
 	tabCount     int
 	commandCount int
 	tabs         []TabDefinition

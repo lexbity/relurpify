@@ -14,7 +14,6 @@ type ToolSpanExporter struct {
 	next    Telemetry           // chain to next sink
 	spans   SpanExporter        // span backend (nil = no-op)
 	attrs   map[string]struct{} // allowlisted extra attribute keys
-	agentID string
 }
 
 // ToolSpanExporterOption configures the exporter.

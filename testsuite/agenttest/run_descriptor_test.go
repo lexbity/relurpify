@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/platform/fs"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
@@ -13,10 +14,10 @@ func TestPreparedRunDescriptorRoundTrip(t *testing.T) {
 	workspace := t.TempDir()
 	suitePath := filepath.Join(workspace, "suite.yaml")
 	manifestPath := filepath.Join(workspace, "relurpify_cfg", "agent.yaml")
-	if err := os.MkdirAll(filepath.Dir(manifestPath), 0o755); err != nil {
+	if err := fs.MkdirAllSecure(filepath.Dir(manifestPath)); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(manifestPath, []byte(`schema: relurpify/agent/v1
+	if err := fs.WriteFileSecure(manifestPath, []byte(`schema: relurpify/agent/v1
 apiVersion: relurpify/v1alpha1
 kind: AgentManifest
 metadata:
@@ -35,7 +36,7 @@ spec:
     model:
       provider: ollama
       name: qwen2.5-coder:14b
-`), 0o644); err != nil {
+`)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -124,7 +125,7 @@ spec:
 		t.Fatalf("backend selection changed on round-trip: %q -> %q", desc.BackendSelection, loaded.BackendSelection)
 	}
 
-	raw, err := os.ReadFile(outPath)
+	raw, err := os.ReadFile(filepath.Clean(outPath))
 	if err != nil {
 		t.Fatal(err)
 	}

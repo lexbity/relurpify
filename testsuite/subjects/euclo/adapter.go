@@ -3,11 +3,11 @@ package euclo
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
 	"codeburg.org/lexbit/relurpify/context/contextdata"
+	"codeburg.org/lexbit/relurpify/platform/fs"
 )
 
 // CollectPerformancePhases extracts Euclo phase names from the working snapshot.
@@ -81,7 +81,7 @@ func WriteInteractionTape(path string, snapshot map[string]any) error {
 	if len(lines) == 0 {
 		return nil
 	}
-	return os.WriteFile(path, lines, 0o644)
+	return fs.WriteFileSecure(path, lines)
 }
 
 func workingValue(snapshot *contextdata.Envelope, key string) any {

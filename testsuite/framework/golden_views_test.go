@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/app/relurpish/tui"
+	"codeburg.org/lexbit/relurpify/platform/fs"
 )
 
 var update = flag.Bool("update", false, "update golden files")
@@ -27,10 +28,10 @@ func readGolden(t *testing.T, name string) string {
 func writeGolden(t *testing.T, name, content string) {
 	t.Helper()
 	path := goldenPath(name)
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := fs.MkdirAllSecure(filepath.Dir(path)); err != nil {
 		t.Fatalf("failed to create golden dir: %v", err)
 	}
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+	if err := fs.WriteFileSecure(path, []byte(content)); err != nil {
 		t.Fatalf("failed to write golden file %s: %v", name, err)
 	}
 }

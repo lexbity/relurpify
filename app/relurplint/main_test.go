@@ -24,7 +24,15 @@ func TestMain(m *testing.M) {
 	testRepoRoot = filepath.Clean(filepath.Join(cwd, "..", ".."))
 
 	bin := filepath.Join(os.TempDir(), "relurplint-test-"+strings.ReplaceAll(filepath.Base(os.Args[0]), ".", "_"))
-	cmd := exec.Command("go", "build", "-o", bin, "./app/relurplint")
+	goPath, err := exec.LookPath("go")
+	if err != nil {
+		os.Stderr.WriteString("go not found in PATH")
+		os.Exit(1)
+	}
+	cmd := &exec.Cmd{
+		Path: goPath,
+		Args: []string{goPath, "build", "-o", filepath.Clean(bin), "./app/relurplint"},
+	}
 	cmd.Dir = testRepoRoot
 	if out, err := cmd.CombinedOutput(); err != nil {
 		os.Stderr.WriteString("build failed: " + err.Error() + "\n" + string(out))

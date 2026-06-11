@@ -11,6 +11,7 @@ import (
 	"codeburg.org/lexbit/relurpify/governance/authorization"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
+	"codeburg.org/lexbit/relurpify/platform/fs"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
@@ -144,7 +145,7 @@ func NewTestEnvironment(t *testing.T) *TestEnvironment {
 	}
 
 	manifestRoot := filepath.Join(workspace, "manifests")
-	if err := os.MkdirAll(manifestRoot, 0o755); err != nil {
+	if err := fs.MkdirAllSecure(manifestRoot); err != nil {
 		_ = os.RemoveAll(workspace)
 		t.Fatalf("failed to create manifest root: %v", err)
 	}

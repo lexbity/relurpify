@@ -200,18 +200,6 @@ func (r *CapabilityRegistry) localToolEntriesLocked() []*capabilityEntry {
 	return out
 }
 
-func (r *CapabilityRegistry) rewrapLegacyEntryLocked(entry *capabilityEntry) {
-	if r == nil || entry == nil || entry.legacyTool == nil {
-		return
-	}
-	var inner = entry.legacyTool
-	if instrumented, ok := entry.legacyTool.(*instrumentedTool); ok {
-		inner = instrumented.Tool
-	}
-	entry.legacyTool = r.wrapTool(inner)
-	entry.handler = legacyToolHandler{tool: entry.legacyTool}
-}
-
 func (r *CapabilityRegistry) syncPermissionAwareEntriesLocked() {
 	if r == nil {
 		return

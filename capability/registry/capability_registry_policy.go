@@ -1,7 +1,6 @@
 package registry
 
 import (
-	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -13,7 +12,6 @@ import (
 	runtime "codeburg.org/lexbit/relurpify/capability/runtime"
 
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
-	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/capability/safety"
 	"codeburg.org/lexbit/relurpify/governance/classification"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
@@ -245,19 +243,6 @@ func defaultCapabilityExposureForEntry(desc descriptor.CapabilityDescriptor, ent
 		return agentspec.CapabilityExposureInspectable
 	default:
 		return defaultCapabilityExposure(desc)
-	}
-}
-
-func exposureRestrictiveness(access agentspec.CapabilityExposure) int {
-	switch access {
-	case agentspec.CapabilityExposureHidden:
-		return 0
-	case agentspec.CapabilityExposureInspectable:
-		return 1
-	case agentspec.CapabilityExposureCallable:
-		return 2
-	default:
-		return 1
 	}
 }
 
@@ -521,25 +506,6 @@ func (r *CapabilityRegistry) UpdateClassPolicy(class string, level agentspec.Age
 	r.refreshRuntimePolicyLocked()
 }
 
-func effectiveClassPolicy(tool ports.Tool, policies map[string]agentspec.AgentPermissionLevel) agentspec.AgentPermissionLevel {
-	var result agentspec.AgentPermissionLevel
-	for _, label := range capabilityPolicyLabels(tool) {
-		level, ok := policies[label]
-		if !ok {
-			continue
-		}
-		switch {
-		case level == agentspec.AgentPermissionDeny:
-			return agentspec.AgentPermissionDeny
-		case level == agentspec.AgentPermissionAsk && result != agentspec.AgentPermissionDeny:
-			result = agentspec.AgentPermissionAsk
-		case level == agentspec.AgentPermissionAllow && result == "":
-			result = agentspec.AgentPermissionAllow
-		}
-	}
-	return result
-}
-
 // UseTelemetry wires a telemetry sink for all tool executions.
 func (r *CapabilityRegistry) UseTelemetry(telemetry fwtelemetry.Telemetry) {
 	r.mu.Lock()
@@ -580,10 +546,6 @@ func (r *CapabilityRegistry) RestrictToCapabilities(allowed []agentspec.Capabili
 	r.rebuildIndexesLocked()
 }
 
-func matchesAnyCapabilitySelector(selectors []agentspec.CapabilitySelector, desc descriptor.CapabilityDescriptor) bool {
-	return matchesAnyCompiledCapabilitySelector(compileSelectors(selectors), buildDescriptorProfile(desc))
-}
-
 func matchesAnyCompiledCapabilitySelector(selectors []compiledSelector, profile descriptorProfile) bool {
 	if len(selectors) == 0 {
 		return true
@@ -594,35 +556,6 @@ func matchesAnyCompiledCapabilitySelector(selectors []compiledSelector, profile 
 		}
 	}
 	return false
-}
-
-func capabilityPolicyLabels(tool ports.Tool) []string {
-	if tool == nil {
-		return nil
-	}
-	labels := make(map[string]struct{})
-	desc := descriptor.ToolDescriptor(context.Background(), tool)
-	for _, rc := range risk.Classify(desc.EffectClasses, desc.Source.Scope) {
-		labels[strings.ToLower(strings.TrimSpace(string(rc)))] = struct{}{}
-	}
-	for _, class := range desc.EffectClasses {
-		labels[strings.ToLower(strings.TrimSpace(string(class)))] = struct{}{}
-	}
-	if desc.TrustClass != "" {
-		labels[strings.ToLower(strings.TrimSpace(string(desc.TrustClass)))] = struct{}{}
-	}
-	for _, tag := range tool.Tags() {
-		tag = strings.ToLower(strings.TrimSpace(tag))
-		if tag == "" {
-			continue
-		}
-		labels[tag] = struct{}{}
-	}
-	out := make([]string, 0, len(labels))
-	for label := range labels {
-		out = append(out, label)
-	}
-	return out
 }
 
 func capabilityPolicyLabelsForDescriptor(desc descriptor.CapabilityDescriptor) []string {
@@ -646,32 +579,6 @@ func capabilityPolicyLabelsForDescriptor(desc descriptor.CapabilityDescriptor) [
 	return out
 }
 
-func effectiveCapabilityPolicy(tool ports.Tool, policies []agentspec.CapabilityPolicy) agentspec.AgentPermissionLevel {
-	if tool == nil || len(policies) == 0 {
-		return ""
-	}
-	desc := descriptor.ToolDescriptor(context.Background(), tool)
-	var result agentspec.AgentPermissionLevel
-	for _, policy := range policies {
-		if !SelectorMatchesDescriptor(policy.Selector, desc) {
-			continue
-		}
-		switch {
-		case policy.Execute == agentspec.AgentPermissionDeny:
-			return agentspec.AgentPermissionDeny
-		case policy.Execute == agentspec.AgentPermissionAsk && result != agentspec.AgentPermissionDeny:
-			result = agentspec.AgentPermissionAsk
-		case policy.Execute == agentspec.AgentPermissionAllow && result == "":
-			result = agentspec.AgentPermissionAllow
-		}
-	}
-	return result
-}
-
-func effectiveCapabilityPolicyForDescriptor(desc descriptor.CapabilityDescriptor, policies []agentspec.CapabilityPolicy) agentspec.AgentPermissionLevel {
-	return effectiveCompiledCapabilityPolicyForProfile(buildDescriptorProfile(desc), compileCapabilityPolicies(policies))
-}
-
 func effectiveCompiledCapabilityPolicyForProfile(profile descriptorProfile, policies []compiledCapabilityPolicy) agentspec.AgentPermissionLevel {
 	if len(policies) == 0 {
 		return ""
@@ -691,10 +598,6 @@ func effectiveCompiledCapabilityPolicyForProfile(profile descriptorProfile, poli
 		}
 	}
 	return result
-}
-
-func effectiveClassPolicyForDescriptor(desc descriptor.CapabilityDescriptor, policies map[string]agentspec.AgentPermissionLevel) agentspec.AgentPermissionLevel {
-	return effectiveClassPolicyForProfile(buildDescriptorProfile(desc), policies)
 }
 
 func effectiveClassPolicyForProfile(profile descriptorProfile, policies map[string]agentspec.AgentPermissionLevel) agentspec.AgentPermissionLevel {

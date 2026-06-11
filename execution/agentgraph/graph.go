@@ -83,7 +83,6 @@ type Graph struct {
 	preflightDirty    bool
 	lastValidationErr error
 	validationDirty   bool
-	graphHash         string
 	hashDirty         bool
 }
 
@@ -754,15 +753,6 @@ func (n *TerminalNode) Contract() NodeContract {
 // Execute completes immediately.
 func (n *TerminalNode) Execute(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 	return &execution.Result{NodeID: n.id, Success: true}, nil
-}
-
-// errorFromString reconstructs an error from a stored message, enabling tool
-// results that only record strings to participate in graph error handling.
-func errorFromString(err string) error {
-	if err == "" {
-		return nil
-	}
-	return errors.New(err)
 }
 
 func resultFromToolExecution(nodeID string, res *ports.ToolResult) *execution.Result {

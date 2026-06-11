@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/context/contextdata"
+	"codeburg.org/lexbit/relurpify/platform/fs"
 	"codeburg.org/lexbit/relurpify/telemetry/perfstats"
 	euclosubject "codeburg.org/lexbit/relurpify/testsuite/subjects/euclo"
 )
@@ -104,11 +105,11 @@ func WritePerformanceBaseline(path string, baseline *PerformanceBaseline) error 
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, data, 0o644)
+	return fs.WriteFileSecure(path, data)
 }
 
 func LoadPerformanceBaseline(path string) (*PerformanceBaseline, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(filepath.Clean(path))
 	if err != nil {
 		return nil, err
 	}
@@ -288,15 +289,6 @@ func SummarizePerformance(cases []CaseReport) PerformanceSummary {
 		summary.Warnings = append(summary.Warnings, cr.PerformanceWarnings...)
 	}
 	return summary
-}
-
-func shouldComparePerformanceBaseline(recordingMode string) bool {
-	switch strings.ToLower(strings.TrimSpace(recordingMode)) {
-	case "replay", "replay-only":
-		return false
-	default:
-		return true
-	}
 }
 
 func allocateIntAcrossPhases(weights []int64, total int) []int {

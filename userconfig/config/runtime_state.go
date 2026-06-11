@@ -109,7 +109,7 @@ func LoadRuntimeWorkspaceConfig(path string) (RuntimeWorkspaceConfig, error) {
 	if path == "" {
 		return RuntimeWorkspaceConfig{}, fmt.Errorf("config path required")
 	}
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(filepath.Clean(path))
 	if err != nil {
 		return RuntimeWorkspaceConfig{}, err
 	}
@@ -130,7 +130,7 @@ func LoadRuntimeProviderConfig(path string) (RuntimeProviderConfig, error) {
 	if path == "" {
 		return RuntimeProviderConfig{}, fmt.Errorf("provider config path required")
 	}
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(filepath.Clean(path))
 	if err != nil {
 		return RuntimeProviderConfig{}, err
 	}
@@ -151,7 +151,7 @@ func LoadRuntimeKeybindingConfig(path string) (RuntimeKeybindingConfig, error) {
 	if path == "" {
 		return RuntimeKeybindingConfig{}, fmt.Errorf("keybinding config path required")
 	}
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(filepath.Clean(path))
 	if err != nil {
 		return RuntimeKeybindingConfig{}, err
 	}
@@ -265,7 +265,7 @@ func CreateTimestampedBackup(path string) (string, error) {
 	if path == "" {
 		return "", fmt.Errorf("path required")
 	}
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(filepath.Clean(path))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return "", nil

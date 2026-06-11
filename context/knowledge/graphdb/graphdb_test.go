@@ -338,13 +338,6 @@ func TestRevisionHistoryAndPersistence(t *testing.T) {
 	require.JSONEq(t, `{"site":"z"}`, string(reopened.GetOutEdges("n1", "calls")[0].Props))
 }
 
-func mustJSON(t *testing.T, value any) []byte {
-	t.Helper()
-	data, err := json.Marshal(value)
-	require.NoError(t, err)
-	return data
-}
-
 func TestReadFrameRejectsCorruptChecksum(t *testing.T) {
 	payload := []byte(`{"kind":"noop"}`)
 	frame := encodeFrame(frameTypeOp, payload)

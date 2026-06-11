@@ -96,7 +96,7 @@ func main() {
 }
 
 func loadExceptions(path string) map[string]map[string]bool {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(filepath.Clean(path))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil

@@ -98,7 +98,7 @@ func TestTargetedRefactorRequiresWritePermission(t *testing.T) {
 	require.NotNil(t, result)
 	require.True(t, result.Success)
 
-	content, err := os.ReadFile(path)
+	content, err := os.ReadFile(filepath.Clean(path))
 	require.NoError(t, err)
 	require.Contains(t, string(content), `return "new"`)
 }
@@ -124,7 +124,7 @@ func TestTargetedRefactorRespectsFileScopeProtection(t *testing.T) {
 	require.NotNil(t, result)
 	require.True(t, result.Success)
 
-	content, err := os.ReadFile(path)
+	content, err := os.ReadFile(filepath.Clean(path))
 	require.NoError(t, err)
 	require.Contains(t, string(content), `return "new"`)
 }
@@ -152,7 +152,7 @@ func TestRenameSymbolFindsAllOccurrences(t *testing.T) {
 	require.True(t, result.Success)
 
 	for _, absPath := range []string{aPath, bPath} {
-		content, err := os.ReadFile(absPath)
+		content, err := os.ReadFile(filepath.Clean(absPath))
 		require.NoError(t, err)
 		require.Contains(t, string(content), "World")
 		require.NotContains(t, string(content), "Hello")

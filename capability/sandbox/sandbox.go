@@ -195,7 +195,21 @@ func (g *SandboxRuntimeImpl) checkContainerRuntime(ctx context.Context) error {
 // hanging verification commands.
 func (g *SandboxRuntimeImpl) commandContext(ctx context.Context, name string, args ...string) (*exec.Cmd, context.CancelFunc) {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	return exec.CommandContext(ctx, name, args...), cancel
+	resolvedPath, err := exec.LookPath(name)
+	if err != nil {
+		resolvedPath = name
+	}
+	cmd := &exec.Cmd{
+		Path: resolvedPath,
+		Args: append([]string{resolvedPath}, args...),
+	}
+	go func() {
+		<-ctx.Done()
+		if cmd.Process != nil {
+			cmd.Process.Kill()
+		}
+	}()
+	return cmd, cancel
 }
 
 // SupportedSandboxBackends returns the canonical list of valid sandbox backend

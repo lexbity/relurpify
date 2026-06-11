@@ -284,12 +284,6 @@ func reflectionReviewGuidance(agent *ReflectionAgent, task *execution.Task) stri
 	return policy.RenderReviewPolicy(effective.Policy)
 }
 
-func reflectionApprovalPasses(agent *ReflectionAgent, env *contextdata.Envelope, review reviewPayload) bool {
-	if agent == nil || agent.Config == nil || agent.Config.AgentSpec == nil {
-		return review.Approve
-	}
-	return reflectionAssessmentForReview(agent, env, review).Allowed && review.Approve
-}
 
 func reflectionAssessmentForReview(agent *ReflectionAgent, env *contextdata.Envelope, review reviewPayload) reflectionAssessment {
 	var cfg policyresolve.AgentOrchestrationConfig
@@ -431,9 +425,6 @@ func truncate(value string, max int) string {
 	return string(runes[:max]) + "…"
 }
 
-func reflectionSeverityGuidance(weights map[string]float64) string {
-	return policy.RenderSeverityWeights(weights)
-}
 
 func reflectionSeverityWeights(input map[string]float64) map[string]float64 {
 	return policy.ResolveSeverityWeights(input)

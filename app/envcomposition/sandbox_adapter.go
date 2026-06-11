@@ -113,49 +113,6 @@ func NewSandboxBackendFactory() fauthorization.SandboxBackendFactory {
 	}
 }
 
-// reverseSandboxRuntimeAdapter adapts authorization.SandboxRuntime back to
-// sandbox.SandboxRuntime so existing callers that pass registration.Runtime
-// to sandbox.NewCommandRunner continue to work.
-type reverseSandboxRuntimeAdapter struct {
-	inner governanceports.SandboxRuntime
-}
-
-func (a *reverseSandboxRuntimeAdapter) Verify(ctx context.Context) error {
-	return a.inner.Verify(ctx)
-}
-
-func (a *reverseSandboxRuntimeAdapter) ValidatePolicy(p sandbox.SandboxPolicy) error {
-	return a.inner.ValidatePolicy(fromSandboxPolicy(p))
-}
-
-func (a *reverseSandboxRuntimeAdapter) ApplyPolicy(ctx context.Context, p sandbox.SandboxPolicy) error {
-	return a.inner.ApplyPolicy(ctx, fromSandboxPolicy(p))
-}
-
-func (a *reverseSandboxRuntimeAdapter) Policy() sandbox.SandboxPolicy {
-	return toSandboxPolicy(a.inner.Policy())
-}
-
-func (a *reverseSandboxRuntimeAdapter) Capabilities() sandbox.Capabilities {
-	return sandbox.Capabilities{}
-}
-
-func (a *reverseSandboxRuntimeAdapter) RunConfig() sandbox.SandboxConfig {
-	rc := a.inner.RunConfig()
-	return sandbox.SandboxConfig{
-		RunscPath:        rc.RunscPath,
-		ContainerRuntime: rc.ContainerRuntime,
-		Platform:         rc.Platform,
-		NetworkIsolation: rc.NetworkIsolation,
-		ReadOnlyRoot:     rc.ReadOnlyRoot,
-		SeccompProfile:   rc.SeccompProfile,
-	}
-}
-
-func (a *reverseSandboxRuntimeAdapter) Name() string {
-	return a.inner.Name()
-}
-
 // toFaSandboxConfig converts a sandbox.SandboxConfig to authorization.SandboxConfig.
 func toFaSandboxConfig(cfg sandbox.SandboxConfig) governanceports.SandboxConfig {
 	return governanceports.SandboxConfig{

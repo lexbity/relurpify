@@ -401,25 +401,6 @@ func estimatePayloadTokens(values ...any) int {
 	return estimatePayloadBytes(values...) / 4
 }
 
-func cloneRevocationSnapshot(input capresult.RevocationSnapshot) capresult.RevocationSnapshot {
-	return capresult.RevocationSnapshot{
-		Capabilities: cloneStringMap(input.Capabilities),
-		Providers:    cloneStringMap(input.Providers),
-		Sessions:     cloneStringMap(input.Sessions),
-	}
-}
-
-func cloneStringMap(input map[string]string) map[string]string {
-	if input == nil {
-		return nil
-	}
-	out := make(map[string]string, len(input))
-	for k, v := range input {
-		out[k] = v
-	}
-	return out
-}
-
 func SortedKeys(input map[string]string) []string {
 	keys := make([]string, 0, len(input))
 	for key := range input {

@@ -675,14 +675,6 @@ func (c *Compiler) estimateChunkTokens(chunkID knowledge.ChunkID) int {
 	return 0
 }
 
-func (c *Compiler) getRankerNames(rankers []retrieval.Ranker) []string {
-	names := make([]string, 0, len(rankers))
-	for _, r := range rankers {
-		names = append(names, r.Name())
-	}
-	return names
-}
-
 func (c *Compiler) computeDigest(record *CompilationRecord) string {
 	return compilationDigest(record)
 }

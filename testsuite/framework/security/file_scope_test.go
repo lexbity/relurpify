@@ -11,6 +11,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
+	"codeburg.org/lexbit/relurpify/platform/fs"
 )
 
 // TestFileScopePolicy validates that filesystem scope policy correctly
@@ -86,7 +87,7 @@ func TestFileScopeValidation(t *testing.T) {
 	t.Run("nested workspace file is within scope", func(t *testing.T) {
 		workspace := t.TempDir()
 		nestedDir := filepath.Join(workspace, "subdir", "nested")
-		if err := os.MkdirAll(nestedDir, 0o755); err != nil {
+		if err := fs.MkdirAllSecure(nestedDir); err != nil {
 			t.Fatalf("failed to create nested directory: %v", err)
 		}
 
@@ -163,7 +164,7 @@ func TestProtectedPaths(t *testing.T) {
 		workspace := t.TempDir()
 		// Create a protected directory within the workspace
 		protectedDir := filepath.Join(workspace, "protected")
-		if err := os.MkdirAll(protectedDir, 0o755); err != nil {
+		if err := fs.MkdirAllSecure(protectedDir); err != nil {
 			t.Fatalf("failed to create protected directory: %v", err)
 		}
 
@@ -186,7 +187,7 @@ func TestProtectedPaths(t *testing.T) {
 		workspace := t.TempDir()
 		// Create a protected directory within the workspace
 		protectedDir := filepath.Join(workspace, "protected")
-		if err := os.MkdirAll(protectedDir, 0o755); err != nil {
+		if err := fs.MkdirAllSecure(protectedDir); err != nil {
 			t.Fatalf("failed to create protected directory: %v", err)
 		}
 
@@ -205,13 +206,13 @@ func TestProtectedPaths(t *testing.T) {
 		workspace := t.TempDir()
 		// Create a protected directory within the workspace
 		protectedDir := filepath.Join(workspace, "protected")
-		if err := os.MkdirAll(protectedDir, 0o755); err != nil {
+		if err := fs.MkdirAllSecure(protectedDir); err != nil {
 			t.Fatalf("failed to create protected directory: %v", err)
 		}
 
 		// Create a file with same name outside protected directory
 		localPasswd := filepath.Join(workspace, "passwd")
-		if err := os.WriteFile(localPasswd, []byte("test"), 0o644); err != nil {
+		if err := fs.WriteFileSecure(localPasswd, []byte("test")); err != nil {
 			t.Fatalf("failed to create test file: %v", err)
 		}
 
@@ -230,10 +231,10 @@ func TestProtectedPaths(t *testing.T) {
 		// Create protected directories within the workspace
 		protectedDir1 := filepath.Join(workspace, "protected1")
 		protectedDir2 := filepath.Join(workspace, "protected2")
-		if err := os.MkdirAll(protectedDir1, 0o755); err != nil {
+		if err := fs.MkdirAllSecure(protectedDir1); err != nil {
 			t.Fatalf("failed to create protected directory 1: %v", err)
 		}
-		if err := os.MkdirAll(protectedDir2, 0o755); err != nil {
+		if err := fs.MkdirAllSecure(protectedDir2); err != nil {
 			t.Fatalf("failed to create protected directory 2: %v", err)
 		}
 

@@ -329,17 +329,6 @@ type EventTaskFailed struct {
 	Error string `json:"error,omitempty"`
 }
 
-func mergeEventData(base map[string]any, extra map[string]any) map[string]any {
-	out := make(map[string]any, len(base)+len(extra))
-	for k, v := range base {
-		out[k] = v
-	}
-	for k, v := range extra {
-		out[k] = v
-	}
-	return out
-}
-
 func eventPayloadMap(payload any) map[string]any {
 	if payload == nil {
 		return map[string]any{}

@@ -1,7 +1,6 @@
 package lsp
 
 import (
-	"context"
 	"errors"
 	"sync"
 	"sync/atomic"
@@ -11,38 +10,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-type noopClient struct {
-	LSPClient
-}
-
-func (noopClient) GetDefinition(ctx context.Context, req DefinitionRequest) (DefinitionResult, error) {
-	return DefinitionResult{Location: Location{URI: req.File}}, nil
-}
-
-func (noopClient) GetHover(ctx context.Context, req HoverRequest) (HoverResult, error) {
-	return HoverResult{}, nil
-}
-
-func (noopClient) GetDiagnostics(ctx context.Context, file string) ([]Diagnostic, error) {
-	return nil, nil
-}
-
-func (noopClient) GetDocumentSymbols(ctx context.Context, file string) ([]SymbolInformation, error) {
-	return nil, nil
-}
-
-func (noopClient) SearchSymbols(ctx context.Context, query string) ([]SymbolInformation, error) {
-	return nil, nil
-}
-
-func (noopClient) GetReferences(ctx context.Context, req ReferencesRequest) ([]Location, error) {
-	return nil, nil
-}
-
-func (noopClient) Format(ctx context.Context, req FormatRequest) (string, error) {
-	return "", nil
-}
 
 func TestNewProxy_Defaults(t *testing.T) {
 	p := NewProxy(0, 0)

@@ -11,6 +11,7 @@ import (
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
+	"codeburg.org/lexbit/relurpify/platform/fs"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
@@ -90,13 +91,13 @@ func TestFixtureIsolation(t *testing.T) {
 
 	// Create a file in env1's workspace
 	file1 := filepath.Join(env1.WorkspacePath, "test.txt")
-	if err := os.WriteFile(file1, []byte("env1"), 0o644); err != nil {
+	if err := fs.WriteFileSecure(file1, []byte("env1")); err != nil {
 		t.Fatalf("failed to write file: %v", err)
 	}
 
 	// Create a file in env2's workspace
 	file2 := filepath.Join(env2.WorkspacePath, "test.txt")
-	if err := os.WriteFile(file2, []byte("env2"), 0o644); err != nil {
+	if err := fs.WriteFileSecure(file2, []byte("env2")); err != nil {
 		t.Fatalf("failed to write file: %v", err)
 	}
 
@@ -105,11 +106,11 @@ func TestFixtureIsolation(t *testing.T) {
 	}
 
 	// Verify file contents are different
-	content1, err := os.ReadFile(file1)
+	content1, err := os.ReadFile(filepath.Clean(file1))
 	if err != nil {
 		t.Fatalf("failed to read file1: %v", err)
 	}
-	content2, err := os.ReadFile(file2)
+	content2, err := os.ReadFile(filepath.Clean(file2))
 	if err != nil {
 		t.Fatalf("failed to read file2: %v", err)
 	}
@@ -205,7 +206,7 @@ func TestWorkspaceFixtureBuilder(t *testing.T) {
 		}
 
 		filePath := filepath.Join(builder.basePath, "custom/file.txt")
-		content, err := os.ReadFile(filePath)
+		content, err := os.ReadFile(filepath.Clean(filePath))
 		if err != nil {
 			t.Errorf("custom file not created: %v", err)
 		}

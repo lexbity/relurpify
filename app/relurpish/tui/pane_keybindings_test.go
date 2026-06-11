@@ -89,7 +89,7 @@ func TestKeybindingConflictEngine(t *testing.T) {
 	if got := GlobalKeys.Tab2.Keys(); len(got) != 0 {
 		t.Fatalf("tab2 keys = %#v, want unbound", got)
 	}
-	written, err := os.ReadFile(path)
+	written, err := os.ReadFile(filepath.Clean(path))
 	if err != nil {
 		t.Fatalf("read keybinding file: %v", err)
 	}

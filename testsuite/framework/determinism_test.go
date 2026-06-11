@@ -9,6 +9,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
+	"codeburg.org/lexbit/relurpify/platform/fs"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
@@ -76,7 +77,7 @@ func TestWorkspaceIsolation(t *testing.T) {
 		file1 := filepath.Join(env1.WorkspacePath, "isolation_test.txt")
 		content1 := "env1 content"
 		fullPath1 := file1
-		if err := os.WriteFile(fullPath1, []byte(content1), 0o644); err != nil {
+		if err := fs.WriteFileSecure(fullPath1, []byte(content1)); err != nil {
 			t.Fatalf("failed to write file in env1: %v", err)
 		}
 

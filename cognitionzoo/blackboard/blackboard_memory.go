@@ -1,74 +1,14 @@
 package blackboard
 
 import (
-	"context"
 	"fmt"
 	"strings"
 	"time"
 
 	relurpctx "codeburg.org/lexbit/relurpify/context"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
-	"codeburg.org/lexbit/relurpify/context/knowledge/memory"
-	graph "codeburg.org/lexbit/relurpify/execution/agentgraph"
 )
 
-type blackboardScopedMemoryRetriever struct {
-	store       *memory.WorkingMemoryStore
-	taskID      string
-	keyPrefix   string
-	memoryClass relurpctx.MemoryClass
-}
-
-func (r blackboardScopedMemoryRetriever) Retrieve(ctx context.Context, query string, limit int) ([]relurpctx.MemoryRecordEnvelope, error) {
-	publication, err := r.RetrievePublication(ctx, query, limit)
-	if err != nil || publication == nil {
-		return nil, err
-	}
-	return publication.Results, nil
-}
-
-func (r blackboardScopedMemoryRetriever) RetrievePublication(ctx context.Context, query string, limit int) (*graph.MemoryRetrievalPublication, error) {
-	if r.store == nil {
-		return graph.BuildMemoryRetrievalPublication(strings.TrimSpace(query), nil, r.memoryClass), nil
-	}
-	q := strings.TrimSpace(query)
-	prefix := strings.TrimSpace(r.keyPrefix)
-	if q != "" {
-		if prefix == "" {
-			prefix = q
-		} else if !strings.HasPrefix(prefix, q) {
-			prefix = q
-		}
-	}
-	records, err := r.store.Retrieve(ctx, memory.MemoryQuery{
-		TaskID:    strings.TrimSpace(r.taskID),
-		KeyPrefix: prefix,
-		Class:     r.memoryClass,
-		Limit:     limit,
-	})
-	if err != nil {
-		return nil, err
-	}
-	out := make([]relurpctx.MemoryRecordEnvelope, 0, len(records))
-	for _, record := range records {
-		entry := record.Entry
-		summary, text := summarizeMemoryEntry(entry.Value)
-		out = append(out, relurpctx.MemoryRecordEnvelope{
-			Key:         record.Key,
-			MemoryClass: r.memoryClass,
-			Scope:       record.TaskID,
-			Summary:     summary,
-			Text:        text,
-			Source:      "working_memory",
-			RecordID:    record.Key,
-			Reference: map[string]any{
-				"task_id": record.TaskID,
-				"key":     record.Key,
-			},
-		})
-	}
-	return graph.BuildMemoryRetrievalPublication(q, out, r.memoryClass), nil
-}
 
 func hydrateBlackboardFromMemory(state *contextdata.Envelope, bb *Blackboard) int {
 	if state == nil || bb == nil {
@@ -209,42 +149,6 @@ func hydrateBlackboardFromMemory(state *contextdata.Envelope, bb *Blackboard) in
 	return added
 }
 
-func summarizeMemoryEntry(value any) (summary string, text string) {
-	switch typed := value.(type) {
-	case nil:
-		return "", ""
-	case string:
-		s := strings.TrimSpace(typed)
-		return s, s
-	case fmt.Stringer:
-		s := strings.TrimSpace(typed.String())
-		return s, s
-	case []string:
-		joined := strings.Join(typed, ", ")
-		return truncate(joined, 240), joined
-	case []any:
-		joined := fmt.Sprint(typed)
-		return truncate(joined, 240), joined
-	case map[string]any:
-		joined := fmt.Sprint(typed)
-		return truncate(joined, 240), joined
-	default:
-		joined := fmt.Sprint(value)
-		return truncate(joined, 240), joined
-	}
-}
-
-func truncate(value string, max int) string {
-	value = strings.TrimSpace(value)
-	if max <= 0 {
-		return ""
-	}
-	runes := []rune(value)
-	if len(runes) <= max {
-		return value
-	}
-	return string(runes[:max]) + "…"
-}
 
 func publishPersistenceCandidates(state *contextdata.Envelope, bb *Blackboard, controller ControllerState, metrics Metrics) {
 	if state == nil || bb == nil {

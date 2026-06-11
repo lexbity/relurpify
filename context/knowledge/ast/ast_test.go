@@ -1,7 +1,6 @@
 package ast
 
 import (
-	"context"
 	"errors"
 	"testing"
 	"time"
@@ -103,10 +102,4 @@ func TestMarkdownParserParse(t *testing.T) {
 	}
 }
 
-type fakeSymbolProvider struct {
-	symbols []DocumentSymbol
-}
 
-func (f fakeSymbolProvider) DocumentSymbols(ctx context.Context, path string) ([]DocumentSymbol, error) {
-	return f.symbols, nil
-}

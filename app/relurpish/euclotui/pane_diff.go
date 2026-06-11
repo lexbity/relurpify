@@ -840,7 +840,15 @@ func (p *DiffPane) openEditorCmd(path string) tea.Cmd {
 }
 
 func editorProcess(path string) *exec.Cmd {
-	return exec.Command(tui.EditorPath(), path)
+	editor := tui.EditorPath()
+	editorPath, err := exec.LookPath(editor)
+	if err != nil {
+		editorPath = editor
+	}
+	return &exec.Cmd{
+		Path: editorPath,
+		Args: []string{editorPath, filepath.Clean(path)},
+	}
 }
 
 func (p *DiffPane) applyAllCmd() tea.Cmd {
@@ -986,7 +994,7 @@ func (p *DiffPane) applyHunks(filePath string, hunks []DiffHunkProjection) error
 	if err := p.captureBaseline(filePath); err != nil {
 		return err
 	}
-	current, err := os.ReadFile(abs)
+	current, err := os.ReadFile(filepath.Clean(abs))
 	if err != nil && !os.IsNotExist(err) {
 		return err
 	}
@@ -1047,7 +1055,7 @@ func (p *DiffPane) captureBaseline(filePath string) error {
 	if abs == "" {
 		return fmt.Errorf("workspace path unavailable")
 	}
-	data, err := os.ReadFile(abs)
+	data, err := os.ReadFile(filepath.Clean(abs))
 	if err != nil {
 		if os.IsNotExist(err) {
 			p.baselines[filePath] = diffBaseline{Exists: false}

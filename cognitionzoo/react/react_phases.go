@@ -24,55 +24,6 @@ const (
 	contextmgrPhaseEdit    = "edit"
 )
 
-func defaultIterationsForMode(mode string) int {
-	switch strings.ToLower(mode) {
-	case "code", "tdd":
-		return 16
-	case "debug":
-		return 20
-	case "review":
-		return 12
-	default:
-		return 8
-	}
-}
-
-func (a *ReActAgent) initializePhase(env *contextdata.Envelope, task *execution.Task) {
-	if env == nil {
-		return
-	}
-	// Parent state merging
-	if task != nil && task.Context != nil {
-		if parentStateRaw, ok := task.Context["parent_state"]; ok {
-			if parentState, ok := parentStateRaw.(*contextdata.Envelope); ok && parentState != nil {
-				env.Merge(parentState)
-				a.debugf("initialized phase with parent state from HTN step")
-			}
-		}
-	}
-	if phase := envGetString(env, "react.phase"); phase != "" {
-		return
-	}
-	phase := contextmgrPhaseExplore
-	text := taskInstructionText(task)
-	if task != nil && task.Context != nil {
-		if _, ok := task.Context["current_step"]; ok {
-			if strings.Contains(text, "verify") || strings.Contains(text, "test") || strings.Contains(text, "build") {
-				phase = contextmgrPhaseVerify
-			}
-		}
-	}
-	if !taskNeedsEditing(task) && taskRequiresVerification(task) && len(explicitlyRequestedToolNames(task)) > 0 {
-		phase = contextmgrPhaseVerify
-	}
-	if strings.EqualFold(a.Mode, "debug") && (strings.Contains(text, "test") || strings.Contains(text, "build") || strings.Contains(text, "lint") || strings.Contains(text, "cargo")) {
-		phase = contextmgrPhaseVerify
-	}
-	if strings.EqualFold(a.Mode, "docs") {
-		phase = contextmgrPhaseEdit
-	}
-	env.SetWorkingValueWithClass("react.phase", phase, contextdata.MemoryClassTask)
-}
 
 func (a *ReActAgent) availableToolsForPhase(ctx context.Context, env *contextdata.Envelope, task *execution.Task) []ports.Tool {
 	catalog := a.executionCapabilityCatalog(ctx)

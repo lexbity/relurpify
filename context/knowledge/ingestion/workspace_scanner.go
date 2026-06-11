@@ -283,8 +283,15 @@ func (s *WorkspaceScanner) processFile(ctx context.Context, root string, file st
 
 // getGitChangedFiles gets the list of changed files from git.
 func (s *WorkspaceScanner) getGitChangedFiles(root string, since string) ([]string, error) {
-	cmd := exec.Command("git", "diff", "--name-only", since)
-	cmd.Dir = root
+	gitPath, err := exec.LookPath("git")
+	if err != nil {
+		return nil, fmt.Errorf("git not found: %w", err)
+	}
+	cmd := &exec.Cmd{
+		Path: gitPath,
+		Args: []string{gitPath, "diff", "--name-only", filepath.Clean(since)},
+		Dir:  root,
+	}
 
 	output, err := cmd.Output()
 	if err != nil {

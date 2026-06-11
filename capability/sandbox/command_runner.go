@@ -148,8 +148,15 @@ func (r *SandboxCommandRunner) Run(ctx context.Context, req CommandRequest) (*po
 	}
 	args = append(args, image)
 	args = append(args, req.Args...)
+	runtimeBinaryPath, err := exec.LookPath(runtimeBinary)
+	if err != nil {
+		return nil, fmt.Errorf("%s not found: %w", runtimeBinary, err)
+	}
 	start := time.Now()
-	cmd := exec.Command(runtimeBinary, args...)
+	cmd := &exec.Cmd{
+		Path: runtimeBinaryPath,
+		Args: append([]string{runtimeBinaryPath}, args...),
+	}
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	ceiling := OutputCeilingOrDefault(req.OutputCeiling)
 	stdoutBuf := newSpillWriter(ceiling)

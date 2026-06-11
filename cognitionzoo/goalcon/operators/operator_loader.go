@@ -62,7 +62,7 @@ func LoadOperatorsFromFile(filePath string) *types.OperatorRegistry {
 		return DefaultOperatorRegistry()
 	}
 
-	data, err := os.ReadFile(filePath)
+	data, err := os.ReadFile(filepath.Clean(filePath))
 	if err != nil {
 		// Log would go here; fall back to defaults
 		return DefaultOperatorRegistry()
@@ -258,7 +258,7 @@ func LoadOperatorLibraryFromFile(filePath string, name string) *OperatorLibrary 
 		return nil
 	}
 
-	data, err := os.ReadFile(filePath)
+	data, err := os.ReadFile(filepath.Clean(filePath))
 	if err != nil {
 		return nil
 	}

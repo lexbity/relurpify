@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	capability "codeburg.org/lexbit/relurpify/capability/registry"
-	relurpctx "codeburg.org/lexbit/relurpify/context"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/context/contextstream"
 	"codeburg.org/lexbit/relurpify/context/knowledge/memory"
@@ -279,76 +278,6 @@ func (a *BlackboardAgent) executionCapabilityCatalog(ctx context.Context) *capab
 	return a.Tools.CaptureExecutionCatalogSnapshot(ctx)
 }
 
-func compactBlackboardPostExecutionState(env *contextdata.Envelope) {
-	if env == nil {
-		return
-	}
-	if _, ok := env.GetWorkingValue(contextKeySummaryRef); !ok {
-		return
-	}
-	rawAudit, ok := env.GetWorkingValue(contextKeyAuditTrail)
-	if !ok {
-		return
-	}
-	entries, ok := rawAudit.([]map[string]any)
-	if !ok {
-		return
-	}
-	env.SetWorkingValueWithClass(contextKeyAuditTrail, compactBlackboardAudit(entries), contextdata.MemoryClassTask)
-}
-
-func compactBlackboardAudit(entries []map[string]any) map[string]any {
-	value := map[string]any{
-		"entry_count": len(entries),
-	}
-	if len(entries) == 0 {
-		return value
-	}
-	last := entries[len(entries)-1]
-	value["last_message"] = strings.TrimSpace(fmt.Sprint(last["message"]))
-	value["first_message"] = strings.TrimSpace(fmt.Sprint(entries[0]["message"]))
-	return value
-}
-
-func mirrorBlackboardArtifactReferences(env *contextdata.Envelope) {
-	if env == nil {
-		return
-	}
-	if strings.TrimSpace(envGetString(env, contextKeySummary)) != "" {
-		if rawRef, ok := env.GetWorkingValue("graph.summary_ref"); ok {
-			if ref, ok := rawRef.(relurpctx.ArtifactReference); ok {
-				env.SetWorkingValueWithClass(contextKeySummaryRef, ref, contextdata.MemoryClassTask)
-			}
-		}
-		if summary := strings.TrimSpace(envGetString(env, "graph.summary")); summary != "" {
-			env.SetWorkingValueWithClass(contextKeySummaryArtifactSummary, summary, contextdata.MemoryClassTask)
-		}
-	}
-	if rawRef, ok := env.GetWorkingValue("graph.checkpoint_ref"); ok {
-		if ref, ok := rawRef.(relurpctx.ArtifactReference); ok {
-			env.SetWorkingValueWithClass(contextKeyCheckpointRef, ref, contextdata.MemoryClassTask)
-		}
-	}
-}
-
-func blackboardUsesStructuredPersistence(cfg *execution.Config) bool {
-	_ = cfg
-	return true
-}
-
-func taskID(task *execution.Task) string {
-	if task == nil {
-		return ""
-	}
-	return strings.TrimSpace(task.ID)
-}
-
-func taskInstruction(task *execution.Task) string {
-	if task == nil {
-		return ""
-	}
-	return task.Instruction
-}
 
 func maxCycles(max int) int {
 	if max <= 0 {

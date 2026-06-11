@@ -231,28 +231,6 @@ func (p *InvalidationPass) stalenessManager() *StalenessManager {
 	return &StalenessManager{Store: p.Store, Propagate: true, MaxDepth: 3}
 }
 
-func chunkTouchesPaths(chunk KnowledgeChunk, pathSet map[string]struct{}) bool {
-	if len(pathSet) == 0 {
-		return true
-	}
-	if path, _ := chunk.Body.Fields["file_path"].(string); path != "" {
-		if _, ok := pathSet[strings.TrimSpace(path)]; ok {
-			return true
-		}
-	}
-	for _, source := range chunk.Provenance.Sources {
-		if _, ok := pathSet[strings.TrimSpace(source.Ref)]; ok {
-			return true
-		}
-	}
-	for _, value := range stringValues(chunk.Body.Fields["symbol_scope"]) {
-		if _, ok := pathSet[strings.TrimSpace(value)]; ok {
-			return true
-		}
-	}
-	return false
-}
-
 func chunkIDsFromStrings(ids []string) []ChunkID {
 	out := make([]ChunkID, 0, len(ids))
 	for _, id := range ids {

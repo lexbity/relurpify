@@ -7,10 +7,7 @@ import (
 	"fmt"
 	"log"
 	"path/filepath"
-	"regexp"
 	"strings"
-
-	"gopkg.in/yaml.v3"
 
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/userconfig/config/model"
@@ -49,92 +46,6 @@ type LoadOptions struct {
 	SubprocessToolFactory func(ports.ToolManifest) ports.Tool
 }
 
-var varRegex = regexp.MustCompile(`\$\{([A-Za-z0-9_]+)(?::-([^}]+))?\}`)
-
-func resolveVariables(val string, workspace string, env []string, defaultModel model.ModelRef) (string, error) {
-	var err error
-	res := varRegex.ReplaceAllStringFunc(val, func(m string) string {
-		if err != nil {
-			return m
-		}
-		submatches := varRegex.FindStringSubmatch(m)
-		if len(submatches) < 2 {
-			return m
-		}
-		name := submatches[1]
-		hasDefault := len(submatches) > 2 && submatches[2] != ""
-		fallback := ""
-		if hasDefault {
-			fallback = submatches[2]
-		}
-
-		if name == "workspace" {
-			return workspace
-		}
-
-		// Try to lookup in env overrides first
-		envVal := lookupEnv(env, name)
-		if envVal != "" {
-			return envVal
-		}
-
-		if name == "RELURPIFY_MODEL_PROVIDER" && strings.TrimSpace(defaultModel.Provider) != "" {
-			return defaultModel.Provider
-		}
-		if name == "RELURPIFY_MODEL_NAME" && strings.TrimSpace(defaultModel.Name) != "" {
-			return defaultModel.Name
-		}
-
-		if envVal == "" && hasDefault {
-			return fallback
-		}
-
-		if envVal == "" {
-			err = fmt.Errorf("unresolved variable reference: %s", m)
-			return m
-		}
-
-		return envVal
-	})
-	if err != nil {
-		return "", err
-	}
-	return res, nil
-}
-
-func resolveNodeVariables(node *yaml.Node, workspace string, env []string, defaultModel model.ModelRef) error {
-	if node == nil {
-		return nil
-	}
-	switch node.Kind {
-	case yaml.DocumentNode:
-		for _, child := range node.Content {
-			if err := resolveNodeVariables(child, workspace, env, defaultModel); err != nil {
-				return err
-			}
-		}
-	case yaml.MappingNode:
-		for i := 0; i+1 < len(node.Content); i += 2 {
-			valNode := node.Content[i+1]
-			if err := resolveNodeVariables(valNode, workspace, env, defaultModel); err != nil {
-				return err
-			}
-		}
-	case yaml.SequenceNode:
-		for _, child := range node.Content {
-			if err := resolveNodeVariables(child, workspace, env, defaultModel); err != nil {
-				return err
-			}
-		}
-	case yaml.ScalarNode:
-		resolved, err := resolveVariables(node.Value, workspace, env, defaultModel)
-		if err != nil {
-			return err
-		}
-		node.Value = resolved
-	}
-	return nil
-}
 
 // Load executes the consolidated configuration loading boundary.
 func Load(opts LoadOptions) (*AppConfig, *Secrets, error) {

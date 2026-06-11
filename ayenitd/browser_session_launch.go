@@ -24,6 +24,8 @@ import (
 	"codeburg.org/lexbit/relurpify/telemetry"
 )
 
+
+
 const defaultBrowserTimeout = 15 * time.Second
 const (
 	sandboxCDPPort       = 9222
@@ -207,8 +209,21 @@ func (b *sandboxedBrowserBackend) close(ctx context.Context) error {
 	if err := allowBrowserCommand(cmdCtx, b.cfg, b.runtimeBinary, []string{"rm", "-f", b.containerID}); err != nil {
 		return err
 	}
-	cmd := exec.CommandContext(cmdCtx, b.runtimeBinary, "rm", "-f", b.containerID)
-	err := cmd.Run()
+	runtimePath, err := exec.LookPath(b.runtimeBinary)
+	if err != nil {
+		return fmt.Errorf("runtime binary %q not found: %w", b.runtimeBinary, err)
+	}
+	cmd := &exec.Cmd{
+		Path: runtimePath,
+		Args: []string{runtimePath, "rm", "-f", b.containerID},
+	}
+	go func() {
+		<-cmdCtx.Done()
+		if cmd.Process != nil {
+			cmd.Process.Kill()
+		}
+	}()
+	err = cmd.Run()
 	b.containerID = ""
 	if b.launchDir != "" {
 		_ = os.RemoveAll(b.launchDir)
@@ -271,7 +286,20 @@ func runSandboxBrowserContainer(ctx context.Context, cfg browsersvc.BrowserSessi
 	if err := allowBrowserCommand(ctx, cfg, runtimeBinary, args); err != nil {
 		return "", err
 	}
-	cmd := exec.CommandContext(ctx, runtimeBinary, args...)
+	runtimeBinaryPath, err := exec.LookPath(runtimeBinary)
+	if err != nil {
+		return "", fmt.Errorf("runtime binary %q not found: %w", runtimeBinary, err)
+	}
+	cmd := &exec.Cmd{
+		Path: runtimeBinaryPath,
+		Args: append([]string{runtimeBinaryPath}, args...),
+	}
+	go func() {
+		<-ctx.Done()
+		if cmd.Process != nil {
+			cmd.Process.Kill()
+		}
+	}()
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("launch sandbox browser: %w: %s", err, strings.TrimSpace(string(output)))
@@ -286,7 +314,21 @@ func removeSandboxBrowserContainer(ctx context.Context, cfg browsersvc.BrowserSe
 	if err := allowBrowserCommand(ctx, cfg, browserContainerRuntime(cfg), []string{"rm", "-f", containerID}); err != nil {
 		return err
 	}
-	cmd := exec.CommandContext(ctx, browserContainerRuntime(cfg), "rm", "-f", containerID)
+	runtimeBinary := browserContainerRuntime(cfg)
+	runtimePath, err := exec.LookPath(runtimeBinary)
+	if err != nil {
+		return fmt.Errorf("runtime binary %q not found: %w", runtimeBinary, err)
+	}
+	cmd := &exec.Cmd{
+		Path: runtimePath,
+		Args: []string{runtimePath, "rm", "-f", containerID},
+	}
+	go func() {
+		<-ctx.Done()
+		if cmd.Process != nil {
+			cmd.Process.Kill()
+		}
+	}()
 	return cmd.Run()
 }
 

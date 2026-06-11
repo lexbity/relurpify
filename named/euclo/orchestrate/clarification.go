@@ -3,7 +3,6 @@ package orchestrate
 import (
 	"context"
 	"fmt"
-	"reflect"
 	"strings"
 	"time"
 
@@ -60,19 +59,6 @@ func needsClarificationRoute(env *contextdata.Envelope) bool {
 		if len(interpretation.MissingInfo) > 0 {
 			return true
 		}
-	}
-	return false
-}
-
-func clarificationRouteRequested(env *contextdata.Envelope) bool {
-	if _, ok := env.GetWorkingValue(clarificationRequestKey); ok {
-		return true
-	}
-	if needsClarificationRoute(env) {
-		return true
-	}
-	if selection, ok := euclostate.GetRouteSelection(env); ok && selection != nil {
-		return strings.TrimSpace(selection.ThoughtRecipeID) == clarificationThoughtRecipeID
 	}
 	return false
 }
@@ -327,74 +313,6 @@ func buildTraversalFromAnchors(anchors []retrieval.AnchorRef) *retrieval.Travers
 		Direction:    retrieval.TraversalDirectionBoth,
 		MaxDepth:     2,
 		PreferLatest: true,
-	}
-}
-
-func ambiguityFromValue(value any) (bool, float64, bool) {
-	if value == nil {
-		return false, 0, false
-	}
-	rv := reflect.ValueOf(value)
-	if rv.Kind() == reflect.Pointer {
-		if rv.IsNil() {
-			return false, 0, false
-		}
-		rv = rv.Elem()
-	}
-	if rv.Kind() != reflect.Struct {
-		if m, ok := value.(map[string]any); ok {
-			ambiguous, _ := m["ambiguous"].(bool)
-			confidence := confidenceFromAny(m["confidence"])
-			return ambiguous, confidence, true
-		}
-		return false, 0, false
-	}
-	ambiguous := fieldBool(rv, "Ambiguous")
-	confidence := fieldFloat(rv, "Confidence")
-	return ambiguous, confidence, true
-}
-
-func fieldBool(rv reflect.Value, name string) bool {
-	f := rv.FieldByName(name)
-	if !f.IsValid() || !f.CanInterface() || f.Kind() != reflect.Bool {
-		return false
-	}
-	return f.Bool()
-}
-
-func fieldFloat(rv reflect.Value, name string) float64 {
-	f := rv.FieldByName(name)
-	if !f.IsValid() || !f.CanInterface() {
-		return 0
-	}
-	switch f.Kind() {
-	case reflect.Float32, reflect.Float64:
-		return f.Float()
-	default:
-		return confidenceFromAny(f.Interface())
-	}
-}
-
-func confidenceFromAny(value any) float64 {
-	switch v := value.(type) {
-	case float32:
-		return float64(v)
-	case float64:
-		return v
-	case int:
-		return float64(v)
-	case int64:
-		return float64(v)
-	case int32:
-		return float64(v)
-	case uint:
-		return float64(v)
-	case uint64:
-		return float64(v)
-	case uint32:
-		return float64(v)
-	default:
-		return 0
 	}
 }
 

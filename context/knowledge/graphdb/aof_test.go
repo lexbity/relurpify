@@ -65,7 +65,7 @@ func TestReplayAOF_TruncatedFrameIgnored(t *testing.T) {
 	payload := []byte("payload")
 	frame := encodeFrame(frameTypeOp, payload)
 	// write only first half of frame
-	file, err := os.Create(path)
+	file, err := os.Create(filepath.Clean(path))
 	require.NoError(t, err)
 	_, err = file.Write(frame[:len(frame)-8])
 	require.NoError(t, err)

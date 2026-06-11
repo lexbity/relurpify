@@ -38,7 +38,7 @@ func LoadToolManifests(dir string) ([]*ports.ToolManifest, error) {
 
 // LoadToolManifest loads a single .tool.yaml file.
 func LoadToolManifest(path string) (*ports.ToolManifest, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(filepath.Clean(path))
 	if err != nil {
 		return nil, err
 	}

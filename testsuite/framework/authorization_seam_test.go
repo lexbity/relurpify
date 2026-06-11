@@ -2,7 +2,6 @@ package framework
 
 import (
 	"context"
-	"os"
 	"path/filepath"
 	"testing"
 
@@ -10,6 +9,7 @@ import (
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	govpolicy "codeburg.org/lexbit/relurpify/governance/policy"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
+	"codeburg.org/lexbit/relurpify/platform/fs"
 )
 
 // TestFileAccessAllowDeny validates file access permission enforcement
@@ -20,7 +20,7 @@ func TestFileAccessAllowDeny(t *testing.T) {
 
 		// Create a file in the workspace
 		testFile := filepath.Join(env.WorkspacePath, "test.txt")
-		if err := os.WriteFile(testFile, []byte("test content"), 0o644); err != nil {
+		if err := fs.WriteFileSecure(testFile, []byte("test content")); err != nil {
 			t.Fatalf("failed to create test file: %v", err)
 		}
 
@@ -88,7 +88,7 @@ func TestFileAccessAllowDeny(t *testing.T) {
 
 		// Create a file in the workspace
 		testFile := filepath.Join(env.WorkspacePath, "test.txt")
-		if err := os.WriteFile(testFile, []byte("test content"), 0o644); err != nil {
+		if err := fs.WriteFileSecure(testFile, []byte("test content")); err != nil {
 			t.Fatalf("failed to create test file: %v", err)
 		}
 
@@ -311,7 +311,7 @@ func TestHITLRequiredPath(t *testing.T) {
 
 		// Create a file in the workspace
 		testFile := filepath.Join(env.WorkspacePath, "secret.txt")
-		if err := os.WriteFile(testFile, []byte("secret content"), 0o644); err != nil {
+		if err := fs.WriteFileSecure(testFile, []byte("secret content")); err != nil {
 			t.Fatalf("failed to create test file: %v", err)
 		}
 
@@ -375,7 +375,7 @@ func TestHITLRequiredPath(t *testing.T) {
 
 		// Create a file in the workspace
 		testFile := filepath.Join(env.WorkspacePath, "secret.txt")
-		if err := os.WriteFile(testFile, []byte("secret content"), 0o644); err != nil {
+		if err := fs.WriteFileSecure(testFile, []byte("secret content")); err != nil {
 			t.Fatalf("failed to create test file: %v", err)
 		}
 

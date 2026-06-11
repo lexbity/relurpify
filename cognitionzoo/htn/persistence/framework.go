@@ -2,29 +2,12 @@ package persistence
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/execution/agentlifecycle"
 )
-
-// envelopeGet retrieves a value from envelope working memory.
-func envelopeGet(state *contextdata.Envelope, key string) (any, bool) {
-	if state == nil {
-		return nil, false
-	}
-	return state.GetWorkingValue(key)
-}
-
-// envelopeSet stores a value in envelope working memory with task scope.
-func envelopeSet(state *contextdata.Envelope, key string, value any) {
-	if state == nil {
-		return
-	}
-	state.SetWorkingValueWithClass(key, value, contextdata.MemoryClassTask)
-}
 
 // Phase 9: Framework-native persistence integration for HTN runtime artifacts.
 // Persists end-of-run summaries, method metadata, execution metrics, and operator
@@ -153,116 +136,4 @@ func AppendHTNEvent(ctx context.Context,
 	return nil
 }
 
-// Helper functions for marshaling and summarization.
 
-func marshalHTNRunSummary(summary HTNRunSummary) string {
-	data, _ := marshalJSON(summary)
-	return string(data)
-}
-
-func marshalExecutionMetrics(metrics ExecutionMetrics) string {
-	data, _ := marshalJSON(metrics)
-	return string(data)
-}
-
-func marshalOperatorOutcome(outcome OperatorOutcome) string {
-	data, _ := marshalJSON(outcome)
-	return string(data)
-}
-
-func summarizeHTNRun(summary HTNRunSummary) string {
-	termStatus := "SUCCESS"
-	if !summary.Success {
-		termStatus = "FAILED"
-	}
-	return fmt.Sprintf(
-		"[%s] Task: %s | Method: %s | Progress: %d/%d | Duration: %ds",
-		termStatus,
-		summary.TaskType,
-		summary.SelectedMethod,
-		summary.CompletedStepCount,
-		summary.PlannedStepCount,
-		summary.TotalDuration,
-	)
-}
-
-func summarizeHTNRunMetadata(summary HTNRunSummary) map[string]any {
-	return map[string]any{
-		"schema_version":     summary.SchemaVersion,
-		"task_type":          string(summary.TaskType),
-		"selected_method":    summary.SelectedMethod,
-		"planned_steps":      summary.PlannedStepCount,
-		"completed_steps":    summary.CompletedStepCount,
-		"termination_status": summary.TerminationStatus,
-		"total_duration":     summary.TotalDuration,
-		"retrieval_applied":  summary.RetrievalApplied,
-		"success":            summary.Success,
-	}
-}
-
-func summarizeExecutionMetrics(metrics ExecutionMetrics) string {
-	return fmt.Sprintf(
-		"Duration: %ds (decomp: %ds, exec: %ds) | Steps: %d/%d | Retries: %d",
-		metrics.TotalDuration,
-		metrics.DecompositionTime,
-		metrics.ExecutionTime,
-		metrics.CompletedSteps,
-		metrics.PlanStepCount,
-		metrics.RetriedSteps,
-	)
-}
-
-func metricsMetadata(metrics ExecutionMetrics) map[string]any {
-	return map[string]any{
-		"schema_version":     metrics.SchemaVersion,
-		"total_duration":     metrics.TotalDuration,
-		"decomposition_time": metrics.DecompositionTime,
-		"execution_time":     metrics.ExecutionTime,
-		"plan_steps":         metrics.PlanStepCount,
-		"completed_steps":    metrics.CompletedSteps,
-		"failed_steps":       metrics.FailedSteps,
-		"retried_steps":      metrics.RetriedSteps,
-		"average_cost":       metrics.AverageCost,
-		"parallel_branches":  metrics.ParallelBranches,
-		"retrieval_applied":  metrics.RetrievalApplied,
-		"success":            metrics.Success,
-	}
-}
-
-func summarizeOperatorOutcome(outcome OperatorOutcome) string {
-	status := "OK"
-	if !outcome.Success {
-		status = "FAILED"
-	}
-	return fmt.Sprintf(
-		"[%s] %s (%s) | Duration: %ds | Retry: %d | Outputs: %d",
-		status,
-		outcome.OperatorName,
-		outcome.StepID,
-		outcome.Duration,
-		outcome.RetryCount,
-		len(outcome.OutputKeys),
-	)
-}
-
-func operatorOutcomeMetadata(outcome OperatorOutcome) map[string]any {
-	return map[string]any{
-		"operator_name": outcome.OperatorName,
-		"step_id":       outcome.StepID,
-		"task_type":     string(outcome.TaskType),
-		"success":       outcome.Success,
-		"duration":      outcome.Duration,
-		"cost_class":    outcome.CostClass,
-		"retry_class":   outcome.RetryClass,
-		"retried":       outcome.Retried,
-		"retry_count":   outcome.RetryCount,
-		"output_count":  len(outcome.OutputKeys),
-	}
-}
-
-func statusString(success bool) string {
-	if success {
-		return "completed"
-	}
-	return "failed"
-}

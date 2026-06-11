@@ -40,14 +40,6 @@ func truncate(s string, max int) string {
 	return string(runes[:max]) + "…"
 }
 
-// marshalJSON encodes v to indented JSON, returning "" on error.
-func marshalJSON(v any) string {
-	b, err := json.MarshalIndent(v, "", "  ")
-	if err != nil {
-		return fmt.Sprint(v)
-	}
-	return string(b)
-}
 
 // extractStringField extracts field from a map[string]any via JSON round-trip.
 // Used when a value is stored as a concrete struct type we can't import.

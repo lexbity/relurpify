@@ -42,7 +42,7 @@ func (c recipesCheck) Run(workspace string) []Diagnostic {
 		}
 
 		path := filepath.Join(recipesDir, entry.Name())
-		src, err := os.ReadFile(path)
+		src, err := os.ReadFile(filepath.Clean(path))
 		if err != nil {
 			diags = append(diags, Diagnostic{
 				Check:    "recipes",

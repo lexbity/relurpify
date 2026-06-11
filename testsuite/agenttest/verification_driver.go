@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
+	"codeburg.org/lexbit/relurpify/platform/fs"
 )
 
 // PreparedRunVerificationReport records artifact-only verification results.
@@ -148,14 +149,14 @@ func writePreparedRunVerificationReport(path string, report *PreparedRunVerifica
 	if strings.TrimSpace(path) == "" || report == nil {
 		return nil
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := fs.MkdirAllSecure(filepath.Dir(path)); err != nil {
 		return err
 	}
 	data, err := json.MarshalIndent(report, "", "  ")
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, data, 0o644)
+	return fs.WriteFileSecure(path, data)
 }
 
 func preparedRunFromSuiteCase(suite *Suite, c CaseSpec, model ModelSpec, opts RunOptions, targetWorkspace, runRoot, runID string) (*PreparedRun, error) {

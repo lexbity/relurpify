@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -295,7 +296,16 @@ func (p *SessionPane) Update(msg tea.Msg) (*SessionPane, tea.Cmd) {
 				path = p.changes[p.changeSel].Path
 			}
 			if path != "" {
-				return p, tea.ExecProcess(exec.Command(EditorPath(), path), func(err error) tea.Msg {
+				editor := EditorPath()
+			editorPath, err := exec.LookPath(editor)
+			if err != nil {
+				editorPath = editor
+			}
+			return p, tea.ExecProcess(
+				&exec.Cmd{
+					Path: editorPath,
+					Args: []string{editorPath, filepath.Clean(path)},
+				}, func(err error) tea.Msg {
 					if err != nil {
 						return chatSystemMsg{Text: fmt.Sprintf("Editor error: %v", err)}
 					}

@@ -9,22 +9,16 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/capability/descriptor"
-
 	runtimesvc "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
-	"codeburg.org/lexbit/relurpify/context/knowledge"
-	"codeburg.org/lexbit/relurpify/context/knowledge/memory"
 	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/execution/agentgraph"
 	"codeburg.org/lexbit/relurpify/execution/prompt"
 	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
-	"codeburg.org/lexbit/relurpify/governance/classification"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
-	"codeburg.org/lexbit/relurpify/governance/risk"
 	"codeburg.org/lexbit/relurpify/platform/llm"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
@@ -956,55 +950,6 @@ func (r *runtimeAdapter) SaveSandboxBackend(backend string) (string, error) {
 	})
 }
 
-func dedupeLowerPreserveOrder(values []string) []string {
-	seen := make(map[string]struct{}, len(values))
-	out := make([]string, 0, len(values))
-	for _, value := range values {
-		value = strings.ToLower(strings.TrimSpace(value))
-		if value == "" {
-			continue
-		}
-		if _, ok := seen[value]; ok {
-			continue
-		}
-		seen[value] = struct{}{}
-		out = append(out, value)
-	}
-	return out
-}
-
-func summarizeMetadata(metadata map[string]any) []string {
-	if len(metadata) == 0 {
-		return nil
-	}
-	keys := make([]string, 0, len(metadata))
-	for key := range metadata {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	out := make([]string, 0, len(keys))
-	for _, key := range keys {
-		out = append(out, fmt.Sprintf("%s=%v", key, metadata[key]))
-	}
-	return out
-}
-
-func summarizeAnyMetadata(metadata map[string]any) []string {
-	if len(metadata) == 0 {
-		return nil
-	}
-	keys := make([]string, 0, len(metadata))
-	for key := range metadata {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	out := make([]string, 0, len(keys))
-	for _, key := range keys {
-		out = append(out, fmt.Sprintf("%s=%v", key, metadata[key]))
-	}
-	return out
-}
-
 func cloneStringMap(values map[string]string) map[string]string {
 	if len(values) == 0 {
 		return nil
@@ -1028,75 +973,6 @@ func inferApprovalKind(request fauthorization.PermissionRequest) string {
 	default:
 		return "execution"
 	}
-}
-
-func capabilityAvailabilityLabel(spec descriptor.AvailabilitySpec) string {
-	if spec.Available {
-		return "available"
-	}
-	if strings.TrimSpace(spec.Reason) != "" {
-		return "unavailable: " + strings.TrimSpace(spec.Reason)
-	}
-	return "unavailable"
-}
-
-func riskClassStrings(values []risk.RiskClass) []string {
-	out := make([]string, 0, len(values))
-	for _, value := range values {
-		out = append(out, string(value))
-	}
-	return out
-}
-
-func effectClassStrings(values []classification.EffectClass) []string {
-	out := make([]string, 0, len(values))
-	for _, value := range values {
-		out = append(out, string(value))
-	}
-	return out
-}
-
-func describeWorkflowLinkedResources(refs []string) []WorkflowLinkedResourceInfo {
-	if len(refs) == 0 {
-		return nil
-	}
-	out := make([]WorkflowLinkedResourceInfo, 0, len(refs))
-	for _, raw := range refs {
-		ref, err := memory.ParseWorkflowResourceURI(raw)
-		if err != nil {
-			out = append(out, WorkflowLinkedResourceInfo{URI: raw, Summary: raw})
-			continue
-		}
-		out = append(out, WorkflowLinkedResourceInfo{
-			URI:     raw,
-			Role:    string(ref.Role),
-			RunID:   ref.RunID,
-			StepID:  ref.StepID,
-			Summary: describeWorkflowResourceRef(ref),
-		})
-	}
-	return out
-}
-
-func describeWorkflowResourceRef(ref memory.WorkflowResourceURI) string {
-	parts := []string{ref.WorkflowID}
-	if ref.Role != "" {
-		parts = append(parts, string(ref.Role))
-	}
-	if ref.StepID != "" {
-		parts = append(parts, ref.StepID)
-	}
-	if ref.RunID != "" {
-		parts = append(parts, ref.RunID)
-	}
-	return strings.Join(parts, " / ")
-}
-
-func fallbackSource(primary, fallback string) string {
-	if strings.TrimSpace(primary) != "" {
-		return primary
-	}
-	return strings.TrimSpace(fallback)
 }
 
 func (r *runtimeAdapter) SessionArtifacts() SessionArtifacts {
@@ -1377,115 +1253,4 @@ func (r *runtimeAdapter) activeWorkflowID() string {
 	return ""
 }
 
-func (r *runtimeAdapter) workspaceRoot() string {
-	if r == nil || r.rt == nil || strings.TrimSpace(r.rt.Config.Workspace) == "" {
-		return "."
-	}
-	return r.rt.Config.Workspace
-}
 
-func normalizeGoPackageArg(pkg string) string {
-	pkg = strings.TrimSpace(pkg)
-	if pkg == "" {
-		return "./..."
-	}
-	return pkg
-}
-
-func splitNonEmptyLines(raw string) []string {
-	lines := strings.Split(raw, "\n")
-	out := make([]string, 0, len(lines))
-	for _, line := range lines {
-		line = strings.TrimRight(line, "\r")
-		if strings.TrimSpace(line) == "" {
-			continue
-		}
-		out = append(out, line)
-	}
-	return out
-}
-
-func combineToolOutput(result *ports.ToolResult) []byte {
-	if result == nil {
-		return nil
-	}
-	stdout, _ := result.Data["stdout"].(string)
-	stderr, _ := result.Data["stderr"].(string)
-	switch {
-	case stdout == "":
-		return []byte(stderr)
-	case stderr == "":
-		return []byte(stdout)
-	default:
-		return []byte(stdout + "\n" + stderr)
-	}
-}
-
-func (r *runtimeAdapter) planNotes(workflowID string) map[string][]string {
-	out := map[string][]string{}
-	if r == nil || r.rt == nil || workflowID == "" {
-		return out
-	}
-	return out
-}
-
-func matchesCorpusScope(scope, corpusScope string, instances []knowledge.PatternInstance) bool {
-	scope = normalizeScope(scope)
-	corpusScope = normalizeScope(corpusScope)
-	if scope == "" || corpusScope == "" {
-		return true
-	}
-	if strings.Contains(corpusScope, scope) || strings.Contains(scope, corpusScope) {
-		return true
-	}
-	for _, instance := range instances {
-		if strings.Contains(normalizeScope(instance.FilePath), scope) {
-			return true
-		}
-	}
-	return false
-}
-
-func normalizeScope(scope string) string {
-	scope = strings.TrimSpace(scope)
-	scope = strings.TrimPrefix(scope, "./")
-	return filepath.Clean(scope)
-}
-
-func parseDriftSeverity(detail string) string {
-	lower := strings.ToLower(detail)
-	switch {
-	case strings.Contains(lower, "severity:critical"):
-		return "critical"
-	case strings.Contains(lower, "severity:significant"):
-		return "significant"
-	default:
-		return "minor"
-	}
-}
-
-func mapPlanAnchors(ids []string) []AnchorRef {
-	out := make([]AnchorRef, 0, len(ids))
-	for _, id := range ids {
-		if strings.TrimSpace(id) == "" {
-			continue
-		}
-		out = append(out, AnchorRef{Name: id, Status: "active"})
-	}
-	return out
-}
-
-func convertAnchors(anchorIDs []string) []AnchorRef {
-	out := make([]AnchorRef, 0, len(anchorIDs))
-	for _, id := range anchorIDs {
-		if strings.TrimSpace(id) == "" {
-			continue
-		}
-		out = append(out, AnchorRef{
-			Name:   id,
-			Class:  "technical", // Default class
-			Status: "active",
-		})
-	}
-	return out
-}

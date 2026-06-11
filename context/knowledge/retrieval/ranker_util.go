@@ -1,7 +1,6 @@
 package retrieval
 
 import (
-	"math"
 	"sort"
 	"strings"
 	"unicode"
@@ -46,6 +45,3 @@ func sortRankedIDs(scores map[knowledge.ChunkID]float64, tiebreak func(a, b know
 	return ids
 }
 
-func clampFloat(v, min, max float64) float64 {
-	return math.Max(min, math.Min(max, v))
-}

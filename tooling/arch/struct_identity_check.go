@@ -36,7 +36,7 @@ func CheckStructIdentityConverters(pkgs []GoPackage, root string, allowlist Allo
 			if strings.HasSuffix(fname, "_test.go") {
 				continue
 			}
-			src, err := os.ReadFile(filepath.Join(pkgDir, fname))
+			src, err := os.ReadFile(filepath.Clean(filepath.Join(pkgDir, fname)))
 			if err != nil {
 				continue
 			}

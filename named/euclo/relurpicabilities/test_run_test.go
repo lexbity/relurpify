@@ -10,10 +10,6 @@ import (
 	"codeburg.org/lexbit/relurpify/testsuite/testsupport"
 )
 
-func testCmdDeps(runner CommandRuntime, policy CommandPolicy) CommandDeps {
-	return CommandDeps{Runner: runner, Policy: policy}
-}
-
 func TestTestRunHandlerDescriptor(t *testing.T) {
 	handler := NewTestRunHandler(CommandDeps{})
 

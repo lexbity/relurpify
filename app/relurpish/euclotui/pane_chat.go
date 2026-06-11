@@ -24,7 +24,6 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-const chatSidebarMinWidth = 60
 const contextFileMaxBytes = 8000
 
 var spinnerFrames = []string{"⣷", "⣯", "⣟", "⡿", "⢿", "⣻", "⣽", "⣾"}
@@ -39,13 +38,6 @@ var chatSubTabPolicies = map[tui.SubTabID]struct {
 	tui.SubTabChatOnlineRead: {ModeHint: "research", OnlineToolsEnabled: true},
 	tui.SubTabChatOnlineEdit: {ModeHint: "code", EditEnabled: true, OnlineToolsEnabled: true},
 }
-
-type chatFocusPane int
-
-const (
-	chatFocusFeed chatFocusPane = iota
-	chatFocusSidebar
-)
 
 type ChatPane struct {
 	feed      *tui.Feed
@@ -954,10 +946,6 @@ func (p *ChatPane) addSystemMessage(text string) {
 		Content:   tui.MessageContent{Text: text},
 	}
 	p.feed.AppendMessage(msg)
-}
-
-func (p *ChatPane) normalizeRenderedFrameText(text string) string {
-	return summarizeMilestoneText(text)
 }
 
 func extractFileTokens(text string) []string {

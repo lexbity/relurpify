@@ -91,13 +91,6 @@ func (a *GoalConAgent) BuildGraph(ctx context.Context, _ *execution.Task) (*grap
 	return g, nil
 }
 
-func envGetString(env *contextdata.Envelope, key string) string {
-	val, _ := env.GetWorkingValue(key)
-	if s, ok := val.(string); ok {
-		return s
-	}
-	return ""
-}
 
 func (a *GoalConAgent) Execute(ctx context.Context, task *execution.Task, env *contextdata.Envelope) (*execution.Result, error) {
 	if !a.initialised {

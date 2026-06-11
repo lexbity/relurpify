@@ -15,6 +15,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
+	"codeburg.org/lexbit/relurpify/platform/fs"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 	euclosubject "codeburg.org/lexbit/relurpify/testsuite/subjects/euclo"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
@@ -77,10 +78,10 @@ func newLoadedOllamaServer(t *testing.T, modelName string) *loadedOllamaServer {
 func TestFallbackManifestPath(t *testing.T) {
 	workspace := t.TempDir()
 	manifestPath := filepath.Join(config.New(workspace).ConfigRoot(), "agent.yaml")
-	if err := os.MkdirAll(filepath.Dir(manifestPath), 0o755); err != nil {
+	if err := fs.MkdirAllSecure(filepath.Dir(manifestPath)); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	if err := os.WriteFile(manifestPath, []byte("test"), 0o644); err != nil {
+	if err := fs.WriteFileSecure(manifestPath, []byte("test")); err != nil {
 		t.Fatalf("write manifest: %v", err)
 	}
 
@@ -166,10 +167,10 @@ func TestResolveCaseExecutionPrefersCLIThenSuiteThenManifestModel(t *testing.T) 
 func TestResolveCaseModelProfileUsesWorkspaceRegistry(t *testing.T) {
 	workspace := t.TempDir()
 	profilesDir := filepath.Join(workspace, "relurpify_cfg", "model", "profiles")
-	if err := os.MkdirAll(profilesDir, 0o755); err != nil {
+	if err := fs.MkdirAllSecure(profilesDir); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(profilesDir, "default.llm.yaml"), []byte(`schema: relurpify/model/profile/v1
+	if err := fs.WriteFileSecure(filepath.Join(profilesDir, "default.llm.yaml"), []byte(`schema: relurpify/model/profile/v1
 pattern: "*"
 tool_calling:
   native_api: false
@@ -179,10 +180,10 @@ tool_calling:
 repair:
   strategy: heuristic-only
   max_attempts: 0
-`), 0o644); err != nil {
+`)); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(profilesDir, "gemma4.llm.yaml"), []byte(`schema: relurpify/model/profile/v1
+	if err := fs.WriteFileSecure(filepath.Join(profilesDir, "gemma4.llm.yaml"), []byte(`schema: relurpify/model/profile/v1
 pattern: "gemma4*"
 tool_calling:
   native_api: true
@@ -192,7 +193,7 @@ tool_calling:
 repair:
   strategy: llm
   max_attempts: 1
-`), 0o644); err != nil {
+`)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -242,11 +243,11 @@ func TestResolveCaseExecutionUsesGoldenTapeForReplayStrategy(t *testing.T) {
 	workspace := t.TempDir()
 	suitePath := filepath.Join(workspace, "testsuite", "agenttests", "euclo.code.testsuite.yaml")
 	goldenDir := filepath.Join(workspace, "testsuite", "agenttests", "tapes", "euclo.code")
-	if err := os.MkdirAll(goldenDir, 0o755); err != nil {
+	if err := fs.MkdirAllSecure(goldenDir); err != nil {
 		t.Fatal(err)
 	}
 	goldenPath := filepath.Join(goldenDir, "basic_edit_task__qwen2_5_coder_14b.tape.jsonl")
-	if err := os.WriteFile(goldenPath, []byte("{}\n"), 0o644); err != nil {
+	if err := fs.WriteFileSecure(goldenPath, []byte("{}\n")); err != nil {
 		t.Fatal(err)
 	}
 	layout := newRunCaseLayout(t.TempDir(), "basic_edit_task", "qwen2.5-coder:14b")
@@ -485,7 +486,7 @@ func TestSeedWorkflowRetrievalStateForCaseSeedsCompiledPlanFromWorkflowKnowledge
 func TestRunnerPreflightSuiteChecksLoadedModels(t *testing.T) {
 	workspace := t.TempDir()
 	manifestPath := filepath.Join(workspace, "relurpify_cfg", "agent.yaml")
-	if err := os.MkdirAll(filepath.Dir(manifestPath), 0o755); err != nil {
+	if err := fs.MkdirAllSecure(filepath.Dir(manifestPath)); err != nil {
 		t.Fatalf("mkdir manifest dir: %v", err)
 	}
 	manifestData := `schema: relurpify/agent/v1
@@ -509,7 +510,7 @@ spec:
       provider: ollama
       name: qwen2.5-coder:14b
 `
-	if err := os.WriteFile(manifestPath, []byte(manifestData), 0o644); err != nil {
+	if err := fs.WriteFileSecure(manifestPath, []byte(manifestData)); err != nil {
 		t.Fatalf("write manifest: %v", err)
 	}
 
@@ -549,7 +550,7 @@ spec:
 func TestRunnerPreflightSuiteFailsWhenModelNotLoaded(t *testing.T) {
 	workspace := t.TempDir()
 	manifestPath := filepath.Join(workspace, "relurpify_cfg", "agent.yaml")
-	if err := os.MkdirAll(filepath.Dir(manifestPath), 0o755); err != nil {
+	if err := fs.MkdirAllSecure(filepath.Dir(manifestPath)); err != nil {
 		t.Fatalf("mkdir manifest dir: %v", err)
 	}
 	manifestData := `schema: relurpify/agent/v1
@@ -573,7 +574,7 @@ spec:
       provider: ollama
       name: qwen2.5-coder:14b
 `
-	if err := os.WriteFile(manifestPath, []byte(manifestData), 0o644); err != nil {
+	if err := fs.WriteFileSecure(manifestPath, []byte(manifestData)); err != nil {
 		t.Fatalf("write manifest: %v", err)
 	}
 

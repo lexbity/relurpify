@@ -214,7 +214,7 @@ func loadTelemetryEvents(path string, limit int) ([]telemetry.Event, bool, error
 	if limit <= 0 {
 		limit = 200
 	}
-	f, err := os.Open(path)
+	f, err := os.Open(filepath.Clean(path))
 	if err != nil {
 		return nil, false, err
 	}

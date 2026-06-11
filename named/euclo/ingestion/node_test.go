@@ -160,8 +160,15 @@ func gitInit(t *testing.T, root string) {
 
 func gitRun(t *testing.T, root string, args ...string) {
 	t.Helper()
-	cmd := exec.Command("git", args...)
-	cmd.Dir = root
+	gitPath, err := exec.LookPath("git")
+	if err != nil {
+		t.Fatalf("git not found: %v", err)
+	}
+	cmd := &exec.Cmd{
+		Path: gitPath,
+		Args: append([]string{gitPath}, args...),
+		Dir:  filepath.Clean(root),
+	}
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("git %v failed: %v\n%s", args, err, string(out))
@@ -170,8 +177,15 @@ func gitRun(t *testing.T, root string, args ...string) {
 
 func gitOutput(t *testing.T, root string, args ...string) string {
 	t.Helper()
-	cmd := exec.Command("git", args...)
-	cmd.Dir = root
+	gitPath, err := exec.LookPath("git")
+	if err != nil {
+		t.Fatalf("git not found: %v", err)
+	}
+	cmd := &exec.Cmd{
+		Path: gitPath,
+		Args: append([]string{gitPath}, args...),
+		Dir:  filepath.Clean(root),
+	}
 	out, err := cmd.Output()
 	if err != nil {
 		t.Fatalf("git %v failed: %v", args, err)

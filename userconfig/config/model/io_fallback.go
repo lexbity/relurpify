@@ -50,7 +50,7 @@ func readConfigFile(workspaceRoot, path string) ([]byte, error) {
 		return nil, fmt.Errorf("config path %q is outside workspace root %q", absPath, absWorkspace)
 	}
 
-	return os.ReadFile(absPath)
+	return os.ReadFile(filepath.Clean(absPath))
 }
 
 func rejectForbiddenSecretFields(path string, data []byte) error {

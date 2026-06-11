@@ -358,7 +358,7 @@ func isTypeOnlyPackageForVocab(pkg GoPackage, root string) bool {
 			continue
 		}
 
-		src, err := os.ReadFile(filepath.Join(pkgDir, f.Name()))
+		src, err := os.ReadFile(filepath.Clean(filepath.Join(pkgDir, f.Name())))
 		if err != nil {
 			return false
 		}

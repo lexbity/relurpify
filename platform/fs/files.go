@@ -89,7 +89,7 @@ func (t *ReadFileTool) Execute(ctx context.Context, args map[string]any) (*ports
 	if info.IsDir() {
 		return &ports.ToolResult{Success: false, Error: fmt.Sprintf("%s is a directory; use file_list to explore it", path)}, nil
 	}
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(filepath.Clean(path))
 	if err != nil {
 		return nil, err
 	}
@@ -194,7 +194,7 @@ func (t *WriteFileTool) Execute(ctx context.Context, args map[string]any) (*port
 	}
 	// Open with O_NOFOLLOW to prevent writing through a symlink (defence-in-depth
 	// for the sandbox scope check — SEC-5).
-	f, openErr := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC|syscall.O_NOFOLLOW, 0o644)
+	f, openErr := os.OpenFile(filepath.Clean(path), os.O_CREATE|os.O_WRONLY|os.O_TRUNC|syscall.O_NOFOLLOW, 0o644)
 	if openErr != nil {
 		return nil, fmt.Errorf("open %s for write: %w", path, openErr)
 	}
@@ -398,7 +398,7 @@ func (t *SearchInFilesTool) Execute(ctx context.Context, args map[string]any) (*
 			return err
 		}
 
-		file, err := os.Open(path)
+		file, err := os.Open(filepath.Clean(path))
 		if err != nil {
 			return nil // skip unreadable files
 		}
@@ -708,12 +708,12 @@ func isText(data []byte) bool {
 }
 
 func copyFile(src, dst string) error {
-	in, err := os.Open(src)
+	in, err := os.Open(filepath.Clean(src))
 	if err != nil {
 		return err
 	}
 	defer in.Close()
-	out, err := os.Create(dst)
+	out, err := os.Create(filepath.Clean(dst))
 	if err != nil {
 		return err
 	}

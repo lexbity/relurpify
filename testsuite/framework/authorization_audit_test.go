@@ -3,7 +3,6 @@ package framework
 import (
 	"context"
 	"errors"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -14,6 +13,7 @@ import (
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	govpolicy "codeburg.org/lexbit/relurpify/governance/policy"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
+	"codeburg.org/lexbit/relurpify/platform/fs"
 )
 
 // TestAllowDecisionAudit validates that allow decisions generate observable audit records
@@ -25,7 +25,7 @@ func TestAllowDecisionAudit(t *testing.T) {
 	testPath := filepath.Join(env.WorkspacePath, "allowed.txt")
 
 	// Create a file to test access
-	if err := os.WriteFile(testPath, []byte("test content"), 0o644); err != nil {
+	if err := fs.WriteFileSecure(testPath, []byte("test content")); err != nil {
 		t.Fatalf("failed to create test file: %v", err)
 	}
 
@@ -240,7 +240,7 @@ func TestRequestDecisionCorrelation(t *testing.T) {
 	testPath := filepath.Join(env.WorkspacePath, "correlation.txt")
 
 	// Create a test file
-	if err := os.WriteFile(testPath, []byte("correlation test"), 0o644); err != nil {
+	if err := fs.WriteFileSecure(testPath, []byte("correlation test")); err != nil {
 		t.Fatalf("failed to create test file: %v", err)
 	}
 
@@ -298,7 +298,7 @@ func TestAuditRecordDeterminism(t *testing.T) {
 	testPath := filepath.Join(env.WorkspacePath, "determinism.txt")
 
 	// Create a test file
-	if err := os.WriteFile(testPath, []byte("determinism test"), 0o644); err != nil {
+	if err := fs.WriteFileSecure(testPath, []byte("determinism test")); err != nil {
 		t.Fatalf("failed to create test file: %v", err)
 	}
 
@@ -357,7 +357,7 @@ func TestAuditQueryFiltering(t *testing.T) {
 	otherAgentID := "other-agent"
 
 	testPath := filepath.Join(env.WorkspacePath, "query.txt")
-	if err := os.WriteFile(testPath, []byte("query test"), 0o644); err != nil {
+	if err := fs.WriteFileSecure(testPath, []byte("query test")); err != nil {
 		t.Fatalf("failed to create test file: %v", err)
 	}
 

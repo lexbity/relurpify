@@ -1,10 +1,11 @@
 package arch
 
 import (
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"codeburg.org/lexbit/relurpify/platform/fs"
 )
 
 func mkPkg(importPath string, goFiles ...string) GoPackage {
@@ -364,14 +365,14 @@ func TestCheckNoBucket_stillFlagsFrameworkTypes(t *testing.T) {
 
 func mkDirAll(t *testing.T, path string) {
 	t.Helper()
-	if err := os.MkdirAll(path, 0755); err != nil {
+	if err := fs.MkdirAllSecure(path); err != nil {
 		t.Fatal(err)
 	}
 }
 
 func writeFile(t *testing.T, path, content string) {
 	t.Helper()
-	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+	if err := fs.WriteFileSecure(path, []byte(content)); err != nil {
 		t.Fatal(err)
 	}
 }

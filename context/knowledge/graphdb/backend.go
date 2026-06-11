@@ -76,9 +76,7 @@ type backend interface {
 type mutationBatch struct {
 	opName string
 	op     any
-	// ops holds additional ops when a batch carries multiple operations.
-	// When non-nil, commit applies all of them atomically.
-	ops []any
+
 }
 
 // singleOpBatch returns a mutationBatch for a single operation.

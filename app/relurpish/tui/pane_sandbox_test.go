@@ -180,7 +180,7 @@ func TestSandboxPaneCyclesAndPersists(t *testing.T) {
 	if _, err := os.Stat(saved.Backup); err != nil {
 		t.Fatalf("backup missing: %v", err)
 	}
-	written, err := os.ReadFile(manifestPath)
+	written, err := os.ReadFile(filepath.Clean(manifestPath))
 	if err != nil {
 		t.Fatalf("read written manifest: %v", err)
 	}

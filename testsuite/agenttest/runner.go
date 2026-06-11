@@ -8,13 +8,13 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 	"time"
 
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/platform/fs"
 	"codeburg.org/lexbit/relurpify/telemetry/perfstats"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
@@ -229,7 +229,7 @@ func (r *Runner) RunSuite(ctx context.Context, suite *Suite, opts RunOptions) (*
 	if outDir == "" {
 		outDir = workspacePaths.TestRunsDir()
 	}
-	if err := os.MkdirAll(outDir, 0o755); err != nil {
+	if err := fs.MkdirAllSecure(outDir); err != nil {
 		return nil, err
 	}
 
@@ -290,7 +290,7 @@ func (r *Runner) RunSuite(ctx context.Context, suite *Suite, opts RunOptions) (*
 		if benchmarkReport, err := BuildBenchmarkReport(suite, report); err == nil && benchmarkReport != nil {
 			report.Benchmark = benchmarkReport
 			if data, marshalErr := json.MarshalIndent(benchmarkReport, "", "  "); marshalErr == nil {
-				_ = os.WriteFile(BenchmarkReportFilePath(outDir), data, 0o644)
+				_ = fs.WriteFileSecure(BenchmarkReportFilePath(outDir), data)
 			}
 		}
 	}
@@ -298,13 +298,13 @@ func (r *Runner) RunSuite(ctx context.Context, suite *Suite, opts RunOptions) (*
 	// OSB Model: Write benchmark_summary.json (Phase 5)
 	if report.OSBBenchmark != nil {
 		if data, err := json.MarshalIndent(report.OSBBenchmark, "", "  "); err == nil {
-			_ = os.WriteFile(filepath.Join(outDir, "benchmark_summary.json"), data, 0o644)
+			_ = fs.WriteFileSecure(filepath.Join(outDir, "benchmark_summary.json"), data)
 		}
 	}
 
 	data, err := json.MarshalIndent(report, "", "  ")
 	if err == nil {
-		_ = os.WriteFile(filepath.Join(outDir, "report.json"), data, 0o644)
+		_ = fs.WriteFileSecure(filepath.Join(outDir, "report.json"), data)
 	}
 	return report, nil
 }
@@ -312,8 +312,8 @@ func (r *Runner) RunSuite(ctx context.Context, suite *Suite, opts RunOptions) (*
 func (r *Runner) runPreparedCase(ctx context.Context, suite *Suite, c CaseSpec, model ModelSpec, opts RunOptions, targetWorkspace, outDir, runID string) CaseReport {
 	caseStartedAt := time.Now().UTC()
 	layout := newRunCaseLayout(outDir, c.Name, model.Name)
-	_ = os.MkdirAll(layout.ArtifactsDir, 0o755)
-	_ = os.MkdirAll(layout.TmpDir, 0o755)
+	_ = fs.MkdirAllSecure(layout.ArtifactsDir)
+	_ = fs.MkdirAllSecure(layout.TmpDir)
 
 	preparedRunID := preparedRunCaseID(runID, c.Name, model.Name)
 	caseRunRoot := filepath.Join(outDir, preparedRunID)

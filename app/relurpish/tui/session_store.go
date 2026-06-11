@@ -105,7 +105,7 @@ func (s *SessionStore) List() ([]SessionMeta, error) {
 			continue
 		}
 		f := filepath.Join(s.root, e.Name(), "session.json")
-		data, err := os.ReadFile(f)
+		data, err := os.ReadFile(filepath.Clean(f))
 		if err != nil {
 			continue
 		}
@@ -175,7 +175,7 @@ func (s *SessionStore) ListCheckpoints() ([]SessionMeta, error) {
 			continue
 		}
 		f := filepath.Join(s.root, e.Name(), "session.json")
-		data, err := os.ReadFile(f)
+		data, err := os.ReadFile(filepath.Clean(f))
 		if err != nil {
 			continue
 		}

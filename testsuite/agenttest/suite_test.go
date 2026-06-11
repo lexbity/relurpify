@@ -4,9 +4,10 @@
 package agenttest
 
 import (
-	"os"
 	"path/filepath"
 	"testing"
+
+	"codeburg.org/lexbit/relurpify/platform/fs"
 )
 
 func TestSuiteValidateDefaultsDerivedWorkspaceSettings(t *testing.T) {
@@ -231,7 +232,7 @@ func TestSuiteIsStrictRunForCIProfiles(t *testing.T) {
 func TestLoadSuiteRejectsUnknownFields(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "suite.yaml")
-	err := os.WriteFile(path, []byte(`
+	err := fs.WriteFileSecure(path, []byte(`
 apiVersion: relurpify/v1alpha1
 kind: AgentTestSuite
 metadata:
@@ -243,7 +244,7 @@ spec:
   cases:
     - name: smoke
       prompt: summarize
-`), 0o644)
+`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -256,7 +257,7 @@ spec:
 func TestLoadSuiteRejectsUnknownEucloExpectationFields(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "suite.yaml")
-	err := os.WriteFile(path, []byte(`
+	err := fs.WriteFileSecure(path, []byte(`
 apiVersion: relurpify/v1alpha1
 kind: AgentTestSuite
 metadata:
@@ -271,7 +272,7 @@ spec:
         euclo:
           mode: code
           transitions_accepted: 1
-`), 0o644)
+`))
 	if err != nil {
 		t.Fatal(err)
 	}

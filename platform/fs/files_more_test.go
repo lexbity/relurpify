@@ -127,7 +127,7 @@ func TestCopyFile(t *testing.T) {
 	err = copyFile(src, dst)
 	require.NoError(t, err)
 
-	copied, err := os.ReadFile(dst)
+	copied, err := os.ReadFile(filepath.Clean(dst))
 	require.NoError(t, err)
 	assert.Equal(t, content, copied)
 }
@@ -417,7 +417,7 @@ func TestCreateFileTool_CreatesNewFile(t *testing.T) {
 	assert.True(t, res.Success)
 	assert.Equal(t, filepath.Join(dir, "newfile.txt"), res.Data["path"])
 
-	content, err := os.ReadFile(filepath.Join(dir, "newfile.txt"))
+	content, err := os.ReadFile(filepath.Clean(filepath.Join(dir, "newfile.txt")))
 	require.NoError(t, err)
 	assert.Equal(t, "new content", string(content))
 }
@@ -433,7 +433,7 @@ func TestCreateFileTool_CreatesNestedFile(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, res.Success)
 
-	content, err := os.ReadFile(filepath.Join(dir, "subdir/nested/file.txt"))
+	content, err := os.ReadFile(filepath.Clean(filepath.Join(dir, "subdir/nested/file.txt")))
 	require.NoError(t, err)
 	assert.Equal(t, "nested content", string(content))
 }
@@ -463,7 +463,7 @@ func TestCreateFileTool_NoContent(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, res.Success)
 
-	content, err := os.ReadFile(filepath.Join(dir, "empty.txt"))
+	content, err := os.ReadFile(filepath.Clean(filepath.Join(dir, "empty.txt")))
 	require.NoError(t, err)
 	assert.Empty(t, string(content), "file should be empty when content not provided")
 }
@@ -479,7 +479,7 @@ func TestCreateFileTool_EmptyContent(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, res.Success)
 
-	content, err := os.ReadFile(filepath.Join(dir, "empty.txt"))
+	content, err := os.ReadFile(filepath.Clean(filepath.Join(dir, "empty.txt")))
 	require.NoError(t, err)
 	assert.Empty(t, string(content))
 }
@@ -504,7 +504,7 @@ func TestDeleteFileTool_MovesToTrash(t *testing.T) {
 
 	// File should be in trash
 	trashFile := filepath.Join(dir, ".trash", "todelete.txt")
-	content, err := os.ReadFile(trashFile)
+	content, err := os.ReadFile(filepath.Clean(trashFile))
 	require.NoError(t, err)
 	assert.Equal(t, "delete me", string(content))
 }
@@ -524,7 +524,7 @@ func TestDeleteFileTool_CustomTrashDir(t *testing.T) {
 
 	// File should be in custom trash
 	trashFile := filepath.Join(customTrash, "todelete.txt")
-	content, err := os.ReadFile(trashFile)
+	content, err := os.ReadFile(filepath.Clean(trashFile))
 	require.NoError(t, err)
 	assert.Equal(t, "delete me", string(content))
 }
@@ -613,12 +613,12 @@ func TestWriteFileTool_Backup(t *testing.T) {
 
 	// Check backup exists
 	backup := file + ".bak"
-	backupContent, err := os.ReadFile(backup)
+	backupContent, err := os.ReadFile(filepath.Clean(backup))
 	require.NoError(t, err)
 	assert.Equal(t, "original content", string(backupContent))
 
 	// Check file is updated
-	content, err := os.ReadFile(file)
+	content, err := os.ReadFile(filepath.Clean(file))
 	require.NoError(t, err)
 	assert.Equal(t, "updated content", string(content))
 }
@@ -1636,7 +1636,7 @@ func TestCopyFile_ExercisePath(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify content was copied
-	content, err := os.ReadFile(dst)
+	content, err := os.ReadFile(filepath.Clean(dst))
 	require.NoError(t, err)
 	assert.Equal(t, "content", string(content))
 }
@@ -1654,7 +1654,7 @@ func TestCreateFileTool_DeepNesting(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, res.Success)
 
-	content, err := os.ReadFile(filepath.Join(dir, "a/b/c/d/e/deep.txt"))
+	content, err := os.ReadFile(filepath.Clean(filepath.Join(dir, "a/b/c/d/e/deep.txt")))
 	require.NoError(t, err)
 	assert.Equal(t, "deep content", string(content))
 }
@@ -1672,7 +1672,7 @@ func TestWriteFileTool_DeepNesting(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, res.Success)
 
-	content, err := os.ReadFile(filepath.Join(dir, "a/b/c/d/e/deep.txt"))
+	content, err := os.ReadFile(filepath.Clean(filepath.Join(dir, "a/b/c/d/e/deep.txt")))
 	require.NoError(t, err)
 	assert.Equal(t, "deep content", string(content))
 }

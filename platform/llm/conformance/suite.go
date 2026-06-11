@@ -1,10 +1,7 @@
 package conformance
 
 import (
-	"context"
 	"encoding/json"
-	"io"
-	"net/http"
 	"net/http/httptest"
 	"testing"
 
@@ -141,18 +138,4 @@ func BackendConformanceSuite(t *testing.T, spec BackendConformanceSpec) {
 	})
 }
 
-func writeJSONResponse(w http.ResponseWriter, body any) {
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(body); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
-}
 
-func requestBodyString(r *http.Request) string {
-	data, _ := io.ReadAll(r.Body)
-	return string(data)
-}
-
-func withContext() context.Context {
-	return context.Background()
-}

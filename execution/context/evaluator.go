@@ -124,7 +124,6 @@ type quotaCounter struct {
 	mu         sync.Mutex
 	chunksUsed int
 	tokensUsed int
-	lastReset  time.Time
 }
 
 func (qc *quotaCounter) chunksRemaining(maxChunks int) int {

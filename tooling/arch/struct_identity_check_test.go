@@ -1,19 +1,20 @@
 package arch
 
 import (
-	"os"
 	"path/filepath"
 	"testing"
+
+	"codeburg.org/lexbit/relurpify/platform/fs"
 )
 
 // writeConvPkg writes a single-file package under root and returns the GoPackage.
 func writeConvPkg(t *testing.T, root, rel, src string) GoPackage {
 	t.Helper()
 	dir := filepath.Join(root, rel)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := fs.MkdirAllSecure(dir); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "conv.go"), []byte(src), 0o644); err != nil {
+	if err := fs.WriteFileSecure(filepath.Join(dir, "conv.go"), []byte(src)); err != nil {
 		t.Fatal(err)
 	}
 	return GoPackage{

@@ -30,26 +30,6 @@ func envelopeGet(state *contextdata.Envelope, key string) (any, bool) {
 	return nil, false
 }
 
-// envelopeSet stores a value in envelope working memory with task scope.
-func envelopeSet(state *contextdata.Envelope, key string, value any) {
-	if state == nil {
-		return
-	}
-	state.SetWorkingValueWithClass(key, value, contextdata.MemoryClassTask)
-}
-
-// envelopeGetString retrieves a value and converts it to string.
-func envelopeGetString(state *contextdata.Envelope, key string) string {
-	if state == nil {
-		return ""
-	}
-	raw, ok := envelopeGet(state, key)
-	if !ok || raw == nil {
-		return ""
-	}
-	return fmt.Sprint(raw)
-}
-
 // getWorkingValueAsString retrieves a working value and converts it to string.
 func getWorkingValueAsString(state *contextdata.Envelope, key string) string {
 	if state == nil {
@@ -60,70 +40,6 @@ func getWorkingValueAsString(state *contextdata.Envelope, key string) string {
 		return ""
 	}
 	return fmt.Sprint(raw)
-}
-
-// envelopeGetContextForLLM retrieves LLM-formatted context from envelope.
-// Assembles streamed context references into a formatted string for LLM consumption.
-// Note: ChunkReference contains IDs only; content resolution happens at assembly time.
-func envelopeGetContextForLLM(state *contextdata.Envelope) string {
-	if state == nil {
-		return ""
-	}
-
-	var sections []string
-
-	// Add retrieval context if available (QueryText contains the actual query)
-	for _, ref := range state.References.Retrieval {
-		if ref.QueryText != "" {
-			sections = append(sections, fmt.Sprintf("Retrieved: %s", ref.QueryText))
-		}
-	}
-
-	// Note: StreamedContext ChunkReferences are resolved by the compiler
-	// during envelope assembly. The references indicate which chunks were
-	// included, but the actual content was already written to working memory
-	// or is accessed via the streaming trigger results.
-
-	if len(sections) == 0 {
-		return ""
-	}
-
-	return strings.Join(sections, "\n\n")
-}
-
-// envelopeGetFullHistory retrieves full chat history from envelope working memory.
-// Returns compressed summary interactions and full interactions from the envelope.
-func envelopeGetFullHistory(state *contextdata.Envelope) ([]CompressedInteraction, []Interaction) {
-	if state == nil {
-		return nil, nil
-	}
-
-	// Retrieve interactions from working memory
-	var interactions []Interaction
-	if raw, ok := state.GetWorkingValue("_interactions"); ok {
-		if arr, ok := raw.([]map[string]any); ok {
-			for _, item := range arr {
-				role, _ := item["role"].(string)
-				content, _ := item["content"].(string)
-				if role != "" && content != "" {
-					interactions = append(interactions, Interaction{
-						Role:    role,
-						Content: content,
-					})
-				}
-			}
-		}
-	}
-
-	// Retrieve compressed history if available
-	var compressed []CompressedInteraction
-	if raw, ok := state.GetWorkingValue("react.history_compressed"); ok {
-		if arr, ok := raw.([]CompressedInteraction); ok {
-			compressed = arr
-		}
-	}
-
-	return compressed, interactions
 }
 
 // CompressedInteraction represents a compressed chat interaction.
@@ -325,21 +241,6 @@ func firstMeaningfulLine(text string) string {
 	return ""
 }
 
-func finalOutputSummary(value any) string {
-	switch v := value.(type) {
-	case map[string]any:
-		return strings.TrimSpace(fmt.Sprint(v["summary"]))
-	default:
-		return strings.TrimSpace(fmt.Sprint(value))
-	}
-}
-
-func reactTaskScope(state *contextdata.Envelope) string {
-	if state == nil {
-		return ""
-	}
-	return getWorkingValueAsString(state, "task.id")
-}
 
 func trimToBudget(value string, max int) string {
 	value = strings.TrimSpace(value)

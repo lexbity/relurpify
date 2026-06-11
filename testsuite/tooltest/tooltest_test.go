@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"codeburg.org/lexbit/relurpify/platform/fs"
 )
 
 func TestLoadToolTests(t *testing.T) {
@@ -128,10 +130,10 @@ func TestRunToolTestNetworkEgressBlocked(t *testing.T) {
 
 func requireWriteFile(t *testing.T, path, content string) {
 	t.Helper()
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := fs.MkdirAllSecure(filepath.Dir(path)); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+	if err := fs.WriteFileSecure(path, []byte(content)); err != nil {
 		t.Fatal(err)
 	}
 }

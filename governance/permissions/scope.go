@@ -170,17 +170,6 @@ func defaultFileScopeProtectedRoots(workspace string) []string {
 	}
 }
 
-func cleanScopeRoots(roots []string) []string {
-	out := make([]string, 0, len(roots))
-	for _, root := range roots {
-		cleaned := filepath.Clean(root)
-		if cleaned != "" && cleaned != "." && cleaned != "/" {
-			out = append(out, cleaned+string(filepath.Separator))
-		}
-	}
-	return out
-}
-
 func dedupeScopePaths(paths []string) []string {
 	if len(paths) == 0 {
 		return nil

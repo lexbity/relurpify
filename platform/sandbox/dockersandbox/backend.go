@@ -85,7 +85,16 @@ func (b *Backend) Verify(ctx context.Context) error {
 	}
 	cctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(cctx, path, "version", "--format", "{{.Server.Version}}")
+	cmd := &exec.Cmd{
+		Path: path,
+		Args: []string{path, "version", "--format", "{{.Server.Version}}"},
+	}
+	go func() {
+		<-cctx.Done()
+		if cmd.Process != nil {
+			cmd.Process.Kill()
+		}
+	}()
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("docker verification failed: %w", err)
 	} else if strings.TrimSpace(string(out)) == "" {

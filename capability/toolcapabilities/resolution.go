@@ -259,19 +259,6 @@ func cloneAnyMap(in map[string]any) map[string]any {
 	return out
 }
 
-func hasKeyNormalized(args map[string]any, key string) bool {
-	if len(args) == 0 {
-		return false
-	}
-	want := NormalizeToolName(key)
-	for existing := range args {
-		if NormalizeToolName(existing) == want {
-			return true
-		}
-	}
-	return false
-}
-
 func normalizeStringSlice(value any) ([]string, error) {
 	switch typed := value.(type) {
 	case nil:

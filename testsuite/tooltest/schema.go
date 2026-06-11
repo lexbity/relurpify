@@ -105,7 +105,7 @@ func LoadToolTests(dir string) ([]*ToolTestCase, error) {
 
 // LoadToolTest reads a single .tooltest.yaml file.
 func LoadToolTest(path string) (*ToolTestCase, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(filepath.Clean(path))
 	if err != nil {
 		return nil, err
 	}

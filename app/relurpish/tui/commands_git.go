@@ -131,28 +131,6 @@ func gitAutoCommitCmd(rt RuntimeAdapter) tea.Cmd {
 	}
 }
 
-// gitStatusCmd queries git for modified files through the capability registry.
-func gitStatusCmd(rt RuntimeAdapter) tea.Cmd {
-	return func() tea.Msg {
-		if rt == nil {
-			return gitStatusMsg{Err: fmt.Errorf("runtime unavailable")}
-		}
-		result, err := rt.InvokeCapability(context.Background(), "cli_git", map[string]any{
-			"args": []string{"status", "--porcelain"},
-		})
-		if err != nil {
-			return gitStatusMsg{Err: fmt.Errorf("git status failed: %w", err)}
-		}
-		output := ""
-		if result != nil {
-			if s, ok := result.Data["stdout"].(string); ok {
-				output = s
-			}
-		}
-		return gitStatusMsg{Modified: parseGitStatusOutput(output)}
-	}
-}
-
 // parseGitStatusOutput parses porcelain git status output into a list of file paths.
 func parseGitStatusOutput(output string) []string {
 	lines := strings.Split(strings.TrimSpace(output), "\n")

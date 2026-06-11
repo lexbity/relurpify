@@ -3,6 +3,7 @@ package prompt
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -14,7 +15,7 @@ type ParseResult struct {
 
 // ParseFile reads and parses a .prompt file from disk.
 func ParseFile(path string) (*ParseResult, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(filepath.Clean(path))
 	if err != nil {
 		return nil, fmt.Errorf("read %s: %w", path, err)
 	}

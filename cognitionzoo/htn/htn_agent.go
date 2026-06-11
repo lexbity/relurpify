@@ -455,45 +455,6 @@ func (n *noopAgent) Execute(_ context.Context, _ *execution.Task, _ *contextdata
 	return &execution.Result{Success: true, Data: execution.NewToolResultPayload(map[string]any{})}, nil
 }
 
-func taskID(task *execution.Task) string {
-	if task == nil {
-		return ""
-	}
-	return strings.TrimSpace(task.ID)
-}
-
-func timePtr(value time.Time) *time.Time {
-	return &value
-}
-
-// resumeCheckpoint is temporarily disabled - memory/db package being rebuilt
-func (a *HTNAgent) resumeCheckpoint(ctx context.Context, store any, workflowID, runID string, task *execution.Task, env *contextdata.Envelope) error {
-	_ = ctx
-	_ = store
-	_ = workflowID
-	_ = runID
-	_ = task
-	_ = env
-	return nil
-}
-
-func resultData(result *execution.Result) any {
-	if result == nil {
-		return nil
-	}
-	fields := execution.ResultFields(result.Data)
-	if len(fields) == 0 {
-		return nil
-	}
-	return fields
-}
-
-func resultErrorText(result *execution.Result) string {
-	if result == nil || result.Success {
-		return ""
-	}
-	return "step failed"
-}
 
 // streamMode returns the streaming mode, defaulting to blocking.
 func (a *HTNAgent) streamMode() contextstream.Mode {

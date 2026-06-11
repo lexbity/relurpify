@@ -318,7 +318,7 @@ func copyTemplateFile(src, dst, workspace string, overwrite bool) error {
 			return nil
 		}
 	}
-	data, err := os.ReadFile(src)
+	data, err := os.ReadFile(filepath.Clean(src))
 	if err != nil {
 		return err
 	}

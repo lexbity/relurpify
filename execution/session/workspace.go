@@ -721,7 +721,7 @@ func setupTelemetry(cfg WorkspaceConfig) (*os.File, *log.Logger, telemetry.Telem
 	if err := os.MkdirAll(filepath.Dir(logPath), 0o755); err != nil {
 		return nil, nil, nil, fmt.Errorf("create log directory: %w", err)
 	}
-	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+	logFile, err := os.OpenFile(filepath.Clean(logPath), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("open log: %w", err)
 	}

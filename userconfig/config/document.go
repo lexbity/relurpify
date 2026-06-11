@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -51,7 +52,7 @@ func (d *Document) Section(key string) (yaml.Node, bool) {
 // Document envelope, and fingerprints the raw bytes. It does NOT decode or
 // validate any spec section — that is each domain's responsibility.
 func LoadDocument(path string) (*DocumentSnapshot, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(filepath.Clean(path))
 	if err != nil {
 		return nil, fmt.Errorf("read document: %w", err)
 	}

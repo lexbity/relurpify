@@ -3,6 +3,7 @@ package security
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -13,7 +14,7 @@ func loadAndDecode[T any](path, workspace string, decode Decoder, defaultPath fu
 	if strings.TrimSpace(path) == "" {
 		path = defaultPath(workspace)
 	}
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(filepath.Clean(path))
 	if err != nil {
 		return fmt.Errorf("read policy %s: %w", path, err)
 	}

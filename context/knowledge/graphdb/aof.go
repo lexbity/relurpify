@@ -9,6 +9,7 @@ import (
 	"io"
 	"math"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 )
@@ -90,7 +91,7 @@ type aofWriter struct {
 }
 
 func openAOF(path string, opts Options) (*aofWriter, error) {
-	file, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0o644)
+	file, err := os.OpenFile(filepath.Clean(path), os.O_CREATE|os.O_RDWR|os.O_APPEND, 0o644)
 	if err != nil {
 		return nil, err
 	}
@@ -122,34 +123,6 @@ func (w *aofWriter) appendOp(op binaryOp) error {
 		return err
 	}
 	return w.syncLocked(false)
-}
-
-func (w *aofWriter) truncate() error {
-	if w == nil {
-		return nil
-	}
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	if err := w.file.Truncate(0); err != nil {
-		return err
-	}
-	if _, err := w.file.Seek(0, io.SeekStart); err != nil {
-		return err
-	}
-	return w.syncLocked(true)
-}
-
-func (w *aofWriter) size() (int64, error) {
-	if w == nil {
-		return 0, nil
-	}
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	info, err := w.file.Stat()
-	if err != nil {
-		return 0, err
-	}
-	return info.Size(), nil
 }
 
 func (w *aofWriter) close() error {
@@ -201,7 +174,7 @@ func encodeFrame(frameType byte, payload []byte) []byte {
 }
 
 func replayAOF(path string, applyBinary func(binaryOp) error, applyLegacy func([]byte) error) error {
-	file, err := os.Open(path)
+	file, err := os.Open(filepath.Clean(path))
 	if errors.Is(err, os.ErrNotExist) {
 		return nil
 	}
@@ -277,121 +250,9 @@ func readFrame(r io.Reader) (byte, []byte, error) {
 	return frameType, payload, nil
 }
 
-func encodeBinaryOp(kind string, payload any) (binaryOp, error) {
-	switch kind {
-	case "upsert_node":
-		op, ok := payload.(nodeOp)
-		if !ok {
-			return binaryOp{}, errors.New("graphdb: invalid upsert_node payload")
-		}
-		return binaryOp{code: opCodeUpsertNode, data: encodeNodeRecord(op.Node)}, nil
-	case "upsert_nodes":
-		op, ok := payload.(nodeBatchOp)
-		if !ok {
-			return binaryOp{}, errors.New("graphdb: invalid upsert_nodes payload")
-		}
-		var enc binaryEncoder
-		enc.writeNodeRecords(op.Nodes)
-		return binaryOp{code: opCodeUpsertNodes, data: enc.Bytes()}, nil
-	case "delete_node":
-		op, ok := payload.(deleteNodeOp)
-		if !ok {
-			return binaryOp{}, errors.New("graphdb: invalid delete_node payload")
-		}
-		return binaryOp{code: opCodeDeleteNode, data: encodeString(op.ID)}, nil
-	case "delete_nodes":
-		op, ok := payload.(deleteNodesOp)
-		if !ok {
-			return binaryOp{}, errors.New("graphdb: invalid delete_nodes payload")
-		}
-		var enc binaryEncoder
-		enc.writeStrings(op.IDs)
-		return binaryOp{code: opCodeDeleteNodes, data: enc.Bytes()}, nil
-	case "link_edge":
-		op, ok := payload.(edgeOp)
-		if !ok {
-			return binaryOp{}, errors.New("graphdb: invalid link_edge payload")
-		}
-		return binaryOp{code: opCodeLinkEdge, data: encodeEdgeRecord(op.Edge)}, nil
-	case "link_edges":
-		op, ok := payload.(edgeBatchOp)
-		if !ok {
-			return binaryOp{}, errors.New("graphdb: invalid link_edges payload")
-		}
-		var enc binaryEncoder
-		enc.writeEdgeRecords(op.Edges)
-		return binaryOp{code: opCodeLinkEdges, data: enc.Bytes()}, nil
-	case "unlink_edge":
-		op, ok := payload.(unlinkOp)
-		if !ok {
-			return binaryOp{}, errors.New("graphdb: invalid unlink_edge payload")
-		}
-		var enc binaryEncoder
-		enc.writeString(op.SourceID)
-		enc.writeString(op.TargetID)
-		enc.writeString(string(op.Kind))
-		enc.writeBool(op.Hard)
-		return binaryOp{code: opCodeUnlinkEdge, data: enc.Bytes()}, nil
-	case "annotate_node":
-		op, ok := payload.(annotateNodeOp)
-		if !ok {
-			return binaryOp{}, errors.New("graphdb: invalid annotate_node payload")
-		}
-		raw, err := json.Marshal(op.Props)
-		if err != nil {
-			return binaryOp{}, err
-		}
-		var enc binaryEncoder
-		enc.writeString(op.ID)
-		enc.writeBytes(raw)
-		return binaryOp{code: opCodeAnnotateNode, data: enc.Bytes()}, nil
-	case "annotate_edge":
-		op, ok := payload.(annotateEdgeOp)
-		if !ok {
-			return binaryOp{}, errors.New("graphdb: invalid annotate_edge payload")
-		}
-		raw, err := json.Marshal(op.Props)
-		if err != nil {
-			return binaryOp{}, err
-		}
-		var enc binaryEncoder
-		enc.writeString(op.SourceID)
-		enc.writeString(op.TargetID)
-		enc.writeString(string(op.Kind))
-		enc.writeBytes(raw)
-		return binaryOp{code: opCodeAnnotateEdge, data: enc.Bytes()}, nil
-	case "record_mutation_result":
-		op, ok := payload.(mutationResultOp)
-		if !ok {
-			return binaryOp{}, errors.New("graphdb: invalid record_mutation_result payload")
-		}
-		raw, err := json.Marshal(op.Result)
-		if err != nil {
-			return binaryOp{}, err
-		}
-		var enc binaryEncoder
-		enc.writeBytes(raw)
-		return binaryOp{code: opCodeRecordMutationResult, data: enc.Bytes()}, nil
-	default:
-		return binaryOp{}, errors.New("graphdb: unsupported persisted op kind")
-	}
-}
-
 func encodeNodeRecord(node NodeRecord) []byte {
 	var enc binaryEncoder
 	enc.writeNodeRecord(node)
-	return enc.Bytes()
-}
-
-func encodeEdgeRecord(edge EdgeRecord) []byte {
-	var enc binaryEncoder
-	enc.writeEdgeRecord(edge)
-	return enc.Bytes()
-}
-
-func encodeString(value string) []byte {
-	var enc binaryEncoder
-	enc.writeString(value)
 	return enc.Bytes()
 }
 
@@ -401,14 +262,6 @@ type binaryEncoder struct {
 
 func (e *binaryEncoder) Bytes() []byte {
 	return e.buf.Bytes()
-}
-
-func (e *binaryEncoder) writeBool(v bool) {
-	if v {
-		e.buf.WriteByte(1)
-		return
-	}
-	e.buf.WriteByte(0)
 }
 
 func (e *binaryEncoder) writeUint32(v uint32) {
@@ -426,12 +279,6 @@ func (e *binaryEncoder) writeInt64(v int64) {
 func (e *binaryEncoder) writeUint64(v uint64) {
 	var buf [8]byte
 	binary.LittleEndian.PutUint64(buf[:], v)
-	e.buf.Write(buf[:])
-}
-
-func (e *binaryEncoder) writeFloat32(v float32) {
-	var buf [4]byte
-	binary.LittleEndian.PutUint32(buf[:], math.Float32bits(v))
 	e.buf.Write(buf[:])
 }
 
@@ -468,38 +315,6 @@ func (e *binaryEncoder) writeNodeRecord(node NodeRecord) {
 	e.writeInt64(node.CreatedAt)
 	e.writeInt64(node.UpdatedAt)
 	e.writeInt64(node.DeletedAt)
-}
-
-func (e *binaryEncoder) writeNodeRecords(nodes []NodeRecord) {
-	e.writeUint32(uint32(len(nodes)))
-	for _, node := range nodes {
-		e.writeNodeRecord(node)
-	}
-}
-
-func (e *binaryEncoder) writeEdgeRecord(edge EdgeRecord) {
-	e.writeString(edge.SourceID)
-	e.writeString(edge.TargetID)
-	e.writeString(string(edge.Kind))
-	e.writeString(edge.StableID)
-	e.writeString(edge.RevisionRootID)
-	e.writeString(edge.RevisionOf)
-	e.writeString(edge.IdempotencyKey)
-	e.writeString(edge.TaskID)
-	e.writeString(edge.SessionID)
-	e.writeString(edge.TurnID)
-	e.writeUint64(edge.StateVersion)
-	e.writeFloat32(edge.Weight)
-	e.writeBytes(edge.Props)
-	e.writeInt64(edge.CreatedAt)
-	e.writeInt64(edge.DeletedAt)
-}
-
-func (e *binaryEncoder) writeEdgeRecords(edges []EdgeRecord) {
-	e.writeUint32(uint32(len(edges)))
-	for _, edge := range edges {
-		e.writeEdgeRecord(edge)
-	}
 }
 
 type binaryDecoder struct {

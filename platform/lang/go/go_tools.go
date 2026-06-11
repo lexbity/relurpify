@@ -15,11 +15,6 @@ import (
 	"codeburg.org/lexbit/relurpify/platform/tools/subprocess"
 )
 
-var goProjectMarkers = []string{
-	"go.mod",
-	"go.work",
-}
-
 type GoWorkspaceDetectTool struct {
 	BasePath string
 }

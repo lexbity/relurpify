@@ -121,7 +121,7 @@ func (t *PythonProjectMetadataTool) Execute(ctx context.Context, args map[string
 	files := make(map[string]string)
 	for _, marker := range markers {
 		path := filepath.Join(projectRoot, marker)
-		content, err := os.ReadFile(path)
+		content, err := os.ReadFile(filepath.Clean(path))
 		if err != nil {
 			continue
 		}

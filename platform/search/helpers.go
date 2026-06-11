@@ -3,7 +3,6 @@ package search
 import (
 	"bufio"
 	"bytes"
-	"os"
 	"path/filepath"
 	"strings"
 )
@@ -59,7 +58,4 @@ func scanLinesOrChunks(maxChunk int) bufio.SplitFunc {
 	}
 }
 
-func fileExists(path string) bool {
-	info, err := os.Stat(path)
-	return err == nil && !info.IsDir()
-}
+

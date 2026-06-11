@@ -57,7 +57,7 @@ func (t *GrepTool) Execute(ctx context.Context, args map[string]any) (*ports.Too
 			}
 			return nil
 		}
-		file, err := os.Open(path)
+		file, err := os.Open(filepath.Clean(path))
 		if err != nil {
 			return nil // skip unreadable files
 		}
@@ -132,7 +132,7 @@ func (t *SimilarityTool) Execute(ctx context.Context, args map[string]any) (*por
 		if !isSimilarityCandidate(path) {
 			return nil
 		}
-		data, err := os.ReadFile(path)
+		data, err := os.ReadFile(filepath.Clean(path))
 		if err != nil {
 			return err
 		}
@@ -197,7 +197,7 @@ func (t *SemanticSearchTool) Execute(ctx context.Context, args map[string]any) (
 		if !isSemanticCandidate(path) {
 			return nil
 		}
-		data, err := os.ReadFile(path)
+		data, err := os.ReadFile(filepath.Clean(path))
 		if err != nil {
 			return err
 		}

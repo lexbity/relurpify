@@ -4,12 +4,13 @@ import (
 	"bufio"
 	"encoding/json"
 	"os"
+	"path/filepath"
 
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 func ReadTelemetryJSONL(path string) ([]telemetry.Event, error) {
-	f, err := os.Open(path)
+	f, err := os.Open(filepath.Clean(path))
 	if err != nil {
 		return nil, err
 	}

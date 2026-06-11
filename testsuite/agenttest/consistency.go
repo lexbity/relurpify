@@ -98,11 +98,6 @@ func computeVariance(values []int) float64 {
 	return variance
 }
 
-// computeStandardDeviation calculates standard deviation
-func computeStandardDeviation(values []int) float64 {
-	return math.Sqrt(computeVariance(values))
-}
-
 // VarianceReport provides detailed variance analysis
 type VarianceReport struct {
 	Mean                   float64 `json:"mean"`

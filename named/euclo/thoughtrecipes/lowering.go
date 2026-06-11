@@ -474,47 +474,6 @@ func gatherLoweredFromDeclaration(node Declaration, plan *ExecutionPlan, runInde
 	return nil
 }
 
-func gatherLoweredFromExecutionItem(item ExecutionItem, plan *ExecutionPlan, runIndex *int) error {
-	switch v := item.(type) {
-	case *RunDecl:
-		step, err := lowerAgentExecutionDecl("run", v.Agent, v.Items, plan.Agents, runIndex, plan.ToolScopes)
-		if err != nil {
-			return err
-		}
-		plan.Steps = append(plan.Steps, step)
-	case *DelegateDecl:
-		step, err := lowerAgentExecutionDecl("delegate", v.Agent, v.Items, plan.Agents, runIndex, plan.ToolScopes)
-		if err != nil {
-			return err
-		}
-		plan.Steps = append(plan.Steps, step)
-	case *RouteDecl:
-		group, err := lowerRouteDecl(v, plan.Agents, runIndex, plan, plan.ToolScopes)
-		if err != nil {
-			return err
-		}
-		plan.Routes = append(plan.Routes, *group)
-	case *AskDecl:
-		step, err := lowerAskDecl(v, runIndex)
-		if err != nil {
-			return err
-		}
-		plan.Steps = append(plan.Steps, step)
-	case *DirectiveBlock:
-		for _, child := range v.Body {
-			if err := gatherLoweredFromExecutionItem(child, plan, runIndex); err != nil {
-				return err
-			}
-		}
-	case *PipelineDecl:
-		step, err := lowerPipelineDecl(v, plan.Agents, runIndex, plan)
-		if err != nil {
-			return err
-		}
-		plan.Steps = append(plan.Steps, step)
-	}
-	return nil
-}
 
 func rawValueExprList(values []ValueExpr) []string {
 	if len(values) == 0 {

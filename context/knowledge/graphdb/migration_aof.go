@@ -163,7 +163,7 @@ func MigrateAOFToBadger(ctx context.Context, aofDir string, badgerDir string) er
 		EdgeHistory     map[string][]EdgeRecord   `json:"edge_history,omitempty"`
 		MutationResults map[string]MutationResult `json:"mutation_results,omitempty"`
 	}
-	if raw, err := os.ReadFile(snapPath); err == nil && len(raw) > 0 {
+	if raw, err := os.ReadFile(filepath.Clean(snapPath)); err == nil && len(raw) > 0 {
 		_ = json.Unmarshal(raw, &snapHistory)
 	}
 

@@ -54,7 +54,18 @@ func (s *EditorSupervisor) OpenEditor(path string) tea.Cmd {
 	if path == "" {
 		return nil
 	}
-	cmd := exec.Command(configuredEditor, path)
+	editor := configuredEditor
+	if editor == "" {
+		editor = "vi"
+	}
+	editorPath, err := exec.LookPath(editor)
+	if err != nil {
+		editorPath = editor
+	}
+	cmd := &exec.Cmd{
+		Path: editorPath,
+		Args: []string{editorPath, filepath.Clean(path)},
+	}
 	s.mu.Lock()
 	s.activePath = path
 	s.mu.Unlock()
@@ -121,7 +132,17 @@ func editFileCmd(path string) tea.Cmd {
 		return nil
 	}
 	editor := editorPath()
-	cmd := exec.Command(editor, path)
+	if editor == "" {
+		editor = "vi"
+	}
+	editorPath, err := exec.LookPath(editor)
+	if err != nil {
+		editorPath = editor
+	}
+	cmd := &exec.Cmd{
+		Path: editorPath,
+		Args: []string{editorPath, filepath.Clean(path)},
+	}
 	return tea.ExecProcess(cmd, func(err error) tea.Msg {
 		pid := 0
 		if cmd.Process != nil {

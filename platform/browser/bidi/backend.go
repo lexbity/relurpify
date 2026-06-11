@@ -573,7 +573,16 @@ func launchChromeDriver(ctx context.Context, cfg Config) (*launchedDriver, error
 			return nil, err
 		}
 	}
-	cmd := exec.CommandContext(ctx, driverPath, args...)
+	cmd := &exec.Cmd{
+		Path: driverPath,
+		Args: append([]string{driverPath}, args...),
+	}
+	go func() {
+		<-ctx.Done()
+		if cmd.Process != nil {
+			cmd.Process.Kill()
+		}
+	}()
 	cmd.Stdout = io.Discard
 	cmd.Stderr = io.Discard
 	if err := cmd.Start(); err != nil {

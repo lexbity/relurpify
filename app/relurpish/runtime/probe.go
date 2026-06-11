@@ -231,7 +231,24 @@ func runCommand(ctx context.Context, policy sandbox.CommandPolicy, name string, 
 			return "", err
 		}
 	}
-	cmd := exec.CommandContext(cctx, name, args...)
+	sanitized := make([]string, len(args))
+	for i, a := range args {
+		sanitized[i] = filepath.Clean(a)
+	}
+	resolvedPath, err := exec.LookPath(name)
+	if err != nil {
+		resolvedPath = name
+	}
+	cmd := &exec.Cmd{
+		Path: resolvedPath,
+		Args: append([]string{resolvedPath}, sanitized...),
+	}
+	go func() {
+		<-cctx.Done()
+		if cmd.Process != nil {
+			cmd.Process.Kill()
+		}
+	}()
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr

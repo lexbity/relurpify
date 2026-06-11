@@ -435,7 +435,7 @@ func parseNodeProjectMetadata(projectRoot, manifestPath string, markers []string
 		result["summary"] = fmt.Sprintf("Node project at %s", projectRoot)
 		return result, nil
 	}
-	content, err := os.ReadFile(manifestPath)
+	content, err := os.ReadFile(filepath.Clean(manifestPath))
 	if err != nil {
 		return nil, err
 	}

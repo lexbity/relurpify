@@ -44,14 +44,6 @@ type SessionManagedProvider interface {
 	CloseSession(ctx context.Context, sessionID string) error
 }
 
-type runtimeProviderHealthReporter interface {
-	HealthSnapshot(ctx context.Context) (provider.ProviderHealthSnapshot, error)
-}
-
-type runtimeProviderSessionLister interface {
-	ListSessions(ctx context.Context) ([]provider.ProviderSession, error)
-}
-
 type runtimeProviderRecord struct {
 	provider RuntimeProvider
 	desc     provider.ProviderDescriptor

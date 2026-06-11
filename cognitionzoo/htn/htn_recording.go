@@ -130,10 +130,4 @@ func htnResultSummary(result *execution.Result, execErr error) string {
 	return fmt.Sprint(fields)
 }
 
-// htnStatus returns a status string for metadata based on whether execution failed.
-func htnStatus(execErr error) string {
-	if execErr != nil {
-		return "failed"
-	}
-	return "completed"
-}
+

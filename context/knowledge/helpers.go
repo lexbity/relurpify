@@ -47,28 +47,6 @@ func cloneMap(in map[string]any) map[string]any {
 	return out
 }
 
-func stringValues(value any) []string {
-	switch v := value.(type) {
-	case []string:
-		return append([]string(nil), v...)
-	case []any:
-		out := make([]string, 0, len(v))
-		for _, item := range v {
-			if s, ok := item.(string); ok && strings.TrimSpace(s) != "" {
-				out = append(out, strings.TrimSpace(s))
-			}
-		}
-		return out
-	case string:
-		if strings.TrimSpace(v) == "" {
-			return nil
-		}
-		return []string{strings.TrimSpace(v)}
-	default:
-		return nil
-	}
-}
-
 func chunkIDsToStrings(ids []ChunkID) []string {
 	out := make([]string, 0, len(ids))
 	for _, id := range ids {

@@ -2,7 +2,6 @@ package react
 
 import (
 	"encoding/json"
-	"errors"
 	"strings"
 	"time"
 )
@@ -94,10 +93,4 @@ func normalizeArguments(value any) map[string]any {
 	}
 }
 
-// parseError converts an error message string into an error value.
-func parseError(err string) error {
-	if err == "" {
-		return nil
-	}
-	return errors.New(err)
-}
+

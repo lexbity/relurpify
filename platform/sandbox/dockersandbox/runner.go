@@ -116,6 +116,11 @@ func (r *Runner) Run(ctx context.Context, req ports.CommandRequest) (*ports.Comm
 		dockerPath = "docker"
 	}
 
+	resolvedDockerPath, err := exec.LookPath(dockerPath)
+	if err != nil {
+		return nil, fmt.Errorf("docker not found: %w", err)
+	}
+
 	policy := r.backend.Policy()
 	args := []string{"run", "--rm", "--name", containerName, "-v", fmt.Sprintf("%s:/workspace", r.backend.config.Workspace), "-w", containerWorkdir}
 	if policy.ReadOnlyRoot {
@@ -166,7 +171,10 @@ func (r *Runner) Run(ctx context.Context, req ports.CommandRequest) (*ports.Comm
 	}
 	defer cancel()
 	start := time.Now()
-	cmd := exec.Command(dockerPath, args...)
+	cmd := &exec.Cmd{
+		Path: resolvedDockerPath,
+		Args: append([]string{resolvedDockerPath}, args...),
+	}
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	ceiling := sandbox.OutputCeilingOrDefault(req.OutputCeiling)
 	stdoutBuf := newSpillWriter(ceiling)
@@ -191,13 +199,19 @@ func (r *Runner) Run(ctx context.Context, req ports.CommandRequest) (*ports.Comm
 		<-execCtx.Done()
 		tornDown.Store(true)
 		// docker stop -t <grace> sends SIGTERM, waits up to grace, then SIGKILLs.
-		stopCtx, stopCancel := context.WithTimeout(teardownCtx, grace+5*time.Second)
+		_, stopCancel := context.WithTimeout(teardownCtx, grace+5*time.Second)
 		defer stopCancel()
-		_ = exec.CommandContext(stopCtx, dockerPath, "stop", "-t", fmt.Sprintf("%.0f", grace.Seconds()), containerName).Run()
+		_ = (&exec.Cmd{
+			Path: resolvedDockerPath,
+			Args: []string{resolvedDockerPath, "stop", "-t", fmt.Sprintf("%.0f", grace.Seconds()), containerName},
+		}).Run()
 		// Force-remove in case --rm didn't clean up.
-		rmCtx, rmCancel := context.WithTimeout(teardownCtx, 5*time.Second)
+		_, rmCancel := context.WithTimeout(teardownCtx, 5*time.Second)
 		defer rmCancel()
-		_ = exec.CommandContext(rmCtx, dockerPath, "rm", "-f", containerName).Run()
+		_ = (&exec.Cmd{
+			Path: resolvedDockerPath,
+			Args: []string{resolvedDockerPath, "rm", "-f", containerName},
+		}).Run()
 	}()
 
 	// Monitor output ceiling concurrently.
@@ -215,12 +229,18 @@ func (r *Runner) Run(ctx context.Context, req ports.CommandRequest) (*ports.Comm
 				if stdoutBuf.exceededCeiling() || stderrBuf.exceededCeiling() {
 					oomKilled.Store(true)
 					// docker stop -t 0 force-kills immediately, then rm -f
-					stopCtx2, stopCancel2 := context.WithTimeout(teardownCtx, 5*time.Second)
-					defer stopCancel2()
-					_ = exec.CommandContext(stopCtx2, dockerPath, "stop", "-t", "0", containerName).Run()
-					rmCtx2, rmCancel2 := context.WithTimeout(teardownCtx, 5*time.Second)
-					defer rmCancel2()
-					_ = exec.CommandContext(rmCtx2, dockerPath, "rm", "-f", containerName).Run()
+				_, stopCancel2 := context.WithTimeout(teardownCtx, 5*time.Second)
+				defer stopCancel2()
+				_ = (&exec.Cmd{
+					Path: resolvedDockerPath,
+					Args: []string{resolvedDockerPath, "stop", "-t", "0", containerName},
+				}).Run()
+				_, rmCancel2 := context.WithTimeout(teardownCtx, 5*time.Second)
+				defer rmCancel2()
+				_ = (&exec.Cmd{
+					Path: resolvedDockerPath,
+					Args: []string{resolvedDockerPath, "rm", "-f", containerName},
+				}).Run()
 					return
 				}
 			}

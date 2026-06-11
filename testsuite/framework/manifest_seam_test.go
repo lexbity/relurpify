@@ -11,6 +11,7 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/governance/authorization"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
+	"codeburg.org/lexbit/relurpify/platform/fs"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
@@ -31,7 +32,7 @@ func TestManifestResolution(t *testing.T) {
 			t.Fatalf("failed to save manifest: %v", err)
 		}
 
-		data, err := os.ReadFile(manifestPath)
+		data, err := os.ReadFile(filepath.Clean(manifestPath))
 		if err != nil {
 			t.Fatalf("failed to read manifest: %v", err)
 		}
@@ -124,7 +125,7 @@ func TestManifestPermissionPropagation(t *testing.T) {
 		if err := config.SaveYAML(manifestPath, m); err != nil {
 			t.Fatalf("failed to save manifest: %v", err)
 		}
-		data, err := os.ReadFile(manifestPath)
+		data, err := os.ReadFile(filepath.Clean(manifestPath))
 		if err != nil {
 			t.Fatalf("failed to read manifest: %v", err)
 		}
@@ -141,7 +142,7 @@ func TestManifestPermissionPropagation(t *testing.T) {
 		}
 
 		testFile := filepath.Join(env.WorkspacePath, "allowed.txt")
-		if err := os.WriteFile(testFile, []byte("content"), 0o644); err != nil {
+		if err := fs.WriteFileSecure(testFile, []byte("content")); err != nil {
 			t.Fatalf("failed to create test file: %v", err)
 		}
 		if err := manager.CheckFileAccess(context.Background(), "manifest-agent", permissions.FileSystemRead, testFile); err != nil {

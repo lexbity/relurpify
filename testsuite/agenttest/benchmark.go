@@ -8,6 +8,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"codeburg.org/lexbit/relurpify/platform/fs"
 )
 
 type BenchmarkBaseline struct {
@@ -197,10 +199,10 @@ func BuildBenchmarkReport(suite *Suite, suiteReport *SuiteReport) (*BenchmarkRep
 		caseScore := scoreBenchmarkCase(family, weights, artifactsByName, cr)
 		report.Cases = append(report.Cases, caseScore)
 		if data, err := json.MarshalIndent(caseScore, "", "  "); err == nil {
-			_ = os.WriteFile(BenchmarkCaseScoreFilePath(cr.ArtifactsDir), data, 0o644)
+			_ = fs.WriteFileSecure(BenchmarkCaseScoreFilePath(cr.ArtifactsDir), data)
 		}
 		if data, err := json.MarshalIndent(caseScore.comparison(), "", "  "); err == nil {
-			_ = os.WriteFile(BenchmarkCaseComparisonFilePath(cr.ArtifactsDir), data, 0o644)
+			_ = fs.WriteFileSecure(BenchmarkCaseComparisonFilePath(cr.ArtifactsDir), data)
 		}
 		if cr.Model != "" {
 			modelSet[cr.Model] = struct{}{}
@@ -585,7 +587,7 @@ func BenchmarkCaseBaselineFilePath(artifactsDir, caseName, modelName string) str
 }
 
 func LoadBenchmarkBaseline(path string) (*BenchmarkBaseline, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(filepath.Clean(path))
 	if err != nil {
 		return nil, err
 	}
@@ -604,7 +606,7 @@ func WriteBenchmarkBaseline(path string, baseline *BenchmarkBaseline) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, data, 0o644)
+	return fs.WriteFileSecure(path, data)
 }
 
 func BuildBenchmarkBaseline(report *BenchmarkReport) *BenchmarkBaseline {

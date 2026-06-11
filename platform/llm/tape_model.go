@@ -98,7 +98,7 @@ func NewTapeModel(inner LanguageModel, path string, mode string) (*TapeModel, er
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 			return nil, err
 		}
-		f, err := os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o644)
+		f, err := os.OpenFile(filepath.Clean(path), os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o644)
 		if err != nil {
 			return nil, err
 		}
@@ -409,7 +409,7 @@ func fingerprint(kind string, req tapeRequest) string {
 }
 
 func readTape(path string) ([]tapeEntry, error) {
-	f, err := os.Open(path)
+	f, err := os.Open(filepath.Clean(path))
 	if err != nil {
 		return nil, err
 	}

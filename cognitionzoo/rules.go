@@ -2,6 +2,7 @@ package agents
 
 import (
 	"os"
+	"path/filepath"
 
 	"gopkg.in/yaml.v3"
 )
@@ -24,7 +25,7 @@ type Ruleset struct {
 
 // LoadRuleset reads the workspace rules file when present.
 func LoadRuleset(path string) (*Ruleset, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(filepath.Clean(path))
 	if err != nil {
 		return nil, err
 	}

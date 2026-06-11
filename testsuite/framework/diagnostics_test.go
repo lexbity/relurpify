@@ -10,6 +10,7 @@ import (
 	"codeburg.org/lexbit/relurpify/governance/authorization"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
+	"codeburg.org/lexbit/relurpify/platform/fs"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
@@ -30,7 +31,7 @@ func TestDiagnosticFailureMessages(t *testing.T) {
 				env := NewTestEnvironment(t)
 				// Create a file outside the workspace to trigger permission denial
 				outsideFile := filepath.Join(env.WorkspacePath, "..", "outside.txt")
-				if err := os.WriteFile(outsideFile, []byte("test"), 0o644); err != nil {
+				if err := fs.WriteFileSecure(outsideFile, []byte("test")); err != nil {
 					t.Fatalf("failed to create test file: %v", err)
 				}
 				return env, func() { os.Remove(outsideFile) }
@@ -231,7 +232,7 @@ func TestCleanupPathVerification(t *testing.T) {
 
 	// Create a test file in the workspace
 	testFile := filepath.Join(workspace, "cleanup-test.txt")
-	if err := os.WriteFile(testFile, []byte("cleanup test"), 0o644); err != nil {
+	if err := fs.WriteFileSecure(testFile, []byte("cleanup test")); err != nil {
 		t.Fatalf("failed to write test file: %v", err)
 	}
 

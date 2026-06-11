@@ -1,10 +1,10 @@
 package agenttest
 
 import (
-	"os"
 	"path/filepath"
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/platform/fs"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
@@ -55,10 +55,10 @@ func TestPreparedRunDescriptorNormalizesPaths(t *testing.T) {
 func TestPreparedRunDescriptorMatrixSelection(t *testing.T) {
 	workspace := t.TempDir()
 	manifestPath := filepath.Join(workspace, "relurpify_cfg", "agent.yaml")
-	if err := os.MkdirAll(filepath.Dir(manifestPath), 0o755); err != nil {
+	if err := fs.MkdirAllSecure(filepath.Dir(manifestPath)); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(manifestPath, []byte(`schema: relurpify/agent/v1
+	if err := fs.WriteFileSecure(manifestPath, []byte(`schema: relurpify/agent/v1
 apiVersion: relurpify/v1alpha1
 kind: AgentManifest
 metadata:
@@ -77,7 +77,7 @@ spec:
     model:
       provider: ollama
       name: model-a
-`), 0o644); err != nil {
+`)); err != nil {
 		t.Fatal(err)
 	}
 	suite := &Suite{
