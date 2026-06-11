@@ -9,13 +9,14 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
+	"codeburg.org/lexbit/relurpify/platform/fs"
 )
 
 func TestIndexManagerRespectsFileScope(t *testing.T) {
 	workspace := t.TempDir()
 	protected := filepath.Join(workspace, "relurpify_cfg", "agent.yaml")
-	require.NoError(t, os.MkdirAll(filepath.Dir(protected), 0o755))
-	require.NoError(t, os.WriteFile(protected, []byte("secret"), 0o644))
+	require.NoError(t, fs.MkdirAllSecure(filepath.Dir(protected)))
+	require.NoError(t, fs.WriteFileSecure(protected, []byte("secret")))
 
 	store, err := NewTestStore(filepath.Join(workspace, "index.db"))
 	require.NoError(t, err)

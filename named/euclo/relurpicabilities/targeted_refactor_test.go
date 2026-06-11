@@ -17,7 +17,7 @@ func newTargetedRefactorTestDeps(t *testing.T) (SymbolQuerier, EdgeStore, Worksp
 	tmpDir := t.TempDir()
 	path := filepath.Join(tmpDir, "sample.go")
 	source := "package sample\n\nfunc Hello() string {\n\treturn \"old\"\n}\n"
-	require.NoError(t, os.WriteFile(path, []byte(source), 0o644))
+	require.NoError(t, os.WriteFile(path, []byte(source), 0o600)) // public: test fixture
 
 	store, err := ast.NewTestStore(filepath.Join(tmpDir, "index.db"))
 	require.NoError(t, err)

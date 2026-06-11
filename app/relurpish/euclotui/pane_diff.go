@@ -13,6 +13,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 	"codeburg.org/lexbit/relurpify/app/relurpish/tui"
+	"codeburg.org/lexbit/relurpify/platform/fs"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
@@ -1005,13 +1006,13 @@ func (p *DiffPane) applyHunks(filePath string, hunks []DiffHunkProjection) error
 			return fmt.Errorf("%s: %w", filePath, err)
 		}
 	}
-	if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(abs), fs.PublicDirMode); err != nil { // public: parent dir for patch
 		return err
 	}
 	if _, err := config.CreateTimestampedBackup(abs); err != nil && !os.IsNotExist(err) {
 		return err
 	}
-	return os.WriteFile(abs, updated, 0o644)
+	return os.WriteFile(abs, updated, fs.PublicFileMode) // public: patched file
 }
 
 func (p *DiffPane) revertFile(filePath string) error {
@@ -1032,10 +1033,10 @@ func (p *DiffPane) revertFile(filePath string) error {
 		}
 		return nil
 	}
-	if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(abs), fs.PublicDirMode); err != nil { // public: parent dir for revert
 		return err
 	}
-	return os.WriteFile(abs, baseline.Data, 0o644)
+	return os.WriteFile(abs, baseline.Data, fs.PublicFileMode) // public: baseline content
 }
 
 func (p *DiffPane) revertAll() error {

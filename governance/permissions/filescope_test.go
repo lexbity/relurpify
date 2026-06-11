@@ -46,7 +46,7 @@ func TestCanonicalScopePathExistingLeafSymlink(t *testing.T) {
 
 	// Create a file outside, then symlink to it from inside the workspace.
 	outsideFile := filepath.Join(t.TempDir(), "outside.txt")
-	require.NoError(t, os.WriteFile(outsideFile, []byte("data"), 0o644))
+	require.NoError(t, os.WriteFile(outsideFile, []byte("data"), 0o600))
 
 	linkPath := filepath.Join(workspace, "link_target.txt")
 	require.NoError(t, os.Symlink(outsideFile, linkPath))
@@ -59,13 +59,13 @@ func TestCanonicalScopePathExistingLeafSymlink(t *testing.T) {
 
 	// Create a symlink that points inside the workspace.
 	insideDir := filepath.Join(workspace, "subdir")
-	require.NoError(t, os.MkdirAll(insideDir, 0o755))
+	require.NoError(t, os.MkdirAll(insideDir, 0o700))
 	insideLink := filepath.Join(workspace, "inside_link")
 	require.NoError(t, os.Symlink(insideDir, insideLink))
 
 	// Accessing under an inside-pointing symlink must be allowed.
 	legitPath := filepath.Join(insideLink, "nested.txt")
-	require.NoError(t, os.WriteFile(legitPath, []byte("data"), 0o644))
+	require.NoError(t, os.WriteFile(legitPath, []byte("data"), 0o600))
 	require.NoError(t, policy.Check(FileSystemRead, legitPath), "legitimate nested write through inside symlink must be allowed")
 }
 
@@ -79,7 +79,7 @@ func TestCanonicalScopePathLegitimateNestedWrites(t *testing.T) {
 
 	// Write to an existing directory inside workspace must be allowed.
 	existingDir := filepath.Join(workspace, "existing")
-	require.NoError(t, os.MkdirAll(existingDir, 0o755))
+	require.NoError(t, os.MkdirAll(existingDir, 0o700))
 	existingFile := filepath.Join(existingDir, "file.txt")
 	require.NoError(t, policy.Check(FileSystemWrite, existingFile), "write to existing dir inside workspace must be allowed")
 }
@@ -89,7 +89,7 @@ func TestCanonicalScopePathDeepSymlinkChain(t *testing.T) {
 
 	// Create a chain: ws/lvl1 -> ws/target, ws/lvl2 -> ws/lvl1
 	target := filepath.Join(workspace, "target")
-	require.NoError(t, os.MkdirAll(target, 0o755))
+	require.NoError(t, os.MkdirAll(target, 0o700))
 
 	lvl1 := filepath.Join(workspace, "lvl1")
 	require.NoError(t, os.Symlink(target, lvl1))

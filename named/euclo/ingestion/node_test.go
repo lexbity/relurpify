@@ -145,7 +145,7 @@ func TestIngestionNodeHandlesMissingTaskEnvelope(t *testing.T) {
 func writeTestFile(t *testing.T, root, name, content string) string {
 	t.Helper()
 	path := filepath.Join(root, name)
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil { // public: test fixture
 		t.Fatalf("write test file: %v", err)
 	}
 	return path

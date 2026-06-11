@@ -1,3 +1,6 @@
+//go:build live
+// +build live
+
 package agenttest
 
 import (
@@ -5,13 +8,14 @@ import (
 	"path/filepath"
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/platform/fs"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
 func TestPrepareRunWritesDescriptor(t *testing.T) {
 	workspace := t.TempDir()
 	manifestPath := filepath.Join(workspace, "relurpify_cfg", "agent.yaml")
-	if err := os.MkdirAll(filepath.Dir(manifestPath), 0o755); err != nil {
+	if err := fs.MkdirAllSecure(filepath.Dir(manifestPath)); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(manifestPath, []byte(`schema: relurpify/agent/v1
@@ -33,7 +37,7 @@ spec:
     model:
       provider: ollama
       name: qwen2.5-coder:14b
-`), 0o644); err != nil {
+`), fs.PublicFileMode); err != nil { // public: test manifest
 		t.Fatal(err)
 	}
 	suite := &Suite{
@@ -69,7 +73,7 @@ spec:
 func TestPrepareRunMaterializesCaseSetupFiles(t *testing.T) {
 	workspace := t.TempDir()
 	manifestPath := filepath.Join(workspace, "relurpify_cfg", "agent.yaml")
-	if err := os.MkdirAll(filepath.Dir(manifestPath), 0o755); err != nil {
+	if err := fs.MkdirAllSecure(filepath.Dir(manifestPath)); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(manifestPath, []byte(`schema: relurpify/agent/v1
@@ -91,7 +95,7 @@ spec:
     model:
       provider: ollama
       name: qwen2.5-coder:14b
-`), 0o644); err != nil {
+`), fs.PublicFileMode); err != nil { // public: test manifest
 		t.Fatal(err)
 	}
 	suite := &Suite{

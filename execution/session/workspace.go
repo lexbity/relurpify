@@ -718,10 +718,10 @@ func setupTelemetry(cfg WorkspaceConfig) (*os.File, *log.Logger, telemetry.Telem
 			telemetryPath = filepath.Join(cfg.Workspace, workspace.StateDirName, "telemetry", "workspace.jsonl")
 		}
 	}
-	if err := os.MkdirAll(filepath.Dir(logPath), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(logPath), 0o700); err != nil { // public: workspace log directory
 		return nil, nil, nil, fmt.Errorf("create log directory: %w", err)
 	}
-	logFile, err := os.OpenFile(filepath.Clean(logPath), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+	logFile, err := os.OpenFile(filepath.Clean(logPath), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("open log: %w", err)
 	}
@@ -731,7 +731,7 @@ func setupTelemetry(cfg WorkspaceConfig) (*os.File, *log.Logger, telemetry.Telem
 	sinks = append(sinks, telemetry.LoggerTelemetry{Logger: logger})
 
 	if telemetryPath != "" {
-		if err := os.MkdirAll(filepath.Dir(telemetryPath), 0o755); err == nil {
+		if err := os.MkdirAll(filepath.Dir(telemetryPath), 0o700); err == nil { // public: workspace telemetry directory
 			if fileSink, err := telemetry.NewJSONFileTelemetry(telemetryPath); err == nil {
 				sinks = append(sinks, fileSink)
 			} else {

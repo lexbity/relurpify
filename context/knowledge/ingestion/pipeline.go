@@ -11,6 +11,7 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/context/knowledge"
 	contextports "codeburg.org/lexbit/relurpify/context/ports"
+	"codeburg.org/lexbit/relurpify/platform/fs"
 	"codeburg.org/lexbit/relurpify/governance/identity"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 )
@@ -352,13 +353,13 @@ func (p *Pipeline) quarantineContent(ctx context.Context, typed *TypedIngestion)
 	hash := fmt.Sprintf("%x", time.Now().UnixNano())[:8]
 	quarantineDir := filepath.Join(p.quarantineDir, fmt.Sprintf("%s_%s", timestamp, hash))
 
-	if err := os.MkdirAll(quarantineDir, 0750); err != nil {
+	if err := fs.MkdirAllSecure(quarantineDir); err != nil {
 		return "", fmt.Errorf("create quarantine dir: %w", err)
 	}
 
 	// Write content
 	contentPath := filepath.Join(quarantineDir, "content.bin")
-	if err := os.WriteFile(contentPath, typed.Content, 0640); err != nil {
+	if err := fs.WriteFileSecure(contentPath, typed.Content); err != nil {
 		return "", fmt.Errorf("write quarantine content: %w", err)
 	}
 
@@ -368,7 +369,7 @@ func (p *Pipeline) quarantineContent(ctx context.Context, typed *TypedIngestion)
 		time.Now().UTC().Format(time.RFC3339),
 		typed.ContentType,
 		len(typed.ChunkBoundaries))
-	if err := os.WriteFile(reasonPath, []byte(reason), 0640); err != nil {
+	if err := fs.WriteFileSecure(reasonPath, []byte(reason)); err != nil {
 		return "", fmt.Errorf("write quarantine reason: %w", err)
 	}
 

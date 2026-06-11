@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/platform/fs"
 	"codeburg.org/lexbit/relurpify/testsuite/testhelper"
 )
 
@@ -42,7 +43,7 @@ func TestValidateWorkspaceTreeMissingWorkspaceYaml(t *testing.T) {
 func TestValidateWorkspaceTreeBadPolicy(t *testing.T) {
 	workspace := writeMinimalValidWorkspace(t)
 	policyPath := filepath.Join(workspace, "relurpify_cfg", "security", "sandbox.policy.yaml")
-	os.WriteFile(policyPath, []byte("schema: relurpify/policy/sandbox/v1\n\nprotected_paths: [invalid\n"), 0o644)
+	fs.WriteFileSecure(policyPath, []byte("schema: relurpify/policy/sandbox/v1\n\nprotected_paths: [invalid\n"))
 	report := ValidateWorkspaceTree(workspace)
 	if !report.HasErrors() {
 		t.Fatal("expected error for malformed policy")

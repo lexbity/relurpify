@@ -1,11 +1,12 @@
 package graphdb
 
 import (
-	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"codeburg.org/lexbit/relurpify/platform/fs"
 )
 
 func TestWriteReadSnapshot_Empty(t *testing.T) {
@@ -54,7 +55,7 @@ func TestReadSnapshot_NonExistentFile(t *testing.T) {
 func TestReadSnapshot_CorruptJSON(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "corrupt.snap")
-	require.NoError(t, os.WriteFile(path, []byte(`{not json}`), 0o644))
+	require.NoError(t, fs.WriteFileSecure(path, []byte(`{not json}`)))
 
 	_, err := readSnapshot(path)
 	require.Error(t, err)

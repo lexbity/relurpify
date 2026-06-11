@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/platform/fs"
 )
 
 // applyCargoIsolation checks whether the tool invocation targets a nested Cargo
@@ -176,13 +177,13 @@ func copyDir(src, dst string) error {
 			return err
 		}
 		if rel == "." {
-			return os.MkdirAll(dst, 0o755)
+			return fs.MkdirAllSecure(dst)
 		}
 		if info.IsDir() {
 			if info.Name() == ".git" || info.Name() == "target" {
 				return filepath.SkipDir
 			}
-			return os.MkdirAll(filepath.Join(dst, rel), 0o755)
+			return fs.MkdirAllSecure(filepath.Join(dst, rel))
 		}
 		if strings.HasSuffix(info.Name(), ".bak") {
 			return nil
@@ -192,7 +193,7 @@ func copyDir(src, dst string) error {
 }
 
 func copyFile(src, dst string, mode os.FileMode) error {
-	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+	if err := fs.MkdirAllSecure(filepath.Dir(dst)); err != nil {
 		return err
 	}
 	in, err := os.Open(filepath.Clean(src))

@@ -10,6 +10,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/app/relurpish/tui"
 	"codeburg.org/lexbit/relurpify/named/euclo/reporting"
+	"codeburg.org/lexbit/relurpify/platform/fs"
 )
 
 func TestDiffPaneGroupsByFileAndShowsVerificationAlerts(t *testing.T) {
@@ -158,10 +159,10 @@ func TestDiffPaneShowsCheckpointAnchor(t *testing.T) {
 
 func writeFile(t *testing.T, path, content string) {
 	t.Helper()
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), fs.PublicDirMode); err != nil { // public: test dir
 		t.Fatalf("mkdir %s: %v", path, err)
 	}
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte(content), fs.PublicFileMode); err != nil { // public: test fixture
 		t.Fatalf("write %s: %v", path, err)
 	}
 }

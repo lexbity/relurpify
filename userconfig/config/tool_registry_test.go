@@ -2,7 +2,6 @@ package config
 
 import (
 	"context"
-	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
@@ -11,6 +10,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/platform/fs"
 	"codeburg.org/lexbit/relurpify/platform/tools/subprocess"
 	"codeburg.org/lexbit/relurpify/userconfig/config/security"
 )
@@ -282,13 +282,13 @@ func TestBuildRegistry_RepositoryCorpus(t *testing.T) {
 
 func writeWorkspaceToolFixture(workspace string) error {
 	toolsDir := DefaultToolManifestDir(workspace)
-	if err := os.MkdirAll(toolsDir, 0o755); err != nil {
+	if err := fs.MkdirAllSecure(toolsDir); err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Join(workspace, "relurpify_cfg", "security"), 0o755); err != nil {
+	if err := fs.MkdirAllSecure(filepath.Join(workspace, "relurpify_cfg", "security")); err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(toolsDir, "demo.tool.yaml"), []byte(`schema: relurpify/tool/v1
+	if err := fs.WriteFileSecure(filepath.Join(toolsDir, "demo.tool.yaml"), []byte(`schema: relurpify/tool/v1
 name: demo
 family: demo
 description: Demo tool
@@ -300,12 +300,12 @@ capability:
   trust_class: builtin_trusted
   risk_class: [execute]
   effect_class: [external_state]
-`), 0o644); err != nil {
+`)); err != nil {
 		return err
 	}
-	return os.WriteFile(filepath.Join(workspace, "relurpify_cfg", "security", "localtool.policy.yaml"), []byte(`schema: relurpify/policy/localtool/v1
+	return fs.WriteFileSecure(filepath.Join(workspace, "relurpify_cfg", "security", "localtool.policy.yaml"), []byte(`schema: relurpify/policy/localtool/v1
 tools:
   demo:
     execute: ask
-`), 0o644)
+`))
 }

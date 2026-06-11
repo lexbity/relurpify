@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"codeburg.org/lexbit/relurpify/context/knowledge/graphdb"
+	"codeburg.org/lexbit/relurpify/platform/fs"
 )
 
 func TestIndexManagerPopulatesGraphDBForGoFile(t *testing.T) {
@@ -21,11 +22,7 @@ func TestIndexManagerPopulatesGraphDBForGoFile(t *testing.T) {
 	manager.GraphDB = graphEngine
 
 	path := filepath.Join(tmpDir, "main.go")
-	require.NoError(t, os.WriteFile(path, []byte(`package sample
-import "fmt"
-func Helper() {}
-func Hello() { Helper(); _ = fmt.Sprintf }
-`), 0o644))
+	require.NoError(t, fs.WriteFileSecure(path, []byte("package sample\nimport \"fmt\"\nfunc Helper() {}\nfunc Hello() { Helper(); _ = fmt.Sprintf }\n")))
 
 	require.NoError(t, manager.IndexFile(context.Background(), path))
 
@@ -61,14 +58,10 @@ func TestIndexManagerReindexReplacesGraphNodesForSource(t *testing.T) {
 	manager.GraphDB = graphEngine
 
 	path := filepath.Join(tmpDir, "main.go")
-	require.NoError(t, os.WriteFile(path, []byte(`package sample
-func Hello() {}
-`), 0o644))
+	require.NoError(t, fs.WriteFileSecure(path, []byte("package sample\nfunc Hello() {}\n")))
 	require.NoError(t, manager.IndexFile(context.Background(), path))
 
-	require.NoError(t, os.WriteFile(path, []byte(`package sample
-func Goodbye() {}
-`), 0o644))
+	require.NoError(t, fs.WriteFileSecure(path, []byte("package sample\nfunc Goodbye() {}\n")))
 	require.NoError(t, manager.IndexFile(context.Background(), path))
 
 	graphNodes := manager.GraphDB.NodesBySource(path)
@@ -83,9 +76,7 @@ func Goodbye() {}
 func TestIndexManagerGraphDBNilDoesNotPanic(t *testing.T) {
 	manager, tmpDir := newTestIndexManager(t)
 	path := filepath.Join(tmpDir, "main.go")
-	require.NoError(t, os.WriteFile(path, []byte(`package sample
-func Hello() {}
-`), 0o644))
+	require.NoError(t, fs.WriteFileSecure(path, []byte("package sample\nfunc Hello() {}\n")))
 
 	require.NotPanics(t, func() {
 		require.NoError(t, manager.IndexFile(context.Background(), path))
@@ -102,9 +93,7 @@ func TestIndexManagerRefreshFilesRemovesGraphNodesForDeletedFile(t *testing.T) {
 	manager.GraphDB = graphEngine
 
 	path := filepath.Join(tmpDir, "main.go")
-	require.NoError(t, os.WriteFile(path, []byte(`package sample
-func Hello() {}
-`), 0o644))
+	require.NoError(t, fs.WriteFileSecure(path, []byte("package sample\nfunc Hello() {}\n")))
 	require.NoError(t, manager.IndexFile(context.Background(), path))
 	require.NotEmpty(t, manager.GraphDB.NodesBySource(path))
 

@@ -11,6 +11,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
+	"codeburg.org/lexbit/relurpify/platform/fs"
 	"codeburg.org/lexbit/relurpify/execution/agentgraph"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	intentcontext "codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
@@ -153,7 +154,7 @@ func TestResolveInteractionFrameDoesNotResumeOutcomeFeedback(t *testing.T) {
 func TestSaveAgentManifestWithBackup(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "relurpify_cfg", "agent.yaml")
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), fs.PublicDirMode); err != nil { // public: test dir
 		t.Fatalf("mkdir manifest dir: %v", err)
 	}
 	seed := &config.ManifestSpec{

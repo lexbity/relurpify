@@ -16,10 +16,10 @@ func TestPromptAndRecipeLibraryIntegrationEndToEnd(t *testing.T) {
 	promptRoot := filepath.Join(workspace, "relurpify_cfg", "prompts")
 	recipeRoot := filepath.Join(workspace, ThoughtRecipeSourceRoot)
 
-	if err := os.MkdirAll(promptRoot, 0o755); err != nil {
+	if err := os.MkdirAll(promptRoot, 0o700); err != nil { // public: test fixture dir
 		t.Fatalf("mkdir prompt root: %v", err)
 	}
-	if err := os.MkdirAll(recipeRoot, 0o755); err != nil {
+	if err := os.MkdirAll(recipeRoot, 0o700); err != nil { // public: test fixture dir
 		t.Fatalf("mkdir recipe root: %v", err)
 	}
 
@@ -29,7 +29,7 @@ id named.euclo.code.explore
 tag "system"
 ---
 Explore the codebase thoroughly.
-`), 0o644); err != nil {
+`), 0o600); err != nil { // public: test fixture
 		t.Fatalf("write explore prompt: %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(promptRoot, "clarify.prompt"), []byte(`---
@@ -38,7 +38,7 @@ id named.euclo.intent.clarify.question.v1
 tag "system"
 ---
 Which module should be updated?
-`), 0o644); err != nil {
+`), 0o600); err != nil { // public: test fixture
 		t.Fatalf("write clarify prompt: %v", err)
 	}
 
@@ -62,7 +62,7 @@ run reviewer:
 
 ask user:
   question prompt clarify_question
-`), 0o644); err != nil {
+`), 0o600); err != nil { // public: test fixture
 		t.Fatalf("write review flow recipe: %v", err)
 	}
 

@@ -16,6 +16,7 @@ import (
 	"codeburg.org/lexbit/relurpify/context/knowledge/graphdb"
 	"codeburg.org/lexbit/relurpify/context/knowledge/search"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
+	"codeburg.org/lexbit/relurpify/platform/fs"
 	platformsearch "codeburg.org/lexbit/relurpify/platform/search"
 	"codeburg.org/lexbit/relurpify/platform/tools/composite"
 	"codeburg.org/lexbit/relurpify/platform/tools/subprocess"
@@ -140,7 +141,7 @@ func BuildCapabilityRuntime(ctx context.Context, workspace string, runner *fsand
 
 	paths := config.New(workspace)
 	indexDir := paths.ASTIndexDir()
-	if err := os.MkdirAll(indexDir, 0o755); err != nil {
+	if err := os.MkdirAll(indexDir, fs.PublicDirMode); err != nil { // public: AST index dir
 		return nil, err
 	}
 

@@ -171,7 +171,7 @@ func (t *WriteFileTool) Execute(ctx context.Context, args map[string]any) (*port
 		return nil, err
 	}
 
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), PublicDirMode); err != nil { // public: user-facing file write
 		return nil, err
 	}
 
@@ -194,7 +194,7 @@ func (t *WriteFileTool) Execute(ctx context.Context, args map[string]any) (*port
 	}
 	// Open with O_NOFOLLOW to prevent writing through a symlink (defence-in-depth
 	// for the sandbox scope check — SEC-5).
-	f, openErr := os.OpenFile(filepath.Clean(path), os.O_CREATE|os.O_WRONLY|os.O_TRUNC|syscall.O_NOFOLLOW, 0o644)
+	f, openErr := os.OpenFile(filepath.Clean(path), os.O_CREATE|os.O_WRONLY|os.O_TRUNC|syscall.O_NOFOLLOW, SecureFileMode)
 	if openErr != nil {
 		return nil, fmt.Errorf("open %s for write: %w", path, openErr)
 	}
@@ -494,10 +494,10 @@ func (t *CreateFileTool) Execute(ctx context.Context, args map[string]any) (*por
 	if _, err := os.Stat(path); err == nil {
 		return nil, fmt.Errorf("file %s already exists", path)
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), PublicDirMode); err != nil { // public: user-facing file create
 		return nil, err
 	}
-	if err := os.WriteFile(path, []byte(params.Content), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte(params.Content), PublicFileMode); err != nil { // public: user-facing file create
 		return nil, err
 	}
 	return &ports.ToolResult{Success: true, Data: map[string]any{"path": path}}, nil
@@ -569,7 +569,7 @@ func (t *DeleteFileTool) Execute(ctx context.Context, args map[string]any) (*por
 	if trash == "" {
 		trash = filepath.Join(t.BasePath, ".trash")
 	}
-	if err := os.MkdirAll(trash, 0o755); err != nil {
+	if err := MkdirAllSecure(trash); err != nil {
 		return nil, err
 	}
 	dest := filepath.Join(trash, info.Name())

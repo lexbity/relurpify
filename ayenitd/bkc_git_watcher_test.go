@@ -108,10 +108,10 @@ func TestGitWatcherServiceHelpersAndStart(t *testing.T) {
 		gitPath, err := exec.LookPath("git")
 		require.NoError(t, err)
 		require.NoError(t, (&exec.Cmd{Path: gitPath, Args: []string{gitPath, "init", filepath.Clean(dir)}}).Run())
-		require.NoError(t, os.WriteFile(filepath.Join(dir, "tracked.txt"), []byte("one"), 0o644))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "tracked.txt"), []byte("one"), 0o600)) // public: test fixture
 		require.NoError(t, (&exec.Cmd{Path: gitPath, Args: []string{gitPath, "-C", filepath.Clean(dir), "add", "tracked.txt"}}).Run())
 		require.NoError(t, (&exec.Cmd{Path: gitPath, Args: []string{gitPath, "-C", filepath.Clean(dir), "-c", "user.name=test", "-c", "user.email=test@example.com", "commit", "-m", "init"}}).Run())
-		require.NoError(t, os.WriteFile(filepath.Join(dir, "tracked.txt"), []byte("two"), 0o644))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "tracked.txt"), []byte("two"), 0o600)) // public: test fixture
 		require.NoError(t, (&exec.Cmd{Path: gitPath, Args: []string{gitPath, "-C", filepath.Clean(dir), "add", "tracked.txt"}}).Run())
 		require.NoError(t, (&exec.Cmd{Path: gitPath, Args: []string{gitPath, "-C", filepath.Clean(dir), "-c", "user.name=test", "-c", "user.email=test@example.com", "commit", "-m", "update"}}).Run())
 

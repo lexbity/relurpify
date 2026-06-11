@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/platform/fs"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
@@ -63,14 +64,14 @@ func (s *SessionStore) Save(rec SessionRecord) error {
 		rec.UpdatedAt = time.Now()
 	}
 	dir := s.sessionDir(rec.ID)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, fs.PublicDirMode); err != nil { // public: session data dir
 		return err
 	}
 	data, err := json.MarshalIndent(rec, "", "  ")
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(s.sessionFile(rec.ID), data, 0o644)
+	return os.WriteFile(s.sessionFile(rec.ID), data, fs.PublicFileMode) // public: session data
 }
 
 // Load reads a session record by ID.

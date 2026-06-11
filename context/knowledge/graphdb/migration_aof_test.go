@@ -9,6 +9,8 @@ import (
 
 	"github.com/dgraph-io/badger/v4"
 	"github.com/stretchr/testify/require"
+
+	"codeburg.org/lexbit/relurpify/platform/fs"
 )
 
 // ────────────────────────────────────────────────────────────────────
@@ -326,7 +328,7 @@ func TestMigrateAOFToBadger_InvalidSourceDir(t *testing.T) {
 	badgerDir := t.TempDir()
 	// A missing snapshot file is fine (empty state). An invalid one should fail.
 	aofDir := t.TempDir()
-	err := os.WriteFile(filepath.Join(aofDir, "graphdb.snapshot"), []byte(`{invalid json}`), 0o644)
+	err := fs.WriteFileSecure(filepath.Join(aofDir, "graphdb.snapshot"), []byte(`{invalid json}`))
 	require.NoError(t, err)
 	err = MigrateAOFToBadger(context.Background(), aofDir, badgerDir)
 	require.Error(t, err)

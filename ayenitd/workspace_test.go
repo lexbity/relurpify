@@ -23,7 +23,7 @@ func TestOpenWorkspace(t *testing.T) {
 	// Write a few Go source files so the AST indexer has something to scan.
 	if err := os.WriteFile(filepath.Join(workspace, "main.go"), []byte(`package main
 func main() {}
-`), 0o644); err != nil {
+`), 0o644); err != nil { // public: integration test fixture
 		t.Fatal(err)
 	}
 

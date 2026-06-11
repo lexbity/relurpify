@@ -2,7 +2,6 @@ package ingestion
 
 import (
 	"context"
-	"os"
 	"path/filepath"
 	"testing"
 
@@ -10,13 +9,14 @@ import (
 
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/governance/identity"
+	"codeburg.org/lexbit/relurpify/platform/fs"
 )
 
 func TestAcquireFromFileRespectsFileScope(t *testing.T) {
 	workspace := t.TempDir()
 	protected := filepath.Join(workspace, "relurpify_cfg", "config.yaml")
-	require.NoError(t, os.MkdirAll(filepath.Dir(protected), 0o755))
-	require.NoError(t, os.WriteFile(protected, []byte("secret"), 0o644))
+	require.NoError(t, fs.MkdirAllSecure(filepath.Dir(protected)))
+	require.NoError(t, fs.WriteFileSecure(protected, []byte("secret")))
 
 	_, err := AcquireFromFile(context.Background(), protected, identity.SubjectRef{ID: "scanner"}, nil, nil, nil, sandbox.NewFileScopePolicy(workspace, []string{protected}))
 	require.Error(t, err)
@@ -24,10 +24,10 @@ func TestAcquireFromFileRespectsFileScope(t *testing.T) {
 
 func TestWorkspaceScannerSkipsProtectedConfigDir(t *testing.T) {
 	workspace := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(workspace, "main.go"), []byte("package main\n"), 0o644))
+	require.NoError(t, fs.WriteFileSecure(filepath.Join(workspace, "main.go"), []byte("package main\n")))
 	protectedDir := filepath.Join(workspace, "relurpify_cfg")
-	require.NoError(t, os.MkdirAll(protectedDir, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(protectedDir, "config.yaml"), []byte("secret"), 0o644))
+	require.NoError(t, fs.MkdirAllSecure(protectedDir))
+	require.NoError(t, fs.WriteFileSecure(filepath.Join(protectedDir, "config.yaml"), []byte("secret")))
 
 	scanner := &WorkspaceScanner{
 		FileScope: sandbox.NewFileScopePolicy(workspace, []string{protectedDir}),
@@ -40,7 +40,7 @@ func TestWorkspaceScannerSkipsProtectedConfigDir(t *testing.T) {
 
 func TestWorkspaceScannerAllowsWorkspaceFilesOutsideConfig(t *testing.T) {
 	workspace := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(workspace, "main.go"), []byte("package main\n"), 0o644))
+	require.NoError(t, fs.WriteFileSecure(filepath.Join(workspace, "main.go"), []byte("package main\n")))
 	scanner := &WorkspaceScanner{}
 
 	files, err := scanner.discoverFiles(workspace)

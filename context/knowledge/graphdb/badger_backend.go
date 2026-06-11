@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger/v4"
+
+	"codeburg.org/lexbit/relurpify/platform/fs"
 )
 
 // BadgerOptions controls the behaviour of the Badger-backed durable store.
@@ -30,7 +32,7 @@ func newBadgerBackend(opts BadgerOptions) (*badgerBackend, error) {
 	if opts.InMemory {
 		bopts = badger.DefaultOptions("").WithInMemory(true)
 	} else {
-		if err := os.MkdirAll(opts.Dir, 0o755); err != nil {
+		if err := fs.MkdirAllSecure(opts.Dir); err != nil {
 			return nil, err
 		}
 		bopts = badger.DefaultOptions(opts.Dir).WithValueDir(opts.Dir)

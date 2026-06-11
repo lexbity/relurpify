@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"codeburg.org/lexbit/relurpify/platform/fs"
 )
 
 func TestEncodeDecodeFrame(t *testing.T) {
@@ -42,7 +44,7 @@ func TestReadFrame_CorruptChecksum(t *testing.T) {
 func TestReplayAOF_EmptyFile(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "empty.aof")
-	err := os.WriteFile(path, []byte{}, 0o644)
+	err := fs.WriteFileSecure(path, []byte{})
 	require.NoError(t, err)
 
 	calls := 0

@@ -2,11 +2,12 @@ package config
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 
 	"gopkg.in/yaml.v3"
+
+	"codeburg.org/lexbit/relurpify/platform/fs"
 )
 
 // MarshalWithSchema prepends the canonical schema declaration to a YAML body.
@@ -37,12 +38,12 @@ func WriteWithSchema(path, schema string, v any) error {
 	if strings.TrimSpace(path) == "" {
 		return fmt.Errorf("path required")
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := fs.MkdirAllSecure(filepath.Dir(path)); err != nil {
 		return err
 	}
 	data, err := MarshalWithSchema(schema, v)
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, data, 0o644)
+	return fs.WriteFileSecure(path, data)
 }

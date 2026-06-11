@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"codeburg.org/lexbit/relurpify/platform/fs"
 )
 
 func TestSessionMetaRoundTripNewFields(t *testing.T) {
@@ -58,10 +60,10 @@ func TestSessionMetaOldRecordWithoutWorkflowID(t *testing.T) {
 		"workspace": "/old"
 	}`
 	sessionDir := filepath.Join(dir, id)
-	if err := os.MkdirAll(sessionDir, 0o755); err != nil {
+	if err := os.MkdirAll(sessionDir, fs.PublicDirMode); err != nil { // public: test dir
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(sessionDir, "session.json"), []byte(oldJSON), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(sessionDir, "session.json"), []byte(oldJSON), fs.PublicFileMode); err != nil { // public: test fixture
 		t.Fatal(err)
 	}
 

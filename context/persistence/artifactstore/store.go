@@ -16,6 +16,8 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+
+	"codeburg.org/lexbit/relurpify/platform/fs"
 )
 
 // Ref is a retrieval-addressable artifact handle (e.g. "artifact://<session>/<id>").
@@ -72,7 +74,7 @@ type DiskStore struct {
 // NewDiskStore creates an artifact store rooted at <workspace>/.relurpify_state/artifacts.
 func NewDiskStore(workspace string, maxSize int64) (*DiskStore, error) {
 	rootDir := filepath.Join(workspace, ".relurpify_state", "artifacts")
-	if err := os.MkdirAll(rootDir, 0o755); err != nil {
+	if err := fs.MkdirAllSecure(rootDir); err != nil {
 		return nil, fmt.Errorf("create artifact root: %w", err)
 	}
 	if maxSize <= 0 {
@@ -170,7 +172,7 @@ func (s *DiskStore) Put(_ context.Context, kind string, meta map[string]string, 
 	}
 
 	sessionDir := s.sessionDir(session)
-	if err := os.MkdirAll(sessionDir, 0o755); err != nil {
+	if err := fs.MkdirAllSecure(sessionDir); err != nil {
 		return "", fmt.Errorf("create session dir: %w", err)
 	}
 
@@ -206,7 +208,7 @@ func (s *DiskStore) Put(_ context.Context, kind string, meta map[string]string, 
 		os.Remove(dataPath)
 		return "", fmt.Errorf("marshal metadata: %w", err)
 	}
-	if err := os.WriteFile(s.metaPath(ref), metaBytes, 0o644); err != nil {
+	if err := fs.WriteFileSecure(s.metaPath(ref), metaBytes); err != nil {
 		os.Remove(dataPath)
 		os.Remove(s.metaPath(ref))
 		return "", fmt.Errorf("write metadata: %w", err)

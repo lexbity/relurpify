@@ -13,8 +13,8 @@ import (
 func TestFileScopePolicyCheck(t *testing.T) {
 	dir := t.TempDir()
 	protected := filepath.Join(dir, "relurpify_cfg", "manifest.yaml")
-	require.NoError(t, os.MkdirAll(filepath.Dir(protected), 0o755))
-	require.NoError(t, os.WriteFile(protected, []byte("config"), 0o644))
+	require.NoError(t, os.MkdirAll(filepath.Dir(protected), 0o700))
+	require.NoError(t, os.WriteFile(protected, []byte("config"), 0o600))
 
 	policy := NewFileScopePolicy(dir, []string{protected})
 	err := policy.Check(permissions.FileSystemWrite, protected)

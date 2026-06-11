@@ -12,6 +12,8 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+
+	"codeburg.org/lexbit/relurpify/platform/fs"
 )
 
 const (
@@ -91,7 +93,7 @@ type aofWriter struct {
 }
 
 func openAOF(path string, opts Options) (*aofWriter, error) {
-	file, err := os.OpenFile(filepath.Clean(path), os.O_CREATE|os.O_RDWR|os.O_APPEND, 0o644)
+	file, err := os.OpenFile(filepath.Clean(path), os.O_CREATE|os.O_RDWR|os.O_APPEND, fs.SecureFileMode)
 	if err != nil {
 		return nil, err
 	}

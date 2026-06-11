@@ -257,12 +257,7 @@ func copyRenderedFile(src, dst, workspace, sourceWorkspace string) error {
 	if err := fs.MkdirAllSecure(filepath.Dir(dst)); err != nil {
 		return err
 	}
-	info, err := os.Stat(filepath.Clean(src))
-	mode := iofs.FileMode(0o644)
-	if err == nil {
-		mode = info.Mode().Perm()
-	}
-	return os.WriteFile(dst, rendered, mode)
+	return fs.WriteFileSecure(dst, rendered)
 }
 
 func renderWorkspaceContent(data []byte, workspace, sourceWorkspace string) []byte {
@@ -277,10 +272,6 @@ func applyWorkspaceFiles(workspace, targetWorkspace string, files []SetupFileSpe
 	for _, f := range files {
 		if f.Path == "" {
 			continue
-		}
-		mode, err := parseSetupFileMode(f.Mode)
-		if err != nil {
-			return err
 		}
 		target, err := resolvePathWithin(workspace, f.Path)
 		if err != nil {
@@ -303,7 +294,7 @@ func applyWorkspaceFiles(workspace, targetWorkspace string, files []SetupFileSpe
 		if err := fs.MkdirAllSecure(filepath.Dir(target)); err != nil {
 			return err
 		}
-		if err := os.WriteFile(target, content, mode); err != nil {
+		if err := fs.WriteFileSecure(target, content); err != nil {
 			return err
 		}
 	}

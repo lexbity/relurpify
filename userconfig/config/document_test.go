@@ -2,12 +2,13 @@ package config
 
 import (
 	"crypto/sha256"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"gopkg.in/yaml.v3"
+
+	"codeburg.org/lexbit/relurpify/platform/fs"
 )
 
 // sampleAgentYAML is a minimal agent config with a permissions section, used
@@ -38,7 +39,7 @@ spec:
 func TestLoadDocument_basicEnvelope(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "agent.yaml")
-	if err := os.WriteFile(path, []byte(sampleAgentYAML), 0644); err != nil {
+	if err := fs.WriteFileSecure(path, []byte(sampleAgentYAML)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -67,7 +68,7 @@ func TestLoadDocument_basicEnvelope(t *testing.T) {
 func TestLoadDocument_sections(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "agent.yaml")
-	if err := os.WriteFile(path, []byte(sampleAgentYAML), 0644); err != nil {
+	if err := fs.WriteFileSecure(path, []byte(sampleAgentYAML)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -106,7 +107,7 @@ func TestLoadDocument_sections(t *testing.T) {
 func TestLoadDocument_fingerprintStability(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "agent.yaml")
-	if err := os.WriteFile(path, []byte(sampleAgentYAML), 0644); err != nil {
+	if err := fs.WriteFileSecure(path, []byte(sampleAgentYAML)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -134,7 +135,7 @@ func TestLoadDocument_fingerprintStability(t *testing.T) {
 func TestLoadDocument_fingerprintChangesOnModification(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "agent.yaml")
-	if err := os.WriteFile(path, []byte(sampleAgentYAML), 0644); err != nil {
+	if err := fs.WriteFileSecure(path, []byte(sampleAgentYAML)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -145,7 +146,7 @@ func TestLoadDocument_fingerprintChangesOnModification(t *testing.T) {
 
 	// Modify the file and re-load
 	modified := strings.ReplaceAll(sampleAgentYAML, "test-agent", "modified-agent")
-	if err := os.WriteFile(path, []byte(modified), 0644); err != nil {
+	if err := fs.WriteFileSecure(path, []byte(modified)); err != nil {
 		t.Fatal(err)
 	}
 	snapshot2, err := LoadDocument(path)
@@ -168,7 +169,7 @@ func TestLoadDocument_nonexistentFile(t *testing.T) {
 func TestLoadDocument_sectionPermissionsRoundTrip(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "agent.yaml")
-	if err := os.WriteFile(path, []byte(sampleAgentYAML), 0644); err != nil {
+	if err := fs.WriteFileSecure(path, []byte(sampleAgentYAML)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -208,7 +209,7 @@ spec:
 `
 	dir := t.TempDir()
 	path := filepath.Join(dir, "agent.yaml")
-	if err := os.WriteFile(path, []byte(yamlContent), 0644); err != nil {
+	if err := fs.WriteFileSecure(path, []byte(yamlContent)); err != nil {
 		t.Fatal(err)
 	}
 

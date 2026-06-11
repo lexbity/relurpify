@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"codeburg.org/lexbit/relurpify/platform/fs"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
@@ -17,7 +18,7 @@ func SaveManifestSpecWithBackup(path string, spec *config.ManifestSpec) (string,
 	if spec == nil {
 		return "", fmt.Errorf("manifest required")
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), fs.PublicDirMode); err != nil { // public: manifest parent dir
 		return "", err
 	}
 	backup, err := config.CreateTimestampedBackup(path)

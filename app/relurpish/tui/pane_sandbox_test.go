@@ -12,6 +12,7 @@ import (
 
 	runtimesvc "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/platform/fs"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
@@ -114,16 +115,16 @@ func TestSandboxPaneCyclesAndPersists(t *testing.T) {
 	dir := t.TempDir()
 	manifestPath := filepath.Join(dir, "relurpify_cfg", "agent.yaml")
 	configPath := filepath.Join(dir, "relurpify_cfg", "config.yaml")
-	if err := os.MkdirAll(filepath.Dir(manifestPath), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(manifestPath), fs.PublicDirMode); err != nil { // public: test dir
 		t.Fatalf("mkdir manifest dir: %v", err)
 	}
-	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(configPath), fs.PublicDirMode); err != nil { // public: test dir
 		t.Fatalf("mkdir config dir: %v", err)
 	}
 	if err := config.SaveYAML(manifestPath, testSandboxManifest()); err != nil {
 		t.Fatalf("seed manifest: %v", err)
 	}
-	if err := os.WriteFile(configPath, []byte("sandbox_backend: gvisor\n"), 0o644); err != nil {
+	if err := os.WriteFile(configPath, []byte("sandbox_backend: gvisor\n"), fs.PublicFileMode); err != nil { // public: test fixture
 		t.Fatalf("seed config: %v", err)
 	}
 

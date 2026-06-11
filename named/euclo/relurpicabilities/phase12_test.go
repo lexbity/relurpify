@@ -81,7 +81,7 @@ func TestTargetedRefactorRequiresWritePermission(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "sample.go")
 	source := "package sample\n\nfunc Hello() string {\n\treturn \"old\"\n}\n"
-	require.NoError(t, os.WriteFile(path, []byte(source), 0o644))
+	require.NoError(t, os.WriteFile(path, []byte(source), 0o600)) // public: test fixture
 	store, err := ast.NewTestStore(filepath.Join(dir, "index.db"))
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = store.Close() })
@@ -107,7 +107,7 @@ func TestTargetedRefactorRespectsFileScopeProtection(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "sample.go")
 	source := "package sample\n\nfunc Hello() string {\n\treturn \"old\"\n}\n"
-	require.NoError(t, os.WriteFile(path, []byte(source), 0o644))
+	require.NoError(t, os.WriteFile(path, []byte(source), 0o600)) // public: test fixture
 	store, err := ast.NewTestStore(filepath.Join(dir, "index.db"))
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = store.Close() })
@@ -133,8 +133,8 @@ func TestRenameSymbolFindsAllOccurrences(t *testing.T) {
 	dir := t.TempDir()
 	aPath := filepath.Join(dir, "a.go")
 	bPath := filepath.Join(dir, "b.go")
-	require.NoError(t, os.WriteFile(aPath, []byte("package sample\n\nfunc Hello() {}\n"), 0o644))
-	require.NoError(t, os.WriteFile(bPath, []byte("package sample\n\nfunc Hello() {}\n"), 0o644))
+	require.NoError(t, os.WriteFile(aPath, []byte("package sample\n\nfunc Hello() {}\n"), 0o600)) // public: test fixture
+	require.NoError(t, os.WriteFile(bPath, []byte("package sample\n\nfunc Hello() {}\n"), 0o600)) // public: test fixture
 	store, err := ast.NewTestStore(filepath.Join(dir, "index.db"))
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = store.Close() })

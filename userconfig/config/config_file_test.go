@@ -1,18 +1,19 @@
 package config
 
 import (
-	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"codeburg.org/lexbit/relurpify/platform/fs"
 )
 
 func TestReadConfigFileWithinWorkspace(t *testing.T) {
 	workspace := t.TempDir()
 	path := filepath.Join(workspace, "relurpify_cfg", "workspace.yaml")
-	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
-	require.NoError(t, os.WriteFile(path, []byte("schema: relurpify/workspace/v1\n"), 0o644))
+	require.NoError(t, fs.MkdirAllSecure(filepath.Dir(path)))
+	require.NoError(t, fs.WriteFileSecure(path, []byte("schema: relurpify/workspace/v1\n")))
 
 	data, err := ReadConfigFile(workspace, path)
 	require.NoError(t, err)

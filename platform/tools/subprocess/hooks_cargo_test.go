@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/platform/fs"
 )
 
 func TestCargoIsolationNotAppliedToNonCargoTool(t *testing.T) {
@@ -36,8 +37,8 @@ func TestCargoIsolationNotAppliedToNonCargoTool(t *testing.T) {
 func TestCargoIsolationStandaloneCrateNotIsolated(t *testing.T) {
 	base := t.TempDir()
 	crateDir := filepath.Join(base, "my_crate")
-	require.NoError(t, os.MkdirAll(crateDir, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(crateDir, "Cargo.toml"), []byte("[package]\nname = \"demo\"\nversion = \"0.1.0\"\n"), 0o644))
+	require.NoError(t, fs.MkdirAllSecure(crateDir))
+	require.NoError(t, fs.WriteFileSecure(filepath.Join(crateDir, "Cargo.toml"), []byte("[package]\nname = \"demo\"\nversion = \"0.1.0\"\n")))
 
 	runner := &recordingRunner{stdout: "ok"}
 	tool := NewTool(ports.ToolManifest{
@@ -65,13 +66,13 @@ func TestCargoIsolationStandaloneCrateNotIsolated(t *testing.T) {
 func TestCargoIsolationNestedWorkspaceIsolated(t *testing.T) {
 	base := t.TempDir()
 	// Root workspace Cargo.toml
-	require.NoError(t, os.WriteFile(filepath.Join(base, "Cargo.toml"), []byte("[workspace]\nmembers = [\"nested\"]\n"), 0o644))
+	require.NoError(t, fs.WriteFileSecure(filepath.Join(base, "Cargo.toml"), []byte("[workspace]\nmembers = [\"nested\"]\n")))
 
 	// Nested crate
 	crateDir := filepath.Join(base, "nested")
-	require.NoError(t, os.MkdirAll(filepath.Join(crateDir, "src"), 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(crateDir, "Cargo.toml"), []byte("[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n"), 0o644))
-	require.NoError(t, os.WriteFile(filepath.Join(crateDir, "src", "lib.rs"), []byte("pub fn add(a:i32,b:i32)->i32{a+b}\n"), 0o644))
+	require.NoError(t, fs.MkdirAllSecure(filepath.Join(crateDir, "src")))
+	require.NoError(t, fs.WriteFileSecure(filepath.Join(crateDir, "Cargo.toml"), []byte("[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n")))
+	require.NoError(t, fs.WriteFileSecure(filepath.Join(crateDir, "src", "lib.rs"), []byte("pub fn add(a:i32,b:i32)->i32{a+b}\n")))
 
 	runner := &recordingRunner{stdout: "ok"}
 	tool := NewTool(ports.ToolManifest{
@@ -106,10 +107,10 @@ func TestCargoIsolationNestedWorkspaceIsolated(t *testing.T) {
 
 func TestCargoIsolationNotAppliedForNonIsolatedSubcommands(t *testing.T) {
 	base := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(base, "Cargo.toml"), []byte("[workspace]\n"), 0o644))
+	require.NoError(t, fs.WriteFileSecure(filepath.Join(base, "Cargo.toml"), []byte("[workspace]\n")))
 	crateDir := filepath.Join(base, "nested")
-	require.NoError(t, os.MkdirAll(crateDir, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(crateDir, "Cargo.toml"), []byte("[package]\nname = \"demo\"\n"), 0o644))
+	require.NoError(t, fs.MkdirAllSecure(crateDir))
+	require.NoError(t, fs.WriteFileSecure(filepath.Join(crateDir, "Cargo.toml"), []byte("[package]\nname = \"demo\"\n")))
 
 	runner := &recordingRunner{stdout: "ok"}
 	tool := NewTool(ports.ToolManifest{
@@ -136,7 +137,7 @@ func TestCargoIsolationNotAppliedForNonIsolatedSubcommands(t *testing.T) {
 
 func TestCargoIsolationSkipsWhenNoArgs(t *testing.T) {
 	base := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(base, "Cargo.toml"), []byte("[workspace]\n"), 0o644))
+	require.NoError(t, fs.WriteFileSecure(filepath.Join(base, "Cargo.toml"), []byte("[workspace]\n")))
 
 	runner := &recordingRunner{stdout: "ok"}
 	tool := NewTool(ports.ToolManifest{
@@ -159,10 +160,10 @@ func TestCargoIsolationSkipsWhenNoArgs(t *testing.T) {
 
 func TestCargoIsolationAlreadyHasManifestPath(t *testing.T) {
 	base := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(base, "Cargo.toml"), []byte("[workspace]\n"), 0o644))
+	require.NoError(t, fs.WriteFileSecure(filepath.Join(base, "Cargo.toml"), []byte("[workspace]\n")))
 	crateDir := filepath.Join(base, "nested")
-	require.NoError(t, os.MkdirAll(crateDir, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(crateDir, "Cargo.toml"), []byte("[package]\nname = \"demo\"\n"), 0o644))
+	require.NoError(t, fs.MkdirAllSecure(crateDir))
+	require.NoError(t, fs.WriteFileSecure(filepath.Join(crateDir, "Cargo.toml"), []byte("[package]\nname = \"demo\"\n")))
 	existingManifest := filepath.Join(crateDir, "Cargo.toml")
 
 	runner := &recordingRunner{stdout: "ok"}
@@ -220,13 +221,13 @@ func TestCargoSubcommandExtraction(t *testing.T) {
 func TestCargoCopyDirSkipsGitTargetAndBak(t *testing.T) {
 	base := t.TempDir()
 	src := filepath.Join(base, "src")
-	require.NoError(t, os.MkdirAll(filepath.Join(src, "nested"), 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(src, "keep.txt"), []byte("keep"), 0o644))
-	require.NoError(t, os.WriteFile(filepath.Join(src, "ignore.bak"), []byte("skip"), 0o644))
-	require.NoError(t, os.MkdirAll(filepath.Join(src, ".git"), 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(src, ".git", "config"), []byte("skip"), 0o644))
-	require.NoError(t, os.MkdirAll(filepath.Join(src, "target"), 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(src, "target", "artifact"), []byte("skip"), 0o644))
+	require.NoError(t, fs.MkdirAllSecure(filepath.Join(src, "nested")))
+	require.NoError(t, fs.WriteFileSecure(filepath.Join(src, "keep.txt"), []byte("keep")))
+	require.NoError(t, fs.WriteFileSecure(filepath.Join(src, "ignore.bak"), []byte("skip")))
+	require.NoError(t, fs.MkdirAllSecure(filepath.Join(src, ".git")))
+	require.NoError(t, fs.WriteFileSecure(filepath.Join(src, ".git", "config"), []byte("skip")))
+	require.NoError(t, fs.MkdirAllSecure(filepath.Join(src, "target")))
+	require.NoError(t, fs.WriteFileSecure(filepath.Join(src, "target", "artifact"), []byte("skip")))
 
 	dst := filepath.Join(t.TempDir(), "mirror")
 	require.NoError(t, copyDir(src, dst))

@@ -112,10 +112,7 @@ func (a managedBackendAdapter) Reset(ctx context.Context, strategy string) error
 		if model == "" {
 			return nil
 		}
-		cmd := &exec.Cmd{
-			Path: ollamaPath,
-			Args: []string{ollamaPath, "stop", filepath.Clean(model)},
-		}
+		cmd := execCommandContext(ctx, ollamaPath, "stop", filepath.Clean(model))
 		_ = cmd.Run()
 		sleepFn(200 * time.Millisecond)
 		return nil
@@ -125,16 +122,13 @@ func (a managedBackendAdapter) Reset(ctx context.Context, strategy string) error
 		if err != nil {
 			return fmt.Errorf("systemctl not found: %w", err)
 		}
-		cmd := &exec.Cmd{Path: systemctlPath, Args: []string{systemctlPath, "restart", "ollama"}}
+		cmd := execCommandContext(ctx, systemctlPath, "restart", "ollama")
 		err = cmd.Run()
 		if err != nil {
 			// Fallback: try to stop the model if systemctl fails
 			model := strings.TrimSpace(a.modelName)
 			if model != "" {
-				_ = (&exec.Cmd{
-					Path: ollamaPath,
-					Args: []string{ollamaPath, "stop", filepath.Clean(model)},
-				}).Run()
+				_ = execCommandContext(ctx, ollamaPath, "stop", filepath.Clean(model)).Run()
 			}
 		}
 		sleepFn(500 * time.Millisecond)

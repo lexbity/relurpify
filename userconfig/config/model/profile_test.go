@@ -1,11 +1,12 @@
 package model
 
 import (
-	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"codeburg.org/lexbit/relurpify/platform/fs"
 )
 
 func TestLoadProfileDir(t *testing.T) {
@@ -78,10 +79,10 @@ func TestMatchProfile_FallsBackToDefault(t *testing.T) {
 
 func writeProfileTestFile(t *testing.T, path, contents string) {
 	t.Helper()
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := fs.MkdirAllSecure(filepath.Dir(path)); err != nil {
 		t.Fatalf("mkdir failed: %v", err)
 	}
-	if err := os.WriteFile(path, []byte(contents), 0o644); err != nil {
+	if err := fs.WriteFileSecure(path, []byte(contents)); err != nil {
 		t.Fatalf("write failed: %v", err)
 	}
 }

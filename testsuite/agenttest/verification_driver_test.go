@@ -1,3 +1,6 @@
+//go:build live
+// +build live
+
 package agenttest
 
 import (
@@ -6,13 +9,14 @@ import (
 	"path/filepath"
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/platform/fs"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
 func TestVerifyPreparedRunWritesVerificationReport(t *testing.T) {
 	workspace := t.TempDir()
 	manifestPath := filepath.Join(workspace, "relurpify_cfg", "agent.yaml")
-	if err := os.MkdirAll(filepath.Dir(manifestPath), 0o755); err != nil {
+	if err := fs.MkdirAllSecure(filepath.Dir(manifestPath)); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(manifestPath, []byte(`schema: relurpify/agent/v1
@@ -34,7 +38,7 @@ spec:
     model:
       provider: ollama
       name: qwen2.5-coder:14b
-`), 0o644); err != nil {
+`), fs.PublicFileMode); err != nil { // public: test manifest
 		t.Fatal(err)
 	}
 	suite := &Suite{
@@ -63,10 +67,10 @@ spec:
 		filepath.Join(prepared.Descriptor.ExecutionTelemetryDir, "agenttest.jsonl"),
 		preparedRunReportPath(prepared.Descriptor),
 	} {
-		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		if err := fs.MkdirAllSecure(filepath.Dir(path)); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(path, []byte("{}\n"), 0o644); err != nil {
+		if err := os.WriteFile(path, []byte("{}\n"), fs.PublicFileMode); err != nil { // public: test fixture
 			t.Fatal(err)
 		}
 	}
@@ -89,7 +93,7 @@ spec:
 func TestEvaluateFileContentExpectations(t *testing.T) {
 	workspace := t.TempDir()
 	path := filepath.Join(workspace, "hello.go")
-	if err := os.WriteFile(path, []byte("package hello\n\nfunc Hello() string {\n  return \"hello world\"\n}\n"), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte("package hello\n\nfunc Hello() string {\n  return \"hello world\"\n}\n"), fs.PublicFileMode); err != nil { // public: test fixture
 		t.Fatal(err)
 	}
 

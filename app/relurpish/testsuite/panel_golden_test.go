@@ -21,6 +21,7 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/model"
+	"codeburg.org/lexbit/relurpify/platform/fs"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	"codeburg.org/lexbit/relurpify/platform/llm"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
@@ -83,10 +84,10 @@ func readGolden(t *testing.T, name string) string {
 func writeGolden(t *testing.T, name, content string) {
 	t.Helper()
 	path := goldenPath(name)
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), fs.PublicDirMode); err != nil { // public: golden dir
 		t.Fatalf("failed to create golden dir: %v", err)
 	}
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte(content), fs.PublicFileMode); err != nil { // public: golden fixture
 		t.Fatalf("failed to write golden file %s: %v", name, err)
 	}
 }
@@ -224,7 +225,7 @@ func deterministicTempDir(t *testing.T) string {
 	} else {
 		workdir = baseDir
 	}
-	if err := os.MkdirAll(workdir, 0o755); err != nil {
+	if err := os.MkdirAll(workdir, fs.PublicDirMode); err != nil { // public: test workdir
 		t.Fatalf("mkdir workdir: %v", err)
 	}
 	return workdir
@@ -250,7 +251,7 @@ func TestPanelGoldenViews(t *testing.T) {
 	assertGolden(t, "welcome_panel.txt", baseWelcome.View())
 
 	sandboxDir := filepath.Join(workdir, "sandbox")
-	if err := os.MkdirAll(filepath.Join(sandboxDir, "relurpify_cfg"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(sandboxDir, "relurpify_cfg"), fs.PublicDirMode); err != nil { // public: sandbox config dir
 		t.Fatalf("mkdir sandbox config: %v", err)
 	}
 	if err := config.SaveYAML(filepath.Join(sandboxDir, "relurpify_cfg", "agent.yaml"), testManifest()); err != nil {
@@ -327,7 +328,7 @@ func TestRootTUIViews(t *testing.T) {
 	withWorkingDir(t, workdir)
 
 	// Create necessary directories for runtime config
-	if err := os.MkdirAll(filepath.Join(workdir, "relurpify_cfg"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(workdir, "relurpify_cfg"), fs.PublicDirMode); err != nil { // public: workdir config dir
 		t.Fatalf("mkdir config: %v", err)
 	}
 

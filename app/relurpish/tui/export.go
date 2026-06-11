@@ -13,6 +13,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/capability/runtime"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
+	"codeburg.org/lexbit/relurpify/platform/fs"
 	"codeburg.org/lexbit/relurpify/platform/llm"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
@@ -86,7 +87,7 @@ func WriteSessionExport(messages []Message, session *Session, ctx *AgentContext,
 		base := "session-" + time.Now().Format("20060102-150405")
 		outPath = filepath.Join(config.New(root).ExportsDir(), base+"."+format)
 	}
-	if err := os.MkdirAll(filepath.Dir(outPath), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(outPath), fs.PublicDirMode); err != nil { // public: export output dir
 		return "", err
 	}
 
@@ -125,7 +126,7 @@ func writeJSONExport(path string, payload SessionExport) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, data, 0o644)
+	return os.WriteFile(path, data, fs.PublicFileMode) // public: JSON export
 }
 
 func writeMarkdownExport(path string, payload SessionExport) error {
@@ -207,7 +208,7 @@ func writeMarkdownExport(path string, payload SessionExport) error {
 		fmt.Fprintf(&b, "- Log Path: %s\n", payload.LogPath)
 	}
 
-	return os.WriteFile(path, []byte(b.String()), 0o644)
+	return os.WriteFile(path, []byte(b.String()), fs.PublicFileMode) // public: markdown export
 }
 
 func loadTelemetryEvents(path string, limit int) ([]telemetry.Event, bool, error) {

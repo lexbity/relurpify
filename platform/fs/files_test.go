@@ -3,7 +3,6 @@ package fs
 import (
 	"context"
 	"encoding/json"
-	"os"
 	"path/filepath"
 	"testing"
 
@@ -40,8 +39,8 @@ func TestReadWriteListFileTools(t *testing.T) {
 func TestFileToolsHonorSandboxProtectedPaths(t *testing.T) {
 	dir := t.TempDir()
 	protected := filepath.Join(dir, "relurpify_cfg", "agent.yaml")
-	assert.NoError(t, os.MkdirAll(filepath.Dir(protected), 0o755))
-	assert.NoError(t, os.WriteFile(protected, []byte("secret"), 0o644))
+	assert.NoError(t, MkdirAllSecure(filepath.Dir(protected)))
+	assert.NoError(t, WriteFileSecure(protected, []byte("secret")))
 
 	scope := NewFileScopePolicy(dir, []string{protected})
 
@@ -64,7 +63,7 @@ func TestFileToolsHonorSandboxProtectedPaths(t *testing.T) {
 func TestSearchInFilesTool(t *testing.T) {
 	dir := t.TempDir()
 	file := filepath.Join(dir, "code.go")
-	assert.NoError(t, os.WriteFile(file, []byte("package main\n// TODO: fix bug\n"), 0o644))
+	assert.NoError(t, WriteFileSecure(file, []byte("package main\n// TODO: fix bug\n")))
 
 	tool := &SearchInFilesTool{BasePath: dir}
 	res, err := tool.Execute(context.Background(), map[string]any{
@@ -82,7 +81,7 @@ func TestSearchInFilesTool(t *testing.T) {
 func TestSearchInFilesToolDefaultsDirectory(t *testing.T) {
 	dir := t.TempDir()
 	file := filepath.Join(dir, "main.c")
-	assert.NoError(t, os.WriteFile(file, []byte("#include <stdio.h>\n"), 0o644))
+	assert.NoError(t, WriteFileSecure(file, []byte("#include <stdio.h>\n")))
 
 	tool := &SearchInFilesTool{BasePath: dir}
 	res, err := tool.Execute(context.Background(), map[string]any{
@@ -99,8 +98,8 @@ func TestSearchInFilesToolDefaultsDirectory(t *testing.T) {
 func TestListFilesToolMatchesRecursiveRelativePatterns(t *testing.T) {
 	dir := t.TempDir()
 	target := filepath.Join(dir, "src", "nested", "lib.rs")
-	assert.NoError(t, os.MkdirAll(filepath.Dir(target), 0o755))
-	assert.NoError(t, os.WriteFile(target, []byte("pub fn demo() {}\n"), 0o644))
+	assert.NoError(t, MkdirAllSecure(filepath.Dir(target)))
+	assert.NoError(t, WriteFileSecure(target, []byte("pub fn demo() {}\n")))
 
 	tool := &ListFilesTool{BasePath: dir}
 	res, err := tool.Execute(context.Background(), map[string]any{
@@ -115,7 +114,7 @@ func TestListFilesToolMatchesRecursiveRelativePatterns(t *testing.T) {
 func TestListFilesToolDefaultsDirectory(t *testing.T) {
 	dir := t.TempDir()
 	target := filepath.Join(dir, "README.md")
-	assert.NoError(t, os.WriteFile(target, []byte("# docs\n"), 0o644))
+	assert.NoError(t, WriteFileSecure(target, []byte("# docs\n")))
 
 	tool := &ListFilesTool{BasePath: dir}
 	res, err := tool.Execute(context.Background(), map[string]any{
@@ -130,10 +129,10 @@ func TestListFilesToolSkipsGeneratedDirectories(t *testing.T) {
 	dir := t.TempDir()
 	source := filepath.Join(dir, "src", "main.rs")
 	generated := filepath.Join(dir, "target", "debug", "build.rs")
-	assert.NoError(t, os.MkdirAll(filepath.Dir(source), 0o755))
-	assert.NoError(t, os.MkdirAll(filepath.Dir(generated), 0o755))
-	assert.NoError(t, os.WriteFile(source, []byte("fn main() {}\n"), 0o644))
-	assert.NoError(t, os.WriteFile(generated, []byte("fn generated() {}\n"), 0o644))
+	assert.NoError(t, MkdirAllSecure(filepath.Dir(source)))
+	assert.NoError(t, MkdirAllSecure(filepath.Dir(generated)))
+	assert.NoError(t, WriteFileSecure(source, []byte("fn main() {}\n")))
+	assert.NoError(t, WriteFileSecure(generated, []byte("fn generated() {}\n")))
 
 	tool := &ListFilesTool{BasePath: dir}
 	res, err := tool.Execute(context.Background(), map[string]any{
@@ -150,10 +149,10 @@ func TestSearchInFilesToolSkipsGeneratedDirectories(t *testing.T) {
 	dir := t.TempDir()
 	source := filepath.Join(dir, "src", "main.rs")
 	generated := filepath.Join(dir, "target", "debug", "build.rs")
-	assert.NoError(t, os.MkdirAll(filepath.Dir(source), 0o755))
-	assert.NoError(t, os.MkdirAll(filepath.Dir(generated), 0o755))
-	assert.NoError(t, os.WriteFile(source, []byte("// TODO: source\n"), 0o644))
-	assert.NoError(t, os.WriteFile(generated, []byte("// TODO: generated\n"), 0o644))
+	assert.NoError(t, MkdirAllSecure(filepath.Dir(source)))
+	assert.NoError(t, MkdirAllSecure(filepath.Dir(generated)))
+	assert.NoError(t, WriteFileSecure(source, []byte("// TODO: source\n")))
+	assert.NoError(t, WriteFileSecure(generated, []byte("// TODO: generated\n")))
 
 	tool := &SearchInFilesTool{BasePath: dir}
 	res, err := tool.Execute(context.Background(), map[string]any{
@@ -172,7 +171,7 @@ func TestSearchInFilesToolSkipsGeneratedDirectories(t *testing.T) {
 func TestSearchInFilesToolDefaultsToCaseInsensitiveMatching(t *testing.T) {
 	dir := t.TempDir()
 	file := filepath.Join(dir, "main.go")
-	assert.NoError(t, os.WriteFile(file, []byte("TODO: fix bug\n"), 0o644))
+	assert.NoError(t, WriteFileSecure(file, []byte("TODO: fix bug\n")))
 
 	tool := &SearchInFilesTool{BasePath: dir}
 	res, err := tool.Execute(context.Background(), map[string]any{
@@ -191,7 +190,7 @@ func TestSearchInFilesToolDefaultsToCaseInsensitiveMatching(t *testing.T) {
 func TestSearchInFilesToolSupportsCaseSensitiveMatching(t *testing.T) {
 	dir := t.TempDir()
 	file := filepath.Join(dir, "main.go")
-	assert.NoError(t, os.WriteFile(file, []byte("TODO: fix bug\n"), 0o644))
+	assert.NoError(t, WriteFileSecure(file, []byte("TODO: fix bug\n")))
 
 	tool := &SearchInFilesTool{BasePath: dir}
 	res, err := tool.Execute(context.Background(), map[string]any{

@@ -37,7 +37,7 @@ func TestThoughtRecipeLoaderRejectsFiles(t *testing.T) {
 func TestThoughtRecipeLoaderScansAcceptedExtensionsInOrder(t *testing.T) {
 	root := t.TempDir()
 	sourceRoot := filepath.Join(root, ThoughtRecipeSourceRoot)
-	if err := os.MkdirAll(sourceRoot, 0o755); err != nil {
+	if err := os.MkdirAll(sourceRoot, 0o700); err != nil { // public: test fixture dir
 		t.Fatalf("mkdir source root: %v", err)
 	}
 
@@ -48,7 +48,7 @@ func TestThoughtRecipeLoaderScansAcceptedExtensionsInOrder(t *testing.T) {
 		"ignore.txt":      "not a thoughtrecipe\n",
 	}
 	for name, contents := range files {
-		if err := os.WriteFile(filepath.Join(sourceRoot, name), []byte(contents), 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(sourceRoot, name), []byte(contents), 0o600); err != nil { // public: test fixture
 			t.Fatalf("write %s: %v", name, err)
 		}
 	}
@@ -87,13 +87,13 @@ func TestThoughtRecipeLoaderScansAcceptedExtensionsInOrder(t *testing.T) {
 func TestThoughtRecipeLoaderIgnoresNestedDirectories(t *testing.T) {
 	root := t.TempDir()
 	sourceRoot := filepath.Join(root, ThoughtRecipeSourceRoot)
-	if err := os.MkdirAll(filepath.Join(sourceRoot, "nested"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(sourceRoot, "nested"), 0o700); err != nil { // public: test fixture dir
 		t.Fatalf("mkdir nested: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(sourceRoot, "nested", "inner.euclo"), []byte("thoughtrecipe nested\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(sourceRoot, "nested", "inner.euclo"), []byte("thoughtrecipe nested\n"), 0o600); err != nil { // public: test fixture
 		t.Fatalf("write nested file: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(sourceRoot, "top.euclo"), []byte("thoughtrecipe top\n\ntrigger as capability:\n  may read workspace\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(sourceRoot, "top.euclo"), []byte("thoughtrecipe top\n\ntrigger as capability:\n  may read workspace\n"), 0o600); err != nil { // public: test fixture
 		t.Fatalf("write top file: %v", err)
 	}
 
@@ -120,7 +120,7 @@ func TestThoughtRecipeLoaderIgnoresNestedDirectories(t *testing.T) {
 func TestThoughtRecipeLoaderWarnsOnDuplicateThoughtRecipeNames(t *testing.T) {
 	root := t.TempDir()
 	sourceRoot := filepath.Join(root, ThoughtRecipeSourceRoot)
-	if err := os.MkdirAll(sourceRoot, 0o755); err != nil {
+	if err := os.MkdirAll(sourceRoot, 0o700); err != nil { // public: test fixture dir
 		t.Fatalf("mkdir source root: %v", err)
 	}
 
@@ -129,7 +129,7 @@ func TestThoughtRecipeLoaderWarnsOnDuplicateThoughtRecipeNames(t *testing.T) {
 
 trigger as capability:
   may read workspace
-`), 0o644); err != nil {
+`), 0o600); err != nil { // public: test fixture
 		t.Fatalf("write first thoughtrecipe: %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(sourceRoot, "b.euclo"), []byte(`thoughtrecipe shared
@@ -137,7 +137,7 @@ trigger as capability:
 
 trigger as capability:
   may read workspace
-`), 0o644); err != nil {
+`), 0o600); err != nil { // public: test fixture
 		t.Fatalf("write second thoughtrecipe: %v", err)
 	}
 
@@ -170,7 +170,7 @@ trigger as capability:
 func TestThoughtRecipeLoaderCapturesIntentRouteKind(t *testing.T) {
 	root := t.TempDir()
 	sourceRoot := filepath.Join(root, ThoughtRecipeSourceRoot)
-	if err := os.MkdirAll(sourceRoot, 0o755); err != nil {
+	if err := os.MkdirAll(sourceRoot, 0o700); err != nil { // public: test fixture dir
 		t.Fatalf("mkdir source root: %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(sourceRoot, "intent.euclo"), []byte(`thoughtrecipe intent_route
@@ -181,7 +181,7 @@ trigger as intent:
   keyword ["clarify", "route"]
   handoff ["intent_clarify"]
   may read workspace
-`), 0o644); err != nil {
+`), 0o600); err != nil { // public: test fixture
 		t.Fatalf("write intent thoughtrecipe: %v", err)
 	}
 
@@ -215,7 +215,7 @@ trigger as intent:
 func TestThoughtRecipeLoaderRejectsPromptImportsWithoutPromptRegistry(t *testing.T) {
 	root := t.TempDir()
 	sourceRoot := filepath.Join(root, ThoughtRecipeSourceRoot)
-	if err := os.MkdirAll(sourceRoot, 0o755); err != nil {
+	if err := os.MkdirAll(sourceRoot, 0o700); err != nil { // public: test fixture dir
 		t.Fatalf("mkdir source root: %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(sourceRoot, "prompt_import.euclo"), []byte(`thoughtrecipe prompt_import
@@ -230,7 +230,7 @@ agent reviewer uses react
 
 run reviewer:
   goal prompt explore
-`), 0o644); err != nil {
+`), 0o600); err != nil { // public: test fixture
 		t.Fatalf("write prompt import thoughtrecipe: %v", err)
 	}
 
@@ -246,7 +246,7 @@ run reviewer:
 func TestThoughtRecipeLoaderValidatesPromptImportsWithPromptRegistry(t *testing.T) {
 	root := t.TempDir()
 	sourceRoot := filepath.Join(root, ThoughtRecipeSourceRoot)
-	if err := os.MkdirAll(sourceRoot, 0o755); err != nil {
+	if err := os.MkdirAll(sourceRoot, 0o700); err != nil { // public: test fixture dir
 		t.Fatalf("mkdir source root: %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(sourceRoot, "prompt_import.euclo"), []byte(`thoughtrecipe prompt_import
@@ -261,7 +261,7 @@ agent reviewer uses react
 
 run reviewer:
   goal prompt explore
-`), 0o644); err != nil {
+`), 0o600); err != nil { // public: test fixture
 		t.Fatalf("write prompt import thoughtrecipe: %v", err)
 	}
 
@@ -281,7 +281,7 @@ run reviewer:
 func TestThoughtRecipeLoaderValidatesPromptImportsWithRepositoryPromptRegistry(t *testing.T) {
 	root := t.TempDir()
 	sourceRoot := filepath.Join(root, ThoughtRecipeSourceRoot)
-	if err := os.MkdirAll(sourceRoot, 0o755); err != nil {
+	if err := os.MkdirAll(sourceRoot, 0o700); err != nil { // public: test fixture dir
 		t.Fatalf("mkdir source root: %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(sourceRoot, "prompt_import.euclo"), []byte(`thoughtrecipe prompt_import
@@ -301,7 +301,7 @@ run reviewer:
 
 ask user:
   question prompt clarify_question
-`), 0o644); err != nil {
+`), 0o600); err != nil { // public: test fixture
 		t.Fatalf("write prompt import thoughtrecipe: %v", err)
 	}
 
@@ -323,7 +323,7 @@ ask user:
 func TestThoughtRecipeLoaderStopsOnHardImportValidationFailures(t *testing.T) {
 	root := t.TempDir()
 	sourceRoot := filepath.Join(root, ThoughtRecipeSourceRoot)
-	if err := os.MkdirAll(sourceRoot, 0o755); err != nil {
+	if err := os.MkdirAll(sourceRoot, 0o700); err != nil { // public: test fixture dir
 		t.Fatalf("mkdir source root: %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(sourceRoot, "a.euclo"), []byte(`thoughtrecipe valid_recipe
@@ -331,7 +331,7 @@ func TestThoughtRecipeLoaderStopsOnHardImportValidationFailures(t *testing.T) {
 
 trigger as capability:
   may read workspace
-`), 0o644); err != nil {
+`), 0o600); err != nil { // public: test fixture
 		t.Fatalf("write valid thoughtrecipe: %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(sourceRoot, "b.euclo"), []byte(`thoughtrecipe invalid_recipe
@@ -346,7 +346,7 @@ agent reviewer uses react
 
 run reviewer:
   goal prompt explore
-`), 0o644); err != nil {
+`), 0o600); err != nil { // public: test fixture
 		t.Fatalf("write invalid thoughtrecipe: %v", err)
 	}
 

@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/model"
+	"codeburg.org/lexbit/relurpify/platform/fs"
 )
 
 type TapeMode string
@@ -95,10 +96,10 @@ func NewTapeModel(inner LanguageModel, path string, mode string) (*TapeModel, er
 	case TapeOff:
 		return tm, nil
 	case TapeRecord:
-		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		if err := fs.MkdirAllSecure(filepath.Dir(path)); err != nil {
 			return nil, err
 		}
-		f, err := os.OpenFile(filepath.Clean(path), os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o644)
+		f, err := os.OpenFile(filepath.Clean(path), os.O_CREATE|os.O_TRUNC|os.O_WRONLY, fs.SecureFileMode)
 		if err != nil {
 			return nil, err
 		}

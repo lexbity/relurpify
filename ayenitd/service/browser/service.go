@@ -199,7 +199,7 @@ func (s *BrowserService) ensureBrowserRoots() error {
 		if err := s.ensureBrowserPathRoot(label, path); err != nil {
 			return err
 		}
-		if err := os.MkdirAll(path, 0o755); err != nil {
+		if err := os.MkdirAll(path, 0o700); err != nil { // public: browser roots
 			return fmt.Errorf("create browser %s: %w", label, err)
 		}
 	}
@@ -218,7 +218,7 @@ func (s *BrowserService) ensureSessionPaths(sessionID string) (browserSessionPat
 		if err := s.ensureBrowserPathRoot(label, path); err != nil {
 			return browserSessionPaths{}, err
 		}
-		if err := os.MkdirAll(path, 0o755); err != nil {
+		if err := os.MkdirAll(path, 0o700); err != nil { // public: browser session paths
 			return browserSessionPaths{}, fmt.Errorf("create browser %s: %w", label, err)
 		}
 	}
@@ -235,7 +235,7 @@ func (s *BrowserService) persistSessionMetadata(handle *browserSessionHandle) {
 	if err := s.checkFileScope(permissions.FileSystemWrite, handle.paths.metadataFile); err != nil {
 		return
 	}
-	if err := os.MkdirAll(filepath.Dir(handle.paths.metadataFile), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(handle.paths.metadataFile), 0o700); err != nil { // public: browser metadata dir
 		return
 	}
 	payload := map[string]any{
@@ -246,7 +246,7 @@ func (s *BrowserService) persistSessionMetadata(handle *browserSessionHandle) {
 	if err != nil {
 		return
 	}
-	_ = os.WriteFile(handle.paths.metadataFile, data, 0o644)
+	_ = os.WriteFile(handle.paths.metadataFile, data, 0o600) // public: browser metadata file
 }
 
 func canonicalBrowserAction(action string) string {

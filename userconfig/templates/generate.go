@@ -5,6 +5,8 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+
+	relurpifyfs "codeburg.org/lexbit/relurpify/platform/fs"
 )
 
 // GenerateWorkspaceTemplates copies the canonical workspace template tree to
@@ -21,7 +23,7 @@ func GenerateWorkspaceTemplates(output string) error {
 	if err := os.RemoveAll(output); err != nil {
 		return err
 	}
-	if err := os.MkdirAll(output, 0o755); err != nil {
+	if err := relurpifyfs.MkdirAllSecure(output); err != nil {
 		return err
 	}
 	return filepath.WalkDir(source, func(path string, d fs.DirEntry, err error) error {
@@ -37,19 +39,15 @@ func GenerateWorkspaceTemplates(output string) error {
 		}
 		target := filepath.Join(output, rel)
 		if d.IsDir() {
-			return os.MkdirAll(target, 0o755)
+			return relurpifyfs.MkdirAllSecure(target)
 		}
 		data, err := os.ReadFile(filepath.Clean(path))
 		if err != nil {
 			return err
 		}
-		info, err := d.Info()
-		if err != nil {
+		if err := relurpifyfs.MkdirAllSecure(filepath.Dir(target)); err != nil {
 			return err
 		}
-		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
-			return err
-		}
-		return os.WriteFile(target, data, info.Mode().Perm())
+		return relurpifyfs.WriteFileSecure(target, data)
 	})
 }

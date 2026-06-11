@@ -11,6 +11,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/ayenitd"
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/platform/fs"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/platform/llm"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
@@ -246,7 +247,7 @@ func InitializeWorkspaceFromTemplates(cfg Config, overwrite bool) error {
 		return fmt.Errorf("workspace path required")
 	}
 	paths := config.New(cfg.Workspace)
-	if err := os.MkdirAll(paths.ConfigRoot(), 0o755); err != nil {
+	if err := os.MkdirAll(paths.ConfigRoot(), fs.PublicDirMode); err != nil { // public: config root
 		return err
 	}
 	resolver := templates.NewResolver(cfg.SharedRoot)
@@ -279,7 +280,7 @@ func InitializeWorkspaceFromTemplates(cfg Config, overwrite bool) error {
 	}
 	securityDir := filepath.Join(paths.ConfigRoot(), "security")
 	for _, dir := range []string{securityDir} {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
+		if err := os.MkdirAll(dir, fs.PublicDirMode); err != nil { // public: security policies dir
 			return err
 		}
 	}
@@ -305,7 +306,7 @@ func InitializeWorkspaceFromTemplates(cfg Config, overwrite bool) error {
 		filepath.Join(stateDir, "sessions"),
 		filepath.Join(stateDir, "test_run"),
 	} {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
+		if err := os.MkdirAll(dir, fs.PublicDirMode); err != nil { // public: runtime state dirs
 			return err
 		}
 	}
@@ -323,10 +324,10 @@ func copyTemplateFile(src, dst, workspace string, overwrite bool) error {
 		return err
 	}
 	rendered := strings.ReplaceAll(string(data), "${workspace}", filepath.ToSlash(workspace))
-	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(dst), fs.PublicDirMode); err != nil { // public: template dst dir
 		return err
 	}
-	return os.WriteFile(dst, []byte(rendered), 0o644)
+	return os.WriteFile(dst, []byte(rendered), fs.PublicFileMode) // public: rendered template
 }
 
 func detectChromiumStatus(ctx context.Context, policy sandbox.CommandPolicy) DependencyStatus {

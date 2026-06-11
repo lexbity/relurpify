@@ -393,6 +393,6 @@ func writeBidiSleepScript(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
 	path := dir + "/sleep.sh"
-	require.NoError(t, os.WriteFile(path, []byte("#!/bin/sh\nsleep 60\n"), 0o755))
+	require.NoError(t, os.WriteFile(path, []byte("#!/bin/sh\nsleep 60\n"), 0o600))
 	return path
 }

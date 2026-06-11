@@ -2,8 +2,9 @@ package prompt
 
 import (
 	"errors"
-	"os"
 	"path/filepath"
+
+	"codeburg.org/lexbit/relurpify/platform/fs"
 	"reflect"
 	"sort"
 	"strings"
@@ -156,7 +157,7 @@ func TestRegistry_DeterministicLoadOrder(t *testing.T) {
 
 func writePromptFile(t *testing.T, dir, name, id string, tags []string, vars map[string]string, body string) {
 	t.Helper()
-	if err := os.WriteFile(filepath.Join(dir, name), []byte(promptFile(id, tags, vars, body)), 0o600); err != nil {
+	if err := fs.WriteFileSecure(filepath.Join(dir, name), []byte(promptFile(id, tags, vars, body))); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
 }

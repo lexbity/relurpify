@@ -1,18 +1,19 @@
 package security
 
 import (
-	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"codeburg.org/lexbit/relurpify/platform/fs"
 )
 
 func TestLoadWorkspaceIngestionPolicy(t *testing.T) {
 	workspace := t.TempDir()
 	path := WorkspaceIngestionPolicyPath(workspace)
-	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
-	require.NoError(t, os.WriteFile(path, []byte(`schema: relurpify/policy/ingestion/v1
+	require.NoError(t, fs.MkdirAllSecure(filepath.Dir(path)))
+	require.NoError(t, fs.WriteFileSecure(path, []byte(`schema: relurpify/policy/ingestion/v1
 rules:
   - id: allow-workspace-ingestion
     name: Workspace ingestion
@@ -21,7 +22,7 @@ rules:
     effect:
       action: allow
       reason: Allow workspace ingestion for configured sources
-`), 0o644))
+`)))
 
 	rules, err := LoadWorkspaceIngestionPolicy(path, workspace, testDecode)
 	require.NoError(t, err)
@@ -31,8 +32,8 @@ rules:
 func TestLoadWorkspaceIngestionPolicyRejectsInvalidRule(t *testing.T) {
 	workspace := t.TempDir()
 	path := WorkspaceIngestionPolicyPath(workspace)
-	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
-	require.NoError(t, os.WriteFile(path, []byte(`schema: relurpify/policy/ingestion/v1
+	require.NoError(t, fs.MkdirAllSecure(filepath.Dir(path)))
+	require.NoError(t, fs.WriteFileSecure(path, []byte(`schema: relurpify/policy/ingestion/v1
 rules:
   - id: ""
     name: broken
@@ -41,7 +42,7 @@ rules:
     effect:
       action: allow
       reason: broken
-`), 0o644))
+`)))
 
 	_, err := LoadWorkspaceIngestionPolicy(path, workspace, testDecode)
 	require.Error(t, err)

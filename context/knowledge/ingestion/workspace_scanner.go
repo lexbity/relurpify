@@ -14,6 +14,7 @@ import (
 	"codeburg.org/lexbit/relurpify/context/knowledge"
 	contextports "codeburg.org/lexbit/relurpify/context/ports"
 	"codeburg.org/lexbit/relurpify/governance/identity"
+	"codeburg.org/lexbit/relurpify/platform/fs"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
@@ -45,7 +46,7 @@ func (s *WorkspaceScanner) Scan(ctx context.Context, root string) (*ScanReport, 
 
 	// Ensure quarantine directory exists
 	if s.QuarantineDir != "" {
-		if err := os.MkdirAll(s.QuarantineDir, 0750); err != nil {
+		if err := fs.MkdirAllSecure(s.QuarantineDir); err != nil {
 			return report, fmt.Errorf("create quarantine dir: %w", err)
 		}
 	}

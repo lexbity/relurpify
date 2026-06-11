@@ -1,24 +1,25 @@
 package config
 
 import (
-	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"codeburg.org/lexbit/relurpify/platform/fs"
 )
 
 func TestLoadWorkspaceConfigAppliesDefaults(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "relurpify_cfg", "workspace.yaml")
-	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
-	require.NoError(t, os.WriteFile(path, []byte(`schema: relurpify/workspace/v1
+	require.NoError(t, fs.MkdirAllSecure(filepath.Dir(path)))
+	require.NoError(t, fs.WriteFileSecure(path, []byte(`schema: relurpify/workspace/v1
 model:
   provider: ollama
   name: gemma4:e4b
 sandbox:
   backend: gvisor
-`), 0o644))
+`)))
 
 	cfg, err := LoadWorkspaceConfig(path, dir, WorkspaceLoadOptions{})
 	require.NoError(t, err)
@@ -37,14 +38,14 @@ sandbox:
 func TestLoadWorkspaceConfigRejectsStrictDefaults(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "relurpify_cfg", "workspace.yaml")
-	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
-	require.NoError(t, os.WriteFile(path, []byte(`schema: relurpify/workspace/v1
+	require.NoError(t, fs.MkdirAllSecure(filepath.Dir(path)))
+	require.NoError(t, fs.WriteFileSecure(path, []byte(`schema: relurpify/workspace/v1
 model:
   provider: ollama
   name: gemma4:e4b
 sandbox:
   backend: gvisor
-`), 0o644))
+`)))
 
 	_, err := LoadWorkspaceConfig(path, dir, WorkspaceLoadOptions{Strict: true})
 	require.Error(t, err)

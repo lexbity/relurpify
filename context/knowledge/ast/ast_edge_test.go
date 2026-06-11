@@ -10,6 +10,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"codeburg.org/lexbit/relurpify/platform/fs"
 )
 
 // ==================== IndexManager Edge Cases ====================
@@ -17,9 +19,7 @@ import (
 func TestIndexManagerStartIndexingWhenReady(t *testing.T) {
 	manager, tmpDir := newTestIndexManager(t)
 	path := filepath.Join(tmpDir, "main.go")
-	require.NoError(t, os.WriteFile(path, []byte(`package main
-func Hello() {}
-`), 0o644))
+	require.NoError(t, fs.WriteFileSecure(path, []byte("package main\nfunc Hello() {}\n")))
 	require.NoError(t, manager.IndexWorkspace())
 	require.True(t, manager.Ready())
 
@@ -38,9 +38,7 @@ func TestIndexManagerStartIndexingWhenRunning(t *testing.T) {
 
 	// Create a file to index
 	path := filepath.Join(tmpDir, "main.go")
-	require.NoError(t, os.WriteFile(path, []byte(`package main
-func Hello() {}
-`), 0o644))
+	require.NoError(t, fs.WriteFileSecure(path, []byte("package main\nfunc Hello() {}\n")))
 
 	// First start indexing
 	require.NoError(t, manager.StartIndexing(context.Background()))
@@ -59,9 +57,7 @@ func TestIndexManagerRefreshFileWithPathFilter(t *testing.T) {
 	manager := NewIndexManager(store, IndexConfig{WorkspacePath: tmpDir})
 
 	path := filepath.Join(tmpDir, "main.go")
-	require.NoError(t, os.WriteFile(path, []byte(`package main
-func Hello() {}
-`), 0o644))
+	require.NoError(t, fs.WriteFileSecure(path, []byte("package main\nfunc Hello() {}\n")))
 	require.NoError(t, manager.IndexFile(context.Background(), path))
 
 	// Verify file was indexed
@@ -109,9 +105,7 @@ func TestIndexManagerRemoveIndexedFileWithError(t *testing.T) {
 	manager := NewIndexManager(store, IndexConfig{WorkspacePath: tmpDir})
 
 	path := filepath.Join(tmpDir, "main.go")
-	require.NoError(t, os.WriteFile(path, []byte(`package main
-func Hello() {}
-`), 0o644))
+	require.NoError(t, fs.WriteFileSecure(path, []byte("package main\nfunc Hello() {}\n")))
 	require.NoError(t, manager.IndexFile(context.Background(), path))
 
 	// Close the store to cause errors
@@ -175,9 +169,7 @@ func TestIndexManagerIndexFileReadError(t *testing.T) {
 func TestIndexManagerIndexFileWithConcurrentAccess(t *testing.T) {
 	manager, tmpDir := newTestIndexManager(t)
 	path := filepath.Join(tmpDir, "main.go")
-	require.NoError(t, os.WriteFile(path, []byte(`package main
-func Hello() {}
-`), 0o644))
+	require.NoError(t, fs.WriteFileSecure(path, []byte("package main\nfunc Hello() {}\n")))
 
 	// Lock the indexing map to simulate concurrent access
 	manager.mu.Lock()
@@ -272,9 +264,7 @@ func TestIndexManagerSanitizeSymbolName(t *testing.T) {
 func TestIndexManagerWaitUntilReadyAlreadyReady(t *testing.T) {
 	manager, tmpDir := newTestIndexManager(t)
 	path := filepath.Join(tmpDir, "main.go")
-	require.NoError(t, os.WriteFile(path, []byte(`package main
-func Hello() {}
-`), 0o644))
+	require.NoError(t, fs.WriteFileSecure(path, []byte("package main\nfunc Hello() {}\n")))
 	require.NoError(t, manager.IndexWorkspace())
 
 	// Should return immediately since already ready
@@ -312,9 +302,7 @@ func TestIndexManagerIndexWorkspaceContextCanceled(t *testing.T) {
 
 	// Create a file
 	path := filepath.Join(tmpDir, "main.go")
-	require.NoError(t, os.WriteFile(path, []byte(`package main
-func Hello() {}
-`), 0o644))
+	require.NoError(t, fs.WriteFileSecure(path, []byte("package main\nfunc Hello() {}\n")))
 
 	// Cancel context immediately
 	ctx, cancel := context.WithCancel(context.Background())
@@ -330,11 +318,7 @@ func TestIndexManagerGetCallGraphWithMultipleResults(t *testing.T) {
 
 	// Create file with multiple functions
 	path := filepath.Join(tmpDir, "main.go")
-	require.NoError(t, os.WriteFile(path, []byte(`package main
-func A() {}
-func B() { A() }
-func C() { A() }
-`), 0o644))
+	require.NoError(t, fs.WriteFileSecure(path, []byte("package main\nfunc A() {}\nfunc B() { A() }\nfunc C() { A() }\n")))
 	require.NoError(t, manager.IndexFile(context.Background(), path))
 
 	// Get call graph for A
@@ -353,9 +337,7 @@ func TestIndexManagerGetCallGraphStoreError(t *testing.T) {
 
 	// Index a file first
 	path := filepath.Join(tmpDir, "main.go")
-	require.NoError(t, os.WriteFile(path, []byte(`package main
-func Hello() {}
-`), 0o644))
+	require.NoError(t, fs.WriteFileSecure(path, []byte("package main\nfunc Hello() {}\n")))
 	require.NoError(t, manager.IndexFile(context.Background(), path))
 
 	// Close store to cause errors
@@ -376,9 +358,7 @@ func TestIndexManagerRunWorkspaceIndexWithContextError(t *testing.T) {
 
 	// Create a file
 	path := filepath.Join(tmpDir, "main.go")
-	require.NoError(t, os.WriteFile(path, []byte(`package main
-func Hello() {}
-`), 0o644))
+	require.NoError(t, fs.WriteFileSecure(path, []byte("package main\nfunc Hello() {}\n")))
 
 	// Use canceled context
 	ctx, cancel := context.WithCancel(context.Background())
@@ -406,7 +386,7 @@ func TestIndexManagerIndexFilesParallelError(t *testing.T) {
 		filepath.Join(tmpDir, "test2.py"),
 	}
 	for _, path := range files {
-		require.NoError(t, os.WriteFile(path, []byte(`print("hello")`), 0o644))
+		require.NoError(t, fs.WriteFileSecure(path, []byte(`print("hello")`)))
 	}
 
 	// Should handle errors from parallel indexing
@@ -460,7 +440,7 @@ func TestIndexManagerIndexFileParseErrorFallbackToSymbols(t *testing.T) {
 
 	// Create a file with the error parser's language
 	path := filepath.Join(tmpDir, "test.err")
-	require.NoError(t, os.WriteFile(path, []byte(`some content`), 0o644))
+	require.NoError(t, fs.WriteFileSecure(path, []byte(`some content`)))
 
 	// Without a symbol provider, this should fail
 	err = manager.IndexFile(context.Background(), path)

@@ -7,6 +7,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
+	"codeburg.org/lexbit/relurpify/platform/fs"
 )
 
 func TestNormalizePathSimpleFile(t *testing.T) {
@@ -60,7 +61,7 @@ func TestNormalizePathAbsoluteEscapeBlocked(t *testing.T) {
 func TestNormalizePathSymlinkInsideWorkspace(t *testing.T) {
 	ws := t.TempDir()
 	realDir := filepath.Join(ws, "realdir")
-	if err := os.MkdirAll(realDir, 0o755); err != nil {
+	if err := fs.MkdirAllSecure(realDir); err != nil {
 		t.Fatal(err)
 	}
 	link := filepath.Join(ws, "link")
@@ -141,7 +142,7 @@ func TestNormalizePathEmptyString(t *testing.T) {
 func TestNormalizePathSymlinkChainsResolved(t *testing.T) {
 	ws := t.TempDir()
 	targetDir := filepath.Join(ws, "target")
-	if err := os.MkdirAll(targetDir, 0o755); err != nil {
+	if err := fs.MkdirAllSecure(targetDir); err != nil {
 		t.Fatal(err)
 	}
 	link1 := filepath.Join(ws, "link1")

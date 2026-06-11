@@ -7,6 +7,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"codeburg.org/lexbit/relurpify/platform/fs"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
@@ -29,7 +30,7 @@ func TestKeybindingConflictEngine(t *testing.T) {
 	dir := t.TempDir()
 	workspace := dir
 	path := filepath.Join(dir, ".relurpify_state", "keybindings.yaml")
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), fs.PublicDirMode); err != nil { // public: test dir
 		t.Fatalf("mkdir keybinding dir: %v", err)
 	}
 	initial := config.RuntimeKeybindingConfig{Bindings: make([]config.RuntimeKeybindingEntry, 0)}

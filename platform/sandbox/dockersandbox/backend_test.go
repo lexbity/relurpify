@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
+	"codeburg.org/lexbit/relurpify/platform/fs"
 )
 
 func TestBackendCapabilitiesReportSupportedFeatures(t *testing.T) {
@@ -40,10 +41,10 @@ func TestBackendValidatePolicyRejectsUnsupportedPolicy(t *testing.T) {
 func TestBackendValidatePolicyAcceptsProtectedPathsInsideWorkspace(t *testing.T) {
 	workspace := t.TempDir()
 	protected := filepath.Join(workspace, "relurpify_cfg", "agent.yaml")
-	if err := os.MkdirAll(filepath.Dir(protected), 0o755); err != nil {
+	if err := fs.MkdirAllSecure(filepath.Dir(protected)); err != nil {
 		t.Fatalf("mkdir protected path: %v", err)
 	}
-	if err := os.WriteFile(protected, []byte("manifest"), 0o644); err != nil {
+	if err := fs.WriteFileSecure(protected, []byte("manifest")); err != nil {
 		t.Fatalf("write protected path: %v", err)
 	}
 
@@ -64,10 +65,10 @@ func TestBackendValidatePolicyAcceptsProtectedPathsInsideWorkspace(t *testing.T)
 func TestBackendPolicyRoundTrip(t *testing.T) {
 	workspace := t.TempDir()
 	protected := filepath.Join(workspace, "relurpify_cfg", "agent.yaml")
-	if err := os.MkdirAll(filepath.Dir(protected), 0o755); err != nil {
+	if err := fs.MkdirAllSecure(filepath.Dir(protected)); err != nil {
 		t.Fatalf("mkdir protected path: %v", err)
 	}
-	if err := os.WriteFile(protected, []byte("manifest"), 0o644); err != nil {
+	if err := fs.WriteFileSecure(protected, []byte("manifest")); err != nil {
 		t.Fatalf("write protected path: %v", err)
 	}
 
@@ -101,7 +102,7 @@ func TestBackendVerifyUsesDockerBinary(t *testing.T) {
 func writeDockerScript(t *testing.T, dir, name, body string) string {
 	t.Helper()
 	path := filepath.Join(dir, name)
-	if err := os.WriteFile(path, []byte(body), 0o755); err != nil {
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
 		t.Fatalf("write script: %v", err)
 	}
 	return path

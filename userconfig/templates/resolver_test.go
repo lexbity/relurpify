@@ -1,9 +1,10 @@
 package templates
 
 import (
-	"os"
 	"path/filepath"
 	"testing"
+
+	"codeburg.org/lexbit/relurpify/platform/fs"
 )
 
 func TestResolverPrefersSharedRoot(t *testing.T) {
@@ -11,16 +12,16 @@ func TestResolverPrefersSharedRoot(t *testing.T) {
 	repo := t.TempDir()
 	sharedTemplate := filepath.Join(shared, "templates", "skills", "skill.yaml")
 	repoTemplate := filepath.Join(repo, "templates", "skills", "skill.yaml")
-	if err := os.MkdirAll(filepath.Dir(sharedTemplate), 0o755); err != nil {
+	if err := fs.MkdirAllSecure(filepath.Dir(sharedTemplate)); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.MkdirAll(filepath.Dir(repoTemplate), 0o755); err != nil {
+	if err := fs.MkdirAllSecure(filepath.Dir(repoTemplate)); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(sharedTemplate, []byte("shared"), 0o644); err != nil {
+	if err := fs.WriteFileSecure(sharedTemplate, []byte("shared")); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(repoTemplate, []byte("repo"), 0o644); err != nil {
+	if err := fs.WriteFileSecure(repoTemplate, []byte("repo")); err != nil {
 		t.Fatal(err)
 	}
 	r := NewResolver(shared)
@@ -37,10 +38,10 @@ func TestResolverPrefersSharedRoot(t *testing.T) {
 func TestResolverWorkspaceConfigTemplate(t *testing.T) {
 	root := t.TempDir()
 	configTemplate := filepath.Join(root, "templates", "workspace", "workspace.yaml")
-	if err := os.MkdirAll(filepath.Dir(configTemplate), 0o755); err != nil {
+	if err := fs.MkdirAllSecure(filepath.Dir(configTemplate)); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(configTemplate, []byte("model: test"), 0o644); err != nil {
+	if err := fs.WriteFileSecure(configTemplate, []byte("model: test")); err != nil {
 		t.Fatal(err)
 	}
 	r := NewResolver(root)
@@ -56,10 +57,10 @@ func TestResolverWorkspaceConfigTemplate(t *testing.T) {
 func TestResolverWorkspaceAgentTemplate(t *testing.T) {
 	root := t.TempDir()
 	templatePath := filepath.Join(root, "templates", "workspace", "agent.yaml")
-	if err := os.MkdirAll(filepath.Dir(templatePath), 0o755); err != nil {
+	if err := fs.MkdirAllSecure(filepath.Dir(templatePath)); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(templatePath, []byte("schema: relurpify/agent/v1"), 0o644); err != nil {
+	if err := fs.WriteFileSecure(templatePath, []byte("schema: relurpify/agent/v1")); err != nil {
 		t.Fatal(err)
 	}
 	r := NewResolver(root)
@@ -75,10 +76,10 @@ func TestResolverWorkspaceAgentTemplate(t *testing.T) {
 func TestResolverWorkspaceSecurityTemplate(t *testing.T) {
 	root := t.TempDir()
 	templatePath := filepath.Join(root, "templates", "workspace", "security", "sandbox.policy.yaml")
-	if err := os.MkdirAll(filepath.Dir(templatePath), 0o755); err != nil {
+	if err := fs.MkdirAllSecure(filepath.Dir(templatePath)); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(templatePath, []byte("schema: relurpify/policy/sandbox/v1"), 0o644); err != nil {
+	if err := fs.WriteFileSecure(templatePath, []byte("schema: relurpify/policy/sandbox/v1")); err != nil {
 		t.Fatal(err)
 	}
 	r := NewResolver(root)
@@ -94,10 +95,10 @@ func TestResolverWorkspaceSecurityTemplate(t *testing.T) {
 func TestResolverStarterAgentPrefersTemplatesDir(t *testing.T) {
 	root := t.TempDir()
 	canonical := filepath.Join(root, "templates", "agents", "coding-go.yaml")
-	if err := os.MkdirAll(filepath.Dir(canonical), 0o755); err != nil {
+	if err := fs.MkdirAllSecure(filepath.Dir(canonical)); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(canonical, []byte("canonical"), 0o644); err != nil {
+	if err := fs.WriteFileSecure(canonical, []byte("canonical")); err != nil {
 		t.Fatal(err)
 	}
 	r := NewResolver(root)
@@ -113,7 +114,7 @@ func TestResolverStarterAgentPrefersTemplatesDir(t *testing.T) {
 func TestResolverTestsuiteTemplateProfile(t *testing.T) {
 	root := t.TempDir()
 	profile := filepath.Join(root, "templates", "testsuite", "default", "relurpify_cfg")
-	if err := os.MkdirAll(profile, 0o755); err != nil {
+	if err := fs.MkdirAllSecure(profile); err != nil {
 		t.Fatal(err)
 	}
 	r := NewResolver(root)

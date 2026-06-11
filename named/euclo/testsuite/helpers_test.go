@@ -268,7 +268,7 @@ func rootGraphDepsWithModel(reg *registry.CapabilityRegistry, m model.LanguageMo
 
 func writeWorkspaceFile(t *testing.T, dir, name, contents string) {
 	t.Helper()
-	if err := os.WriteFile(filepath.Join(dir, name), []byte(contents), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, name), []byte(contents), 0o600); err != nil {
 		t.Fatalf("write workspace file: %v", err)
 	}
 }

@@ -121,7 +121,7 @@ func TestCopyFile(t *testing.T) {
 	dst := filepath.Join(dir, "dest.txt")
 	content := []byte("test content for copying")
 
-	err := os.WriteFile(src, content, 0o644)
+	err := WriteFileSecure(src, content)
 	require.NoError(t, err)
 
 	err = copyFile(src, dst)
@@ -441,7 +441,7 @@ func TestCreateFileTool_CreatesNestedFile(t *testing.T) {
 func TestCreateFileTool_ExistingFile(t *testing.T) {
 	dir := t.TempDir()
 	existingFile := filepath.Join(dir, "exists.txt")
-	os.WriteFile(existingFile, []byte("original"), 0o644)
+	WriteFileSecure(existingFile, []byte("original"))
 
 	tool := &CreateFileTool{BasePath: dir}
 	_, err := tool.Execute(context.Background(), map[string]any{
@@ -489,7 +489,7 @@ func TestCreateFileTool_EmptyContent(t *testing.T) {
 func TestDeleteFileTool_MovesToTrash(t *testing.T) {
 	dir := t.TempDir()
 	file := filepath.Join(dir, "todelete.txt")
-	os.WriteFile(file, []byte("delete me"), 0o644)
+	WriteFileSecure(file, []byte("delete me"))
 
 	tool := &DeleteFileTool{BasePath: dir}
 	res, err := tool.Execute(context.Background(), map[string]any{
@@ -513,7 +513,7 @@ func TestDeleteFileTool_CustomTrashDir(t *testing.T) {
 	dir := t.TempDir()
 	customTrash := filepath.Join(dir, "custom_trash")
 	file := filepath.Join(dir, "todelete.txt")
-	os.WriteFile(file, []byte("delete me"), 0o644)
+	WriteFileSecure(file, []byte("delete me"))
 
 	tool := &DeleteFileTool{BasePath: dir, TrashDir: customTrash}
 	res, err := tool.Execute(context.Background(), map[string]any{
@@ -585,7 +585,7 @@ func TestReadFileTool_NonExistent(t *testing.T) {
 func TestReadFileTool_BinaryFile(t *testing.T) {
 	dir := t.TempDir()
 	file := filepath.Join(dir, "binary.bin")
-	os.WriteFile(file, []byte{0x00, 0x01, 0x02, 0x03}, 0o644)
+	WriteFileSecure(file, []byte{0x00, 0x01, 0x02, 0x03})
 
 	tool := &ReadFileTool{BasePath: dir}
 	res, err := tool.Execute(context.Background(), map[string]any{
@@ -601,7 +601,7 @@ func TestReadFileTool_BinaryFile(t *testing.T) {
 func TestWriteFileTool_Backup(t *testing.T) {
 	dir := t.TempDir()
 	file := filepath.Join(dir, "existing.txt")
-	os.WriteFile(file, []byte("original content"), 0o644)
+	WriteFileSecure(file, []byte("original content"))
 
 	tool := &WriteFileTool{BasePath: dir, Backup: true}
 	res, err := tool.Execute(context.Background(), map[string]any{
@@ -628,7 +628,7 @@ func TestWriteFileTool_Backup(t *testing.T) {
 func TestCreateFileTool_EnforceSandboxScope(t *testing.T) {
 	dir := t.TempDir()
 	protected := filepath.Join(dir, "protected.txt")
-	os.WriteFile(protected, []byte("secret"), 0o644)
+	WriteFileSecure(protected, []byte("secret"))
 
 	scope := NewFileScopePolicy(dir, []string{protected})
 	tool := &CreateFileTool{BasePath: dir}
@@ -645,7 +645,7 @@ func TestCreateFileTool_EnforceSandboxScope(t *testing.T) {
 func TestDeleteFileTool_EnforceSandboxScope(t *testing.T) {
 	dir := t.TempDir()
 	protected := filepath.Join(dir, "protected.txt")
-	os.WriteFile(protected, []byte("secret"), 0o644)
+	WriteFileSecure(protected, []byte("secret"))
 
 	scope := NewFileScopePolicy(dir, []string{protected})
 	tool := &DeleteFileTool{BasePath: dir}
@@ -889,7 +889,7 @@ func TestCreateFileTool_WithPermissionManager(t *testing.T) {
 func TestDeleteFileTool_WithPermissionManager(t *testing.T) {
 	dir := t.TempDir()
 	file := filepath.Join(dir, "delete.txt")
-	os.WriteFile(file, []byte("delete me"), 0o644)
+	WriteFileSecure(file, []byte("delete me"))
 
 	tool := &DeleteFileTool{BasePath: dir}
 
@@ -918,7 +918,7 @@ func TestWriteFileTool_WithPermissionManager_Denied(t *testing.T) {
 func TestReadFileTool_WithNilManager(t *testing.T) {
 	dir := t.TempDir()
 	file := filepath.Join(dir, "test.txt")
-	os.WriteFile(file, []byte("content"), 0o644)
+	WriteFileSecure(file, []byte("content"))
 
 	tool := &ReadFileTool{BasePath: dir}
 
@@ -934,7 +934,7 @@ func TestReadFileTool_WithNilManager(t *testing.T) {
 func TestListFilesTool_WithNilManager(t *testing.T) {
 	dir := t.TempDir()
 	file := filepath.Join(dir, "test.txt")
-	os.WriteFile(file, []byte("content"), 0o644)
+	WriteFileSecure(file, []byte("content"))
 
 	tool := &ListFilesTool{BasePath: dir}
 
@@ -950,7 +950,7 @@ func TestListFilesTool_WithNilManager(t *testing.T) {
 func TestSearchInFilesTool_WithNilManager(t *testing.T) {
 	dir := t.TempDir()
 	file := filepath.Join(dir, "test.txt")
-	os.WriteFile(file, []byte("search content"), 0o644)
+	WriteFileSecure(file, []byte("search content"))
 
 	tool := &SearchInFilesTool{BasePath: dir}
 
@@ -1038,7 +1038,7 @@ func TestEnforceFileMatrix_EditAction(t *testing.T) {
 func TestReadFileTool_PermissionManagerIntegration(t *testing.T) {
 	dir := t.TempDir()
 	file := filepath.Join(dir, "secret.txt")
-	os.WriteFile(file, []byte("secret"), 0o644)
+	WriteFileSecure(file, []byte("secret"))
 
 	tool := &ReadFileTool{BasePath: dir}
 	// manager is nil - should still work as no permission check is done
@@ -1058,7 +1058,7 @@ func TestReadFileTool_PermissionManagerIntegration(t *testing.T) {
 func TestListFilesTool_WhitespaceDirectory(t *testing.T) {
 	dir := t.TempDir()
 	file := filepath.Join(dir, "test.txt")
-	os.WriteFile(file, []byte("content"), 0o644)
+	WriteFileSecure(file, []byte("content"))
 
 	tool := &ListFilesTool{BasePath: dir}
 
@@ -1076,7 +1076,7 @@ func TestListFilesTool_WhitespaceDirectory(t *testing.T) {
 func TestSearchInFilesTool_WhitespaceDirectory(t *testing.T) {
 	dir := t.TempDir()
 	file := filepath.Join(dir, "test.txt")
-	os.WriteFile(file, []byte("search term"), 0o644)
+	WriteFileSecure(file, []byte("search term"))
 
 	tool := &SearchInFilesTool{BasePath: dir}
 
@@ -1094,7 +1094,7 @@ func TestSearchInFilesTool_WhitespaceDirectory(t *testing.T) {
 func TestWriteFileTool_BackupSandboxBlocked(t *testing.T) {
 	dir := t.TempDir()
 	file := filepath.Join(dir, "protected.txt")
-	os.WriteFile(file, []byte("original"), 0o644)
+	WriteFileSecure(file, []byte("original"))
 
 	scope := NewFileScopePolicy(dir, []string{file + ".bak"})
 	tool := &WriteFileTool{BasePath: dir, Backup: true}
@@ -1162,7 +1162,7 @@ func TestIsText_WithNullByte(t *testing.T) {
 func TestCopyFile_InvalidDestination(t *testing.T) {
 	dir := t.TempDir()
 	src := filepath.Join(dir, "source.txt")
-	os.WriteFile(src, []byte("content"), 0o644)
+	WriteFileSecure(src, []byte("content"))
 
 	// Try to copy to a non-existent directory that can't be created
 	invalidDst := "/nonexistent/path/to/file.txt"
@@ -1192,7 +1192,7 @@ func TestReadFileTool_StatErrorAfterRead(t *testing.T) {
 func TestListFilesTool_WithPermissionManagerNil(t *testing.T) {
 	dir := t.TempDir()
 	file := filepath.Join(dir, "test.txt")
-	os.WriteFile(file, []byte("content"), 0o644)
+	WriteFileSecure(file, []byte("content"))
 
 	tool := &ListFilesTool{BasePath: dir}
 	// Explicitly set manager to nil (though it's already nil by default)
@@ -1211,7 +1211,7 @@ func TestListFilesTool_WithPermissionManagerNil(t *testing.T) {
 func TestSearchInFilesTool_WithPermissionManagerNil(t *testing.T) {
 	dir := t.TempDir()
 	file := filepath.Join(dir, "test.txt")
-	os.WriteFile(file, []byte("search term"), 0o644)
+	WriteFileSecure(file, []byte("search term"))
 
 	tool := &SearchInFilesTool{BasePath: dir}
 	// Explicitly set manager to nil
@@ -1260,7 +1260,7 @@ func TestCreateFileTool_ExecuteWithManagerNil(t *testing.T) {
 func TestDeleteFileTool_ExecuteWithManagerNil(t *testing.T) {
 	dir := t.TempDir()
 	file := filepath.Join(dir, "delete.txt")
-	os.WriteFile(file, []byte("delete me"), 0o644)
+	WriteFileSecure(file, []byte("delete me"))
 
 	tool := &DeleteFileTool{BasePath: dir}
 	// manager is nil, so the permission check should be skipped
@@ -1356,7 +1356,7 @@ func TestCreateFileTool_FileMatrixDeniesWrite(t *testing.T) {
 func TestDeleteFileTool_FileMatrixDeniesWrite(t *testing.T) {
 	dir := t.TempDir()
 	file := filepath.Join(dir, "test.secret")
-	os.WriteFile(file, []byte("secret"), 0o644)
+	WriteFileSecure(file, []byte("secret"))
 
 	tool := &DeleteFileTool{
 		BasePath: dir,
@@ -1384,9 +1384,9 @@ func TestDeleteFileTool_FileMatrixDeniesWrite(t *testing.T) {
 func TestListFilesTool_SandboxScopeErrorOnDir(t *testing.T) {
 	dir := t.TempDir()
 	subdir := filepath.Join(dir, "subdir")
-	os.MkdirAll(subdir, 0o755)
+	MkdirAllSecure(subdir)
 	file := filepath.Join(subdir, "test.txt")
-	os.WriteFile(file, []byte("content"), 0o644)
+	WriteFileSecure(file, []byte("content"))
 
 	// Create a scope that blocks the subdirectory
 	scope := NewFileScopePolicy(dir, []string{subdir})
@@ -1410,9 +1410,9 @@ func TestListFilesTool_SandboxScopeErrorOnDir(t *testing.T) {
 func TestSearchInFilesTool_SandboxScopeErrorOnDir(t *testing.T) {
 	dir := t.TempDir()
 	subdir := filepath.Join(dir, "subdir")
-	os.MkdirAll(subdir, 0o755)
+	MkdirAllSecure(subdir)
 	file := filepath.Join(subdir, "test.txt")
-	os.WriteFile(file, []byte("search term"), 0o644)
+	WriteFileSecure(file, []byte("search term"))
 
 	// Create a scope that blocks the subdirectory
 	scope := NewFileScopePolicy(dir, []string{subdir})
@@ -1439,7 +1439,7 @@ func TestSearchInFilesTool_SandboxScopeErrorOnDir(t *testing.T) {
 func TestReadFileTool_SandboxScopeError(t *testing.T) {
 	dir := t.TempDir()
 	protected := filepath.Join(dir, "secret.txt")
-	os.WriteFile(protected, []byte("secret"), 0o644)
+	WriteFileSecure(protected, []byte("secret"))
 
 	scope := NewFileScopePolicy(dir, []string{protected})
 	tool := &ReadFileTool{BasePath: dir}
@@ -1475,7 +1475,7 @@ func TestWriteFileTool_SandboxScopeError(t *testing.T) {
 func TestDeleteFileTool_DeleteDirectory(t *testing.T) {
 	dir := t.TempDir()
 	subdir := filepath.Join(dir, "subdir")
-	os.MkdirAll(subdir, 0o755)
+	MkdirAllSecure(subdir)
 
 	tool := &DeleteFileTool{BasePath: dir}
 
@@ -1570,7 +1570,7 @@ func TestPreparePath_EdgeCases(t *testing.T) {
 func TestReadFileTool_ExecutePathCoverage(t *testing.T) {
 	dir := t.TempDir()
 	file := filepath.Join(dir, "test.txt")
-	os.WriteFile(file, []byte("content"), 0o644)
+	WriteFileSecure(file, []byte("content"))
 
 	tool := &ReadFileTool{BasePath: dir}
 	// Explicitly set all fields to ensure all paths are exercised
@@ -1590,7 +1590,7 @@ func TestReadFileTool_ExecutePathCoverage(t *testing.T) {
 func TestListFilesTool_NilDirectory(t *testing.T) {
 	dir := t.TempDir()
 	file := filepath.Join(dir, "test.txt")
-	os.WriteFile(file, []byte("content"), 0o644)
+	WriteFileSecure(file, []byte("content"))
 
 	tool := &ListFilesTool{BasePath: dir}
 
@@ -1610,7 +1610,7 @@ func TestListFilesTool_NilDirectory(t *testing.T) {
 func TestSearchInFilesTool_NilDirectory(t *testing.T) {
 	dir := t.TempDir()
 	file := filepath.Join(dir, "test.txt")
-	os.WriteFile(file, []byte("search me"), 0o644)
+	WriteFileSecure(file, []byte("search me"))
 
 	tool := &SearchInFilesTool{BasePath: dir}
 
@@ -1628,7 +1628,7 @@ func TestSearchInFilesTool_NilDirectory(t *testing.T) {
 func TestCopyFile_ExercisePath(t *testing.T) {
 	dir := t.TempDir()
 	src := filepath.Join(dir, "file.txt")
-	os.WriteFile(src, []byte("content"), 0o644)
+	WriteFileSecure(src, []byte("content"))
 	dst := filepath.Join(dir, "copy.txt")
 
 	// Standard copy to exercise the code path
