@@ -86,7 +86,7 @@ func TestNormalizePathSymlinkEscapesWorkspace(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(outsideDir)
+	defer func() { _ = os.RemoveAll(outsideDir) }()
 
 	link := filepath.Join(ws, "evil")
 	if err := os.Symlink(outsideDir, link); err != nil {

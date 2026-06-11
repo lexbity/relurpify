@@ -61,7 +61,7 @@ func (t *GrepTool) Execute(ctx context.Context, args map[string]any) (*ports.Too
 		if err != nil {
 			return nil // skip unreadable files
 		}
-		defer file.Close()
+		defer func() { _ = file.Close() }()
 		scanner := bufio.NewScanner(file)
 		scanner.Buffer(make([]byte, scanChunkSize), scanChunkSize)
 		scanner.Split(scanLinesOrChunks(scanChunkSize))

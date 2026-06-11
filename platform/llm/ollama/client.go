@@ -124,7 +124,7 @@ func (c *Client) GenerateStream(ctx context.Context, prompt string, options *LLM
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
@@ -308,7 +308,7 @@ func (c *Client) doRequest(ctx context.Context, apiPath string, payload any) (*L
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode >= 300 {
 		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
 		detail := strings.TrimSpace(string(msg))
@@ -342,7 +342,7 @@ func (c *Client) doRequestStream(ctx context.Context, apiPath string, payload ma
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode >= 300 {
 		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
 		detail := strings.TrimSpace(string(msg))

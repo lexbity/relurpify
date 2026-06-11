@@ -81,8 +81,8 @@ func TestProbeWorkspace_WorkspaceIsFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f.Close()
-	defer os.Remove(f.Name())
+	_ = f.Close()
+	defer func() { _ = os.Remove(f.Name()) }()
 
 	results := ayenitd.ProbeWorkspace(context.Background(), probeCfg(f.Name()), llm.ProviderSecrets{}, fakeBackend{
 		models: []llm.ModelInfo{{Name: "qwen2.5-coder:14b"}},

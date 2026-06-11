@@ -71,7 +71,7 @@ func renderText(diags []Diagnostic, w io.Writer) {
 		if code != "" {
 			code = " " + code
 		}
-		fmt.Fprintf(w, "%s: [%s%s] %s\n", loc, d.Severity, code, d.Message)
+		_, _ = fmt.Fprintf(w, "%s: [%s%s] %s\n", loc, d.Severity, code, d.Message)
 	}
 }
 

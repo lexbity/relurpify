@@ -121,13 +121,13 @@ func TestWorkspaceIsolation(t *testing.T) {
 		env2 := NewTestEnvironment(t)
 
 		// Log a record in env1
-		env1.AuditSink.Log(context.Background(), policy.AuditRecord{
+		_ = env1.AuditSink.Log(context.Background(), policy.AuditRecord{
 			AgentID: "env1-agent",
 			Action:  "env1-action",
 		})
 
 		// Log a record in env2
-		env2.AuditSink.Log(context.Background(), policy.AuditRecord{
+		_ = env2.AuditSink.Log(context.Background(), policy.AuditRecord{
 			AgentID: "env2-agent",
 			Action:  "env2-action",
 		})

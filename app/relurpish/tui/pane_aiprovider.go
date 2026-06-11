@@ -191,7 +191,7 @@ func (p *AIProviderPane) refreshModels() {
 		p.models = nil
 		return
 	}
-	defer backend.Close()
+	defer func() { _ = backend.Close() }()
 	models, err := backend.ListModels(context.Background())
 	if err != nil {
 		p.status = fmt.Sprintf("model list failed: %v", err)
@@ -315,7 +315,7 @@ func (p *AIProviderPane) testProviderCmd() tea.Cmd {
 		if err != nil {
 			return chatSystemMsg{Text: fmt.Sprintf("provider test failed: %v", err)}
 		}
-		defer backend.Close()
+		defer func() { _ = backend.Close() }()
 		start := time.Now()
 		report, err := backend.Health(context.Background())
 		elapsed := time.Since(start)

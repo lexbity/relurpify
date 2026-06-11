@@ -613,7 +613,7 @@ func (im *IndexManager) persist(ctx context.Context, result *ParseResult, conten
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	if err := im.store.SaveFile(result.Metadata); err != nil {
 		return err

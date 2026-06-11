@@ -114,7 +114,7 @@ func TestChunkStorage(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to open graph engine: %v", err)
 		}
-		defer graph.Close(context.Background())
+		defer func() { _ = graph.Close(context.Background()) }()
 		store := &knowledge.ChunkStore{Graph: graph}
 
 		chunk := knowledge.KnowledgeChunk{
@@ -151,7 +151,7 @@ func TestChunkStorage(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to open graph engine: %v", err)
 		}
-		defer graph.Close(context.Background())
+		defer func() { _ = graph.Close(context.Background()) }()
 		store := &knowledge.ChunkStore{Graph: graph}
 
 		chunk := knowledge.KnowledgeChunk{
@@ -179,7 +179,7 @@ func TestChunkStorage(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to open graph engine: %v", err)
 		}
-		defer graph.Close(context.Background())
+		defer func() { _ = graph.Close(context.Background()) }()
 		store := &knowledge.ChunkStore{Graph: graph}
 
 		chunk := knowledge.KnowledgeChunk{
@@ -223,7 +223,7 @@ func TestChunkRetrieval(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to open graph engine: %v", err)
 		}
-		defer graph.Close(context.Background())
+		defer func() { _ = graph.Close(context.Background()) }()
 		store := &knowledge.ChunkStore{Graph: graph}
 
 		chunk := knowledge.KnowledgeChunk{
@@ -268,7 +268,7 @@ func TestChunkRetrieval(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to open graph engine: %v", err)
 		}
-		defer graph.Close(context.Background())
+		defer func() { _ = graph.Close(context.Background()) }()
 		store := &knowledge.ChunkStore{Graph: graph}
 
 		_, ok, err := store.Load(knowledge.ChunkID("non-existent"))
@@ -287,7 +287,7 @@ func TestChunkRetrieval(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to open graph engine: %v", err)
 		}
-		defer graph.Close(context.Background())
+		defer func() { _ = graph.Close(context.Background()) }()
 		store := &knowledge.ChunkStore{Graph: graph}
 
 		ids := []knowledge.ChunkID{
@@ -334,7 +334,7 @@ func TestKnowledgeGraphQuery(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to open graph engine: %v", err)
 		}
-		defer graph.Close(context.Background())
+		defer func() { _ = graph.Close(context.Background()) }()
 		store := &knowledge.ChunkStore{Graph: graph}
 		chunkGraph := &knowledge.ChunkGraph{Store: store}
 
@@ -378,7 +378,7 @@ func TestKnowledgeGraphQuery(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to open graph engine: %v", err)
 		}
-		defer graph.Close(context.Background())
+		defer func() { _ = graph.Close(context.Background()) }()
 		store := &knowledge.ChunkStore{Graph: graph}
 		chunkGraph := &knowledge.ChunkGraph{Store: store}
 
@@ -431,7 +431,7 @@ func TestKnowledgeGraphQuery(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to open graph engine: %v", err)
 		}
-		defer graph.Close(context.Background())
+		defer func() { _ = graph.Close(context.Background()) }()
 		store := &knowledge.ChunkStore{Graph: graph}
 		chunkGraph := &knowledge.ChunkGraph{Store: store}
 

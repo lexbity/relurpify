@@ -71,7 +71,7 @@ func TestReplayAOF_TruncatedFrameIgnored(t *testing.T) {
 	require.NoError(t, err)
 	_, err = file.Write(frame[:len(frame)-8])
 	require.NoError(t, err)
-	file.Close()
+	_ = file.Close() // ignore: test cleanup
 
 	called := false
 	apply := func(op binaryOp) error {
@@ -140,7 +140,7 @@ func TestAOFWriter_SyncModes(t *testing.T) {
 	opts.SyncMode = SyncOnFlush
 	writer, err := openAOF(path, opts)
 	require.NoError(t, err)
-	defer writer.close()
+	defer func() { _ = writer.close() }()
 
 	// write an op
 	op := binaryOp{code: opCodeUpsertNode, data: encodeNodeRecord(NodeRecord{ID: "x"})}

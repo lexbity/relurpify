@@ -54,7 +54,7 @@ func (e *Embedder) Embed(ctx context.Context, texts []string) ([][]float32, erro
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode >= 300 {
 		return nil, readHTTPError(resp)
 	}

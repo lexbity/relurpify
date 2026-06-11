@@ -183,7 +183,7 @@ func replayAOF(path string, applyBinary func(binaryOp) error, applyLegacy func([
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	for {
 		frameType, payload, err := readFrame(file)

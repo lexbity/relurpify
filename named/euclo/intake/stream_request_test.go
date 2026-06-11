@@ -169,7 +169,7 @@ func TestBuildStreamRequestBackgroundModeSafeWithHint(t *testing.T) {
 
 func TestIntakePipelineNodeExecute(t *testing.T) {
 	registry := families.NewRegistry()
-	families.RegisterBuiltins(registry)
+	_ = families.RegisterBuiltins(registry)
 
 	trigger := &UniqueMockStreamTrigger{}
 	node := NewIntakePipelineNode("intake", registry, 1000, contextstream.ModeBlocking, trigger)

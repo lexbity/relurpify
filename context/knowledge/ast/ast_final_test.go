@@ -17,12 +17,12 @@ func TestIndexManagerPersistWithTransactionError(t *testing.T) {
 	tmpDir := t.TempDir()
 	store, err := NewTestStore(filepath.Join(tmpDir, "index.db"))
 	require.NoError(t, err)
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 
 	manager := NewIndexManager(store, IndexConfig{WorkspacePath: tmpDir})
 
 	// Close the store to cause transaction errors
-	store.Close()
+	_ = store.Close()
 
 	now := time.Now()
 	fileID := GenerateFileID("/test.go")
@@ -46,7 +46,7 @@ func TestIndexManagerPersistWithContentHash(t *testing.T) {
 	tmpDir := t.TempDir()
 	store, err := NewTestStore(filepath.Join(tmpDir, "index.db"))
 	require.NoError(t, err)
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 
 	manager := NewIndexManager(store, IndexConfig{WorkspacePath: tmpDir})
 
@@ -344,7 +344,7 @@ func TestGetFileByPathNotFound(t *testing.T) {
 	tmpDir := t.TempDir()
 	store, err := NewTestStore(filepath.Join(tmpDir, "index.db"))
 	require.NoError(t, err)
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 
 	file, err := store.GetFileByPath("/nonexistent.go")
 	assert.ErrorIs(t, err, os.ErrNotExist)
@@ -355,7 +355,7 @@ func TestGetEdgeNotFound(t *testing.T) {
 	tmpDir := t.TempDir()
 	store, err := NewTestStore(filepath.Join(tmpDir, "index.db"))
 	require.NoError(t, err)
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 
 	edge, err := store.GetEdge("nonexistent")
 	assert.ErrorIs(t, err, os.ErrNotExist)

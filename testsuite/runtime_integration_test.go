@@ -27,7 +27,7 @@ func TestBadgerRuntime_OpenClose(t *testing.T) {
 func TestBadgerRuntime_ChunkStore(t *testing.T) {
 	engine, err := graphdb.Open(context.Background(), graphdb.DefaultOptions(t.TempDir()))
 	require.NoError(t, err)
-	defer engine.Close(context.Background())
+	defer func() { _ = engine.Close(context.Background()) }()
 
 	store := &knowledge.ChunkStore{Graph: engine}
 
@@ -56,7 +56,7 @@ func TestBadgerRuntime_ChunkStore(t *testing.T) {
 func TestBadgerRuntime_ChunkEdges(t *testing.T) {
 	engine, err := graphdb.Open(context.Background(), graphdb.DefaultOptions(t.TempDir()))
 	require.NoError(t, err)
-	defer engine.Close(context.Background())
+	defer func() { _ = engine.Close(context.Background()) }()
 
 	store := &knowledge.ChunkStore{Graph: engine}
 
@@ -91,7 +91,7 @@ func TestBadgerRuntime_ASTIndexStore(t *testing.T) {
 	dir := t.TempDir()
 	engine, err := graphdb.Open(context.Background(), graphdb.DefaultOptions(dir))
 	require.NoError(t, err)
-	defer engine.Close(context.Background())
+	defer func() { _ = engine.Close(context.Background()) }()
 
 	astStore := ast.NewGraphIndexStore(engine)
 
@@ -134,7 +134,7 @@ func TestBadgerRuntime_ASTIndexStore(t *testing.T) {
 func TestBadgerRuntime_Retriever(t *testing.T) {
 	engine, err := graphdb.Open(context.Background(), graphdb.DefaultOptions(t.TempDir()))
 	require.NoError(t, err)
-	defer engine.Close(context.Background())
+	defer func() { _ = engine.Close(context.Background()) }()
 
 	store := &knowledge.ChunkStore{Graph: engine}
 

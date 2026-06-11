@@ -69,7 +69,7 @@ func TestNewBadgerStoreIsUsable(t *testing.T) {
 	// Reopen and verify data persists.
 	engine2, err := Open(context.Background(), opts)
 	require.NoError(t, err)
-	defer engine2.Close(context.Background())
+	defer func() { _ = engine2.Close(context.Background()) }()
 
 	_, ok = engine2.GetNode("n1")
 	require.True(t, ok, "data should persist after reopen with Badger")

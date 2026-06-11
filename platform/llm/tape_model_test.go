@@ -52,7 +52,7 @@ func TestTapeModelRecordThenReplay(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	defer rec.Close()
+	defer func() { _ = rec.Close() }()
 
 	if _, err := rec.Generate(context.Background(), "p", &LLMOptions{Model: "m"}); err != nil {
 		t.Fatal(err)
@@ -130,7 +130,7 @@ func TestTapeModelRecordWritesHeaderFirst(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	sc := bufio.NewScanner(f)
 	if !sc.Scan() {
 		t.Fatal("expected header line")
@@ -309,7 +309,7 @@ func writeTapeFixture(t *testing.T, entries []tapeEntry) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	enc := json.NewEncoder(f)
 	for _, entry := range entries {
 		if err := enc.Encode(entry); err != nil {

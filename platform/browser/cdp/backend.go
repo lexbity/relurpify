@@ -430,7 +430,7 @@ func launchChromium(ctx context.Context, cfg Config) (*launchedBrowser, error) {
 	go func() {
 		<-ctx.Done()
 		if cmd.Process != nil {
-			cmd.Process.Kill()
+			_ = cmd.Process.Kill()
 		}
 	}()
 	cmd.Stdout = io.Discard
@@ -482,7 +482,7 @@ func pageWebSocketURL(ctx context.Context, httpBase string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	var targets []listTarget
 	if err := json.NewDecoder(response.Body).Decode(&targets); err != nil {
 		return "", err
@@ -500,6 +500,6 @@ func freePort() (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	defer listener.Close()
+	defer func() { _ = listener.Close() }()
 	return listener.Addr().(*net.TCPAddr).Port, nil
 }

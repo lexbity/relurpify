@@ -12,7 +12,7 @@ import (
 
 func TestIntakePipelineNodeCoordinatorOnly(t *testing.T) {
 	registry := families.NewRegistry()
-	families.RegisterBuiltins(registry)
+	_ = families.RegisterBuiltins(registry)
 
 	node := NewIntakePipelineNode("intake", registry, 1024, contextstream.ModeBlocking, &MockStreamTrigger{})
 	env := contextdata.NewEnvelope("task-1", "session-1")

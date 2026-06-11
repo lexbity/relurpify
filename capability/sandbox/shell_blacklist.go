@@ -81,7 +81,7 @@ func Load(path string) (*ShellBlacklist, error) {
 		}
 		return nil, fmt.Errorf("open blacklist file: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	data, err := io.ReadAll(f)
 	if err != nil {

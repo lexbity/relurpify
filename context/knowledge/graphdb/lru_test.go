@@ -29,7 +29,7 @@ func TestLRU_WarmNothing_GetNodeLazyLoads(t *testing.T) {
 	// Second pass: open with LRU — load skips nodes, GetNode fetches on miss.
 	engine, err := Open(context.Background(), opts)
 	require.NoError(t, err)
-	defer engine.Close(context.Background())
+	defer func() { _ = engine.Close(context.Background()) }()
 
 	// Verify the store has zero nodes in RAM after open.
 	engine.store.mu.RLock()
@@ -63,7 +63,7 @@ func TestLRU_WarmNothing_MultipleGetNodes(t *testing.T) {
 
 	engine, err := Open(context.Background(), opts)
 	require.NoError(t, err)
-	defer engine.Close(context.Background())
+	defer func() { _ = engine.Close(context.Background()) }()
 
 	// All 10 nodes should be retrievable via lazy loading.
 	for i := 0; i < 10; i++ {
@@ -95,7 +95,7 @@ func TestNFR4_BootMemory_BoundedByLRUCapacity(t *testing.T) {
 
 	engine, err := Open(context.Background(), opts)
 	require.NoError(t, err)
-	defer engine.Close(context.Background())
+	defer func() { _ = engine.Close(context.Background()) }()
 
 	engine.store.mu.RLock()
 	ramCount := len(engine.store.nodes)
@@ -125,7 +125,7 @@ func TestNFR5_TraversalMemory_OnePage(t *testing.T) {
 
 	engine, err := Open(context.Background(), opts)
 	require.NoError(t, err)
-	defer engine.Close(context.Background())
+	defer func() { _ = engine.Close(context.Background()) }()
 
 	// One page with PageSize=100 gets everything.
 	page, err := engine.SubgraphPage(context.Background(), GraphPageQuery{
@@ -175,7 +175,7 @@ func TestCursor_FrontierStateAcrossPages(t *testing.T) {
 
 	engine, err := Open(context.Background(), opts)
 	require.NoError(t, err)
-	defer engine.Close(context.Background())
+	defer func() { _ = engine.Close(context.Background()) }()
 
 	// Fetch in pages, collecting all items.
 	var allItems []GraphElement
@@ -239,7 +239,7 @@ func TestLRU_IndexIntegrity_ListNodesByLabel(t *testing.T) {
 
 	engine, err := Open(context.Background(), opts)
 	require.NoError(t, err)
-	defer engine.Close(context.Background())
+	defer func() { _ = engine.Close(context.Background()) }()
 
 	// ListNodesByLabel must return ALL 10 nodes even though the LRU cache
 	// only holds 3. The label index is built during load() regardless of
@@ -276,7 +276,7 @@ func TestLRU_IndexIntegrity_AfterChurn(t *testing.T) {
 
 	engine, err := Open(context.Background(), opts)
 	require.NoError(t, err)
-	defer engine.Close(context.Background())
+	defer func() { _ = engine.Close(context.Background()) }()
 
 	// Hit 5 distinct nodes via GetNode — with cap=3 the first 2+ are evicted.
 	for i := 0; i < 5; i++ {
@@ -309,7 +309,7 @@ func TestLRU_IndexIntegrity_NodesBySource(t *testing.T) {
 
 	engine, err := Open(context.Background(), opts)
 	require.NoError(t, err)
-	defer engine.Close(context.Background())
+	defer func() { _ = engine.Close(context.Background()) }()
 
 	nodes := engine.NodesBySource("source-main")
 	if len(nodes) != 10 {
@@ -336,7 +336,7 @@ func TestNFR4_Strict_BootMemory(t *testing.T) {
 
 	engine, err := Open(context.Background(), opts)
 	require.NoError(t, err)
-	defer engine.Close(context.Background())
+	defer func() { _ = engine.Close(context.Background()) }()
 
 	engine.store.mu.RLock()
 	ramNodes := len(engine.store.nodes)
@@ -369,7 +369,7 @@ func TestCursor_NoReTraversal(t *testing.T) {
 
 	engine, err := Open(context.Background(), opts)
 	require.NoError(t, err)
-	defer engine.Close(context.Background())
+	defer func() { _ = engine.Close(context.Background()) }()
 
 	seen := make(map[string]int)
 	after := PageToken("")

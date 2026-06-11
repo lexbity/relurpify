@@ -22,7 +22,7 @@ func newStore(t *testing.T) (*Store, string) {
 
 func closeStore(s *Store, _ string) {
 	if s != nil {
-		s.Close()
+		_ = s.Close()
 	}
 }
 
@@ -236,7 +236,7 @@ func TestDurabilityAcrossRestart(t *testing.T) {
 	if err := s.Create(ctx, job); err != nil {
 		t.Fatalf("create: %v", err)
 	}
-	s.Close()
+	_ = s.Close()
 
 	s2, err := Open(WithPath(path))
 	if err != nil {
@@ -278,18 +278,18 @@ func TestLifecycle(t *testing.T) {
 		t.Fatalf("create: %v", err)
 	}
 
-	s.AppendEvent(ctx, jobs.Event{ID: "le1", JobID: "life", Type: jobs.EventCreated, Occurred: now})
+	_ = s.AppendEvent(ctx, jobs.Event{ID: "le1", JobID: "life", Type: jobs.EventCreated, Occurred: now})
 
 	job.State = jobs.StateRunning
-	s.Update(ctx, job)
-	s.AppendEvent(ctx, jobs.Event{ID: "le2", JobID: "life", Type: jobs.EventStarted, Occurred: now.Add(time.Second)})
+	_ = s.Update(ctx, job)
+	_ = s.AppendEvent(ctx, jobs.Event{ID: "le2", JobID: "life", Type: jobs.EventStarted, Occurred: now.Add(time.Second)})
 
-	s.SaveCheckpoint(ctx, jobs.Checkpoint{ID: "lc1", JobID: "life", State: "mid", Created: now.Add(2 * time.Second)})
+	_ = s.SaveCheckpoint(ctx, jobs.Checkpoint{ID: "lc1", JobID: "life", State: "mid", Created: now.Add(2 * time.Second)})
 
 	job.State = jobs.StateCompleted
 	job.CompletedAt = now.Add(3 * time.Second)
-	s.Update(ctx, job)
-	s.AppendEvent(ctx, jobs.Event{ID: "le3", JobID: "life", Type: jobs.EventCompleted, Occurred: now.Add(3 * time.Second)})
+	_ = s.Update(ctx, job)
+	_ = s.AppendEvent(ctx, jobs.Event{ID: "le3", JobID: "life", Type: jobs.EventCompleted, Occurred: now.Add(3 * time.Second)})
 
 	loaded, err := s.Load(ctx, "life")
 	if err != nil {

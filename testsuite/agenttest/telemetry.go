@@ -14,7 +14,7 @@ func ReadTelemetryJSONL(path string) ([]telemetry.Event, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	var events []telemetry.Event
 	sc := bufio.NewScanner(f)
 	// Allow large lines (debug prompt logging).

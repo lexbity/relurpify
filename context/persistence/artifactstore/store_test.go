@@ -16,7 +16,7 @@ func TestPutOpenRoundTrip(t *testing.T) {
 	workspace := t.TempDir()
 	store, err := NewDiskStore(workspace, 0)
 	require.NoError(t, err)
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 
 	content := "hello world"
 	ref, err := store.Put(context.Background(), "text", map[string]string{"session": "test-session"}, strings.NewReader(content))
@@ -26,7 +26,7 @@ func TestPutOpenRoundTrip(t *testing.T) {
 
 	rc, meta, err := store.Open(context.Background(), ref)
 	require.NoError(t, err)
-	defer rc.Close()
+	defer func() { _ = rc.Close() }()
 
 	data, err := io.ReadAll(rc)
 	require.NoError(t, err)
@@ -39,7 +39,7 @@ func TestRefStability(t *testing.T) {
 	workspace := t.TempDir()
 	store, err := NewDiskStore(workspace, 0)
 	require.NoError(t, err)
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 
 	ref, err := store.Put(context.Background(), "test", nil, strings.NewReader("data"))
 	require.NoError(t, err)
@@ -57,7 +57,7 @@ func TestLargeStreaming(t *testing.T) {
 	workspace := t.TempDir()
 	store, err := NewDiskStore(workspace, 0)
 	require.NoError(t, err)
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 
 	// Stream 5 MiB without OOM.
 	size := 5 * 1024 * 1024
@@ -71,7 +71,7 @@ func TestLargeStreaming(t *testing.T) {
 
 	rc, meta, err := store.Open(context.Background(), ref)
 	require.NoError(t, err)
-	defer rc.Close()
+	defer func() { _ = rc.Close() }()
 
 	read, err := io.ReadAll(rc)
 	require.NoError(t, err)
@@ -83,7 +83,7 @@ func TestPutNilReader(t *testing.T) {
 	workspace := t.TempDir()
 	store, err := NewDiskStore(workspace, 0)
 	require.NoError(t, err)
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 
 	_, err = store.Put(context.Background(), "test", nil, nil)
 	require.Error(t, err)
@@ -94,7 +94,7 @@ func TestOpenNotFound(t *testing.T) {
 	workspace := t.TempDir()
 	store, err := NewDiskStore(workspace, 0)
 	require.NoError(t, err)
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 
 	_, _, err = store.Open(context.Background(), Ref("artifact://nonexistent/1234"))
 	require.Error(t, err)
@@ -105,7 +105,7 @@ func TestDefaultSession(t *testing.T) {
 	workspace := t.TempDir()
 	store, err := NewDiskStore(workspace, 0)
 	require.NoError(t, err)
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 
 	ref, err := store.Put(context.Background(), "test", nil, strings.NewReader("data"))
 	require.NoError(t, err)
@@ -116,7 +116,7 @@ func TestMultipleArtifacts(t *testing.T) {
 	workspace := t.TempDir()
 	store, err := NewDiskStore(workspace, 0)
 	require.NoError(t, err)
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 
 	ref1, err := store.Put(context.Background(), "a", map[string]string{"session": "s1"}, strings.NewReader("data1"))
 	require.NoError(t, err)
@@ -140,7 +140,7 @@ func TestMultipleArtifacts(t *testing.T) {
 		rc, _, err := store.Open(context.Background(), tc.ref)
 		require.NoError(t, err)
 		data, _ := io.ReadAll(rc)
-		rc.Close()
+		_ = rc.Close()
 		require.Equal(t, tc.want, string(data))
 		require.Equal(t, tc.sess, tc.ref.Session())
 	}
@@ -150,7 +150,7 @@ func TestDiskStoreDirectoryStructure(t *testing.T) {
 	workspace := t.TempDir()
 	store, err := NewDiskStore(workspace, 0)
 	require.NoError(t, err)
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 
 	ref, err := store.Put(context.Background(), "test", map[string]string{"session": "mysession"}, strings.NewReader("content"))
 	require.NoError(t, err)
@@ -190,7 +190,7 @@ func TestScanOnBoot(t *testing.T) {
 	// Recreate store using the same workspace directory.
 	store2, err := NewDiskStore(workspace, 0)
 	require.NoError(t, err)
-	defer store2.Close()
+	defer func() { _ = store2.Close() }()
 
 	// Verify that the total size and session sizes are parsed on boot.
 	require.Positive(t, store2.TotalBytes())

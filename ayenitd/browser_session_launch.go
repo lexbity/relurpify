@@ -220,7 +220,7 @@ func (b *sandboxedBrowserBackend) close(ctx context.Context) error {
 	go func() {
 		<-cmdCtx.Done()
 		if cmd.Process != nil {
-			cmd.Process.Kill()
+			_ = cmd.Process.Kill()
 		}
 	}()
 	err = cmd.Run()
@@ -297,7 +297,7 @@ func runSandboxBrowserContainer(ctx context.Context, cfg browsersvc.BrowserSessi
 	go func() {
 		<-ctx.Done()
 		if cmd.Process != nil {
-			cmd.Process.Kill()
+			_ = cmd.Process.Kill()
 		}
 	}()
 	output, err := cmd.CombinedOutput()
@@ -326,7 +326,7 @@ func removeSandboxBrowserContainer(ctx context.Context, cfg browsersvc.BrowserSe
 	go func() {
 		<-ctx.Done()
 		if cmd.Process != nil {
-			cmd.Process.Kill()
+			_ = cmd.Process.Kill()
 		}
 	}()
 	return cmd.Run()
@@ -472,7 +472,7 @@ func waitForHTTPReady(ctx context.Context, target string) error {
 		if err == nil {
 			resp, err := http.DefaultClient.Do(req)
 			if err == nil {
-				resp.Body.Close()
+				_ = resp.Body.Close()
 				if resp.StatusCode < 500 {
 					return nil
 				}
@@ -495,7 +495,7 @@ func fetchCDPWebSocket(ctx context.Context, target string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	var targets []struct {
 		Type                 string `json:"type"`
 		WebSocketDebuggerURL string `json:"webSocketDebuggerUrl"`
@@ -516,7 +516,7 @@ func reservePort() (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	defer listener.Close()
+	defer func() { _ = listener.Close() }()
 	return listener.Addr().(*net.TCPAddr).Port, nil
 }
 

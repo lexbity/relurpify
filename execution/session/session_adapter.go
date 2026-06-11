@@ -50,7 +50,7 @@ func (a *SessionAdapter) OpenWorkspace(ctx context.Context, req OpenWorkspaceReq
 
 	id, err := workspace.New(req.WorkspaceRoot)
 	if err != nil {
-		ws.Close(ctx)
+		_ = ws.Close(ctx)
 		return nil, err
 	}
 

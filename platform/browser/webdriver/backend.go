@@ -397,7 +397,7 @@ func (b *Backend) do(ctx context.Context, method, path string, payload map[strin
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	data, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
@@ -516,7 +516,7 @@ func launchChromeDriver(ctx context.Context, cfg Config) (*launchedDriver, error
 	go func() {
 		<-ctx.Done()
 		if cmd.Process != nil {
-			cmd.Process.Kill()
+			_ = cmd.Process.Kill()
 		}
 	}()
 	cmd.Stdout = io.Discard
@@ -546,7 +546,7 @@ func waitForDriver(ctx context.Context, baseURL string, timeout time.Duration) e
 		if err == nil {
 			resp, err := http.DefaultClient.Do(req)
 			if err == nil {
-				resp.Body.Close()
+				_ = resp.Body.Close()
 				if resp.StatusCode < 500 {
 					return nil
 				}
@@ -565,6 +565,6 @@ func freePort() (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	defer listener.Close()
+	defer func() { _ = listener.Close() }()
 	return listener.Addr().(*net.TCPAddr).Port, nil
 }

@@ -92,7 +92,7 @@ func (b *Backend) Verify(ctx context.Context) error {
 	go func() {
 		<-cctx.Done()
 		if cmd.Process != nil {
-			cmd.Process.Kill()
+			_ = cmd.Process.Kill()
 		}
 	}()
 	if out, err := cmd.CombinedOutput(); err != nil {

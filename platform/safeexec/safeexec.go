@@ -43,7 +43,7 @@ func CommandContext(ctx context.Context, a Args) *exec.Cmd {
 	go func() {
 		<-ctx.Done()
 		if cmd.Process != nil {
-			cmd.Process.Kill()
+			_ = cmd.Process.Kill()
 		}
 	}()
 	return cmd

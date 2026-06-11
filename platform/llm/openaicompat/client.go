@@ -178,7 +178,7 @@ func (c *Client) doChat(ctx context.Context, payload map[string]any) (*LLMRespon
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode >= 300 {
 		return nil, readHTTPError(resp)
 	}
@@ -199,7 +199,7 @@ func (c *Client) doChatStream(ctx context.Context, payload map[string]any, token
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode >= 300 {
 		return nil, readHTTPError(resp)
 	}
@@ -287,7 +287,7 @@ func (c *Client) ListModels(ctx context.Context) ([]ModelInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode >= 300 {
 		return nil, readHTTPError(resp)
 	}

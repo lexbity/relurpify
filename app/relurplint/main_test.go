@@ -18,7 +18,7 @@ var testRepoRoot string
 func TestMain(m *testing.M) {
 	cwd, err := os.Getwd()
 	if err != nil {
-		os.Stderr.WriteString("getwd: " + err.Error() + "\n")
+		_, _ = os.Stderr.WriteString("getwd: " + err.Error() + "\n")
 		os.Exit(1)
 	}
 	testRepoRoot = filepath.Clean(filepath.Join(cwd, "..", ".."))
@@ -26,7 +26,7 @@ func TestMain(m *testing.M) {
 	bin := filepath.Join(os.TempDir(), "relurplint-test-"+strings.ReplaceAll(filepath.Base(os.Args[0]), ".", "_"))
 	goPath, err := exec.LookPath("go")
 	if err != nil {
-		os.Stderr.WriteString("go not found in PATH")
+		_, _ = os.Stderr.WriteString("go not found in PATH")
 		os.Exit(1)
 	}
 	cmd := &exec.Cmd{
@@ -35,12 +35,12 @@ func TestMain(m *testing.M) {
 	}
 	cmd.Dir = testRepoRoot
 	if out, err := cmd.CombinedOutput(); err != nil {
-		os.Stderr.WriteString("build failed: " + err.Error() + "\n" + string(out))
+		_, _ = os.Stderr.WriteString("build failed: " + err.Error() + "\n" + string(out))
 		os.Exit(1)
 	}
 	relurplintBin = bin
 	code := m.Run()
-	os.Remove(bin)
+	_ = os.Remove(bin)
 	os.Exit(code)
 }
 

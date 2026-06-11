@@ -17,7 +17,7 @@ import (
 func TestBadgerBackend_MaintenanceNoOp(t *testing.T) {
 	bb, err := newBadgerBackend(BadgerOptions{InMemory: true})
 	require.NoError(t, err)
-	defer bb.close()
+	defer func() { _ = bb.close() }()
 
 	result, err := bb.maintenance(context.Background(), MaintenanceRequest{})
 	require.NoError(t, err)
@@ -29,7 +29,7 @@ func TestBadgerBackend_MaintenanceNoOp(t *testing.T) {
 func TestBadgerBackend_MaintenanceIntegrityCheck(t *testing.T) {
 	bb, err := newBadgerBackend(BadgerOptions{InMemory: true})
 	require.NoError(t, err)
-	defer bb.close()
+	defer func() { _ = bb.close() }()
 
 	// Write a few records.
 	require.NoError(t, bb.commit(context.TODO(), mutationBatch{
@@ -53,7 +53,7 @@ func TestBadgerBackend_MaintenanceGCEmpty(t *testing.T) {
 	dir := t.TempDir()
 	bb, err := newBadgerBackend(BadgerOptions{Dir: dir})
 	require.NoError(t, err)
-	defer bb.close()
+	defer func() { _ = bb.close() }()
 
 	// GC on an empty DB is a no-op (no value log files to rewrite).
 	result, err := bb.maintenance(context.Background(), MaintenanceRequest{
@@ -70,7 +70,7 @@ func TestBadgerBackend_MaintenanceGCEmpty(t *testing.T) {
 func TestBadgerBackend_Backup(t *testing.T) {
 	bb, err := newBadgerBackend(BadgerOptions{InMemory: true})
 	require.NoError(t, err)
-	defer bb.close()
+	defer func() { _ = bb.close() }()
 
 	require.NoError(t, bb.commit(context.TODO(), mutationBatch{
 		opName: "upsert_node",
@@ -104,7 +104,7 @@ func TestEvent_OpenStartComplete(t *testing.T) {
 
 	engine, err := Open(context.Background(), opts)
 	require.NoError(t, err)
-	engine.Close(context.Background())
+	require.NoError(t, engine.Close(context.Background()))
 
 	obs.mu.Lock()
 	defer obs.mu.Unlock()
@@ -125,7 +125,7 @@ func TestEvent_Commit(t *testing.T) {
 
 	engine, err := Open(context.Background(), opts)
 	require.NoError(t, err)
-	defer engine.Close(context.Background())
+	defer func() { _ = engine.Close(context.Background()) }()
 
 	require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: "n1", Kind: "function"}))
 
@@ -148,7 +148,7 @@ func TestEvent_CommitFailed(t *testing.T) {
 
 	engine, err := Open(context.Background(), opts)
 	require.NoError(t, err)
-	defer engine.Close(context.Background())
+	defer func() { _ = engine.Close(context.Background()) }()
 
 	// Inject a commit failure by using an invalid payload type through
 	// the engine's persist path. The engine itself validates, so we
@@ -177,7 +177,7 @@ func TestEvent_MemoryApplyFail(t *testing.T) {
 
 	engine, err := Open(context.Background(), opts)
 	require.NoError(t, err)
-	defer engine.Close(context.Background())
+	defer func() { _ = engine.Close(context.Background()) }()
 
 	engine.markDirty(errors.New("apply failed"))
 
@@ -197,7 +197,7 @@ func TestEvent_MemoryApplyFail(t *testing.T) {
 func TestSubgraphPage_TraversalSucceeds(t *testing.T) {
 	engine, err := Open(context.Background(), DefaultOptions(t.TempDir()))
 	require.NoError(t, err)
-	defer engine.Close(context.Background())
+	defer func() { _ = engine.Close(context.Background()) }()
 
 	require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: "a", Kind: "function"}))
 	require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: "b", Kind: "function"}))
@@ -223,7 +223,7 @@ func TestEvent_TraversalCancelled(t *testing.T) {
 
 	engine, err := Open(context.Background(), opts)
 	require.NoError(t, err)
-	defer engine.Close(context.Background())
+	defer func() { _ = engine.Close(context.Background()) }()
 
 	// Create graph and cancel context immediately.
 	buildBranchingGraph(engine, "root", 3, 3)
@@ -258,7 +258,7 @@ func TestEvent_BadgerGC(t *testing.T) {
 	dir := t.TempDir()
 	bb, err := newBadgerBackend(BadgerOptions{Dir: dir})
 	require.NoError(t, err)
-	defer bb.close()
+	defer func() { _ = bb.close() }()
 
 	// Write enough data to create value log files.
 	for i := 0; i < 100; i++ {

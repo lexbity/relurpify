@@ -102,7 +102,7 @@ func TestDeleteAndReopen(t *testing.T) {
 
 	reopened, err := Open(context.Background(), opts)
 	require.NoError(t, err)
-	defer reopened.Close(context.Background())
+	defer func() { _ = reopened.Close(context.Background()) }()
 
 	_, ok := reopened.GetNode("n1")
 	require.False(t, ok)
@@ -143,7 +143,7 @@ func TestMutationResultRoundTrip(t *testing.T) {
 
 	reopened, err := Open(context.Background(), opts)
 	require.NoError(t, err)
-	defer reopened.Close(context.Background())
+	defer func() { _ = reopened.Close(context.Background()) }()
 
 	reopenedResult, ok := reopened.MutationResult(result.StableID)
 	require.True(t, ok)
@@ -324,7 +324,7 @@ func TestRevisionHistoryAndPersistence(t *testing.T) {
 
 	reopened, err := Open(context.Background(), opts)
 	require.NoError(t, err)
-	defer reopened.Close(context.Background())
+	defer func() { _ = reopened.Close(context.Background()) }()
 
 	reopenedNodeRevisions := reopened.NodeRevisions("n1")
 	require.Len(t, reopenedNodeRevisions, 2)

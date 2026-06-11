@@ -206,7 +206,7 @@ func (g *SandboxRuntimeImpl) commandContext(ctx context.Context, name string, ar
 	go func() {
 		<-ctx.Done()
 		if cmd.Process != nil {
-			cmd.Process.Kill()
+			_ = cmd.Process.Kill()
 		}
 	}()
 	return cmd, cancel

@@ -14,7 +14,7 @@ func TestCollectSignalsKeyword(t *testing.T) {
 	}
 
 	registry := families.NewRegistry()
-	families.RegisterBuiltins(registry)
+	_ = families.RegisterBuiltins(registry)
 
 	signals := CollectSignals(envelope, nil, registry)
 
@@ -87,7 +87,7 @@ func TestCollectSignalsNoSignalBaseline(t *testing.T) {
 	}
 
 	registry := families.NewRegistry()
-	families.RegisterBuiltins(registry)
+	_ = families.RegisterBuiltins(registry)
 
 	classification := ClassifyTaskScored(envelope, registry, nil)
 
@@ -111,7 +111,7 @@ func TestCollectSignalsNegative(t *testing.T) {
 	}
 
 	registry := families.NewRegistry()
-	families.RegisterBuiltins(registry)
+	_ = families.RegisterBuiltins(registry)
 
 	signals := CollectSignals(envelope, nil, registry)
 
@@ -129,7 +129,7 @@ func TestCollectSignalsNegative(t *testing.T) {
 
 func TestScoreSignalsRanking(t *testing.T) {
 	registry := families.NewRegistry()
-	families.RegisterBuiltins(registry)
+	_ = families.RegisterBuiltins(registry)
 
 	signals := []ClassificationSignal{
 		{Kind: SignalKindKeyword, FamilyID: families.FamilyDebug, Weight: WeightKeyword},
@@ -151,7 +151,7 @@ func TestScoreSignalsRanking(t *testing.T) {
 
 func TestScoreSignalsAmbiguity(t *testing.T) {
 	registry := families.NewRegistry()
-	families.RegisterBuiltins(registry)
+	_ = families.RegisterBuiltins(registry)
 
 	signals := []ClassificationSignal{
 		{Kind: SignalKindKeyword, FamilyID: families.FamilyDebug, Weight: 1.0},
@@ -173,7 +173,7 @@ func TestScoreSignalsAmbiguity(t *testing.T) {
 
 func TestScoreSignalsWeightOverride(t *testing.T) {
 	registry := families.NewRegistry()
-	families.RegisterBuiltins(registry)
+	_ = families.RegisterBuiltins(registry)
 
 	signals := []ClassificationSignal{
 		{Kind: SignalKindErrorText, FamilyID: families.FamilyDebug, Weight: WeightErrorText},
@@ -198,7 +198,7 @@ func TestScoreSignalsWeightOverride(t *testing.T) {
 
 func TestScoreSignalsWeightSuppression(t *testing.T) {
 	registry := families.NewRegistry()
-	families.RegisterBuiltins(registry)
+	_ = families.RegisterBuiltins(registry)
 
 	signals := []ClassificationSignal{
 		{Kind: SignalKindKeyword, FamilyID: families.FamilyReview, Weight: WeightKeyword},
@@ -225,7 +225,7 @@ func TestClassifyTaskScored_ReviewNoEdit(t *testing.T) {
 	}
 
 	registry := families.NewRegistry()
-	families.RegisterBuiltins(registry)
+	_ = families.RegisterBuiltins(registry)
 
 	classification := ClassifyTaskScored(envelope, registry, nil)
 
@@ -240,7 +240,7 @@ func TestClassifyTaskScored_MixedIntent(t *testing.T) {
 	}
 
 	registry := families.NewRegistry()
-	families.RegisterBuiltins(registry)
+	_ = families.RegisterBuiltins(registry)
 
 	classification := ClassifyTaskScored(envelope, registry, nil)
 
@@ -257,7 +257,7 @@ func TestClassifyTaskScored_CrossCutting(t *testing.T) {
 	}
 
 	registry := families.NewRegistry()
-	families.RegisterBuiltins(registry)
+	_ = families.RegisterBuiltins(registry)
 
 	classification := ClassifyTaskScored(envelope, registry, nil)
 
@@ -301,7 +301,7 @@ func TestBuiltinFamiliesAllRegistered(t *testing.T) {
 
 func TestFamilyRegistryOverride(t *testing.T) {
 	registry := families.NewRegistry()
-	families.RegisterBuiltins(registry)
+	_ = families.RegisterBuiltins(registry)
 
 	override := families.FamilyOverride{
 		AddKeywords: []string{"hotfix"},
@@ -332,7 +332,7 @@ func TestFamilyRegistryOverride(t *testing.T) {
 
 func TestFamilyRegistryConflict(t *testing.T) {
 	registry := families.NewRegistry()
-	families.RegisterBuiltins(registry)
+	_ = families.RegisterBuiltins(registry)
 
 	// Try to register same family again
 	family := families.KeywordFamily{
@@ -358,7 +358,7 @@ func TestFamilyRegistryLookupMissing(t *testing.T) {
 
 func TestSignalWeightsForFamily(t *testing.T) {
 	registry := families.NewRegistry()
-	families.RegisterBuiltins(registry)
+	_ = families.RegisterBuiltins(registry)
 
 	override := families.FamilyOverride{
 		SignalWeights: map[string]float64{
@@ -367,7 +367,7 @@ func TestSignalWeightsForFamily(t *testing.T) {
 		},
 	}
 
-	registry.Override(families.FamilyDebug, override)
+	_ = registry.Override(families.FamilyDebug, override)
 
 	weights := registry.SignalWeightsFor(families.FamilyDebug)
 	if weights == nil {

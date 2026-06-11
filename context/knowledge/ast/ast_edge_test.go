@@ -32,7 +32,7 @@ func TestIndexManagerStartIndexingWhenRunning(t *testing.T) {
 	tmpDir := t.TempDir()
 	store, err := NewTestStore(filepath.Join(tmpDir, "index.db"))
 	require.NoError(t, err)
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 
 	manager := NewIndexManager(store, IndexConfig{WorkspacePath: tmpDir})
 
@@ -52,7 +52,7 @@ func TestIndexManagerRefreshFileWithPathFilter(t *testing.T) {
 	tmpDir := t.TempDir()
 	store, err := NewTestStore(filepath.Join(tmpDir, "index.db"))
 	require.NoError(t, err)
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 
 	manager := NewIndexManager(store, IndexConfig{WorkspacePath: tmpDir})
 
@@ -87,7 +87,7 @@ func TestIndexManagerRemoveIndexedFileNotFound(t *testing.T) {
 	tmpDir := t.TempDir()
 	store, err := NewTestStore(filepath.Join(tmpDir, "index.db"))
 	require.NoError(t, err)
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 
 	manager := NewIndexManager(store, IndexConfig{WorkspacePath: tmpDir})
 
@@ -100,7 +100,7 @@ func TestIndexManagerRemoveIndexedFileWithError(t *testing.T) {
 	tmpDir := t.TempDir()
 	store, err := NewTestStore(filepath.Join(tmpDir, "index.db"))
 	require.NoError(t, err)
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 
 	manager := NewIndexManager(store, IndexConfig{WorkspacePath: tmpDir})
 
@@ -109,7 +109,7 @@ func TestIndexManagerRemoveIndexedFileWithError(t *testing.T) {
 	require.NoError(t, manager.IndexFile(context.Background(), path))
 
 	// Close the store to cause errors
-	store.Close()
+	_ = store.Close()
 
 	// This should return an error because store is closed
 	err = manager.removeIndexedFile(context.Background(), path)
@@ -120,7 +120,7 @@ func TestIndexManagerCloseWithGraphDB(t *testing.T) {
 	tmpDir := t.TempDir()
 	store, err := NewTestStore(filepath.Join(tmpDir, "index.db"))
 	require.NoError(t, err)
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 
 	manager := NewIndexManager(store, IndexConfig{WorkspacePath: tmpDir})
 
@@ -143,7 +143,7 @@ func TestIndexManagerPersistErrorCases(t *testing.T) {
 	tmpDir := t.TempDir()
 	store, err := NewTestStore(filepath.Join(tmpDir, "index.db"))
 	require.NoError(t, err)
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 
 	manager := NewIndexManager(store, IndexConfig{WorkspacePath: tmpDir})
 
@@ -157,7 +157,7 @@ func TestIndexManagerIndexFileReadError(t *testing.T) {
 	tmpDir := t.TempDir()
 	store, err := NewTestStore(filepath.Join(tmpDir, "index.db"))
 	require.NoError(t, err)
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 
 	manager := NewIndexManager(store, IndexConfig{WorkspacePath: tmpDir})
 
@@ -191,7 +191,7 @@ func TestIndexManagerBuildSymbolNodesWithChildren(t *testing.T) {
 	tmpDir := t.TempDir()
 	store, err := NewTestStore(filepath.Join(tmpDir, "index.db"))
 	require.NoError(t, err)
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 
 	manager := NewIndexManager(store, IndexConfig{WorkspacePath: tmpDir})
 
@@ -221,7 +221,7 @@ func TestIndexManagerBuildSymbolNodesWithEmptyKind(t *testing.T) {
 	tmpDir := t.TempDir()
 	store, err := NewTestStore(filepath.Join(tmpDir, "index.db"))
 	require.NoError(t, err)
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 
 	manager := NewIndexManager(store, IndexConfig{WorkspacePath: tmpDir})
 
@@ -279,7 +279,7 @@ func TestIndexManagerWaitUntilReadyWithError(t *testing.T) {
 	tmpDir := t.TempDir()
 	store, err := NewTestStore(filepath.Join(tmpDir, "index.db"))
 	require.NoError(t, err)
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 
 	manager := NewIndexManager(store, IndexConfig{WorkspacePath: tmpDir})
 
@@ -296,7 +296,7 @@ func TestIndexManagerIndexWorkspaceContextCanceled(t *testing.T) {
 	tmpDir := t.TempDir()
 	store, err := NewTestStore(filepath.Join(tmpDir, "index.db"))
 	require.NoError(t, err)
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 
 	manager := NewIndexManager(store, IndexConfig{WorkspacePath: tmpDir})
 
@@ -341,7 +341,7 @@ func TestIndexManagerGetCallGraphStoreError(t *testing.T) {
 	require.NoError(t, manager.IndexFile(context.Background(), path))
 
 	// Close store to cause errors
-	store.Close()
+	_ = store.Close()
 
 	// Should error because store is closed
 	_, err = manager.GetCallGraph("Hello")
@@ -352,7 +352,7 @@ func TestIndexManagerRunWorkspaceIndexWithContextError(t *testing.T) {
 	tmpDir := t.TempDir()
 	store, err := NewTestStore(filepath.Join(tmpDir, "index.db"))
 	require.NoError(t, err)
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 
 	manager := NewIndexManager(store, IndexConfig{WorkspacePath: tmpDir})
 
@@ -373,7 +373,7 @@ func TestIndexManagerIndexFilesParallelError(t *testing.T) {
 	tmpDir := t.TempDir()
 	store, err := NewTestStore(filepath.Join(tmpDir, "index.db"))
 	require.NoError(t, err)
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 
 	manager := NewIndexManager(store, IndexConfig{
 		WorkspacePath:   tmpDir,
@@ -431,7 +431,7 @@ func TestIndexManagerIndexFileParseErrorFallbackToSymbols(t *testing.T) {
 	tmpDir := t.TempDir()
 	store, err := NewTestStore(filepath.Join(tmpDir, "index.db"))
 	require.NoError(t, err)
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 
 	manager := NewIndexManager(store, IndexConfig{WorkspacePath: tmpDir})
 

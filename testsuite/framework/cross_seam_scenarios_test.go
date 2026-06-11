@@ -140,7 +140,7 @@ func TestFullFrameworkFlowScenario(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open graph engine: %v", err)
 	}
-	defer graph.Close(context.Background())
+	defer func() { _ = graph.Close(context.Background()) }()
 
 	store := &knowledge.ChunkStore{Graph: graph}
 	events := &knowledge.EventBus{}

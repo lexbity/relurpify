@@ -108,7 +108,7 @@ func MigrateAOFToBadger(ctx context.Context, aofDir string, badgerDir string) er
 	if err != nil {
 		return fmt.Errorf("graphdb migration: open target: %w", err)
 	}
-	defer bb.close()
+	defer func() { _ = bb.close() }()
 
 	// 3. Check migration state.
 	var alreadyDone bool

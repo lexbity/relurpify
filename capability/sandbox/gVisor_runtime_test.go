@@ -112,10 +112,10 @@ func TestSandboxPolicy_ConcurrentSafe(t *testing.T) {
 func TestSandboxPolicy_ReturnsSnapshot(t *testing.T) {
 	gt := NewSandboxRuntime(SandboxConfig{})
 	policy1 := SandboxPolicy{NetworkRules: []NetworkRule{{Direction: "egress", Protocol: "tcp", Host: "v1", Port: 443}}}
-	gt.ApplyPolicy(context.Background(), policy1)
+	_ = gt.ApplyPolicy(context.Background(), policy1)
 
 	policy2 := SandboxPolicy{NetworkRules: []NetworkRule{{Direction: "egress", Protocol: "tcp", Host: "v2", Port: 443}}}
-	gt.ApplyPolicy(context.Background(), policy2)
+	_ = gt.ApplyPolicy(context.Background(), policy2)
 
 	// Policy() should return the latest snapshot
 	current := gt.Policy()

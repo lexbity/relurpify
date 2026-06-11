@@ -186,10 +186,10 @@ func WrapRegistryWithInterceptor(reg *registry.CapabilityRegistry, overrides []T
 		if len(toolOverrides) > 0 {
 			// Wrap with interceptor
 			wrapped := NewInjectionInterceptor(tool, overrides)
-			wrappedRegistry.Register(context.Background(), wrapped)
+			_ = wrappedRegistry.Register(context.Background(), wrapped)
 		} else {
 			// Register unmodified
-			wrappedRegistry.Register(context.Background(), tool)
+			_ = wrappedRegistry.Register(context.Background(), tool)
 		}
 	}
 

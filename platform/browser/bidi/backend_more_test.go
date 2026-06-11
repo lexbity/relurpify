@@ -135,7 +135,7 @@ func TestTransportCallReadLoopAndClose(t *testing.T) {
 
 	transport, err := newWebsocketTransport(context.Background(), wsURL)
 	require.NoError(t, err)
-	defer transport.Close()
+	defer func() { _ = transport.Close() }()
 
 	sub := transport.Subscribe("browsingContext.load")
 	other := transport.Subscribe("custom.event")
@@ -229,7 +229,7 @@ func TestLaunchChromeDriverTimeoutBranch(t *testing.T) {
 	portListener, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 	port := portListener.Addr().(*net.TCPAddr).Port
-	portListener.Close()
+	_ = portListener.Close()
 
 	_, err = launchChromeDriver(context.Background(), Config{
 		DriverPath:     writeBidiSleepScript(t),
@@ -311,7 +311,7 @@ func newBidiTestWebSocketServer(t *testing.T) (string, func()) {
 		conn, err := upgrader.Upgrade(w, r, nil)
 		require.NoError(t, err)
 		go func() {
-			defer conn.Close()
+			defer func() { _ = conn.Close() }()
 			for {
 				var req requestEnvelope
 				if err := conn.ReadJSON(&req); err != nil {

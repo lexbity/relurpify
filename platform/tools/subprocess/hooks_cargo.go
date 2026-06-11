@@ -62,7 +62,7 @@ func applyCargoIsolationCmd(cmd []string, workdir string, sourcePath string) ([]
 	if err != nil {
 		return cmd, workdir, noop, fmt.Errorf("cargo isolation: %w", err)
 	}
-	cleanup := func() { os.RemoveAll(filepath.Dir(isolated)) }
+	cleanup := func() { _ = os.RemoveAll(filepath.Dir(isolated)) }
 
 	manifestPath := filepath.Join(isolated, "Cargo.toml")
 	modified := injectManifestPath(cmd, subcommand, manifestPath)
@@ -140,7 +140,7 @@ func isolateCargoWorkdir(workdir string) (string, error) {
 	}
 	target := filepath.Join(tempRoot, filepath.Base(workdir))
 	if err := copyDir(workdir, target); err != nil {
-		os.RemoveAll(tempRoot)
+		_ = os.RemoveAll(tempRoot)
 		return "", err
 	}
 	return target, nil
@@ -200,12 +200,12 @@ func copyFile(src, dst string, mode os.FileMode) error {
 	if err != nil {
 		return err
 	}
-	defer in.Close()
+	defer func() { _ = in.Close() }()
 	out, err := os.OpenFile(filepath.Clean(dst), os.O_CREATE|os.O_TRUNC|os.O_WRONLY, mode.Perm())
 	if err != nil {
 		return err
 	}
-	defer out.Close()
+	defer func() { _ = out.Close() }()
 	if _, err := io.Copy(out, in); err != nil {
 		return err
 	}

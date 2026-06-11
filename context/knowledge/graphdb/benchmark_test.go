@@ -258,7 +258,7 @@ func BenchmarkPersistSyncMode(b *testing.B) {
 			if err != nil {
 				b.Fatal(err)
 			}
-			defer engine.Close(context.Background())
+			defer func() { _ = engine.Close(context.Background()) }()
 
 			b.ReportAllocs()
 			b.ResetTimer()

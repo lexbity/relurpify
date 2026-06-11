@@ -201,7 +201,7 @@ func IsDeterministic(score float64, threshold string) bool {
 		op = ">="
 	} else {
 		// Default to >= for bare numbers
-		fmt.Sscanf(threshold, "%f", &target)
+		_, _ = fmt.Sscanf(threshold, "%f", &target)
 		op = ">="
 	}
 

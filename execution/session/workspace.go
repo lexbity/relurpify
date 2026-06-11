@@ -73,7 +73,7 @@ func (w *Workspace) Close(ctx context.Context) error {
 	}
 
 	if w.Environment.Scheduler != nil {
-		w.Environment.Scheduler.Stop()
+		_ = w.Environment.Scheduler.Stop()
 	}
 
 	if w.Backend != nil {
@@ -161,7 +161,7 @@ func (w *Workspace) stopServices() error {
 	}
 
 	if w.Environment.Scheduler != nil {
-		w.Environment.Scheduler.Stop()
+		_ = w.Environment.Scheduler.Stop()
 	}
 	return nil
 }

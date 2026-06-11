@@ -8,7 +8,7 @@ import (
 
 func TestResolveIntentDoesNotInventCapabilitySequences(t *testing.T) {
 	registry := families.NewRegistry()
-	families.RegisterBuiltins(registry)
+	_ = families.RegisterBuiltins(registry)
 
 	classification := &ScoredClassification{
 		WinningFamily: families.FamilyDebug,
@@ -46,7 +46,7 @@ func TestResolveIntentDoesNotInventCapabilitySequences(t *testing.T) {
 
 func TestResolveIntentDeterministicFamilyMetadata(t *testing.T) {
 	registry := families.NewRegistry()
-	families.RegisterBuiltins(registry)
+	_ = families.RegisterBuiltins(registry)
 
 	classification := &ScoredClassification{
 		WinningFamily: families.FamilyReview,

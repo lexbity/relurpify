@@ -338,7 +338,7 @@ func markdownReferencedVariables(body string) map[string]bool {
 	doc := markdownParser.Parser().Parse(gmtext.NewReader(source))
 
 	used := make(map[string]bool)
-	ast.Walk(doc, func(node ast.Node, entering bool) (ast.WalkStatus, error) {
+	_ = ast.Walk(doc, func(node ast.Node, entering bool) (ast.WalkStatus, error) {
 		if !entering {
 			return ast.WalkContinue, nil
 		}

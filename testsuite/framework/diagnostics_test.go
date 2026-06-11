@@ -34,7 +34,7 @@ func TestDiagnosticFailureMessages(t *testing.T) {
 				if err := fs.WriteFileSecure(outsideFile, []byte("test")); err != nil {
 					t.Fatalf("failed to create test file: %v", err)
 				}
-				return env, func() { os.Remove(outsideFile) }
+				return env, func() { _ = os.Remove(outsideFile) }
 			},
 			trigger: func(t *testing.T, env *TestEnvironment) {
 				outsideFile := filepath.Join(env.WorkspacePath, "..", "outside.txt")

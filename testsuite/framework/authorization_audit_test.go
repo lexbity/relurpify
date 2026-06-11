@@ -365,10 +365,10 @@ func TestAuditQueryFiltering(t *testing.T) {
 	ctx := context.Background()
 
 	// Perform operations for test-agent
-	env.PermissionManager.CheckFileAccess(ctx, agentID, permissions.FileSystemRead, testPath)
+	_ = env.PermissionManager.CheckFileAccess(ctx, agentID, permissions.FileSystemRead, testPath)
 
 	// Perform operations for other-agent
-	env.PermissionManager.CheckFileAccess(ctx, otherAgentID, permissions.FileSystemRead, testPath)
+	_ = env.PermissionManager.CheckFileAccess(ctx, otherAgentID, permissions.FileSystemRead, testPath)
 
 	// Query by agent ID
 	filter := policy.AuditQuery{AgentID: agentID}

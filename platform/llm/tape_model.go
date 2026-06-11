@@ -414,7 +414,7 @@ func readTape(path string) ([]tapeEntry, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	sc := bufio.NewScanner(f)
 	sc.Buffer(make([]byte, 64*1024), 8*1024*1024)
 	var entries []tapeEntry

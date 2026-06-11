@@ -83,7 +83,7 @@ func TestBadgerBackend_UpsertNodeAndReopen(t *testing.T) {
 
 	bb2, err := newBadgerBackend(BadgerOptions{Dir: dir})
 	require.NoError(t, err)
-	defer bb2.close()
+	defer func() { _ = bb2.close() }()
 
 	store2 := newAdjacencyStore()
 	require.NoError(t, bb2.load(context.TODO(), store2))
@@ -116,7 +116,7 @@ func TestBadgerBackend_LinkEdgeAndReopen(t *testing.T) {
 
 	bb2, err := newBadgerBackend(BadgerOptions{Dir: dir})
 	require.NoError(t, err)
-	defer bb2.close()
+	defer func() { _ = bb2.close() }()
 
 	store2 := newAdjacencyStore()
 	require.NoError(t, bb2.load(context.TODO(), store2))
@@ -147,7 +147,7 @@ func TestBadgerBackend_DeleteNodeRemovesRecord(t *testing.T) {
 
 	bb2, err := newBadgerBackend(BadgerOptions{Dir: dir})
 	require.NoError(t, err)
-	defer bb2.close()
+	defer func() { _ = bb2.close() }()
 
 	store2 := newAdjacencyStore()
 	require.NoError(t, bb2.load(context.TODO(), store2))
@@ -183,7 +183,7 @@ func TestBadgerBackend_HardUnlinkEdge(t *testing.T) {
 
 	bb2, err := newBadgerBackend(BadgerOptions{Dir: dir})
 	require.NoError(t, err)
-	defer bb2.close()
+	defer func() { _ = bb2.close() }()
 
 	store2 := newAdjacencyStore()
 	require.NoError(t, bb2.load(context.TODO(), store2))
@@ -212,7 +212,7 @@ func TestBadgerBackend_MutationResult(t *testing.T) {
 
 	bb2, err := newBadgerBackend(BadgerOptions{Dir: dir})
 	require.NoError(t, err)
-	defer bb2.close()
+	defer func() { _ = bb2.close() }()
 
 	store2 := newAdjacencyStore()
 	require.NoError(t, bb2.load(context.TODO(), store2))
@@ -242,7 +242,7 @@ func TestBadgerBackend_AnnotateNode(t *testing.T) {
 
 	bb2, err := newBadgerBackend(BadgerOptions{Dir: dir})
 	require.NoError(t, err)
-	defer bb2.close()
+	defer func() { _ = bb2.close() }()
 
 	store2 := newAdjacencyStore()
 	require.NoError(t, bb2.load(context.TODO(), store2))
@@ -276,7 +276,7 @@ func TestBadgerBackend_BatchNodesAndEdges(t *testing.T) {
 
 	bb2, err := newBadgerBackend(BadgerOptions{Dir: dir})
 	require.NoError(t, err)
-	defer bb2.close()
+	defer func() { _ = bb2.close() }()
 
 	store2 := newAdjacencyStore()
 	require.NoError(t, bb2.load(context.TODO(), store2))
@@ -289,7 +289,7 @@ func TestBadgerBackend_BatchNodesAndEdges(t *testing.T) {
 func TestBadgerBackend_LoadEmptyStore(t *testing.T) {
 	bb, err := newBadgerBackend(BadgerOptions{InMemory: true})
 	require.NoError(t, err)
-	defer bb.close()
+	defer func() { _ = bb.close() }()
 
 	store := newAdjacencyStore()
 	require.NoError(t, bb.load(context.TODO(), store))
@@ -336,7 +336,7 @@ func TestBadgerBackend_DeleteNodeThroughEngine(t *testing.T) {
 func TestBadgerBackend_CommitFailsOnInvalidOp(t *testing.T) {
 	bb, err := newBadgerBackend(BadgerOptions{InMemory: true})
 	require.NoError(t, err)
-	defer bb.close()
+	defer func() { _ = bb.close() }()
 
 	err = bb.commit(context.TODO(), mutationBatch{
 		opName: "upsert_node",
@@ -349,7 +349,7 @@ func TestBadgerBackend_CommitFailsOnInvalidOp(t *testing.T) {
 func TestBadgerBackend_FailedCommitLeavesStoreUnchanged(t *testing.T) {
 	bb, err := newBadgerBackend(BadgerOptions{InMemory: true})
 	require.NoError(t, err)
-	defer bb.close()
+	defer func() { _ = bb.close() }()
 
 	store := newAdjacencyStore()
 	require.NoError(t, bb.load(context.TODO(), store))
@@ -365,7 +365,7 @@ func TestBadgerBackend_FailedCommitLeavesStoreUnchanged(t *testing.T) {
 func TestBadgerBackend_AnnotateNonexistentNode(t *testing.T) {
 	bb, err := newBadgerBackend(BadgerOptions{InMemory: true})
 	require.NoError(t, err)
-	defer bb.close()
+	defer func() { _ = bb.close() }()
 
 	err = bb.commit(context.TODO(), mutationBatch{
 		opName: "annotate_node",

@@ -388,7 +388,7 @@ func (r *runtimeAdapter) InferenceModels(ctx context.Context) ([]string, error) 
 	if err != nil {
 		return nil, err
 	}
-	defer backend.Close()
+	defer func() { _ = backend.Close() }()
 	backendModels, err := backend.ListModels(ctx)
 	if err != nil {
 		return nil, err

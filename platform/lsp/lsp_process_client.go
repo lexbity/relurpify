@@ -91,7 +91,7 @@ func newProcessLSPClientInternal(cfg ProcessLSPConfig, policy sandbox.CommandPol
 	go func() {
 		<-ctx.Done()
 		if cmd.Process != nil {
-			cmd.Process.Kill()
+			_ = cmd.Process.Kill()
 		}
 	}()
 

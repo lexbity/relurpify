@@ -16,7 +16,7 @@ func TestGCSessionRemovesOnlyThatSession(t *testing.T) {
 	workspace := t.TempDir()
 	store, err := NewDiskStore(workspace, 0)
 	require.NoError(t, err)
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 
 	ctx := context.Background()
 
@@ -35,7 +35,7 @@ func TestGCSessionRemovesOnlyThatSession(t *testing.T) {
 	rc, _, err := store.Open(ctx, ref1)
 	require.NoError(t, err)
 	data, _ := io.ReadAll(rc)
-	rc.Close()
+	_ = rc.Close()
 	require.Equal(t, "keep-data", string(data))
 
 	// "remove" session directory should be gone.
@@ -48,7 +48,7 @@ func TestGCSessionIdempotent(t *testing.T) {
 	workspace := t.TempDir()
 	store, err := NewDiskStore(workspace, 0)
 	require.NoError(t, err)
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 
 	ctx := context.Background()
 
@@ -68,7 +68,7 @@ func TestGCAgeRemovesOldSessions(t *testing.T) {
 	workspace := t.TempDir()
 	store, err := NewDiskStore(workspace, 0)
 	require.NoError(t, err)
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 
 	ctx := context.Background()
 
@@ -106,7 +106,7 @@ func TestEvictOldest(t *testing.T) {
 	workspace := t.TempDir()
 	store, err := NewDiskStore(workspace, 1024*1024) // 1 MiB cap
 	require.NoError(t, err)
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 
 	ctx := context.Background()
 
@@ -144,7 +144,7 @@ func TestEvictOldestNoOpWhenUnderTarget(t *testing.T) {
 	workspace := t.TempDir()
 	store, err := NewDiskStore(workspace, 0)
 	require.NoError(t, err)
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 
 	ctx := context.Background()
 
@@ -162,7 +162,7 @@ func TestTotalBytesAfterPut(t *testing.T) {
 	workspace := t.TempDir()
 	store, err := NewDiskStore(workspace, 0)
 	require.NoError(t, err)
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 
 	_, err = store.Put(context.Background(), "text", nil, strings.NewReader("hello"))
 	require.NoError(t, err)

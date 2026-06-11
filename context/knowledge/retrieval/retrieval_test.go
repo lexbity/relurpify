@@ -399,7 +399,7 @@ func TestTraversalCandidates_BoundUnderLRU(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open graphdb: %v", err)
 	}
-	defer engine.Close(context.Background())
+	defer func() { _ = engine.Close(context.Background()) }()
 	store := &knowledge.ChunkStore{Graph: engine}
 
 	// Ingest enough chunks that paging is required.
@@ -447,7 +447,7 @@ func TestTraversalCandidates_Precedence(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		store.SaveEdge(context.Background(), knowledge.ChunkEdge{FromChunk: "prec-a", ToChunk: knowledge.ChunkID("prec-child-" + string(rune('0'+i))), Kind: knowledge.EdgeKindRequiresContext, Weight: 1})
+		_, _ = store.SaveEdge(context.Background(), knowledge.ChunkEdge{FromChunk: "prec-a", ToChunk: knowledge.ChunkID("prec-child-" + string(rune('0'+i))), Kind: knowledge.EdgeKindRequiresContext, Weight: 1})
 	}
 
 	retriever := NewRetriever(nil, store).WithPolicy(&contextports.PolicyBundle{MaxTraversalCandidates: 100})
@@ -489,10 +489,10 @@ func TestTraversalCandidates_Parity(t *testing.T) {
 	store := newRetrievalTestStore(t)
 	chunks := []string{"a", "b", "c"}
 	for _, id := range chunks {
-		store.Save(context.Background(), knowledge.KnowledgeChunk{ID: knowledge.ChunkID(id)})
+		_, _ = store.Save(context.Background(), knowledge.KnowledgeChunk{ID: knowledge.ChunkID(id)})
 	}
-	store.SaveEdge(context.Background(), knowledge.ChunkEdge{FromChunk: "a", ToChunk: "b", Kind: knowledge.EdgeKindRequiresContext, Weight: 1})
-	store.SaveEdge(context.Background(), knowledge.ChunkEdge{FromChunk: "b", ToChunk: "c", Kind: knowledge.EdgeKindRequiresContext, Weight: 1})
+	_, _ = store.SaveEdge(context.Background(), knowledge.ChunkEdge{FromChunk: "a", ToChunk: "b", Kind: knowledge.EdgeKindRequiresContext, Weight: 1})
+	_, _ = store.SaveEdge(context.Background(), knowledge.ChunkEdge{FromChunk: "b", ToChunk: "c", Kind: knowledge.EdgeKindRequiresContext, Weight: 1})
 
 	retriever := NewRetriever(nil, store)
 	ids := retriever.traversalCandidates(context.Background(), RetrievalQuery{
@@ -517,18 +517,18 @@ func TestTraversalCandidates_PreferLatestRegime(t *testing.T) {
 	// With PreferLatest, the K kept must be the K most recent, not the
 	// K shallowest.  Insert chunks with varied freshness across depths.
 	store := newRetrievalTestStore(t)
-	store.Save(context.Background(), knowledge.KnowledgeChunk{ID: "latest-old", Body: knowledge.ChunkBody{Raw: "old"}})
-	store.Save(context.Background(), knowledge.KnowledgeChunk{ID: "latest-mid", Body: knowledge.ChunkBody{Raw: "mid"}})
-	store.Save(context.Background(), knowledge.KnowledgeChunk{ID: "latest-new", Body: knowledge.ChunkBody{Raw: "new"}})
+	_, _ = store.Save(context.Background(), knowledge.KnowledgeChunk{ID: "latest-old", Body: knowledge.ChunkBody{Raw: "old"}})
+	_, _ = store.Save(context.Background(), knowledge.KnowledgeChunk{ID: "latest-mid", Body: knowledge.ChunkBody{Raw: "mid"}})
+	_, _ = store.Save(context.Background(), knowledge.KnowledgeChunk{ID: "latest-new", Body: knowledge.ChunkBody{Raw: "new"}})
 	// Link them so BFS finds all three.
-	store.SaveEdge(context.Background(), knowledge.ChunkEdge{FromChunk: "latest-old", ToChunk: "latest-mid", Kind: knowledge.EdgeKindRequiresContext, Weight: 1})
-	store.SaveEdge(context.Background(), knowledge.ChunkEdge{FromChunk: "latest-mid", ToChunk: "latest-new", Kind: knowledge.EdgeKindRequiresContext, Weight: 1})
+	_, _ = store.SaveEdge(context.Background(), knowledge.ChunkEdge{FromChunk: "latest-old", ToChunk: "latest-mid", Kind: knowledge.EdgeKindRequiresContext, Weight: 1})
+	_, _ = store.SaveEdge(context.Background(), knowledge.ChunkEdge{FromChunk: "latest-mid", ToChunk: "latest-new", Kind: knowledge.EdgeKindRequiresContext, Weight: 1})
 
 	// Manually set UpdatedAt timestamps by re-saving with different times.
 	// PreferLatest sorts by UpdatedAt descending.
-	store.Save(context.Background(), knowledge.KnowledgeChunk{ID: "latest-old", Body: knowledge.ChunkBody{Raw: "old"}, Provenance: knowledge.ChunkProvenance{Timestamp: time.Now().Add(-2 * time.Hour)}})
-	store.Save(context.Background(), knowledge.KnowledgeChunk{ID: "latest-mid", Body: knowledge.ChunkBody{Raw: "mid"}, Provenance: knowledge.ChunkProvenance{Timestamp: time.Now().Add(-1 * time.Hour)}})
-	store.Save(context.Background(), knowledge.KnowledgeChunk{ID: "latest-new", Body: knowledge.ChunkBody{Raw: "new"}, Provenance: knowledge.ChunkProvenance{Timestamp: time.Now()}})
+	_, _ = store.Save(context.Background(), knowledge.KnowledgeChunk{ID: "latest-old", Body: knowledge.ChunkBody{Raw: "old"}, Provenance: knowledge.ChunkProvenance{Timestamp: time.Now().Add(-2 * time.Hour)}})
+	_, _ = store.Save(context.Background(), knowledge.KnowledgeChunk{ID: "latest-mid", Body: knowledge.ChunkBody{Raw: "mid"}, Provenance: knowledge.ChunkProvenance{Timestamp: time.Now().Add(-1 * time.Hour)}})
+	_, _ = store.Save(context.Background(), knowledge.KnowledgeChunk{ID: "latest-new", Body: knowledge.ChunkBody{Raw: "new"}, Provenance: knowledge.ChunkProvenance{Timestamp: time.Now()}})
 
 	retriever := NewRetriever(nil, store)
 	budget := 2

@@ -20,7 +20,7 @@ func TestBinaryIshContentHandling(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open graph engine: %v", err)
 	}
-	defer graph.Close(context.Background())
+	defer func() { _ = graph.Close(context.Background()) }()
 
 	store := &knowledge.ChunkStore{Graph: graph}
 	events := &knowledge.EventBus{}
@@ -98,7 +98,7 @@ func TestEmptyFileHandling(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open graph engine: %v", err)
 	}
-	defer graph.Close(context.Background())
+	defer func() { _ = graph.Close(context.Background()) }()
 
 	store := &knowledge.ChunkStore{Graph: graph}
 	events := &knowledge.EventBus{}
@@ -150,7 +150,7 @@ func TestPartialFailureIsolation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open graph engine: %v", err)
 	}
-	defer graph.Close(context.Background())
+	defer func() { _ = graph.Close(context.Background()) }()
 
 	store := &knowledge.ChunkStore{Graph: graph}
 	events := &knowledge.EventBus{}
@@ -246,7 +246,7 @@ func TestMixedEncodingHandling(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open graph engine: %v", err)
 	}
-	defer graph.Close(context.Background())
+	defer func() { _ = graph.Close(context.Background()) }()
 
 	store := &knowledge.ChunkStore{Graph: graph}
 	events := &knowledge.EventBus{}
@@ -330,7 +330,7 @@ func TestLargeContentHandling(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open graph engine: %v", err)
 	}
-	defer graph.Close(context.Background())
+	defer func() { _ = graph.Close(context.Background()) }()
 
 	store := &knowledge.ChunkStore{Graph: graph}
 	events := &knowledge.EventBus{}
@@ -413,7 +413,7 @@ func TestLLMResponseWithEmptyText(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open graph engine: %v", err)
 	}
-	defer graph.Close(context.Background())
+	defer func() { _ = graph.Close(context.Background()) }()
 
 	store := &knowledge.ChunkStore{Graph: graph}
 	events := &knowledge.EventBus{}
@@ -466,7 +466,7 @@ func TestObservationWithEmptyText(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open graph engine: %v", err)
 	}
-	defer graph.Close(context.Background())
+	defer func() { _ = graph.Close(context.Background()) }()
 
 	store := &knowledge.ChunkStore{Graph: graph}
 	events := &knowledge.EventBus{}

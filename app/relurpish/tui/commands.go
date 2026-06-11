@@ -223,9 +223,9 @@ func rootHandleHelp(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 		}
 	}
 	var b strings.Builder
-	b.WriteString("Available commands:\n\n")
+	_, _ = b.WriteString("Available commands:\n\n")
 	for _, cmd := range rootCommandRegistry.All() {
-		fmt.Fprintf(&b, "  %s - %s\n", cmd.Usage, cmd.Description)
+		_, _ = fmt.Fprintf(&b, "  %s - %s\n", cmd.Usage, cmd.Description)
 	}
 	m.addSystemMessage(b.String())
 	return m, nil
@@ -421,7 +421,7 @@ func rootHandleAdd(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 			m.addSystemMessage(fmt.Sprintf("Added to context: %s", path))
 			// Also add to shared context for immediate UI update
 			if m.sharedCtx != nil {
-				m.sharedCtx.AddFile(path)
+				_ = m.sharedCtx.AddFile(path)
 			}
 			// Update chat sidebar if visible
 			if sidebar, ok := m.chat.(ChatSidebarController); ok {
@@ -471,11 +471,11 @@ func rootHandleContext(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 		return m, nil
 	}
 	var b strings.Builder
-	b.WriteString("Files in context:\n\n")
+	_, _ = b.WriteString("Files in context:\n\n")
 	for _, f := range m.sharedCtx.Files {
-		fmt.Fprintf(&b, "  • %s\n", f)
+		_, _ = fmt.Fprintf(&b, "  • %s\n", f)
 	}
-	fmt.Fprintf(&b, "\nTokens: %d / %d", m.sharedCtx.UsedTokens, m.sharedCtx.MaxTokens)
+	_, _ = fmt.Fprintf(&b, "\nTokens: %d / %d", m.sharedCtx.UsedTokens, m.sharedCtx.MaxTokens)
 	m.addSystemMessage(b.String())
 	return m, nil
 }
@@ -554,13 +554,13 @@ func rootHandleDiff(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 	changes := messages[index].Content.Changes
 	if len(args) == 0 {
 		var b strings.Builder
-		b.WriteString("Recent changes:\n\n")
+		_, _ = b.WriteString("Recent changes:\n\n")
 		for i, c := range changes {
 			state := "collapsed"
 			if c.Expanded {
 				state = "expanded"
 			}
-			fmt.Fprintf(&b, "  %d) %s (%s)\n", i+1, c.Path, state)
+			_, _ = fmt.Fprintf(&b, "  %d) %s (%s)\n", i+1, c.Path, state)
 		}
 		m.addSystemMessage(b.String())
 		return m, nil
@@ -588,9 +588,9 @@ func rootHandleDiff(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 		m.addSystemMessage(fmt.Sprintf("No diff matched: %s", arg))
 	} else if len(matches) > 1 {
 		var b strings.Builder
-		b.WriteString("Multiple diffs matched:\n\n")
+		_, _ = b.WriteString("Multiple diffs matched:\n\n")
 		for _, i := range matches {
-			fmt.Fprintf(&b, "  %d) %s\n", i+1, changes[i].Path)
+			_, _ = fmt.Fprintf(&b, "  %d) %s\n", i+1, changes[i].Path)
 		}
 		m.addSystemMessage(b.String())
 	} else {
@@ -642,9 +642,9 @@ func rootHandleHITL(m *RootModel, _ []string) (*RootModel, tea.Cmd) {
 		return m, nil
 	}
 	var b strings.Builder
-	b.WriteString("Pending approvals:\n")
+	_, _ = b.WriteString("Pending approvals:\n")
 	for _, req := range pending {
-		fmt.Fprintf(&b, " - %s %s (%s)\n", req.ID, req.Permission.Action, req.Justification)
+		_, _ = fmt.Fprintf(&b, " - %s %s (%s)\n", req.ID, req.Permission.Action, req.Justification)
 	}
 	m.addSystemMessage(b.String())
 	return m, nil
@@ -761,16 +761,16 @@ func rootHandleWorkflows(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 		return m, nil
 	}
 	var b strings.Builder
-	b.WriteString("Persisted workflows:\n")
+	_, _ = b.WriteString("Persisted workflows:\n")
 	for _, workflow := range workflows {
-		fmt.Fprintf(&b, " - %s status=%s", workflow.WorkflowID, workflow.Status)
+		_, _ = fmt.Fprintf(&b, " - %s status=%s", workflow.WorkflowID, workflow.Status)
 		if workflow.CursorStepID != "" {
-			fmt.Fprintf(&b, " cursor=%s", workflow.CursorStepID)
+			_, _ = fmt.Fprintf(&b, " cursor=%s", workflow.CursorStepID)
 		}
 		if !workflow.UpdatedAt.IsZero() {
-			fmt.Fprintf(&b, " updated=%s", workflow.UpdatedAt.Format("2006-01-02 15:04:05"))
+			_, _ = fmt.Fprintf(&b, " updated=%s", workflow.UpdatedAt.Format("2006-01-02 15:04:05"))
 		}
-		b.WriteByte('\n')
+		_, _ = b.Write([]byte{'\n'})
 	}
 	m.addSystemMessage(b.String())
 	return m, nil
@@ -791,45 +791,45 @@ func rootHandleWorkflow(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 		return m, nil
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "Workflow %s\n", details.Workflow.WorkflowID)
-	fmt.Fprintf(&b, "Status: %s\n", details.Workflow.Status)
+	_, _ = fmt.Fprintf(&b, "Workflow %s\n", details.Workflow.WorkflowID)
+	_, _ = fmt.Fprintf(&b, "Status: %s\n", details.Workflow.Status)
 	if details.Workflow.CursorStepID != "" {
-		fmt.Fprintf(&b, "Cursor: %s\n", details.Workflow.CursorStepID)
+		_, _ = fmt.Fprintf(&b, "Cursor: %s\n", details.Workflow.CursorStepID)
 	}
-	fmt.Fprintf(&b, "Instruction: %s\n", details.Workflow.Instruction)
+	_, _ = fmt.Fprintf(&b, "Instruction: %s\n", details.Workflow.Instruction)
 	if len(details.Steps) > 0 {
-		b.WriteString("\nSteps:\n")
+		_, _ = b.WriteString("\nSteps:\n")
 		for _, step := range details.Steps {
-			fmt.Fprintf(&b, " - %s status=%s: %s\n", step.StepID, step.Status, step.Description)
+			_, _ = fmt.Fprintf(&b, " - %s status=%s: %s\n", step.StepID, step.Status, step.Description)
 		}
 	}
 	if len(details.Events) > 0 {
-		b.WriteString("\nRecent events:\n")
+		_, _ = b.WriteString("\nRecent events:\n")
 		for _, event := range details.Events {
-			fmt.Fprintf(&b, " - %s step=%s %s\n", event.EventType, event.StepID, event.Message)
+			_, _ = fmt.Fprintf(&b, " - %s step=%s %s\n", event.EventType, event.StepID, event.Message)
 		}
 	}
 	if len(details.Delegations) > 0 {
-		b.WriteString("\nDelegations:\n")
+		_, _ = b.WriteString("\nDelegations:\n")
 		for _, delegation := range details.Delegations {
 			target := delegation.TargetCapabilityID
 			if target == "" {
 				target = delegation.TargetProviderID
 			}
-			fmt.Fprintf(&b, " - %s state=%s target=%s", delegation.DelegationID, delegation.State, target)
+			_, _ = fmt.Fprintf(&b, " - %s state=%s target=%s", delegation.DelegationID, delegation.State, target)
 			if delegation.TargetSessionID != "" {
-				fmt.Fprintf(&b, " session=%s", delegation.TargetSessionID)
+				_, _ = fmt.Fprintf(&b, " session=%s", delegation.TargetSessionID)
 			}
 			if delegation.InsertionAction != "" {
-				fmt.Fprintf(&b, " insertion=%s", delegation.InsertionAction)
+				_, _ = fmt.Fprintf(&b, " insertion=%s", delegation.InsertionAction)
 			}
-			b.WriteByte('\n')
+			_, _ = b.Write([]byte{'\n'})
 		}
 	}
 	if len(details.LinkedResources) > 0 {
-		b.WriteString("\nLinked resources:\n")
+		_, _ = b.WriteString("\nLinked resources:\n")
 		for _, ref := range details.LinkedResources {
-			fmt.Fprintf(&b, " - %s\n", ref)
+			_, _ = fmt.Fprintf(&b, " - %s\n", ref)
 		}
 	}
 	m.addSystemMessage(b.String())

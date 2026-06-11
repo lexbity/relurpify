@@ -194,7 +194,7 @@ func TestNavigatePath(t *testing.T) {
 
 func TestNavigatePathMissingReturnsNil(t *testing.T) {
 	var data any
-	json.Unmarshal([]byte(`{"a":1}`), &data)
+	require.NoError(t, json.Unmarshal([]byte(`{"a":1}`), &data))
 	items := navigatePath(data, "missing.path")
 	require.Nil(t, items)
 }

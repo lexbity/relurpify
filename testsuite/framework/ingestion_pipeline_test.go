@@ -25,7 +25,7 @@ func TestTextIngestion(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open graph engine: %v", err)
 	}
-	defer graph.Close(context.Background())
+	defer func() { _ = graph.Close(context.Background()) }()
 
 	store := &knowledge.ChunkStore{Graph: graph}
 	events := &knowledge.EventBus{}
@@ -100,7 +100,7 @@ func TestMetadataPropagation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open graph engine: %v", err)
 	}
-	defer graph.Close(context.Background())
+	defer func() { _ = graph.Close(context.Background()) }()
 
 	store := &knowledge.ChunkStore{Graph: graph}
 	events := &knowledge.EventBus{}
@@ -233,7 +233,7 @@ func TestChunkSourceRetention(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open graph engine: %v", err)
 	}
-	defer graph.Close(context.Background())
+	defer func() { _ = graph.Close(context.Background()) }()
 
 	store := &knowledge.ChunkStore{Graph: graph}
 	events := &knowledge.EventBus{}
@@ -343,7 +343,7 @@ func TestRepeatIngestionConsistency(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open graph engine: %v", err)
 	}
-	defer graph.Close(context.Background())
+	defer func() { _ = graph.Close(context.Background()) }()
 
 	store := &knowledge.ChunkStore{Graph: graph}
 	events := &knowledge.EventBus{}
@@ -421,7 +421,7 @@ func TestIngestionWithDifferentContent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open graph engine: %v", err)
 	}
-	defer graph.Close(context.Background())
+	defer func() { _ = graph.Close(context.Background()) }()
 
 	store := &knowledge.ChunkStore{Graph: graph}
 	events := &knowledge.EventBus{}
@@ -486,7 +486,7 @@ func TestToolResultIngestion(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open graph engine: %v", err)
 	}
-	defer graph.Close(context.Background())
+	defer func() { _ = graph.Close(context.Background()) }()
 
 	store := &knowledge.ChunkStore{Graph: graph}
 	events := &knowledge.EventBus{}
@@ -550,7 +550,7 @@ func TestObservationIngestion(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open graph engine: %v", err)
 	}
-	defer graph.Close(context.Background())
+	defer func() { _ = graph.Close(context.Background()) }()
 
 	store := &knowledge.ChunkStore{Graph: graph}
 	events := &knowledge.EventBus{}
@@ -600,7 +600,7 @@ func TestChunkVersionIncrement(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open graph engine: %v", err)
 	}
-	defer graph.Close(context.Background())
+	defer func() { _ = graph.Close(context.Background()) }()
 
 	store := &knowledge.ChunkStore{Graph: graph}
 

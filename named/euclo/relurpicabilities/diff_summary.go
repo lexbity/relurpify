@@ -344,10 +344,10 @@ func parseStatSummary(stat string) (additions, deletions int) {
 			fields := strings.Fields(line)
 			for i, f := range fields {
 				if strings.HasPrefix(f, "insertion") && i > 0 {
-					fmt.Sscanf(fields[i-1], "%d", &additions)
+					_, _ = fmt.Sscanf(fields[i-1], "%d", &additions)
 				}
 				if strings.HasPrefix(f, "deletion") && i > 0 {
-					fmt.Sscanf(fields[i-1], "%d", &deletions)
+					_, _ = fmt.Sscanf(fields[i-1], "%d", &deletions)
 				}
 			}
 		}

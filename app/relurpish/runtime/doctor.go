@@ -152,7 +152,7 @@ func BuildDoctorReport(ctx context.Context, cfg Config, secrets config.Secrets) 
 		}
 		env.Inference.State = llm.BackendHealthUnhealthy
 	} else {
-		defer backend.Close()
+		defer func() { _ = backend.Close() }()
 		env = ProbeEnvironment(ctx, cfg, secrets, backend)
 	}
 	report.Inference = env.Inference

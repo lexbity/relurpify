@@ -33,7 +33,7 @@ func TestValidateWorkspaceTreeMinimalValid(t *testing.T) {
 
 func TestValidateWorkspaceTreeMissingWorkspaceYaml(t *testing.T) {
 	workspace := writeMinimalValidWorkspace(t)
-	os.Remove(filepath.Join(workspace, "relurpify_cfg", "workspace.yaml"))
+	_ = os.Remove(filepath.Join(workspace, "relurpify_cfg", "workspace.yaml"))
 	report := ValidateWorkspaceTree(workspace)
 	if !report.HasErrors() {
 		t.Fatal("expected error for missing workspace.yaml")
@@ -43,7 +43,7 @@ func TestValidateWorkspaceTreeMissingWorkspaceYaml(t *testing.T) {
 func TestValidateWorkspaceTreeBadPolicy(t *testing.T) {
 	workspace := writeMinimalValidWorkspace(t)
 	policyPath := filepath.Join(workspace, "relurpify_cfg", "security", "sandbox.policy.yaml")
-	fs.WriteFileSecure(policyPath, []byte("schema: relurpify/policy/sandbox/v1\n\nprotected_paths: [invalid\n"))
+	_ = fs.WriteFileSecure(policyPath, []byte("schema: relurpify/policy/sandbox/v1\n\nprotected_paths: [invalid\n"))
 	report := ValidateWorkspaceTree(workspace)
 	if !report.HasErrors() {
 		t.Fatal("expected error for malformed policy")
@@ -62,7 +62,7 @@ func TestValidateWorkspaceTreeBadPolicy(t *testing.T) {
 
 func TestValidateWorkspaceTreeMissingToolsDir(t *testing.T) {
 	workspace := writeMinimalValidWorkspace(t)
-	os.RemoveAll(filepath.Join(workspace, "relurpify_cfg", "tools"))
+	_ = os.RemoveAll(filepath.Join(workspace, "relurpify_cfg", "tools"))
 	report := ValidateWorkspaceTree(workspace)
 	if report.HasErrors() {
 		t.Fatalf("expected no errors for missing tools dir (optional), got: %s", report.Error())

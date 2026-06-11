@@ -21,7 +21,7 @@ func TestConfigCheckCleanRepo(t *testing.T) {
 func TestConfigCheckBadPolicy(t *testing.T) {
 	workspace := writeValidWorkspace(t)
 	policyPath := filepath.Join(workspace, "relurpify_cfg", "security", "sandbox.policy.yaml")
-	os.WriteFile(policyPath, []byte("schema: relurpify/policy/sandbox/v1\n\nprotected_paths: [invalid\n"), fs.PublicFileMode) // public: test fixture
+	_ = os.WriteFile(policyPath, []byte("schema: relurpify/policy/sandbox/v1\n\nprotected_paths: [invalid\n"), fs.PublicFileMode) // public: test fixture
 
 	c := configCheck{}
 	diags := c.Run(workspace)
@@ -49,7 +49,7 @@ func TestConfigCheckExcludesToolIssues(t *testing.T) {
 	workspace := writeValidWorkspace(t)
 	// Add a broken tool manifest
 	toolsDir := filepath.Join(workspace, "relurpify_cfg", "tools")
-	os.WriteFile(filepath.Join(toolsDir, "broken.tool.yaml"), []byte("schema: relurpify/tool/v1\ninvalid: true\n"), fs.PublicFileMode) // public: test fixture
+	_ = os.WriteFile(filepath.Join(toolsDir, "broken.tool.yaml"), []byte("schema: relurpify/tool/v1\ninvalid: true\n"), fs.PublicFileMode) // public: test fixture
 
 	c := configCheck{}
 	diags := c.Run(workspace)

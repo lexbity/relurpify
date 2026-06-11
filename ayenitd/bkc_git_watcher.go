@@ -140,7 +140,7 @@ func (s *GitWatcherService) runGit(ctx context.Context, args ...string) (string,
 	go func() {
 		<-ctx.Done()
 		if cmd.Process != nil {
-			cmd.Process.Kill()
+			_ = cmd.Process.Kill()
 		}
 	}()
 	out, err := cmd.Output()

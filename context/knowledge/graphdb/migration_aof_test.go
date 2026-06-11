@@ -29,7 +29,7 @@ func migratedNodeCount(t *testing.T, badgerDir string) int {
 	t.Helper()
 	bb, err := newBadgerBackend(BadgerOptions{Dir: badgerDir})
 	require.NoError(t, err)
-	defer bb.close()
+	defer func() { _ = bb.close() }()
 
 	var count int
 	require.NoError(t, bb.db.View(func(txn *badger.Txn) error {
@@ -48,7 +48,7 @@ func migratedEdgeCount(t *testing.T, badgerDir string) int {
 	t.Helper()
 	bb, err := newBadgerBackend(BadgerOptions{Dir: badgerDir})
 	require.NoError(t, err)
-	defer bb.close()
+	defer func() { _ = bb.close() }()
 
 	var count int
 	require.NoError(t, bb.db.View(func(txn *badger.Txn) error {
@@ -67,7 +67,7 @@ func isMigrationCompleted(t *testing.T, badgerDir string) bool {
 	t.Helper()
 	bb, err := newBadgerBackend(BadgerOptions{Dir: badgerDir})
 	require.NoError(t, err)
-	defer bb.close()
+	defer func() { _ = bb.close() }()
 
 	var completed bool
 	require.NoError(t, bb.db.View(func(txn *badger.Txn) error {
@@ -110,7 +110,7 @@ func TestMigrateAOFToBadger_NodesOnly(t *testing.T) {
 
 	bb, err := newBadgerBackend(BadgerOptions{Dir: badgerDir})
 	require.NoError(t, err)
-	defer bb.close()
+	defer func() { _ = bb.close() }()
 
 	store := newAdjacencyStore()
 	require.NoError(t, bb.load(context.Background(), store))
@@ -141,7 +141,7 @@ func TestMigrateAOFToBadger_WithEdges(t *testing.T) {
 
 	bb, err := newBadgerBackend(BadgerOptions{Dir: badgerDir})
 	require.NoError(t, err)
-	defer bb.close()
+	defer func() { _ = bb.close() }()
 
 	store := newAdjacencyStore()
 	require.NoError(t, bb.load(context.Background(), store))
@@ -168,7 +168,7 @@ func TestMigrateAOFToBadger_WithMutationResults(t *testing.T) {
 
 	bb, err := newBadgerBackend(BadgerOptions{Dir: badgerDir})
 	require.NoError(t, err)
-	defer bb.close()
+	defer func() { _ = bb.close() }()
 
 	store := newAdjacencyStore()
 	require.NoError(t, bb.load(context.Background(), store))
@@ -192,7 +192,7 @@ func TestMigrateAOFToBadger_WithLabelsAndSource(t *testing.T) {
 
 	bb, err := newBadgerBackend(BadgerOptions{Dir: badgerDir})
 	require.NoError(t, err)
-	defer bb.close()
+	defer func() { _ = bb.close() }()
 
 	store := newAdjacencyStore()
 	require.NoError(t, bb.load(context.Background(), store))
@@ -230,7 +230,7 @@ func TestMigrateAOFToBadger_ResumeAfterInterruption(t *testing.T) {
 			Status: migrationStatusInProgress,
 		})
 	}))
-	bb.close()
+	_ = bb.close() // ignore: cleanup after test setup
 
 	require.NoError(t, MigrateAOFToBadger(context.Background(), aofDir, badgerDir))
 	require.Equal(t, 2, migratedNodeCount(t, badgerDir))
@@ -271,7 +271,7 @@ func TestMigrateAOFToBadger_LoadAndQuery(t *testing.T) {
 
 	bb, err := newBadgerBackend(BadgerOptions{Dir: badgerDir})
 	require.NoError(t, err)
-	defer bb.close()
+	defer func() { _ = bb.close() }()
 
 	store := newAdjacencyStore()
 	require.NoError(t, bb.load(context.Background(), store))
@@ -311,7 +311,7 @@ func TestMigrateAOFToBadger_MigrationStateWritten(t *testing.T) {
 
 	bb, err := newBadgerBackend(BadgerOptions{Dir: badgerDir})
 	require.NoError(t, err)
-	defer bb.close()
+	defer func() { _ = bb.close() }()
 
 	var st migrationState
 	require.NoError(t, bb.db.View(func(txn *badger.Txn) error {

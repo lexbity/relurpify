@@ -69,7 +69,7 @@ func TestToolsCheckUnderdeclaredManifest(t *testing.T) {
 func TestToolsCheckSchemaError(t *testing.T) {
 	workspace := writeValidWorkspace(t)
 	toolsDir := filepath.Join(workspace, "relurpify_cfg", "tools")
-	os.WriteFile(filepath.Join(toolsDir, "broken.tool.yaml"), []byte("schema: relurpify/tool/v1\nname: broken\n"), fs.PublicFileMode) // public: test fixture
+	_ = os.WriteFile(filepath.Join(toolsDir, "broken.tool.yaml"), []byte("schema: relurpify/tool/v1\nname: broken\n"), fs.PublicFileMode) // public: test fixture
 
 	c := toolsCheck{}
 	diags := c.Run(workspace)
@@ -92,7 +92,7 @@ func TestToolsCheckExcludesConfigIssues(t *testing.T) {
 	workspace := writeValidWorkspace(t)
 	// Corrupt a config file (not a tool)
 	policyPath := filepath.Join(workspace, "relurpify_cfg", "security", "sandbox.policy.yaml")
-	os.WriteFile(policyPath, []byte("schema: relurpify/policy/sandbox/v1\n\nprotected_paths: [invalid\n"), fs.PublicFileMode) // public: test fixture
+	_ = os.WriteFile(policyPath, []byte("schema: relurpify/policy/sandbox/v1\n\nprotected_paths: [invalid\n"), fs.PublicFileMode) // public: test fixture
 
 	c := toolsCheck{}
 	diags := c.Run(workspace)

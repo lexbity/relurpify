@@ -197,7 +197,7 @@ func TestASTQueryHandlerQueriesIndex(t *testing.T) {
 			FileID:    "file2",
 		},
 	}
-	store.SaveNodes(nodes)
+	_ = store.SaveNodes(nodes)
 
 	handler := NewASTQueryHandler(indexManager)
 
@@ -272,7 +272,7 @@ func TestASTQueryHandlerLimitRespected(t *testing.T) {
 			FileID:    "file1",
 		}
 	}
-	store.SaveNodes(nodes)
+	_ = store.SaveNodes(nodes)
 
 	handler := NewASTQueryHandler(indexManager)
 
@@ -317,7 +317,7 @@ func TestASTQueryHandlerWritesReferences(t *testing.T) {
 			FileID:    "file1",
 		},
 	}
-	store.SaveNodes(nodes)
+	_ = store.SaveNodes(nodes)
 
 	handler := NewASTQueryHandler(indexManager)
 
@@ -381,7 +381,7 @@ func TestSymbolTraceHandlerCallees(t *testing.T) {
 		EndLine:   30,
 		FileID:    "file1",
 	}
-	store.SaveNodes([]*ast.Node{rootNode, calleeNode})
+	_ = store.SaveNodes([]*ast.Node{rootNode, calleeNode})
 
 	handler := NewSymbolTraceHandler(indexManager)
 
@@ -489,7 +489,7 @@ func TestCallGraphHandlerBuildsGraph(t *testing.T) {
 			FileID:    "file1",
 		},
 	}
-	store.SaveNodes(nodes)
+	_ = store.SaveNodes(nodes)
 
 	handler := NewCallGraphHandler(IndexDeps{Searcher: indexManager, Grapher: indexManager, Workspace: indexManager.WorkspacePath()})
 
@@ -563,7 +563,7 @@ func TestCallGraphHandlerWritesReferences(t *testing.T) {
 			FileID:    "file1",
 		},
 	}
-	store.SaveNodes(nodes)
+	_ = store.SaveNodes(nodes)
 
 	handler := NewCallGraphHandler(IndexDeps{Searcher: indexManager, Grapher: indexManager, Workspace: indexManager.WorkspacePath()})
 
@@ -744,7 +744,7 @@ func TestBlameTraceHandlerSymbolResolvedToLines(t *testing.T) {
 			FileID:    "file1",
 		},
 	}
-	store.SaveNodes(nodes)
+	_ = store.SaveNodes(nodes)
 
 	handler := NewBlameTraceHandler(
 		CommandDeps{

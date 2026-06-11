@@ -47,7 +47,7 @@ func TestLabelIndex_RebuildFromAOF(t *testing.T) {
 
 	reopened, err := Open(context.Background(), opts)
 	require.NoError(t, err)
-	defer reopened.Close(context.Background())
+	defer func() { _ = reopened.Close(context.Background()) }()
 
 	coverage := reopened.ListNodesByLabel("chunk", "coverage_hash:abc")
 	require.Len(t, coverage, 1)

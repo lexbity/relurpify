@@ -137,7 +137,7 @@ func runWithRuntime(cmd *cobra.Command, fn func(context.Context, *runtimesvc.Run
 	if err != nil {
 		return err
 	}
-	defer rt.Close(context.TODO())
+	defer func() { _ = rt.Close(context.TODO()) }()
 	return fn(ctx, rt)
 }
 
@@ -178,7 +178,7 @@ func runDoctor(cmd *cobra.Command, fix, yes bool) error {
 				if err := runtimesvc.InitializeWorkspaceFromTemplates(cfg, overwrite); err != nil {
 					return err
 				}
-				fmt.Fprintln(cmd.OutOrStdout(), "Workspace starter configuration written to relurpify_cfg/")
+				_, _ = fmt.Fprintln(cmd.OutOrStdout(), "Workspace starter configuration written to relurpify_cfg/")
 				report = runtimesvc.BuildDoctorReport(ctx, cfg, secrets)
 				renderDoctorReport(cmd.OutOrStdout(), report)
 			}
@@ -191,65 +191,65 @@ func runDoctor(cmd *cobra.Command, fix, yes bool) error {
 }
 
 func renderDoctorReport(w io.Writer, report runtimesvc.DoctorReport) {
-	fmt.Fprintf(w, "Workspace: %s\n", report.Workspace)
-	fmt.Fprintf(w, "Config root: %s\n", report.ConfigRoot)
-	fmt.Fprintf(w, "Workspace present: %s\n", yesNo(report.WorkspacePresent))
-	fmt.Fprintf(w, "Config file: %s", yesNo(report.ConfigExists))
+	_, _ = fmt.Fprintf(w, "Workspace: %s\n", report.Workspace)
+	_, _ = fmt.Fprintf(w, "Config root: %s\n", report.ConfigRoot)
+	_, _ = fmt.Fprintf(w, "Workspace present: %s\n", yesNo(report.WorkspacePresent))
+	_, _ = fmt.Fprintf(w, "Config file: %s", yesNo(report.ConfigExists))
 	if report.ConfigError != "" {
-		fmt.Fprintf(w, " (%s)", report.ConfigError)
+		_, _ = fmt.Fprintf(w, " (%s)", report.ConfigError)
 	}
-	fmt.Fprintln(w)
-	fmt.Fprintf(w, "Manifest file: %s", yesNo(report.ManifestExists))
+	_, _ = fmt.Fprintln(w)
+	_, _ = fmt.Fprintf(w, "Manifest file: %s", yesNo(report.ManifestExists))
 	if report.ManifestError != "" {
-		fmt.Fprintf(w, " (%s)", report.ManifestError)
+		_, _ = fmt.Fprintf(w, " (%s)", report.ManifestError)
 	}
-	fmt.Fprintln(w)
+	_, _ = fmt.Fprintln(w)
 	if len(report.ManifestWarnings) > 0 {
-		fmt.Fprintln(w, "Manifest warnings:")
+		_, _ = fmt.Fprintln(w, "Manifest warnings:")
 		for _, warning := range report.ManifestWarnings {
-			fmt.Fprintf(w, "  - %s\n", warning)
+			_, _ = fmt.Fprintf(w, "  - %s\n", warning)
 		}
 	}
 	if len(report.DeprecationNotices) > 0 {
-		fmt.Fprintln(w, "Deprecation notices:")
+		_, _ = fmt.Fprintln(w, "Deprecation notices:")
 		for _, notice := range report.DeprecationNotices {
-			fmt.Fprintf(w, "  - %s\n", notice)
+			_, _ = fmt.Fprintf(w, "  - %s\n", notice)
 		}
 	}
 	if report.ManifestFingerprint != "" {
-		fmt.Fprintf(w, "Manifest fingerprint: %s\n", report.ManifestFingerprint)
+		_, _ = fmt.Fprintf(w, "Manifest fingerprint: %s\n", report.ManifestFingerprint)
 	}
 	if report.ManifestPolicySummary != "" {
-		fmt.Fprintf(w, "Manifest policy: %s\n", report.ManifestPolicySummary)
+		_, _ = fmt.Fprintf(w, "Manifest policy: %s\n", report.ManifestPolicySummary)
 	}
 	if len(report.ProtectedPaths) > 0 {
-		fmt.Fprintf(w, "Sandbox roots: %s\n", strings.Join(report.ProtectedPaths, ", "))
+		_, _ = fmt.Fprintf(w, "Sandbox roots: %s\n", strings.Join(report.ProtectedPaths, ", "))
 	}
 	if report.Inference.SelectedProfile != "" {
-		fmt.Fprintf(w, "  profile: %s\n", report.Inference.SelectedProfile)
+		_, _ = fmt.Fprintf(w, "  profile: %s\n", report.Inference.SelectedProfile)
 	}
 	if report.Inference.ProfileReason != "" {
-		fmt.Fprintf(w, "  profile_reason: %s\n", report.Inference.ProfileReason)
+		_, _ = fmt.Fprintf(w, "  profile_reason: %s\n", report.Inference.ProfileReason)
 	}
 	if report.Inference.ProfileSource != "" {
-		fmt.Fprintf(w, "  profile_source: %s\n", report.Inference.ProfileSource)
+		_, _ = fmt.Fprintf(w, "  profile_source: %s\n", report.Inference.ProfileSource)
 	}
-	fmt.Fprintln(w, "Inference backend:")
-	fmt.Fprintf(w, "  provider: %s\n", cmp.Or(report.Inference.Provider, "unknown"))
-	fmt.Fprintf(w, "  endpoint: %s\n", cmp.Or(report.Inference.Endpoint, "-"))
-	fmt.Fprintf(w, "  state: %s\n", cmp.Or(string(report.Inference.State), "unknown"))
+	_, _ = fmt.Fprintln(w, "Inference backend:")
+	_, _ = fmt.Fprintf(w, "  provider: %s\n", cmp.Or(report.Inference.Provider, "unknown"))
+	_, _ = fmt.Fprintf(w, "  endpoint: %s\n", cmp.Or(report.Inference.Endpoint, "-"))
+	_, _ = fmt.Fprintf(w, "  state: %s\n", cmp.Or(string(report.Inference.State), "unknown"))
 	if len(report.Inference.Models) > 0 {
-		fmt.Fprintf(w, "  models: %s\n", strings.Join(report.Inference.Models, ", "))
+		_, _ = fmt.Fprintf(w, "  models: %s\n", strings.Join(report.Inference.Models, ", "))
 	} else {
-		fmt.Fprintln(w, "  models: -")
+		_, _ = fmt.Fprintln(w, "  models: -")
 	}
 	if report.Inference.SelectedModel != "" {
-		fmt.Fprintf(w, "  selected: %s\n", report.Inference.SelectedModel)
+		_, _ = fmt.Fprintf(w, "  selected: %s\n", report.Inference.SelectedModel)
 	}
 	if report.Inference.Error != "" {
-		fmt.Fprintf(w, "  error: %s\n", report.Inference.Error)
+		_, _ = fmt.Fprintf(w, "  error: %s\n", report.Inference.Error)
 	}
-	fmt.Fprintln(w, "Dependencies:")
+	_, _ = fmt.Fprintln(w, "Dependencies:")
 	for _, dep := range report.Dependencies {
 		status := "ok"
 		if !dep.Available {
@@ -263,15 +263,15 @@ func renderDoctorReport(w io.Writer, report runtimesvc.DoctorReport) {
 			severity = "blocking"
 		}
 		if dep.Details != "" {
-			fmt.Fprintf(w, "  - %s: %s [%s] (%s)\n", dep.Name, status, severity, dep.Details)
+			_, _ = fmt.Fprintf(w, "  - %s: %s [%s] (%s)\n", dep.Name, status, severity, dep.Details)
 		} else {
-			fmt.Fprintf(w, "  - %s: %s [%s]\n", dep.Name, status, severity)
+			_, _ = fmt.Fprintf(w, "  - %s: %s [%s]\n", dep.Name, status, severity)
 		}
 	}
 	if report.HasBlockingIssues() {
-		fmt.Fprintln(w, "Result: blocking issues detected")
+		_, _ = fmt.Fprintln(w, "Result: blocking issues detected")
 	} else {
-		fmt.Fprintln(w, "Result: ready")
+		_, _ = fmt.Fprintln(w, "Result: ready")
 	}
 }
 
@@ -289,7 +289,7 @@ func confirmDoctorAction(in io.Reader, out io.Writer, prompt string) bool {
 	if prompt == "" {
 		return false
 	}
-	fmt.Fprint(out, prompt)
+	_, _ = fmt.Fprint(out, prompt)
 	reader := bufio.NewReader(in)
 	line, _ := reader.ReadString('\n')
 	line = strings.TrimSpace(strings.ToLower(line))

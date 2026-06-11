@@ -199,7 +199,7 @@ func (t *WriteFileTool) Execute(ctx context.Context, args map[string]any) (*port
 		return nil, fmt.Errorf("open %s for write: %w", path, openErr)
 	}
 	if _, writeErr := f.Write(content); writeErr != nil {
-		f.Close()
+		_ = f.Close()
 		return nil, writeErr
 	}
 	if closeErr := f.Close(); closeErr != nil {
@@ -402,7 +402,7 @@ func (t *SearchInFilesTool) Execute(ctx context.Context, args map[string]any) (*
 		if err != nil {
 			return nil // skip unreadable files
 		}
-		defer file.Close()
+		defer func() { _ = file.Close() }()
 		scanner := bufio.NewScanner(file)
 		scanner.Buffer(make([]byte, scanChunkSize), scanChunkSize)
 		scanner.Split(scanLinesOrChunks(scanChunkSize))
@@ -712,16 +712,16 @@ func copyFile(src, dst string) error {
 	if err != nil {
 		return err
 	}
-	defer in.Close()
+	defer func() { _ = in.Close() }()
 	out, err := os.Create(filepath.Clean(dst))
 	if err != nil {
 		return err
 	}
-	defer out.Close()
 	if _, err := out.ReadFrom(in); err != nil {
+		_ = out.Close() // ignore: read error is primary
 		return err
 	}
-	return nil
+	return out.Close()
 }
 
 func enforceFileMatrix(ctx context.Context, checker FilePermissionChecker, agentID, basePath, action, absPath string, matrix agentspec.AgentFileMatrix) error {

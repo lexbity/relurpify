@@ -25,7 +25,7 @@ func setupTestDB(t *testing.T) *graphdb.Engine {
 
 func TestLifecycleRepository_CreateWorkflow(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close(context.Background())
+	defer func() { _ = db.Close(context.Background()) }()
 	repo := NewLifecycleRepository(db)
 
 	workflow := contextports.WorkflowRecord{
@@ -50,7 +50,7 @@ func TestLifecycleRepository_CreateWorkflow(t *testing.T) {
 
 func TestLifecycleRepository_GetWorkflow(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close(context.Background())
+	defer func() { _ = db.Close(context.Background()) }()
 	repo := NewLifecycleRepository(db)
 
 	workflow := contextports.WorkflowRecord{
@@ -71,7 +71,7 @@ func TestLifecycleRepository_GetWorkflow(t *testing.T) {
 
 func TestLifecycleRepository_ListWorkflows(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close(context.Background())
+	defer func() { _ = db.Close(context.Background()) }()
 	repo := NewLifecycleRepository(db)
 
 	_ = repo.CreateWorkflow(contextports.WorkflowRecord{WorkflowID: "wf-1"})
@@ -88,7 +88,7 @@ func TestLifecycleRepository_ListWorkflows(t *testing.T) {
 
 func TestLifecycleRepository_CreateRun(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close(context.Background())
+	defer func() { _ = db.Close(context.Background()) }()
 	repo := NewLifecycleRepository(db)
 
 	// First create a workflow
@@ -117,7 +117,7 @@ func TestLifecycleRepository_CreateRun(t *testing.T) {
 
 func TestLifecycleRepository_ListRuns(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close(context.Background())
+	defer func() { _ = db.Close(context.Background()) }()
 	repo := NewLifecycleRepository(db)
 
 	_ = repo.CreateWorkflow(contextports.WorkflowRecord{WorkflowID: "wf-1"})
@@ -135,7 +135,7 @@ func TestLifecycleRepository_ListRuns(t *testing.T) {
 
 func TestLifecycleRepository_UpdateRunStatus(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close(context.Background())
+	defer func() { _ = db.Close(context.Background()) }()
 	repo := NewLifecycleRepository(db)
 
 	_ = repo.CreateWorkflow(contextports.WorkflowRecord{WorkflowID: "wf-1"})
@@ -157,7 +157,7 @@ func TestLifecycleRepository_UpdateRunStatus(t *testing.T) {
 
 func TestLifecycleRepository_UpsertDelegation(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close(context.Background())
+	defer func() { _ = db.Close(context.Background()) }()
 	repo := NewLifecycleRepository(db)
 
 	_ = repo.CreateWorkflow(contextports.WorkflowRecord{WorkflowID: "wf-1"})
@@ -187,7 +187,7 @@ func TestLifecycleRepository_UpsertDelegation(t *testing.T) {
 
 func TestLifecycleRepository_ListDelegations(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close(context.Background())
+	defer func() { _ = db.Close(context.Background()) }()
 	repo := NewLifecycleRepository(db)
 
 	_ = repo.CreateWorkflow(contextports.WorkflowRecord{WorkflowID: "wf-1"})
@@ -207,7 +207,7 @@ func TestLifecycleRepository_ListDelegations(t *testing.T) {
 
 func TestLifecycleRepository_AppendDelegationTransition(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close(context.Background())
+	defer func() { _ = db.Close(context.Background()) }()
 	repo := NewLifecycleRepository(db)
 
 	_ = repo.CreateWorkflow(contextports.WorkflowRecord{WorkflowID: "wf-1"})
@@ -234,7 +234,7 @@ func TestLifecycleRepository_AppendDelegationTransition(t *testing.T) {
 
 func TestLifecycleRepository_AppendEvent(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close(context.Background())
+	defer func() { _ = db.Close(context.Background()) }()
 	repo := NewLifecycleRepository(db)
 
 	_ = repo.CreateWorkflow(contextports.WorkflowRecord{WorkflowID: "wf-1"})
@@ -265,7 +265,7 @@ func TestLifecycleRepository_AppendEvent(t *testing.T) {
 
 func TestLifecycleRepository_UpsertArtifact(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close(context.Background())
+	defer func() { _ = db.Close(context.Background()) }()
 	repo := NewLifecycleRepository(db)
 
 	_ = repo.CreateWorkflow(contextports.WorkflowRecord{WorkflowID: "wf-1"})
@@ -295,7 +295,7 @@ func TestLifecycleRepository_UpsertArtifact(t *testing.T) {
 
 func TestLifecycleRepository_ListArtifacts(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close(context.Background())
+	defer func() { _ = db.Close(context.Background()) }()
 	repo := NewLifecycleRepository(db)
 
 	_ = repo.CreateWorkflow(contextports.WorkflowRecord{WorkflowID: "wf-1"})
@@ -315,7 +315,7 @@ func TestLifecycleRepository_ListArtifacts(t *testing.T) {
 
 func TestLifecycleRepository_UpsertLineageBinding(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close(context.Background())
+	defer func() { _ = db.Close(context.Background()) }()
 	repo := NewLifecycleRepository(db)
 
 	_ = repo.CreateWorkflow(contextports.WorkflowRecord{WorkflowID: "wf-1"})
@@ -345,7 +345,7 @@ func TestLifecycleRepository_UpsertLineageBinding(t *testing.T) {
 
 func TestLifecycleRepository_FindLineageBindingByLineageID(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close(context.Background())
+	defer func() { _ = db.Close(context.Background()) }()
 	repo := NewLifecycleRepository(db)
 
 	_ = repo.CreateWorkflow(contextports.WorkflowRecord{WorkflowID: "wf-1"})
@@ -375,7 +375,7 @@ func TestLifecycleRepository_FindLineageBindingByLineageID(t *testing.T) {
 
 func TestLifecycleRepository_FindLineageBindingByAttemptID(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close(context.Background())
+	defer func() { _ = db.Close(context.Background()) }()
 	repo := NewLifecycleRepository(db)
 
 	_ = repo.CreateWorkflow(contextports.WorkflowRecord{WorkflowID: "wf-1"})
@@ -428,7 +428,7 @@ func TestLifecycleRepository_Close(t *testing.T) {
 
 func TestLifecycleRepository_IDGeneration(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close(context.Background())
+	defer func() { _ = db.Close(context.Background()) }()
 	repo := NewLifecycleRepository(db)
 
 	// Test auto-generated IDs
@@ -449,7 +449,7 @@ func TestLifecycleRepository_IDGeneration(t *testing.T) {
 
 func TestLifecycleRepository_RoundTrip(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close(context.Background())
+	defer func() { _ = db.Close(context.Background()) }()
 	repo := NewLifecycleRepository(db)
 
 	// Create workflow
@@ -525,7 +525,7 @@ func TestGraphdbSequenceIDGeneration(t *testing.T) {
 
 func TestLifecycleRepository_EventLimit(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close(context.Background())
+	defer func() { _ = db.Close(context.Background()) }()
 	repo := NewLifecycleRepository(db)
 
 	_ = repo.CreateWorkflow(contextports.WorkflowRecord{WorkflowID: "wf-1"})

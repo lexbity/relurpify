@@ -23,3 +23,8 @@ unused
 
 # Slice 5 — Sandbox routing (G304=0 via filepath.Clean, G204=0 via exec.Cmd
 # struct literals with exec.LookPath. Zero #nosec in tree.)
+
+# Slice 6 — errcheck/G104 on IO paths (448 errcheck + 179 G104 → 0).
+# Persistence/fs/network paths handle errors properly; non-IO paths use
+# _ = f() // ignore: <reason> pattern.
+errcheck

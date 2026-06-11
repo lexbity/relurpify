@@ -65,7 +65,7 @@ func checkWorkspaceDirectory(workspace string) (bool, string) {
 	if err != nil {
 		return false, fmt.Sprintf("workspace not readable: %s", err)
 	}
-	f.Close()
+	_ = f.Close()
 	return true, "workspace directory exists and is readable"
 }
 
@@ -76,7 +76,7 @@ func checkInferenceBackend(ctx context.Context, cfg WorkspaceConfig, secrets llm
 		if err != nil {
 			return false, fmt.Sprintf("build inference backend: %s", err)
 		}
-		defer backend.Close()
+		defer func() { _ = backend.Close() }()
 	}
 	if err := backend.Warm(ctx); err != nil {
 		return false, fmt.Sprintf("inference backend unhealthy: %s", err)

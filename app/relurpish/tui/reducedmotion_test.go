@@ -33,7 +33,7 @@ func TestReduceMotionNilSafe(t *testing.T) {
 func TestReduceMotionCollapseReduced(t *testing.T) {
 	restore := preserveEnv("CI", "SSH_TTY", "SSH_CONNECTION", "TERM")
 	defer restore()
-	os.Setenv("CI", "true")
+	_ = os.Setenv("CI", "true")
 
 	r := NewReduceMotion(true)
 	if !r.Reduced() {
@@ -58,10 +58,10 @@ func TestReduceMotionCollapseReduced(t *testing.T) {
 func TestReduceMotionCollapseNotReduced(t *testing.T) {
 	restore := preserveEnv("CI", "SSH_TTY", "SSH_CONNECTION", "TERM")
 	defer restore()
-	os.Unsetenv("CI")
-	os.Unsetenv("SSH_TTY")
-	os.Unsetenv("SSH_CONNECTION")
-	os.Setenv("TERM", "xterm-256color")
+	_ = os.Unsetenv("CI")
+	_ = os.Unsetenv("SSH_TTY")
+	_ = os.Unsetenv("SSH_CONNECTION")
+	_ = os.Setenv("TERM", "xterm-256color")
 
 	r := NewReduceMotion(false)
 	if r.Reduced() {
@@ -86,9 +86,9 @@ func preserveEnv(keys ...string) func() {
 	return func() {
 		for k, v := range saved {
 			if v == "" {
-				os.Unsetenv(k)
+				_ = os.Unsetenv(k)
 			} else {
-				os.Setenv(k, v)
+				_ = os.Setenv(k, v)
 			}
 		}
 	}

@@ -117,12 +117,12 @@ func TestCached_EvictsLRUWhenFull(t *testing.T) {
 func TestCached_UsageUpdatesLRUOrder(t *testing.T) {
 	p := NewProxy(time.Minute, 3)
 	for _, k := range []string{"a", "b", "c"} {
-		p.cached(k, func() (any, error) { return k, nil })
+		_, _ = p.cached(k, func() (any, error) { return k, nil })
 	}
 
-	p.cached("a", func() (any, error) { return "a", nil })
+	_, _ = p.cached("a", func() (any, error) { return "a", nil })
 
-	p.cached("d", func() (any, error) { return "d", nil })
+	_, _ = p.cached("d", func() (any, error) { return "d", nil })
 
 	assert.Len(t, p.cache, 3)
 
@@ -133,7 +133,7 @@ func TestCached_UsageUpdatesLRUOrder(t *testing.T) {
 
 func TestCached_ExpiredEntry(t *testing.T) {
 	p := NewProxy(10*time.Millisecond, 10)
-	p.cached("k", func() (any, error) { return "v1", nil })
+	_, _ = p.cached("k", func() (any, error) { return "v1", nil })
 
 	time.Sleep(20 * time.Millisecond)
 

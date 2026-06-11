@@ -104,7 +104,7 @@ func TestFunc` + string(rune('A'+i)) + `() string {
 	if err != nil {
 		b.Fatalf("failed to open graph engine: %v", err)
 	}
-	defer graph.Close(context.Background())
+	defer func() { _ = graph.Close(context.Background()) }()
 
 	store := &knowledge.ChunkStore{Graph: graph}
 	events := &knowledge.EventBus{}

@@ -55,7 +55,7 @@ func Open(ctx context.Context, opts Options) (*Engine, error) {
 		return nil, err
 	}
 	if err := bb.load(ctx, engine.store); err != nil {
-		bb.close()
+		_ = bb.close() // ignore: load error is primary
 		return nil, err
 	}
 	engine.bk = bb

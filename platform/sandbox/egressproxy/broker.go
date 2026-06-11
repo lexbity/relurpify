@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"strings"
 	"sync"
@@ -92,8 +93,10 @@ func (b *Broker) serve(ctx context.Context) {
 }
 
 func (b *Broker) handleConn(client net.Conn) {
-	defer client.Close()
-	client.SetDeadline(time.Now().Add(30 * time.Second))
+	defer func() { _ = client.Close() }()
+	if err := client.SetDeadline(time.Now().Add(30 * time.Second)); err != nil {
+		log.Printf("egressproxy: set deadline: %v", err)
+	}
 
 	br := bufio.NewReader(client)
 	req, err := readCONNECT(br)
@@ -127,26 +130,26 @@ func (b *Broker) handleConn(client net.Conn) {
 		sendHTTP(client, "502 Bad Gateway", fmt.Sprintf("cannot connect to %s: %v", target, err))
 		return
 	}
-	defer backend.Close()
+	defer func() { _ = backend.Close() }()
 
 	// Send 200 Connection Established.
 	_, _ = client.Write([]byte("HTTP/1.1 200 Connection Established\r\n\r\n"))
 
 	// Clear deadline for the proxy phase.
-	client.SetDeadline(time.Time{})
+	_ = client.SetDeadline(time.Time{})
 
 	// Bidirectional proxy.
 	var wg sync.WaitGroup
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		io.Copy(backend, client)
-		backend.Close()
+		_, _ = io.Copy(backend, client)
+		_ = backend.Close() // ignore: best-effort close
 	}()
 	go func() {
 		defer wg.Done()
-		io.Copy(client, backend)
-		client.Close()
+		_, _ = io.Copy(client, backend)
+		_ = client.Close() // ignore: best-effort close
 	}()
 	wg.Wait()
 }
@@ -208,7 +211,9 @@ func readCONNECT(br *bufio.Reader) (*connectRequest, error) {
 
 func sendHTTP(conn net.Conn, status, body string) {
 	msg := fmt.Sprintf("HTTP/1.1 %s\r\nContent-Type: text/plain\r\nContent-Length: %d\r\nConnection: close\r\n\r\n%s", status, len(body), body)
-	conn.Write([]byte(msg))
+	if _, err := conn.Write([]byte(msg)); err != nil {
+		log.Printf("egressproxy: send HTTP %s response: %v", status, err)
+	}
 }
 
 func resolveAndPin(host string) (string, error) {

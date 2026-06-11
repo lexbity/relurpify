@@ -25,7 +25,7 @@ func TestStreamingSuccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open graph engine: %v", err)
 	}
-	defer graph.Close(context.Background())
+	defer func() { _ = graph.Close(context.Background()) }()
 
 	store := &knowledge.ChunkStore{Graph: graph}
 
@@ -120,7 +120,7 @@ func TestStreamedChunkReferenceIntegrity(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open graph engine: %v", err)
 	}
-	defer graph.Close(context.Background())
+	defer func() { _ = graph.Close(context.Background()) }()
 
 	store := &knowledge.ChunkStore{Graph: graph}
 
@@ -400,7 +400,7 @@ func TestStreamingWithTelemetry(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open graph engine: %v", err)
 	}
-	defer graph.Close(context.Background())
+	defer func() { _ = graph.Close(context.Background()) }()
 
 	store := &knowledge.ChunkStore{Graph: graph}
 

@@ -321,7 +321,7 @@ func TestLaunchChromeDriverTimeoutBranch(t *testing.T) {
 	portListener, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 	port := portListener.Addr().(*net.TCPAddr).Port
-	portListener.Close()
+	_ = portListener.Close()
 
 	_, err = launchChromeDriver(context.Background(), Config{
 		DriverPath:     writeSleepScript(t),
@@ -396,7 +396,7 @@ func TestLaunchChromeDriverAndWaitForDriver(t *testing.T) {
 	go func() {
 		_ = httpServer.Serve(portListener)
 	}()
-	defer httpServer.Close()
+	defer func() { _ = httpServer.Close() }()
 
 	script := writeSleepScript(t)
 	launched, err := launchChromeDriver(context.Background(), Config{
@@ -426,7 +426,7 @@ func TestWaitForDriverAndFreePort(t *testing.T) {
 	go func() {
 		_ = server.Serve(portListener)
 	}()
-	defer server.Close()
+	defer func() { _ = server.Close() }()
 
 	err = waitForDriver(context.Background(), "http://127.0.0.1:"+strconv.Itoa(actualPort), time.Second)
 	require.NoError(t, err)

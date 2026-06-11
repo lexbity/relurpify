@@ -60,7 +60,7 @@ func requireNotHasKey(t *testing.T, db *badger.DB, key []byte) {
 func TestIndex_NodeKind(t *testing.T) {
 	bb, err := newBadgerBackend(BadgerOptions{InMemory: true})
 	require.NoError(t, err)
-	defer bb.close()
+	defer func() { _ = bb.close() }()
 
 	require.NoError(t, bb.commit(context.TODO(), mutationBatch{
 		opName: "upsert_node",
@@ -74,7 +74,7 @@ func TestIndex_NodeKind(t *testing.T) {
 func TestIndex_NodeLabel(t *testing.T) {
 	bb, err := newBadgerBackend(BadgerOptions{InMemory: true})
 	require.NoError(t, err)
-	defer bb.close()
+	defer func() { _ = bb.close() }()
 
 	require.NoError(t, bb.commit(context.TODO(), mutationBatch{
 		opName: "upsert_node",
@@ -88,7 +88,7 @@ func TestIndex_NodeLabel(t *testing.T) {
 func TestIndex_NodeStableID(t *testing.T) {
 	bb, err := newBadgerBackend(BadgerOptions{InMemory: true})
 	require.NoError(t, err)
-	defer bb.close()
+	defer func() { _ = bb.close() }()
 
 	require.NoError(t, bb.commit(context.TODO(), mutationBatch{
 		opName: "upsert_node",
@@ -101,7 +101,7 @@ func TestIndex_NodeStableID(t *testing.T) {
 func TestIndex_NodePathHashMedia(t *testing.T) {
 	bb, err := newBadgerBackend(BadgerOptions{InMemory: true})
 	require.NoError(t, err)
-	defer bb.close()
+	defer func() { _ = bb.close() }()
 
 	require.NoError(t, bb.commit(context.TODO(), mutationBatch{
 		opName: "upsert_node",
@@ -120,7 +120,7 @@ func TestIndex_NodePathHashMedia(t *testing.T) {
 func TestIndex_NodeDeleteRemovesIndexes(t *testing.T) {
 	bb, err := newBadgerBackend(BadgerOptions{InMemory: true})
 	require.NoError(t, err)
-	defer bb.close()
+	defer func() { _ = bb.close() }()
 
 	require.NoError(t, bb.commit(context.TODO(), mutationBatch{
 		opName: "upsert_node",
@@ -144,7 +144,7 @@ func TestIndex_NodeDeleteRemovesIndexes(t *testing.T) {
 func TestIndex_NodeUpdateRemovesStaleLabels(t *testing.T) {
 	bb, err := newBadgerBackend(BadgerOptions{InMemory: true})
 	require.NoError(t, err)
-	defer bb.close()
+	defer func() { _ = bb.close() }()
 
 	// Create with label tag:a
 	require.NoError(t, bb.commit(context.TODO(), mutationBatch{
@@ -169,7 +169,7 @@ func TestIndex_NodeUpdateRemovesStaleLabels(t *testing.T) {
 func TestIndex_NodeUpdateRemovesStaleSource(t *testing.T) {
 	bb, err := newBadgerBackend(BadgerOptions{InMemory: true})
 	require.NoError(t, err)
-	defer bb.close()
+	defer func() { _ = bb.close() }()
 
 	require.NoError(t, bb.commit(context.TODO(), mutationBatch{
 		opName: "upsert_node",
@@ -190,7 +190,7 @@ func TestIndex_NodeUpdateRemovesStaleSource(t *testing.T) {
 func TestIndex_NodeUpdateRemovesStalePath(t *testing.T) {
 	bb, err := newBadgerBackend(BadgerOptions{InMemory: true})
 	require.NoError(t, err)
-	defer bb.close()
+	defer func() { _ = bb.close() }()
 
 	require.NoError(t, bb.commit(context.TODO(), mutationBatch{
 		opName: "upsert_node",
@@ -219,7 +219,7 @@ func TestIndex_NodeUpdateRemovesStalePath(t *testing.T) {
 func TestIndex_EdgeStableID(t *testing.T) {
 	bb, err := newBadgerBackend(BadgerOptions{InMemory: true})
 	require.NoError(t, err)
-	defer bb.close()
+	defer func() { _ = bb.close() }()
 
 	require.NoError(t, bb.commit(context.TODO(), mutationBatch{
 		opName: "link_edge",
@@ -237,7 +237,7 @@ func TestIndex_EdgeStableID(t *testing.T) {
 func TestIndex_EdgeHardUnlinkRemovesIndex(t *testing.T) {
 	bb, err := newBadgerBackend(BadgerOptions{InMemory: true})
 	require.NoError(t, err)
-	defer bb.close()
+	defer func() { _ = bb.close() }()
 
 	require.NoError(t, bb.commit(context.TODO(), mutationBatch{
 		opName: "link_edge",
@@ -262,7 +262,7 @@ func TestIndex_EdgeHardUnlinkRemovesIndex(t *testing.T) {
 func TestIndex_EdgeNoStableIDNoIndex(t *testing.T) {
 	bb, err := newBadgerBackend(BadgerOptions{InMemory: true})
 	require.NoError(t, err)
-	defer bb.close()
+	defer func() { _ = bb.close() }()
 
 	require.NoError(t, bb.commit(context.TODO(), mutationBatch{
 		opName: "link_edge",
@@ -281,7 +281,7 @@ func TestIndex_EdgeNoStableIDNoIndex(t *testing.T) {
 func TestIndex_AnnotateNodeUpdatesPathHash(t *testing.T) {
 	bb, err := newBadgerBackend(BadgerOptions{InMemory: true})
 	require.NoError(t, err)
-	defer bb.close()
+	defer func() { _ = bb.close() }()
 
 	require.NoError(t, bb.commit(context.TODO(), mutationBatch{
 		opName: "upsert_node",
@@ -307,7 +307,7 @@ func TestIndex_AnnotateNodeUpdatesPathHash(t *testing.T) {
 func TestIndex_PropsWithoutIndexedFields(t *testing.T) {
 	bb, err := newBadgerBackend(BadgerOptions{InMemory: true})
 	require.NoError(t, err)
-	defer bb.close()
+	defer func() { _ = bb.close() }()
 
 	// Props with valid JSON but no expected indexable fields should not
 	// create path/hash/media indexes.
@@ -335,7 +335,7 @@ func TestIndex_PropsWithoutIndexedFields(t *testing.T) {
 func TestIndex_RebuildAfterDeletion(t *testing.T) {
 	bb, err := newBadgerBackend(BadgerOptions{InMemory: true})
 	require.NoError(t, err)
-	defer bb.close()
+	defer func() { _ = bb.close() }()
 
 	// Insert nodes and edges
 	require.NoError(t, bb.commit(context.TODO(), mutationBatch{
@@ -387,7 +387,7 @@ func TestIndex_RebuildAfterDeletion(t *testing.T) {
 func TestIndex_BatchUpsertNodes(t *testing.T) {
 	bb, err := newBadgerBackend(BadgerOptions{InMemory: true})
 	require.NoError(t, err)
-	defer bb.close()
+	defer func() { _ = bb.close() }()
 
 	require.NoError(t, bb.commit(context.TODO(), mutationBatch{
 		opName: "upsert_nodes",
@@ -406,7 +406,7 @@ func TestIndex_BatchUpsertNodes(t *testing.T) {
 func TestIndex_BatchDeleteNodes(t *testing.T) {
 	bb, err := newBadgerBackend(BadgerOptions{InMemory: true})
 	require.NoError(t, err)
-	defer bb.close()
+	defer func() { _ = bb.close() }()
 
 	require.NoError(t, bb.commit(context.TODO(), mutationBatch{
 		opName: "upsert_nodes",
@@ -430,7 +430,7 @@ func TestIndex_BatchDeleteNodes(t *testing.T) {
 func TestIndex_BatchLinkEdges(t *testing.T) {
 	bb, err := newBadgerBackend(BadgerOptions{InMemory: true})
 	require.NoError(t, err)
-	defer bb.close()
+	defer func() { _ = bb.close() }()
 
 	require.NoError(t, bb.commit(context.TODO(), mutationBatch{
 		opName: "link_edges",

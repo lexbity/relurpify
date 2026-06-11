@@ -186,12 +186,12 @@ func (s *DiskStore) Put(_ context.Context, kind string, meta map[string]string, 
 
 	written, err := io.Copy(f, r)
 	if err != nil {
-		f.Close()
-		os.Remove(dataPath)
+		_ = f.Close()
+		_ = os.Remove(dataPath)
 		return "", fmt.Errorf("write artifact: %w", err)
 	}
 	if err := f.Close(); err != nil {
-		os.Remove(dataPath)
+		_ = os.Remove(dataPath)
 		return "", fmt.Errorf("close artifact: %w", err)
 	}
 
@@ -205,12 +205,12 @@ func (s *DiskStore) Put(_ context.Context, kind string, meta map[string]string, 
 	}
 	metaBytes, err := json.Marshal(am)
 	if err != nil {
-		os.Remove(dataPath)
+		_ = os.Remove(dataPath)
 		return "", fmt.Errorf("marshal metadata: %w", err)
 	}
 	if err := fs.WriteFileSecure(s.metaPath(ref), metaBytes); err != nil {
-		os.Remove(dataPath)
-		os.Remove(s.metaPath(ref))
+		_ = os.Remove(dataPath)
+		_ = os.Remove(s.metaPath(ref))
 		return "", fmt.Errorf("write metadata: %w", err)
 	}
 
@@ -242,13 +242,13 @@ func (s *DiskStore) Open(_ context.Context, ref Ref) (io.ReadCloser, ArtifactMet
 
 	metaBytes, err := os.ReadFile(s.metaPath(ref))
 	if err != nil {
-		f.Close()
+		_ = f.Close()
 		return nil, ArtifactMeta{}, fmt.Errorf("read metadata: %w", err)
 	}
 
 	var am ArtifactMeta
 	if err := json.Unmarshal(metaBytes, &am); err != nil {
-		f.Close()
+		_ = f.Close()
 		return nil, ArtifactMeta{}, fmt.Errorf("unmarshal metadata: %w", err)
 	}
 

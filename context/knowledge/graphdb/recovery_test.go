@@ -194,7 +194,7 @@ func TestCrashReopen_CommittedDataSurvives(t *testing.T) {
 	// Reopen.
 	engine2, err := Open(context.Background(), opts)
 	require.NoError(t, err)
-	defer engine2.Close(context.Background())
+	defer func() { _ = engine2.Close(context.Background()) }()
 
 	_, ok := engine2.GetNode("survivor")
 	require.True(t, ok, "committed node must survive crash/reopen")
@@ -232,7 +232,7 @@ func TestCrashReopen_UncommittedDataDoesNotAppear(t *testing.T) {
 
 	engine2, err := Open(context.Background(), opts)
 	require.NoError(t, err)
-	defer engine2.Close(context.Background())
+	defer func() { _ = engine2.Close(context.Background()) }()
 
 	_, ok := engine2.GetNode("committed")
 	require.True(t, ok, "committed node must survive")
@@ -250,7 +250,7 @@ func TestCrashReopen_DeletedDataStaysDeleted(t *testing.T) {
 
 	engine2, err := Open(context.Background(), opts)
 	require.NoError(t, err)
-	defer engine2.Close(context.Background())
+	defer func() { _ = engine2.Close(context.Background()) }()
 
 	_, ok := engine2.GetNode("gone")
 	require.False(t, ok, "deleted node must not reappear after crash/reopen")

@@ -20,7 +20,7 @@ func TestRecipesCheckNoDirectory(t *testing.T) {
 
 func TestRecipesCheckEmptyDirectory(t *testing.T) {
 	workspace := t.TempDir()
-	os.MkdirAll(filepath.Join(workspace, "relurpify_cfg", "euclo"), fs.PublicDirMode) // public: test dir
+	_ = os.MkdirAll(filepath.Join(workspace, "relurpify_cfg", "euclo"), fs.PublicDirMode) // public: test dir
 	c := recipesCheck{}
 	diags := c.Run(workspace)
 	if len(diags) != 0 {
@@ -31,7 +31,7 @@ func TestRecipesCheckEmptyDirectory(t *testing.T) {
 func TestRecipesCheckValidRecipe(t *testing.T) {
 	workspace := t.TempDir()
 	recipesDir := filepath.Join(workspace, "relurpify_cfg", "euclo")
-	os.MkdirAll(recipesDir, fs.PublicDirMode) // public: test dir
+	_ = os.MkdirAll(recipesDir, fs.PublicDirMode) // public: test dir
 	testhelper.MustWrite(t, filepath.Join(recipesDir, "hello.erpe"), `thoughtrecipe hello
 
 trigger as capability:
@@ -48,7 +48,7 @@ trigger as capability:
 func TestRecipesCheckParseError(t *testing.T) {
 	workspace := t.TempDir()
 	recipesDir := filepath.Join(workspace, "relurpify_cfg", "euclo")
-	os.MkdirAll(recipesDir, fs.PublicDirMode) // public: test dir
+	_ = os.MkdirAll(recipesDir, fs.PublicDirMode) // public: test dir
 	testhelper.MustWrite(t, filepath.Join(recipesDir, "broken.erpe"), `thoughtrecipe broken
 
 trigger as capability:
@@ -76,7 +76,7 @@ trigger as capability:
 func TestRecipesCheckIgnoresNonRecipeFiles(t *testing.T) {
 	workspace := t.TempDir()
 	recipesDir := filepath.Join(workspace, "relurpify_cfg", "euclo")
-	os.MkdirAll(recipesDir, fs.PublicDirMode) // public: test dir
+	_ = os.MkdirAll(recipesDir, fs.PublicDirMode) // public: test dir
 	testhelper.MustWrite(t, filepath.Join(recipesDir, "notes.txt"), "this is not a recipe")
 
 	c := recipesCheck{}

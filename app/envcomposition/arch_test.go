@@ -75,7 +75,7 @@ func TestNoEnvcompositionImportsInSession(t *testing.T) {
 // longer reference the legacy in-agentenv capability bundle builder.
 func TestBuildBuiltinCapabilityBundleIsDeprecated(t *testing.T) {
 	root := filepath.Join("..", "..")
-	filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+	_ = filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -108,7 +108,7 @@ func TestCompositionRootOwnsBuildFunctions(t *testing.T) {
 		"BuildModelRuntime":      "app/envcomposition/model.go",
 	}
 	root := filepath.Join("..", "..")
-	filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+	_ = filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}

@@ -139,7 +139,7 @@ func TestTransportCallReadLoopAndClose(t *testing.T) {
 
 	transport, err := newWebsocketTransport(context.Background(), wsURL)
 	require.NoError(t, err)
-	defer transport.Close()
+	defer func() { _ = transport.Close() }()
 
 	result, err := transport.Call(context.Background(), "Runtime.evaluate", map[string]any{"expression": "1+1"})
 	require.NoError(t, err)
@@ -181,7 +181,7 @@ func TestLaunchChromiumTimeoutBranch(t *testing.T) {
 	portListener, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 	port := portListener.Addr().(*net.TCPAddr).Port
-	portListener.Close()
+	_ = portListener.Close()
 
 	_, err = launchChromium(context.Background(), Config{
 		ExecutablePath: writeSleepScript(t),
@@ -255,7 +255,7 @@ func TestLaunchChromiumAndClose(t *testing.T) {
 	go func() {
 		_ = httpServer.Serve(portListener)
 	}()
-	defer httpServer.Close()
+	defer func() { _ = httpServer.Close() }()
 
 	script := writeSleepScript(t)
 	launched, err := launchChromium(context.Background(), Config{
@@ -305,7 +305,7 @@ func newCDPWebSocketServer(t *testing.T) (string, func()) {
 		conn, err := upgrader.Upgrade(w, r, nil)
 		require.NoError(t, err)
 		go func() {
-			defer conn.Close()
+			defer func() { _ = conn.Close() }()
 			for {
 				var req requestEnvelope
 				if err := conn.ReadJSON(&req); err != nil {

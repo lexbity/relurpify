@@ -54,8 +54,8 @@ func TestFakeRunner_RecordsCalls(t *testing.T) {
 
 	fr := FakeRunner(FakeResponse{Stdout: "ok"})
 
-	fr.Run(context.Background(), sandbox.CommandRequest{Args: []string{"echo", "a"}})
-	fr.Run(context.Background(), sandbox.CommandRequest{Args: []string{"echo", "b"}})
+	_, _ = fr.Run(context.Background(), sandbox.CommandRequest{Args: []string{"echo", "a"}})
+	_, _ = fr.Run(context.Background(), sandbox.CommandRequest{Args: []string{"echo", "b"}})
 
 	if fr.CallCount() != 2 {
 		t.Errorf("CallCount = %d, want 2", fr.CallCount())
@@ -135,7 +135,7 @@ func TestFakeRunner_Reset(t *testing.T) {
 	t.Parallel()
 
 	fr := FakeRunner(FakeResponse{Stdout: "a"})
-	fr.Run(context.Background(), sandbox.CommandRequest{Args: []string{"echo"}})
+	_, _ = fr.Run(context.Background(), sandbox.CommandRequest{Args: []string{"echo"}})
 	if fr.CallCount() != 1 {
 		t.Fatal("expected 1 call before reset")
 	}

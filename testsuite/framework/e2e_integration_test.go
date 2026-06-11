@@ -26,7 +26,7 @@ func TestEndToEndAgentExecution(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open graph engine: %v", err)
 	}
-	defer graph.Close(context.Background())
+	defer func() { _ = graph.Close(context.Background()) }()
 	knowledgeStore := &knowledge.ChunkStore{Graph: graph}
 
 	// Step 1: Create a manifest with policy (manifest seam)

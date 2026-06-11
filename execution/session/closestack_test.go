@@ -137,7 +137,7 @@ func TestCloseStack_Len(t *testing.T) {
 	if cs.Len() != 1 {
 		t.Errorf("after add Len = %d, want 1", cs.Len())
 	}
-	cs.Close(context.Background())
+	_ = cs.Close(context.Background())
 	if cs.Len() != 0 {
 		t.Errorf("after close Len = %d, want 0", cs.Len())
 	}
@@ -194,7 +194,7 @@ func TestCloseStack_SkipNilItems(t *testing.T) {
 		return nil
 	})
 
-	cs.Close(context.Background())
+	_ = cs.Close(context.Background())
 
 	want := []string{"fourth", "second"}
 	if len(closed) != len(want) {

@@ -68,7 +68,7 @@ func (e *Embedder) Embed(ctx context.Context, texts []string) ([][]float32, erro
 	if resp, err := e.client.Do(req); err != nil {
 		return nil, err
 	} else {
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 			return nil, fmt.Errorf("ollama embed failed: %s", resp.Status)
 		}

@@ -14,7 +14,7 @@ func TestOpen_EmptyDir(t *testing.T) {
 	opts := DefaultOptions(filepath.Join(dir, "graphdb"))
 	engine, err := Open(context.Background(), opts)
 	require.NoError(t, err)
-	defer engine.Close(context.Background())
+	defer func() { _ = engine.Close(context.Background()) }()
 
 	// should be usable
 	require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: "test", Kind: "function"}))
@@ -38,7 +38,7 @@ func TestOpen_WithExistingSnapshot(t *testing.T) {
 	// reopen
 	eng2, err := Open(context.Background(), opts)
 	require.NoError(t, err)
-	defer eng2.Close(context.Background())
+	defer func() { _ = eng2.Close(context.Background()) }()
 
 	node, ok := eng2.GetNode("persisted")
 	require.True(t, ok)
@@ -61,7 +61,7 @@ func TestSnapshotAndReopen_Badger(t *testing.T) {
 
 	eng2, err := Open(context.Background(), opts)
 	require.NoError(t, err)
-	defer eng2.Close(context.Background())
+	defer func() { _ = eng2.Close(context.Background()) }()
 	_, ok := eng2.GetNode("snap")
 	require.True(t, ok)
 }
@@ -77,7 +77,7 @@ func TestCloseAndReopen_Badger(t *testing.T) {
 
 	eng2, err := Open(context.Background(), opts)
 	require.NoError(t, err)
-	defer eng2.Close(context.Background())
+	defer func() { _ = eng2.Close(context.Background()) }()
 	_, ok := eng2.GetNode("persist")
 	require.True(t, ok)
 }
@@ -104,7 +104,7 @@ func TestBackgroundAutoSnapshot(t *testing.T) {
 	opts.MaintenanceInterval = 10 * time.Millisecond
 	engine, err := Open(context.Background(), opts)
 	require.NoError(t, err)
-	defer engine.Close(context.Background())
+	defer func() { _ = engine.Close(context.Background()) }()
 
 	// write enough ops to exceed threshold
 	for i := 0; i < 10; i++ {

@@ -155,7 +155,7 @@ func detectInferenceBackend(ctx context.Context, cfg Config, secrets config.Secr
 		ownedBackend = true
 	}
 	if ownedBackend {
-		defer backend.Close()
+		defer func() { _ = backend.Close() }()
 	}
 	health, err := backend.Health(ctx)
 	if health != nil {
@@ -246,7 +246,7 @@ func runCommand(ctx context.Context, policy sandbox.CommandPolicy, name string, 
 	go func() {
 		<-cctx.Done()
 		if cmd.Process != nil {
-			cmd.Process.Kill()
+			_ = cmd.Process.Kill()
 		}
 	}()
 	var stdout, stderr bytes.Buffer

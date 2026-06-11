@@ -140,7 +140,7 @@ func (b *Backend) ListModels(ctx context.Context) ([]ModelInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode >= 300 {
 		return nil, fmt.Errorf("ollama tags error: %s", resp.Status)
 	}
@@ -214,7 +214,7 @@ func (b *Backend) Pull(ctx context.Context, model string) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode >= 300 {
 		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
 		detail := strings.TrimSpace(string(msg))
@@ -286,7 +286,7 @@ func (b *Backend) discoverModelContextSize(ctx context.Context) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode >= 300 {
 		return 0, fmt.Errorf("ollama show error: %s", resp.Status)
 	}

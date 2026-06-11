@@ -55,7 +55,7 @@ func newWebsocketTransport(ctx context.Context, wsURL string) (*websocketTranspo
 		return nil, err
 	}
 	if resp != nil {
-		resp.Body.Close()
+		_ = resp.Body.Close()
 	}
 	t := &websocketTransport{
 		conn:    conn,

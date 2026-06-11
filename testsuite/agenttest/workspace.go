@@ -146,13 +146,13 @@ func CopyWorkspace(src, dst string, exclude []string) error {
 		if err != nil {
 			return err
 		}
-		defer in.Close()
+		defer func() { _ = in.Close() }()
 		out, err := os.OpenFile(filepath.Clean(target), os.O_CREATE|os.O_TRUNC|os.O_WRONLY, info.Mode().Perm())
 		if err != nil {
 			return err
 		}
 		if _, err := io.Copy(out, in); err != nil {
-			out.Close()
+			_ = out.Close()
 			return err
 		}
 		return out.Close()
@@ -349,7 +349,7 @@ func hashFile(path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	h := sha256.New()
 	if _, err := io.Copy(h, f); err != nil {
 		return "", err
