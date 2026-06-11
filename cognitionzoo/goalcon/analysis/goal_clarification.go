@@ -241,10 +241,6 @@ func (session *ClarificationSession) PersistToMemory(
 		return nil
 	}
 
-	if ctx == nil {
-		ctx = context.Background()
-	}
-
 	session.mu.Lock()
 	defer session.mu.Unlock()
 

@@ -19,7 +19,7 @@ func (f fakeRunner) Run(context.Context, sandbox.CommandRequest) (*ports.Command
 func TestValidateSecurityRuntimeInputRejectsBackendManifestMismatch(t *testing.T) {
 	err := ValidateSecurityRuntimeInput(SecurityRuntimeInput{
 		SandboxBackend: "docker",
-		ManifestSpec: &config.ManifestSpec{Runtime: "gvisor"},
+		ManifestSpec:   &config.ManifestSpec{Runtime: "gvisor"},
 	})
 	if err == nil {
 		t.Fatal("expected backend mismatch error")

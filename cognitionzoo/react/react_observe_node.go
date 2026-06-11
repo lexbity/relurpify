@@ -420,7 +420,7 @@ func stallThresholdForTask(task *execution.Task) int {
 	if task == nil {
 		return 3
 	}
-	if strings.EqualFold(string(task.Type), "analysis") {
+	if strings.EqualFold(task.Type, "analysis") {
 		return 6 // analysis tasks legitimately re-read the same files before converging
 	}
 	return 3

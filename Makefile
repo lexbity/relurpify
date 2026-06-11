@@ -55,15 +55,25 @@ no-dead:
 
 lint-all: lint-layering lint-invariants lint-framework-boundaries lint-no-host-exec lint-config-boundary
 
-# Standard Go linters (golangci-lint, config: .golangci.yaml). Not yet gating:
-# the tree currently has a large backlog (~7.9k issues), so CI runs this with
-# continue-on-error until the high-signal buckets are driven down.
+# Standard Go linters (golangci-lint, config: .golangci.yaml). Use locally;
+# CI uses two-track gate (ratchet + graduated) for enforce.
 lint-go:
 	golangci-lint run ./...
 
 # Apply all auto-fixable findings (gofmt, goimports, unconvert, many revive, etc.).
 lint-go-fix:
 	golangci-lint run --fix ./...
+
+# Two-track CI gate: ratchet blocks new issues; graduated blocks any occurrence.
+# Mirrors the CI gate in .github/workflows/ci.yml.
+lint-ratchet:
+	golangci-lint run --new-from-rev=origin/main ./...
+
+lint-graduated:
+	@graduated=$$(grep -vE '^\s*(#|$$)' .golangci-graduated.txt | paste -sd,); \
+	if [ -n "$$graduated" ]; then \
+		golangci-lint run --enable-only="$$graduated" ./...; \
+	fi
 
 lint-config:
 	go run ./app/relurplint --check all

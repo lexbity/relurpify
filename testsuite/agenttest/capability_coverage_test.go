@@ -336,5 +336,3 @@ func (m *mockTool) Permissions() ports.ToolPermissions   { return ports.ToolPerm
 func (m *mockTool) Tags() []string                       { return nil }
 
 var _ ports.Tool = (*mockTool)(nil)
-
-

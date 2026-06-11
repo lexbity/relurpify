@@ -93,7 +93,7 @@ func TestThoughtRecipeStepNodeExecuteCapability(t *testing.T) {
 	if got, _ := execution.ResultField(result.Data, "capability_id"); got != "euclo:cap.ast_query" {
 		t.Fatalf("expected capability_id in result, got %v", got)
 	}
-	outputValue, ok := execution.ResultField(result.Data, "output")
+	outputValue, _ := execution.ResultField(result.Data, "output")
 	output, ok := outputValue.(map[string]any)
 	if !ok {
 		t.Fatalf("expected output map, got %T", outputValue)

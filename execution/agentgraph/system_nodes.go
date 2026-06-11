@@ -261,7 +261,7 @@ func contextReferenceFromEnvelope(result relurpctx.MemoryRecordEnvelope, expecte
 		ID:     key,
 		Detail: strings.TrimSpace(result.Kind),
 		Metadata: map[string]string{
-			"memory_class": string(nonEmptyMemoryClass(relurpctx.MemoryClass(result.MemoryClass), expectedClass)),
+			"memory_class": string(nonEmptyMemoryClass(result.MemoryClass, expectedClass)),
 			"source":       strings.TrimSpace(result.Source),
 		},
 	}

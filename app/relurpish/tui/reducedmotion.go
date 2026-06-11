@@ -43,7 +43,6 @@ func (r *ReduceMotion) Collapse(fn func() AnimationFrame) string {
 			last = fr
 			break
 		}
-		last = fr
 	}
 	return last.Text
 }

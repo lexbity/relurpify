@@ -100,5 +100,3 @@ func (a *compilerTriggerAdapter) Compile(ctx context.Context, req contextports.C
 		},
 	}, nil
 }
-
-

@@ -25,10 +25,10 @@ func EffectiveInsertionDecision(spec *agentspec.AgentRuntimeSpec, envelope *capr
 	}
 	override := decision.Action
 	for _, policy := range spec.InsertionPolicies {
-		if !SelectorMatchesDescriptor(agentspec.CapabilitySelector(policy.Selector), envelope.Descriptor) {
+		if !SelectorMatchesDescriptor(policy.Selector, envelope.Descriptor) {
 			continue
 		}
-		action := agentspec.InsertionAction(policy.Action)
+		action := policy.Action
 		if capresult.InsertionRestrictiveness(action) >= capresult.InsertionRestrictiveness(override) {
 			override = action
 			decision.Reason = "manifest insertion policy override"

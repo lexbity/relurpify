@@ -212,5 +212,3 @@ func TestFormatConsistencyReport_Interpretations(t *testing.T) {
 		}
 	}
 }
-
-

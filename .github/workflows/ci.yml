@@ -11,18 +11,31 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.24"
+          go-version: "1.25.x"
       - name: Architecture invariant gates (GP-9)
         run: make lint-arch
       - name: Lint (layering, invariants, boundaries, host-exec)
         run: make lint-all
         continue-on-error: true
-      - name: Lint Go (golangci-lint)
+      - name: Compile guard (defeat silent-blanking)
+        run: |
+          go build ./...
+          go vet ./...
+      - name: Lint Go — ratchet (Track R, new issues only, blocking)
         uses: golangci/golangci-lint-action@v6
         with:
           version: v2.12.2
           args: --timeout 5m
-        continue-on-error: true
+          only-new-issues: true
+      - name: Lint Go — graduated (Track Z, whole tree, blocking)
+        run: |
+          graduated=$(grep -vE '^\s*(#|$)' .golangci-graduated.txt | paste -sd,)
+          if [ -n "$graduated" ]; then
+            out=$(golangci-lint run --enable-only="$graduated" ./... 2>&1) || true
+            echo "$out"
+            echo "$out" | grep -qE '\(typecheck\)' && { echo "::error::typecheck blanked the run"; exit 1; }
+            echo "$out" | grep -qE '\([a-z]+\)$' && { echo "::error::graduated linter regressed"; exit 1; }
+          fi
       - name: Lint config boundary
         run: make lint-config-boundary
         continue-on-error: true

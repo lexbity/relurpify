@@ -104,7 +104,6 @@ func (n *reactActNode) Execute(ctx context.Context, env *contextdata.Envelope) (
 						// Convert hard tool errors (e.g. schema validation, permission denial)
 						// into soft ToolResult failures so the LLM can observe and recover.
 						res = &ports.ToolResult{Success: false, Error: err.Error()}
-						err = nil
 					}
 					if res != nil {
 						envelope := n.capabilityEnvelope(ctx, env, nil, call, res)

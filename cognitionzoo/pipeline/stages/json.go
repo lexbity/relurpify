@@ -10,7 +10,7 @@ func extractJSON(raw string) string {
 	}
 	startObj := strings.Index(raw, "{")
 	startArr := strings.Index(raw, "[")
-	start := -1
+	var start int
 	switch {
 	case startObj >= 0 && startArr >= 0:
 		if startObj < startArr {

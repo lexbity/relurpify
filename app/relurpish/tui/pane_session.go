@@ -966,7 +966,7 @@ func (p *SessionPane) viewServices() string {
 		b.WriteString(p.th.Dim().Render("No services registered.") + "\n")
 	} else {
 		for i, svc := range p.services {
-			statusBadge := ""
+			var statusBadge string
 			switch svc.Status {
 			case ServiceStatusRunning:
 				statusBadge = p.th.Success().Render("[running]")

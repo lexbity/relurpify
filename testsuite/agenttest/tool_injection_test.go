@@ -26,20 +26,20 @@ func TestInjectionInterceptorMatchesOverride(t *testing.T) {
 	// Create override with specific args matching
 	override := ToolResponseOverride{
 		Tool:      "test_tool",
-		MatchArgs: map[string]interface{}{"arg1": "value1"},
+		MatchArgs: map[string]any{"arg1": "value1"},
 		Error:     "injected error",
 	}
 
 	interceptor := NewInjectionInterceptor(baseTool, []ToolResponseOverride{override})
 
 	// Test that args matching works
-	matches := interceptor.matchesOverride(override, map[string]interface{}{"arg1": "value1"}, 1)
+	matches := interceptor.matchesOverride(override, map[string]any{"arg1": "value1"}, 1)
 	if !matches {
 		t.Error("Expected override to match when args match")
 	}
 
 	// Test that non-matching args don't match
-	matches = interceptor.matchesOverride(override, map[string]interface{}{"arg1": "different"}, 1)
+	matches = interceptor.matchesOverride(override, map[string]any{"arg1": "different"}, 1)
 	if matches {
 		t.Error("Expected override not to match when args differ")
 	}
@@ -58,13 +58,13 @@ func TestInjectionInterceptorCallCount(t *testing.T) {
 	interceptor := NewInjectionInterceptor(baseTool, []ToolResponseOverride{override})
 
 	// First call should not match (call count = 1)
-	matches := interceptor.matchesOverride(override, map[string]interface{}{}, 1)
+	matches := interceptor.matchesOverride(override, map[string]any{}, 1)
 	if matches {
 		t.Error("Expected override not to match on first call when CallCount=2")
 	}
 
 	// Second call should match (call count = 2)
-	matches = interceptor.matchesOverride(override, map[string]interface{}{}, 2)
+	matches = interceptor.matchesOverride(override, map[string]any{}, 2)
 	if !matches {
 		t.Error("Expected override to match on second call when CallCount=2")
 	}
@@ -203,7 +203,7 @@ func TestInjectionInterceptorCallHistory(t *testing.T) {
 
 	// Execute multiple times
 	ctx := context.Background()
-	args := map[string]interface{}{}
+	args := map[string]any{}
 
 	for i := 0; i < 3; i++ {
 		interceptor.Execute(ctx, args)

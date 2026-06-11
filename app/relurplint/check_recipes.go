@@ -62,7 +62,7 @@ func (c recipesCheck) Run(workspace string) []Diagnostic {
 func validateRecipe(workspace, path, src string) []Diagnostic {
 	rel := relPath(workspace, path)
 
-	doc, err := thoughtrecipe.ParseSource(path, string(src))
+	doc, err := thoughtrecipe.ParseSource(path, src)
 	if err != nil {
 		return []Diagnostic{{
 			Check:    "recipes",

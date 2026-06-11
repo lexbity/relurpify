@@ -887,7 +887,7 @@ func (p *SandboxPane) renderNodeLine(node *sandboxNode, depth int) string {
 			prefix = "▸"
 		}
 	}
-	label := node.Label
+	var label string
 	if node.Selectable {
 		label = fmt.Sprintf("%s [%s] %s", prefix, stateLabel(node.State), node.Label)
 	} else {

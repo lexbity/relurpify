@@ -484,21 +484,16 @@ func (p *Parser) parsePipelineDecl() (*PipelineDecl, error) {
 
 func (p *Parser) parseRunBlockItems() ([]ExecutionItem, Token, error) {
 	var items []ExecutionItem
-	var last Token
 	for !p.atEOF() && p.peek().Kind != TokenDedent {
 		item, err := p.parseRunExecutionItem()
 		if err != nil {
 			return nil, Token{}, err
 		}
 		items = append(items, item)
-		last = endToken(item)
 	}
 	endTok, err := p.expectKind(TokenDedent, "end block")
 	if err != nil {
 		return nil, Token{}, err
-	}
-	if last.Kind == TokenIllegal {
-		last = endTok
 	}
 	return items, endTok, nil
 }
@@ -531,21 +526,16 @@ func (p *Parser) parsePipelineStage() (PipelineStage, error) {
 
 func (p *Parser) parseExecutionBlockItems() ([]ExecutionItem, Token, error) {
 	var items []ExecutionItem
-	var last Token
 	for !p.atEOF() && p.peek().Kind != TokenDedent {
 		item, err := p.parseExecutionItem()
 		if err != nil {
 			return nil, Token{}, err
 		}
 		items = append(items, item)
-		last = endToken(item)
 	}
 	endTok, err := p.expectKind(TokenDedent, "end block")
 	if err != nil {
 		return nil, Token{}, err
-	}
-	if last.Kind == TokenIllegal {
-		last = endTok
 	}
 	return items, endTok, nil
 }

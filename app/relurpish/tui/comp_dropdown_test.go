@@ -43,7 +43,7 @@ func TestDropdownOpenCloseKeyboard(t *testing.T) {
 	}
 
 	// Esc closes.
-	cmd, handled = d.Update(tea.KeyMsg{Type: tea.KeyEscape})
+	_, handled = d.Update(tea.KeyMsg{Type: tea.KeyEscape})
 	if !handled {
 		t.Fatal("esc should be handled")
 	}

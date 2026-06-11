@@ -60,7 +60,7 @@ func computeJitter(baseDuration time.Duration, jitterFraction float64) time.Dura
 	if baseDuration <= 0 || jitterFraction <= 0 {
 		return 0
 	}
-	jitterMs := int64(baseDuration.Milliseconds()) * int64(jitterFraction*100) / 100
+	jitterMs := baseDuration.Milliseconds() * int64(jitterFraction*100) / 100
 	if jitterMs <= 0 {
 		return 0
 	}

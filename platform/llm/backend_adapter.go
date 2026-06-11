@@ -28,8 +28,7 @@ func (a managedBackendAdapter) Embedder() Embedder {
 }
 
 func (a managedBackendAdapter) Capabilities() BackendCapabilities {
-	caps := a.inner.Capabilities()
-	return BackendCapabilities(caps)
+	return a.inner.Capabilities()
 }
 
 func (a managedBackendAdapter) ModelContextSize(ctx context.Context) (int, error) {

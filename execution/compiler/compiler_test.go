@@ -432,7 +432,7 @@ func TestCompilerApplyBudget(t *testing.T) {
 
 	// With limited budget, should tail-drop
 	// Note: actual results depend on estimateChunkTokens which is stubbed
-	result, shortfall = c.applyBudget(chunks, 100)
+	result, _ = c.applyBudget(chunks, 100)
 	// Since estimateChunkTokens returns 0 for nil store, all chunks should fit
 	if len(result) != 5 {
 		t.Errorf("expected 5 chunks (all fit with 0 token estimate), got %d", len(result))

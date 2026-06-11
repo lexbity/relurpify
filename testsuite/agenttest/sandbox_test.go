@@ -104,7 +104,7 @@ func TestNewWorkspaceSandboxRunner_WorkspaceIsolation(t *testing.T) {
 
 	// Write a file in workspace A.
 	markerFile := "marker.txt"
-	res, err := runnerA.Run(ctx, sandbox.CommandRequest{
+	_, err = runnerA.Run(ctx, sandbox.CommandRequest{
 		Args: []string{"sh", "-c", "echo 'workspace-a-data' > " + markerFile},
 	})
 	if err != nil {
@@ -112,7 +112,7 @@ func TestNewWorkspaceSandboxRunner_WorkspaceIsolation(t *testing.T) {
 	}
 
 	// Verify the file exists in workspace A.
-	res, err = runnerA.Run(ctx, sandbox.CommandRequest{
+	res, err := runnerA.Run(ctx, sandbox.CommandRequest{
 		Args: []string{"cat", markerFile},
 	})
 	if err != nil {

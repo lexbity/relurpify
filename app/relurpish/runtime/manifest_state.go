@@ -8,7 +8,6 @@ import (
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
-
 // SaveManifestSpecWithBackup writes the manifest spec to path after snapshotting
 // the previous file into relurpify_cfg/backups.
 func SaveManifestSpecWithBackup(path string, spec *config.ManifestSpec) (string, error) {
@@ -26,10 +25,10 @@ func SaveManifestSpecWithBackup(path string, spec *config.ManifestSpec) (string,
 		return "", err
 	}
 	out := struct {
-		APIVersion string                    `yaml:"apiVersion"`
-		Kind       string                    `yaml:"kind"`
-		Metadata   config.DocumentMetadata   `yaml:"metadata"`
-		Spec       *config.ManifestSpec      `yaml:"spec"`
+		APIVersion string                  `yaml:"apiVersion"`
+		Kind       string                  `yaml:"kind"`
+		Metadata   config.DocumentMetadata `yaml:"metadata"`
+		Spec       *config.ManifestSpec    `yaml:"spec"`
 	}{
 		APIVersion: "relurpify/v1alpha1",
 		Kind:       "AgentManifest",

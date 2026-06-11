@@ -251,7 +251,7 @@ func (nb *NotificationBar) View() string {
 	if !ok {
 		return ""
 	}
-	hint := ""
+	var hint string
 	switch current.Kind {
 	case NotifKindHITL:
 		hint = nb.th.Dim().Render("  [y] once  [s] session  [a] always  [n] deny  [d] dismiss")

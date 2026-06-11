@@ -835,14 +835,14 @@ func (r *runtimeAdapter) SetToolPolicyLive(name string, level agentspec.AgentPer
 	if r == nil || r.rt == nil || r.rt.Tools == nil {
 		return
 	}
-	r.rt.Tools.UpdateToolPolicy(name, agentspec.ToolPolicy{Execute: agentspec.AgentPermissionLevel(level)})
+	r.rt.Tools.UpdateToolPolicy(name, agentspec.ToolPolicy{Execute: level})
 }
 
 func (r *runtimeAdapter) SetClassPolicyLive(class string, level agentspec.AgentPermissionLevel) {
 	if r == nil || r.rt == nil || r.rt.Tools == nil {
 		return
 	}
-	r.rt.Tools.UpdateClassPolicy(class, agentspec.AgentPermissionLevel(level))
+	r.rt.Tools.UpdateClassPolicy(class, level)
 }
 
 func (r *runtimeAdapter) SaveToolPolicy(toolName string, level agentspec.AgentPermissionLevel) error {
@@ -863,7 +863,7 @@ func (r *runtimeAdapter) SaveToolPolicy(toolName string, level agentspec.AgentPe
 	if spec.Agent.ToolExecutionPolicy == nil {
 		spec.Agent.ToolExecutionPolicy = make(map[string]agentspec.ToolPolicy)
 	}
-	spec.Agent.ToolExecutionPolicy[strings.TrimSpace(toolName)] = agentspec.ToolPolicy{Execute: agentspec.AgentPermissionLevel(level)}
+	spec.Agent.ToolExecutionPolicy[strings.TrimSpace(toolName)] = agentspec.ToolPolicy{Execute: level}
 	if _, err := runtimesvc.SaveManifestSpecWithBackup(manifestPath, spec); err != nil {
 		return err
 	}

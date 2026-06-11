@@ -301,7 +301,7 @@ func (p *MarkdownParser) Parse(ctx context.Context, raw RawIngestion) (*TypedIng
 
 	// Add final chunk
 	if currentChunk < len(lines) {
-		title := ""
+		var title string
 		if len(boundaries) > 0 {
 			title = extractMarkdownHeading(lines[currentChunk])
 		} else {

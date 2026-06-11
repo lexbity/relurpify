@@ -42,7 +42,7 @@ func ApplyStaleGaps(env *contextdata.Envelope, compilation *contextports.Compila
 	ids := make([]string, 0, len(compilation.SkippedStaleChunks))
 	for _, id := range compilation.SkippedStaleChunks {
 		if id != "" {
-			ids = append(ids, string(id))
+			ids = append(ids, id)
 		}
 	}
 	if len(ids) == 0 {

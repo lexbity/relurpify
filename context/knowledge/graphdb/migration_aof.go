@@ -219,7 +219,7 @@ func MigrateAOFToBadger(ctx context.Context, aofDir string, badgerDir string) er
 	_ = bb.db.Update(func(txn *badger.Txn) error {
 		for _, history := range snapHistory.NodeHistory {
 			for _, node := range history {
-				key := keyNodeHistory(node.ID, node.UpdatedAt, uint64(node.StateVersion))
+				key := keyNodeHistory(node.ID, node.UpdatedAt, node.StateVersion)
 				val, _ := json.Marshal(node)
 				_ = txn.Set(key, val)
 			}

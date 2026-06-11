@@ -182,9 +182,6 @@ func (m *DelegationManager) StartDelegation(ctx context.Context, request policy.
 	if m == nil {
 		return nil, fmt.Errorf("delegation manager unavailable")
 	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	request = cloneDelegationRequest(request)
 	if request.CreatedAt.IsZero() {
 		request.CreatedAt = time.Now().UTC()
@@ -195,7 +192,7 @@ func (m *DelegationManager) StartDelegation(ctx context.Context, request policy.
 	snapshot := policy.DelegationSnapshot{
 		Request:        request,
 		State:          policy.DelegationStateRunning,
-		TrustClass:     string(opts.TrustClass),
+		TrustClass:     opts.TrustClass,
 		Recoverability: string(opts.Recoverability),
 		Background:     opts.Background,
 		Metadata:       cloneAnyMap(opts.Metadata),
@@ -376,8 +373,8 @@ func (m *DelegationManager) PersistDelegations(ctx context.Context, repo governa
 			RunID:          strings.TrimSpace(runID),
 			TaskID:         snapshot.Request.TaskID,
 			State:          string(snapshot.State),
-			TrustClass:     string(snapshot.TrustClass),
-			Recoverability: string(snapshot.Recoverability),
+			TrustClass:     snapshot.TrustClass,
+			Recoverability: snapshot.Recoverability,
 			Background:     snapshot.Background,
 			Request:        snapshot.Request,
 			Result:         snapshot.Result,

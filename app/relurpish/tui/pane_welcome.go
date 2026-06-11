@@ -204,10 +204,6 @@ func (p *WelcomePane) View() string {
 	logoView := p.logo.View()
 
 	// Right column: widgets
-	agentLabel := p.agentDrop.Selected().Label
-	if agentLabel == "" {
-		agentLabel = "none"
-	}
 	agentDropView := p.agentDrop.View()
 
 	startBtn := NewButton("Start")

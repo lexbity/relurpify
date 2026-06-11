@@ -82,11 +82,11 @@ func mergeConfiguredProviders(spec *agentspec.AgentRuntimeSpec) []provider.Provi
 	for i, providerSpec := range spec.Providers {
 		out[i] = provider.ProviderConfig{
 			ID:              providerSpec.ID,
-			Kind:            agentspec.ProviderKind(providerSpec.Kind),
+			Kind:            providerSpec.Kind,
 			Enabled:         providerSpec.Enabled,
 			Target:          providerSpec.Target,
 			ActivationScope: providerSpec.ActivationScope,
-			TrustBaseline:   agentspec.TrustClass(providerSpec.TrustBaseline),
+			TrustBaseline:   providerSpec.TrustBaseline,
 			Recoverability:  policy.RecoverabilityMode(providerSpec.Recoverability),
 		}
 		if len(providerSpec.Config) > 0 {
@@ -225,9 +225,6 @@ func (r *Runtime) QuarantineProvider(ctx context.Context, providerID, reason str
 	providerID = strings.TrimSpace(providerID)
 	if providerID == "" {
 		return fmt.Errorf("provider id required")
-	}
-	if ctx == nil {
-		ctx = context.Background()
 	}
 	if r.Tools != nil {
 		r.Tools.RevokeProvider(providerID, reason)

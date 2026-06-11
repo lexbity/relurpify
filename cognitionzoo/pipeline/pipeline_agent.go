@@ -195,7 +195,7 @@ func (a *PipelineAgent) BuildGraph(task *execution.Task) (*graph.Graph, error) {
 		}
 	}
 	// Set start to stream node if present, otherwise first stage
-	startIdx := 0
+	var startIdx int
 	if stream != nil {
 		startIdx = 0
 	} else {

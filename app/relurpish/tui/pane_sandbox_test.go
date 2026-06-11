@@ -214,7 +214,7 @@ func TestSandboxPaneCyclesAndPersists(t *testing.T) {
 	if switched.Err != nil {
 		t.Fatalf("backend toggle failed: %v", switched.Err)
 	}
-	pane, _ = pane.Update(switched)
+	_, _ = pane.Update(switched)
 	if rt.backend != "docker" {
 		t.Fatalf("backend = %q, want docker", rt.backend)
 	}

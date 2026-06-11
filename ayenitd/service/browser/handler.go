@@ -371,7 +371,7 @@ func (s *BrowserService) authorizeNavigation(ctx context.Context, args map[strin
 		return fmt.Errorf("browser navigation url missing host")
 	}
 	port := parsed.Port()
-	portNum := 0
+	var portNum int
 	if port != "" {
 		portNum, err = strconv.Atoi(port)
 		if err != nil {

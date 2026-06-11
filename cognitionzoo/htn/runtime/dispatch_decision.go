@@ -29,7 +29,7 @@ func dispatchMetadata(task *execution.Task) (string, []agentspec.CapabilitySelec
 			args["task_id"] = task.ID
 		}
 		if task.Type != "" {
-			args["task_type"] = string(task.Type)
+			args["task_type"] = task.Type
 		}
 		if len(task.Metadata) > 0 {
 			metadataStr := make(map[string]string, len(task.Metadata))

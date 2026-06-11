@@ -1,0 +1,9 @@
+# Linters that have been driven to whole-tree zero and are now hard-enforced
+# (Track Z). One linter name per line. Added by each Slice as it graduates.
+# See devdocs/plans/lint-backlog-elimination-20260610.md §5.4.
+
+# Slice 1 — Mechanical (auto-fixed / manually fixed, behavior-preserving)
+# gofmt is auto-enforced via formatters config, not a Track-Z linter.
+unconvert
+wastedassign
+ineffassign

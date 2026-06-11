@@ -59,38 +59,48 @@ type mockDescriptor struct {
 	name string
 }
 
-func (d *mockDescriptor) CapabilityID() string                              { return d.id }
-func (d *mockDescriptor) CapabilityName() string                            { return d.name }
-func (d *mockDescriptor) CapabilityKind() string                            { return "tool" }
-func (d *mockDescriptor) RuntimeFamily() string                             { return "local-tool" }
-func (d *mockDescriptor) Description() string                               { return "mock" }
-func (d *mockDescriptor) Version() string                                   { return "1.0" }
-func (d *mockDescriptor) Category() string                                  { return "" }
-func (d *mockDescriptor) Tags() []string                                    { return nil }
-func (d *mockDescriptor) TrustClass() string                                { return "builtin-trusted" }
-func (d *mockDescriptor) RiskClasses() []risk.RiskClass                      { return nil }
-func (d *mockDescriptor) EffectClasses() []classification.EffectClass        { return nil }
-func (d *mockDescriptor) SourceProviderID() string                          { return "provider-1" }
-func (d *mockDescriptor) SourceScope() string                               { return "builtin" }
-func (d *mockDescriptor) SourceSessionID() string                           { return "" }
-func (d *mockDescriptor) CoordinationRole() string                          { return "" }
-func (d *mockDescriptor) CoordinationTaskTypes() []string                    { return nil }
-func (d *mockDescriptor) CoordinationExecutionModes() []string               { return nil }
-func (d *mockDescriptor) CoordinationLongRunning() int32                     { return 0 }
-func (d *mockDescriptor) CoordinationDirectInsertionAllowed() int32          { return 0 }
-func (d *mockDescriptor) CapabilityExecutionModes() []string                  { return nil }
-func (d *mockDescriptor) CoordinationTarget() bool                           { return true }
-func (d *mockDescriptor) CoordinationMaxDepth() int                          { return 3 }
-func (d *mockDescriptor) CoordinationMaxRuntimeSeconds() int                  { return 0 }
-func (d *mockDescriptor) GetToolExecutionPolicy() map[string]governanceports.ToolPolicyView { return nil }
+func (d *mockDescriptor) CapabilityID() string                        { return d.id }
+func (d *mockDescriptor) CapabilityName() string                      { return d.name }
+func (d *mockDescriptor) CapabilityKind() string                      { return "tool" }
+func (d *mockDescriptor) RuntimeFamily() string                       { return "local-tool" }
+func (d *mockDescriptor) Description() string                         { return "mock" }
+func (d *mockDescriptor) Version() string                             { return "1.0" }
+func (d *mockDescriptor) Category() string                            { return "" }
+func (d *mockDescriptor) Tags() []string                              { return nil }
+func (d *mockDescriptor) TrustClass() string                          { return "builtin-trusted" }
+func (d *mockDescriptor) RiskClasses() []risk.RiskClass               { return nil }
+func (d *mockDescriptor) EffectClasses() []classification.EffectClass { return nil }
+func (d *mockDescriptor) SourceProviderID() string                    { return "provider-1" }
+func (d *mockDescriptor) SourceScope() string                         { return "builtin" }
+func (d *mockDescriptor) SourceSessionID() string                     { return "" }
+func (d *mockDescriptor) CoordinationRole() string                    { return "" }
+func (d *mockDescriptor) CoordinationTaskTypes() []string             { return nil }
+func (d *mockDescriptor) CoordinationExecutionModes() []string        { return nil }
+func (d *mockDescriptor) CoordinationLongRunning() int32              { return 0 }
+func (d *mockDescriptor) CoordinationDirectInsertionAllowed() int32   { return 0 }
+func (d *mockDescriptor) CapabilityExecutionModes() []string          { return nil }
+func (d *mockDescriptor) CoordinationTarget() bool                    { return true }
+func (d *mockDescriptor) CoordinationMaxDepth() int                   { return 3 }
+func (d *mockDescriptor) CoordinationMaxRuntimeSeconds() int          { return 0 }
+func (d *mockDescriptor) GetToolExecutionPolicy() map[string]governanceports.ToolPolicyView {
+	return nil
+}
 func (d *mockDescriptor) GetCapabilityPolicies() []governanceports.CapabilityPolicyView { return nil }
-func (d *mockDescriptor) GetProviderPolicies() map[string]governanceports.ProviderPolicyView { return nil }
+func (d *mockDescriptor) GetProviderPolicies() map[string]governanceports.ProviderPolicyView {
+	return nil
+}
 func (d *mockDescriptor) GetSessionPolicies() []governanceports.SessionPolicyView { return nil }
-func (d *mockDescriptor) GetGlobalPolicies() map[string]string              { return nil }
-func (d *mockDescriptor) GetAllowedCapabilities() []governanceports.CapabilitySelectorView { return nil }
-func (d *mockDescriptor) GetBrowser() governanceports.BrowserSpecView         { return governanceports.BrowserSpecView{} }
-func (d *mockDescriptor) GetOrchestration() governanceports.OrchestrationConfigView { return governanceports.OrchestrationConfigView{} }
-func (d *mockDescriptor) ProviderSecurityOrigin() string                    { return "" }
+func (d *mockDescriptor) GetGlobalPolicies() map[string]string                    { return nil }
+func (d *mockDescriptor) GetAllowedCapabilities() []governanceports.CapabilitySelectorView {
+	return nil
+}
+func (d *mockDescriptor) GetBrowser() governanceports.BrowserSpecView {
+	return governanceports.BrowserSpecView{}
+}
+func (d *mockDescriptor) GetOrchestration() governanceports.OrchestrationConfigView {
+	return governanceports.OrchestrationConfigView{}
+}
+func (d *mockDescriptor) ProviderSecurityOrigin() string { return "" }
 
 // mockInvocationState implements ports.State via the InvocationState pass-through.
 type mockInvocationState struct {
@@ -101,7 +111,7 @@ type mockInvocationState struct {
 func (s *mockInvocationState) GetWorkingValue(key string) (any, bool) { return nil, false }
 func (s *mockInvocationState) SetWorkingValue(key string, value any)  {}
 func (s *mockInvocationState) DeleteWorkingValue(key string)          {}
-func (s *mockInvocationState) ClearWorkingData()                     {}
+func (s *mockInvocationState) ClearWorkingData()                      {}
 func (s *mockInvocationState) WorkingMemoryKeys() []string            { return nil }
 func (s *mockInvocationState) Snapshot() map[string]any               { return nil }
 func (s *mockInvocationState) TaskID() string                         { return s.taskID }

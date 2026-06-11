@@ -389,8 +389,6 @@ func New(ctx context.Context, cfg Config, secrets config.Secrets) (*Runtime, err
 	if eventTelemetry.Log != nil {
 		if mt, ok := baseTelemetry.(telemetry.MultiplexTelemetry); ok {
 			mt.Sinks = append(mt.Sinks, eventTelemetry)
-		} else {
-			baseTelemetry = telemetry.MultiplexTelemetry{Sinks: []telemetry.Telemetry{baseTelemetry, eventTelemetry}}
 		}
 	}
 
