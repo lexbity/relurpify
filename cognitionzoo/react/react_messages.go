@@ -241,7 +241,6 @@ func firstMeaningfulLine(text string) string {
 	return ""
 }
 
-
 func trimToBudget(value string, max int) string {
 	value = strings.TrimSpace(value)
 	if max <= 0 || len(value) <= max {

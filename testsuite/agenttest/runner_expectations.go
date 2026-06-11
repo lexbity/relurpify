@@ -7,7 +7,6 @@ import (
 	"strings"
 )
 
-
 func evaluateFileContentExpectations(expectations []FileContentExpectation, workspace string) ([]AssertionResult, []string) {
 	if len(expectations) == 0 {
 		return nil, nil
@@ -57,5 +56,3 @@ func evaluateFileContentExpectations(expectations []FileContentExpectation, work
 	}
 	return results, failures
 }
-
-

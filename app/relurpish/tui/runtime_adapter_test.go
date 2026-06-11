@@ -20,7 +20,9 @@ func (profileAgent) Execute(context.Context, *execution.Task, *contextdata.Envel
 
 func (profileAgent) Capabilities() []string { return nil }
 
-func (profileAgent) BuildGraph(context.Context, *execution.Task) (*agentgraph.Graph, error) { return nil, errors.New("mock not implemented") }
+func (profileAgent) BuildGraph(context.Context, *execution.Task) (*agentgraph.Graph, error) {
+	return nil, errors.New("mock not implemented")
+}
 
 func (profileAgent) RuntimeProfile() (string, string) { return "analysis", "route-dispatch" }
 
@@ -34,7 +36,9 @@ func (plainAgent) Execute(context.Context, *execution.Task, *contextdata.Envelop
 
 func (plainAgent) Capabilities() []string { return nil }
 
-func (plainAgent) BuildGraph(context.Context, *execution.Task) (*agentgraph.Graph, error) { return nil, errors.New("mock not implemented") }
+func (plainAgent) BuildGraph(context.Context, *execution.Task) (*agentgraph.Graph, error) {
+	return nil, errors.New("mock not implemented")
+}
 
 func TestDescribeAgentRuntimeUsesOptionalProfileInterface(t *testing.T) {
 	mode, strategy := describeAgentRuntime(profileAgent{})

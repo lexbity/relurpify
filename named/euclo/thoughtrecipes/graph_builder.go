@@ -3,6 +3,7 @@ package thoughtrecipe
 import (
 	"context"
 	"fmt"
+	"math"
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/cognitionzoo/paradigm"
@@ -821,6 +822,9 @@ func routeConfidenceValue(value any) (int, bool) {
 	case uint32:
 		return int(v), true
 	case uint64:
+		if v > uint64(math.MaxInt) {
+			return 0, false
+		}
 		return int(v), true
 	case float32:
 		return int(v), true

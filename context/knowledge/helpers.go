@@ -1,7 +1,7 @@
 package knowledge
 
 import (
-	"crypto/sha1"
+	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"strings"
@@ -12,7 +12,7 @@ func deterministicChunkID(kind, ref string) ChunkID {
 }
 
 func hashStrings(values ...string) string {
-	h := sha1.New()
+	h := sha256.New()
 	for _, value := range values {
 		_, _ = h.Write([]byte(value))
 		_, _ = h.Write([]byte{'\n'})

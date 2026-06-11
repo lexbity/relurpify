@@ -41,7 +41,7 @@ func GenerateWorkspaceTemplates(output string) error {
 		if d.IsDir() {
 			return relurpifyfs.MkdirAllSecure(target)
 		}
-		data, err := os.ReadFile(filepath.Clean(path))
+		data, err := os.ReadFile(filepath.Clean(path)) //nolint:gosec
 		if err != nil {
 			return err
 		}

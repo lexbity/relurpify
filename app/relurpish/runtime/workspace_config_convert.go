@@ -112,5 +112,3 @@ func convertRuntimeCoordinationModes(values []string) []agentspec.CoordinationEx
 	}
 	return out
 }
-
-

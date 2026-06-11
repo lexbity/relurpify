@@ -11,9 +11,9 @@ import (
 // EventToolCall and EventToolResult events and produces SpanEvents that
 // can be consumed by a SpanExporter backend (OTel adapter, JSONL, etc.).
 type ToolSpanExporter struct {
-	next    Telemetry           // chain to next sink
-	spans   SpanExporter        // span backend (nil = no-op)
-	attrs   map[string]struct{} // allowlisted extra attribute keys
+	next  Telemetry           // chain to next sink
+	spans SpanExporter        // span backend (nil = no-op)
+	attrs map[string]struct{} // allowlisted extra attribute keys
 }
 
 // ToolSpanExporterOption configures the exporter.

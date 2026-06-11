@@ -41,5 +41,3 @@ func TestWorkspaceBootstrapServiceStopNoop(t *testing.T) {
 	require.NoError(t, (&WorkspaceBootstrapService{}).Stop())
 	require.NoError(t, (&WorkspaceBootstrapService{IndexManager: &ast.IndexManager{}}).Stop())
 }
-
-

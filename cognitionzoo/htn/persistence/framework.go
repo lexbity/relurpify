@@ -135,5 +135,3 @@ func AppendHTNEvent(ctx context.Context,
 	// using agentlifecycle.Repository
 	return nil
 }
-
-

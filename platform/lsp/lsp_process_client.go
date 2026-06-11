@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -178,7 +179,7 @@ func (c *processLSPClient) consumeLogs(stderr io.Reader) {
 
 func (c *processLSPClient) initialize(ctx context.Context, root string) error {
 	params := &protocol.InitializeParams{
-		ProcessID: int32(os.Getpid()),
+		ProcessID: safePID(os.Getpid()),
 		RootURI:   protocol.DocumentURI(pathToURI(root)),
 		ClientInfo: &protocol.ClientInfo{
 			Name:    "relurpify",
@@ -274,7 +275,7 @@ func (c *processLSPClient) GetDefinition(ctx context.Context, req DefinitionRequ
 	params := protocol.DefinitionParams{
 		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
 			TextDocument: protocol.TextDocumentIdentifier{URI: protocol.DocumentURI(pathToURI(req.File))},
-			Position:     protocol.Position{Line: uint32(req.Position.Line), Character: uint32(req.Position.Character)},
+			Position:     protocol.Position{Line: safeUint32Line(req.Position.Line), Character: safeUint32Char(req.Position.Character)},
 		},
 	}
 	var resp []protocol.Location
@@ -296,6 +297,27 @@ func (c *processLSPClient) GetDefinition(ctx context.Context, req DefinitionRequ
 	}, nil
 }
 
+func safePID(pid int) int32 {
+	if pid > math.MaxInt32 || pid < math.MinInt32 {
+		return 0
+	}
+	return int32(pid)
+}
+
+func safeUint32Line(v int) uint32 {
+	if v < 0 || v > math.MaxUint32 {
+		return 0
+	}
+	return uint32(v)
+}
+
+func safeUint32Char(v int) uint32 {
+	if v < 0 || v > math.MaxUint32 {
+		return 0
+	}
+	return uint32(v)
+}
+
 func (c *processLSPClient) GetReferences(ctx context.Context, req ReferencesRequest) ([]Location, error) {
 	if err := c.ensureOpen(ctx, req.File); err != nil {
 		return nil, err
@@ -303,7 +325,7 @@ func (c *processLSPClient) GetReferences(ctx context.Context, req ReferencesRequ
 	params := protocol.ReferenceParams{
 		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
 			TextDocument: protocol.TextDocumentIdentifier{URI: protocol.DocumentURI(pathToURI(req.File))},
-			Position:     protocol.Position{Line: uint32(req.Position.Line), Character: uint32(req.Position.Character)},
+			Position:     protocol.Position{Line: safeUint32Line(req.Position.Line), Character: safeUint32Char(req.Position.Character)},
 		},
 		Context: protocol.ReferenceContext{IncludeDeclaration: false},
 	}
@@ -328,7 +350,7 @@ func (c *processLSPClient) GetHover(ctx context.Context, req HoverRequest) (Hove
 	params := protocol.HoverParams{
 		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
 			TextDocument: protocol.TextDocumentIdentifier{URI: protocol.DocumentURI(pathToURI(req.File))},
-			Position:     protocol.Position{Line: uint32(req.Position.Line), Character: uint32(req.Position.Character)},
+			Position:     protocol.Position{Line: safeUint32Line(req.Position.Line), Character: safeUint32Char(req.Position.Character)},
 		},
 	}
 	var resp protocol.Hover

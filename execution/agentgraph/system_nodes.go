@@ -293,5 +293,3 @@ func trimmedAnyString(value any) string {
 		return formatted
 	}
 }
-
-

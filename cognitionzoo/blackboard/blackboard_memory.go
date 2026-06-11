@@ -9,7 +9,6 @@ import (
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 )
 
-
 func hydrateBlackboardFromMemory(state *contextdata.Envelope, bb *Blackboard) int {
 	if state == nil || bb == nil {
 		return 0
@@ -53,63 +52,63 @@ func hydrateBlackboardFromMemory(state *contextdata.Envelope, bb *Blackboard) in
 		}
 	} else if payload, ok := contextdata.GetTyped[map[string]any](state, "graph.declarative_memory"); ok {
 		if results, ok := payload["results"].([]relurpctx.MemoryRecordEnvelope); ok {
-				for _, record := range results {
-					if bb.AddFact("memory:"+record.Key, strings.TrimSpace(record.Summary), "memory:declarative") {
-						// Stamp derivation and origin on the newly added fact
-						if len(bb.Facts) > 0 {
-							lastFact := &bb.Facts[len(bb.Facts)-1]
-							origin := relurpctx.OriginDerivation("memory")
-							derived := origin.Derive("memory_store", "memory", 0.0, fmt.Sprintf("record_key=%s", record.Key))
-							lastFact.Derivation = &derived
-							// Add origin tracking
-							lastFact.Origin = &FactOrigin{
-								SourceSystem: "declarative",
-								RecordID:     record.RecordID,
-								Scope:        record.Scope,
-								Kind:         "declarative",
-								Derivation:   &derived,
-								CapturedAt:   time.Now().UTC(),
-							}
+			for _, record := range results {
+				if bb.AddFact("memory:"+record.Key, strings.TrimSpace(record.Summary), "memory:declarative") {
+					// Stamp derivation and origin on the newly added fact
+					if len(bb.Facts) > 0 {
+						lastFact := &bb.Facts[len(bb.Facts)-1]
+						origin := relurpctx.OriginDerivation("memory")
+						derived := origin.Derive("memory_store", "memory", 0.0, fmt.Sprintf("record_key=%s", record.Key))
+						lastFact.Derivation = &derived
+						// Add origin tracking
+						lastFact.Origin = &FactOrigin{
+							SourceSystem: "declarative",
+							RecordID:     record.RecordID,
+							Scope:        record.Scope,
+							Kind:         "declarative",
+							Derivation:   &derived,
+							CapturedAt:   time.Now().UTC(),
 						}
-						added++
 					}
+					added++
 				}
 			}
+		}
 	}
 	if payload, ok := contextdata.GetTyped[map[string]any](state, "graph.procedural_memory_payload"); ok {
 		if results, ok := payload["results"].([]map[string]any); ok {
-				for _, record := range results {
-					key := strings.TrimSpace(fmt.Sprint(record["record_id"]))
-					if key == "" {
-						key = strings.TrimSpace(fmt.Sprint(record["summary"]))
-					}
-					description := strings.TrimSpace(fmt.Sprint(record["summary"]))
-					if description == "" {
-						description = strings.TrimSpace(fmt.Sprint(record["text"]))
-					}
-					if description == "" {
-						description = "consider learned routine " + key
-					}
-					if err := bb.AddHypothesis("memory:routine:"+key, description, 0.55, "memory:"+strings.TrimSpace(fmt.Sprint(record["source"]))); err == nil {
-						// Stamp derivation and origin on the newly added hypothesis
-						if len(bb.Hypotheses) > 0 {
-							lastHyp := &bb.Hypotheses[len(bb.Hypotheses)-1]
-							origin := relurpctx.OriginDerivation("memory")
-							recordID := strings.TrimSpace(fmt.Sprint(record["record_id"]))
-							derived := origin.Derive("memory_store", "memory", 0.0, fmt.Sprintf("record_id=%s", recordID))
-							lastHyp.Derivation = &derived
-							// Add origin tracking
-							lastHyp.Origin = &FactOrigin{
-								SourceSystem: strings.TrimSpace(fmt.Sprint(record["source"])),
-								RecordID:     recordID,
-								Derivation:   &derived,
-								CapturedAt:   time.Now().UTC(),
-							}
+			for _, record := range results {
+				key := strings.TrimSpace(fmt.Sprint(record["record_id"]))
+				if key == "" {
+					key = strings.TrimSpace(fmt.Sprint(record["summary"]))
+				}
+				description := strings.TrimSpace(fmt.Sprint(record["summary"]))
+				if description == "" {
+					description = strings.TrimSpace(fmt.Sprint(record["text"]))
+				}
+				if description == "" {
+					description = "consider learned routine " + key
+				}
+				if err := bb.AddHypothesis("memory:routine:"+key, description, 0.55, "memory:"+strings.TrimSpace(fmt.Sprint(record["source"]))); err == nil {
+					// Stamp derivation and origin on the newly added hypothesis
+					if len(bb.Hypotheses) > 0 {
+						lastHyp := &bb.Hypotheses[len(bb.Hypotheses)-1]
+						origin := relurpctx.OriginDerivation("memory")
+						recordID := strings.TrimSpace(fmt.Sprint(record["record_id"]))
+						derived := origin.Derive("memory_store", "memory", 0.0, fmt.Sprintf("record_id=%s", recordID))
+						lastHyp.Derivation = &derived
+						// Add origin tracking
+						lastHyp.Origin = &FactOrigin{
+							SourceSystem: strings.TrimSpace(fmt.Sprint(record["source"])),
+							RecordID:     recordID,
+							Derivation:   &derived,
+							CapturedAt:   time.Now().UTC(),
 						}
-						added++
 					}
+					added++
 				}
 			}
+		}
 	} else if payload, ok := contextdata.GetTyped[map[string]any](state, "graph.procedural_memory"); ok {
 		if results, ok := payload["results"].([]relurpctx.MemoryRecordEnvelope); ok {
 			for _, record := range results {
@@ -122,27 +121,26 @@ func hydrateBlackboardFromMemory(state *contextdata.Envelope, bb *Blackboard) in
 					// Stamp derivation and origin on the newly added hypothesis
 					if len(bb.Hypotheses) > 0 {
 						lastHyp := &bb.Hypotheses[len(bb.Hypotheses)-1]
-							origin := relurpctx.OriginDerivation("memory")
-							derived := origin.Derive("memory_store", "memory", 0.0, fmt.Sprintf("record_key=%s", record.Key))
-							lastHyp.Derivation = &derived
-							// Add origin tracking
-							lastHyp.Origin = &FactOrigin{
-								SourceSystem: "procedural",
-								RecordID:     record.RecordID,
-								Scope:        record.Scope,
-								Kind:         "procedural",
-								Derivation:   &derived,
-								CapturedAt:   time.Now().UTC(),
-							}
+						origin := relurpctx.OriginDerivation("memory")
+						derived := origin.Derive("memory_store", "memory", 0.0, fmt.Sprintf("record_key=%s", record.Key))
+						lastHyp.Derivation = &derived
+						// Add origin tracking
+						lastHyp.Origin = &FactOrigin{
+							SourceSystem: "procedural",
+							RecordID:     record.RecordID,
+							Scope:        record.Scope,
+							Kind:         "procedural",
+							Derivation:   &derived,
+							CapturedAt:   time.Now().UTC(),
 						}
-						added++
 					}
+					added++
 				}
+			}
 		}
 	}
 	return added
 }
-
 
 func publishPersistenceCandidates(state *contextdata.Envelope, bb *Blackboard, controller ControllerState, metrics Metrics) {
 	if state == nil || bb == nil {

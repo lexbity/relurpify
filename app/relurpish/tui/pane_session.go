@@ -297,20 +297,20 @@ func (p *SessionPane) Update(msg tea.Msg) (*SessionPane, tea.Cmd) {
 			}
 			if path != "" {
 				editor := EditorPath()
-			editorPath, err := exec.LookPath(editor)
-			if err != nil {
-				editorPath = editor
-			}
-			return p, tea.ExecProcess(
-				&exec.Cmd{
-					Path: editorPath,
-					Args: []string{editorPath, filepath.Clean(path)},
-				}, func(err error) tea.Msg {
-					if err != nil {
-						return chatSystemMsg{Text: fmt.Sprintf("Editor error: %v", err)}
-					}
-					return nil
-				})
+				editorPath, err := exec.LookPath(editor)
+				if err != nil {
+					editorPath = editor
+				}
+				return p, tea.ExecProcess(
+					&exec.Cmd{
+						Path: editorPath,
+						Args: []string{editorPath, filepath.Clean(path)},
+					}, func(err error) tea.Msg {
+						if err != nil {
+							return chatSystemMsg{Text: fmt.Sprintf("Editor error: %v", err)}
+						}
+						return nil
+					})
 			}
 		}
 	}

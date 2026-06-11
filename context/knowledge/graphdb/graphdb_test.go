@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/json"
+	"fmt"
 	"os"
 	"sync"
 	"testing"
@@ -218,10 +219,10 @@ func TestConcurrentUpsertAndLink(t *testing.T) {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			id := string(rune('a' + i))
+			id := fmt.Sprintf("%c", 'a'+i)
 			assert.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: id, Kind: "function"}))
 			if i > 0 {
-				prev := string(rune('a' + i - 1))
+				prev := fmt.Sprintf("%c", 'a'+i-1)
 				assert.NoError(t, engine.Link(context.TODO(), prev, id, "calls", "", 1, nil))
 			}
 		}(i)

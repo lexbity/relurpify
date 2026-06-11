@@ -211,7 +211,6 @@ func (p *PlanExecutor) executeReadyStepsParallel(ctx context.Context, provider B
 	results := make(chan branchResult, len(readySteps))
 	keepBranchState := p.Options.MergeBranches != nil
 	for idx, step := range readySteps {
-		idx, step := idx, step
 		branchExecutor, err := provider.BranchExecutor()
 		if err != nil {
 			return nil, err

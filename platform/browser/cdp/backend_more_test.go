@@ -235,7 +235,7 @@ func TestLaunchChromiumAndClose(t *testing.T) {
 	portListener, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 	port := portListener.Addr().(*net.TCPAddr).Port
-	httpServer := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	httpServer := &http.Server{ReadHeaderTimeout: time.Second, Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/json/list":
 			if err := json.NewEncoder(w).Encode([]listTarget{{
@@ -344,6 +344,6 @@ func writeSleepScript(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
 	path := dir + "/sleep.sh"
-	require.NoError(t, os.WriteFile(path, []byte("#!/bin/sh\nsleep 60\n"), 0o755))
+	require.NoError(t, os.WriteFile(path, []byte("#!/bin/sh\nsleep 60\n"), 0o700)) //nolint:gosec
 	return path
 }

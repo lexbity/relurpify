@@ -29,5 +29,3 @@ type UpdateTaskMsg struct {
 	TaskIndex int
 	Status    TaskStatus
 }
-
-

@@ -1,6 +1,8 @@
 package descriptor
 
 import (
+	"math"
+
 	"codeburg.org/lexbit/relurpify/governance/classification"
 	governanceports "codeburg.org/lexbit/relurpify/governance/ports"
 	"codeburg.org/lexbit/relurpify/governance/risk"
@@ -62,15 +64,25 @@ func (a *DescriptorViewAdapter) CoordinationExecutionModes() []string {
 }
 func (a *DescriptorViewAdapter) CoordinationLongRunning() int32 {
 	if a.D.Coordination != nil {
-		return int32(a.D.Coordination.LongRunning)
+		return safeInt32View(int(a.D.Coordination.LongRunning))
 	}
 	return 0
 }
 func (a *DescriptorViewAdapter) CoordinationDirectInsertionAllowed() int32 {
 	if a.D.Coordination != nil {
-		return int32(a.D.Coordination.DirectInsertionAllowed)
+		return safeInt32View(int(a.D.Coordination.DirectInsertionAllowed))
 	}
 	return 0
+}
+
+func safeInt32View(v int) int32 {
+	if v > math.MaxInt32 {
+		return math.MaxInt32
+	}
+	if v < math.MinInt32 {
+		return math.MinInt32
+	}
+	return int32(v)
 }
 func (a *DescriptorViewAdapter) CoordinationMaxDepth() int {
 	if a.D.Coordination != nil {

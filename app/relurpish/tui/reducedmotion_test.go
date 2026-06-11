@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"os"
 	"testing"
 )
 
@@ -31,9 +30,7 @@ func TestReduceMotionNilSafe(t *testing.T) {
 }
 
 func TestReduceMotionCollapseReduced(t *testing.T) {
-	restore := preserveEnv("CI", "SSH_TTY", "SSH_CONNECTION", "TERM")
-	defer restore()
-	_ = os.Setenv("CI", "true")
+	t.Setenv("CI", "true")
 
 	r := NewReduceMotion(true)
 	if !r.Reduced() {
@@ -56,12 +53,7 @@ func TestReduceMotionCollapseReduced(t *testing.T) {
 }
 
 func TestReduceMotionCollapseNotReduced(t *testing.T) {
-	restore := preserveEnv("CI", "SSH_TTY", "SSH_CONNECTION", "TERM")
-	defer restore()
-	_ = os.Unsetenv("CI")
-	_ = os.Unsetenv("SSH_TTY")
-	_ = os.Unsetenv("SSH_CONNECTION")
-	_ = os.Setenv("TERM", "xterm-256color")
+	t.Setenv("TERM", "xterm-256color")
 
 	r := NewReduceMotion(false)
 	if r.Reduced() {
@@ -74,22 +66,5 @@ func TestReduceMotionCollapseNotReduced(t *testing.T) {
 	// When not reduced, Collapse returns the first frame.
 	if result != "first" {
 		t.Errorf("Collapse = %q, want %q", result, "first")
-	}
-}
-
-// preserveEnv saves and restores environment variables.
-func preserveEnv(keys ...string) func() {
-	saved := make(map[string]string)
-	for _, k := range keys {
-		saved[k] = os.Getenv(k)
-	}
-	return func() {
-		for k, v := range saved {
-			if v == "" {
-				_ = os.Unsetenv(k)
-			} else {
-				_ = os.Setenv(k, v)
-			}
-		}
 	}
 }

@@ -1252,5 +1252,3 @@ func (r *runtimeAdapter) InitializeWorkspaceFromTemplates(overwrite bool) error 
 func (r *runtimeAdapter) activeWorkflowID() string {
 	return ""
 }
-
-

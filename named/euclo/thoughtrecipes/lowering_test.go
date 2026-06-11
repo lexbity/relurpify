@@ -621,7 +621,7 @@ func equalStringSlices(got, want []string) bool {
 	if len(got) != len(want) {
 		return false
 	}
-	for i := range got {
+	for i := 0; i < len(got); i++ {
 		if got[i] != want[i] {
 			return false
 		}

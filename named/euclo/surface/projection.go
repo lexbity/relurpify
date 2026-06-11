@@ -164,5 +164,3 @@ func isOptionalStep(stepID string, groups []ConditionalGroup) bool {
 	}
 	return false
 }
-
-

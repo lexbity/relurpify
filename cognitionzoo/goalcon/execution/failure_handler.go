@@ -1,6 +1,7 @@
 package execution
 
 import (
+	"strconv"
 	"strings"
 	"time"
 
@@ -265,7 +266,7 @@ func (fd *FailureDetector) FormatFailureReport(fc *FailureContext) string {
 	sb.WriteString("Tool: " + fc.ToolName + " (" + fc.CapabilityID + ")\n")
 	sb.WriteString("Category: " + fc.Category.String() + "\n")
 	sb.WriteString("Error: " + fc.Error.Error() + "\n")
-	sb.WriteString("Retry Count: " + string(rune(fc.RetryCount)) + "\n")
+	sb.WriteString("Retry Count: " + strconv.Itoa(fc.RetryCount) + "\n")
 	sb.WriteString("Success Rate: " + formatPercent(fc.SuccessRate) + "%\n")
 	sb.WriteString("Suggestion: " + fc.Suggestion + "\n")
 
@@ -288,6 +289,6 @@ func formatPercent(value float64) string {
 	case percent >= 100:
 		return "100"
 	default:
-		return string(rune('0'+percent/10)) + string(rune('0'+(percent%10)))
+		return strconv.Itoa(percent)
 	}
 }

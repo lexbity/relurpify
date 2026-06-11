@@ -114,7 +114,6 @@ func (a *PipelineAgent) Execute(ctx context.Context, task *execution.Task, env *
 	}, nil
 }
 
-
 func (a *PipelineAgent) Capabilities() []string {
 	return []string{"pipeline"}
 }
@@ -215,7 +214,6 @@ func (a *PipelineAgent) toolCallingEnabled() bool {
 	}
 	return a.Config.NativeToolCalling
 }
-
 
 func summarizePipelineResults(results []StageResult) string {
 	if len(results) == 0 {

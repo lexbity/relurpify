@@ -710,7 +710,6 @@ func plannerSkillHints(agent *PlannerAgent) string {
 	})
 }
 
-
 func normalizePlannerPlan(agent *PlannerAgent, task *execution.Task, plan pl.Plan) (pl.Plan, []string) {
 	if agent == nil {
 		return ensurePlannerPlanDefaults(plan), nil
@@ -954,7 +953,6 @@ func plannerToolArgs(tool ports.Tool, task *execution.Task, plan pl.Plan) (map[s
 func PlannerSkillHints(agent *PlannerAgent) string {
 	return plannerSkillHints(agent)
 }
-
 
 func taskInstructionText(task *execution.Task) string {
 	if task == nil {
@@ -1233,7 +1231,7 @@ func resolvePlannerOutputReference(env *contextdata.Envelope, ref string) (any, 
 	if stepID == "" {
 		return nil, false
 	}
-	value, ok := contextdata.GetTyped[any](env, "planner.step." + stepID)
+	value, ok := contextdata.GetTyped[any](env, "planner.step."+stepID)
 	if !ok {
 		return nil, false
 	}

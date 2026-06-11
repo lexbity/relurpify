@@ -1,6 +1,10 @@
 package types
 
-import "codeburg.org/lexbit/relurpify/cognitionzoo/plan"
+import (
+	"strconv"
+
+	"codeburg.org/lexbit/relurpify/cognitionzoo/plan"
+)
 
 // Predicate is a satisfied or unsatisfied world-state fact.
 type Predicate string
@@ -106,10 +110,13 @@ func stepIDFor(index int, op *Operator) string {
 }
 
 func twoDigit(n int) string {
-	if n < 10 {
-		return "0" + string(rune('0'+n))
+	if n < 0 {
+		return "00"
 	}
-	return string(rune('0'+(n/10)%10)) + string(rune('0'+n%10))
+	if n < 10 {
+		return "0" + strconv.Itoa(n)
+	}
+	return strconv.Itoa(n)
 }
 
 func operatorSatisfiesAny(op *Operator, preconditions []Predicate) bool {

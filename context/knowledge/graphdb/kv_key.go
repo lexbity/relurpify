@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 )
 
 // ────────────────────────────────────────────────────────────────────
@@ -49,7 +50,7 @@ func encodeKey(segments ...string) []byte {
 		if s == "" {
 			continue
 		}
-		buf = binary.LittleEndian.AppendUint32(buf, uint32(len(s)))
+		buf = binary.LittleEndian.AppendUint32(buf, safeSegmentLen(s))
 		buf = append(buf, s...)
 	}
 	return buf
@@ -156,15 +157,30 @@ func keyEdgeByStable(stableID, sourceID, targetID string, kind EdgeKind) []byte 
 func keyNodeHistory(id string, timestamp int64, seq uint64) []byte {
 	var buf []byte
 	buf = append(buf, encodeKey(famHistoryNode, id)...)
-	buf = binary.BigEndian.AppendUint64(buf, uint64(timestamp))
+	buf = binary.BigEndian.AppendUint64(buf, safeTimestamp(timestamp))
 	buf = binary.BigEndian.AppendUint64(buf, seq)
 	return buf
+}
+
+func safeSegmentLen(s string) uint32 {
+	n := int64(len(s))
+	if n < 0 || n > math.MaxUint32 {
+		panic(fmt.Sprintf("graphdb: segment too long: %d", n))
+	}
+	return uint32(n)
+}
+
+func safeTimestamp(ts int64) uint64 {
+	if ts < 0 {
+		return 0
+	}
+	return uint64(ts)
 }
 
 func keyEdgeHistory(sourceID string, kind EdgeKind, targetID string, timestamp int64, seq uint64) []byte {
 	var buf []byte
 	buf = append(buf, encodeKey(famHistoryEdge, sourceID, string(kind), targetID)...)
-	buf = binary.BigEndian.AppendUint64(buf, uint64(timestamp))
+	buf = binary.BigEndian.AppendUint64(buf, safeTimestamp(timestamp))
 	buf = binary.BigEndian.AppendUint64(buf, seq)
 	return buf
 }

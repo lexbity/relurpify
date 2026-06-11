@@ -95,8 +95,6 @@ func parseFailedTests(stdout, stderr string) []string {
 	return failed
 }
 
-
-
 // nodesToMatchEntries converts AST nodes to match entry maps for output.
 func nodesToMatchEntries(nodes []*ast.Node) []map[string]any {
 	matches := make([]map[string]any, 0, len(nodes))

@@ -129,5 +129,3 @@ func htnResultSummary(result *execution.Result, execErr error) string {
 	}
 	return fmt.Sprint(fields)
 }
-
-

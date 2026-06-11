@@ -56,9 +56,7 @@ func TestFileScopePolicy(t *testing.T) {
 		parentDir := filepath.Dir(workspace)
 
 		// Change to parent directory and use relative path
-		originalWd, _ := os.Getwd()
-		_ = os.Chdir(parentDir)
-		defer func() { _ = os.Chdir(originalWd) }()
+		t.Chdir(parentDir)
 
 		policy := sandbox.NewFileScopePolicy(relPath, nil)
 

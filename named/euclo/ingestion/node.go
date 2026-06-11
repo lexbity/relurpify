@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -304,6 +305,9 @@ func summaryInt(summary map[string]any, key string) int {
 		case int64:
 			return int(v)
 		case uint64:
+			if v > math.MaxInt {
+				return 0
+			}
 			return int(v)
 		}
 	}

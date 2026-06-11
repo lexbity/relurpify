@@ -11,8 +11,8 @@ import (
 
 	"codeburg.org/lexbit/relurpify/ayenitd"
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
-	"codeburg.org/lexbit/relurpify/platform/fs"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
+	"codeburg.org/lexbit/relurpify/platform/fs"
 	"codeburg.org/lexbit/relurpify/platform/llm"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 	"codeburg.org/lexbit/relurpify/userconfig/modelselect"
@@ -324,10 +324,14 @@ func copyTemplateFile(src, dst, workspace string, overwrite bool) error {
 		return err
 	}
 	rendered := strings.ReplaceAll(string(data), "${workspace}", filepath.ToSlash(workspace))
-	if err := os.MkdirAll(filepath.Dir(dst), fs.PublicDirMode); err != nil { // public: template dst dir
+	cleanDst := filepath.Clean(dst)
+	if !strings.HasPrefix(cleanDst, filepath.Clean(workspace)) {
+		return fmt.Errorf("path traversal: %s", dst)
+	}
+	if err := os.MkdirAll(filepath.Dir(cleanDst), fs.PublicDirMode); err != nil { // public: template dst dir
 		return err
 	}
-	return os.WriteFile(dst, []byte(rendered), fs.PublicFileMode) // public: rendered template
+	return os.WriteFile(filepath.Clean(cleanDst), []byte(rendered), fs.PublicFileMode) //nolint:gosec // public: rendered template
 }
 
 func detectChromiumStatus(ctx context.Context, policy sandbox.CommandPolicy) DependencyStatus {

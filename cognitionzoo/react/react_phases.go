@@ -24,7 +24,6 @@ const (
 	contextmgrPhaseEdit    = "edit"
 )
 
-
 func (a *ReActAgent) availableToolsForPhase(ctx context.Context, env *contextdata.Envelope, task *execution.Task) []ports.Tool {
 	catalog := a.executionCapabilityCatalog(ctx)
 	if catalog == nil && a.Tools == nil {

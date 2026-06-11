@@ -125,5 +125,3 @@ func cleanAbsolutePath(path string) string {
 	}
 	return filepath.Clean(path)
 }
-
-

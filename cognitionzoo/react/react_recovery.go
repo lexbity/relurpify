@@ -190,5 +190,3 @@ func inferredPathFromObservations(env *contextdata.Envelope, keys ...string) str
 	}
 	return ""
 }
-
-

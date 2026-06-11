@@ -246,7 +246,6 @@ func generateCheckpointID() string {
 	return fmt.Sprintf("htn_checkpoint_%d", time.Now().UnixNano())
 }
 
-
 func taskMetadataToAny(input map[string]string) map[string]any {
 	if len(input) == 0 {
 		return nil
@@ -257,8 +256,6 @@ func taskMetadataToAny(input map[string]string) map[string]any {
 	}
 	return out
 }
-
-
 
 // marshalJSON encodes a value to JSON bytes.
 func marshalJSON(v any) ([]byte, error) {

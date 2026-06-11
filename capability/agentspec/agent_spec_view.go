@@ -1,6 +1,8 @@
 package agentspec
 
 import (
+	"math"
+
 	"codeburg.org/lexbit/relurpify/governance/ports"
 )
 
@@ -115,6 +117,16 @@ func (a *AgentRuntimeSpec) GetOrchestration() ports.OrchestrationConfigView {
 	}
 }
 
+func clampView(v int) int32 {
+	if v > math.MaxInt32 {
+		return math.MaxInt32
+	}
+	if v < math.MinInt32 {
+		return math.MinInt32
+	}
+	return int32(v)
+}
+
 func (cs CapabilitySelector) ToView() ports.CapabilitySelectorView {
 	runtimeFamilies := make([]string, len(cs.RuntimeFamilies))
 	for i, rf := range cs.RuntimeFamilies {
@@ -158,8 +170,8 @@ func (cs CapabilitySelector) ToView() ports.CapabilitySelectorView {
 		CoordinationTaskTypes:       append([]string{}, cs.CoordinationTaskTypes...),
 		CoordinationRoles:           roles,
 		CoordinationExecModes:       execModes,
-		CoordinationLongRunning:     int32(cs.CoordinationLongRunning),
-		CoordinationDirectInsertion: int32(cs.CoordinationDirectInsertion),
+		CoordinationLongRunning:     clampView(int(cs.CoordinationLongRunning)),
+		CoordinationDirectInsertion: clampView(int(cs.CoordinationDirectInsertion)),
 	}
 }
 

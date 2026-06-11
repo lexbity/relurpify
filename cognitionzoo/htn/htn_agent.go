@@ -455,7 +455,6 @@ func (n *noopAgent) Execute(_ context.Context, _ *execution.Task, _ *contextdata
 	return &execution.Result{Success: true, Data: execution.NewToolResultPayload(map[string]any{})}, nil
 }
 
-
 // streamMode returns the streaming mode, defaulting to blocking.
 func (a *HTNAgent) streamMode() contextstream.Mode {
 	if a.StreamMode != "" {

@@ -282,10 +282,10 @@ func (s *RewooCheckpointStore) ensureCheckpointArtifactRefs(ctx context.Context,
 	}
 	if _, ok := contextdata.GetTyped[any](env, "rewoo.tool_results_ref"); !ok {
 		if results, ok := contextdata.GetTyped[[]RewooStepResult](env, "rewoo.tool_results"); ok && len(results) > 0 {
-				if ref := s.persistToolResultsArtifact(ctx, checkpointID, workflowID, runID, results); ref != nil {
-					env.SetWorkingValueWithClass("rewoo.tool_results_ref", *ref, contextdata.MemoryClassTask)
-					env.SetWorkingValueWithClass("rewoo.tool_results_summary", summarizeRewooStepResults(results), contextdata.MemoryClassTask)
-				}
+			if ref := s.persistToolResultsArtifact(ctx, checkpointID, workflowID, runID, results); ref != nil {
+				env.SetWorkingValueWithClass("rewoo.tool_results_ref", *ref, contextdata.MemoryClassTask)
+				env.SetWorkingValueWithClass("rewoo.tool_results_summary", summarizeRewooStepResults(results), contextdata.MemoryClassTask)
+			}
 		}
 	}
 	if _, ok := contextdata.GetTyped[any](env, "rewoo.synthesis_ref"); !ok {

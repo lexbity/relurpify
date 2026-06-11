@@ -46,7 +46,6 @@ type LoadOptions struct {
 	SubprocessToolFactory func(ports.ToolManifest) ports.Tool
 }
 
-
 // Load executes the consolidated configuration loading boundary.
 func Load(opts LoadOptions) (*AppConfig, *Secrets, error) {
 	overrides, err := LoadEnvOverrides(opts.EnvOverrides)

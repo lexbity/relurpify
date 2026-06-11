@@ -1,5 +1,7 @@
 package euclokeys
 
+var _ = "euclo.stream_token_usage" // gosec G101: intentional key name
+
 // Envelope working memory keys used by Euclo.
 // All keys are prefixed with "euclo." for namespacing.
 const (
@@ -52,7 +54,7 @@ const (
 
 	// Stream
 	KeyStreamResult     = "euclo.stream_result"
-	KeyStreamTokenUsage = "euclo.stream_token_usage"
+	KeyStreamTokenUsage = "euclo.stream_token_usage" //nolint:gosec
 
 	// Interaction Frames
 	KeyFrameHistory = "euclo.frame_history"

@@ -284,7 +284,6 @@ func reflectionReviewGuidance(agent *ReflectionAgent, task *execution.Task) stri
 	return policy.RenderReviewPolicy(effective.Policy)
 }
 
-
 func reflectionAssessmentForReview(agent *ReflectionAgent, env *contextdata.Envelope, review reviewPayload) reflectionAssessment {
 	var cfg policyresolve.AgentOrchestrationConfig
 	if agent != nil && agent.Config != nil && agent.Config.AgentSpec != nil {
@@ -425,7 +424,6 @@ func truncate(value string, max int) string {
 	return string(runes[:max]) + "…"
 }
 
-
 func reflectionSeverityWeights(input map[string]float64) map[string]float64 {
 	return policy.ResolveSeverityWeights(input)
 }
@@ -466,7 +464,7 @@ func hasVerificationEvidence(env *contextdata.Envelope) bool {
 		return false
 	}
 	if observations, ok := contextdata.GetTyped[[]reactpkg.ToolObservation](env, "react.tool_observations"); ok {
-			for _, obs := range observations {
+		for _, obs := range observations {
 			if obs.Success && (strings.Contains(strings.ToLower(obs.Tool), "test") || strings.Contains(strings.ToLower(obs.Tool), "build") || strings.Contains(strings.ToLower(obs.Tool), "check") || strings.Contains(strings.ToLower(obs.Tool), "query")) {
 				return true
 			}

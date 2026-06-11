@@ -319,6 +319,9 @@ func (r *LifecycleRepository) ListDelegationTransitions(delegationID string) ([]
 
 func (r *LifecycleRepository) AppendEvent(event contextports.WorkflowEventRecord) error {
 	if event.EventID == "" {
+		if event.Sequence < 0 {
+			return fmt.Errorf("negative sequence: %d", event.Sequence)
+		}
 		event.EventID = graphdb.GenerateSequenceID("evt", uint64(event.Sequence))
 	}
 	if event.Timestamp.IsZero() {

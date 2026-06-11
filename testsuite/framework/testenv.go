@@ -139,10 +139,7 @@ func (r *recordingAuditSink) Clear() {
 func NewTestEnvironment(t *testing.T) *TestEnvironment {
 	t.Helper()
 
-	workspace, err := os.MkdirTemp("", "framework-suite-*")
-	if err != nil {
-		t.Fatalf("failed to create workspace directory: %v", err)
-	}
+	workspace := t.TempDir()
 
 	manifestRoot := filepath.Join(workspace, "manifests")
 	if err := fs.MkdirAllSecure(manifestRoot); err != nil {

@@ -14,5 +14,3 @@ type BackendModelProfileProvenance struct {
 	Reason            string            `json:"reason,omitempty"`
 	Profile           *llm.ModelProfile `json:"profile,omitempty"`
 }
-
-

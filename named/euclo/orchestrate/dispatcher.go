@@ -241,4 +241,3 @@ func classificationRequiresClarification(env *contextdata.Envelope) bool {
 	cls, ok := euclostate.GetIntentClassification(env)
 	return ok && cls != nil && cls.Ambiguous
 }
-

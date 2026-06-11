@@ -474,7 +474,6 @@ func gatherLoweredFromDeclaration(node Declaration, plan *ExecutionPlan, runInde
 	return nil
 }
 
-
 func rawValueExprList(values []ValueExpr) []string {
 	if len(values) == 0 {
 		return nil

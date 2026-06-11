@@ -61,5 +61,3 @@ func TestAgentBuilder_RequiresEnvironment(t *testing.T) {
 		t.Fatal("expected error when environment is not set")
 	}
 }
-
-

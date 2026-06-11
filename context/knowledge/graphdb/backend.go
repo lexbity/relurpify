@@ -76,7 +76,6 @@ type backend interface {
 type mutationBatch struct {
 	opName string
 	op     any
-
 }
 
 // singleOpBatch returns a mutationBatch for a single operation.

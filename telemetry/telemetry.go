@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"log"
 	"os"
+	"path/filepath"
 	"sync"
 )
 
@@ -33,7 +34,7 @@ type JSONFileTelemetry struct {
 
 // NewJSONFileTelemetry opens (or creates) the log file.
 func NewJSONFileTelemetry(path string) (*JSONFileTelemetry, error) {
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+	f, err := os.OpenFile(filepath.Clean(path), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
 	if err != nil {
 		return nil, err
 	}

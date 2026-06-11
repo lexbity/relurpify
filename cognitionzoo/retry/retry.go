@@ -2,8 +2,9 @@ package retry
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/binary"
 	"math"
-	"math/rand"
 	"time"
 )
 
@@ -64,12 +65,22 @@ func computeJitter(baseDuration time.Duration, jitterFraction float64) time.Dura
 	if jitterMs <= 0 {
 		return 0
 	}
-	randomJitter := rand.Int63n(2*jitterMs) - jitterMs
+	randomJitter := cryptoRandInt63n(2 * jitterMs)
+	randomJitter -= jitterMs
 	return time.Duration(randomJitter) * time.Millisecond
 }
 
 func (bc *BackoffCalculator) Reset() {
 	bc.attempt = 0
+}
+
+func cryptoRandInt63n(n int64) int64 {
+	var buf [8]byte
+	if _, err := rand.Read(buf[:]); err != nil {
+		return 0
+	}
+	v := int64(binary.LittleEndian.Uint64(buf[:]) & 0x7fffffffffffffff)
+	return v % n
 }
 
 func Sleep(ctx context.Context, d time.Duration) bool {

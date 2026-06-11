@@ -11,11 +11,11 @@ import (
 
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
-	"codeburg.org/lexbit/relurpify/platform/fs"
 	"codeburg.org/lexbit/relurpify/execution/agentgraph"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	intentcontext "codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
+	"codeburg.org/lexbit/relurpify/platform/fs"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
@@ -82,7 +82,9 @@ func (r *recordingExecutor) Execute(ctx context.Context, task *execution.Task, e
 
 func (r *recordingExecutor) Capabilities() []string { return nil }
 
-func (r *recordingExecutor) BuildGraph(ctx context.Context, _ *execution.Task) (*agentgraph.Graph, error) { return nil, errors.New("not implemented") }
+func (r *recordingExecutor) BuildGraph(ctx context.Context, _ *execution.Task) (*agentgraph.Graph, error) {
+	return nil, errors.New("not implemented")
+}
 
 func TestResolveInteractionFrameResumesClarificationTask(t *testing.T) {
 	env := contextdata.NewEnvelope("task-1", "session-1")

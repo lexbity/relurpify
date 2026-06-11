@@ -2,6 +2,7 @@ package capability
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -147,7 +148,7 @@ func TestAllCapabilitySnapshots_ConcurrentAccess(t *testing.T) {
 	for i := 0; i < total; i++ {
 		go func(i int) {
 			desc := descriptor.CapabilityDescriptor{
-				ID:            "cap:concurrent:" + string(rune('a'+i)),
+				ID:            fmt.Sprintf("cap:concurrent:%c", 'a'+i),
 				Name:          "concurrent",
 				Kind:          agentspec.CapabilityKindTool,
 				RuntimeFamily: agentspec.CapabilityRuntimeFamilyProvider,

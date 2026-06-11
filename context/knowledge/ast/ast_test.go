@@ -101,5 +101,3 @@ func TestMarkdownParserParse(t *testing.T) {
 		t.Fatalf("expected heading and code nodes, got %d", len(result.Nodes))
 	}
 }
-
-

@@ -255,7 +255,6 @@ func (a *BlackboardAgent) executionCapabilityCatalog(ctx context.Context) *capab
 	return a.Tools.CaptureExecutionCatalogSnapshot(ctx)
 }
 
-
 func maxCycles(max int) int {
 	if max <= 0 {
 		return defaultMaxCycles

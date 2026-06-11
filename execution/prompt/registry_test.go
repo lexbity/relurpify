@@ -4,12 +4,13 @@ import (
 	"errors"
 	"path/filepath"
 
-	"codeburg.org/lexbit/relurpify/platform/fs"
 	"reflect"
 	"sort"
 	"strings"
 	"testing"
 	"testing/fstest"
+
+	"codeburg.org/lexbit/relurpify/platform/fs"
 )
 
 func TestRegistry_LoadDirV2Prompts(t *testing.T) {

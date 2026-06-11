@@ -229,18 +229,18 @@ func (r *Runner) Run(ctx context.Context, req ports.CommandRequest) (*ports.Comm
 				if stdoutBuf.exceededCeiling() || stderrBuf.exceededCeiling() {
 					oomKilled.Store(true)
 					// docker stop -t 0 force-kills immediately, then rm -f
-				_, stopCancel2 := context.WithTimeout(teardownCtx, 5*time.Second)
-				defer stopCancel2()
-				_ = (&exec.Cmd{
-					Path: resolvedDockerPath,
-					Args: []string{resolvedDockerPath, "stop", "-t", "0", containerName},
-				}).Run()
-				_, rmCancel2 := context.WithTimeout(teardownCtx, 5*time.Second)
-				defer rmCancel2()
-				_ = (&exec.Cmd{
-					Path: resolvedDockerPath,
-					Args: []string{resolvedDockerPath, "rm", "-f", containerName},
-				}).Run()
+					_, stopCancel2 := context.WithTimeout(teardownCtx, 5*time.Second)
+					defer stopCancel2()
+					_ = (&exec.Cmd{
+						Path: resolvedDockerPath,
+						Args: []string{resolvedDockerPath, "stop", "-t", "0", containerName},
+					}).Run()
+					_, rmCancel2 := context.WithTimeout(teardownCtx, 5*time.Second)
+					defer rmCancel2()
+					_ = (&exec.Cmd{
+						Path: resolvedDockerPath,
+						Args: []string{resolvedDockerPath, "rm", "-f", containerName},
+					}).Run()
 					return
 				}
 			}

@@ -82,11 +82,7 @@ func TestNormalizePathSymlinkInsideWorkspace(t *testing.T) {
 
 func TestNormalizePathSymlinkEscapesWorkspace(t *testing.T) {
 	ws := t.TempDir()
-	outsideDir, err := os.MkdirTemp("", "outside-*")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = os.RemoveAll(outsideDir) }()
+	outsideDir := t.TempDir()
 
 	link := filepath.Join(ws, "evil")
 	if err := os.Symlink(outsideDir, link); err != nil {
@@ -94,7 +90,7 @@ func TestNormalizePathSymlinkEscapesWorkspace(t *testing.T) {
 	}
 
 	m := testPermManager(ws)
-	_, err = m.normalizePath("evil/passwd")
+	_, err := m.normalizePath("evil/passwd")
 	if err == nil {
 		t.Fatal("expected error for symlink escaping workspace")
 	}

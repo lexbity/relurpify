@@ -992,10 +992,15 @@ func (p *DiffPane) applyHunks(filePath string, hunks []DiffHunkProjection) error
 	if abs == "" {
 		return fmt.Errorf("workspace path unavailable")
 	}
+	cleanAbs := filepath.Clean(abs)
+	workspaceRoot := filepath.Clean(p.workspace)
+	if !strings.HasPrefix(cleanAbs, workspaceRoot) {
+		return fmt.Errorf("path traversal: %s", filePath)
+	}
 	if err := p.captureBaseline(filePath); err != nil {
 		return err
 	}
-	current, err := os.ReadFile(filepath.Clean(abs))
+	current, err := os.ReadFile(cleanAbs)
 	if err != nil && !os.IsNotExist(err) {
 		return err
 	}
@@ -1006,13 +1011,13 @@ func (p *DiffPane) applyHunks(filePath string, hunks []DiffHunkProjection) error
 			return fmt.Errorf("%s: %w", filePath, err)
 		}
 	}
-	if err := os.MkdirAll(filepath.Dir(abs), fs.PublicDirMode); err != nil { // public: parent dir for patch
+	if err := os.MkdirAll(filepath.Dir(cleanAbs), fs.PublicDirMode); err != nil { // public: parent dir for patch
 		return err
 	}
-	if _, err := config.CreateTimestampedBackup(abs); err != nil && !os.IsNotExist(err) {
+	if _, err := config.CreateTimestampedBackup(cleanAbs); err != nil && !os.IsNotExist(err) {
 		return err
 	}
-	return os.WriteFile(abs, updated, fs.PublicFileMode) // public: patched file
+	return os.WriteFile(filepath.Clean(cleanAbs), updated, fs.PublicFileMode) //nolint:gosec // public: patched file
 }
 
 func (p *DiffPane) revertFile(filePath string) error {

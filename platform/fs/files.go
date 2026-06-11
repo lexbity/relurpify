@@ -398,7 +398,7 @@ func (t *SearchInFilesTool) Execute(ctx context.Context, args map[string]any) (*
 			return err
 		}
 
-		file, err := os.Open(filepath.Clean(path))
+		file, err := os.Open(filepath.Clean(path)) //nolint:gosec
 		if err != nil {
 			return nil // skip unreadable files
 		}

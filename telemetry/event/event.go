@@ -121,7 +121,7 @@ func (r *Runner) applyBatch(ctx context.Context, events []FrameworkEvent) error 
 		r.SnapshotInterval = 10000
 	}
 	lastSeq := events[len(events)-1].Seq
-	if lastSeq-r.lastSnapshotSeq < uint64(r.SnapshotInterval) {
+	if lastSeq-r.lastSnapshotSeq < safeSnapInterval(r.SnapshotInterval) {
 		return nil
 	}
 	for _, m := range r.Materializers {
@@ -135,6 +135,13 @@ func (r *Runner) applyBatch(ctx context.Context, events []FrameworkEvent) error 
 	}
 	r.lastSnapshotSeq = lastSeq
 	return nil
+}
+
+func safeSnapInterval(v int) uint64 {
+	if v < 0 {
+		return 0
+	}
+	return uint64(v)
 }
 
 func partitionOrDefault(partition string) string {

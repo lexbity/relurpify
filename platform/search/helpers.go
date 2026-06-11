@@ -57,5 +57,3 @@ func scanLinesOrChunks(maxChunk int) bufio.SplitFunc {
 		return 0, nil, nil
 	}
 }
-
-

@@ -4,6 +4,17 @@ import (
 	"testing"
 )
 
+// Package-level sentinel assignments tell gosec G101 these strings are
+// intended test data, not leaked credentials.
+var (
+	_ = "ghp_abcdef123456"
+	_ = "github_pat_abc123"
+	_ = "sk-proj-test"
+	_ = "bearer xyz"
+	_ = "authorization: basic"
+	_ = "session=abc123"
+)
+
 // redactGoldenVectors defines a shared set of (input, expected) pairs that
 // both governance/authorization.redactAny and the original capability-level
 // redactor must agree on. Add vectors here when adding new sensitive patterns.
@@ -81,15 +92,17 @@ var redactGoldenVectors = []struct {
 	},
 	{
 		name: "sensitive value patterns",
-		input: map[string]any{
-			"header":       "bearer xyz",
-			"gh_token":     "ghp_abcdef123456",
-			"github_token": "github_pat_abc123",
-			"openai_key":   "sk-proj-test",
-			"auth_str":     "authorization: basic",
-			"session":      "session=abc123",
-			"safe":         "hello world",
-		},
+		input: func() map[string]any {
+			return map[string]any{ //nolint:gosec
+				"header":       "bearer xyz",
+				"gh_token":     "ghp_abcdef123456",
+				"github_token": "github_pat_abc123",
+				"openai_key":   "sk-proj-test",
+				"auth_str":     "authorization: basic",
+				"session":      "session=abc123",
+				"safe":         "hello world",
+			}
+		}(),
 		expected: map[string]any{
 			"header":       "[REDACTED]",
 			"gh_token":     "[REDACTED]",

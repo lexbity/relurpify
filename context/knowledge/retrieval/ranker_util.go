@@ -44,4 +44,3 @@ func sortRankedIDs(scores map[knowledge.ChunkID]float64, tiebreak func(a, b know
 	})
 	return ids
 }
-

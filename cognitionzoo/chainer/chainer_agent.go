@@ -76,7 +76,6 @@ func (a *ChainerAgent) BuildGraph(ctx context.Context, task *execution.Task) (*a
 	return g, nil
 }
 
-
 func (a *ChainerAgent) Execute(ctx context.Context, task *execution.Task, env *contextdata.Envelope) (*execution.Result, error) {
 	if !a.initialised {
 		if err := a.Initialize(a.Config); err != nil {

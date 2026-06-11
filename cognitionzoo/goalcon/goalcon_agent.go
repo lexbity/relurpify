@@ -91,7 +91,6 @@ func (a *GoalConAgent) BuildGraph(ctx context.Context, _ *execution.Task) (*grap
 	return g, nil
 }
 
-
 func (a *GoalConAgent) Execute(ctx context.Context, task *execution.Task, env *contextdata.Envelope) (*execution.Result, error) {
 	if !a.initialised {
 		if err := a.Initialize(a.Config); err != nil {

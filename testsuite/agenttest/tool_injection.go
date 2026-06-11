@@ -2,8 +2,9 @@ package agenttest
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/binary"
 	"fmt"
-	"math/rand"
 	"strings"
 	"sync"
 	"time"
@@ -57,6 +58,14 @@ func (i *InjectionInterceptor) Category() string {
 }
 
 // Parameters returns the wrapped tool's parameters
+func cryptoRandFloat64() float64 {
+	var buf [8]byte
+	if _, err := rand.Read(buf[:]); err != nil {
+		return 0
+	}
+	return float64(binary.LittleEndian.Uint64(buf[:])&((1<<53)-1)) / float64(1<<53)
+}
+
 func (i *InjectionInterceptor) Parameters() []ports.ToolParameter {
 	return i.base.Parameters()
 }
@@ -97,7 +106,7 @@ func (i *InjectionInterceptor) Execute(ctx context.Context, args map[string]any)
 		}
 
 		// Apply failure rate injection
-		if override.FailureRate > 0 && rand.Float64() < override.FailureRate {
+		if override.FailureRate > 0 && cryptoRandFloat64() < override.FailureRate {
 			return i.createErrorResult(override, "injected failure"), nil
 		}
 

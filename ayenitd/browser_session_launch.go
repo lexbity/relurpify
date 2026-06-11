@@ -24,8 +24,6 @@ import (
 	"codeburg.org/lexbit/relurpify/telemetry"
 )
 
-
-
 const defaultBrowserTimeout = 15 * time.Second
 const (
 	sandboxCDPPort       = 9222

@@ -92,5 +92,3 @@ func normalizeArguments(value any) map[string]any {
 		return map[string]any{}
 	}
 }
-
-

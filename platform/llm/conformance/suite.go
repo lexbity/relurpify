@@ -137,5 +137,3 @@ func BackendConformanceSuite(t *testing.T, spec BackendConformanceSpec) {
 		spec.SetDebugLogging(backend, true)
 	})
 }
-
-

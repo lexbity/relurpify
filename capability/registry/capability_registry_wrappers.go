@@ -98,7 +98,6 @@ func (h instrumentCapabilityHandler) runtimeState() executionRuntimeState {
 	return h.registry.executionRuntimeState()
 }
 
-
 func (h instrumentCapabilityHandler) Descriptor(ctx context.Context, env ports.State) descriptor.CapabilityDescriptor {
 	if h.descriptor.ID != "" {
 		return h.descriptor

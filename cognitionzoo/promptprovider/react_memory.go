@@ -109,6 +109,5 @@ func renderChunkRefs(refs []contextdata.ChunkReference) string {
 	return strings.Join(lines, "\n")
 }
 
-
 // Ensure unused import doesn't slip through — used in renderChunkRefs.
 var _ = fmt.Sprintf

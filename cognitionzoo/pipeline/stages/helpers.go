@@ -14,7 +14,6 @@ func taskInstruction(task *execution.Task) string {
 	return strings.TrimSpace(task.Instruction)
 }
 
-
 func renderContextFiles(task *execution.Task, maxBytes int) string {
 	if task == nil || task.Context == nil {
 		return ""

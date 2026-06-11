@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"hash/crc32"
 	"io"
 	"math"
@@ -168,7 +169,10 @@ func (w *aofWriter) syncLocked(force bool) error {
 func encodeFrame(frameType byte, payload []byte) []byte {
 	out := make([]byte, 1+4+len(payload)+4)
 	out[0] = frameType
-	binary.LittleEndian.PutUint32(out[1:5], uint32(len(payload)))
+	if len(payload) > math.MaxUint32 {
+		panic(fmt.Sprintf("graphdb: payload too large: %d", len(payload)))
+	}
+	binary.LittleEndian.PutUint32(out[1:5], safeIntLen(len(payload)))
 	copy(out[5:5+len(payload)], payload)
 	crc := crc32.ChecksumIEEE(payload)
 	binary.LittleEndian.PutUint32(out[5+len(payload):], crc)
@@ -274,8 +278,22 @@ func (e *binaryEncoder) writeUint32(v uint32) {
 
 func (e *binaryEncoder) writeInt64(v int64) {
 	var buf [8]byte
-	binary.LittleEndian.PutUint64(buf[:], uint64(v))
+	binary.LittleEndian.PutUint64(buf[:], encodeInt64ToUint64(v))
 	e.buf.Write(buf[:])
+}
+
+func encodeInt64ToUint64(v int64) uint64 {
+	if v < 0 {
+		return 0
+	}
+	return uint64(v)
+}
+
+func safeIntLen(v int) uint32 {
+	if v < 0 || v > math.MaxUint32 {
+		panic(fmt.Sprintf("graphdb: value out of range: %d", v))
+	}
+	return uint32(v)
 }
 
 func (e *binaryEncoder) writeUint64(v uint64) {
@@ -285,7 +303,7 @@ func (e *binaryEncoder) writeUint64(v uint64) {
 }
 
 func (e *binaryEncoder) writeBytes(v []byte) {
-	e.writeUint32(uint32(len(v)))
+	e.writeUint32(safeIntLen(len(v)))
 	e.buf.Write(v)
 }
 
@@ -294,7 +312,7 @@ func (e *binaryEncoder) writeString(v string) {
 }
 
 func (e *binaryEncoder) writeStrings(values []string) {
-	e.writeUint32(uint32(len(values)))
+	e.writeUint32(safeIntLen(len(values)))
 	for _, value := range values {
 		e.writeString(value)
 	}
@@ -355,7 +373,11 @@ func (d *binaryDecoder) readInt64() (int64, error) {
 	if _, err := io.ReadFull(d.r, buf[:]); err != nil {
 		return 0, err
 	}
-	return int64(binary.LittleEndian.Uint64(buf[:])), nil
+	v := binary.LittleEndian.Uint64(buf[:])
+	if v > math.MaxInt64 {
+		return 0, fmt.Errorf("graphdb: int64 overflow: %d", v)
+	}
+	return int64(v), nil
 }
 
 func (d *binaryDecoder) readUint64() (uint64, error) {

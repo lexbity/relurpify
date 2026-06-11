@@ -1,6 +1,8 @@
 package agentspec
 
 import (
+	"math"
+
 	"codeburg.org/lexbit/relurpify/governance/policy"
 	"codeburg.org/lexbit/relurpify/governance/policyresolve"
 )
@@ -50,8 +52,8 @@ func toCapSelectors(in []CapabilitySelector) []policyresolve.CapabilitySelector 
 			CoordinationRoles:           toStringSlice(s.CoordinationRoles),
 			CoordinationTaskTypes:       append([]string(nil), s.CoordinationTaskTypes...),
 			CoordinationExecutionModes:  toStringSlice(s.CoordinationExecutionModes),
-			CoordinationLongRunning:     int32(s.CoordinationLongRunning),
-			CoordinationDirectInsertion: int32(s.CoordinationDirectInsertion),
+			CoordinationLongRunning:     clampSpec(int(s.CoordinationLongRunning)),
+			CoordinationDirectInsertion: clampSpec(int(s.CoordinationDirectInsertion)),
 		}
 	}
 	return out
@@ -103,6 +105,16 @@ func toReviewPolicy(r AgentReviewPolicy) policyresolve.AgentReviewPolicy {
 		},
 		SeverityWeights: cloneMapF64(r.SeverityWeights),
 	}
+}
+
+func clampSpec(v int) int32 {
+	if v > math.MaxInt32 {
+		return math.MaxInt32
+	}
+	if v < math.MinInt32 {
+		return math.MinInt32
+	}
+	return int32(v)
 }
 
 func toStringSlice[T ~string](in []T) []string {

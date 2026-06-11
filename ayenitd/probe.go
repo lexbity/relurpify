@@ -3,6 +3,7 @@ package ayenitd
 import (
 	"context"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"syscall"
@@ -106,8 +107,11 @@ func checkDiskSpace(workspace string, requiredBytes int64) (bool, string) {
 	if err != nil {
 		return true, fmt.Sprintf("cannot check disk space: %s (assuming sufficient)", err)
 	}
+	if stat.Bsize < 0 || (stat.Bsize > 0 && stat.Bavail > math.MaxUint64/uint64(stat.Bsize)) {
+		return true, "cannot check disk space: overflow (assuming sufficient)"
+	}
 	available := stat.Bavail * uint64(stat.Bsize)
-	if uint64(requiredBytes) > available {
+	if requiredBytes < 0 || uint64(requiredBytes) > available {
 		return false, fmt.Sprintf("insufficient disk space: %d MB available, need at least %d MB",
 			available/(1024*1024), requiredBytes/(1024*1024))
 	}

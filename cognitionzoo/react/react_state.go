@@ -19,7 +19,6 @@ type ToolObservation struct {
 	Timestamp time.Time      `json:"timestamp"`
 }
 
-
 func activeToolSet(env *contextdata.Envelope) map[string]struct{} {
 	out := map[string]struct{}{}
 	if env == nil {

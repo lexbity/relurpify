@@ -53,8 +53,8 @@ func (p *fakeChatPane) MutateMessages(func([]Message))                          
 func (p *fakeChatPane) AddFile(string) tea.Cmd                                        { return nil }
 
 type fakeSurface struct {
-	name         string
-	chat         ChatPaner
+	name string
+	chat ChatPaner
 
 	tabCount     int
 	commandCount int

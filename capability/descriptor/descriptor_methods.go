@@ -1,6 +1,8 @@
 package descriptor
 
 import (
+	"math"
+
 	"codeburg.org/lexbit/relurpify/governance/classification"
 )
 
@@ -27,6 +29,16 @@ func (d CapabilityDescriptor) DirectInsertionAllowed() int32 {
 	return directInsertionAllowed(d)
 }
 
+func safeInt32(v int) int32 {
+	if v > math.MaxInt32 {
+		return math.MaxInt32
+	}
+	if v < math.MinInt32 {
+		return math.MinInt32
+	}
+	return int32(v)
+}
+
 func coordinationRole(d CapabilityDescriptor) string {
 	if d.Coordination != nil {
 		return string(d.Coordination.Role)
@@ -40,7 +52,7 @@ func coordinationTarget(d CapabilityDescriptor) bool {
 
 func longRunning(d CapabilityDescriptor) int32 {
 	if d.Coordination != nil {
-		return int32(d.Coordination.LongRunning)
+		return safeInt32(int(d.Coordination.LongRunning))
 	}
 	return 0
 }
@@ -69,7 +81,7 @@ func coordinationExecutionModes(d CapabilityDescriptor) []string {
 
 func directInsertionAllowed(d CapabilityDescriptor) int32 {
 	if d.Coordination != nil {
-		return int32(d.Coordination.DirectInsertionAllowed)
+		return safeInt32(int(d.Coordination.DirectInsertionAllowed))
 	}
 	return 0
 }

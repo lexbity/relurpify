@@ -1,7 +1,7 @@
 package ast
 
 import (
-	"crypto/sha1"
+	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 )
@@ -63,7 +63,7 @@ type CodeChunk struct {
 
 // Hash returns a stable identifier suitable for caches.
 func (c *CodeChunk) Hash() string {
-	h := sha1.Sum([]byte(c.File + c.Name + fmt.Sprint(c.StartLine, c.EndLine)))
+	h := sha256.Sum256([]byte(c.File + c.Name + fmt.Sprint(c.StartLine, c.EndLine)))
 	return hex.EncodeToString(h[:])
 }
 

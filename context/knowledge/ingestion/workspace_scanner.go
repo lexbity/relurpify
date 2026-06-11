@@ -14,8 +14,8 @@ import (
 	"codeburg.org/lexbit/relurpify/context/knowledge"
 	contextports "codeburg.org/lexbit/relurpify/context/ports"
 	"codeburg.org/lexbit/relurpify/governance/identity"
-	"codeburg.org/lexbit/relurpify/platform/fs"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
+	"codeburg.org/lexbit/relurpify/platform/fs"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
