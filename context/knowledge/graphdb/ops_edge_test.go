@@ -18,7 +18,7 @@ func TestLink_SingleEdge(t *testing.T) {
 	out := engine.GetOutEdges("src", "calls")
 	require.Len(t, out, 1)
 	require.Equal(t, "tgt", out[0].TargetID)
-	require.Equal(t, float32(1.5), out[0].Weight)
+	require.InDelta(t, float32(1.5), out[0].Weight, 0.01)
 	require.JSONEq(t, `{"site":"x"}`, string(out[0].Props))
 }
 
@@ -136,6 +136,6 @@ func TestEdgeUpsert_UpdateExisting(t *testing.T) {
 
 	out := engine.GetOutEdges("u", "calls")
 	require.Len(t, out, 1)
-	require.Equal(t, float32(2), out[0].Weight)
+	require.InDelta(t, float32(2), out[0].Weight, 0.01)
 	require.JSONEq(t, `{"a":2}`, string(out[0].Props))
 }

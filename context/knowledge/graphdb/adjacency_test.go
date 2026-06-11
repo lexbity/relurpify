@@ -50,7 +50,7 @@ func TestCloneEdge(t *testing.T) {
 	require.True(t, reflect.DeepEqual(edge, copied), "cloned edge should equal original")
 	originalProps := edge.Props
 	edge.Props = append(edge.Props, 'y')
-	require.Equal(t, []byte(`{"site":"x"}`), []byte(copied.Props), "props slice should be independent")
+	require.JSONEq(t, `{"site":"x"}`, string(copied.Props), "props slice should be independent")
 	edge.Props = originalProps
 }
 

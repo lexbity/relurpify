@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"codeburg.org/lexbit/relurpify/model"
@@ -38,7 +39,7 @@ func TestBackend_ConformanceSuite(t *testing.T) {
 				}
 				body, _ := io.ReadAll(r.Body)
 				if scenario == "chat-tools-native" {
-					require.Contains(t, string(body), `"tools"`)
+					assert.Contains(t, string(body), `"tools"`)
 					_ = json.NewEncoder(w).Encode(map[string]any{
 						"choices": []map[string]any{
 							{
@@ -62,7 +63,7 @@ func TestBackend_ConformanceSuite(t *testing.T) {
 					return
 				}
 				if scenario == "chat-tools-fallback" {
-					require.NotContains(t, string(body), `"tools"`)
+					assert.NotContains(t, string(body), `"tools"`)
 				}
 				_ = json.NewEncoder(w).Encode(map[string]any{
 					"choices": []map[string]any{
@@ -161,7 +162,7 @@ func TestBackend_ConformanceSuite(t *testing.T) {
 
 func TestLMStudioBackend_Warm_Reachable(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		require.Equal(t, "/v1/models", r.URL.Path)
+		assert.Equal(t, "/v1/models", r.URL.Path)
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"data": []map[string]any{{"id": "test-model", "object": "model", "owned_by": "lmstudio"}},
 		})
@@ -169,7 +170,7 @@ func TestLMStudioBackend_Warm_Reachable(t *testing.T) {
 	defer srv.Close()
 
 	backend := NewBackend(Config{Endpoint: srv.URL, Model: "test-model"}, "")
-	require.NoError(t, backend.Warm(context.Background()))
+	assert.NoError(t, backend.Warm(context.Background()))
 }
 
 func TestLMStudioBackend_Warm_Unreachable(t *testing.T) {
@@ -179,7 +180,7 @@ func TestLMStudioBackend_Warm_Unreachable(t *testing.T) {
 	defer srv.Close()
 
 	backend := NewBackend(Config{Endpoint: srv.URL, Model: "test-model"}, "")
-	require.Error(t, backend.Warm(context.Background()))
+	assert.Error(t, backend.Warm(context.Background()))
 }
 
 func TestLMStudioBackend_Capabilities(t *testing.T) {
@@ -200,9 +201,9 @@ func TestLMStudioBackend_ModelContextSize_ProfileOverride(t *testing.T) {
 
 func TestLMStudioBackend_Chat(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		require.Equal(t, "/v1/chat/completions", r.URL.Path)
+		assert.Equal(t, "/v1/chat/completions", r.URL.Path)
 		body, _ := io.ReadAll(r.Body)
-		require.Contains(t, string(body), `"messages"`)
+		assert.Contains(t, string(body), `"messages"`)
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"choices": []map[string]any{
 				{"message": map[string]any{"role": "assistant", "content": "response"}, "finish_reason": "stop"},
@@ -214,14 +215,14 @@ func TestLMStudioBackend_Chat(t *testing.T) {
 	backend := NewBackend(Config{Endpoint: srv.URL, Model: "test-model"}, "")
 	resp, err := backend.Model().Chat(context.Background(), []model.Message{{Role: "user", Content: "ping"}}, nil)
 	require.NoError(t, err)
-	require.Equal(t, "response", resp.Text)
+	assert.Equal(t, "response", resp.Text)
 }
 
 func TestLMStudioBackend_Streaming(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
 		flusher, ok := w.(http.Flusher)
-		require.True(t, ok)
+		assert.True(t, ok)
 		_, _ = fmt.Fprintln(w, `data: {"choices":[{"delta":{"content":"hel"}}]}`)
 		flusher.Flush()
 		_, _ = fmt.Fprintln(w, `data: {"choices":[{"delta":{"content":"lo"},"finish_reason":"stop"}]}`)
@@ -237,16 +238,16 @@ func TestLMStudioBackend_Streaming(t *testing.T) {
 		StreamCallback: func(token string) { got.WriteString(token) },
 	})
 	require.NoError(t, err)
-	require.Equal(t, "hello", got.String())
-	require.Equal(t, "hello", resp.Text)
+	assert.Equal(t, "hello", got.String())
+	assert.Equal(t, "hello", resp.Text)
 }
 
 func TestLMStudioBackend_ChatWithTools_Native(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		require.Equal(t, "/v1/chat/completions", r.URL.Path)
+		assert.Equal(t, "/v1/chat/completions", r.URL.Path)
 		var payload map[string]any
-		require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
-		require.Contains(t, payload, "tools")
+		assert.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
+		assert.Contains(t, payload, "tools")
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"choices": []map[string]any{
 				{
@@ -273,13 +274,13 @@ func TestLMStudioBackend_ChatWithTools_Native(t *testing.T) {
 	backend := NewBackend(Config{Endpoint: srv.URL, Model: "test-model", NativeToolCalling: true}, "")
 	resp, err := backend.Model().ChatWithTools(context.Background(), []model.Message{{Role: "user", Content: "ping"}}, []model.LLMToolSpec{{Name: "echo"}}, nil)
 	require.NoError(t, err)
-	require.Len(t, resp.ToolCalls, 1)
-	require.Equal(t, "echo", resp.ToolCalls[0].Name)
+	assert.Len(t, resp.ToolCalls, 1)
+	assert.Equal(t, "echo", resp.ToolCalls[0].Name)
 }
 
 func TestLMStudioBackend_BearerAuth(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		require.Equal(t, "Bearer secret", r.Header.Get("Authorization"))
+		assert.Equal(t, "Bearer secret", r.Header.Get("Authorization"))
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"choices": []map[string]any{
 				{"message": map[string]any{"role": "assistant", "content": "ok"}},
@@ -290,12 +291,12 @@ func TestLMStudioBackend_BearerAuth(t *testing.T) {
 
 	backend := NewBackend(Config{Endpoint: srv.URL, Model: "test-model"}, "secret")
 	_, err := backend.Model().Chat(context.Background(), []model.Message{{Role: "user", Content: "ping"}}, nil)
-	require.NoError(t, err)
+	assert.NoError(t, err)
 }
 
 func TestLMStudioBackend_NoAuth(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		require.Empty(t, r.Header.Get("Authorization"))
+		assert.Empty(t, r.Header.Get("Authorization"))
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"choices": []map[string]any{
 				{"message": map[string]any{"role": "assistant", "content": "ok"}},
@@ -306,15 +307,15 @@ func TestLMStudioBackend_NoAuth(t *testing.T) {
 
 	backend := NewBackend(Config{Endpoint: srv.URL, Model: "test-model"}, "")
 	_, err := backend.Model().Chat(context.Background(), []model.Message{{Role: "user", Content: "ping"}}, nil)
-	require.NoError(t, err)
+	assert.NoError(t, err)
 }
 
 func TestLMStudioBackend_Embeddings(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		require.Equal(t, "/v1/embeddings", r.URL.Path)
+		assert.Equal(t, "/v1/embeddings", r.URL.Path)
 		var payload map[string]any
-		require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
-		require.Equal(t, "embed-model", payload["model"])
+		assert.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
+		assert.Equal(t, "embed-model", payload["model"])
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"data": []map[string]any{
 				{"embedding": []float32{1, 2, 3}},
@@ -325,15 +326,15 @@ func TestLMStudioBackend_Embeddings(t *testing.T) {
 
 	backend := NewBackend(Config{Endpoint: srv.URL, Model: "embed-model"}, "")
 	embedder := backend.Embedder()
-	require.NotNil(t, embedder)
+	assert.NotNil(t, embedder)
 	vectors, err := embedder.Embed(context.Background(), []string{"hello"})
 	require.NoError(t, err)
-	require.Equal(t, [][]float32{{1, 2, 3}}, vectors)
+	assert.Equal(t, [][]float32{{1, 2, 3}}, vectors)
 }
 
 func TestLMStudioBackend_ListModels(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		require.Equal(t, "/v1/models", r.URL.Path)
+		assert.Equal(t, "/v1/models", r.URL.Path)
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"data": []map[string]any{
 				{"id": "model-a", "object": "model", "owned_by": "lmstudio"},
@@ -346,9 +347,9 @@ func TestLMStudioBackend_ListModels(t *testing.T) {
 	backend := NewBackend(Config{Endpoint: srv.URL, Model: "test-model"}, "")
 	models, err := backend.ListModels(context.Background())
 	require.NoError(t, err)
-	require.Len(t, models, 2)
-	require.Equal(t, "model-a", models[0].Name)
-	require.Equal(t, "model-b", models[1].Name)
+	assert.Len(t, models, 2)
+	assert.Equal(t, "model-a", models[0].Name)
+	assert.Equal(t, "model-b", models[1].Name)
 }
 
 func TestLMStudioBackend_Health(t *testing.T) {
@@ -362,7 +363,7 @@ func TestLMStudioBackend_Health(t *testing.T) {
 	backend := NewBackend(Config{Endpoint: srv.URL, Model: "test-model"}, "")
 	report, err := backend.Health(context.Background())
 	require.NoError(t, err)
-	require.Equal(t, BackendHealthReady, report.State)
+	assert.Equal(t, BackendHealthReady, report.State)
 }
 
 func TestLMStudioBackend_CloseAndDebugLogging(t *testing.T) {

@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"codeburg.org/lexbit/relurpify/capability/ports"
@@ -85,48 +86,48 @@ func TestBackendMethodFlowWithRemoteServers(t *testing.T) {
 	defer api.Close()
 
 	backend, err := New(context.Background(), Config{RemoteURL: api.URL})
-	require.NoError(t, err)
+	assert.NoError(t, err)
 
-	require.NoError(t, backend.Navigate(context.Background(), "https://example.com"))
-	require.NoError(t, backend.Click(context.Background(), "#submit"))
-	require.NoError(t, backend.Type(context.Background(), "#name", "lex"))
+	assert.NoError(t, backend.Navigate(context.Background(), "https://example.com"))
+	assert.NoError(t, backend.Click(context.Background(), "#submit"))
+	assert.NoError(t, backend.Type(context.Background(), "#name", "lex"))
 
 	text, err := backend.GetText(context.Background(), "#result")
 	require.NoError(t, err)
-	require.Equal(t, "hello", text)
+	assert.Equal(t, "hello", text)
 
 	ax, err := backend.GetAccessibilityTree(context.Background())
 	require.NoError(t, err)
-	require.Contains(t, ax, `"role":"document"`)
+	assert.Contains(t, ax, `"role":"document"`)
 
 	html, err := backend.GetHTML(context.Background())
 	require.NoError(t, err)
-	require.Equal(t, "<html><body>ok</body></html>", html)
+	assert.Equal(t, "<html><body>ok</body></html>", html)
 
 	value, err := backend.ExecuteScript(context.Background(), "return 1")
 	require.NoError(t, err)
-	require.Equal(t, map[string]any{"ok": true}, value)
+	assert.Equal(t, map[string]any{"ok": true}, value)
 
 	screenshot, err := backend.Screenshot(context.Background())
 	require.NoError(t, err)
-	require.Equal(t, []byte{0x89, 0x50, 0x4e, 0x47}, screenshot)
+	assert.Equal(t, []byte{0x89, 0x50, 0x4e, 0x47}, screenshot)
 
-	require.NoError(t, backend.WaitFor(context.Background(), browser.WaitCondition{Type: browser.WaitForLoad}, time.Second))
-	require.NoError(t, backend.WaitFor(context.Background(), browser.WaitCondition{Type: browser.WaitForSelector, Selector: "#ready"}, time.Second))
-	require.NoError(t, backend.WaitFor(context.Background(), browser.WaitCondition{Type: browser.WaitForSelectorMissing, Selector: "#missing"}, time.Second))
-	require.NoError(t, backend.WaitFor(context.Background(), browser.WaitCondition{Type: browser.WaitForText, Selector: "#result", Text: "hello"}, time.Second))
-	require.NoError(t, backend.WaitFor(context.Background(), browser.WaitCondition{Type: browser.WaitForURLContains, URLContains: "example.com"}, time.Second))
+	assert.NoError(t, backend.WaitFor(context.Background(), browser.WaitCondition{Type: browser.WaitForLoad}, time.Second))
+	assert.NoError(t, backend.WaitFor(context.Background(), browser.WaitCondition{Type: browser.WaitForSelector, Selector: "#ready"}, time.Second))
+	assert.NoError(t, backend.WaitFor(context.Background(), browser.WaitCondition{Type: browser.WaitForSelectorMissing, Selector: "#missing"}, time.Second))
+	assert.NoError(t, backend.WaitFor(context.Background(), browser.WaitCondition{Type: browser.WaitForText, Selector: "#result", Text: "hello"}, time.Second))
+	assert.NoError(t, backend.WaitFor(context.Background(), browser.WaitCondition{Type: browser.WaitForURLContains, URLContains: "example.com"}, time.Second))
 
 	currentURL, err := backend.CurrentURL(context.Background())
 	require.NoError(t, err)
-	require.Equal(t, "https://example.com/page", currentURL)
+	assert.Equal(t, "https://example.com/page", currentURL)
 
 	closeProc := exec.Command("sleep", "5")
 	require.NoError(t, closeProc.Start())
 	backend.process = closeProc
 	backend.userData = t.TempDir()
-	require.NoError(t, backend.Close(context.Background()))
-	require.NoError(t, backend.Close(context.Background()))
+	assert.NoError(t, backend.Close(context.Background()))
+	assert.NoError(t, backend.Close(context.Background()))
 }
 
 func TestTransportCallReadLoopAndClose(t *testing.T) {
@@ -191,7 +192,7 @@ func TestDoEvaluateResolveContextAndLaunchErrors(t *testing.T) {
 	backend := &Backend{client: api.Client(), baseURL: api.URL}
 	_, err := backend.do(context.Background(), http.MethodPost, "/session", map[string]any{"hello": "world"})
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "no such element")
+	assert.Contains(t, err.Error(), "no such element")
 
 	backend = &Backend{transport: &fakeTransport{callFunc: func(method string, params map[string]any) (json.RawMessage, error) {
 		switch method {
@@ -206,11 +207,11 @@ func TestDoEvaluateResolveContextAndLaunchErrors(t *testing.T) {
 
 	_, err = backend.evaluate(context.Background(), "return 1")
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "script evaluation failed")
+	assert.Contains(t, err.Error(), "script evaluation failed")
 
 	err = backend.resolveContext(context.Background())
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "missing")
+	assert.Contains(t, err.Error(), "missing")
 
 	deny := sandbox.CommandPolicyFunc(func(context.Context, ports.CommandRequest) error {
 		return errors.New("denied")
@@ -222,7 +223,7 @@ func TestDoEvaluateResolveContextAndLaunchErrors(t *testing.T) {
 		Policy:         deny,
 	})
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "denied")
+	assert.Contains(t, err.Error(), "denied")
 }
 
 func TestLaunchChromeDriverTimeoutBranch(t *testing.T) {
@@ -263,7 +264,7 @@ func TestNewMissingSessionMetadata(t *testing.T) {
 	}))
 	defer missingWS.Close()
 	_, err = New(context.Background(), Config{RemoteURL: missingWS.URL})
-	require.Error(t, err)
+	assert.Error(t, err)
 }
 
 type closingTransport struct{ err error }
@@ -309,7 +310,7 @@ func newBidiTestWebSocketServer(t *testing.T) (string, func()) {
 	upgrader := websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		conn, err := upgrader.Upgrade(w, r, nil)
-		require.NoError(t, err)
+		assert.NoError(t, err)
 		go func() {
 			defer func() { _ = conn.Close() }()
 			for {
@@ -319,28 +320,28 @@ func newBidiTestWebSocketServer(t *testing.T) (string, func()) {
 				}
 				switch req.Method {
 				case "session.subscribe":
-					require.NoError(t, conn.WriteJSON(responseEnvelope{Type: "success", ID: req.ID, Result: json.RawMessage(`{}`)}))
+					assert.NoError(t, conn.WriteJSON(responseEnvelope{Type: "success", ID: req.ID, Result: json.RawMessage(`{}`)}))
 					_ = conn.WriteJSON(responseEnvelope{
 						Type:   "event",
 						Method: "browsingContext.load",
 						Params: json.RawMessage(`{"context":"ctx-1"}`),
 					})
 				case "browsingContext.getTree":
-					require.NoError(t, conn.WriteJSON(responseEnvelope{
+					assert.NoError(t, conn.WriteJSON(responseEnvelope{
 						Type:   "success",
 						ID:     req.ID,
 						Result: json.RawMessage(`{"contexts":[{"context":"ctx-1"}]}`),
 					}))
 				case "browsingContext.navigate":
-					require.NoError(t, conn.WriteJSON(responseEnvelope{Type: "success", ID: req.ID, Result: json.RawMessage(`{"navigation":"nav-1"}`)}))
+					assert.NoError(t, conn.WriteJSON(responseEnvelope{Type: "success", ID: req.ID, Result: json.RawMessage(`{"navigation":"nav-1"}`)}))
 				case "browsingContext.captureScreenshot":
-					require.NoError(t, conn.WriteJSON(responseEnvelope{
+					assert.NoError(t, conn.WriteJSON(responseEnvelope{
 						Type:   "success",
 						ID:     req.ID,
 						Result: json.RawMessage(`{"data":"` + base64.StdEncoding.EncodeToString([]byte{0x89, 0x50, 0x4e, 0x47}) + `"}`),
 					}))
 				case "force.error":
-					require.NoError(t, conn.WriteJSON(responseEnvelope{
+					assert.NoError(t, conn.WriteJSON(responseEnvelope{
 						Type:    "error",
 						ID:      req.ID,
 						Error:   "no such element",
@@ -350,32 +351,32 @@ func newBidiTestWebSocketServer(t *testing.T) (string, func()) {
 					expr, _ := req.Params["expression"].(string)
 					switch {
 					case strings.Contains(expr, "JSON.stringify"):
-						require.NoError(t, conn.WriteJSON(responseEnvelope{Type: "success", ID: req.ID, Result: json.RawMessage(`{"result":{"type":"string","value":"{\"role\":\"document\",\"name\":\"Example Title\",\"url\":\"https://example.com/page\"}"}}`)}))
+						assert.NoError(t, conn.WriteJSON(responseEnvelope{Type: "success", ID: req.ID, Result: json.RawMessage(`{"result":{"type":"string","value":"{\"role\":\"document\",\"name\":\"Example Title\",\"url\":\"https://example.com/page\"}"}}`)}))
 					case strings.Contains(expr, "innerText ?? el.textContent ??"):
-						require.NoError(t, conn.WriteJSON(responseEnvelope{Type: "success", ID: req.ID, Result: json.RawMessage(`{"result":{"type":"string","value":"hello"}}`)}))
+						assert.NoError(t, conn.WriteJSON(responseEnvelope{Type: "success", ID: req.ID, Result: json.RawMessage(`{"result":{"type":"string","value":"hello"}}`)}))
 					case strings.Contains(expr, "document.title"):
-						require.NoError(t, conn.WriteJSON(responseEnvelope{Type: "success", ID: req.ID, Result: json.RawMessage(`{"result":{"type":"string","value":"Example Title"}}`)}))
+						assert.NoError(t, conn.WriteJSON(responseEnvelope{Type: "success", ID: req.ID, Result: json.RawMessage(`{"result":{"type":"string","value":"Example Title"}}`)}))
 					case strings.Contains(expr, "document.links.length"):
-						require.NoError(t, conn.WriteJSON(responseEnvelope{Type: "success", ID: req.ID, Result: json.RawMessage(`{"result":{"type":"object","value":{"links":2,"forms":3,"inputs":4,"buttons":5}}}`)}))
+						assert.NoError(t, conn.WriteJSON(responseEnvelope{Type: "success", ID: req.ID, Result: json.RawMessage(`{"result":{"type":"object","value":{"links":2,"forms":3,"inputs":4,"buttons":5}}}`)}))
 					case strings.Contains(expr, "document.documentElement.outerHTML"):
-						require.NoError(t, conn.WriteJSON(responseEnvelope{Type: "success", ID: req.ID, Result: json.RawMessage(`{"result":{"type":"string","value":"<html><body>ok</body></html>"}}`)}))
+						assert.NoError(t, conn.WriteJSON(responseEnvelope{Type: "success", ID: req.ID, Result: json.RawMessage(`{"result":{"type":"string","value":"<html><body>ok</body></html>"}}`)}))
 					case strings.Contains(expr, "window.location.href"):
-						require.NoError(t, conn.WriteJSON(responseEnvelope{Type: "success", ID: req.ID, Result: json.RawMessage(`{"result":{"type":"string","value":"https://example.com/page"}}`)}))
+						assert.NoError(t, conn.WriteJSON(responseEnvelope{Type: "success", ID: req.ID, Result: json.RawMessage(`{"result":{"type":"string","value":"https://example.com/page"}}`)}))
 					case strings.Contains(expr, "includes("):
-						require.NoError(t, conn.WriteJSON(responseEnvelope{Type: "success", ID: req.ID, Result: json.RawMessage(`{"result":{"type":"boolean","value":true}}`)}))
+						assert.NoError(t, conn.WriteJSON(responseEnvelope{Type: "success", ID: req.ID, Result: json.RawMessage(`{"result":{"type":"boolean","value":true}}`)}))
 					case strings.Contains(expr, "querySelector(") && strings.Contains(expr, "!== null"):
-						require.NoError(t, conn.WriteJSON(responseEnvelope{Type: "success", ID: req.ID, Result: json.RawMessage(`{"result":{"type":"boolean","value":true}}`)}))
+						assert.NoError(t, conn.WriteJSON(responseEnvelope{Type: "success", ID: req.ID, Result: json.RawMessage(`{"result":{"type":"boolean","value":true}}`)}))
 					case strings.Contains(expr, "querySelector(") && strings.Contains(expr, "=== null"):
-						require.NoError(t, conn.WriteJSON(responseEnvelope{Type: "success", ID: req.ID, Result: json.RawMessage(`{"result":{"type":"boolean","value":true}}`)}))
+						assert.NoError(t, conn.WriteJSON(responseEnvelope{Type: "success", ID: req.ID, Result: json.RawMessage(`{"result":{"type":"boolean","value":true}}`)}))
 					case strings.Contains(expr, "el.click()"):
-						require.NoError(t, conn.WriteJSON(responseEnvelope{Type: "success", ID: req.ID, Result: json.RawMessage(`{"result":{"type":"boolean","value":true}}`)}))
+						assert.NoError(t, conn.WriteJSON(responseEnvelope{Type: "success", ID: req.ID, Result: json.RawMessage(`{"result":{"type":"boolean","value":true}}`)}))
 					case strings.Contains(expr, "el.focus()"):
-						require.NoError(t, conn.WriteJSON(responseEnvelope{Type: "success", ID: req.ID, Result: json.RawMessage(`{"result":{"type":"boolean","value":true}}`)}))
+						assert.NoError(t, conn.WriteJSON(responseEnvelope{Type: "success", ID: req.ID, Result: json.RawMessage(`{"result":{"type":"boolean","value":true}}`)}))
 					default:
-						require.NoError(t, conn.WriteJSON(responseEnvelope{Type: "success", ID: req.ID, Result: json.RawMessage(`{"result":{"type":"object","value":{"ok":true}}}`)}))
+						assert.NoError(t, conn.WriteJSON(responseEnvelope{Type: "success", ID: req.ID, Result: json.RawMessage(`{"result":{"type":"object","value":{"ok":true}}}`)}))
 					}
 				default:
-					require.NoError(t, conn.WriteJSON(responseEnvelope{
+					assert.NoError(t, conn.WriteJSON(responseEnvelope{
 						Type:    "error",
 						ID:      req.ID,
 						Error:   "unsupported",

@@ -25,7 +25,7 @@ func TestIndexManagerStartIndexingWhenReady(t *testing.T) {
 
 	// Starting indexing when already ready should return nil (no error)
 	err := manager.StartIndexing(context.Background())
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func TestIndexManagerStartIndexingWhenRunning(t *testing.T) {
@@ -45,7 +45,7 @@ func TestIndexManagerStartIndexingWhenRunning(t *testing.T) {
 
 	// Starting again while running should return nil (no error)
 	err = manager.StartIndexing(context.Background())
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func TestIndexManagerRefreshFileWithPathFilter(t *testing.T) {
@@ -75,11 +75,11 @@ func TestIndexManagerRefreshFileWithPathFilter(t *testing.T) {
 
 	// Refresh should remove the file because filter blocks it
 	err = manager.RefreshFiles(context.Background(), []string{path})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// File should be removed from index
 	file, err := manager.Store().GetFileByPath(path)
-	assert.ErrorIs(t, err, os.ErrNotExist)
+	require.ErrorIs(t, err, os.ErrNotExist)
 	assert.Nil(t, file)
 }
 
@@ -93,7 +93,7 @@ func TestIndexManagerRemoveIndexedFileNotFound(t *testing.T) {
 
 	// Remove a file that was never indexed - should not error under graphdb
 	err = manager.removeIndexedFile(context.Background(), "/nonexistent/path.go")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func TestIndexManagerRemoveIndexedFileWithError(t *testing.T) {
@@ -113,7 +113,7 @@ func TestIndexManagerRemoveIndexedFileWithError(t *testing.T) {
 
 	// This should return an error because store is closed
 	err = manager.removeIndexedFile(context.Background(), path)
-	assert.Error(t, err)
+	require.Error(t, err)
 }
 
 func TestIndexManagerCloseWithGraphDB(t *testing.T) {
@@ -127,7 +127,7 @@ func TestIndexManagerCloseWithGraphDB(t *testing.T) {
 	// Create a mock graph DB (can't easily test actual one without more setup)
 	// Just verify Close works without GraphDB
 	err = manager.Close(context.Background())
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func TestIndexManagerLastIndexedAtNotFound(t *testing.T) {
@@ -135,7 +135,7 @@ func TestIndexManagerLastIndexedAtNotFound(t *testing.T) {
 
 	// Query for non-existent file - returns no error, zero time
 	ts, err := manager.LastIndexedAt("/nonexistent.go")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.True(t, ts.IsZero())
 }
 
@@ -149,7 +149,7 @@ func TestIndexManagerPersistErrorCases(t *testing.T) {
 
 	// Test persist with nil metadata
 	err = manager.persist(context.Background(), &ParseResult{Metadata: nil}, "hash")
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "missing metadata")
 }
 
@@ -163,7 +163,7 @@ func TestIndexManagerIndexFileReadError(t *testing.T) {
 
 	// Try to index a non-existent file
 	err = manager.IndexFile(context.Background(), "/nonexistent/path.go")
-	assert.Error(t, err)
+	require.Error(t, err)
 }
 
 func TestIndexManagerIndexFileWithConcurrentAccess(t *testing.T) {
@@ -178,7 +178,7 @@ func TestIndexManagerIndexFileWithConcurrentAccess(t *testing.T) {
 
 	// This should fail because indexing is "already in progress"
 	err := manager.IndexFile(context.Background(), path)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "index already running")
 
 	// Clean up
@@ -272,7 +272,7 @@ func TestIndexManagerWaitUntilReadyAlreadyReady(t *testing.T) {
 	defer cancel()
 
 	err := manager.WaitUntilReady(ctx)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func TestIndexManagerWaitUntilReadyWithError(t *testing.T) {
@@ -288,7 +288,7 @@ func TestIndexManagerWaitUntilReadyWithError(t *testing.T) {
 
 	// Should return the error
 	err = manager.WaitUntilReady(context.Background())
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "test error")
 }
 
@@ -309,8 +309,8 @@ func TestIndexManagerIndexWorkspaceContextCanceled(t *testing.T) {
 	cancel()
 
 	err = manager.IndexWorkspaceContext(ctx)
-	assert.Error(t, err)
-	assert.ErrorIs(t, err, context.Canceled)
+	require.Error(t, err)
+	require.ErrorIs(t, err, context.Canceled)
 }
 
 func TestIndexManagerGetCallGraphWithMultipleResults(t *testing.T) {
@@ -345,7 +345,7 @@ func TestIndexManagerGetCallGraphStoreError(t *testing.T) {
 
 	// Should error because store is closed
 	_, err = manager.GetCallGraph("Hello")
-	assert.Error(t, err)
+	require.Error(t, err)
 }
 
 func TestIndexManagerRunWorkspaceIndexWithContextError(t *testing.T) {
@@ -365,8 +365,8 @@ func TestIndexManagerRunWorkspaceIndexWithContextError(t *testing.T) {
 	cancel()
 
 	err = manager.runWorkspaceIndex(ctx)
-	assert.Error(t, err)
-	assert.ErrorIs(t, err, context.Canceled)
+	require.Error(t, err)
+	require.ErrorIs(t, err, context.Canceled)
 }
 
 func TestIndexManagerIndexFilesParallelError(t *testing.T) {
@@ -394,7 +394,7 @@ func TestIndexManagerIndexFilesParallelError(t *testing.T) {
 	cancel()
 
 	err = manager.indexFilesParallel(ctx, files)
-	assert.Error(t, err)
+	require.Error(t, err)
 }
 
 func TestLanguageDetectorDetectEmptyPath(t *testing.T) {
@@ -410,21 +410,21 @@ func TestGoParserParseError(t *testing.T) {
 
 	// Invalid Go code
 	_, err := parser.Parse(`invalid go code {{{`, "test.go")
-	assert.Error(t, err)
+	require.Error(t, err)
 }
 
 func TestGoParserParseIncremental(t *testing.T) {
 	parser := NewGoParser()
 
 	_, err := parser.ParseIncremental(nil, nil)
-	assert.Error(t, err)
+	require.Error(t, err)
 }
 
 func TestMarkdownParserParseIncremental(t *testing.T) {
 	parser := NewMarkdownParser()
 
 	_, err := parser.ParseIncremental(nil, nil)
-	assert.Error(t, err)
+	require.Error(t, err)
 }
 
 func TestIndexManagerIndexFileParseErrorFallbackToSymbols(t *testing.T) {
@@ -444,7 +444,7 @@ func TestIndexManagerIndexFileParseErrorFallbackToSymbols(t *testing.T) {
 
 	// Without a symbol provider, this should fail
 	err = manager.IndexFile(context.Background(), path)
-	assert.Error(t, err)
+	require.Error(t, err)
 }
 
 type errorParser struct{}

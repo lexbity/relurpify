@@ -39,7 +39,7 @@ func TestIndexManagerPersistWithTransactionError(t *testing.T) {
 	}
 
 	err = manager.persist(context.Background(), result, "hash")
-	assert.Error(t, err)
+	require.Error(t, err)
 }
 
 func TestIndexManagerPersistWithContentHash(t *testing.T) {
@@ -347,7 +347,7 @@ func TestGetFileByPathNotFound(t *testing.T) {
 	defer func() { _ = store.Close() }()
 
 	file, err := store.GetFileByPath("/nonexistent.go")
-	assert.ErrorIs(t, err, os.ErrNotExist)
+	require.ErrorIs(t, err, os.ErrNotExist)
 	assert.Nil(t, file)
 }
 
@@ -358,6 +358,6 @@ func TestGetEdgeNotFound(t *testing.T) {
 	defer func() { _ = store.Close() }()
 
 	edge, err := store.GetEdge("nonexistent")
-	assert.ErrorIs(t, err, os.ErrNotExist)
+	require.ErrorIs(t, err, os.ErrNotExist)
 	assert.Nil(t, edge)
 }

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"codeburg.org/lexbit/relurpify/model"
@@ -44,7 +45,7 @@ func TestBackend_ConformanceSuite(t *testing.T) {
 				}
 				body, _ := io.ReadAll(r.Body)
 				if scenario == "chat-tools-native" {
-					require.Contains(t, string(body), `"tools"`)
+					assert.Contains(t, string(body), `"tools"`)
 					_ = json.NewEncoder(w).Encode(map[string]any{
 						"message": map[string]any{
 							"role": "assistant",
@@ -63,7 +64,7 @@ func TestBackend_ConformanceSuite(t *testing.T) {
 					return
 				}
 				if scenario == "chat-tools-fallback" {
-					require.NotContains(t, string(body), `"tools"`)
+					assert.NotContains(t, string(body), `"tools"`)
 				}
 				_ = json.NewEncoder(w).Encode(map[string]any{
 					"message": map[string]any{
@@ -173,12 +174,12 @@ func TestBackend_Warm_Reachable(t *testing.T) {
 	defer srv.Close()
 
 	backend := NewBackend(Config{Endpoint: srv.URL, Model: "test-model"}, "")
-	require.NoError(t, backend.Warm(context.Background()))
+	assert.NoError(t, backend.Warm(context.Background()))
 }
 
 func TestBackend_ListModels(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		require.Equal(t, "/api/tags", r.URL.Path)
+		assert.Equal(t, "/api/tags", r.URL.Path)
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"models": []map[string]any{
 				{"name": "test-model", "families": "llama", "quantization_level": "q4"},
@@ -190,10 +191,10 @@ func TestBackend_ListModels(t *testing.T) {
 	backend := NewBackend(Config{Endpoint: srv.URL, Model: "test-model"}, "")
 	models, err := backend.ListModels(context.Background())
 	require.NoError(t, err)
-	require.Len(t, models, 1)
-	require.Equal(t, "test-model", models[0].Name)
-	require.Equal(t, "llama", models[0].Family)
-	require.Equal(t, "q4", models[0].Quantization)
+	assert.Len(t, models, 1)
+	assert.Equal(t, "test-model", models[0].Name)
+	assert.Equal(t, "llama", models[0].Family)
+	assert.Equal(t, "q4", models[0].Quantization)
 }
 
 func TestBackend_Capabilities(t *testing.T) {
@@ -236,9 +237,9 @@ func TestClient_NormalizeUsageEstimationFallback(t *testing.T) {
 
 func TestBackend_Chat_RoundTrip(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		require.Equal(t, "/api/chat", r.URL.Path)
+		assert.Equal(t, "/api/chat", r.URL.Path)
 		body, _ := io.ReadAll(r.Body)
-		require.Contains(t, string(body), `"messages"`)
+		assert.Contains(t, string(body), `"messages"`)
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"text": "response",
 		})
@@ -248,13 +249,13 @@ func TestBackend_Chat_RoundTrip(t *testing.T) {
 	backend := NewBackend(Config{Endpoint: srv.URL, Model: "test-model"}, "")
 	resp, err := backend.Model().Chat(context.Background(), []model.Message{{Role: "user", Content: "ping"}}, nil)
 	require.NoError(t, err)
-	require.Equal(t, "response", resp.Text)
+	assert.Equal(t, "response", resp.Text)
 }
 
 func TestBackend_ChatWithTools_NativeDisabled(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
-		require.NotContains(t, string(body), `"tools"`)
+		assert.NotContains(t, string(body), `"tools"`)
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"text": "ok",
 		})
@@ -264,14 +265,14 @@ func TestBackend_ChatWithTools_NativeDisabled(t *testing.T) {
 	backend := NewBackend(Config{Endpoint: srv.URL, Model: "test-model", NativeToolCalling: false}, "")
 	resp, err := backend.Model().ChatWithTools(context.Background(), []model.Message{{Role: "user", Content: "ping"}}, nil, nil)
 	require.NoError(t, err)
-	require.Equal(t, "ok", resp.Text)
+	assert.Equal(t, "ok", resp.Text)
 }
 
 func TestBackend_Streaming(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		flusher, ok := w.(http.Flusher)
-		require.True(t, ok)
+		assert.True(t, ok)
 		_, _ = w.Write([]byte(`{"message":{"content":"hel"}}` + "\n"))
 		flusher.Flush()
 		_, _ = w.Write([]byte(`{"message":{"content":"lo"},"done_reason":"stop"}` + "\n"))
@@ -285,6 +286,6 @@ func TestBackend_Streaming(t *testing.T) {
 		StreamCallback: func(token string) { got.WriteString(token) },
 	})
 	require.NoError(t, err)
-	require.Equal(t, "hello", got.String())
-	require.Equal(t, "hello", resp.Text)
+	assert.Equal(t, "hello", got.String())
+	assert.Equal(t, "hello", resp.Text)
 }

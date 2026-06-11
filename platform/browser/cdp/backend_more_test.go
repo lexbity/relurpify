@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"codeburg.org/lexbit/relurpify/capability/ports"
@@ -174,7 +175,7 @@ func TestLaunchChromiumPolicyAndPageTargetErrors(t *testing.T) {
 	}))
 	defer server.Close()
 	_, err = pageWebSocketURL(context.Background(), server.URL)
-	require.Error(t, err)
+	assert.Error(t, err)
 }
 
 func TestLaunchChromiumTimeoutBranch(t *testing.T) {
@@ -264,7 +265,7 @@ func TestLaunchChromiumAndClose(t *testing.T) {
 		StartupTimeout: time.Second,
 		Headless:       true,
 	})
-	require.NoError(t, err)
+	assert.NoError(t, err)
 
 	backend := &Backend{
 		transport: &fakeTransport{callFunc: func(method string, params map[string]any) (json.RawMessage, error) {
@@ -273,7 +274,7 @@ func TestLaunchChromiumAndClose(t *testing.T) {
 		process:  launched.process,
 		userData: launched.userData,
 	}
-	require.NoError(t, backend.Close(context.Background()))
+	assert.NoError(t, backend.Close(context.Background()))
 }
 
 func TestWaitForDebuggerAndPageWebSocketURL(t *testing.T) {
@@ -291,11 +292,11 @@ func TestWaitForDebuggerAndPageWebSocketURL(t *testing.T) {
 
 	got, err := pageWebSocketURL(context.Background(), server.URL)
 	require.NoError(t, err)
-	require.Equal(t, wsURL, got)
+	assert.Equal(t, wsURL, got)
 
 	got, err = waitForDebugger(context.Background(), server.URL, time.Second)
 	require.NoError(t, err)
-	require.Equal(t, wsURL, got)
+	assert.Equal(t, wsURL, got)
 }
 
 func newCDPWebSocketServer(t *testing.T) (string, func()) {
@@ -303,7 +304,7 @@ func newCDPWebSocketServer(t *testing.T) (string, func()) {
 	upgrader := websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		conn, err := upgrader.Upgrade(w, r, nil)
-		require.NoError(t, err)
+		assert.NoError(t, err)
 		go func() {
 			defer func() { _ = conn.Close() }()
 			for {
@@ -316,22 +317,22 @@ func newCDPWebSocketServer(t *testing.T) (string, func()) {
 					expr, _ := req.Params["expression"].(string)
 					switch {
 					case strings.Contains(expr, "document.readyState"):
-						require.NoError(t, conn.WriteJSON(responseEnvelope{ID: req.ID, Result: json.RawMessage(`{"result":{"type":"boolean","value":true}}`)}))
+						assert.NoError(t, conn.WriteJSON(responseEnvelope{ID: req.ID, Result: json.RawMessage(`{"result":{"type":"boolean","value":true}}`)}))
 					case strings.Contains(expr, "querySelector(") && strings.Contains(expr, "!== null"):
-						require.NoError(t, conn.WriteJSON(responseEnvelope{ID: req.ID, Result: json.RawMessage(`{"result":{"type":"boolean","value":true}}`)}))
+						assert.NoError(t, conn.WriteJSON(responseEnvelope{ID: req.ID, Result: json.RawMessage(`{"result":{"type":"boolean","value":true}}`)}))
 					case strings.Contains(expr, "querySelector(") && strings.Contains(expr, "=== null"):
-						require.NoError(t, conn.WriteJSON(responseEnvelope{ID: req.ID, Result: json.RawMessage(`{"result":{"type":"boolean","value":true}}`)}))
+						assert.NoError(t, conn.WriteJSON(responseEnvelope{ID: req.ID, Result: json.RawMessage(`{"result":{"type":"boolean","value":true}}`)}))
 					case strings.Contains(expr, "includes("):
-						require.NoError(t, conn.WriteJSON(responseEnvelope{ID: req.ID, Result: json.RawMessage(`{"result":{"type":"boolean","value":true}}`)}))
+						assert.NoError(t, conn.WriteJSON(responseEnvelope{ID: req.ID, Result: json.RawMessage(`{"result":{"type":"boolean","value":true}}`)}))
 					case strings.Contains(expr, "window.location.href"):
-						require.NoError(t, conn.WriteJSON(responseEnvelope{ID: req.ID, Result: json.RawMessage(`{"result":{"type":"string","value":"https://example.com/page"}}`)}))
+						assert.NoError(t, conn.WriteJSON(responseEnvelope{ID: req.ID, Result: json.RawMessage(`{"result":{"type":"string","value":"https://example.com/page"}}`)}))
 					default:
-						require.NoError(t, conn.WriteJSON(responseEnvelope{ID: req.ID, Result: json.RawMessage(`{"result":{"type":"object","value":{"ok":true}}}`)}))
+						assert.NoError(t, conn.WriteJSON(responseEnvelope{ID: req.ID, Result: json.RawMessage(`{"result":{"type":"object","value":{"ok":true}}}`)}))
 					}
 				case "force.error":
-					require.NoError(t, conn.WriteJSON(responseEnvelope{ID: req.ID, Error: &responseError{Code: 42, Message: "boom"}}))
+					assert.NoError(t, conn.WriteJSON(responseEnvelope{ID: req.ID, Error: &responseError{Code: 42, Message: "boom"}}))
 				default:
-					require.NoError(t, conn.WriteJSON(responseEnvelope{ID: req.ID, Error: &responseError{Code: 0, Message: req.Method}}))
+					assert.NoError(t, conn.WriteJSON(responseEnvelope{ID: req.ID, Error: &responseError{Code: 0, Message: req.Method}}))
 				}
 			}
 		}()

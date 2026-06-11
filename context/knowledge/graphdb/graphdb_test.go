@@ -8,6 +8,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -218,10 +219,10 @@ func TestConcurrentUpsertAndLink(t *testing.T) {
 		go func(i int) {
 			defer wg.Done()
 			id := string(rune('a' + i))
-			require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: id, Kind: "function"}))
+			assert.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: id, Kind: "function"}))
 			if i > 0 {
 				prev := string(rune('a' + i - 1))
-				require.NoError(t, engine.Link(context.TODO(), prev, id, "calls", "", 1, nil))
+				assert.NoError(t, engine.Link(context.TODO(), prev, id, "calls", "", 1, nil))
 			}
 		}(i)
 	}
@@ -317,7 +318,7 @@ func TestRevisionHistoryAndPersistence(t *testing.T) {
 	require.Len(t, edgeRevisions, 2)
 	require.JSONEq(t, `{"site":"x"}`, string(edgeRevisions[0].Props))
 	require.JSONEq(t, `{"note":"y","site":"x"}`, string(edgeRevisions[1].Props))
-	require.Equal(t, float32(2), engine.GetOutEdges("n1", "calls")[0].Weight)
+	require.InDelta(t, float32(2), engine.GetOutEdges("n1", "calls")[0].Weight, 0.01)
 	require.JSONEq(t, `{"site":"z"}`, string(engine.GetOutEdges("n1", "calls")[0].Props))
 
 	require.NoError(t, engine.Close(context.Background()))

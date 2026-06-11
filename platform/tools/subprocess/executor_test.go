@@ -315,7 +315,7 @@ func TestParityCLIJQ(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.True(t, result.Success)
-	require.Equal(t, "{\"key\": \"value\"}", result.Data["stdout"])
+	require.JSONEq(t, `{"key": "value"}`, result.Data["stdout"].(string))
 	require.Len(t, runner.requests, 1)
 }
 

@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"codeburg.org/lexbit/relurpify/model"
@@ -17,11 +18,11 @@ import (
 
 func TestChat_Sync(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		require.Equal(t, "/v1/chat/completions", r.URL.Path)
-		require.Equal(t, "Bearer token", r.Header.Get("Authorization"))
+		assert.Equal(t, "/v1/chat/completions", r.URL.Path)
+		assert.Equal(t, "Bearer token", r.Header.Get("Authorization"))
 		var payload map[string]any
-		require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
-		require.Equal(t, "model-a", payload["model"])
+		assert.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
+		assert.Equal(t, "model-a", payload["model"])
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"choices": []map[string]any{
 				{"message": map[string]any{"role": "assistant", "content": "hello"}, "finish_reason": "stop"},
@@ -34,12 +35,12 @@ func TestChat_Sync(t *testing.T) {
 	client := NewClient(OpenAICompatConfig{Endpoint: srv.URL}, "token")
 	resp, err := client.Chat(context.Background(), []model.Message{{Role: "user", Content: "ping"}}, &model.LLMOptions{Model: "model-a"})
 	require.NoError(t, err)
-	require.Equal(t, "hello", resp.Text)
-	require.Equal(t, "stop", resp.FinishReason)
-	require.Equal(t, 3, resp.Usage.PromptTokens)
-	require.Equal(t, 2, resp.Usage.CompletionTokens)
-	require.Equal(t, 5, resp.Usage.TotalTokens)
-	require.False(t, resp.Usage.Estimated)
+	assert.Equal(t, "hello", resp.Text)
+	assert.Equal(t, "stop", resp.FinishReason)
+	assert.Equal(t, 3, resp.Usage.PromptTokens)
+	assert.Equal(t, 2, resp.Usage.CompletionTokens)
+	assert.Equal(t, 5, resp.Usage.TotalTokens)
+	assert.False(t, resp.Usage.Estimated)
 }
 
 func TestChat_Streaming(t *testing.T) {
@@ -61,17 +62,17 @@ func TestChat_Streaming(t *testing.T) {
 		StreamCallback: func(token string) { got.WriteString(token) },
 	})
 	require.NoError(t, err)
-	require.Equal(t, "hello", got.String())
-	require.Equal(t, "hello", resp.Text)
+	assert.Equal(t, "hello", got.String())
+	assert.Equal(t, "hello", resp.Text)
 }
 
 func TestChatWithTools_NativeEnabled_Sync(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var payload map[string]any
-		require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
-		require.Contains(t, payload, "tools")
+		assert.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
+		assert.Contains(t, payload, "tools")
 		tools := payload["tools"].([]any)
-		require.Len(t, tools, 1)
+		assert.Len(t, tools, 1)
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"choices": []map[string]any{
 				{
@@ -98,9 +99,9 @@ func TestChatWithTools_NativeEnabled_Sync(t *testing.T) {
 	client := NewClient(OpenAICompatConfig{Endpoint: srv.URL, NativeToolCalling: true}, "")
 	resp, err := client.ChatWithTools(context.Background(), []model.Message{{Role: "user", Content: "ping"}}, []model.LLMToolSpec{{Name: "echo"}}, nil)
 	require.NoError(t, err)
-	require.Len(t, resp.ToolCalls, 1)
-	require.Equal(t, "echo", resp.ToolCalls[0].Name)
-	require.Equal(t, map[string]any{"value": "hi"}, resp.ToolCalls[0].Args)
+	assert.Len(t, resp.ToolCalls, 1)
+	assert.Equal(t, "echo", resp.ToolCalls[0].Name)
+	assert.Equal(t, map[string]any{"value": "hi"}, resp.ToolCalls[0].Args)
 }
 
 func TestChatWithTools_NativeEnabled_Streaming(t *testing.T) {
@@ -122,16 +123,16 @@ func TestChatWithTools_NativeEnabled_Streaming(t *testing.T) {
 		StreamCallback: func(token string) { got.WriteString(token) },
 	})
 	require.NoError(t, err)
-	require.Len(t, resp.ToolCalls, 1)
-	require.Equal(t, "echo", resp.ToolCalls[0].Name)
-	require.Equal(t, map[string]any{"value": "hi"}, resp.ToolCalls[0].Args)
+	assert.Len(t, resp.ToolCalls, 1)
+	assert.Equal(t, "echo", resp.ToolCalls[0].Name)
+	assert.Equal(t, map[string]any{"value": "hi"}, resp.ToolCalls[0].Args)
 }
 
 func TestChatWithTools_NativeDisabled(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var payload map[string]any
-		require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
-		require.NotContains(t, payload, "tools")
+		assert.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
+		assert.NotContains(t, payload, "tools")
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"choices": []map[string]any{
 				{"message": map[string]any{"role": "assistant", "content": "ok"}, "finish_reason": "stop"},
@@ -143,14 +144,14 @@ func TestChatWithTools_NativeDisabled(t *testing.T) {
 	client := NewClient(OpenAICompatConfig{Endpoint: srv.URL, NativeToolCalling: false}, "")
 	resp, err := client.ChatWithTools(context.Background(), []model.Message{{Role: "user", Content: "ping"}}, []model.LLMToolSpec{{Name: "echo"}}, nil)
 	require.NoError(t, err)
-	require.Equal(t, "ok", resp.Text)
+	assert.Equal(t, "ok", resp.Text)
 }
 
 func TestChatWithTools_ProfileDisablesNative(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var payload map[string]any
-		require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
-		require.NotContains(t, payload, "tools")
+		assert.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
+		assert.NotContains(t, payload, "tools")
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"choices": []map[string]any{
 				{"message": map[string]any{"role": "assistant", "content": "ok"}, "finish_reason": "stop"},
@@ -165,32 +166,32 @@ func TestChatWithTools_ProfileDisablesNative(t *testing.T) {
 	client.SetProfile(profile)
 	resp, err := client.ChatWithTools(context.Background(), []model.Message{{Role: "user", Content: "ping"}}, []model.LLMToolSpec{{Name: "echo"}}, nil)
 	require.NoError(t, err)
-	require.Equal(t, "ok", resp.Text)
-	require.False(t, client.UsesNativeToolCalling())
+	assert.Equal(t, "ok", resp.Text)
+	assert.False(t, client.UsesNativeToolCalling())
 }
 
 func TestBearerAuth(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		require.Equal(t, "Bearer secret", r.Header.Get("Authorization"))
+		assert.Equal(t, "Bearer secret", r.Header.Get("Authorization"))
 		_ = json.NewEncoder(w).Encode(map[string]any{"choices": []map[string]any{{"message": map[string]any{"role": "assistant", "content": "ok"}}}})
 	}))
 	defer srv.Close()
 
 	client := NewClient(OpenAICompatConfig{Endpoint: srv.URL}, "secret")
 	_, err := client.Chat(context.Background(), []model.Message{{Role: "user", Content: "ping"}}, nil)
-	require.NoError(t, err)
+	assert.NoError(t, err)
 }
 
 func TestBearerAuth_NoKey(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		require.Empty(t, r.Header.Get("Authorization"))
+		assert.Empty(t, r.Header.Get("Authorization"))
 		_ = json.NewEncoder(w).Encode(map[string]any{"choices": []map[string]any{{"message": map[string]any{"role": "assistant", "content": "ok"}}}})
 	}))
 	defer srv.Close()
 
 	client := NewClient(OpenAICompatConfig{Endpoint: srv.URL}, "")
 	_, err := client.Chat(context.Background(), []model.Message{{Role: "user", Content: "ping"}}, nil)
-	require.NoError(t, err)
+	assert.NoError(t, err)
 }
 
 func TestChat_EstimatesUsageWhenMissing(t *testing.T) {
@@ -206,14 +207,14 @@ func TestChat_EstimatesUsageWhenMissing(t *testing.T) {
 	client := NewClient(OpenAICompatConfig{Endpoint: srv.URL}, "")
 	resp, err := client.Chat(context.Background(), []model.Message{{Role: "user", Content: "ping"}}, nil)
 	require.NoError(t, err)
-	require.True(t, resp.Usage.Estimated)
-	require.Equal(t, "char_div_4", resp.Usage.EstimationMethod)
-	require.Positive(t, resp.Usage.TotalTokens)
+	assert.True(t, resp.Usage.Estimated)
+	assert.Equal(t, "char_div_4", resp.Usage.EstimationMethod)
+	assert.Positive(t, resp.Usage.TotalTokens)
 }
 
 func TestListModels(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		require.Equal(t, "/v1/models", r.URL.Path)
+		assert.Equal(t, "/v1/models", r.URL.Path)
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"data": []map[string]any{{"id": "model-a", "object": "model", "owned_by": "org"}},
 		})
@@ -223,15 +224,15 @@ func TestListModels(t *testing.T) {
 	client := NewClient(OpenAICompatConfig{Endpoint: srv.URL}, "")
 	models, err := client.ListModels(context.Background())
 	require.NoError(t, err)
-	require.Len(t, models, 1)
-	require.Equal(t, "model-a", models[0].Name)
+	assert.Len(t, models, 1)
+	assert.Equal(t, "model-a", models[0].Name)
 }
 
 func TestEmbedder_Single(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var payload map[string]any
-		require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
-		require.Equal(t, "model-a", payload["model"])
+		assert.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
+		assert.Equal(t, "model-a", payload["model"])
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"data": []map[string]any{{"embedding": []float32{0.1, 0.2, 0.3}}},
 		})
@@ -241,9 +242,9 @@ func TestEmbedder_Single(t *testing.T) {
 	embedder := NewEmbedder(OpenAICompatConfig{Endpoint: srv.URL}, "model-a", "")
 	embeddings, err := embedder.Embed(context.Background(), []string{"hello"})
 	require.NoError(t, err)
-	require.Len(t, embeddings, 1)
-	require.Len(t, embeddings[0], 3)
-	require.Equal(t, 3, embedder.Dims())
+	assert.Len(t, embeddings, 1)
+	assert.Len(t, embeddings[0], 3)
+	assert.Equal(t, 3, embedder.Dims())
 }
 
 func TestEmbedder_Batch(t *testing.T) {
@@ -260,8 +261,8 @@ func TestEmbedder_Batch(t *testing.T) {
 	embedder := NewEmbedder(OpenAICompatConfig{Endpoint: srv.URL}, "model-a", "")
 	embeddings, err := embedder.Embed(context.Background(), []string{"a", "b"})
 	require.NoError(t, err)
-	require.Len(t, embeddings, 2)
-	require.Len(t, embeddings[0], 2)
+	assert.Len(t, embeddings, 2)
+	assert.Len(t, embeddings[0], 2)
 }
 
 func TestHTTPError_500(t *testing.T) {
@@ -273,7 +274,7 @@ func TestHTTPError_500(t *testing.T) {
 	client := NewClient(OpenAICompatConfig{Endpoint: srv.URL}, "")
 	_, err := client.Chat(context.Background(), []model.Message{{Role: "user", Content: "ping"}}, nil)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "500")
+	assert.Contains(t, err.Error(), "500")
 }
 
 func TestStreamingCancel(t *testing.T) {
@@ -291,7 +292,7 @@ func TestStreamingCancel(t *testing.T) {
 	ch, err := client.GenerateStream(ctx, "hello", nil)
 	require.NoError(t, err)
 	_, ok := <-ch
-	require.True(t, ok)
+	assert.True(t, ok)
 	cancel()
 	done := make(chan struct{})
 	go func() {

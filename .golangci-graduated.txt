@@ -33,3 +33,9 @@ errcheck
 # All callers migrated to GetTyped[T]; Envelope.GetWorkingValue deleted; no-dead
 # gate extended. Remaining staticcheck codes (35 issues) also fixed.
 staticcheck
+
+# Slice 8 — Cosmetic long tail (ratchet-absorbed).
+# testifylint (122 → 0). goconst (~2658) and revive (~3213, mostly exported
+# doc comments) remain as background ratchet work; they are non-blocking per
+# the spec and absorbed by Track R.
+testifylint

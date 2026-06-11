@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -14,15 +15,15 @@ func TestEmbedder_Embed_Single(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		require.Equal(t, http.MethodPost, r.Method)
-		require.Equal(t, "/api/embed", r.URL.Path)
+		assert.Equal(t, http.MethodPost, r.Method)
+		assert.Equal(t, "/api/embed", r.URL.Path)
 
 		var payload map[string]any
-		require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
-		require.Equal(t, "nomic-embed-text", payload["model"])
+		assert.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
+		assert.Equal(t, "nomic-embed-text", payload["model"])
 
 		w.Header().Set("Content-Type", "application/json")
-		require.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
 			"embedding": []float32{1, 2, 3},
 		}))
 	}))
@@ -31,23 +32,23 @@ func TestEmbedder_Embed_Single(t *testing.T) {
 	embedder := NewEmbedder(Config{Endpoint: srv.URL, Model: "nomic-embed-text"}, "nomic-embed-text")
 	vectors, err := embedder.Embed(context.Background(), []string{"alpha"})
 	require.NoError(t, err)
-	require.Equal(t, [][]float32{{1, 2, 3}}, vectors)
-	require.Equal(t, 3, embedder.Dims())
+	assert.Equal(t, [][]float32{{1, 2, 3}}, vectors)
+	assert.Equal(t, 3, embedder.Dims())
 }
 
 func TestEmbedder_Embed_Batch(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		require.Equal(t, http.MethodPost, r.Method)
-		require.Equal(t, "/api/embed", r.URL.Path)
+		assert.Equal(t, http.MethodPost, r.Method)
+		assert.Equal(t, "/api/embed", r.URL.Path)
 
 		var payload map[string]any
-		require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
-		require.Equal(t, "nomic-embed-text", payload["model"])
+		assert.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
+		assert.Equal(t, "nomic-embed-text", payload["model"])
 
 		w.Header().Set("Content-Type", "application/json")
-		require.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
 			"embeddings": [][]float32{
 				{1, 0, 0},
 				{0, 1, 0},
@@ -59,8 +60,8 @@ func TestEmbedder_Embed_Batch(t *testing.T) {
 	embedder := NewEmbedder(Config{Endpoint: srv.URL, Model: "nomic-embed-text"}, "nomic-embed-text")
 	vectors, err := embedder.Embed(context.Background(), []string{"alpha", "beta"})
 	require.NoError(t, err)
-	require.Equal(t, [][]float32{{1, 0, 0}, {0, 1, 0}}, vectors)
-	require.Equal(t, 3, embedder.Dims())
+	assert.Equal(t, [][]float32{{1, 0, 0}, {0, 1, 0}}, vectors)
+	assert.Equal(t, 3, embedder.Dims())
 }
 
 func TestEmbedder_ModelID(t *testing.T) {

@@ -13,8 +13,8 @@ func TestDefaultPolicy(t *testing.T) {
 	assert.Equal(t, 3, p.MaxAttempts)
 	assert.Equal(t, 100*time.Millisecond, p.InitialBackoff)
 	assert.Equal(t, 30*time.Second, p.MaxBackoff)
-	assert.Equal(t, 1.5, p.BackoffMultiplier)
-	assert.Equal(t, 0.1, p.JitterFraction)
+	assert.InDelta(t, 1.5, p.BackoffMultiplier, 0.01)
+	assert.InDelta(t, 0.1, p.JitterFraction, 0.01)
 }
 
 func TestNextBackoff_Growth(t *testing.T) {

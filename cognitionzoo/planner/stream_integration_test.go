@@ -92,7 +92,7 @@ func TestPlannerExecuteBlockingContextStreamAppliesTrimmedMetadataBeforePlanning
 	require.Equal(t, 7, shortfall)
 	trimmed, ok := contextdata.GetTyped[bool](env, "contextstream.trimmed")
 	require.True(t, ok)
-	require.Equal(t, true, trimmed)
+	require.True(t, trimmed)
 
 	compilerStub.mu.Lock()
 	request := compilerStub.request

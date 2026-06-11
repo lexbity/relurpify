@@ -138,7 +138,7 @@ func TestCopyFile_SourceNotFound(t *testing.T) {
 	dst := filepath.Join(dir, "dest.txt")
 
 	err := copyFile(src, dst)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.True(t, os.IsNotExist(err))
 }
 
@@ -674,7 +674,7 @@ func TestScanLinesOrChunks_AtEOF(t *testing.T) {
 	adv, token, err := split([]byte{}, true)
 	assert.Equal(t, 0, adv)
 	assert.Nil(t, token)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func TestScanLinesOrChunks_LargeData(t *testing.T) {
@@ -685,7 +685,7 @@ func TestScanLinesOrChunks_LargeData(t *testing.T) {
 	adv, token, err := split(data, false)
 	assert.Equal(t, 16, adv)
 	assert.Equal(t, data[:16], token)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func TestScanLinesOrChunks_NoNewline(t *testing.T) {
@@ -696,13 +696,13 @@ func TestScanLinesOrChunks_NoNewline(t *testing.T) {
 	adv, token, err := split(data, false)
 	assert.Equal(t, 0, adv)
 	assert.Nil(t, token)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Now at EOF
 	adv, token, err = split(data, true)
 	assert.Equal(t, len(data), adv)
 	assert.Equal(t, data, token)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func TestScanLinesOrChunks_CRLF(t *testing.T) {
@@ -717,7 +717,7 @@ func TestScanLinesOrChunks_CRLF(t *testing.T) {
 	adv, token, err := split(data, false)
 	assert.Equal(t, 7, adv)                 // index of \n (6) + 1 = 7
 	assert.Equal(t, []byte("line1"), token) // \r is stripped by the function
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 // ============== SearchInFiles Edge Cases ==============
@@ -748,7 +748,7 @@ func TestCreateFileTool_NilSandboxScope(t *testing.T) {
 
 	// Should not panic when scope is nil
 	err := tool.enforceSandboxScope(permissions.FileSystemWrite, filepath.Join(dir, "test.txt"))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func TestDeleteFileTool_NilSandboxScope(t *testing.T) {
@@ -757,7 +757,7 @@ func TestDeleteFileTool_NilSandboxScope(t *testing.T) {
 
 	// Should not panic when scope is nil
 	err := tool.enforceSandboxScope(permissions.FileSystemDelete, filepath.Join(dir, "test.txt"))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func TestDeleteFileTool_NilSpec(t *testing.T) {
@@ -766,7 +766,7 @@ func TestDeleteFileTool_NilSpec(t *testing.T) {
 
 	// Should not panic when spec is nil
 	err := tool.enforceFileMatrix(context.Background(), "delete", filepath.Join(dir, "test.txt"))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func TestCreateFileTool_NilSpec(t *testing.T) {
@@ -775,7 +775,7 @@ func TestCreateFileTool_NilSpec(t *testing.T) {
 
 	// Should not panic when spec is nil
 	err := tool.enforceFileMatrix(context.Background(), "write", filepath.Join(dir, "test.txt"))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 // ============== EnforceFileMatrix Tests ==============
@@ -817,7 +817,7 @@ func TestEnforceFileMatrix_AllowPattern(t *testing.T) {
 	}
 
 	err := enforceFileMatrix(context.Background(), nil, "agent", dir, "write", filepath.Join(dir, "test.go"), matrix)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func TestEnforceFileMatrix_DefaultDeny(t *testing.T) {
@@ -841,7 +841,7 @@ func TestWriteFileTool_NilSpec(t *testing.T) {
 
 	// Should not panic when spec is nil
 	err := tool.enforceFileMatrix(context.Background(), "write", filepath.Join(dir, "test.txt"))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 // ============== Nil Tool Tests ==============
@@ -851,7 +851,7 @@ func TestWriteFileTool_NilEnforceSandboxScope(t *testing.T) {
 
 	// Should not panic when tool is nil
 	err := tool.enforceSandboxScope(permissions.FileSystemWrite, "/tmp/test.txt")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func TestCreateFileTool_NilEnforceSandboxScope(t *testing.T) {
@@ -859,7 +859,7 @@ func TestCreateFileTool_NilEnforceSandboxScope(t *testing.T) {
 
 	// Should not panic when tool is nil
 	err := tool.enforceSandboxScope(permissions.FileSystemWrite, "/tmp/test.txt")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func TestDeleteFileTool_NilEnforceSandboxScope(t *testing.T) {
@@ -867,7 +867,7 @@ func TestDeleteFileTool_NilEnforceSandboxScope(t *testing.T) {
 
 	// Should not panic when tool is nil
 	err := tool.enforceSandboxScope(permissions.FileSystemDelete, "/tmp/test.txt")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func TestWriteFileTool_NilEnforceFileMatrix(t *testing.T) {
@@ -875,7 +875,7 @@ func TestWriteFileTool_NilEnforceFileMatrix(t *testing.T) {
 
 	// Should not panic when tool is nil
 	err := tool.enforceFileMatrix(context.Background(), "write", "/tmp/test.txt")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 // ============== Permission Manager Integration Tests ==============
@@ -1004,7 +1004,7 @@ func TestEnforceFileMatrix_EmptyBasePath(t *testing.T) {
 	// With empty basePath, the path becomes the relative path
 	// Allow the specific pattern
 	err := enforceFileMatrix(context.Background(), nil, "agent", "", "write", "test.go", matrix)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Deny pattern should still work
 	err = enforceFileMatrix(context.Background(), nil, "agent", "", "write", "test.txt", matrix)
@@ -1022,7 +1022,7 @@ func TestEnforceFileMatrix_AllowMdForDocumentationOnly(t *testing.T) {
 
 	// Should allow .md files
 	err := enforceFileMatrix(context.Background(), nil, "agent", dir, "write", filepath.Join(dir, "test.md"), matrix)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Should block non-.md files
 	err = enforceFileMatrix(context.Background(), nil, "agent", dir, "write", filepath.Join(dir, "test.go"), matrix)
@@ -1041,7 +1041,7 @@ func TestEnforceFileMatrix_EditAction(t *testing.T) {
 
 	// Should check Edit permissions for "edit" action
 	err := enforceFileMatrix(context.Background(), nil, "agent", dir, "edit", filepath.Join(dir, "test.go"), matrix)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 // ============== ReadFileTool Permission Manager Integration ==============
@@ -1183,7 +1183,7 @@ func TestCopyFile_InvalidDestination(t *testing.T) {
 	// Try to copy to a non-existent directory that can't be created
 	invalidDst := "/nonexistent/path/to/file.txt"
 	err := copyFile(src, invalidDst)
-	assert.Error(t, err)
+	require.Error(t, err)
 }
 
 // ============== Permission Cache with Nil Manager ==============
@@ -1305,7 +1305,7 @@ func TestTraversalPermissionCache_CheckWithNilCache(t *testing.T) {
 	// Call Check on nil cache should return nil
 	var cache *traversalPermissionCache
 	err := cache.Check(context.Background(), permissions.FileSystemRead, "/tmp/test.txt")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 // ============== Permission Cache With Non-nil Manager ==============
@@ -1559,7 +1559,7 @@ func TestScanLinesOrChunks_MaxChunkBoundary(t *testing.T) {
 	adv, token, err := split(data, false)
 	assert.Equal(t, 16, adv)
 	assert.Equal(t, data, token)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 // ============== toBool More Edge Cases ==============

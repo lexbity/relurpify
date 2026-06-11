@@ -61,7 +61,7 @@ func TestCached_PropagatesError(t *testing.T) {
 	_, err := p.cached("k", func() (any, error) {
 		return nil, expected
 	})
-	assert.ErrorIs(t, err, expected)
+	require.ErrorIs(t, err, expected)
 }
 
 func TestCached_AC5_SingleFlight(t *testing.T) {
@@ -90,7 +90,7 @@ func TestCached_AC5_SingleFlight(t *testing.T) {
 
 	assert.Equal(t, int32(1), atomic.LoadInt32(&callCount), "fetch must run exactly once for N concurrent cold reads")
 	for i := 0; i < n; i++ {
-		assert.NoError(t, errs[i])
+		require.NoError(t, errs[i])
 		assert.Equal(t, "deduped", results[i])
 	}
 }
@@ -167,6 +167,6 @@ func TestCached_SingleFlightErrorPropagatesToAll(t *testing.T) {
 
 	assert.Equal(t, int32(1), atomic.LoadInt32(&callCount), "fetch must run once even when it errors")
 	for i := 0; i < n; i++ {
-		assert.ErrorIs(t, errs[i], expected)
+		require.ErrorIs(t, errs[i], expected)
 	}
 }
