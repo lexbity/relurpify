@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/model"
+	cfgmodel "codeburg.org/lexbit/relurpify/userconfig/config/model"
 )
 
 // NewProfileRegistry creates an empty profile registry.
@@ -14,7 +14,7 @@ func NewProfileRegistry() *ProfileRegistry {
 }
 
 // Add adds a model profile to the registry.
-func (r *ProfileRegistry) Add(profile *model.ModelProfile) {
+func (r *ProfileRegistry) Add(profile *cfgmodel.ModelProfileConfig) {
 	if profile == nil {
 		return
 	}
@@ -32,14 +32,14 @@ type ProfileRegistry struct {
 }
 
 type profileEntry struct {
-	profile    *model.ModelProfile
+	profile    *cfgmodel.ModelProfileConfig
 	sourcePath string
 	isDefault  bool
 }
 
 // ProfileResolution captures the selected profile together with match metadata.
 type ProfileResolution struct {
-	Profile    *model.ModelProfile
+	Profile    *cfgmodel.ModelProfileConfig
 	SourcePath string
 	Reason     string
 	MatchKind  string
@@ -47,11 +47,8 @@ type ProfileResolution struct {
 	Model      string
 }
 
-// NewProfileRegistryFromProfiles builds a registry from already-converted domain
-// profiles. The framework/llmconfig adapter is responsible for converting YAML
-// config DTOs into these domain profiles, keeping platform/llm free of any
-// dependency on framework configuration loaders.
-func NewProfileRegistryFromProfiles(profiles []*model.ModelProfile) *ProfileRegistry {
+// NewProfileRegistryFromProfiles builds a registry from loaded profile config DTOs.
+func NewProfileRegistryFromProfiles(profiles []*cfgmodel.ModelProfileConfig) *ProfileRegistry {
 	reg := &ProfileRegistry{}
 	for _, profile := range profiles {
 		if profile == nil {
@@ -98,15 +95,12 @@ func (r *ProfileRegistry) Resolve(provider, model string) ProfileResolution {
 	if best == nil || bestScore < 0 {
 		if defaultEntry != nil && defaultEntry.profile != nil {
 			res := ProfileResolution{
-				Profile:    defaultEntry.profile.Clone(),
+				Profile:    defaultEntry.profile,
 				SourcePath: defaultEntry.sourcePath,
 				Reason:     profileReason("default", defaultEntry.profile, provider, model, true),
 				MatchKind:  "default",
 				Provider:   provider,
 				Model:      model,
-			}
-			if res.Profile != nil {
-				res.Profile.SourcePath = defaultEntry.sourcePath
 			}
 			return res
 		}
@@ -114,36 +108,33 @@ func (r *ProfileRegistry) Resolve(provider, model string) ProfileResolution {
 	}
 
 	res := ProfileResolution{
-		Profile:    best.profile.Clone(),
+		Profile:    best.profile,
 		SourcePath: best.sourcePath,
 		Reason:     profileReason(bestKind, best.profile, provider, model, best.isDefault),
 		MatchKind:  bestKind,
 		Provider:   provider,
 		Model:      model,
 	}
-	if res.Profile != nil {
-		res.Profile.SourcePath = best.sourcePath
-	}
 	return res
 }
 
 // Match preserves the older single-argument API by resolving against a model
 // name without provider scoping.
-func (r *ProfileRegistry) Match(modelName string) *model.ModelProfile {
+func (r *ProfileRegistry) Match(modelName string) *cfgmodel.ModelProfileConfig {
 	return r.Resolve("", modelName).Profile
 }
 
 // ApplyProfile attaches profile metadata to a profile-aware object when
 // supported. It returns true if the target accepted the profile.
-func ApplyProfile(target any, profile *model.ModelProfile) bool {
+func ApplyProfile(target any, profile *cfgmodel.ModelProfileConfig) bool {
 	if target == nil || profile == nil {
 		return false
 	}
-	setter, ok := target.(interface{ SetProfile(*model.ModelProfile) })
+	setter, ok := target.(interface{ SetProfile(*cfgmodel.ModelProfileConfig) })
 	if !ok {
 		return false
 	}
-	setter.SetProfile(profile.Clone())
+	setter.SetProfile(profile)
 	return true
 }
 
@@ -159,24 +150,18 @@ func builtinProfileResolution(provider, model string) ProfileResolution {
 	}
 }
 
-func builtinDefaultProfile() *model.ModelProfile {
-	profile := &model.ModelProfile{Pattern: "*"}
-	profile.Normalize()
-	return profile
+func builtinDefaultProfile() *cfgmodel.ModelProfileConfig {
+	return &cfgmodel.ModelProfileConfig{Pattern: "*"}
 }
 
-func profileScore(profile *model.ModelProfile, isDefault bool, provider, model string) (int, string) {
+func profileScore(profile *cfgmodel.ModelProfileConfig, isDefault bool, provider, model string) (int, string) {
 	if profile == nil {
 		return -1, ""
 	}
 	if model == "" {
 		return -1, ""
 	}
-	if profile.Provider != "" && profile.Provider != provider {
-		return -1, ""
-	}
-
-	pattern := profile.MatchPattern()
+	pattern := strings.TrimSpace(profile.Pattern)
 	if pattern == "" {
 		if isDefault {
 			return 0, "default"
@@ -184,24 +169,12 @@ func profileScore(profile *model.ModelProfile, isDefault bool, provider, model s
 		return -1, ""
 	}
 
-	if profile.IsExactModelMatch() {
-		if strings.EqualFold(pattern, model) {
-			switch {
-			case profile.Provider != "" && provider == profile.Provider:
-				return 4000 + len(pattern), "provider-model-exact"
-			case profile.Provider == "":
-				return 3000 + len(pattern), "model-exact"
-			}
-		}
+	if !strings.ContainsAny(pattern, "*?[") && strings.EqualFold(pattern, model) {
+		return 3000 + len(pattern), "model-exact"
 	}
 
 	if matchPattern(pattern, model) {
-		score := 2000 + specificityScore(pattern)
-		if profile.Provider != "" {
-			score += 250
-			return score, "provider-glob"
-		}
-		return score, "glob"
+		return 2000 + specificityScore(pattern), "glob"
 	}
 	return -1, ""
 }
@@ -229,14 +202,10 @@ func specificityScore(pattern string) int {
 	return idx
 }
 
-func profileReason(kind string, profile *model.ModelProfile, provider, model string, isDefault bool) string {
+func profileReason(kind string, profile *cfgmodel.ModelProfileConfig, provider, model string, isDefault bool) string {
 	switch kind {
-	case "provider-model-exact":
-		return fmt.Sprintf("provider/model exact match for %s/%s", provider, model)
 	case "model-exact":
 		return fmt.Sprintf("exact model match for %s", model)
-	case "provider-glob":
-		return fmt.Sprintf("provider-scoped glob match for %s/%s", provider, model)
 	case "glob":
 		return fmt.Sprintf("glob match for %s", model)
 	case "default":

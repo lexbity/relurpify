@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	permissions "codeburg.org/lexbit/relurpify/governance/permissions"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
 	governanceports "codeburg.org/lexbit/relurpify/governance/ports"
@@ -26,7 +25,7 @@ type SandboxBackendFactory func(ctx context.Context, backend string, cfg governa
 type RuntimeConfig struct {
 	ManifestPath       string
 	DocumentSnapshot   *config.DocumentSnapshot
-	AgentSpec          *agentspec.AgentRuntimeSpec
+	AgentSpec          *config.AgentSpec
 	Permissions        permissions.PermissionSet
 	DefaultPermissions *permissions.PermissionSet
 	Security           config.SecuritySpec
@@ -48,7 +47,7 @@ type RuntimeConfig struct {
 type AgentRegistration struct {
 	ID                string
 	DocumentSnapshot  *config.DocumentSnapshot
-	AgentSpec         *agentspec.AgentRuntimeSpec
+	AgentSpec         *config.AgentSpec
 	Permissions       *PermissionManager
 	PermissionSet     permissions.PermissionSet
 	Policy            PolicyEngine

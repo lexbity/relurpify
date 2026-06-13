@@ -4,7 +4,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/userconfig/config/secretscan"
 )
 
@@ -260,10 +259,10 @@ type AuditSpec struct {
 // This mirrors execution/context.ContextPolicyBundle to avoid import cycles.
 type ContextPolicy struct {
 	CompilationMode       string                    `yaml:"compilation_mode,omitempty" json:"compilation_mode,omitempty"`
-	DefaultTrustClass     agentspec.TrustClass      `yaml:"default_trust_class,omitempty" json:"default_trust_class,omitempty"`
-	Rankers               []agentspec.RankerRef     `yaml:"rankers,omitempty" json:"rankers,omitempty"`
-	Scanners              []agentspec.ScannerRef    `yaml:"scanners,omitempty" json:"scanners,omitempty"`
-	Summarizers           []agentspec.SummarizerRef `yaml:"summarizers,omitempty" json:"summarizers,omitempty"`
+	DefaultTrustClass     string                    `yaml:"default_trust_class,omitempty" json:"default_trust_class,omitempty"`
+	Rankers               []string                  `yaml:"rankers,omitempty" json:"rankers,omitempty"`
+	Scanners              []string                  `yaml:"scanners,omitempty" json:"scanners,omitempty"`
+	Summarizers           []string                  `yaml:"summarizers,omitempty" json:"summarizers,omitempty"`
 	Quota                 *QuotaSpec                `yaml:"quota,omitempty" json:"quota,omitempty"`
 	RateLimit             *RateLimitSpec            `yaml:"rate_limit,omitempty" json:"rate_limit,omitempty"`
 	TrustDemotedPolicy    string                    `yaml:"trust_demoted_policy,omitempty" json:"trust_demoted_policy,omitempty"`

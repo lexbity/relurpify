@@ -13,6 +13,7 @@ type ProviderConfig struct {
 	Endpoint          string         `yaml:"endpoint,omitempty" json:"endpoint,omitempty"`
 	Model             string         `yaml:"model,omitempty" json:"model,omitempty"`
 	ModelPath         string         `yaml:"model_path,omitempty" json:"model_path,omitempty"`
+	TapePath          string         `yaml:"tape_path,omitempty" json:"tape_path,omitempty"`
 	Timeout           time.Duration  `yaml:"timeout,omitempty" json:"timeout,omitempty"`
 	NativeToolCalling bool           `yaml:"native_tool_calling,omitempty" json:"native_tool_calling,omitempty"`
 	Debug             bool           `yaml:"debug,omitempty" json:"debug,omitempty"`
@@ -30,6 +31,7 @@ type RuntimeConfigSource interface {
 	InferenceProviderValue() string
 	InferenceEndpointValue() string
 	InferenceModelValue() string
+	InferenceTapePathValue() string
 	InferenceNativeToolCallingValue() bool
 }
 
@@ -42,6 +44,7 @@ func ProviderConfigFromRuntimeConfig(cfg RuntimeConfigSource) ProviderConfig {
 		Provider:          cfg.InferenceProviderValue(),
 		Endpoint:          cfg.InferenceEndpointValue(),
 		Model:             cfg.InferenceModelValue(),
+		TapePath:          cfg.InferenceTapePathValue(),
 		NativeToolCalling: cfg.InferenceNativeToolCallingValue(),
 	}
 }
@@ -53,6 +56,9 @@ func (c ProviderConfig) Validate() error {
 	}
 	if isTransportProvider(c.Provider) && strings.TrimSpace(c.Endpoint) == "" {
 		return fmt.Errorf("provider %q endpoint required", c.Provider)
+	}
+	if strings.EqualFold(strings.TrimSpace(c.Provider), "tape") && strings.TrimSpace(c.TapePath) == "" {
+		return fmt.Errorf("provider %q tape_path required", c.Provider)
 	}
 	if c.Timeout < 0 {
 		return fmt.Errorf("provider %q timeout must be >= 0", c.Provider)

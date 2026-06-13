@@ -81,15 +81,15 @@ type TapeInspection struct {
 const staleTapeWarningThreshold = 30 * 24 * time.Hour
 
 func NewTapeModel(inner LanguageModel, path string, mode string) (*TapeModel, error) {
-	if inner == nil {
-		return nil, errors.New("inner model required")
-	}
 	if path == "" {
 		return nil, errors.New("tape path required")
 	}
 	m := TapeMode(mode)
 	if m == "" {
 		m = TapeOff
+	}
+	if inner == nil && m != TapeReplay {
+		return nil, errors.New("inner model required")
 	}
 	tm := &TapeModel{inner: inner, mode: m, path: path}
 	switch tm.mode {

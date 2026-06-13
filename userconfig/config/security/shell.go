@@ -2,8 +2,6 @@ package security
 
 import (
 	"path/filepath"
-
-	"codeburg.org/lexbit/relurpify/capability/sandbox"
 )
 
 // ShellPolicyPath returns the canonical shell policy location.
@@ -12,14 +10,14 @@ func ShellPolicyPath(workspace string) string {
 }
 
 type shellPolicyFile struct {
-	Rules []sandbox.BlacklistRule `yaml:"rules,omitempty"`
+	Rules []BlacklistRule `yaml:"rules,omitempty"`
 }
 
 // LoadShellPolicy loads and validates the shell policy file.
-func LoadShellPolicy(path, workspace string, decode Decoder) (*sandbox.ShellBlacklist, error) {
+func LoadShellPolicy(path, workspace string, decode Decoder) (*ShellBlacklist, error) {
 	var file shellPolicyFile
 	if err := loadAndDecode(path, workspace, decode, ShellPolicyPath, &file); err != nil {
 		return nil, err
 	}
-	return sandbox.NewShellBlacklist(file.Rules)
+	return &ShellBlacklist{Rules: append([]BlacklistRule(nil), file.Rules...)}, nil
 }

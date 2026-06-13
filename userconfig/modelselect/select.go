@@ -2,9 +2,7 @@ package modelselect
 
 import (
 	"fmt"
-	"strings"
 
-	"codeburg.org/lexbit/relurpify/model"
 	cfgmodel "codeburg.org/lexbit/relurpify/userconfig/config/model"
 )
 
@@ -29,7 +27,7 @@ func BuildProfileRegistry(configs []*cfgmodel.ModelProfileConfig) (*ProfileRegis
 		if cfg == nil {
 			continue
 		}
-		reg.Add(convertModelProfileConfig(cfg))
+		reg.Add(cfg)
 	}
 	return reg, nil
 }
@@ -41,29 +39,4 @@ func LoadProviderRegistry(dir string) (*ProviderRegistry, error) {
 		return nil, fmt.Errorf("load providers: %w", err)
 	}
 	return NewProviderRegistry(providers), nil
-}
-
-func convertModelProfileConfig(cfg *cfgmodel.ModelProfileConfig) *model.ModelProfile {
-	if cfg == nil {
-		return nil
-	}
-	profile := &model.ModelProfile{
-		Pattern:    cfg.Pattern,
-		SourcePath: cfg.SourcePath,
-	}
-	switch strings.ToLower(strings.TrimSpace(cfg.ToolCalling.Intent)) {
-	case "native":
-		profile.ToolCalling.NativeAPI = true
-	case "prompt_based":
-		profile.ToolCalling.NativeAPI = false
-	case "auto":
-		profile.ToolCalling.NativeAPI = false
-	}
-	profile.ToolCalling.DoubleEncodedArgs = cfg.ToolCalling.DoubleEncodeArgs
-	profile.ToolCalling.MaxToolsPerCall = cfg.ToolCalling.MaxConcurrentTools
-	if cfg.Context.MaxTokens > 0 {
-		profile.ContextSize = cfg.Context.MaxTokens
-	}
-	profile.Normalize()
-	return profile
 }

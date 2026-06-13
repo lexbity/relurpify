@@ -3,8 +3,6 @@ package model
 import (
 	"context"
 	"strings"
-
-	"codeburg.org/lexbit/relurpify/telemetry"
 )
 
 // LanguageModel is the primary contract every LLM backend satisfies.
@@ -49,11 +47,6 @@ type ToolCall struct {
 	Name string
 	Args map[string]any
 }
-
-// TokenUsage records token consumption for a model invocation.
-// Canonical definition lives in telemetry package.
-type TokenUsage = telemetry.TokenUsage
-type TokenUsageReport = telemetry.TokenUsage
 
 // ProfiledModel extends LanguageModel with profile metadata.
 type ProfiledModel interface {
@@ -185,4 +178,13 @@ type Schema struct {
 	Title       string             `json:"title,omitempty" yaml:"title,omitempty"`
 	Description string             `json:"description,omitempty" yaml:"description,omitempty"`
 	Format      string             `json:"format,omitempty" yaml:"format,omitempty"`
+}
+
+// TokenUsage records token consumption for a model invocation.
+type TokenUsage struct {
+	PromptTokens     int    `json:"prompt_tokens"`
+	CompletionTokens int    `json:"completion_tokens"`
+	TotalTokens      int    `json:"total_tokens"`
+	Estimated        bool   `json:"estimated"`
+	EstimationMethod string `json:"estimation_method,omitempty"`
 }

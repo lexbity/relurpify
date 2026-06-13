@@ -10,7 +10,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/governance/authorization"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
-	"codeburg.org/lexbit/relurpify/telemetry"
+	"codeburg.org/lexbit/relurpify/platform/observability"
 )
 
 func TestSessionNavigateChecksNetworkPermissions(t *testing.T) {
@@ -120,12 +120,12 @@ func (e *errorBackend) WaitFor(context.Context, WaitCondition, time.Duration) er
 func (e *errorBackend) CurrentURL(context.Context) (string, error)                  { return "", e.err }
 func (e *errorBackend) Close(_ context.Context) error                               { return e.err }
 
-// stubBudget implements telemetry.BudgetManager for testing
+// stubBudget implements observability.BudgetManager for testing
 type stubBudget struct {
 	remaining int
 }
 
-func (s *stubBudget) Allocate(category string, tokens int, item telemetry.BudgetItem) error {
+func (s *stubBudget) Allocate(category string, tokens int, item observability.BudgetItem) error {
 	if tokens > s.remaining {
 		return errors.New("budget exhausted")
 	}

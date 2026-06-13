@@ -3,17 +3,14 @@ package config
 import (
 	"fmt"
 	"strings"
-
-	"codeburg.org/lexbit/relurpify/capability/agentspec"
-	"codeburg.org/lexbit/relurpify/governance/permissions"
 )
 
 // EffectiveAgentContract captures the resolved runtime-facing contract derived
 // from a manifest or document plus any later overlays.
 type EffectiveAgentContract struct {
 	AgentID     string
-	AgentSpec   *agentspec.AgentRuntimeSpec
-	Permissions permissions.PermissionSet
+	AgentSpec   *AgentSpec
+	Permissions PermissionSet
 	Resources   ResourceSpec
 	Security    SecuritySpec
 	Sources     SourceSummary
@@ -133,24 +130,24 @@ func assembleEffectiveAgentContract(doc *Document) (*EffectiveAgentContract, err
 	}), nil
 }
 
-func decodePermissionsSection(doc *Document) (permissions.PermissionSet, error) {
+func decodePermissionsSection(doc *Document) (PermissionSet, error) {
 	node, ok := doc.Section("permissions")
 	if !ok {
-		return permissions.PermissionSet{}, nil
+		return PermissionSet{}, nil
 	}
-	ps, err := permissions.DecodeSection(node)
+	ps, err := DecodePermissionsSection(node)
 	if err != nil || ps == nil {
-		return permissions.PermissionSet{}, err
+		return PermissionSet{}, err
 	}
 	return *ps, nil
 }
 
-func decodeAgentSection(doc *Document) (*agentspec.AgentRuntimeSpec, error) {
+func decodeAgentSection(doc *Document) (*AgentSpec, error) {
 	node, ok := doc.Section("agent")
 	if !ok {
 		return nil, fmt.Errorf("agent section not found")
 	}
-	return agentspec.DecodeSection(node)
+	return DecodeAgentSection(node)
 }
 
 func decodeSecuritySection(doc *Document) (SecuritySpec, error) {
@@ -168,7 +165,7 @@ func decodeSecuritySection(doc *Document) (SecuritySpec, error) {
 // BuildEffectiveAgentContract constructs an EffectiveAgentContract from
 // pre-resolved inputs. Callers (typically execution/session) are responsible
 // for decoding each section via the appropriate domain's DecodeSection.
-func BuildEffectiveAgentContract(agentID string, agentSpec *agentspec.AgentRuntimeSpec, perms permissions.PermissionSet, resources ResourceSpec, security SecuritySpec, sources SourceSummary) *EffectiveAgentContract {
+func BuildEffectiveAgentContract(agentID string, agentSpec *AgentSpec, perms PermissionSet, resources ResourceSpec, security SecuritySpec, sources SourceSummary) *EffectiveAgentContract {
 	return &EffectiveAgentContract{
 		AgentID:     agentID,
 		AgentSpec:   agentSpec,

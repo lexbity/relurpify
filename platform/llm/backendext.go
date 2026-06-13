@@ -5,14 +5,12 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/model"
-	"codeburg.org/lexbit/relurpify/telemetry"
 )
 
 // Re-export contract types for local usage
 type (
 	LLMOptions       = model.LLMOptions
 	LLMResponse      = model.LLMResponse
-	TokenUsageReport = telemetry.TokenUsageReport
 	Message          = model.Message
 	LLMToolSpec      = model.LLMToolSpec
 )

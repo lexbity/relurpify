@@ -92,15 +92,23 @@ func BuildDoctorReport(ctx context.Context, cfg Config, secrets config.Secrets) 
 		report.ConfigExists = true
 		if loaded, err := config.LoadRuntimeWorkspaceConfig(cfg.ConfigPath); err != nil {
 			report.ConfigError = err.Error()
-		} else if loaded.SandboxBackend != "" && cfg.SandboxBackend == "" {
-			cfg.SandboxBackend = loaded.SandboxBackend
-			if loaded.Provider != "" && cfg.InferenceProvider == "" {
+		} else {
+			if loaded.SandboxBackend != "" && cfg.SandboxBackend == "" {
+				cfg.SandboxBackend = loaded.SandboxBackend
+			}
+			if loaded.Provider != "" && (strings.TrimSpace(cfg.InferenceProvider) == "" || strings.EqualFold(strings.TrimSpace(cfg.InferenceProvider), "ollama")) {
 				cfg.InferenceProvider = loaded.Provider
 			}
 			if loaded.Model != "" && cfg.InferenceModel == "" {
 				cfg.InferenceModel = loaded.Model
 			}
+			if loaded.TapePath != "" && cfg.InferenceTapePath == "" {
+				cfg.InferenceTapePath = loaded.TapePath
+			}
 		}
+	}
+	if strings.EqualFold(strings.TrimSpace(cfg.InferenceProvider), "tape") && strings.TrimSpace(cfg.InferenceTapePath) == "" {
+		cfg.InferenceTapePath = config.DefaultWorkspaceStateTapeFile(cfg.Workspace)
 	}
 	if _, err := os.Stat(cfg.ManifestPath); err == nil {
 		report.ManifestExists = true
@@ -157,7 +165,9 @@ func BuildDoctorReport(ctx context.Context, cfg Config, secrets config.Secrets) 
 		env = ProbeEnvironment(ctx, cfg, secrets, backend)
 	}
 	report.Inference = env.Inference
-	if reg, err := modelselect.LoadProfileRegistry(config.New(cfg.Workspace).ModelProfilesDir()); err == nil {
+	if strings.EqualFold(strings.TrimSpace(cfg.InferenceProvider), "tape") {
+		report.ModelProfilesExists = true
+	} else if reg, err := modelselect.LoadProfileRegistry(config.New(cfg.Workspace).ModelProfilesDir()); err == nil {
 		resolution := reg.Resolve(cfg.InferenceProvider, report.Inference.SelectedModel)
 		if resolution.SourcePath != "" {
 			report.ModelProfilesExists = true
@@ -176,6 +186,7 @@ func BuildDoctorReport(ctx context.Context, cfg Config, secrets config.Secrets) 
 		InferenceProvider:          cfg.InferenceProvider,
 		InferenceEndpoint:          cfg.InferenceEndpoint,
 		InferenceModel:             cfg.InferenceModel,
+		InferenceTapePath:          cfg.InferenceTapePath,
 		InferenceNativeToolCalling: cfg.InferenceNativeToolCalling,
 		ConfigPath:                 cfg.ConfigPath,
 		AgentsDir:                  cfg.AgentsDir,

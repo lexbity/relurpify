@@ -29,11 +29,22 @@ func convertRuntimeCapabilitySelectors(values []config.RuntimeCapabilitySelector
 			CoordinationRoles:           convertRuntimeCoordinationRoles(value.CoordinationRoles),
 			CoordinationTaskTypes:       append([]string(nil), value.CoordinationTaskTypes...),
 			CoordinationExecutionModes:  convertRuntimeCoordinationModes(value.CoordinationExecutionModes),
-			CoordinationLongRunning:     value.CoordinationLongRunning,
-			CoordinationDirectInsertion: value.CoordinationDirectInsertion,
+			CoordinationLongRunning:     convertEnabledState(value.CoordinationLongRunning),
+			CoordinationDirectInsertion: convertEnabledState(value.CoordinationDirectInsertion),
 		})
 	}
 	return out
+}
+
+func convertEnabledState(value string) agentspec.EnabledState {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "enabled":
+		return agentspec.EnabledStateEnabled
+	case "disabled":
+		return agentspec.EnabledStateDisabled
+	default:
+		return agentspec.EnabledStateUnset
+	}
 }
 
 func convertRuntimeFamilies(values []string) []agentspec.CapabilityRuntimeFamily {

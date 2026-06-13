@@ -233,6 +233,7 @@ func BootstrapAgentRuntime(ctx context.Context, workspace string, opts AgentBoot
 		return nil, err
 	}
 	agentSpec := effectiveContract.AgentSpec
+	agentSpecCap := convertAgentSpec(agentSpec)
 	fileScope := fsandbox.NewFileScopePolicy(workspace, append([]string(nil), opts.SecurityBundle.Sandbox.ProtectedPaths...))
 
 	resolvedModel := opts.InferenceModel
@@ -263,7 +264,7 @@ func BootstrapAgentRuntime(ctx context.Context, workspace string, opts AgentBoot
 		}
 	}
 	if opts.ProfileResolution.Profile != nil {
-		registry.SetModelProfile(opts.ProfileResolution.Profile)
+		registry.SetModelProfile(convertProfileConfig(opts.ProfileResolution.Profile))
 	}
 	compiledPolicy, err := buildCompiledPolicy(effectiveContract, opts.PolicyEngine, nil)
 	if err != nil {
@@ -283,18 +284,18 @@ func BootstrapAgentRuntime(ctx context.Context, workspace string, opts AgentBoot
 		Name:              configName,
 		Model:             resolvedModel,
 		MaxIterations:     maxIterations,
-		NativeToolCalling: agentSpec.NativeToolCallingEnabled(),
-		AgentSpec:         agentSpec,
+		NativeToolCalling: agentSpecCap.NativeToolCallingEnabled(),
+		AgentSpec:         agentSpecCap,
 		DebugLLM:          opts.DebugLLM,
 		DebugAgent:        opts.DebugAgent,
 		Telemetry:         opts.Telemetry,
 	}
-	registry.UseAgentSpec(opts.AgentID, agentSpec)
+	registry.UseAgentSpec(opts.AgentID, agentSpecCap)
 	admissionResults, err := regpkg.AdmitCandidates(
 		ctx,
 		registry,
 		nil,
-		agentspec.EffectiveAllowedCapabilitySelectors(agentSpec),
+		agentspec.EffectiveAllowedCapabilitySelectors(agentSpecCap),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("admit skill capabilities: %w", err)
@@ -327,7 +328,7 @@ func BootstrapAgentRuntime(ctx context.Context, workspace string, opts AgentBoot
 		Registry:             registry,
 		IndexManager:         indexManager,
 		SearchEngine:         searchEngine,
-		AgentSpec:            agentSpec,
+		AgentSpec:            agentSpecCap,
 		AgentConfig:          agentCfg,
 		Backend:              opts.Backend,
 		Environment:          env,
@@ -523,7 +524,7 @@ func OpenWorkspace(ctx context.Context, cfg WorkspaceConfig) (_ *Workspace, err 
 	if cfg.Scope.LLMBackend && backend != nil {
 		backend.SetDebugLogging(logLLM)
 		if cfg.ModelProduct.ModelFactory != nil {
-			model = cfg.ModelProduct.ModelFactory(tel, logLLM)
+			model = cfg.ModelProduct.ModelFactory(newModelTelemetryAdapter(tel), logLLM)
 		} else {
 			model = backend.Model()
 		}

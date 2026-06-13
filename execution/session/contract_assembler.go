@@ -4,9 +4,7 @@ import (
 	"errors"
 	"fmt"
 
-	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	execctx "codeburg.org/lexbit/relurpify/execution/context"
-	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 	"gopkg.in/yaml.v3"
 )
@@ -60,24 +58,24 @@ func AssembleContract(doc *config.Document) (*config.EffectiveAgentContract, err
 	return config.BuildEffectiveAgentContract(agentID, agentSpec, perms, resources, security, sources), nil
 }
 
-func decodePermissionsSection(doc *config.Document) (permissions.PermissionSet, error) {
+func decodePermissionsSection(doc *config.Document) (config.PermissionSet, error) {
 	node, ok := doc.Section("permissions")
 	if !ok {
-		return permissions.PermissionSet{}, nil
+		return config.PermissionSet{}, nil
 	}
-	ps, err := permissions.DecodeSection(node)
+	ps, err := config.DecodePermissionsSection(node)
 	if err != nil || ps == nil {
-		return permissions.PermissionSet{}, err
+		return config.PermissionSet{}, err
 	}
 	return *ps, nil
 }
 
-func decodeAgentSection(doc *config.Document) (*agentspec.AgentRuntimeSpec, error) {
+func decodeAgentSection(doc *config.Document) (*config.AgentSpec, error) {
 	node, ok := doc.Section("agent")
 	if !ok {
 		return nil, errors.New("agent section not found")
 	}
-	return agentspec.DecodeSection(node)
+	return config.DecodeAgentSection(node)
 }
 
 func decodeResourceSection(doc *config.Document) (config.ResourceSpec, error) {

@@ -21,6 +21,7 @@ import (
 	"codeburg.org/lexbit/relurpify/platform/browser/bidi"
 	"codeburg.org/lexbit/relurpify/platform/browser/cdp"
 	"codeburg.org/lexbit/relurpify/platform/browser/webdriver"
+	"codeburg.org/lexbit/relurpify/platform/observability"
 	"codeburg.org/lexbit/relurpify/telemetry"
 )
 
@@ -348,8 +349,8 @@ type budgetManagerAdapter struct {
 	budget *telemetry.ArtifactBudget
 }
 
-func newBudgetManager(maxTokens int) telemetry.BudgetManager {
-	return budgetManagerAdapter{budget: telemetry.NewArtifactBudget(maxTokens)}
+func newBudgetManager(maxTokens int) observability.BudgetManager {
+	return observabilityBudgetManagerAdapter{budget: telemetry.NewArtifactBudget(maxTokens)}
 }
 
 func (b budgetManagerAdapter) Allocate(category string, tokens int, item telemetry.BudgetItem) error {
@@ -385,6 +386,49 @@ func (b budgetManagerAdapter) ShouldCompress() bool {
 }
 
 func (b budgetManagerAdapter) CanAddTokens(tokens int) bool {
+	if b.budget == nil {
+		return false
+	}
+	return b.budget.CanAddTokens(tokens)
+}
+
+type observabilityBudgetManagerAdapter struct {
+	budget *telemetry.ArtifactBudget
+}
+
+func (b observabilityBudgetManagerAdapter) Allocate(category string, tokens int, item observability.BudgetItem) error {
+	if b.budget == nil {
+		return fmt.Errorf("budget unavailable")
+	}
+	var adapted telemetry.BudgetItem
+	if item != nil {
+		adapted = telemetryBudgetItemAdapter{item: item}
+	}
+	return b.budget.Allocate(category, tokens, adapted)
+}
+
+func (b observabilityBudgetManagerAdapter) Free(category string, tokens int, itemID string) {
+	if b.budget == nil {
+		return
+	}
+	b.budget.Free(category, tokens, itemID)
+}
+
+func (b observabilityBudgetManagerAdapter) GetRemainingBudget(category string) int {
+	if b.budget == nil {
+		return 0
+	}
+	return b.budget.GetRemainingBudget(category)
+}
+
+func (b observabilityBudgetManagerAdapter) ShouldCompress() bool {
+	if b.budget == nil {
+		return false
+	}
+	return b.budget.ShouldCompress()
+}
+
+func (b observabilityBudgetManagerAdapter) CanAddTokens(tokens int) bool {
 	if b.budget == nil {
 		return false
 	}
@@ -435,6 +479,56 @@ func (b budgetItemAdapter) Compress() (telemetry.BudgetItem, error) {
 }
 
 func (b budgetItemAdapter) CanEvict() bool {
+	if b.item == nil {
+		return false
+	}
+	return b.item.CanEvict()
+}
+
+type telemetryBudgetItemAdapter struct {
+	item observability.BudgetItem
+}
+
+func (b telemetryBudgetItemAdapter) GetID() string {
+	if b.item == nil {
+		return ""
+	}
+	return b.item.GetID()
+}
+
+func (b telemetryBudgetItemAdapter) GetTokenCount() int {
+	if b.item == nil {
+		return 0
+	}
+	return b.item.GetTokenCount()
+}
+
+func (b telemetryBudgetItemAdapter) GetPriority() int {
+	if b.item == nil {
+		return 0
+	}
+	return b.item.GetPriority()
+}
+
+func (b telemetryBudgetItemAdapter) CanCompress() bool {
+	if b.item == nil {
+		return false
+	}
+	return b.item.CanCompress()
+}
+
+func (b telemetryBudgetItemAdapter) Compress() (telemetry.BudgetItem, error) {
+	if b.item == nil {
+		return nil, errors.New("budget item is nil")
+	}
+	next, err := b.item.Compress()
+	if err != nil || next == nil {
+		return nil, err
+	}
+	return telemetryBudgetItemAdapter{item: next}, nil
+}
+
+func (b telemetryBudgetItemAdapter) CanEvict() bool {
 	if b.item == nil {
 		return false
 	}

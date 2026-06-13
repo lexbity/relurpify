@@ -11,7 +11,6 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/platform/fs"
 )
 
@@ -51,14 +50,15 @@ type RuntimeCapabilitySelector struct {
 	CoordinationRoles           []string               `yaml:"coordination_roles,omitempty"`
 	CoordinationTaskTypes       []string               `yaml:"coordination_task_types,omitempty"`
 	CoordinationExecutionModes  []string               `yaml:"coordination_execution_modes,omitempty"`
-	CoordinationLongRunning     agentspec.EnabledState `yaml:"coordination_long_running,omitempty"`
-	CoordinationDirectInsertion agentspec.EnabledState `yaml:"coordination_direct_insertion,omitempty"`
+	CoordinationLongRunning     string                 `yaml:"coordination_long_running,omitempty"`
+	CoordinationDirectInsertion string                 `yaml:"coordination_direct_insertion,omitempty"`
 }
 
 // RuntimeWorkspaceConfig captures persisted workspace preferences under relurpify_cfg.
 type RuntimeWorkspaceConfig struct {
 	Model               string                        `yaml:"model"`
 	Provider            string                        `yaml:"provider,omitempty"`
+	TapePath            string                        `yaml:"tape_path,omitempty"`
 	SandboxBackend      string                        `yaml:"sandbox_backend,omitempty"`
 	ExecutionMode       string                        `yaml:"execution_mode,omitempty"`
 	Agents              []string                      `yaml:"agents"`
@@ -125,6 +125,9 @@ func LoadRuntimeWorkspaceConfig(path string) (RuntimeWorkspaceConfig, error) {
 	dec.KnownFields(true)
 	if err := dec.Decode(&cfg); err != nil {
 		return RuntimeWorkspaceConfig{}, err
+	}
+	if strings.TrimSpace(cfg.TapePath) != "" && !filepath.IsAbs(cfg.TapePath) {
+		cfg.TapePath = filepath.Clean(filepath.Join(filepath.Dir(path), cfg.TapePath))
 	}
 	return cfg, nil
 }

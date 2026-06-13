@@ -12,7 +12,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/governance/authorization"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
-	"codeburg.org/lexbit/relurpify/telemetry"
+	"codeburg.org/lexbit/relurpify/platform/observability"
 )
 
 type testBackend struct {
@@ -132,14 +132,14 @@ func newTestSession(t *testing.T, backend Backend, opts ...func(*SessionConfig))
 	return session
 }
 
-// testBudget implements telemetry.BudgetManager for testing
+// testBudget implements observability.BudgetManager for testing
 type testBudget struct {
 	maxTokens  int
 	remaining  int
 	categories map[string]float64
 }
 
-func newTestBudget(maxTokens int, categories map[string]float64) telemetry.BudgetManager {
+func newTestBudget(maxTokens int, categories map[string]float64) observability.BudgetManager {
 	return &testBudget{
 		maxTokens:  maxTokens,
 		remaining:  maxTokens,
@@ -147,7 +147,7 @@ func newTestBudget(maxTokens int, categories map[string]float64) telemetry.Budge
 	}
 }
 
-func (t *testBudget) Allocate(category string, tokens int, item telemetry.BudgetItem) error {
+func (t *testBudget) Allocate(category string, tokens int, item observability.BudgetItem) error {
 	if tokens > t.remaining {
 		return errors.New("budget exhausted")
 	}

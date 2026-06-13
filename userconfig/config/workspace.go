@@ -99,6 +99,11 @@ func DefaultWorkspaceStateEventsFile(workspace string) string {
 	return filepath.Join(DefaultWorkspaceStateDir(workspace), "events.db")
 }
 
+// DefaultWorkspaceStateTapeFile returns the default tape corpus path.
+func DefaultWorkspaceStateTapeFile(workspace string) string {
+	return filepath.Join(DefaultWorkspaceStateDir(workspace), "tapes", "tape.jsonl")
+}
+
 // LoadWorkspaceConfig loads, validates, and normalizes workspace.yaml.
 func LoadWorkspaceConfig(path, workspace string, opts WorkspaceLoadOptions) (*WorkspaceConfig, error) {
 	if strings.TrimSpace(workspace) == "" {

@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/model"
-	"codeburg.org/lexbit/relurpify/telemetry"
+	"codeburg.org/lexbit/relurpify/platform/observability"
 )
 
 // Re-export contract types for local usage
@@ -478,8 +478,8 @@ func firstFinishReason(chunk chatCompletionChunk) string {
 	return chunk.Choices[0].FinishReason
 }
 
-func normalizeUsage(usage map[string]any, promptTokens int, responseText string) telemetry.TokenUsageReport {
-	report := telemetry.TokenUsageReport{}
+func normalizeUsage(usage map[string]any, promptTokens int, responseText string) model.TokenUsage {
+	report := model.TokenUsage{}
 	for k, v := range usage {
 		switch strings.ToLower(k) {
 		case "prompt_tokens":
@@ -504,7 +504,7 @@ func estimatePromptTokensFromPayload(payload map[string]any) int {
 		return 0
 	}
 	if prompt, ok := payload["prompt"].(string); ok && prompt != "" {
-		return telemetry.EstimateTokens(prompt)
+		return observability.EstimateTokens(prompt)
 	}
 	messages := payload["messages"]
 	switch msgs := messages.(type) {
@@ -512,7 +512,7 @@ func estimatePromptTokensFromPayload(payload map[string]any) int {
 		total := 0
 		for _, msg := range msgs {
 			if content, ok := msg["content"].(string); ok {
-				total += telemetry.EstimateTokens(content)
+				total += observability.EstimateTokens(content)
 			}
 		}
 		return total
@@ -524,7 +524,7 @@ func estimatePromptTokensFromPayload(payload map[string]any) int {
 				continue
 			}
 			if content, ok := msg["content"].(string); ok {
-				total += telemetry.EstimateTokens(content)
+				total += observability.EstimateTokens(content)
 			}
 		}
 		return total
@@ -533,10 +533,10 @@ func estimatePromptTokensFromPayload(payload map[string]any) int {
 	}
 }
 
-func estimateUsage(promptTokens int, responseText string) telemetry.TokenUsageReport {
-	completionTokens := telemetry.EstimateTokens(responseText)
+func estimateUsage(promptTokens int, responseText string) model.TokenUsage {
+	completionTokens := observability.EstimateTokens(responseText)
 	totalTokens := promptTokens + completionTokens
-	return telemetry.TokenUsageReport{
+	return model.TokenUsage{
 		PromptTokens:     promptTokens,
 		CompletionTokens: completionTokens,
 		TotalTokens:      totalTokens,

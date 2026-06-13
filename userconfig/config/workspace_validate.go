@@ -4,9 +4,13 @@ import (
 	"fmt"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/userconfig/config/model"
 )
+
+var supportedSandboxBackends = map[string]struct{}{
+	"docker": {},
+	"gvisor": {},
+}
 
 // Validate enforces the workspace root contract and field constraints.
 func (c *WorkspaceConfig) Validate() error {
@@ -14,9 +18,11 @@ func (c *WorkspaceConfig) Validate() error {
 		return fmt.Errorf("workspace config required")
 	}
 	backend := strings.ToLower(strings.TrimSpace(stringValue(c.Sandbox.Backend)))
-	if backend != "" && !sandbox.IsSupportedSandboxBackend(backend) {
-		supported := strings.Join(sandbox.SupportedSandboxBackends(), ", ")
+	if backend != "" {
+		if _, ok := supportedSandboxBackends[backend]; !ok {
+			supported := "docker, gvisor"
 		return fmt.Errorf("sandbox.backend must be one of %s (got %q)", supported, backend)
+		}
 	}
 	return nil
 }

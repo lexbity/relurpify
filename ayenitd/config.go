@@ -16,6 +16,7 @@ type WorkspaceConfig struct {
 	InferenceProvider          string
 	InferenceEndpoint          string
 	InferenceModel             string // overrides manifest if non-empty
+	InferenceTapePath          string
 	InferenceNativeToolCalling bool
 
 	// Optional
@@ -43,6 +44,9 @@ type WorkspaceConfig struct {
 func (cfg WorkspaceConfig) InferenceProviderValue() string { return cfg.InferenceProvider }
 func (cfg WorkspaceConfig) InferenceEndpointValue() string { return cfg.InferenceEndpoint }
 func (cfg WorkspaceConfig) InferenceModelValue() string    { return cfg.InferenceModel }
+
+// InferenceTapePathValue exposes the tape corpus path to shared provider builders.
+func (cfg WorkspaceConfig) InferenceTapePathValue() string { return cfg.InferenceTapePath }
 func (cfg WorkspaceConfig) InferenceNativeToolCallingValue() bool {
 	return cfg.InferenceNativeToolCalling
 }

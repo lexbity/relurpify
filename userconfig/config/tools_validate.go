@@ -4,23 +4,21 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-
-	"codeburg.org/lexbit/relurpify/capability/ports"
 )
 
-func validateToolManifest(path string, manifest *ports.ToolManifest) error {
+func validateToolManifest(path string, manifest *ToolManifest) error {
 	if manifest == nil {
 		return &SchemaError{Path: path, Err: fmt.Errorf("tool manifest required")}
 	}
 	var problems []string
-	if ports.NormalizeToolName(manifest.Name) == "" {
+	if NormalizeToolName(manifest.Name) == "" {
 		problems = append(problems, "name required")
 	}
-	if ports.NormalizeToolName(manifest.Family) == "" {
+	if NormalizeToolName(manifest.Family) == "" {
 		problems = append(problems, "family required")
 	}
 	for i, intent := range manifest.Intent {
-		if ports.NormalizeToolName(intent) == "" {
+		if NormalizeToolName(intent) == "" {
 			problems = append(problems, fmt.Sprintf("intent[%d] required", i))
 		}
 	}
@@ -48,11 +46,11 @@ func validateToolManifest(path string, manifest *ports.ToolManifest) error {
 	return nil
 }
 
-func validateToolManifestParameters(params []ports.ToolParameter) error {
+func validateToolManifestParameters(params []ToolParameter) error {
 	seen := make(map[string]struct{}, len(params))
 	var problems []string
 	for i, param := range params {
-		name := ports.NormalizeToolName(param.Name)
+		name := NormalizeToolName(param.Name)
 		if name == "" {
 			problems = append(problems, fmt.Sprintf("parameters[%d].name required", i))
 			continue
@@ -72,17 +70,17 @@ func validateToolManifestParameters(params []ports.ToolParameter) error {
 	return nil
 }
 
-func validateToolManifestExecution(exec ports.ToolManifestExecution) error {
+func validateToolManifestExecution(exec ToolManifestExecution) error {
 	switch exec.Backend {
-	case ports.ToolBackendSubprocess:
+	case ToolBackendSubprocess:
 		if exec.Command == nil || len(exec.Command.Base) == 0 {
 			return fmt.Errorf("execution.command.base required for subprocess backend")
 		}
-	case ports.ToolBackendGoNative:
+	case ToolBackendGoNative:
 		if strings.TrimSpace(exec.Implementation) == "" {
 			return fmt.Errorf("execution.implementation required for go_native backend")
 		}
-	case ports.ToolBackendComposite:
+	case ToolBackendComposite:
 		// composition.steps validated during build, not here
 	default:
 		return fmt.Errorf("execution.backend unsupported")
@@ -93,7 +91,7 @@ func validateToolManifestExecution(exec ports.ToolManifestExecution) error {
 	return nil
 }
 
-func validateToolManifestCapability(capability ports.ToolManifestCapability) error {
+func validateToolManifestCapability(capability ToolManifestCapability) error {
 	if strings.TrimSpace(capability.TrustClass) == "" {
 		return fmt.Errorf("capability.trust_class required")
 	}
@@ -109,19 +107,19 @@ func validateToolManifestCapability(capability ports.ToolManifestCapability) err
 // validateToolManifestFlags checks each declared flag for internal consistency.
 // A flag must use exactly one form (boolean WhenTrue/WhenFalse or typed Param),
 // typed flags must reference a declared parameter, and Style must be valid.
-func validateToolManifestFlags(cmd *ports.ToolManifestCommand, params []ports.ToolParameter) error {
+func validateToolManifestFlags(cmd *ToolManifestCommand, params []ToolParameter) error {
 	if cmd == nil || len(cmd.Flags) == 0 {
 		return nil
 	}
 
 	paramNames := make(map[string]struct{}, len(params))
 	for _, p := range params {
-		paramNames[ports.NormalizeToolName(p.Name)] = struct{}{}
+		paramNames[NormalizeToolName(p.Name)] = struct{}{}
 	}
 
 	validStyles := map[string]bool{
-		ports.FlagStyleEquals:   true,
-		ports.FlagStyleSeparate: true,
+		FlagStyleEquals:   true,
+		FlagStyleSeparate: true,
 	}
 
 	var problems []string
@@ -139,11 +137,11 @@ func validateToolManifestFlags(cmd *ports.ToolManifestCommand, params []ports.To
 		}
 
 		if hasTyped {
-			if _, ok := paramNames[ports.NormalizeToolName(flag.Param)]; !ok {
+			if _, ok := paramNames[NormalizeToolName(flag.Param)]; !ok {
 				problems = append(problems, fmt.Sprintf("flag %q: param %q does not match any declared parameter", name, flag.Param))
 			}
 			if flag.Style != "" && !validStyles[flag.Style] {
-				problems = append(problems, fmt.Sprintf("flag %q: style %q must be %q or %q", name, flag.Style, ports.FlagStyleEquals, ports.FlagStyleSeparate))
+				problems = append(problems, fmt.Sprintf("flag %q: style %q must be %q or %q", name, flag.Style, FlagStyleEquals, FlagStyleSeparate))
 			}
 		}
 	}

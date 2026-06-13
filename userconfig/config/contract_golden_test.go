@@ -9,7 +9,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
 
-	"codeburg.org/lexbit/relurpify/execution/session"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
@@ -61,11 +60,7 @@ func TestContractGoldenCorpus(t *testing.T) {
 				if err != nil {
 					return nil, err
 				}
-				contract, err := session.AssembleContract(snapshot.Document)
-				if err != nil {
-					return nil, err
-				}
-				return contract, nil
+				return config.ResolveEffectiveAgentContract("/workspace/contracts/document", snapshot.Document, config.ResolveOptions{})
 			},
 			specAssert: func(t *testing.T, contract *config.EffectiveAgentContract) {
 				t.Helper()

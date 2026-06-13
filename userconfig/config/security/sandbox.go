@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
-
-	"codeburg.org/lexbit/relurpify/capability/sandbox"
 )
 
 // SandboxPolicyPath returns the canonical security sandbox policy location.
@@ -20,11 +18,11 @@ type sandboxPolicyFile struct {
 	SeccompProfile  string                `yaml:"seccomp_profile,omitempty"`
 	AllowedEnvKeys  []string              `yaml:"allowed_env_keys,omitempty"`
 	DeniedEnvKeys   []string              `yaml:"denied_env_keys,omitempty"`
-	NetworkRules    []sandbox.NetworkRule `yaml:"network_rules,omitempty"`
+	NetworkRules    []NetworkRule         `yaml:"network_rules,omitempty"`
 }
 
 // LoadSandboxPolicy loads and validates the sandbox policy file.
-func LoadSandboxPolicy(path, workspace string, decode Decoder) (*sandbox.SandboxPolicy, error) {
+func LoadSandboxPolicy(path, workspace string, decode Decoder) (*SandboxPolicy, error) {
 	var file sandboxPolicyFile
 	if err := loadAndDecode(path, workspace, decode, SandboxPolicyPath, &file); err != nil {
 		return nil, err
@@ -33,19 +31,16 @@ func LoadSandboxPolicy(path, workspace string, decode Decoder) (*sandbox.Sandbox
 	if err != nil {
 		return nil, fmt.Errorf("resolve workspace: %w", err)
 	}
-	policy := &sandbox.SandboxPolicy{
+	policy := &SandboxPolicy{
 		ReadOnlyRoot:    file.ReadOnlyRoot,
 		ProtectedPaths:  normalizeProtectedPaths(absWorkspace, file.ProtectedPaths),
 		NoNewPrivileges: file.NoNewPrivileges,
 		SeccompProfile:  strings.TrimSpace(file.SeccompProfile),
 		AllowedEnvKeys:  append([]string(nil), file.AllowedEnvKeys...),
 		DeniedEnvKeys:   append([]string(nil), file.DeniedEnvKeys...),
-		NetworkRules:    append([]sandbox.NetworkRule(nil), file.NetworkRules...),
+		NetworkRules:    append([]NetworkRule(nil), file.NetworkRules...),
 	}
 	policy.ProtectedPaths = injectProtectedRoot(absWorkspace, policy.ProtectedPaths)
-	if err := policy.Validate(); err != nil {
-		return nil, fmt.Errorf("validate sandbox policy: %w", err)
-	}
 	return policy, nil
 }
 

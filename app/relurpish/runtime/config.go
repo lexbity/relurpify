@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/capability/ports"
 	fsandbox "codeburg.org/lexbit/relurpify/capability/sandbox"
+	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
@@ -27,6 +27,7 @@ type Config struct {
 	InferenceProvider          string
 	InferenceEndpoint          string
 	InferenceModel             string
+	InferenceTapePath          string
 	InferenceNativeToolCalling bool
 	EmbeddingProvider          string
 	EmbeddingEndpoint          string
@@ -38,11 +39,13 @@ type Config struct {
 	EnvOverrides               []string
 	ReduceMotion               bool
 	Sandbox                    fsandbox.SandboxConfig
+	SecurityRunner             fsandbox.CommandRunner
+	SandboxBackendFactory      fauthorization.SandboxBackendFactory
 	CommandPolicy              fsandbox.CommandPolicy
 	AuditLimit                 int
 	HITLTimeout                time.Duration
 	Editor                     string
-	SubprocessToolFactory      func(ports.ToolManifest) ports.Tool
+	SubprocessToolFactory      func(config.ToolManifest) any
 }
 
 // DefaultConfig infers sensible defaults based on the current working
@@ -141,6 +144,9 @@ func (c *Config) Normalize() error {
 	if c.InferenceEndpoint == "" {
 		c.InferenceEndpoint = "http://localhost:11434"
 	}
+	if c.InferenceTapePath != "" && !filepath.IsAbs(c.InferenceTapePath) {
+		c.InferenceTapePath = filepath.Join(c.Workspace, c.InferenceTapePath)
+	}
 	if c.ServerAddr == "" {
 		c.ServerAddr = ":8080"
 	}
@@ -163,6 +169,11 @@ func (c Config) InferenceEndpointValue() string {
 
 func (c Config) InferenceModelValue() string {
 	return c.InferenceModel
+}
+
+// InferenceTapePathValue exposes the tape corpus path to shared provider builders.
+func (c Config) InferenceTapePathValue() string {
+	return c.InferenceTapePath
 }
 
 func (c Config) InferenceNativeToolCallingValue() bool {

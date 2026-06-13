@@ -102,6 +102,18 @@ func ProbeEnvironment(ctx context.Context, cfg Config, secrets config.Secrets, b
 	var workspaceCfg config.RuntimeWorkspaceConfig
 	if wcfg, err := config.LoadRuntimeWorkspaceConfig(cfg.ConfigPath); err == nil {
 		workspaceCfg = wcfg
+		if workspaceCfg.TapePath != "" && cfg.InferenceTapePath == "" {
+			cfg.InferenceTapePath = workspaceCfg.TapePath
+		}
+		if workspaceCfg.Provider != "" && (strings.TrimSpace(cfg.InferenceProvider) == "" || strings.EqualFold(strings.TrimSpace(cfg.InferenceProvider), "ollama")) {
+			cfg.InferenceProvider = workspaceCfg.Provider
+		}
+		if workspaceCfg.Model != "" && cfg.InferenceModel == "" {
+			cfg.InferenceModel = workspaceCfg.Model
+		}
+	}
+	if strings.EqualFold(strings.TrimSpace(cfg.InferenceProvider), "tape") && strings.TrimSpace(cfg.InferenceTapePath) == "" {
+		cfg.InferenceTapePath = config.DefaultWorkspaceStateTapeFile(cfg.Workspace)
 	}
 	return EnvironmentReport{
 		Workspace: cfg.Workspace,
@@ -395,7 +407,7 @@ func (r *Runtime) Status(ctx context.Context) StatusSnapshot {
 		snapshot.DeprecationNotices = append([]string(nil), r.registration.DocumentSnapshot.Warnings...)
 	}
 	if r.AgentWorkspace().ProfileResolution.Profile != nil {
-		snapshot.SelectedProfile = r.AgentWorkspace().ProfileResolution.Profile.MatchPattern()
+		snapshot.SelectedProfile = strings.TrimSpace(r.AgentWorkspace().ProfileResolution.Profile.Pattern)
 	}
 	snapshot.ProfileReason = r.AgentWorkspace().ProfileResolution.Reason
 	snapshot.ProfileSource = r.AgentWorkspace().ProfileResolution.SourcePath

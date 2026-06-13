@@ -107,6 +107,15 @@ func resolveExplicitOrDefaultTapePath(suite *Suite, recording RecordingSpec, lay
 }
 
 func resolveGoldenTapePath(suitePath, suiteName, caseName, modelName string) string {
+	goldenPath := GoldenTapePath(suitePath, suiteName, caseName, modelName)
+	if _, err := os.Stat(goldenPath); err == nil {
+		return goldenPath
+	}
+	return ""
+}
+
+// GoldenTapePath returns the canonical on-disk path for a golden tape fixture.
+func GoldenTapePath(suitePath, suiteName, caseName, modelName string) string {
 	suitePath = strings.TrimSpace(suitePath)
 	if suitePath == "" {
 		return ""
@@ -116,11 +125,7 @@ func resolveGoldenTapePath(suitePath, suiteName, caseName, modelName string) str
 		suiteKey = strings.TrimSuffix(filepathBase(suitePath), ".testsuite.yaml")
 	}
 	goldenDir := filepathJoin(filepathDir(suitePath), "tapes", suiteKey)
-	goldenPath := filepathJoin(goldenDir, sanitizeName(caseName)+"__"+sanitizeName(modelName)+".tape.jsonl")
-	if _, err := os.Stat(goldenPath); err == nil {
-		return goldenPath
-	}
-	return ""
+	return filepathJoin(goldenDir, sanitizeName(caseName)+"__"+sanitizeName(modelName)+".tape.jsonl")
 }
 
 var (

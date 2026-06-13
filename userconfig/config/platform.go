@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/userconfig/config/security"
 )
 
@@ -14,8 +13,8 @@ import (
 // from the loaded manifest objects rather than from ambient local state.
 type PlatformConfig struct {
 	Workspace     string
-	ToolManifests []*ports.ToolManifest
-	ToolRegistry  ports.ToolRegistry
+	ToolManifests []*ToolManifest
+	ToolRegistry  *ToolRegistry
 }
 
 // LoadPlatformConfig loads the platform tool registry for a workspace.

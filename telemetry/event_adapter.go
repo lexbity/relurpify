@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/governance/identity"
+	"codeburg.org/lexbit/relurpify/platform/observability"
 	evt "codeburg.org/lexbit/relurpify/telemetry/event"
 )
 
@@ -13,7 +13,7 @@ import (
 type EventTelemetry struct {
 	Log       evt.Log
 	Partition string
-	Actor     identity.EventActor
+	Actor     observability.Actor
 	Clock     func() time.Time
 }
 
@@ -71,9 +71,9 @@ func (e EventTelemetry) partition() string {
 	return e.Partition
 }
 
-func (e EventTelemetry) actor() identity.EventActor {
+func (e EventTelemetry) actor() observability.Actor {
 	if e.Actor.Kind == "" && e.Actor.ID == "" {
-		return identity.EventActor{Kind: "system", ID: "relurpify"}
+		return observability.Actor{Kind: "system", ID: "relurpify"}
 	}
 	return e.Actor
 }

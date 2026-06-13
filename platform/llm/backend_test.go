@@ -11,6 +11,13 @@ import (
 	"codeburg.org/lexbit/relurpify/model"
 )
 
+const (
+	backendTestProviderOllama = "ollama"
+	backendTestProviderTape   = "tape"
+	backendTestModelName      = "tape-model"
+	backendTestEndpoint       = "http://localhost:11434"
+)
+
 type stubManagedBackend struct {
 	model model.LanguageModel
 }
@@ -165,7 +172,7 @@ func TestProviderConfig_Validate(t *testing.T) {
 	})
 
 	t.Run("transport endpoint required", func(t *testing.T) {
-		err := (ProviderConfig{Provider: "ollama"}).Validate()
+		err := (ProviderConfig{Provider: backendTestProviderOllama}).Validate()
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "endpoint required")
 	})
@@ -178,12 +185,60 @@ func TestProviderConfig_Validate(t *testing.T) {
 
 	t.Run("valid transport config", func(t *testing.T) {
 		err := (ProviderConfig{
-			Provider: "ollama",
-			Endpoint: "http://localhost:11434",
+			Provider: backendTestProviderOllama,
+			Endpoint: backendTestEndpoint,
 			Timeout:  30 * time.Second,
 		}).Validate()
 		require.NoError(t, err)
 	})
+
+	t.Run("tape provider requires tape path", func(t *testing.T) {
+		err := (ProviderConfig{
+			Provider: backendTestProviderTape,
+			Model:    backendTestModelName,
+		}).Validate()
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "tape_path required")
+	})
+}
+
+type runtimeConfigStub struct {
+	provider string
+	endpoint string
+	model    string
+	tapePath string
+	native   bool
+}
+
+func (s runtimeConfigStub) InferenceProviderValue() string {
+	return s.provider
+}
+
+func (s runtimeConfigStub) InferenceEndpointValue() string {
+	return s.endpoint
+}
+
+func (s runtimeConfigStub) InferenceModelValue() string {
+	return s.model
+}
+
+func (s runtimeConfigStub) InferenceTapePathValue() string {
+	return s.tapePath
+}
+
+func (s runtimeConfigStub) InferenceNativeToolCallingValue() bool {
+	return s.native
+}
+
+func TestProviderConfigFromRuntimeConfigIncludesTapePath(t *testing.T) {
+	cfg := ProviderConfigFromRuntimeConfig(runtimeConfigStub{
+		provider: "tape",
+		model:    backendTestModelName,
+		tapePath: "/workspace/tapes/tape.jsonl",
+	})
+	require.Equal(t, "tape", cfg.Provider)
+	require.Equal(t, backendTestModelName, cfg.Model)
+	require.Equal(t, "/workspace/tapes/tape.jsonl", cfg.TapePath)
 }
 
 func TestHealthReport_Serialisation(t *testing.T) {

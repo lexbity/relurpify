@@ -28,13 +28,13 @@ import (
 	"codeburg.org/lexbit/relurpify/execution/agentlifecycle"
 	"codeburg.org/lexbit/relurpify/execution/session"
 	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
-	"codeburg.org/lexbit/relurpify/governance/identity"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/governance/policy"
 	"codeburg.org/lexbit/relurpify/model"
 	intentcontext "codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	"codeburg.org/lexbit/relurpify/platform/llm"
+	"codeburg.org/lexbit/relurpify/platform/observability"
 	"codeburg.org/lexbit/relurpify/telemetry"
 	"codeburg.org/lexbit/relurpify/telemetry/event"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
@@ -141,14 +141,21 @@ func New(ctx context.Context, cfg Config, secrets config.Secrets) (*Runtime, err
 	// internally, but AllowedCapabilities is a runtime-level concern.
 	var workspaceCfg config.RuntimeWorkspaceConfig
 	var allowedCapabilities []agentspec.CapabilitySelector
+	backendFactory := cfg.SandboxBackendFactory
+	if backendFactory == nil {
+		backendFactory = envcomposition.NewSandboxBackendFactory()
+	}
 	if cfg.ConfigPath != "" {
 		if loaded, err := config.LoadRuntimeWorkspaceConfig(cfg.ConfigPath); err == nil {
 			workspaceCfg = loaded
-			if workspaceCfg.Provider != "" && cfg.InferenceProvider == "" {
+			if workspaceCfg.Provider != "" && (strings.TrimSpace(cfg.InferenceProvider) == "" || strings.EqualFold(strings.TrimSpace(cfg.InferenceProvider), "ollama")) {
 				cfg.InferenceProvider = workspaceCfg.Provider
 			}
 			if workspaceCfg.Model != "" && cfg.InferenceModel == "" {
 				cfg.InferenceModel = workspaceCfg.Model
+			}
+			if workspaceCfg.TapePath != "" && cfg.InferenceTapePath == "" {
+				cfg.InferenceTapePath = workspaceCfg.TapePath
 			}
 			if workspaceCfg.SandboxBackend != "" && cfg.SandboxBackend == "" {
 				cfg.SandboxBackend = workspaceCfg.SandboxBackend
@@ -159,6 +166,9 @@ func New(ctx context.Context, cfg Config, secrets config.Secrets) (*Runtime, err
 			allowedCapabilities = append(allowedCapabilities, convertRuntimeCapabilitySelectors(workspaceCfg.AllowedCapabilities)...)
 		}
 		// Missing config file is not an error — workspace may not be initialized yet.
+	}
+	if strings.EqualFold(strings.TrimSpace(cfg.InferenceProvider), "tape") && strings.TrimSpace(cfg.InferenceTapePath) == "" {
+		cfg.InferenceTapePath = config.DefaultWorkspaceStateTapeFile(cfg.Workspace)
 	}
 
 	// App-level environment composition starts here. agentenv consumes the
@@ -171,25 +181,27 @@ func New(ctx context.Context, cfg Config, secrets config.Secrets) (*Runtime, err
 	if err != nil {
 		return nil, fmt.Errorf("resolve effective contract: %w", err)
 	}
-	agentSpec := contract.AgentSpec
+	agentSpec := convertAgentSpec(contract.AgentSpec)
+	contractPerms := convertPermissionSet(contract.Permissions)
 	securityBundle := loadedConfig.Security
 	profileRegistry, err := modelselect.BuildProfileRegistry(loadedConfig.Model.Profiles)
 	if err != nil {
 		return nil, fmt.Errorf("load model profiles: %w", err)
 	}
 	profileResolution := profileRegistry.Resolve(cfg.InferenceProvider, cfg.InferenceModel)
+	backendProfile := convertProfileConfig(profileResolution.Profile)
 	registration, err := fauthorization.RegisterAgent(ctx, fauthorization.RuntimeConfig{
 		ManifestPath:     cfg.ManifestPath,
 		DocumentSnapshot: docSnapshot,
 		AgentSpec:        contract.AgentSpec,
-		Permissions:      contract.Permissions,
+		Permissions:      contractPerms,
 		Security:         contract.Security,
 		Image:            "",
 		Runtime:          "",
 		SecurityBundle:   &securityBundle,
 		ConfigPath:       cfg.ConfigPath,
 		Backend:          cfg.SandboxBackend,
-		BackendFactory:   envcomposition.NewSandboxBackendFactory(),
+		BackendFactory:   backendFactory,
 		AuditLimit:       cfg.AuditLimit,
 		BaseFS:           cfg.Workspace,
 		StateDir:         config.DefaultWorkspaceStateDir(cfg.Workspace),
@@ -213,6 +225,7 @@ func New(ctx context.Context, cfg Config, secrets config.Secrets) (*Runtime, err
 		SecurityBundle:    &securityBundle,
 		Security:          contract.Security,
 		PermissionManager: registration.Permissions,
+		ExistingRunner:    cfg.SecurityRunner,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("compose security runtime: %w", err)
@@ -258,9 +271,10 @@ func New(ctx context.Context, cfg Config, secrets config.Secrets) (*Runtime, err
 		Provider:          cfg.InferenceProvider,
 		Endpoint:          cfg.InferenceEndpoint,
 		ModelName:         cfg.InferenceModel,
+		TapePath:          cfg.InferenceTapePath,
 		NativeToolCalling: cfg.InferenceNativeToolCalling,
 		Secrets:           llm.ProviderSecrets{APIKey: secrets.LLMAPIKey},
-		Profile:           profileResolution.Profile,
+		Profile:           backendProfile,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("compose model runtime: %w", err)
@@ -342,7 +356,7 @@ func New(ctx context.Context, cfg Config, secrets config.Secrets) (*Runtime, err
 			eventTelemetry = telemetry.EventTelemetry{
 				Log:       env.EventLog,
 				Partition: "local",
-				Actor:     identity.EventActor{Kind: "agent", ID: registration.ID, Label: cfg.AgentLabel()},
+				Actor:     observability.Actor{Kind: "agent", ID: registration.ID, Label: cfg.AgentLabel()},
 			}
 			// Re-wire the permission event logger with full event log support.
 			if registration.Permissions != nil {
@@ -360,7 +374,7 @@ func New(ctx context.Context, cfg Config, secrets config.Secrets) (*Runtime, err
 							Timestamp: time.Now().UTC(),
 							Type:      event.EventPolicyEvaluated,
 							Payload:   data,
-							Actor:     identity.EventActor{Kind: "agent", ID: registration.ID, Label: cfg.AgentLabel()},
+							Actor:     observability.Actor{Kind: "agent", ID: registration.ID, Label: cfg.AgentLabel()},
 							Partition: "local",
 						}})
 					}
@@ -561,12 +575,16 @@ func (r *Runtime) applyResolvedAgentState(name string, effectiveContract *config
 	if effectiveContract.AgentSpec != nil && effectiveContract.AgentSpec.Model.Name != "" && effectiveContract.AgentSpec.Model.Name != cfg.InferenceModel {
 		return fmt.Errorf("agent %s requires model %s; restart to switch models", name, effectiveContract.AgentSpec.Model.Name)
 	}
+	agentSpecCap := convertAgentSpec(effectiveContract.AgentSpec)
+	if agentSpecCap == nil {
+		return fmt.Errorf("agent spec required")
+	}
 	agentCfg := &execution.Config{
 		Name:              cfg.AgentLabel(),
 		Model:             cfg.InferenceModel,
 		MaxIterations:     8,
-		NativeToolCalling: effectiveContract.AgentSpec.NativeToolCallingEnabled(),
-		AgentSpec:         effectiveContract.AgentSpec,
+		NativeToolCalling: agentSpecCap.NativeToolCallingEnabled(),
+		AgentSpec:         agentSpecCap,
 		Telemetry:         r.Workspace.Telemetry,
 	}
 	agent := instantiateAgent(cfg, &paradigm.Deps{
@@ -581,10 +599,10 @@ func (r *Runtime) applyResolvedAgentState(name string, effectiveContract *config
 		return fmt.Errorf("agent %s not available", name)
 	}
 	r.wireRuntimeAgentDependencies(agent)
-	r.Tools.UseAgentSpec(r.Workspace.Registration.ID, effectiveContract.AgentSpec)
+	r.Tools.UseAgentSpec(r.Workspace.Registration.ID, agentSpecCap)
 	r.Workspace.Registration.Policy = nil
 	r.Agent = agent
-	r.Workspace.AgentSpec = effectiveContract.AgentSpec
+	r.Workspace.AgentSpec = agentSpecCap
 	r.Workspace.EffectiveContract = effectiveContract
 	r.Workspace.CompiledPolicy = compiledPolicy
 	r.Workspace.CapabilityAdmissions = nil
@@ -639,12 +657,13 @@ func (r *Runtime) resolveEffectiveContractForAgent(name string) (*config.Effecti
 	if effectiveContract.AgentID == "" {
 		return nil, nil, fmt.Errorf("agent id required")
 	}
-	if effectiveContract.AgentSpec == nil {
+	agentSpecCap := convertAgentSpec(effectiveContract.AgentSpec)
+	if agentSpecCap == nil {
 		return nil, nil, fmt.Errorf("agent spec required")
 	}
 	compiledPolicy := &session.CompiledPolicy{
 		AgentID: effectiveContract.AgentID,
-		Spec:    effectiveContract.AgentSpec,
+		Spec:    agentSpecCap,
 		Engine:  r.Workspace.PolicyEngine,
 	}
 	return effectiveContract, compiledPolicy, nil
@@ -907,7 +926,7 @@ func emitDocumentReloadedEvent(ctx context.Context, eventLog event.Log, agentID,
 			Timestamp: time.Now().UTC(),
 			Type:      event.EventManifestReloaded,
 			Payload:   data,
-			Actor:     identity.EventActor{Kind: "agent", ID: agentID, Label: label},
+			Actor:     observability.Actor{Kind: "agent", ID: agentID, Label: label},
 			Partition: "local",
 		}})
 	}

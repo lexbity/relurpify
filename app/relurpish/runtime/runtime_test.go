@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -9,37 +10,54 @@ import (
 	"sync"
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/execution/agentgraph"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
+	governanceports "codeburg.org/lexbit/relurpify/governance/ports"
+	"codeburg.org/lexbit/relurpify/model"
 	intentcontext "codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	"codeburg.org/lexbit/relurpify/platform/fs"
+	"codeburg.org/lexbit/relurpify/platform/llm"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 	"gopkg.in/yaml.v3"
 )
 
+const (
+	runtimeTestProviderOllama = "ollama"
+	runtimeTestSandboxDocker  = "docker"
+	runtimeTestWorkspaceOld   = "/old/workspace"
+	runtimeTestWorkspaceNew   = "/new/workspace"
+	runtimeTestTapePrompt     = "phase-15 runtime prompt"
+	runtimeTestTapeResponse   = "phase-15 runtime response"
+	runtimeTestTapeModel      = "tape-model"
+	runtimeTestTapePath       = "/old/workspace/.relurpify_state/tapes/tape.jsonl"
+	runtimeTestTapePathNew    = "/new/workspace/.relurpify_state/tapes/tape.jsonl"
+)
+
 func TestConfigForWorkspaceRebindsPaths(t *testing.T) {
 	current := Config{
-		Workspace:         "/old/workspace",
+		Workspace:         runtimeTestWorkspaceOld,
 		AgentName:         "euclo",
-		InferenceProvider: "ollama",
+		InferenceProvider: runtimeTestProviderOllama,
 		InferenceEndpoint: "http://localhost:11434",
 		InferenceModel:    "codex",
-		SandboxBackend:    "docker",
+		SandboxBackend:    runtimeTestSandboxDocker,
 		RecordingMode:     "on",
-		ManifestPath:      "/old/workspace/manifest.yaml",
-		AgentsDir:         "/old/workspace/relurpify_cfg/agents",
-		MemoryPath:        "/old/workspace/.relurpify_state/memory",
-		LogPath:           "/old/workspace/.relurpify_state/logs/relurpish.log",
-		TelemetryPath:     "/old/workspace/.relurpify_state/telemetry/telemetry.jsonl",
-		EventsPath:        "/old/workspace/.relurpify_state/events.db",
-		ConfigPath:        "/old/workspace/relurpify_cfg/config.yaml",
+		ManifestPath:      runtimeTestWorkspaceOld + "/manifest.yaml",
+		AgentsDir:         runtimeTestWorkspaceOld + "/relurpify_cfg/agents",
+		MemoryPath:        runtimeTestWorkspaceOld + "/.relurpify_state/memory",
+		LogPath:           runtimeTestWorkspaceOld + "/.relurpify_state/logs/relurpish.log",
+		TelemetryPath:     runtimeTestWorkspaceOld + "/.relurpify_state/telemetry/telemetry.jsonl",
+		EventsPath:        runtimeTestWorkspaceOld + "/.relurpify_state/events.db",
+		ConfigPath:        runtimeTestWorkspaceOld + "/relurpify_cfg/config.yaml",
+		InferenceTapePath: runtimeTestTapePath,
 	}
 
-	cfg := ConfigForWorkspace(current, "/new/workspace")
-	if cfg.Workspace != "/new/workspace" {
+	cfg := ConfigForWorkspace(current, runtimeTestWorkspaceNew)
+	if cfg.Workspace != runtimeTestWorkspaceNew {
 		t.Fatalf("workspace = %q, want /new/workspace", cfg.Workspace)
 	}
 	if cfg.AgentName != current.AgentName {
@@ -51,14 +69,17 @@ func TestConfigForWorkspaceRebindsPaths(t *testing.T) {
 	if cfg.ConfigPath == current.ConfigPath || cfg.ManifestPath == current.ManifestPath {
 		t.Fatalf("workspace paths were not rebound: %#v", cfg)
 	}
-	if want := "/new/workspace/.relurpify_state/workspace.yaml"; cfg.ConfigPath != want {
+	if want := runtimeTestWorkspaceNew + "/.relurpify_state/workspace.yaml"; cfg.ConfigPath != want {
 		t.Fatalf("config path = %q, want %q", cfg.ConfigPath, want)
 	}
-	if want := "/new/workspace/relurpify_cfg/agents/euclo.yaml"; cfg.ManifestPath != want {
+	if want := runtimeTestWorkspaceNew + "/relurpify_cfg/agents/euclo.yaml"; cfg.ManifestPath != want {
 		t.Fatalf("manifest path = %q, want %q", cfg.ManifestPath, want)
 	}
-	if want := "/new/workspace/.relurpify_state/logs/relurpish.log"; cfg.LogPath != want {
+	if want := runtimeTestWorkspaceNew + "/.relurpify_state/logs/relurpish.log"; cfg.LogPath != want {
 		t.Fatalf("log path = %q, want %q", cfg.LogPath, want)
+	}
+	if want := runtimeTestTapePathNew; cfg.InferenceTapePath != want {
+		t.Fatalf("tape path = %q, want %q", cfg.InferenceTapePath, want)
 	}
 }
 
@@ -68,6 +89,12 @@ type recordingExecutor struct {
 	lastTask  *execution.Task
 	lastEnv   *contextdata.Envelope
 }
+
+type fakeSandboxRuntime struct {
+	policy governanceports.SandboxPolicy
+}
+
+type fakeCommandRunner struct{}
 
 func (r *recordingExecutor) Initialize(*execution.Config) error { return nil }
 
@@ -83,8 +110,29 @@ func (r *recordingExecutor) Execute(ctx context.Context, task *execution.Task, e
 
 func (r *recordingExecutor) Capabilities() []string { return nil }
 
-func (r *recordingExecutor) BuildGraph(ctx context.Context, _ *execution.Task) (*agentgraph.Graph, error) {
+func (r *recordingExecutor) BuildGraph(_ context.Context, _ *execution.Task) (*agentgraph.Graph, error) {
 	return nil, errors.New("not implemented")
+}
+
+func (f *fakeSandboxRuntime) Verify(context.Context) error { return nil }
+
+func (f *fakeSandboxRuntime) ValidatePolicy(governanceports.SandboxPolicy) error { return nil }
+
+func (f *fakeSandboxRuntime) ApplyPolicy(_ context.Context, policy governanceports.SandboxPolicy) error {
+	f.policy = policy
+	return nil
+}
+
+func (f *fakeSandboxRuntime) Policy() governanceports.SandboxPolicy { return f.policy }
+
+func (f *fakeSandboxRuntime) RunConfig() governanceports.SandboxConfig {
+	return governanceports.SandboxConfig{}
+}
+
+func (f *fakeSandboxRuntime) Name() string { return "fake" }
+
+func (fakeCommandRunner) Run(context.Context, ports.CommandRequest) (*ports.CommandResult, error) {
+	return &ports.CommandResult{ExitCode: 0, Stdout: "", Stderr: ""}, nil
 }
 
 func TestResolveInteractionFrameResumesClarificationTask(t *testing.T) {
@@ -206,5 +254,186 @@ func TestSaveAgentDocumentWithBackup(t *testing.T) {
 	}
 	if string(data) == "" || !strings.Contains(string(data), "fs:write") {
 		t.Fatalf("document not updated after save: %s", string(data))
+	}
+}
+
+func TestBuildDoctorReportUsesTapeProviderPathFromRuntimeConfig(t *testing.T) {
+	workspace := t.TempDir()
+	statePath := filepath.Join(workspace, ".relurpify_state", "workspace.yaml")
+	tapePath := filepath.Join(workspace, ".relurpify_state", "tapes", "tape.jsonl")
+	if err := os.MkdirAll(filepath.Dir(tapePath), fs.PublicDirMode); err != nil {
+		t.Fatalf("mkdir tape dir: %v", err)
+	}
+	writeTapeJSONL(t, tapePath, []llm.TapeHeader{{
+		ProviderID: runtimeTestProviderOllama,
+		ModelName:  runtimeTestTapeModel,
+	}})
+	if err := config.SaveRuntimeWorkspaceConfig(statePath, config.RuntimeWorkspaceConfig{
+		Provider: "tape",
+		Model:    runtimeTestTapeModel,
+		TapePath: tapePath,
+	}); err != nil {
+		t.Fatalf("seed runtime workspace config: %v", err)
+	}
+	report := BuildDoctorReport(context.Background(), Config{
+		Workspace:  workspace,
+		ConfigPath: statePath,
+	}, config.Secrets{})
+	if report.Inference.State != llm.BackendHealthReady {
+		t.Fatalf("inference state = %q, want %q (error=%q)", report.Inference.State, llm.BackendHealthReady, report.Inference.Error)
+	}
+}
+
+func TestNewBootsWithTapeProviderFromWorkspaceConfig(t *testing.T) {
+	workspace := t.TempDir()
+	copyTree(t, filepath.Join("..", "..", "..", "relurpify_cfg"), filepath.Join(workspace, "relurpify_cfg"))
+
+	manifestPath := filepath.Join(workspace, "relurpify_cfg", "agents", "euclo.yaml")
+	manifestData, err := os.ReadFile(filepath.Clean(filepath.Join("..", "..", "..", "userconfig", "config", "testdata", "contracts", "document_current.yaml")))
+	if err != nil {
+		t.Fatalf("read manifest fixture: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(manifestPath), fs.PublicDirMode); err != nil {
+		t.Fatalf("mkdir manifest dir: %v", err)
+	}
+	if err := fs.WriteFileSecure(manifestPath, manifestData); err != nil {
+		t.Fatalf("seed manifest: %v", err)
+	}
+
+	statePath := filepath.Join(workspace, ".relurpify_state", "workspace.yaml")
+	tapePath := config.DefaultWorkspaceStateTapeFile(workspace)
+	recordTapeCorpus(t, tapePath)
+	if err := config.SaveRuntimeWorkspaceConfig(statePath, config.RuntimeWorkspaceConfig{
+		Model:    runtimeTestTapeModel,
+		Provider: "tape",
+		TapePath: tapePath,
+	}); err != nil {
+		t.Fatalf("seed runtime workspace config: %v", err)
+	}
+
+	cfg := ConfigForWorkspace(Config{AgentName: "euclo"}, workspace)
+	cfg.ConfigPath = statePath
+	cfg.ManifestPath = manifestPath
+	cfg.InferenceProvider = ""
+	cfg.InferenceModel = ""
+	cfg.InferenceTapePath = tapePath
+	cfg.SecurityRunner = fakeCommandRunner{}
+	cfg.SandboxBackendFactory = func(context.Context, string, governanceports.SandboxConfig, string, string) (governanceports.SandboxRuntime, error) {
+		return &fakeSandboxRuntime{}, nil
+	}
+
+	rt, err := New(context.Background(), cfg, config.Secrets{})
+	if err != nil {
+		t.Fatalf("boot runtime: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = rt.Close(context.Background())
+	})
+	if got := strings.TrimSpace(rt.Config.InferenceProvider); got != "tape" {
+		t.Fatalf("inference provider = %q, want tape", got)
+	}
+	if got := strings.TrimSpace(rt.WorkspaceConfig.Provider); got != "tape" {
+		t.Fatalf("workspace provider = %q, want tape", got)
+	}
+	if rt.Model == nil {
+		t.Fatal("expected runtime model")
+	}
+	resp, err := rt.Model.Generate(context.Background(), runtimeTestTapePrompt, &model.LLMOptions{Model: runtimeTestTapeModel})
+	if err != nil {
+		t.Fatalf("generate through tape provider: %v", err)
+	}
+	if resp == nil || resp.Text != runtimeTestTapeResponse {
+		t.Fatalf("replayed response = %#v, want text %q", resp, runtimeTestTapeResponse)
+	}
+}
+
+func writeTapeJSONL(t *testing.T, path string, headers []llm.TapeHeader) {
+	t.Helper()
+	f, err := os.Create(filepath.Clean(path))
+	if err != nil {
+		t.Fatalf("create tape: %v", err)
+	}
+	defer func() { _ = f.Close() }()
+	enc := json.NewEncoder(f)
+	for _, header := range headers {
+		entry := map[string]any{
+			"kind": "_header",
+			"request": map[string]any{
+				"header": header,
+			},
+		}
+		if err := enc.Encode(entry); err != nil {
+			t.Fatalf("encode tape header: %v", err)
+		}
+	}
+}
+
+type tapeRecorderModel struct{}
+
+func (tapeRecorderModel) Generate(context.Context, string, *model.LLMOptions) (*model.LLMResponse, error) {
+	return &model.LLMResponse{Text: runtimeTestTapeResponse, FinishReason: "stop"}, nil
+}
+
+func (tapeRecorderModel) GenerateStream(context.Context, string, *model.LLMOptions) (<-chan string, error) {
+	ch := make(chan string)
+	close(ch)
+	return ch, nil
+}
+
+func (tapeRecorderModel) Chat(context.Context, []model.Message, *model.LLMOptions) (*model.LLMResponse, error) {
+	return &model.LLMResponse{Text: runtimeTestTapeResponse, FinishReason: "stop"}, nil
+}
+
+func (tapeRecorderModel) ChatWithTools(context.Context, []model.Message, []model.LLMToolSpec, *model.LLMOptions) (*model.LLMResponse, error) {
+	return &model.LLMResponse{Text: runtimeTestTapeResponse, FinishReason: "stop"}, nil
+}
+
+func recordTapeCorpus(t *testing.T, path string) {
+	t.Helper()
+	rec, err := llm.NewTapeModel(tapeRecorderModel{}, path, string(llm.TapeRecord))
+	if err != nil {
+		t.Fatalf("open tape recorder: %v", err)
+	}
+	defer func() {
+		_ = rec.Close()
+	}()
+	if err := rec.ConfigureHeader(llm.TapeHeader{
+		ProviderID: "tape",
+		ModelName:  runtimeTestTapeModel,
+		SuiteName:  "runtime",
+		CaseName:   "provider_tape_boot",
+	}); err != nil {
+		t.Fatalf("configure tape header: %v", err)
+	}
+	resp, err := rec.Generate(context.Background(), runtimeTestTapePrompt, &model.LLMOptions{Model: runtimeTestTapeModel})
+	if err != nil {
+		t.Fatalf("record tape generate: %v", err)
+	}
+	if resp == nil || resp.Text != runtimeTestTapeResponse {
+		t.Fatalf("recorded response = %#v, want text %q", resp, runtimeTestTapeResponse)
+	}
+}
+
+func copyTree(t *testing.T, src, dst string) {
+	t.Helper()
+	if err := filepath.WalkDir(src, func(path string, d os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		rel, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+		target := filepath.Join(dst, rel)
+		if d.IsDir() {
+			return os.MkdirAll(target, fs.PublicDirMode)
+		}
+		data, err := os.ReadFile(filepath.Clean(path))
+		if err != nil {
+			return err
+		}
+		return fs.WriteFileSecure(target, data)
+	}); err != nil {
+		t.Fatalf("copy tree %q -> %q: %v", src, dst, err)
 	}
 }

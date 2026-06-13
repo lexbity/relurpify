@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/userconfig/config/model"
 	"codeburg.org/lexbit/relurpify/userconfig/config/security"
 )
@@ -26,7 +25,7 @@ type AppConfig struct {
 	Workspace   WorkspaceConfig
 	Security    security.Bundle
 	Model       ModelConfig
-	Tools       ports.ToolRegistry
+	Tools       *ToolRegistry
 	Editor      string
 	SharedRoot  string
 	Fingerprint string
@@ -43,7 +42,7 @@ type LoadOptions struct {
 	WorkspaceRoot         string
 	EnvOverrides          []string
 	CLIFlags              FlagSet
-	SubprocessToolFactory func(ports.ToolManifest) ports.Tool
+	SubprocessToolFactory func(ToolManifest) any
 }
 
 // Load executes the consolidated configuration loading boundary.
@@ -75,8 +74,6 @@ func Load(opts LoadOptions) (*AppConfig, *Secrets, error) {
 	if err != nil {
 		return nil, nil, fmt.Errorf("load workspace config: %w", err)
 	}
-	InstallSecretFieldChecks()
-
 	for _, usage := range workspaceCfg.DefaultsUsed {
 		log.Printf("WARN config: using default value  file=%s  key=%s  default=%v", workspaceConfigPath, usage.Key, usage.Value)
 	}
@@ -183,12 +180,12 @@ func fingerprintConfig(cfg *AppConfig) (string, error) {
 		return "", fmt.Errorf("app config required")
 	}
 	payload := struct {
-		Workspace  WorkspaceConfig      `json:"workspace"`
-		Security   security.Bundle      `json:"security"`
-		Model      ModelConfig          `json:"model"`
-		Tools      []ports.ToolManifest `json:"tools"`
-		Editor     string               `json:"editor"`
-		SharedRoot string               `json:"shared_root"`
+		Workspace  WorkspaceConfig `json:"workspace"`
+		Security   security.Bundle `json:"security"`
+		Model      ModelConfig     `json:"model"`
+		Tools      []ToolManifest  `json:"tools"`
+		Editor     string          `json:"editor"`
+		SharedRoot string          `json:"shared_root"`
 	}{
 		Workspace:  cfg.Workspace,
 		Security:   cfg.Security,

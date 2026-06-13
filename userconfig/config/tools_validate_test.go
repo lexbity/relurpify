@@ -5,7 +5,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/capability/toolcapabilities"
 )
 
@@ -24,10 +23,10 @@ const (
 )
 
 func TestValidateToolManifestRejectsMissingRequiredFields(t *testing.T) {
-	err := validateToolManifest("tool.tool.yaml", &ports.ToolManifest{
+	err := validateToolManifest("tool.tool.yaml", &ToolManifest{
 		Name: "bad_tool",
-		Execution: ports.ToolManifestExecution{
-			Backend: ports.ToolBackendSubprocess,
+		Execution: ToolManifestExecution{
+			Backend: ToolBackendSubprocess,
 		},
 	})
 	require.Error(t, err)
@@ -37,18 +36,18 @@ func TestValidateToolManifestRejectsMissingRequiredFields(t *testing.T) {
 }
 
 func TestValidateToolManifestAcceptsGoNativeManifest(t *testing.T) {
-	err := validateToolManifest("tool.tool.yaml", &ports.ToolManifest{
+	err := validateToolManifest("tool.tool.yaml", &ToolManifest{
 		Name:        validateToolName,
 		Family:      "search",
 		Description: "ok",
-		Parameters: []ports.ToolParameter{
+		Parameters: []ToolParameter{
 			{Name: "query", Type: validateStringType, Required: true},
 		},
-		Execution: ports.ToolManifestExecution{
-			Backend:        ports.ToolBackendGoNative,
+		Execution: ToolManifestExecution{
+			Backend:        ToolBackendGoNative,
 			Implementation: "ok_tool",
 		},
-		Capability: ports.ToolManifestCapability{
+		Capability: ToolManifestCapability{
 			TrustClass:  validateToolTrustClass,
 			RiskClass:   []string{"read_only"},
 			EffectClass: []string{validateToolEffect},
@@ -60,27 +59,27 @@ func TestValidateToolManifestAcceptsGoNativeManifest(t *testing.T) {
 // --- v2 flag validation ---
 
 func TestValidateV2TypedFlagEqualsPasses(t *testing.T) {
-	err := validateToolManifest("tool.tool.yaml", &ports.ToolManifest{
+	err := validateToolManifest("tool.tool.yaml", &ToolManifest{
 		Name:        "cli_rg",
 		Family:      "fileops",
 		Description: "ripgrep",
-		Parameters: []ports.ToolParameter{
+		Parameters: []ToolParameter{
 			{Name: "output_path", Type: validateStringType},
 		},
-		Execution: ports.ToolManifestExecution{
-			Backend: ports.ToolBackendSubprocess,
-			Command: &ports.ToolManifestCommand{
+		Execution: ToolManifestExecution{
+			Backend: ToolBackendSubprocess,
+			Command: &ToolManifestCommand{
 				Base: []string{"rg"},
-				Flags: map[string]ports.ToolManifestFlag{
+				Flags: map[string]ToolManifestFlag{
 					validateOutputField: {
 						Param: "output_path",
-						Style: ports.FlagStyleEquals,
+						Style: FlagStyleEquals,
 						Type:  testStringType,
 					},
 				},
 			},
 		},
-		Capability: ports.ToolManifestCapability{
+		Capability: ToolManifestCapability{
 			TrustClass:  validateToolTrustClass,
 			RiskClass:   []string{validateToolRiskClass},
 			EffectClass: []string{validateToolEffect},
@@ -90,28 +89,28 @@ func TestValidateV2TypedFlagEqualsPasses(t *testing.T) {
 }
 
 func TestValidateV2TypedFlagSeparateRepeatPasses(t *testing.T) {
-	err := validateToolManifest("tool.tool.yaml", &ports.ToolManifest{
+	err := validateToolManifest("tool.tool.yaml", &ToolManifest{
 		Name:        "cli_echo",
 		Family:      validateToolFamily,
 		Description: validateEchoBinary,
-		Parameters: []ports.ToolParameter{
+		Parameters: []ToolParameter{
 			{Name: "globs", Type: "array"},
 		},
-		Execution: ports.ToolManifestExecution{
-			Backend: ports.ToolBackendSubprocess,
-			Command: &ports.ToolManifestCommand{
+		Execution: ToolManifestExecution{
+			Backend: ToolBackendSubprocess,
+			Command: &ToolManifestCommand{
 				Base: []string{validateEchoBinary},
-				Flags: map[string]ports.ToolManifestFlag{
+				Flags: map[string]ToolManifestFlag{
 					"glob": {
 						Param:  "globs",
-						Style:  ports.FlagStyleSeparate,
+						Style:  FlagStyleSeparate,
 						Type:   "array",
 						Repeat: true,
 					},
 				},
 			},
 		},
-		Capability: ports.ToolManifestCapability{
+		Capability: ToolManifestCapability{
 			TrustClass:  validateToolTrustClass,
 			RiskClass:   []string{validateToolRiskClass},
 			EffectClass: []string{validateToolEffect},
@@ -121,18 +120,18 @@ func TestValidateV2TypedFlagSeparateRepeatPasses(t *testing.T) {
 }
 
 func TestValidateV2TypedFlagEmptyStyleDefaults(t *testing.T) {
-	err := validateToolManifest("tool.tool.yaml", &ports.ToolManifest{
+	err := validateToolManifest("tool.tool.yaml", &ToolManifest{
 		Name:        "cli_jq",
 		Family:      validateToolFamily,
 		Description: "jq",
-		Parameters: []ports.ToolParameter{
+		Parameters: []ToolParameter{
 			{Name: validateOutputField, Type: validateStringType},
 		},
-		Execution: ports.ToolManifestExecution{
-			Backend: ports.ToolBackendSubprocess,
-			Command: &ports.ToolManifestCommand{
+		Execution: ToolManifestExecution{
+			Backend: ToolBackendSubprocess,
+			Command: &ToolManifestCommand{
 				Base: []string{"jq"},
-				Flags: map[string]ports.ToolManifestFlag{
+				Flags: map[string]ToolManifestFlag{
 					validateOutputField: {
 						Param: validateOutputField,
 						// Style intentionally empty — defaults to "equals"
@@ -140,7 +139,7 @@ func TestValidateV2TypedFlagEmptyStyleDefaults(t *testing.T) {
 				},
 			},
 		},
-		Capability: ports.ToolManifestCapability{
+		Capability: ToolManifestCapability{
 			TrustClass:  validateToolTrustClass,
 			RiskClass:   []string{validateToolRiskClass},
 			EffectClass: []string{validateToolEffect},
@@ -150,15 +149,15 @@ func TestValidateV2TypedFlagEmptyStyleDefaults(t *testing.T) {
 }
 
 func TestValidateV2BooleanFlagPasses(t *testing.T) {
-	err := validateToolManifest("tool.tool.yaml", &ports.ToolManifest{
+	err := validateToolManifest("tool.tool.yaml", &ToolManifest{
 		Name:        "cli_colordiff",
 		Family:      validateToolFamily,
 		Description: "colorized diff",
-		Execution: ports.ToolManifestExecution{
-			Backend: ports.ToolBackendSubprocess,
-			Command: &ports.ToolManifestCommand{
+		Execution: ToolManifestExecution{
+			Backend: ToolBackendSubprocess,
+			Command: &ToolManifestCommand{
 				Base: []string{"colordiff"},
-				Flags: map[string]ports.ToolManifestFlag{
+				Flags: map[string]ToolManifestFlag{
 					"hidden": {
 						WhenTrue:  []string{"--hidden"},
 						WhenFalse: []string{"--no-hidden"},
@@ -166,7 +165,7 @@ func TestValidateV2BooleanFlagPasses(t *testing.T) {
 				},
 			},
 		},
-		Capability: ports.ToolManifestCapability{
+		Capability: ToolManifestCapability{
 			TrustClass:  validateToolTrustClass,
 			RiskClass:   []string{validateToolRiskClass},
 			EffectClass: []string{validateToolEffect},
@@ -176,17 +175,17 @@ func TestValidateV2BooleanFlagPasses(t *testing.T) {
 }
 
 func TestValidateV2NoFlagsPasses(t *testing.T) {
-	err := validateToolManifest("tool.tool.yaml", &ports.ToolManifest{
+	err := validateToolManifest("tool.tool.yaml", &ToolManifest{
 		Name:        "simple",
 		Family:      validateToolFamily,
 		Description: "no flags",
-		Execution: ports.ToolManifestExecution{
-			Backend: ports.ToolBackendSubprocess,
-			Command: &ports.ToolManifestCommand{
+		Execution: ToolManifestExecution{
+			Backend: ToolBackendSubprocess,
+			Command: &ToolManifestCommand{
 				Base: []string{validateEchoBinary},
 			},
 		},
-		Capability: ports.ToolManifestCapability{
+		Capability: ToolManifestCapability{
 			TrustClass:  validateToolTrustClass,
 			RiskClass:   []string{validateToolRiskClass},
 			EffectClass: []string{validateToolEffect},
@@ -196,18 +195,18 @@ func TestValidateV2NoFlagsPasses(t *testing.T) {
 }
 
 func TestValidateV2FlagMixedBooleanAndParamFails(t *testing.T) {
-	err := validateToolManifest("tool.tool.yaml", &ports.ToolManifest{
+	err := validateToolManifest("tool.tool.yaml", &ToolManifest{
 		Name:        validateBadName,
 		Family:      validateToolFamily,
 		Description: "mixed forms",
-		Parameters: []ports.ToolParameter{
+		Parameters: []ToolParameter{
 			{Name: validateOutputField, Type: validateStringType},
 		},
-		Execution: ports.ToolManifestExecution{
-			Backend: ports.ToolBackendSubprocess,
-			Command: &ports.ToolManifestCommand{
+		Execution: ToolManifestExecution{
+			Backend: ToolBackendSubprocess,
+			Command: &ToolManifestCommand{
 				Base: []string{validateToolKind},
-				Flags: map[string]ports.ToolManifestFlag{
+				Flags: map[string]ToolManifestFlag{
 					validateOutField: {
 						WhenTrue: []string{"--out"},
 						Param:    validateOutputField,
@@ -215,7 +214,7 @@ func TestValidateV2FlagMixedBooleanAndParamFails(t *testing.T) {
 				},
 			},
 		},
-		Capability: ports.ToolManifestCapability{
+		Capability: ToolManifestCapability{
 			TrustClass:  validateToolTrustClass,
 			RiskClass:   []string{validateToolRiskClass},
 			EffectClass: []string{validateToolEffect},
@@ -226,20 +225,20 @@ func TestValidateV2FlagMixedBooleanAndParamFails(t *testing.T) {
 }
 
 func TestValidateV2FlagNeitherBooleanNorParamFails(t *testing.T) {
-	err := validateToolManifest("tool.tool.yaml", &ports.ToolManifest{
+	err := validateToolManifest("tool.tool.yaml", &ToolManifest{
 		Name:        validateBadName,
 		Family:      validateToolFamily,
 		Description: "empty flag",
-		Execution: ports.ToolManifestExecution{
-			Backend: ports.ToolBackendSubprocess,
-			Command: &ports.ToolManifestCommand{
+		Execution: ToolManifestExecution{
+			Backend: ToolBackendSubprocess,
+			Command: &ToolManifestCommand{
 				Base: []string{validateToolKind},
-				Flags: map[string]ports.ToolManifestFlag{
+				Flags: map[string]ToolManifestFlag{
 					"empty": {},
 				},
 			},
 		},
-		Capability: ports.ToolManifestCapability{
+		Capability: ToolManifestCapability{
 			TrustClass:  validateToolTrustClass,
 			RiskClass:   []string{validateToolRiskClass},
 			EffectClass: []string{validateToolEffect},
@@ -250,26 +249,26 @@ func TestValidateV2FlagNeitherBooleanNorParamFails(t *testing.T) {
 }
 
 func TestValidateV2FlagParamUnknownFails(t *testing.T) {
-	err := validateToolManifest("tool.tool.yaml", &ports.ToolManifest{
+	err := validateToolManifest("tool.tool.yaml", &ToolManifest{
 		Name:        validateBadName,
 		Family:      validateToolFamily,
 		Description: "unknown param",
-		Parameters: []ports.ToolParameter{
+		Parameters: []ToolParameter{
 			{Name: "known", Type: validateStringType},
 		},
-		Execution: ports.ToolManifestExecution{
-			Backend: ports.ToolBackendSubprocess,
-			Command: &ports.ToolManifestCommand{
+		Execution: ToolManifestExecution{
+			Backend: ToolBackendSubprocess,
+			Command: &ToolManifestCommand{
 				Base: []string{validateToolKind},
-				Flags: map[string]ports.ToolManifestFlag{
+				Flags: map[string]ToolManifestFlag{
 					validateOutField: {
 						Param: "unknown_param",
-						Style: ports.FlagStyleEquals,
+						Style: FlagStyleEquals,
 					},
 				},
 			},
 		},
-		Capability: ports.ToolManifestCapability{
+		Capability: ToolManifestCapability{
 			TrustClass:  validateToolTrustClass,
 			RiskClass:   []string{validateToolRiskClass},
 			EffectClass: []string{validateToolEffect},
@@ -280,18 +279,18 @@ func TestValidateV2FlagParamUnknownFails(t *testing.T) {
 }
 
 func TestValidateV2FlagBadStyleFails(t *testing.T) {
-	err := validateToolManifest("tool.tool.yaml", &ports.ToolManifest{
+	err := validateToolManifest("tool.tool.yaml", &ToolManifest{
 		Name:        validateBadName,
 		Family:      validateToolFamily,
 		Description: "bad style",
-		Parameters: []ports.ToolParameter{
+		Parameters: []ToolParameter{
 			{Name: validateOutField, Type: validateStringType},
 		},
-		Execution: ports.ToolManifestExecution{
-			Backend: ports.ToolBackendSubprocess,
-			Command: &ports.ToolManifestCommand{
+		Execution: ToolManifestExecution{
+			Backend: ToolBackendSubprocess,
+			Command: &ToolManifestCommand{
 				Base: []string{validateToolKind},
-				Flags: map[string]ports.ToolManifestFlag{
+				Flags: map[string]ToolManifestFlag{
 					"out": {
 						Param: validateOutField,
 						Style: "invalid_style",
@@ -299,7 +298,7 @@ func TestValidateV2FlagBadStyleFails(t *testing.T) {
 				},
 			},
 		},
-		Capability: ports.ToolManifestCapability{
+		Capability: ToolManifestCapability{
 			TrustClass:  validateToolTrustClass,
 			RiskClass:   []string{validateToolRiskClass},
 			EffectClass: []string{validateToolEffect},
@@ -310,25 +309,25 @@ func TestValidateV2FlagBadStyleFails(t *testing.T) {
 }
 
 func TestValidateV2ChunkingPasses(t *testing.T) {
-	err := validateToolManifest("tool.tool.yaml", &ports.ToolManifest{
+	err := validateToolManifest("tool.tool.yaml", &ToolManifest{
 		Name:        "cli_rg",
 		Family:      "fileops",
 		Description: "ripgrep",
-		Execution: ports.ToolManifestExecution{
-			Backend: ports.ToolBackendSubprocess,
-			Command: &ports.ToolManifestCommand{
+		Execution: ToolManifestExecution{
+			Backend: ToolBackendSubprocess,
+			Command: &ToolManifestCommand{
 				Base: []string{"rg"},
 			},
 		},
-		Returns: ports.ToolManifestReturns{
+		Returns: ToolManifestReturns{
 			Type: "json",
-			Chunking: &ports.ToolManifestReturnsChunking{
+			Chunking: &ToolManifestReturnsChunking{
 				Mode:      toolcapabilities.ChunkingModePerItem,
 				ItemPath:  "matches[]",
 				RefFields: []string{"path", "line"},
 			},
 		},
-		Capability: ports.ToolManifestCapability{
+		Capability: ToolManifestCapability{
 			TrustClass:  validateToolTrustClass,
 			RiskClass:   []string{validateToolRiskClass},
 			EffectClass: []string{validateToolEffect},
@@ -338,19 +337,19 @@ func TestValidateV2ChunkingPasses(t *testing.T) {
 }
 
 func TestValidateCompositeBackendAccepts(t *testing.T) {
-	err := validateToolManifest("tool.tool.yaml", &ports.ToolManifest{
+	err := validateToolManifest("tool.tool.yaml", &ToolManifest{
 		Name:        "pipe_tool",
 		Family:      "shell",
 		Description: "pipeline",
-		Execution: ports.ToolManifestExecution{
-			Backend: ports.ToolBackendComposite,
+		Execution: ToolManifestExecution{
+			Backend: ToolBackendComposite,
 		},
-		Composition: &ports.ToolManifestComposition{
-			Steps: []ports.ToolManifestCompositionStep{
+		Composition: &ToolManifestComposition{
+			Steps: []ToolManifestCompositionStep{
 				{Tool: "cli_fd", Alias: "files"},
 			},
 		},
-		Capability: ports.ToolManifestCapability{
+		Capability: ToolManifestCapability{
 			TrustClass:  validateToolTrustClass,
 			RiskClass:   []string{validateToolRiskClass},
 			EffectClass: []string{validateToolEffect},

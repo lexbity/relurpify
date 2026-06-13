@@ -5,9 +5,6 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
-
-	"codeburg.org/lexbit/relurpify/capability/agentspec"
-	"codeburg.org/lexbit/relurpify/capability/sandbox"
 )
 
 // Decoder decodes a config file's bytes into out.
@@ -15,9 +12,9 @@ type Decoder func(path string, data []byte, out any) (any, error)
 
 // Bundle groups the typed security policy files loaded from relurpify_cfg/security.
 type Bundle struct {
-	Sandbox   *sandbox.SandboxPolicy
-	Shell     *sandbox.ShellBlacklist
-	LocalTool map[string]agentspec.ToolPolicy
+	Sandbox   *SandboxPolicy
+	Shell     *ShellBlacklist
+	LocalTool map[string]ToolPolicy
 	Ingestion []PolicyRule
 }
 

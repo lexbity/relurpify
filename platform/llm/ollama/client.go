@@ -16,7 +16,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/model"
-	"codeburg.org/lexbit/relurpify/telemetry"
+	"codeburg.org/lexbit/relurpify/platform/observability"
 )
 
 // Client implements LanguageModel for Ollama.
@@ -539,8 +539,8 @@ func (c *Client) parseArguments(raw json.RawMessage) map[string]any {
 	return map[string]any{"_raw": string(raw)}
 }
 
-func normalizeUsage(raw ollamaResponse, promptTokens int, responseText string) telemetry.TokenUsageReport {
-	report := telemetry.TokenUsageReport{}
+func normalizeUsage(raw ollamaResponse, promptTokens int, responseText string) model.TokenUsage {
+	report := model.TokenUsage{}
 	if len(raw.Usage) > 0 {
 		for k, v := range raw.Usage {
 			switch strings.ToLower(k) {
@@ -576,7 +576,7 @@ func estimatePromptTokensFromPayload(payload any) int {
 	switch p := payload.(type) {
 	case map[string]any:
 		if prompt, ok := p["prompt"].(string); ok && prompt != "" {
-			return telemetry.EstimateTokens(prompt)
+			return observability.EstimateTokens(prompt)
 		}
 		return estimatePromptTokensFromMessages(p["messages"])
 	default:
@@ -590,7 +590,7 @@ func estimatePromptTokensFromMessages(value any) int {
 		total := 0
 		for _, msg := range msgs {
 			if content, ok := msg["content"].(string); ok {
-				total += telemetry.EstimateTokens(content)
+				total += observability.EstimateTokens(content)
 			}
 		}
 		return total
@@ -602,7 +602,7 @@ func estimatePromptTokensFromMessages(value any) int {
 				continue
 			}
 			if content, ok := msg["content"].(string); ok {
-				total += telemetry.EstimateTokens(content)
+				total += observability.EstimateTokens(content)
 			}
 		}
 		return total
@@ -611,9 +611,9 @@ func estimatePromptTokensFromMessages(value any) int {
 	}
 }
 
-func estimateUsage(promptTokens int, responseText string) telemetry.TokenUsageReport {
-	completionTokens := telemetry.EstimateTokens(responseText)
-	return telemetry.TokenUsageReport{
+func estimateUsage(promptTokens int, responseText string) model.TokenUsage {
+	completionTokens := observability.EstimateTokens(responseText)
+	return model.TokenUsage{
 		PromptTokens:     promptTokens,
 		CompletionTokens: completionTokens,
 		TotalTokens:      promptTokens + completionTokens,

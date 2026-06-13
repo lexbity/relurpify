@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/governance/identity"
+	"codeburg.org/lexbit/relurpify/platform/observability"
 )
 
 type FrameworkEvent struct {
@@ -13,7 +13,7 @@ type FrameworkEvent struct {
 	Type           string              `json:"type"`
 	CausedBy       []uint64            `json:"caused_by,omitempty"`
 	Payload        json.RawMessage     `json:"payload"`
-	Actor          identity.EventActor `json:"actor"`
+	Actor          observability.Actor `json:"actor"`
 	IdempotencyKey string              `json:"idem_key,omitempty"`
 	Partition      string              `json:"partition"`
 }

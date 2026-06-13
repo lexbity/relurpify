@@ -3,7 +3,6 @@ package ayenitd
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	browsersvc "codeburg.org/lexbit/relurpify/ayenitd/service/browser"
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
@@ -56,30 +55,18 @@ func registerBrowserWorkspaceService(cfg WorkspaceConfig, registration *fauthori
 	return nil
 }
 
-func browserWorkspaceAgentSpec(registration *fauthorization.AgentRegistration) *agentspec.AgentRuntimeSpec {
-	if registration == nil {
-		return nil
-	}
-	return registration.AgentSpec
+func browserWorkspaceAgentSpec(_ *fauthorization.AgentRegistration) *agentspec.AgentRuntimeSpec {
+	return nil
 }
 
 func shouldEnableBrowserWorkspaceService(spec *agentspec.AgentRuntimeSpec) bool {
-	return spec != nil && spec.Browser != nil && spec.Browser.Enabled
+	return false
 }
 
-func browserDefaultBackend(spec *agentspec.AgentRuntimeSpec) string {
-	if spec != nil && spec.Browser != nil {
-		backend := strings.TrimSpace(spec.Browser.DefaultBackend)
-		if backend != "" {
-			return backend
-		}
-	}
+func browserDefaultBackend(_ *agentspec.AgentRuntimeSpec) string {
 	return "cdp"
 }
 
-func browserAllowedBackends(spec *agentspec.AgentRuntimeSpec) []string {
-	if spec == nil || spec.Browser == nil || len(spec.Browser.AllowedBackends) == 0 {
-		return nil
-	}
-	return append([]string(nil), spec.Browser.AllowedBackends...)
+func browserAllowedBackends(_ *agentspec.AgentRuntimeSpec) []string {
+	return nil
 }

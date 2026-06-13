@@ -145,6 +145,10 @@ func ConfigForWorkspace(current Config, workspace string) Config {
 	cfg.TelemetryPath = filepath.Join(config.DefaultWorkspaceStateTelemetryDir(workspace), "telemetry.jsonl")
 	cfg.EventsPath = config.DefaultWorkspaceStateEventsFile(workspace)
 	cfg.ConfigPath = config.DefaultWorkspaceStateConfigPath(workspace)
+	currentTapePath := config.DefaultWorkspaceStateTapeFile(current.Workspace)
+	if cfg.InferenceTapePath == "" || cfg.InferenceTapePath == currentTapePath {
+		cfg.InferenceTapePath = config.DefaultWorkspaceStateTapeFile(workspace)
+	}
 	return cfg
 }
 

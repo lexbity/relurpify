@@ -6,15 +6,20 @@ import (
 	"fmt"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
 )
 
-// toolAdapter wraps ports.Tool to satisfy authorization.Tool inline; the
-// exported adapter function was retired from governance in Slice 6.
+// toolLike is the narrow tool surface needed by permission authorization.
+type toolLike interface {
+	Name() string
+	Tags() []string
+	Permissions() ToolPermissions
+}
+
+// toolAdapter wraps a foreign tool implementation to satisfy authorization.Tool.
 type toolAdapter struct {
-	inner ports.Tool
+	inner toolLike
 }
 
 func (a *toolAdapter) Name() string   { return a.inner.Name() }
@@ -34,9 +39,9 @@ func (m *PermissionManager) AuthorizeTool(ctx context.Context, agentID string, t
 	}
 	t, ok := tool.(Tool)
 	if !ok {
-		pt, ok2 := tool.(ports.Tool)
+		pt, ok2 := tool.(toolLike)
 		if !ok2 {
-			return errors.New("tool does not implement authorization.Tool or ports.Tool")
+			return errors.New("tool does not implement authorization.Tool or the required tool surface")
 		}
 		t = &toolAdapter{inner: pt}
 	}

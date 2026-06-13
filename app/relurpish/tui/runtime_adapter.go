@@ -209,7 +209,7 @@ func (r *runtimeAdapter) SessionInfo() SessionInfo {
 	info.Model = cfg.InferenceModel
 	info.Agent = cfg.AgentLabel()
 	if r.rt.AgentWorkspace().ProfileResolution.Profile != nil {
-		info.Profile = r.rt.AgentWorkspace().ProfileResolution.Profile.MatchPattern()
+		info.Profile = strings.TrimSpace(r.rt.AgentWorkspace().ProfileResolution.Profile.Pattern)
 	}
 	info.ProfileReason = r.rt.AgentWorkspace().ProfileResolution.Reason
 	info.ProfileSource = r.rt.AgentWorkspace().ProfileResolution.SourcePath
@@ -933,6 +933,7 @@ func (r *runtimeAdapter) SaveSandboxBackend(backend string) (string, error) {
 	return config.SaveRuntimeWorkspaceConfigWithBackup(path, config.RuntimeWorkspaceConfig{
 		Model:               r.rt.Config.InferenceModel,
 		Provider:            r.rt.Config.InferenceProvider,
+		TapePath:            r.rt.Config.InferenceTapePath,
 		SandboxBackend:      backend,
 		ExecutionMode:       string(r.ExecutionMode()),
 		Agents:              append([]string(nil), r.rt.WorkspaceConfig.Agents...),

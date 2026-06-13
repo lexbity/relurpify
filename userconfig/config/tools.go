@@ -6,8 +6,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-
-	"codeburg.org/lexbit/relurpify/capability/ports"
 )
 
 // DefaultToolManifestDir returns the canonical tool manifest directory.
@@ -17,7 +15,7 @@ func DefaultToolManifestDir(workspace string) string {
 
 // LoadToolManifests loads every tool definition beneath the provided directory
 // in deterministic order.
-func LoadToolManifests(dir string) ([]*ports.ToolManifest, error) {
+func LoadToolManifests(dir string) ([]*ToolManifest, error) {
 	if strings.TrimSpace(dir) == "" {
 		return nil, fmt.Errorf("tool manifest directory required")
 	}
@@ -25,7 +23,7 @@ func LoadToolManifests(dir string) ([]*ports.ToolManifest, error) {
 	if err != nil {
 		return nil, err
 	}
-	out := make([]*ports.ToolManifest, 0, len(paths))
+	out := make([]*ToolManifest, 0, len(paths))
 	for _, path := range paths {
 		manifest, err := LoadToolManifest(path)
 		if err != nil {
@@ -37,12 +35,12 @@ func LoadToolManifests(dir string) ([]*ports.ToolManifest, error) {
 }
 
 // LoadToolManifest loads a single .tool.yaml file.
-func LoadToolManifest(path string) (*ports.ToolManifest, error) {
+func LoadToolManifest(path string) (*ToolManifest, error) {
 	data, err := os.ReadFile(filepath.Clean(path))
 	if err != nil {
 		return nil, err
 	}
-	var manifest ports.ToolManifest
+	var manifest ToolManifest
 	decl, err := DecodeWithSchema(path, data, NewSchemaRegistry(), &manifest)
 	if err != nil {
 		return nil, err
@@ -64,11 +62,11 @@ func LoadToolManifest(path string) (*ports.ToolManifest, error) {
 		}
 	}
 	manifest.SourcePath = path
-	manifest.CanonicalName = ports.NormalizeToolName(manifest.Name)
+	manifest.CanonicalName = NormalizeToolName(manifest.Name)
 	manifest.Name = manifest.CanonicalName
-	manifest.Family = ports.NormalizeToolName(manifest.Family)
+	manifest.Family = NormalizeToolName(manifest.Family)
 	for i, intent := range manifest.Intent {
-		manifest.Intent[i] = ports.NormalizeToolName(intent)
+		manifest.Intent[i] = NormalizeToolName(intent)
 	}
 	if err := validateToolManifest(path, &manifest); err != nil {
 		return nil, err

@@ -10,7 +10,6 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/model"
-	"codeburg.org/lexbit/relurpify/telemetry"
 )
 
 func TestOutputIngester_IngestLLMResponse(t *testing.T) {
@@ -34,7 +33,7 @@ func TestOutputIngester_IngestLLMResponse(t *testing.T) {
 	saved, err := ing.IngestLLMResponseFull(ctx, &model.LLMResponse{
 		Text:         "hello world",
 		FinishReason: "stop",
-		Usage:        telemetry.TokenUsageReport{PromptTokens: 12, CompletionTokens: 3, TotalTokens: 15},
+		Usage:        model.TokenUsage{PromptTokens: 12, CompletionTokens: 3, TotalTokens: 15},
 	})
 	require.NoError(t, err)
 	require.NotNil(t, saved)
