@@ -4,18 +4,26 @@ import (
 	"testing"
 )
 
+const (
+	Consumer_allowlist_test = "consumer"
+	Consumerdeadhasnonontestimporters_allowlist_test = "consumer: dead has no non-test importers"
+	Cycle_allowlist_test = "cycle"
+	Layer_allowlist_test = "layer"
+)
+
+
 func TestAllowlistContains(t *testing.T) {
 	a := Allowlist{entries: map[string]map[string]bool{
-		"cycle": {"cycle: a depends on b": true},
-		"layer": {},
+		Cycle_allowlist_test: {"cycle: a depends on b": true},
+		Layer_allowlist_test: {},
 	}}
-	if !a.Contains("cycle", "cycle: a depends on b") {
+	if !a.Contains(Cycle_allowlist_test, "cycle: a depends on b") {
 		t.Error("allowlist should contain known cycle")
 	}
-	if a.Contains("cycle", "cycle: x depends on y") {
+	if a.Contains(Cycle_allowlist_test, "cycle: x depends on y") {
 		t.Error("allowlist should not contain unknown cycle")
 	}
-	if a.Contains("layer", "layer: anything") {
+	if a.Contains(Layer_allowlist_test, "layer: anything") {
 		t.Error("empty allowlist category should not match anything")
 	}
 	if a.Contains("nonexistent", "anything") {
@@ -28,13 +36,13 @@ func TestLoadAllowlist(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadAllowlist: %v", err)
 	}
-	if !a.Contains("cycle", "cycle: test cycle") {
+	if !a.Contains(Cycle_allowlist_test, "cycle: test cycle") {
 		t.Error("should contain test cycle")
 	}
-	if !a.Contains("layer", "layer: test layer violation") {
+	if !a.Contains(Layer_allowlist_test, "layer: test layer violation") {
 		t.Error("should contain test layer violation")
 	}
-	if !a.Contains("consumer", "consumer: test consumer violation") {
+	if !a.Contains(Consumer_allowlist_test, "consumer: test consumer violation") {
 		t.Error("should contain test consumer violation")
 	}
 	if !a.Contains("glob", "glob: test glob pattern") {
@@ -47,10 +55,10 @@ func TestLoadAllowlist(t *testing.T) {
 
 func TestValidateAllowlist_noStale(t *testing.T) {
 	a := Allowlist{entries: map[string]map[string]bool{
-		"consumer": {"consumer: dead has no non-test importers": true},
+		Consumer_allowlist_test: {Consumerdeadhasnonontestimporters_allowlist_test: true},
 	}}
 	violations := map[string][]string{
-		"consumer": {"consumer: dead has no non-test importers"},
+		Consumer_allowlist_test: {Consumerdeadhasnonontestimporters_allowlist_test},
 	}
 	stale := ValidateAllowlist(a, violations)
 	if len(stale) != 0 {
@@ -60,10 +68,10 @@ func TestValidateAllowlist_noStale(t *testing.T) {
 
 func TestValidateAllowlist_staleEntry(t *testing.T) {
 	a := Allowlist{entries: map[string]map[string]bool{
-		"consumer": {"consumer: dead has no non-test importers": true},
+		Consumer_allowlist_test: {Consumerdeadhasnonontestimporters_allowlist_test: true},
 	}}
 	violations := map[string][]string{
-		"consumer": {},
+		Consumer_allowlist_test: {},
 	}
 	stale := ValidateAllowlist(a, violations)
 	if len(stale) == 0 {

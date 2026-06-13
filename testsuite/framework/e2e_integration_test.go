@@ -30,16 +30,20 @@ func TestEndToEndAgentExecution(t *testing.T) {
 	knowledgeStore := &knowledge.ChunkStore{Graph: graph}
 
 	// Step 1: Create a manifest with policy (manifest seam)
-	m := ValidManifest().
+	m := ValidDocument().
 		WithFileSystemPermission(permissions.FileSystemRead, env.WorkspacePath+"/**").
 		Build()
-
-	if err := m.Validate(); err != nil {
-		t.Fatalf("manifest validation failed: %v", err)
+	permNode, ok := m.Section("permissions")
+	if !ok {
+		t.Fatal("permissions section missing")
+	}
+	var permSpec permissions.PermissionSet
+	if err := permNode.Decode(&permSpec); err != nil {
+		t.Fatalf("decode permissions: %v", err)
 	}
 
-	// Step 2: Create permission manager from manifest policy (permission seam)
-	manager, err := authorization.NewPermissionManager(env.WorkspacePath, &m.Policy.Permissions, env.AuditSink, nil)
+	// Step 2: Create permission manager from document policy (permission seam)
+	manager, err := authorization.NewPermissionManager(env.WorkspacePath, &permSpec, env.AuditSink, nil)
 	if err != nil {
 		t.Fatalf("failed to create permission manager: %v", err)
 	}
@@ -169,9 +173,9 @@ func TestEndToEndAgentExecution(t *testing.T) {
 		t.Errorf("expected chunk body %s, got %s", chunk.Body.Raw, retrievedChunk.Body.Raw)
 	}
 
-	// Manifest policy was compiled correctly (manifest seam)
-	if len(m.Policy.Permissions.FileSystem) == 0 {
-		t.Error("expected filesystem permissions in manifest")
+	// Document policy was compiled correctly (document seam)
+	if len(permSpec.FileSystem) == 0 {
+		t.Error("expected filesystem permissions in document")
 	}
 
 	// Capability was registered and executable (capability seam)

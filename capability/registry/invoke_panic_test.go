@@ -13,6 +13,14 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/ports"
 )
 
+const (
+	Injectedpanicfortesting_invoke_panic_test = "injected panic for testing"
+	Output_invoke_panic_test = "output"
+	TestTool_invoke_panic_test = "test_tool"
+	Unexpectederrorv_invoke_panic_test = "unexpected error: %v"
+)
+
+
 var errSentinel = errors.New("sentinel error")
 
 func TestPanicInToolExecuteReturnsError(t *testing.T) {
@@ -20,14 +28,14 @@ func TestPanicInToolExecuteReturnsError(t *testing.T) {
 		return &ports.ToolResult{Success: true}, nil
 	})
 	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		t.Fatalf(Unexpectederrorv_invoke_panic_test, err)
 	}
 	if result.Success != true {
 		t.Fatalf("expected Success=true, got %+v", result)
 	}
 
 	result, err = recoverToolPanic(func() (*ports.ToolResult, error) {
-		panic("injected panic for testing")
+		panic(Injectedpanicfortesting_invoke_panic_test)
 	})
 	if err != nil {
 		t.Fatalf("recoverToolPanic should not propagate the error: %v", err)
@@ -50,14 +58,14 @@ func TestPanicInToolExecuteLogsStack(t *testing.T) {
 	defer log.SetOutput(origOutput)
 
 	_, _ = recoverToolPanic(func() (*ports.ToolResult, error) {
-		panic("injected panic for testing")
+		panic(Injectedpanicfortesting_invoke_panic_test)
 	})
 
 	logged := logBuf.String()
 	if !strings.Contains(logged, "tool panic recovered") {
 		t.Fatalf("expected log to contain 'tool panic recovered', got: %q", logged)
 	}
-	if !strings.Contains(logged, "injected panic for testing") {
+	if !strings.Contains(logged, Injectedpanicfortesting_invoke_panic_test) {
 		t.Fatalf("expected log to contain panic value, got: %q", logged)
 	}
 }
@@ -80,10 +88,10 @@ func TestPanicWithNilReturnDoesNotCrash(t *testing.T) {
 
 func TestRecoverToolPanicNoPanic(t *testing.T) {
 	result, err := recoverToolPanic(func() (*ports.ToolResult, error) {
-		return &ports.ToolResult{Success: true, Data: map[string]any{"output": "ok"}}, nil
+		return &ports.ToolResult{Success: true, Data: map[string]any{Output_invoke_panic_test: "ok"}}, nil
 	})
 	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		t.Fatalf(Unexpectederrorv_invoke_panic_test, err)
 	}
 	if result == nil {
 		t.Fatal("result is nil")
@@ -91,8 +99,8 @@ func TestRecoverToolPanicNoPanic(t *testing.T) {
 	if !result.Success {
 		t.Fatal("expected Success=true")
 	}
-	if result.Data["output"] != "ok" {
-		t.Fatalf("expected output='ok', got %v", result.Data["output"])
+	if result.Data[Output_invoke_panic_test] != "ok" {
+		t.Fatalf("expected output='ok', got %v", result.Data[Output_invoke_panic_test])
 	}
 }
 
@@ -102,7 +110,7 @@ func TestRecoverToolPanicWithError(t *testing.T) {
 		return &ports.ToolResult{Success: false, Error: expectedErr}, nil
 	})
 	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		t.Fatalf(Unexpectederrorv_invoke_panic_test, err)
 	}
 	if result == nil {
 		t.Fatal("result is nil")
@@ -135,7 +143,7 @@ func TestHashArgsEmptyMap(t *testing.T) {
 func TestRecordResultNilDataNoPanic(t *testing.T) {
 	detector := NewDoomLoopDetector(DefaultDoomLoopConfig())
 	err := detector.RecordResult(
-		descriptor.CapabilityDescriptor{ID: "test_tool", Name: "test_tool", Kind: agentspec.CapabilityKindTool},
+		descriptor.CapabilityDescriptor{ID: TestTool_invoke_panic_test, Name: TestTool_invoke_panic_test, Kind: agentspec.CapabilityKindTool},
 		&ports.ToolResult{Success: true, Data: nil},
 	)
 	if err != nil {
@@ -146,7 +154,7 @@ func TestRecordResultNilDataNoPanic(t *testing.T) {
 func TestRecordResultNilResultNoPanic(t *testing.T) {
 	detector := NewDoomLoopDetector(DefaultDoomLoopConfig())
 	err := detector.RecordResult(
-		descriptor.CapabilityDescriptor{ID: "test_tool", Name: "test_tool", Kind: agentspec.CapabilityKindTool},
+		descriptor.CapabilityDescriptor{ID: TestTool_invoke_panic_test, Name: TestTool_invoke_panic_test, Kind: agentspec.CapabilityKindTool},
 		nil,
 	)
 	if err != nil {
@@ -157,7 +165,7 @@ func TestRecordResultNilResultNoPanic(t *testing.T) {
 func TestRecordResultNilMetadataNoPanic(t *testing.T) {
 	detector := NewDoomLoopDetector(DefaultDoomLoopConfig())
 	err := detector.RecordResult(
-		descriptor.CapabilityDescriptor{ID: "test_tool", Name: "test_tool", Kind: agentspec.CapabilityKindTool},
+		descriptor.CapabilityDescriptor{ID: TestTool_invoke_panic_test, Name: TestTool_invoke_panic_test, Kind: agentspec.CapabilityKindTool},
 		&ports.ToolResult{Success: true, Data: map[string]any{"path": "/tmp/test"}, Metadata: nil},
 	)
 	if err != nil {

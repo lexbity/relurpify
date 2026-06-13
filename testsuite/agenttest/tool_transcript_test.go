@@ -18,7 +18,7 @@ func TestBuildToolTranscriptPairsCallsAndResults(t *testing.T) {
 			Timestamp: base,
 			Message:   "tool file_search invoked",
 			Metadata: map[string]any{
-				"tool":     "file_search",
+				tool:     file_search,
 				"agent_id": "agent-1",
 				"args":     map[string]any{"needle": "euclo"},
 			},
@@ -28,8 +28,8 @@ func TestBuildToolTranscriptPairsCallsAndResults(t *testing.T) {
 			Timestamp: base.Add(2 * time.Second),
 			Message:   "tool file_search completed",
 			Metadata: map[string]any{
-				"tool":        "file_search",
-				"success":     true,
+				tool:        file_search,
+				success:     true,
 				"duration_ms": int64(2000),
 			},
 		},
@@ -42,7 +42,7 @@ func TestBuildToolTranscriptPairsCallsAndResults(t *testing.T) {
 		t.Fatalf("expected 1 entry, got %d", len(artifact.Entries))
 	}
 	entry := artifact.Entries[0]
-	if entry.Tool != "file_search" || entry.AgentID != "agent-1" {
+	if entry.Tool != file_search || entry.AgentID != "agent-1" {
 		t.Fatalf("unexpected entry: %#v", entry)
 	}
 	if !entry.Success {
@@ -63,8 +63,8 @@ func TestBuildToolTranscriptSkipsUnpairedResults(t *testing.T) {
 			Timestamp: time.Now().UTC(),
 			Message:   "tool missing completed",
 			Metadata: map[string]any{
-				"tool":    "missing",
-				"success": false,
+				tool:    "missing",
+				success: false,
 			},
 		},
 	})

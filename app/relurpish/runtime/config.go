@@ -36,6 +36,7 @@ type Config struct {
 	RecordingMode              string
 	SandboxBackend             string
 	EnvOverrides               []string
+	ReduceMotion               bool
 	Sandbox                    fsandbox.SandboxConfig
 	CommandPolicy              fsandbox.CommandPolicy
 	AuditLimit                 int

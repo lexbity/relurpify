@@ -47,12 +47,12 @@ func LoadToolManifest(path string) (*ports.ToolManifest, error) {
 	if err != nil {
 		return nil, err
 	}
-	if decl.Kind != "tool" {
+	if decl.Kind != schemaKindTool {
 		return nil, &SchemaError{
 			Path:   path,
 			Line:   decl.Line,
 			Schema: decl.String(),
-			Err:    fmt.Errorf("tool manifest must use relurpify/tool/v1 or relurpify/tool/v2, got %s", decl.String()),
+			Err:    fmt.Errorf("tool manifest must use relurpify/%s/v1 or relurpify/%s/v2, got %s", schemaKindTool, schemaKindTool, decl.String()),
 		}
 	}
 	if decl.Version != 1 && decl.Version != 2 {

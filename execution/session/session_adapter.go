@@ -10,27 +10,27 @@ import (
 	"codeburg.org/lexbit/relurpify/execution/workspace"
 )
 
-// SessionAdapter implements WorkspaceService using OpenWorkspace
+// Adapter implements WorkspaceService using OpenWorkspace
 // as a backend. It is a transitional adapter;
 // as domain extraction progresses the adapter shrinks and is eventually
 // replaced by direct execution/session construction.
 //
 // Constructor inputs (WorkspaceConfig) carry the app-composed provider
 // products. OpenWorkspace requests carry the per-session parameters.
-type SessionAdapter struct {
+type Adapter struct {
 	config WorkspaceConfig
 }
 
-// NewSessionAdapter creates a SessionAdapter that uses the given config
+// NewSessionAdapter creates an Adapter that uses the given config
 // to open workspace sessions.
-func NewSessionAdapter(cfg WorkspaceConfig) *SessionAdapter {
-	return &SessionAdapter{config: cfg}
+func NewSessionAdapter(cfg WorkspaceConfig) *Adapter {
+	return &Adapter{config: cfg}
 }
 
 // OpenWorkspace opens a workspace  The provider products (security,
 // capability, knowledge, model) were supplied at adapter construction time;
 // only session-level parameters come from the request.
-func (a *SessionAdapter) OpenWorkspace(ctx context.Context, req OpenWorkspaceRequest) (*WorkspaceSession, error) {
+func (a *Adapter) OpenWorkspace(ctx context.Context, req OpenWorkspaceRequest) (*WorkspaceSession, error) {
 	cfg := a.config
 	cfg.Workspace = req.WorkspaceRoot
 	cfg.ConfigPath = req.ConfigPath
@@ -64,6 +64,9 @@ func (a *SessionAdapter) OpenWorkspace(ctx context.Context, req OpenWorkspaceReq
 		Telemetry: newTelemetryView(ws),
 	}
 	sess.SetCloseFn(func(ctx context.Context) error { return ws.Close(ctx) })
+	if ws.ServiceManager != nil {
+		sess.SetServiceManager(ws.ServiceManager)
+	}
 	return sess, nil
 }
 
@@ -77,7 +80,7 @@ func newSecurityController(ws *Workspace) *securityController {
 	return &securityController{ws: ws}
 }
 
-func (c *securityController) PolicySummary(ctx context.Context) (PolicySummary, error) {
+func (c *securityController) PolicySummary(_ context.Context) (PolicySummary, error) {
 	if c.ws.Registration == nil || c.ws.Registration.Permissions == nil {
 		return PolicySummary{}, ErrSecurityUnavailable
 	}
@@ -87,7 +90,7 @@ func (c *securityController) PolicySummary(ctx context.Context) (PolicySummary, 
 	}, nil
 }
 
-func (c *securityController) RequestApproval(ctx context.Context, req ApprovalRequest) (ApprovalDecision, error) {
+func (c *securityController) RequestApproval(_ context.Context, _ ApprovalRequest) (ApprovalDecision, error) {
 	if c.ws.Registration == nil || c.ws.Registration.HITL == nil {
 		return ApprovalDecision{}, ErrSecurityUnavailable
 	}
@@ -123,7 +126,7 @@ func (c *knowledgeController) Ingest(ctx context.Context, req IngestRequest) (In
 	return IngestResult{}, nil
 }
 
-func (c *knowledgeController) Query(ctx context.Context, req QueryRequest) (QueryResult, error) {
+func (c *knowledgeController) Query(_ context.Context, req QueryRequest) (QueryResult, error) {
 	if c.env.KnowledgeStore == nil || c.env.KnowledgeStore.Graph == nil {
 		return QueryResult{}, ErrKnowledgeUnavailable
 	}
@@ -162,7 +165,7 @@ func newCapabilityController(ws *Workspace) *capabilityController {
 	return &capabilityController{env: ws.Environment}
 }
 
-func (c *capabilityController) List(ctx context.Context) ([]CapabilitySummary, error) {
+func (c *capabilityController) List(_ context.Context) ([]CapabilitySummary, error) {
 	if c.env.Registry == nil {
 		return nil, ErrCapabilityUnavailable
 	}
@@ -179,7 +182,7 @@ func (c *capabilityController) List(ctx context.Context) ([]CapabilitySummary, e
 	return summaries, nil
 }
 
-func (c *capabilityController) Invoke(ctx context.Context, req CapabilityInvokeRequest) (CapabilityInvokeResult, error) {
+func (c *capabilityController) Invoke(_ context.Context, _ CapabilityInvokeRequest) (CapabilityInvokeResult, error) {
 	if c.env.Registry == nil {
 		return CapabilityInvokeResult{}, ErrCapabilityUnavailable
 	}
@@ -200,11 +203,11 @@ func newNamedAgentController(ws *Workspace) *namedAgentController {
 	return &namedAgentController{ws: ws}
 }
 
-func (c *namedAgentController) Catalog(ctx context.Context) ([]NamedAgentSummary, error) {
+func (c *namedAgentController) Catalog(_ context.Context) ([]NamedAgentSummary, error) {
 	return nil, ErrNamedAgentUnavailable
 }
 
-func (c *namedAgentController) Open(ctx context.Context, req NamedAgentOpenRequest) (NamedAgentSession, error) {
+func (c *namedAgentController) Open(_ context.Context, _ NamedAgentOpenRequest) (NamedAgentSession, error) {
 	return NamedAgentSession{}, ErrNamedAgentUnavailable
 }
 
@@ -234,39 +237,8 @@ func NewSessionFromWorkspace(ws *Workspace, workspaceRoot string) *WorkspaceSess
 		Telemetry: newTelemetryView(ws),
 	}
 	sess.SetCloseFn(func(ctx context.Context) error { return ws.Close(ctx) })
-	if ws.ServiceManager != nil {
-		sess.SetServiceManager(&serviceManagerAdapter{sm: ws.ServiceManager})
-	}
 	return sess
 }
 
-// serviceManagerAdapter wraps *serviceManager to satisfy ServiceManager.
-type serviceManagerAdapter struct {
-	sm *serviceManager
-}
-
-func (a *serviceManagerAdapter) RegisterService(id string, svc Service) {
-	a.sm.Register(id, svc)
-}
-
-func (a *serviceManagerAdapter) StartAll(ctx context.Context) error {
-	return a.sm.StartAll(ctx)
-}
-
-func (a *serviceManagerAdapter) Snapshots() []ServiceSnapshot {
-	raw := a.sm.Snapshot()
-	out := make([]ServiceSnapshot, len(raw))
-	for i, s := range raw {
-		out[i] = ServiceSnapshot{
-			ID:     s.ID,
-			Status: s.Status,
-			Source: s.Source,
-			Owner:  s.Owner,
-			Notes:  s.Notes,
-		}
-	}
-	return out
-}
-
-// Ensure *SessionAdapter satisfies WorkspaceService at compile time.
-var _ WorkspaceService = (*SessionAdapter)(nil)
+// Ensure *Adapter satisfies WorkspaceService at compile time.
+var _ WorkspaceService = (*Adapter)(nil)

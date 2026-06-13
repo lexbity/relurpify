@@ -8,14 +8,22 @@ import (
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
-// ManifestCoversFileAction returns true if the manifest explicitly permits
+// DocumentCoversFileAction returns true if the document explicitly permits
 // the given action on the given path. Path may be absolute or relative to workspace.
-func ManifestCoversFileAction(
-	spec *config.ManifestSpec,
+func DocumentCoversFileAction(
+	doc *config.Document,
 	action permissions.FileSystemAction,
 	path, workspace string,
 ) bool {
-	if spec == nil {
+	if doc == nil {
+		return false
+	}
+	node, ok := doc.Section("permissions")
+	if !ok {
+		return false
+	}
+	ps, err := permissions.DecodeSection(node)
+	if err != nil || ps == nil {
 		return false
 	}
 
@@ -27,7 +35,7 @@ func ManifestCoversFileAction(
 	absPath = filepath.Clean(absPath)
 
 	// Check each filesystem permission
-	for _, fsPerm := range spec.Permissions.FileSystem {
+	for _, fsPerm := range ps.FileSystem {
 		// Check if action matches (single Action field, not Actions array)
 		if fsPerm.Action != action {
 			continue
@@ -45,16 +53,24 @@ func ManifestCoversFileAction(
 	return false
 }
 
-// ManifestCoversExecutable returns true if the manifest declares the given binary.
-func ManifestCoversExecutable(spec *config.ManifestSpec, binary string) bool {
-	if spec == nil {
+// DocumentCoversExecutable returns true if the document declares the given binary.
+func DocumentCoversExecutable(doc *config.Document, binary string) bool {
+	if doc == nil {
+		return false
+	}
+	node, ok := doc.Section("permissions")
+	if !ok {
+		return false
+	}
+	ps, err := permissions.DecodeSection(node)
+	if err != nil || ps == nil {
 		return false
 	}
 
 	// Normalize binary name (remove path)
 	binaryName := filepath.Base(binary)
 
-	for _, exec := range spec.Permissions.Executables {
+	for _, exec := range ps.Executables {
 		// Check exact match (Binary field, not Name)
 		if exec.Binary == binaryName {
 			return true
@@ -68,13 +84,21 @@ func ManifestCoversExecutable(spec *config.ManifestSpec, binary string) bool {
 	return false
 }
 
-// ManifestCoversNetworkCall returns true if the manifest declares the given host:port.
-func ManifestCoversNetworkCall(spec *config.ManifestSpec, host string, port int) bool {
-	if spec == nil {
+// DocumentCoversNetworkCall returns true if the document declares the given host:port.
+func DocumentCoversNetworkCall(doc *config.Document, host string, port int) bool {
+	if doc == nil {
+		return false
+	}
+	node, ok := doc.Section("permissions")
+	if !ok {
+		return false
+	}
+	ps, err := permissions.DecodeSection(node)
+	if err != nil || ps == nil {
 		return false
 	}
 
-	for _, net := range spec.Permissions.Network {
+	for _, net := range ps.Network {
 		// Check host match (exact or glob)
 		hostMatches := net.Host == host
 		if !hostMatches {

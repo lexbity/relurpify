@@ -39,29 +39,29 @@ import (
 	"codeburg.org/lexbit/relurpify/telemetry/event"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 	"codeburg.org/lexbit/relurpify/userconfig/modelselect"
-	"gopkg.in/yaml.v3"
 )
 
 // Runtime wires the relurpish CLI, Bubble Tea UI, and API server to the shared
 // agent fruntime. It centralizes tool registration, manifests, sandbox
 // registration, and log management.
 type Runtime struct {
-	Config          Config
-	Workspace       *session.Workspace
-	Session         *session.WorkspaceSession
-	Tools           *registry.CapabilityRegistry
-	Memory          *memory.WorkingMemoryStore
-	Agent           agentgraph.WorkflowExecutor
-	Model           model.LanguageModel
-	IndexManager    *ast.IndexManager
-	GraphDB         *graphdb.Engine
-	SearchEngine    *search.SearchEngine
-	AgentLifecycle  agentlifecycle.Repository
-	Delegations     *fauthorization.DelegationManager
-	WorkspaceConfig config.RuntimeWorkspaceConfig
-	secrets         config.Secrets
-	registration    *fauthorization.AgentRegistration
-	modelBackend    llm.ManagedBackend
+	Config           Config
+	Workspace        *session.Workspace
+	Session          *session.WorkspaceSession
+	Tools            *registry.CapabilityRegistry
+	Memory           *memory.WorkingMemoryStore
+	Agent            agentgraph.WorkflowExecutor
+	Model            model.LanguageModel
+	IndexManager     *ast.IndexManager
+	GraphDB          *graphdb.Engine
+	SearchEngine     *search.SearchEngine
+	AgentLifecycle   agentlifecycle.Repository
+	Delegations      *fauthorization.DelegationManager
+	WorkspaceConfig  config.RuntimeWorkspaceConfig
+	documentSnapshot *config.DocumentSnapshot
+	secrets          config.Secrets
+	registration     *fauthorization.AgentRegistration
+	modelBackend     llm.ManagedBackend
 
 	hitlCancel func()
 
@@ -167,24 +167,11 @@ func New(ctx context.Context, cfg Config, secrets config.Secrets) (*Runtime, err
 	if err != nil {
 		return nil, fmt.Errorf("load manifest: %w", err)
 	}
-	var spec config.ManifestSpec
-	specNode := &yaml.Node{Kind: yaml.MappingNode}
-	for k, v := range docSnapshot.Document.Spec {
-		specNode.Content = append(specNode.Content,
-			&yaml.Node{Kind: yaml.ScalarNode, Value: k},
-			&v,
-		)
+	contract, err := config.ResolveEffectiveAgentContract(cfg.Workspace, docSnapshot.Document, config.ResolveOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("resolve effective contract: %w", err)
 	}
-	if err := specNode.Decode(&spec); err != nil {
-		return nil, fmt.Errorf("decode manifest spec: %w", err)
-	}
-	manifestSnapshot := &config.ManifestSnapshot{
-		Spec:        spec,
-		Fingerprint: docSnapshot.Fingerprint,
-		LoadedAt:    docSnapshot.LoadedAt,
-		SourcePath:  docSnapshot.SourcePath,
-		Warnings:    docSnapshot.Warnings,
-	}
+	agentSpec := contract.AgentSpec
 	securityBundle := loadedConfig.Security
 	profileRegistry, err := modelselect.BuildProfileRegistry(loadedConfig.Model.Profiles)
 	if err != nil {
@@ -193,7 +180,12 @@ func New(ctx context.Context, cfg Config, secrets config.Secrets) (*Runtime, err
 	profileResolution := profileRegistry.Resolve(cfg.InferenceProvider, cfg.InferenceModel)
 	registration, err := fauthorization.RegisterAgent(ctx, fauthorization.RuntimeConfig{
 		ManifestPath:     cfg.ManifestPath,
-		ManifestSnapshot: manifestSnapshot,
+		DocumentSnapshot: docSnapshot,
+		AgentSpec:        contract.AgentSpec,
+		Permissions:      contract.Permissions,
+		Security:         contract.Security,
+		Image:            "",
+		Runtime:          "",
 		SecurityBundle:   &securityBundle,
 		ConfigPath:       cfg.ConfigPath,
 		Backend:          cfg.SandboxBackend,
@@ -210,15 +202,16 @@ func New(ctx context.Context, cfg Config, secrets config.Secrets) (*Runtime, err
 	var capabilityProduct *session.CapabilityProduct
 	var knowledgeProduct *session.KnowledgeProduct
 	var modelProduct *envcomposition.ModelRuntime
-	agentSpec := manifestSnapshot.Spec.Agent
 	securityProduct, err := envcomposition.BuildSecurityRuntime(ctx, envcomposition.SecurityRuntimeInput{
 		Context:           ctx,
 		Workspace:         cfg.Workspace,
 		SandboxBackend:    cfg.SandboxBackend,
+		Runtime:           "",
+		Image:             "",
 		AgentID:           registration.ID,
 		AgentSpec:         agentSpec,
 		SecurityBundle:    &securityBundle,
-		ManifestSpec:      &manifestSnapshot.Spec,
+		Security:          contract.Security,
 		PermissionManager: registration.Permissions,
 	})
 	if err != nil {
@@ -273,13 +266,12 @@ func New(ctx context.Context, cfg Config, secrets config.Secrets) (*Runtime, err
 		return nil, fmt.Errorf("compose model runtime: %w", err)
 	}
 	registrationView := &session.Registration{
-		ID:               registration.ID,
-		ManifestSpec:     registration.ManifestSpec,
-		ManifestSnapshot: registration.ManifestSnapshot,
-		Permissions:      registration.Permissions,
-		Policy:           registration.Policy,
-		Audit:            registration.Audit,
-		HITL:             registration.HITL,
+		ID:          registration.ID,
+		AgentSpec:   agentSpec,
+		Permissions: registration.Permissions,
+		Policy:      registration.Policy,
+		Audit:       registration.Audit,
+		HITL:        registration.HITL,
 	}
 	ws, err := session.OpenWorkspace(ctx, session.WorkspaceConfig{
 		Workspace:                  cfg.Workspace,
@@ -302,7 +294,7 @@ func New(ctx context.Context, cfg Config, secrets config.Secrets) (*Runtime, err
 		AllowedCapabilities:        allowedCapabilities,
 		Strict:                     envOverrides.Strict,
 		LoadedConfig:               loadedConfig,
-		ManifestSnapshot:           manifestSnapshot,
+		DocumentSnapshot:           docSnapshot,
 		ProfileResolution:          profileResolution,
 		SecurityBundle:             &securityBundle,
 		Registration:               registrationView,
@@ -325,8 +317,8 @@ func New(ctx context.Context, cfg Config, secrets config.Secrets) (*Runtime, err
 	baseTelemetry := ws.Telemetry
 	if registration != nil && registration.Permissions != nil {
 		var bashCfg *fauthorization.BashConfig
-		if registration.ManifestSpec != nil && registration.ManifestSpec.Agent != nil {
-			spec := registration.ManifestSpec.Agent
+		if registration.AgentSpec != nil {
+			spec := registration.AgentSpec
 			bashCfg = &fauthorization.BashConfig{
 				AllowPatterns: spec.Bash.AllowPatterns,
 				DenyPatterns:  spec.Bash.DenyPatterns,
@@ -374,8 +366,8 @@ func New(ctx context.Context, cfg Config, secrets config.Secrets) (*Runtime, err
 					}
 				})
 			}
-			if registration.ManifestSnapshot != nil {
-				emitManifestReloadedEvent(ctx, env.EventLog, registration.ID, cfg.AgentLabel(), registration.ManifestSnapshot)
+			if docSnapshot != nil {
+				emitDocumentReloadedEvent(ctx, env.EventLog, registration.ID, cfg.AgentLabel(), docSnapshot)
 			}
 		} else if logger != nil {
 			logger.Printf("warning: event log not available from workspace")
@@ -404,6 +396,7 @@ func New(ctx context.Context, cfg Config, secrets config.Secrets) (*Runtime, err
 		SearchEngine:         env.SearchEngine,
 		AgentLifecycle:       env.AgentLifecycle,
 		WorkspaceConfig:      workspaceCfg,
+		documentSnapshot:     docSnapshot,
 		Delegations:          fauthorization.NewDelegationManager(),
 		interactionEnvelopes: make(map[string]*contextdata.Envelope),
 		secrets:              secrets,
@@ -480,6 +473,23 @@ func (r *Runtime) Close(ctx context.Context) error {
 	return errors.Join(errs...)
 }
 
+// ManifestFingerprint returns the fingerprint of the loaded manifest snapshot
+// when available.
+func (r *Runtime) ManifestFingerprint() string {
+	if r == nil || r.registration == nil || r.registration.DocumentSnapshot == nil {
+		return ""
+	}
+	return fmt.Sprintf("%x", r.registration.DocumentSnapshot.Fingerprint)
+}
+
+// ManifestDeprecationNotices returns manifest compatibility warnings when available.
+func (r *Runtime) ManifestDeprecationNotices() []string {
+	if r == nil || r.registration == nil || r.registration.DocumentSnapshot == nil {
+		return nil
+	}
+	return append([]string(nil), r.registration.DocumentSnapshot.Warnings...)
+}
+
 // AvailableAgents lists known agent presets and definitions.
 func (r *Runtime) AvailableAgents() []string {
 	seen := map[string]struct{}{
@@ -505,7 +515,7 @@ func (r *Runtime) SwitchAgent(name string) error {
 	if name == "" {
 		return errors.New("agent name required")
 	}
-	if r.Workspace.Registration == nil || r.Workspace.Registration.ManifestSpec == nil || r.Workspace.Registration.ManifestSpec.Agent == nil {
+	if r.Workspace.Registration == nil || r.Workspace.Registration.AgentSpec == nil {
 		return errors.New("agent manifest missing")
 	}
 	effectiveContract, compiledPolicy, err := r.resolveEffectiveContractForAgent(name)
@@ -619,7 +629,10 @@ func (r *Runtime) paradigmDeps() *paradigm.Deps {
 }
 
 func (r *Runtime) resolveEffectiveContractForAgent(name string) (*config.EffectiveAgentContract, *session.CompiledPolicy, error) {
-	effectiveContract, err := config.ResolveEffectiveAgentContract(r.Config.Workspace, r.Workspace.Registration.ManifestSpec, config.ResolveOptions{})
+	if r.documentSnapshot == nil || r.documentSnapshot.Document == nil {
+		return nil, nil, fmt.Errorf("manifest snapshot missing")
+	}
+	effectiveContract, err := config.ResolveEffectiveAgentContract(r.Config.Workspace, r.documentSnapshot.Document, config.ResolveOptions{})
 	if err != nil {
 		return nil, nil, fmt.Errorf("resolve effective contract: %w", err)
 	}
@@ -880,12 +893,12 @@ func (r *Runtime) PendingHITL() []*fauthorization.PermissionRequest {
 	return r.registration.HITL.PendingRequests()
 }
 
-func emitManifestReloadedEvent(ctx context.Context, eventLog event.Log, agentID, label string, snapshot *config.ManifestSnapshot) {
+func emitDocumentReloadedEvent(ctx context.Context, eventLog event.Log, agentID, label string, snapshot *config.DocumentSnapshot) {
 	if eventLog == nil || snapshot == nil {
 		return
 	}
 	payload := map[string]any{
-		"manifest_path": snapshot.SourcePath,
+		"document_path": snapshot.SourcePath,
 		"fingerprint":   hex.EncodeToString(snapshot.Fingerprint[:]),
 		"warnings":      append([]string(nil), snapshot.Warnings...),
 	}

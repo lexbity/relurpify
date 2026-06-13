@@ -23,6 +23,12 @@ import (
 	"codeburg.org/lexbit/relurpify/governance/risk"
 )
 
+const (
+	Capabilitysblockedw_invoke = "capability %s blocked: %w"
+	Capabilitysnotfound_invoke = "capability %s not found"
+)
+
+
 // InvokeCapability executes an invocable capability by capability ID or public name.
 func (r *CapabilityRegistry) InvokeCapability(ctx context.Context, state ports.State, idOrName string, args map[string]any) (*ports.ToolResult, error) {
 	if r == nil {
@@ -32,7 +38,7 @@ func (r *CapabilityRegistry) InvokeCapability(ctx context.Context, state ports.S
 		if r.toolIDAllowlist != nil {
 			desc, ok := r.delegate.GetCapability(idOrName)
 			if !ok {
-				return nil, fmt.Errorf("capability %s not found", idOrName)
+				return nil, fmt.Errorf(Capabilitysnotfound_invoke, idOrName)
 			}
 			if !r.isAllowlisted(desc.ID) {
 				return nil, fmt.Errorf("capability %s is not permitted in this context", idOrName)
@@ -107,7 +113,7 @@ func (r *CapabilityRegistry) InvokeCapabilityBackground(ctx context.Context, sta
 		if r.toolIDAllowlist != nil {
 			desc, ok := r.delegate.GetCapability(idOrName)
 			if !ok {
-				return nil, fmt.Errorf("capability %s not found", idOrName)
+				return nil, fmt.Errorf(Capabilitysnotfound_invoke, idOrName)
 			}
 			if !r.isAllowlisted(desc.ID) {
 				return nil, fmt.Errorf("capability %s is not permitted in this context", idOrName)
@@ -231,13 +237,13 @@ func (r *CapabilityRegistry) prepareCapabilityInvocation(ctx context.Context, st
 				// message for the model (DoomLoopPrecheck wraps DoomLoopError with
 				// guidance text). The bare DoomLoopError from guidance is less
 				// informative.
-				return nil, fmt.Errorf("capability %s blocked: %w", entry.descriptor.ID, err)
+				return nil, fmt.Errorf(Capabilitysblockedw_invoke, entry.descriptor.ID, err)
 			}
 			if proceed {
 				return entry, nil
 			}
 		}
-		return nil, fmt.Errorf("capability %s blocked: %w", entry.descriptor.ID, err)
+		return nil, fmt.Errorf(Capabilitysblockedw_invoke, entry.descriptor.ID, err)
 	}
 	return entry, nil
 }
@@ -276,7 +282,7 @@ func (r *CapabilityRegistry) enforceCapabilityPolicy(ctx context.Context, entry 
 		DenyReasonFallback: "denied by policy",
 	})
 	if err != nil {
-		return fmt.Errorf("capability %s blocked: %w", desc.ID, err)
+		return fmt.Errorf(Capabilitysblockedw_invoke, desc.ID, err)
 	}
 	return nil
 }
@@ -295,7 +301,7 @@ func (r *CapabilityRegistry) capabilityEntry(idOrName string) (*capabilityEntry,
 			}
 		}
 	}
-	return nil, fmt.Errorf("capability %s not found", idOrName)
+	return nil, fmt.Errorf(Capabilitysnotfound_invoke, idOrName)
 }
 
 // CapabilityAvailable reports whether a registered capability is currently available for invocation.

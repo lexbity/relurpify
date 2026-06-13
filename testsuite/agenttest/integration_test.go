@@ -12,26 +12,40 @@ import (
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
+const (
+	case1 = "case1"
+	file_search = "file_search"
+	infra = "infra"
+	outcome = "outcome"
+	outcome_must_succeed = "outcome.must_succeed"
+	security = "security"
+	success = "success"
+	token_usage = "token_usage"
+	tool_usage = "tool_usage"
+	tools_expected = "tools_expected"
+)
+
+
 // TestCapabilityCoverage_ExercisesAllTools verifies the coverage framework works
 func TestCapabilityCoverage_ExercisesAllTools(t *testing.T) {
 	// Create a mock transcript with various tools
 	transcript := &ToolTranscriptArtifact{
 		Entries: []ToolTranscriptEntry{
-			{Index: 0, Tool: "file_read", DurationMS: 30, Success: true},
-			{Index: 1, Tool: "file_write", DurationMS: 40, Success: true},
-			{Index: 2, Tool: "go_test", DurationMS: 1000, Success: true},
-			{Index: 3, Tool: "file_search", DurationMS: 50, Success: true},
+			{Index: 0, Tool: file_read, DurationMS: 30, Success: true},
+			{Index: 1, Tool: file_write, DurationMS: 40, Success: true},
+			{Index: 2, Tool: go_test, DurationMS: 1000, Success: true},
+			{Index: 3, Tool: file_search, DurationMS: 50, Success: true},
 		},
 	}
 
 	// Build coverage from transcript
 	coverage := &CapabilityCoverage{
-		RegisteredTools: []string{"file_read", "file_write", "go_test", "file_search", "git_status"},
+		RegisteredTools: []string{file_read, file_write, go_test, file_search, "git_status"},
 		ExercisedTools: map[string]int{
-			"file_read":   1,
-			"file_write":  1,
-			"go_test":     1,
-			"file_search": 1,
+			file_read:   1,
+			file_write:  1,
+			go_test:     1,
+			file_search: 1,
 		},
 	}
 
@@ -56,13 +70,13 @@ func TestCapabilityCoverage_ExercisesAllTools(t *testing.T) {
 func TestToolInjection_RespondsWithSyntheticResult(t *testing.T) {
 	// Create a tool override that injects an error
 	override := ToolResponseOverride{
-		Tool:      "go_test",
+		Tool:      go_test,
 		Error:     "injected test failure",
 		CallCount: 1,
 	}
 
 	// Verify override is properly configured
-	if override.Tool != "go_test" {
+	if override.Tool != go_test {
 		t.Error("Override tool name mismatch")
 	}
 	if override.Error == "" {
@@ -71,13 +85,13 @@ func TestToolInjection_RespondsWithSyntheticResult(t *testing.T) {
 
 	// Test override matching
 	toolOverrides := []ToolResponseOverride{override}
-	filtered := filterOverridesForTool(toolOverrides, "go_test")
+	filtered := filterOverridesForTool(toolOverrides, go_test)
 	if len(filtered) != 1 {
 		t.Errorf("Expected 1 matching override, got %d", len(filtered))
 	}
 
 	// Verify non-matching tools return empty
-	filtered = filterOverridesForTool(toolOverrides, "file_read")
+	filtered = filterOverridesForTool(toolOverrides, file_read)
 	if len(filtered) != 0 {
 		t.Errorf("Expected 0 matching overrides for file_read, got %d", len(filtered))
 	}
@@ -88,14 +102,14 @@ func TestDeterminismDetection_ConsistentRuns(t *testing.T) {
 	// Create two identical transcripts
 	transcript1 := &ToolTranscriptArtifact{
 		Entries: []ToolTranscriptEntry{
-			{Index: 0, Tool: "file_read", DurationMS: 30},
-			{Index: 1, Tool: "go_test", DurationMS: 1000},
+			{Index: 0, Tool: file_read, DurationMS: 30},
+			{Index: 1, Tool: go_test, DurationMS: 1000},
 		},
 	}
 	transcript2 := &ToolTranscriptArtifact{
 		Entries: []ToolTranscriptEntry{
-			{Index: 0, Tool: "file_read", DurationMS: 35},
-			{Index: 1, Tool: "go_test", DurationMS: 1050},
+			{Index: 0, Tool: file_read, DurationMS: 35},
+			{Index: 1, Tool: go_test, DurationMS: 1050},
 		},
 	}
 
@@ -121,8 +135,8 @@ func TestDeterminismDetection_ConsistentRuns(t *testing.T) {
 	// Now test with divergent transcript
 	transcript3 := &ToolTranscriptArtifact{
 		Entries: []ToolTranscriptEntry{
-			{Index: 0, Tool: "file_write", DurationMS: 50},
-			{Index: 1, Tool: "file_search", DurationMS: 100},
+			{Index: 0, Tool: file_write, DurationMS: 50},
+			{Index: 1, Tool: file_search, DurationMS: 100},
 		},
 	}
 	fp3, _ := ComputeFingerprint(transcript3)
@@ -141,21 +155,21 @@ func TestDependencyValidation_EnforcesOrdering(t *testing.T) {
 	// Valid ordering: read before write
 	validTranscript := &ToolTranscriptArtifact{
 		Entries: []ToolTranscriptEntry{
-			{Index: 0, Tool: "file_read"},
-			{Index: 1, Tool: "file_write"},
+			{Index: 0, Tool: file_read},
+			{Index: 1, Tool: file_write},
 		},
 	}
 
 	// Invalid ordering: write without read
 	invalidTranscript := &ToolTranscriptArtifact{
 		Entries: []ToolTranscriptEntry{
-			{Index: 0, Tool: "file_write"},
+			{Index: 0, Tool: file_write},
 		},
 	}
 
 	// Define dependency: file_write requires file_read
 	deps := []ToolDependency{
-		{Tool: "file_write", Requires: []string{"file_read"}},
+		{Tool: file_write, Requires: []string{file_read}},
 	}
 
 	validator := NewDependencyValidator(deps)
@@ -178,9 +192,9 @@ func TestLatencyTracking_MeasuresToolExecution(t *testing.T) {
 	// Create transcript with latency data
 	transcript := &ToolTranscriptArtifact{
 		Entries: []ToolTranscriptEntry{
-			{Index: 0, Tool: "file_read", DurationMS: 30},
-			{Index: 1, Tool: "file_read", DurationMS: 50},
-			{Index: 2, Tool: "go_test", DurationMS: 1000},
+			{Index: 0, Tool: file_read, DurationMS: 30},
+			{Index: 1, Tool: file_read, DurationMS: 50},
+			{Index: 2, Tool: go_test, DurationMS: 1000},
 		},
 	}
 
@@ -197,7 +211,7 @@ func TestLatencyTracking_MeasuresToolExecution(t *testing.T) {
 	}
 
 	// Check file_read stats
-	fileReadStats, ok := report.ToolLatencies["file_read"]
+	fileReadStats, ok := report.ToolLatencies[file_read]
 	if !ok {
 		t.Fatal("Expected file_read in report")
 	}
@@ -214,25 +228,25 @@ func TestConsistencyReport_AggregatesMultipleRuns(t *testing.T) {
 	reports := []CaseReport{
 		{
 			Success:   true,
-			ToolCalls: map[string]int{"file_read": 2, "go_test": 1},
+			ToolCalls: map[string]int{file_read: 2, go_test: 1},
 			ToolLatencies: map[string]LatencyStats{
-				"file_read": {MaxMs: 40},
-				"go_test":   {MaxMs: 1000},
+				file_read: {MaxMs: 40},
+				go_test:   {MaxMs: 1000},
 			},
 		},
 		{
 			Success:   true,
-			ToolCalls: map[string]int{"file_read": 2, "go_test": 1},
+			ToolCalls: map[string]int{file_read: 2, go_test: 1},
 			ToolLatencies: map[string]LatencyStats{
-				"file_read": {MaxMs: 45},
-				"go_test":   {MaxMs: 1100},
+				file_read: {MaxMs: 45},
+				go_test:   {MaxMs: 1100},
 			},
 		},
 		{
 			Success:   false,
-			ToolCalls: map[string]int{"file_read": 1, "go_test": 0},
+			ToolCalls: map[string]int{file_read: 1, go_test: 0},
 			ToolLatencies: map[string]LatencyStats{
-				"file_read": {MaxMs: 50},
+				file_read: {MaxMs: 50},
 			},
 		},
 	}
@@ -259,9 +273,9 @@ func TestConsistencyReport_AggregatesMultipleRuns(t *testing.T) {
 func TestRecoveryDetection_IdentifiesToolFailureRecovery(t *testing.T) {
 	// Events showing recovery: success -> failure -> success
 	recoveryEvents := []telemetry.Event{
-		{Type: telemetry.EventToolResult, Metadata: map[string]any{"tool": "go_test", "success": true}},
-		{Type: telemetry.EventToolResult, Metadata: map[string]any{"tool": "go_test", "success": false}},
-		{Type: telemetry.EventToolResult, Metadata: map[string]any{"tool": "go_test", "success": true}},
+		{Type: telemetry.EventToolResult, Metadata: map[string]any{tool: go_test, success: true}},
+		{Type: telemetry.EventToolResult, Metadata: map[string]any{tool: go_test, success: false}},
+		{Type: telemetry.EventToolResult, Metadata: map[string]any{tool: go_test, success: true}},
 	}
 
 	if !HasRecoveryFromToolFailure(recoveryEvents) {
@@ -270,8 +284,8 @@ func TestRecoveryDetection_IdentifiesToolFailureRecovery(t *testing.T) {
 
 	// Events showing no recovery: all success
 	noFailureEvents := []telemetry.Event{
-		{Type: telemetry.EventToolResult, Metadata: map[string]any{"tool": "go_test", "success": true}},
-		{Type: telemetry.EventToolResult, Metadata: map[string]any{"tool": "go_test", "success": true}},
+		{Type: telemetry.EventToolResult, Metadata: map[string]any{tool: go_test, success: true}},
+		{Type: telemetry.EventToolResult, Metadata: map[string]any{tool: go_test, success: true}},
 	}
 
 	if HasRecoveryFromToolFailure(noFailureEvents) {
@@ -280,8 +294,8 @@ func TestRecoveryDetection_IdentifiesToolFailureRecovery(t *testing.T) {
 
 	// Events showing no recovery: failure at end
 	failureAtEndEvents := []telemetry.Event{
-		{Type: telemetry.EventToolResult, Metadata: map[string]any{"tool": "go_test", "success": true}},
-		{Type: telemetry.EventToolResult, Metadata: map[string]any{"tool": "go_test", "success": false}},
+		{Type: telemetry.EventToolResult, Metadata: map[string]any{tool: go_test, success: true}},
+		{Type: telemetry.EventToolResult, Metadata: map[string]any{tool: go_test, success: false}},
 	}
 
 	if HasRecoveryFromToolFailure(failureAtEndEvents) {
@@ -292,13 +306,13 @@ func TestRecoveryDetection_IdentifiesToolFailureRecovery(t *testing.T) {
 // TestToolSuccessRate_ComputesCorrectly verifies success rate calculation
 func TestToolSuccessRate_ComputesCorrectly(t *testing.T) {
 	events := []telemetry.Event{
-		{Type: telemetry.EventToolResult, Metadata: map[string]any{"tool": "go_test", "success": true}},
-		{Type: telemetry.EventToolResult, Metadata: map[string]any{"tool": "go_test", "success": true}},
-		{Type: telemetry.EventToolResult, Metadata: map[string]any{"tool": "go_test", "success": false}},
-		{Type: telemetry.EventToolResult, Metadata: map[string]any{"tool": "file_read", "success": true}},
+		{Type: telemetry.EventToolResult, Metadata: map[string]any{tool: go_test, success: true}},
+		{Type: telemetry.EventToolResult, Metadata: map[string]any{tool: go_test, success: true}},
+		{Type: telemetry.EventToolResult, Metadata: map[string]any{tool: go_test, success: false}},
+		{Type: telemetry.EventToolResult, Metadata: map[string]any{tool: file_read, success: true}},
 	}
 
-	successes, failures, rate := ToolSuccessRate(events, "go_test")
+	successes, failures, rate := ToolSuccessRate(events, go_test)
 	if successes != 2 {
 		t.Errorf("Expected 2 successes, got %d", successes)
 	}
@@ -316,20 +330,20 @@ func TestFullIntegration_AllFeaturesWorkTogether(t *testing.T) {
 	// Simulate a complete test scenario
 	transcript := &ToolTranscriptArtifact{
 		Entries: []ToolTranscriptEntry{
-			{Index: 0, Tool: "file_read", DurationMS: 30, Success: true},
-			{Index: 1, Tool: "file_write", DurationMS: 40, Success: true},
-			{Index: 2, Tool: "go_test", DurationMS: 1000, Success: false}, // Failure
-			{Index: 3, Tool: "go_test", DurationMS: 1200, Success: true},  // Recovery
+			{Index: 0, Tool: file_read, DurationMS: 30, Success: true},
+			{Index: 1, Tool: file_write, DurationMS: 40, Success: true},
+			{Index: 2, Tool: go_test, DurationMS: 1000, Success: false}, // Failure
+			{Index: 3, Tool: go_test, DurationMS: 1200, Success: true},  // Recovery
 		},
 	}
 
 	// Test coverage
 	coverage := &CapabilityCoverage{
-		RegisteredTools: []string{"file_read", "file_write", "go_test"},
+		RegisteredTools: []string{file_read, file_write, go_test},
 		ExercisedTools: map[string]int{
-			"file_read":  1,
-			"file_write": 1,
-			"go_test":    2,
+			file_read:  1,
+			file_write: 1,
+			go_test:    2,
 		},
 	}
 
@@ -339,7 +353,7 @@ func TestFullIntegration_AllFeaturesWorkTogether(t *testing.T) {
 
 	// Test dependencies
 	deps := []ToolDependency{
-		{Tool: "file_write", Requires: []string{"file_read"}},
+		{Tool: file_write, Requires: []string{file_read}},
 	}
 	validator := NewDependencyValidator(deps)
 	if failures := validator.Validate(transcript); len(failures) > 0 {
@@ -369,7 +383,7 @@ func TestFullIntegration_AllFeaturesWorkTogether(t *testing.T) {
 
 // === Phase 5: OSB Model Integration Tests ===
 
-// TestFailureClassification_SecurityKind verifies [security] prefix produces FailureKind "security"
+// TestFailureClassification_SecurityKind verifies [security] prefix produces FailureKind security
 func TestFailureClassification_SecurityKind(t *testing.T) {
 	// Test cases for failure classification
 	tests := []struct {
@@ -379,11 +393,11 @@ func TestFailureClassification_SecurityKind(t *testing.T) {
 		expected string
 	}{
 		{"empty error", nil, "", ""},
-		{"infra error", nil, "context deadline exceeded", "infra"},
+		{"infra error", nil, "context deadline exceeded", infra},
 		{"assertion error", nil, "expected no file changes", "assertion"},
-		{"security error", nil, "[security] found 1 out-of-scope file writes", "security"},
+		{"security error", nil, "[security] found 1 out-of-scope file writes", security},
 		{"agent error", nil, "agent returned unsuccessful result", "agent"},
-		{"exec error with infra", errors.New("connection refused"), "", "infra"},
+		{"exec error with infra", errors.New("connection refused"), "", infra},
 	}
 
 	for _, tc := range tests {
@@ -399,10 +413,10 @@ func TestFailureClassification_SecurityKind(t *testing.T) {
 // TestSuiteReport_SecurityFailureCount verifies SecurityFailures counter is incremented correctly
 func TestSuiteReport_SecurityFailureCount(t *testing.T) {
 	cases := []CaseReport{
-		{Name: "case1", Success: true, FailureKind: ""},
-		{Name: "case2", Success: false, FailureKind: "security"},
-		{Name: "case3", Success: false, FailureKind: "infra"},
-		{Name: "case4", Success: false, FailureKind: "security"},
+		{Name: case1, Success: true, FailureKind: ""},
+		{Name: "case2", Success: false, FailureKind: security},
+		{Name: "case3", Success: false, FailureKind: infra},
+		{Name: "case4", Success: false, FailureKind: security},
 		{Name: "case5", Success: false, FailureKind: "assertion"},
 	}
 
@@ -411,9 +425,9 @@ func TestSuiteReport_SecurityFailureCount(t *testing.T) {
 	for _, c := range cases {
 		if !c.Success {
 			switch c.FailureKind {
-			case "infra":
+			case infra:
 				infraFailures++
-			case "security":
+			case security:
 				securityFailures++
 			default:
 				assertFailures++
@@ -436,18 +450,18 @@ func TestSuiteReport_SecurityFailureCount(t *testing.T) {
 func TestSuiteReport_BenchmarkSummaryPopulation(t *testing.T) {
 	cases := []CaseReport{
 		{
-			Name:    "case1",
+			Name:    case1,
 			Success: true,
 			BenchmarkObservations: []BenchmarkObservation{
-				{Category: "tool_usage", Field: "tools_expected", Matched: true},
-				{Category: "tool_usage", Field: "tools_expected", Matched: false},
+				{Category: tool_usage, Field: tools_expected, Matched: true},
+				{Category: tool_usage, Field: tools_expected, Matched: false},
 			},
 		},
 		{
 			Name:    "case2",
 			Success: true,
 			BenchmarkObservations: []BenchmarkObservation{
-				{Category: "token_usage", Field: "token_budget.total", Matched: true},
+				{Category: token_usage, Field: "token_budget.total", Matched: true},
 			},
 		},
 	}
@@ -467,12 +481,12 @@ func TestSuiteReport_BenchmarkSummaryPopulation(t *testing.T) {
 	}
 
 	// Verify category breakdown
-	toolCat := summary.ByCategory["tool_usage"]
+	toolCat := summary.ByCategory[tool_usage]
 	if toolCat.Total != 2 {
 		t.Errorf("Expected tool_usage total=2, got %d", toolCat.Total)
 	}
 
-	tokenCat := summary.ByCategory["token_usage"]
+	tokenCat := summary.ByCategory[token_usage]
 	if tokenCat.Total != 1 {
 		t.Errorf("Expected token_usage total=1, got %d", tokenCat.Total)
 	}
@@ -485,13 +499,13 @@ func TestOSBPipeline_AllThreeTiers(t *testing.T) {
 		Name: "full_osb_case",
 		Expect: ExpectSpec{
 			Outcome: &OutcomeSpec{
-				OutputContains: []string{"success"},
+				OutputContains: []string{success},
 			},
 			Security: &SecuritySpec{
 				NoWritesOutsideScope: true,
 			},
 			Benchmark: &BenchmarkSpec{
-				ToolsExpected: []string{"file_read"},
+				ToolsExpected: []string{file_read},
 			},
 		},
 	}
@@ -568,7 +582,7 @@ func TestOSBPipeline_BenchmarkOnly(t *testing.T) {
 		Name: "benchmark_only",
 		Expect: ExpectSpec{
 			Benchmark: &BenchmarkSpec{
-				ToolsExpected:    []string{"file_read", "file_search"},
+				ToolsExpected:    []string{file_read, file_search},
 				LLMCallsExpected: 5,
 			},
 			// No Outcome or Security blocks
@@ -588,9 +602,9 @@ func TestCaseReport_NewFields(t *testing.T) {
 	report := CaseReport{
 		Name:                  "test_case",
 		Success:               true,
-		AssertionResults:      []AssertionResult{{AssertionID: "outcome.must_succeed", Tier: "outcome", Passed: true}},
-		SecurityObservations:  []SecurityObservation{{Kind: "file_read", InScope: true}},
-		BenchmarkObservations: []BenchmarkObservation{{Category: "tool_usage", Field: "tools_expected", Matched: true}},
+		AssertionResults:      []AssertionResult{{AssertionID: outcome_must_succeed, Tier: outcome, Passed: true}},
+		SecurityObservations:  []SecurityObservation{{Kind: file_read, InScope: true}},
+		BenchmarkObservations: []BenchmarkObservation{{Category: tool_usage, Field: tools_expected, Matched: true}},
 	}
 
 	// Verify new OSB fields are populated
@@ -606,22 +620,22 @@ func TestCaseReport_NewFields(t *testing.T) {
 
 	// Verify assertion result structure
 	ar := report.AssertionResults[0]
-	if ar.AssertionID != "outcome.must_succeed" {
+	if ar.AssertionID != outcome_must_succeed {
 		t.Errorf("Expected assertion_id 'outcome.must_succeed', got %q", ar.AssertionID)
 	}
-	if ar.Tier != "outcome" {
+	if ar.Tier != outcome {
 		t.Errorf("Expected tier 'outcome', got %q", ar.Tier)
 	}
 
 	// Verify security observation structure
 	so := report.SecurityObservations[0]
-	if so.Kind != "file_read" {
+	if so.Kind != file_read {
 		t.Errorf("Expected kind 'file_read', got %q", so.Kind)
 	}
 
 	// Verify benchmark observation structure
 	bo := report.BenchmarkObservations[0]
-	if bo.Category != "tool_usage" {
+	if bo.Category != tool_usage {
 		t.Errorf("Expected category 'tool_usage', got %q", bo.Category)
 	}
 }
@@ -632,19 +646,19 @@ func TestSecurityFailureDoesNotAffectBenchmark(t *testing.T) {
 	report := CaseReport{
 		Name:        "mixed_failure",
 		Success:     false,
-		FailureKind: "security",
+		FailureKind: security,
 		Error:       "[security] found 1 out-of-scope file writes",
 		SecurityObservations: []SecurityObservation{
-			{Kind: "file_write", InScope: false, Resource: "/etc/passwd"},
+			{Kind: file_write, InScope: false, Resource: "/etc/passwd"},
 		},
 		BenchmarkObservations: []BenchmarkObservation{
-			{Category: "tool_usage", Field: "tools_expected", Expected: "file_read", Actual: "true", Matched: true},
-			{Category: "token_usage", Field: "token_budget.total", Expected: "<=1000", Actual: "800", Matched: true},
+			{Category: tool_usage, Field: tools_expected, Expected: file_read, Actual: "true", Matched: true},
+			{Category: token_usage, Field: "token_budget.total", Expected: "<=1000", Actual: "800", Matched: true},
 		},
 	}
 
 	// Verify security failure is recorded
-	if report.FailureKind != "security" {
+	if report.FailureKind != security {
 		t.Errorf("Expected FailureKind='security', got %q", report.FailureKind)
 	}
 	if !strings.Contains(report.Error, "[security]") {
@@ -674,16 +688,16 @@ func TestReportJSON_ContainsNewFields(t *testing.T) {
 		SecurityFailures: 1,
 		Cases: []CaseReport{
 			{
-				Name:    "case1",
+				Name:    case1,
 				Success: true,
 				AssertionResults: []AssertionResult{
-					{AssertionID: "outcome.must_succeed", Tier: "outcome", Passed: true},
+					{AssertionID: outcome_must_succeed, Tier: outcome, Passed: true},
 				},
 				SecurityObservations: []SecurityObservation{
-					{Kind: "file_read", InScope: true},
+					{Kind: file_read, InScope: true},
 				},
 				BenchmarkObservations: []BenchmarkObservation{
-					{Category: "tool_usage", Field: "tools_expected", Matched: true},
+					{Category: tool_usage, Field: tools_expected, Matched: true},
 				},
 			},
 		},

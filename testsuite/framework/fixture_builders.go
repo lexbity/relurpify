@@ -8,6 +8,9 @@ import (
 	"testing"
 	"time"
 
+	"gopkg.in/yaml.v3"
+
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/governance/classification"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
@@ -16,6 +19,12 @@ import (
 	"codeburg.org/lexbit/relurpify/platform/fs"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
+)
+
+const (
+	documentAPIVersion = "relurpify.io/v1"
+	documentKind       = "AgentManifest"
+	documentName       = "test-agent"
 )
 
 // WorkspaceBuilder builds deterministic workspace fixtures.
@@ -114,105 +123,164 @@ func MixedLanguageWorkspace(basePath string) *WorkspaceBuilder {
 		WithFile("config.json", `{"key": "value"}`+"\n")
 }
 
-// ManifestBuilder builds deterministic manifest fixtures.
-type ManifestBuilder struct {
-	manifestSpec *config.ManifestSpec
+// DocumentBuilder builds deterministic document fixtures.
+type DocumentBuilder struct {
+	document *config.Document
 }
 
-// NewManifestBuilder creates a new manifest builder with defaults.
-func NewManifestBuilder() *ManifestBuilder {
-	return &ManifestBuilder{
-		manifestSpec: &config.ManifestSpec{
-			Image:   "test-image:latest",
-			Runtime: "gvisor",
-			Policy: &config.ManifestPolicySpec{
-				Permissions: permissions.PermissionSet{
-					FileSystem: []permissions.FileSystemPermission{
-						{Action: permissions.FileSystemRead, Path: "${workspace}/**"},
-						{Action: permissions.FileSystemWrite, Path: "${workspace}/**"},
-					},
-				},
-			},
-		},
+// NewDocumentBuilder creates a new document builder with defaults.
+func NewDocumentBuilder() *DocumentBuilder {
+	doc := &config.Document{
+		APIVersion: documentAPIVersion,
+		Kind:       documentKind,
+		Metadata:   config.DocumentMetadata{Name: documentName},
+		Spec:       map[string]yaml.Node{},
 	}
+	builder := &DocumentBuilder{document: doc}
+	builder.WithFileSystemPermission(permissions.FileSystemRead, "${workspace}/**")
+	builder.WithFileSystemPermission(permissions.FileSystemWrite, "${workspace}/**")
+	builder.document.Spec["agent"] = mustEncodeAgentSpec(agentspec.AgentRuntimeSpec{
+		Mode:  agentspec.AgentModePrimary,
+		Model: agentspec.AgentModelConfig{Provider: "test-provider", Name: "test-model"},
+		Bash:  agentspec.AgentBashPermissions{Default: agentspec.AgentPermissionAsk},
+	})
+	return builder
 }
 
 // WithName is retained for compatibility but no longer stored.
-func (b *ManifestBuilder) WithName(name string) *ManifestBuilder {
+func (b *DocumentBuilder) WithName(name string) *DocumentBuilder {
+	if b != nil && b.document != nil {
+		b.document.Metadata.Name = name
+	}
 	return b
 }
 
 // WithVersion is retained for compatibility but no longer stored.
-func (b *ManifestBuilder) WithVersion(version string) *ManifestBuilder {
+func (b *DocumentBuilder) WithVersion(version string) *DocumentBuilder {
+	if b != nil && b.document != nil {
+		b.document.Metadata.Version = version
+	}
 	return b
 }
 
 // WithFileSystemPermission adds a filesystem permission.
-func (b *ManifestBuilder) WithFileSystemPermission(action permissions.FileSystemAction, path string) *ManifestBuilder {
-	if b.manifestSpec.Policy == nil {
-		b.manifestSpec.Policy = &config.ManifestPolicySpec{}
+func (b *DocumentBuilder) WithFileSystemPermission(action permissions.FileSystemAction, path string) *DocumentBuilder {
+	if b == nil || b.document == nil {
+		return b
 	}
-	b.manifestSpec.Policy.Permissions.FileSystem = append(
-		b.manifestSpec.Policy.Permissions.FileSystem,
-		permissions.FileSystemPermission{Action: action, Path: path},
-	)
+	ps := b.permissionSet()
+	ps.FileSystem = append(ps.FileSystem, permissions.FileSystemPermission{Action: action, Path: path})
+	b.setPermissionSet(ps)
 	return b
 }
 
 // WithNetworkPermission adds a network permission.
-func (b *ManifestBuilder) WithNetworkPermission(direction, protocol, host string, port int) *ManifestBuilder {
-	if b.manifestSpec.Policy == nil {
-		b.manifestSpec.Policy = &config.ManifestPolicySpec{}
+func (b *DocumentBuilder) WithNetworkPermission(direction, protocol, host string, port int) *DocumentBuilder {
+	if b == nil || b.document == nil {
+		return b
 	}
-	b.manifestSpec.Policy.Permissions.Network = append(
-		b.manifestSpec.Policy.Permissions.Network,
-		permissions.NetworkPermission{Direction: direction, Protocol: protocol, Host: host, Port: port},
-	)
+	ps := b.permissionSet()
+	ps.Network = append(ps.Network, permissions.NetworkPermission{Direction: direction, Protocol: protocol, Host: host, Port: port})
+	b.setPermissionSet(ps)
 	return b
 }
 
 // WithHITLRequired marks a permission as requiring HITL approval.
-func (b *ManifestBuilder) WithHITLRequired() *ManifestBuilder {
-	if len(b.manifestSpec.Policy.Permissions.FileSystem) > 0 {
-		b.manifestSpec.Policy.Permissions.FileSystem[len(b.manifestSpec.Policy.Permissions.FileSystem)-1].HITLRequired = true
+func (b *DocumentBuilder) WithHITLRequired() *DocumentBuilder {
+	if b == nil || b.document == nil {
+		return b
 	}
-	if len(b.manifestSpec.Policy.Permissions.Network) > 0 {
-		b.manifestSpec.Policy.Permissions.Network[len(b.manifestSpec.Policy.Permissions.Network)-1].HITLRequired = true
+	ps := b.permissionSet()
+	if len(ps.FileSystem) > 0 {
+		ps.FileSystem[len(ps.FileSystem)-1].HITLRequired = true
 	}
+	if len(ps.Network) > 0 {
+		ps.Network[len(ps.Network)-1].HITLRequired = true
+	}
+	b.setPermissionSet(ps)
 	return b
 }
 
-// Build returns a copy of the constructed manifest spec.
-func (b *ManifestBuilder) Build() *config.ManifestSpec {
-	if b == nil || b.manifestSpec == nil {
+// Build returns a copy of the constructed document.
+func (b *DocumentBuilder) Build() *config.Document {
+	if b == nil || b.document == nil {
 		return nil
 	}
-	m := *b.manifestSpec
-	return &m
+	doc := *b.document
+	doc.Spec = cloneDocumentSpec(b.document.Spec)
+	return &doc
 }
 
-// ValidManifest returns a builder for a valid manifest fixture.
-func ValidManifest() *ManifestBuilder {
-	return NewManifestBuilder()
+// ValidDocument returns a builder for a valid document fixture.
+func ValidDocument() *DocumentBuilder {
+	return NewDocumentBuilder()
 }
 
-// InvalidManifestMissingImage returns a builder for a manifest missing the image.
-func InvalidManifestMissingImage() *ManifestBuilder {
-	return &ManifestBuilder{
-		manifestSpec: &config.ManifestSpec{
-			Runtime: "gvisor",
+// InvalidDocumentMissingMetadata returns a builder for a document missing identity.
+func InvalidDocumentMissingMetadata() *DocumentBuilder {
+	return &DocumentBuilder{
+		document: &config.Document{
+			APIVersion: documentAPIVersion,
+			Kind:       documentKind,
+			Spec:       map[string]yaml.Node{},
 		},
 	}
 }
 
-// InvalidManifestWrongRuntime returns a builder for a manifest with invalid runtime.
-func InvalidManifestWrongRuntime() *ManifestBuilder {
-	return &ManifestBuilder{
-		manifestSpec: &config.ManifestSpec{
-			Image:   "test-image:latest",
-			Runtime: "docker",
+// InvalidDocumentWrongKind returns a builder for a document with invalid kind.
+func InvalidDocumentWrongKind() *DocumentBuilder {
+	return &DocumentBuilder{
+		document: &config.Document{
+			APIVersion: documentAPIVersion,
+			Kind:       "NotAgentManifest",
+			Metadata:   config.DocumentMetadata{Name: documentName},
+			Spec:       map[string]yaml.Node{},
 		},
 	}
+}
+
+func (b *DocumentBuilder) permissionSet() permissions.PermissionSet {
+	if b == nil || b.document == nil {
+		return permissions.PermissionSet{}
+	}
+	node, ok := b.document.Section("permissions")
+	if !ok {
+		return permissions.PermissionSet{}
+	}
+	var ps permissions.PermissionSet
+	_ = node.Decode(&ps)
+	return ps
+}
+
+func (b *DocumentBuilder) setPermissionSet(ps permissions.PermissionSet) {
+	if b == nil || b.document == nil {
+		return
+	}
+	var node yaml.Node
+	_ = node.Encode(ps)
+	if b.document.Spec == nil {
+		b.document.Spec = map[string]yaml.Node{}
+	}
+	b.document.Spec["permissions"] = node
+}
+
+func cloneDocumentSpec(src map[string]yaml.Node) map[string]yaml.Node {
+	if len(src) == 0 {
+		return map[string]yaml.Node{}
+	}
+	dst := make(map[string]yaml.Node, len(src))
+	for k, v := range src {
+		dst[k] = v
+	}
+	return dst
+}
+
+func mustEncodeAgentSpec(spec agentspec.AgentRuntimeSpec) yaml.Node {
+	var node yaml.Node
+	if err := node.Encode(spec); err != nil {
+		panic(err)
+	}
+	return node
 }
 
 // PolicyRuleBuilder builds deterministic policy rule fixtures.

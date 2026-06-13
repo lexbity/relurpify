@@ -10,6 +10,11 @@ import (
 	gmtext "github.com/yuin/goldmark/text"
 )
 
+const (
+	Str17460_markdown = "```"
+)
+
+
 var markdownParser = goldmark.New(
 	goldmark.WithParserOptions(
 		parser.WithAutoHeadingID(),
@@ -154,7 +159,7 @@ func renderListItem(item *ast.ListItem, source []byte, vars map[string]string) (
 
 func renderFencedCodeBlock(out *strings.Builder, n *ast.FencedCodeBlock, source []byte) {
 	if lang := strings.TrimSpace(string(n.Language(source))); lang != "" {
-		out.WriteString("```")
+		out.WriteString(Str17460_markdown)
 		out.WriteString(lang)
 		out.WriteByte('\n')
 	} else {
@@ -173,7 +178,7 @@ func renderFencedCodeBlock(out *strings.Builder, n *ast.FencedCodeBlock, source 
 			out.WriteByte('\n')
 		}
 	}
-	out.WriteString("```")
+	out.WriteString(Str17460_markdown)
 }
 
 func renderIndentedCodeBlock(out *strings.Builder, n *ast.CodeBlock, source []byte) {
@@ -191,7 +196,7 @@ func renderIndentedCodeBlock(out *strings.Builder, n *ast.CodeBlock, source []by
 			out.WriteByte('\n')
 		}
 	}
-	out.WriteString("```")
+	out.WriteString(Str17460_markdown)
 }
 
 func renderInlineChildren(parent ast.Node, source []byte, vars map[string]string) (string, error) {

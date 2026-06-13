@@ -24,13 +24,12 @@ import (
 
 // Registration is the app-composed runtime registration view consumed by session assembly.
 type Registration struct {
-	ID               string
-	ManifestSpec     *config.ManifestSpec
-	ManifestSnapshot *config.ManifestSnapshot
-	Permissions      permissions.PermissionManager
-	Policy           registry.PolicyEngine
-	Audit            policy.AuditLogger
-	HITL             any
+	ID          string
+	AgentSpec   *agentspec.AgentRuntimeSpec
+	Permissions permissions.PermissionManager
+	Policy      registry.PolicyEngine
+	Audit       policy.AuditLogger
+	HITL        any
 }
 
 // CapabilityProduct is the app-composed capability product consumed by session assembly.
@@ -101,8 +100,8 @@ type WorkspaceConfig struct {
 	Telemetry telemetry.Telemetry
 	// LoadedConfig contains the resolved config tree produced by config.
 	LoadedConfig *config.AppConfig
-	// ManifestSnapshot contains the selected agent manifest snapshot.
-	ManifestSnapshot *config.ManifestSnapshot
+	// DocumentSnapshot contains the loaded document used for contract resolution.
+	DocumentSnapshot *config.DocumentSnapshot
 	// ProfileResolution is the pre-resolved model profile selected by the caller.
 	ProfileResolution modelselect.ProfileResolution
 	// SecurityBundle contains the loaded security policy bundle.

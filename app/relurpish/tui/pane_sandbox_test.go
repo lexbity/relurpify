@@ -9,8 +9,8 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"gopkg.in/yaml.v3"
 
-	runtimesvc "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/platform/fs"
@@ -19,8 +19,8 @@ import (
 
 type sandboxPaneRuntimeFake struct {
 	workspace    string
-	manifest     *config.ManifestSpec
-	manifestPath string
+	document     *config.Document
+	documentPath string
 	configPath   string
 	backend      string
 	reloads      int
@@ -30,23 +30,22 @@ func (f *sandboxPaneRuntimeFake) SessionInfo() SessionInfo {
 	return SessionInfo{Workspace: f.workspace}
 }
 
-func (f *sandboxPaneRuntimeFake) LoadSandboxManifest() (*config.ManifestSpec, error) {
-	if f.manifest == nil {
-		return nil, errors.New("manifest not set")
+func (f *sandboxPaneRuntimeFake) LoadSandboxDocument() (*config.Document, error) {
+	if f.document == nil {
+		return nil, errors.New("document not set")
 	}
-	m := *f.manifest
-	return &m, nil
+	return cloneTestDocument(f.document)
 }
 
-func (f *sandboxPaneRuntimeFake) SaveSandboxManifest(m *config.ManifestSpec) (string, error) {
-	if f.manifestPath == "" {
+func (f *sandboxPaneRuntimeFake) SaveSandboxDocument(doc *config.Document) (string, error) {
+	if f.documentPath == "" {
 		return "", os.ErrInvalid
 	}
-	backup, err := runtimesvc.SaveManifestSpecWithBackup(f.manifestPath, m)
+	backup, err := config.SaveDocumentWithBackup(f.documentPath, doc)
 	if err != nil {
 		return "", err
 	}
-	f.manifest = m
+	f.document = doc
 	return backup, nil
 }
 
@@ -76,53 +75,82 @@ func (f *sandboxPaneRuntimeFake) ReloadWorkspace(ctx context.Context, workspace 
 	return nil
 }
 
-func testSandboxManifest() *config.ManifestSpec {
-	return &config.ManifestSpec{
-		Image:   "ghcr.io/example/runtime:0.4.1",
-		Runtime: "gvisor",
-		Permissions: permissions.PermissionSet{
-			FileSystem: []permissions.FileSystemPermission{
-				{Action: permissions.FileSystemRead, Path: "/workspace/**"},
-				{Action: permissions.FileSystemWrite, Path: "/workspace/**"},
-			},
-			Network: []permissions.NetworkPermission{
-				{Direction: "egress", Protocol: "tcp", Host: "localhost", Port: 11434},
-			},
+func testSandboxDocument(t *testing.T) *config.Document {
+	t.Helper()
+	doc := &config.Document{
+		APIVersion: "relurpify/v1alpha1",
+		Kind:       "AgentManifest",
+		Metadata: config.DocumentMetadata{
+			Name: "sandbox-agent",
 		},
-		Agent: &agentspec.AgentRuntimeSpec{
-			Implementation: "coding",
-			Mode:           agentspec.AgentModePrimary,
-			Model: agentspec.AgentModelConfig{
-				Provider: "ollama",
-				Name:     "qwen2.5-coder:14b",
-			},
-			Bash: agentspec.AgentBashPermissions{
-				AllowPatterns: []string{"git status"},
-				DenyPatterns:  []string{"rm -rf .*"},
-				Default:       agentspec.AgentPermissionAsk,
-			},
-			ProviderPolicies: map[string]agentspec.ProviderPolicy{
-				"remote-plugin": {Activate: agentspec.AgentPermissionAsk, DefaultTrust: "remote-declared-untrusted"},
-			},
-			ToolExecutionPolicy: map[string]agentspec.ToolPolicy{
-				"cli_mkdir": {Execute: agentspec.AgentPermissionAllow},
-			},
+		Spec: make(map[string]yaml.Node),
+	}
+	permissionsSpec := permissions.PermissionSet{
+		FileSystem: []permissions.FileSystemPermission{
+			{Action: permissions.FileSystemRead, Path: "/workspace/**"},
+			{Action: permissions.FileSystemWrite, Path: "/workspace/**"},
+		},
+		Network: []permissions.NetworkPermission{
+			{Direction: "egress", Protocol: "tcp", Host: "localhost", Port: 11434},
 		},
 	}
+	agentSpec := &agentspec.AgentRuntimeSpec{
+		Implementation: "coding",
+		Mode:           agentspec.AgentModePrimary,
+		Model: agentspec.AgentModelConfig{
+			Provider: RuntimeOllama,
+			Name:     "qwen2.5-coder:14b",
+		},
+		Bash: agentspec.AgentBashPermissions{
+			AllowPatterns: []string{"git status"},
+			DenyPatterns:  []string{"rm -rf .*"},
+			Default:       agentspec.AgentPermissionAsk,
+		},
+		ProviderPolicies: map[string]agentspec.ProviderPolicy{
+			"remote-plugin": {Activate: agentspec.AgentPermissionAsk, DefaultTrust: "remote-declared-untrusted"},
+		},
+		ToolExecutionPolicy: map[string]agentspec.ToolPolicy{
+			"cli_mkdir": {Execute: agentspec.AgentPermissionAllow},
+		},
+	}
+	doc.Spec["permissions"] = nodeForTest(t, permissionsSpec)
+	doc.Spec["agent"] = nodeForTest(t, agentSpec)
+	return doc
+}
+
+func nodeForTest(t *testing.T, value any) yaml.Node {
+	t.Helper()
+	var node yaml.Node
+	if err := node.Encode(value); err != nil {
+		t.Fatalf("encode node: %v", err)
+	}
+	return node
+}
+
+func cloneTestDocument(doc *config.Document) (*config.Document, error) {
+	var cloned config.Document
+	data, err := yaml.Marshal(doc)
+	if err != nil {
+		return nil, err
+	}
+	if err := yaml.Unmarshal(data, &cloned); err != nil {
+		return nil, err
+	}
+	return &cloned, nil
 }
 
 func TestSandboxPaneCyclesAndPersists(t *testing.T) {
 	dir := t.TempDir()
-	manifestPath := filepath.Join(dir, "relurpify_cfg", "agent.yaml")
+	documentPath := filepath.Join(dir, "relurpify_cfg", "agent.yaml")
 	configPath := filepath.Join(dir, "relurpify_cfg", "config.yaml")
-	if err := os.MkdirAll(filepath.Dir(manifestPath), fs.PublicDirMode); err != nil { // public: test dir
-		t.Fatalf("mkdir manifest dir: %v", err)
+	if err := os.MkdirAll(filepath.Dir(documentPath), fs.PublicDirMode); err != nil { // public: test dir
+		t.Fatalf("mkdir document dir: %v", err)
 	}
 	if err := os.MkdirAll(filepath.Dir(configPath), fs.PublicDirMode); err != nil { // public: test dir
 		t.Fatalf("mkdir config dir: %v", err)
 	}
-	if err := config.SaveYAML(manifestPath, testSandboxManifest()); err != nil {
-		t.Fatalf("seed manifest: %v", err)
+	if err := config.SaveYAML(documentPath, testSandboxDocument(t)); err != nil {
+		t.Fatalf("seed document: %v", err)
 	}
 	if err := os.WriteFile(configPath, []byte("sandbox_backend: gvisor\n"), fs.PublicFileMode); err != nil { // public: test fixture
 		t.Fatalf("seed config: %v", err)
@@ -130,8 +158,8 @@ func TestSandboxPaneCyclesAndPersists(t *testing.T) {
 
 	rt := &sandboxPaneRuntimeFake{
 		workspace:    dir,
-		manifest:     testSandboxManifest(),
-		manifestPath: manifestPath,
+		document:     testSandboxDocument(t),
+		documentPath: documentPath,
 		configPath:   configPath,
 		backend:      "gvisor",
 	}
@@ -154,16 +182,20 @@ func TestSandboxPaneCyclesAndPersists(t *testing.T) {
 	if node.State != agentspec.AgentPermissionAsk {
 		t.Fatalf("file state = %s, want ask", node.State)
 	}
-	clone, err := pane.buildSavedManifest()
+	clone, err := pane.buildSavedDocument()
 	if err != nil {
-		t.Fatalf("build saved manifest: %v", err)
+		t.Fatalf("build saved document: %v", err)
 	}
-	if clone.Policy == nil {
-		t.Fatalf("serialized policy permissions = %#v, want HITLRequired=true", clone.Policy)
+	permNode, ok := clone.Section("permissions")
+	if !ok {
+		t.Fatalf("permissions section missing from serialized document")
 	}
-	ps := &clone.Policy.Permissions
+	var ps permissions.PermissionSet
+	if err := permNode.Decode(&ps); err != nil {
+		t.Fatalf("decode permissions section: %v", err)
+	}
 	if len(ps.FileSystem) == 0 || !ps.FileSystem[0].HITLRequired {
-		t.Fatalf("serialized policy permissions = %#v, want HITLRequired=true", clone.Policy)
+		t.Fatalf("serialized permissions = %#v, want HITLRequired=true", ps)
 	}
 
 	pane, cmd := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}})
@@ -176,17 +208,17 @@ func TestSandboxPaneCyclesAndPersists(t *testing.T) {
 		t.Fatalf("save message type = %T, want sandboxPersistedMsg", msg)
 	}
 	if saved.Backup == "" {
-		t.Fatal("expected manifest backup path")
+		t.Fatal("expected document backup path")
 	}
 	if _, err := os.Stat(saved.Backup); err != nil {
 		t.Fatalf("backup missing: %v", err)
 	}
-	written, err := os.ReadFile(filepath.Clean(manifestPath))
+	written, err := os.ReadFile(filepath.Clean(documentPath))
 	if err != nil {
-		t.Fatalf("read written manifest: %v", err)
+		t.Fatalf("read written document: %v", err)
 	}
 	if !strings.Contains(string(written), "hitl_required: true") {
-		t.Fatalf("written manifest missing ask flag:\n%s", string(written))
+		t.Fatalf("written document missing ask flag:\n%s", string(written))
 	}
 	pane, _ = pane.Update(saved)
 	if rt.reloads == 0 {

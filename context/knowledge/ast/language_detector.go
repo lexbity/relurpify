@@ -4,6 +4,11 @@ import (
 	"path/filepath"
 )
 
+const (
+	Yaml_language_detector = "yaml"
+)
+
+
 // LanguageDetector maps filenames/extensions to languages.
 type LanguageDetector struct {
 	extensionMap map[string]string
@@ -28,8 +33,8 @@ func NewLanguageDetector() *LanguageDetector {
 	ld.extensionMap[".rst"] = "restructuredtext"
 	ld.extensionMap[".adoc"] = "asciidoc"
 	ld.extensionMap[".txt"] = "plaintext"
-	ld.extensionMap[".yaml"] = "yaml"
-	ld.extensionMap[".yml"] = "yaml"
+	ld.extensionMap[".yaml"] = Yaml_language_detector
+	ld.extensionMap[".yml"] = Yaml_language_detector
 	ld.extensionMap[".json"] = "json"
 	ld.extensionMap[".toml"] = "toml"
 	ld.extensionMap[".xml"] = "xml"
@@ -65,7 +70,7 @@ func (ld *LanguageDetector) DetectCategory(language string) Category {
 		return CategoryCode
 	case "markdown", "restructuredtext", "plaintext", "asciidoc":
 		return CategoryDoc
-	case "yaml", "json", "toml", "xml", "ini":
+	case Yaml_language_detector, "json", "toml", "xml", "ini":
 		return CategoryConfig
 	case "sql", "graphql", "protobuf":
 		return CategorySchema

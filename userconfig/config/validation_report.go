@@ -5,6 +5,8 @@ import (
 	"strings"
 )
 
+const nilValueText = "<nil>"
+
 // ValidationIssue describes a single validation failure with location and reason.
 type ValidationIssue struct {
 	File   string
@@ -91,7 +93,7 @@ func (r *ValidationReport) Err() error {
 func formatValidationValue(value any) string {
 	switch v := value.(type) {
 	case nil:
-		return "<nil>"
+		return nilValueText
 	case string:
 		if v == "" {
 			return `""`

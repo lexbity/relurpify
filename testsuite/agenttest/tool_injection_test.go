@@ -10,6 +10,12 @@ import (
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
+const (
+	arg1 = "arg1"
+	test_tool = "test_tool"
+)
+
+
 // Test that ToolResponseOverride struct fields are properly set
 type testOverride struct {
 	Tool        string
@@ -21,36 +27,36 @@ type testOverride struct {
 
 func TestInjectionInterceptorMatchesOverride(t *testing.T) {
 	// Create a mock tool
-	baseTool := &mockTool{name: "test_tool"}
+	baseTool := &mockTool{name: test_tool}
 
 	// Create override with specific args matching
 	override := ToolResponseOverride{
-		Tool:      "test_tool",
-		MatchArgs: map[string]any{"arg1": "value1"},
+		Tool:      test_tool,
+		MatchArgs: map[string]any{arg1: value1},
 		Error:     "injected error",
 	}
 
 	interceptor := NewInjectionInterceptor(baseTool, []ToolResponseOverride{override})
 
 	// Test that args matching works
-	matches := interceptor.matchesOverride(override, map[string]any{"arg1": "value1"}, 1)
+	matches := interceptor.matchesOverride(override, map[string]any{arg1: value1}, 1)
 	if !matches {
 		t.Error("Expected override to match when args match")
 	}
 
 	// Test that non-matching args don't match
-	matches = interceptor.matchesOverride(override, map[string]any{"arg1": "different"}, 1)
+	matches = interceptor.matchesOverride(override, map[string]any{arg1: "different"}, 1)
 	if matches {
 		t.Error("Expected override not to match when args differ")
 	}
 }
 
 func TestInjectionInterceptorCallCount(t *testing.T) {
-	baseTool := &mockTool{name: "test_tool"}
+	baseTool := &mockTool{name: test_tool}
 
 	// Override applies only to 2nd call
 	override := ToolResponseOverride{
-		Tool:      "test_tool",
+		Tool:      test_tool,
 		CallCount: 2,
 		Error:     "second call fails",
 	}
@@ -72,13 +78,13 @@ func TestInjectionInterceptorCallCount(t *testing.T) {
 
 func TestFilterOverridesForTool(t *testing.T) {
 	overrides := []ToolResponseOverride{
-		{Tool: "tool1"},
-		{Tool: "tool2"},
+		{Tool: tool1},
+		{Tool: tool2},
 		{Tool: "TOOL1"}, // case insensitive
-		{Tool: "tool3"},
+		{Tool: tool3},
 	}
 
-	filtered := filterOverridesForTool(overrides, "tool1")
+	filtered := filterOverridesForTool(overrides, tool1)
 	if len(filtered) != 2 {
 		t.Errorf("Expected 2 overrides for tool1 (case insensitive), got %d", len(filtered))
 	}
@@ -86,13 +92,13 @@ func TestFilterOverridesForTool(t *testing.T) {
 
 func TestToolSuccessRate(t *testing.T) {
 	events := []telemetry.Event{
-		{Type: telemetry.EventToolResult, Metadata: map[string]any{"tool": "go_test", "success": true}},
-		{Type: telemetry.EventToolResult, Metadata: map[string]any{"tool": "go_test", "success": true}},
-		{Type: telemetry.EventToolResult, Metadata: map[string]any{"tool": "go_test", "success": false}},
-		{Type: telemetry.EventToolResult, Metadata: map[string]any{"tool": "file_read", "success": true}},
+		{Type: telemetry.EventToolResult, Metadata: map[string]any{tool: go_test, success: true}},
+		{Type: telemetry.EventToolResult, Metadata: map[string]any{tool: go_test, success: true}},
+		{Type: telemetry.EventToolResult, Metadata: map[string]any{tool: go_test, success: false}},
+		{Type: telemetry.EventToolResult, Metadata: map[string]any{tool: file_read, success: true}},
 	}
 
-	successes, failures, rate := ToolSuccessRate(events, "go_test")
+	successes, failures, rate := ToolSuccessRate(events, go_test)
 	if successes != 2 {
 		t.Errorf("Expected 2 successes, got %d", successes)
 	}
@@ -104,13 +110,13 @@ func TestToolSuccessRate(t *testing.T) {
 	}
 
 	// Check file_read
-	successes, failures, rate = ToolSuccessRate(events, "file_read")
+	successes, failures, rate = ToolSuccessRate(events, file_read)
 	if successes != 1 || failures != 0 || rate != 1.0 {
 		t.Errorf("Expected 1 success, 0 failures, rate 1.0 for file_read, got %d/%d/%f", successes, failures, rate)
 	}
 
 	// Check non-existent tool
-	successes, failures, rate = ToolSuccessRate(events, "nonexistent")
+	successes, failures, rate = ToolSuccessRate(events, nonexistent)
 	if successes != 0 || failures != 0 || rate != 0.0 {
 		t.Errorf("Expected 0/0/0 for nonexistent tool, got %d/%d/%f", successes, failures, rate)
 	}
@@ -119,8 +125,8 @@ func TestToolSuccessRate(t *testing.T) {
 func TestHasRecoveryFromToolFailure(t *testing.T) {
 	// No failures - no recovery
 	events := []telemetry.Event{
-		{Type: telemetry.EventToolResult, Metadata: map[string]any{"tool": "go_test", "success": true}},
-		{Type: telemetry.EventToolResult, Metadata: map[string]any{"tool": "go_test", "success": true}},
+		{Type: telemetry.EventToolResult, Metadata: map[string]any{tool: go_test, success: true}},
+		{Type: telemetry.EventToolResult, Metadata: map[string]any{tool: go_test, success: true}},
 	}
 	if HasRecoveryFromToolFailure(events) {
 		t.Error("Expected no recovery when no failures")
@@ -128,8 +134,8 @@ func TestHasRecoveryFromToolFailure(t *testing.T) {
 
 	// Has failure but no success after
 	events = []telemetry.Event{
-		{Type: telemetry.EventToolResult, Metadata: map[string]any{"tool": "go_test", "success": true}},
-		{Type: telemetry.EventToolResult, Metadata: map[string]any{"tool": "go_test", "success": false}},
+		{Type: telemetry.EventToolResult, Metadata: map[string]any{tool: go_test, success: true}},
+		{Type: telemetry.EventToolResult, Metadata: map[string]any{tool: go_test, success: false}},
 	}
 	if HasRecoveryFromToolFailure(events) {
 		t.Error("Expected no recovery when failure is last")
@@ -137,9 +143,9 @@ func TestHasRecoveryFromToolFailure(t *testing.T) {
 
 	// Has failure followed by success
 	events = []telemetry.Event{
-		{Type: telemetry.EventToolResult, Metadata: map[string]any{"tool": "go_test", "success": true}},
-		{Type: telemetry.EventToolResult, Metadata: map[string]any{"tool": "go_test", "success": false}},
-		{Type: telemetry.EventToolResult, Metadata: map[string]any{"tool": "go_test", "success": true}},
+		{Type: telemetry.EventToolResult, Metadata: map[string]any{tool: go_test, success: true}},
+		{Type: telemetry.EventToolResult, Metadata: map[string]any{tool: go_test, success: false}},
+		{Type: telemetry.EventToolResult, Metadata: map[string]any{tool: go_test, success: true}},
 	}
 	if !HasRecoveryFromToolFailure(events) {
 		t.Error("Expected recovery detected when success follows failure")
@@ -175,11 +181,11 @@ func TestEvaluateSuccessRateConstraint(t *testing.T) {
 }
 
 func TestInjectionInterceptorInterface(t *testing.T) {
-	baseTool := &mockTool{name: "test_tool"}
+	baseTool := &mockTool{name: test_tool}
 	interceptor := NewInjectionInterceptor(baseTool, nil)
 
 	// Test that the interceptor implements the Tool interface
-	if interceptor.Name() != "test_tool" {
+	if interceptor.Name() != test_tool {
 		t.Errorf("Expected name test_tool, got %s", interceptor.Name())
 	}
 	if interceptor.Description() != "Mock tool test_tool" {
@@ -194,7 +200,7 @@ func TestInjectionInterceptorInterface(t *testing.T) {
 }
 
 func TestInjectionInterceptorCallHistory(t *testing.T) {
-	baseTool := &mockTool{name: "test_tool"}
+	baseTool := &mockTool{name: test_tool}
 	interceptor := NewInjectionInterceptor(baseTool, nil)
 
 	if interceptor.GetCallCount() != 0 {

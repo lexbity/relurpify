@@ -11,17 +11,24 @@ import (
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
+const (
+	git_commit = "git_commit"
+	go_build = "go_build"
+	nonexistent = "nonexistent"
+)
+
+
 func TestDependencyValidatorValidate(t *testing.T) {
 	// Test requires constraint
 	rules := []ToolDependency{
-		{Tool: "file_write", Requires: []string{"file_read"}},
+		{Tool: file_write, Requires: []string{file_read}},
 	}
 
 	// Valid: read before write
 	transcript := &ToolTranscriptArtifact{
 		Entries: []ToolTranscriptEntry{
-			{Index: 0, Tool: "file_read", CallAt: time.Now()},
-			{Index: 1, Tool: "file_write", CallAt: time.Now().Add(time.Second)},
+			{Index: 0, Tool: file_read, CallAt: time.Now()},
+			{Index: 1, Tool: file_write, CallAt: time.Now().Add(time.Second)},
 		},
 	}
 
@@ -34,7 +41,7 @@ func TestDependencyValidatorValidate(t *testing.T) {
 	// Invalid: write without read
 	transcript2 := &ToolTranscriptArtifact{
 		Entries: []ToolTranscriptEntry{
-			{Index: 0, Tool: "file_write"},
+			{Index: 0, Tool: file_write},
 		},
 	}
 
@@ -50,14 +57,14 @@ func TestDependencyValidatorValidate(t *testing.T) {
 func TestDependencyValidatorValidateMultipleRequires(t *testing.T) {
 	// Tool requires any of the listed tools (OR logic)
 	rules := []ToolDependency{
-		{Tool: "go_test", Requires: []string{"file_write", "file_edit"}},
+		{Tool: go_test, Requires: []string{file_write, "file_edit"}},
 	}
 
 	// Valid with file_write
 	transcript1 := &ToolTranscriptArtifact{
 		Entries: []ToolTranscriptEntry{
-			{Index: 0, Tool: "file_write"},
-			{Index: 1, Tool: "go_test"},
+			{Index: 0, Tool: file_write},
+			{Index: 1, Tool: go_test},
 		},
 	}
 
@@ -70,7 +77,7 @@ func TestDependencyValidatorValidateMultipleRequires(t *testing.T) {
 	transcript2 := &ToolTranscriptArtifact{
 		Entries: []ToolTranscriptEntry{
 			{Index: 0, Tool: "file_edit"},
-			{Index: 1, Tool: "go_test"},
+			{Index: 1, Tool: go_test},
 		},
 	}
 
@@ -81,14 +88,14 @@ func TestDependencyValidatorValidateMultipleRequires(t *testing.T) {
 
 func TestDependencyValidatorExcludes(t *testing.T) {
 	rules := []ToolDependency{
-		{Tool: "file_write", Excludes: []string{"git_commit"}},
+		{Tool: file_write, Excludes: []string{git_commit}},
 	}
 
 	// Valid: no exclusion violation
 	transcript := &ToolTranscriptArtifact{
 		Entries: []ToolTranscriptEntry{
-			{Index: 0, Tool: "file_read"},
-			{Index: 1, Tool: "file_write"},
+			{Index: 0, Tool: file_read},
+			{Index: 1, Tool: file_write},
 		},
 	}
 
@@ -100,41 +107,41 @@ func TestDependencyValidatorExcludes(t *testing.T) {
 	// Invalid: excluded tool present
 	transcript2 := &ToolTranscriptArtifact{
 		Entries: []ToolTranscriptEntry{
-			{Index: 0, Tool: "git_commit"},
-			{Index: 1, Tool: "file_write"},
+			{Index: 0, Tool: git_commit},
+			{Index: 1, Tool: file_write},
 		},
 	}
 
 	failures := validator.Validate(transcript2)
 	// Note: exclusions are checked within phases, so this may not fail
 	// depending on how phases are defined. The phase detection looks for
-	// boundary tools like "checkpoint" or "git_commit".
+	// boundary tools like "checkpoint" or git_commit.
 	_ = failures // Accept either way for this test
 }
 
 func TestValidateToolOrdering(t *testing.T) {
 	transcript := &ToolTranscriptArtifact{
 		Entries: []ToolTranscriptEntry{
-			{Index: 0, Tool: "file_read"},
-			{Index: 1, Tool: "go_test"},
-			{Index: 2, Tool: "file_write"},
+			{Index: 0, Tool: file_read},
+			{Index: 1, Tool: go_test},
+			{Index: 2, Tool: file_write},
 		},
 	}
 
 	// Non-adjacent: should pass
-	failures := ValidateToolOrdering(transcript, []string{"file_read", "file_write"}, false)
+	failures := ValidateToolOrdering(transcript, []string{file_read, file_write}, false)
 	if len(failures) > 0 {
 		t.Errorf("Expected no failures for non-adjacent order, got: %v", failures)
 	}
 
 	// Wrong order
-	failures = ValidateToolOrdering(transcript, []string{"file_write", "file_read"}, false)
+	failures = ValidateToolOrdering(transcript, []string{file_write, file_read}, false)
 	if len(failures) == 0 {
 		t.Error("Expected failures for wrong order")
 	}
 
 	// Missing tool
-	failures = ValidateToolOrdering(transcript, []string{"file_read", "missing_tool"}, false)
+	failures = ValidateToolOrdering(transcript, []string{file_read, "missing_tool"}, false)
 	if len(failures) == 0 {
 		t.Error("Expected failures for missing tool")
 	}
@@ -144,13 +151,13 @@ func TestValidateToolOrderingAdjacent(t *testing.T) {
 	// Valid adjacent sequence
 	transcript := &ToolTranscriptArtifact{
 		Entries: []ToolTranscriptEntry{
-			{Index: 0, Tool: "file_read"},
-			{Index: 1, Tool: "file_write"},
-			{Index: 2, Tool: "go_test"},
+			{Index: 0, Tool: file_read},
+			{Index: 1, Tool: file_write},
+			{Index: 2, Tool: go_test},
 		},
 	}
 
-	failures := ValidateToolOrdering(transcript, []string{"file_read", "file_write"}, true)
+	failures := ValidateToolOrdering(transcript, []string{file_read, file_write}, true)
 	if len(failures) > 0 {
 		t.Errorf("Expected no failures for adjacent match, got: %v", failures)
 	}
@@ -158,13 +165,13 @@ func TestValidateToolOrderingAdjacent(t *testing.T) {
 	// Non-adjacent (wrong order)
 	transcript2 := &ToolTranscriptArtifact{
 		Entries: []ToolTranscriptEntry{
-			{Index: 0, Tool: "file_read"},
-			{Index: 1, Tool: "go_test"},
-			{Index: 2, Tool: "file_write"},
+			{Index: 0, Tool: file_read},
+			{Index: 1, Tool: go_test},
+			{Index: 2, Tool: file_write},
 		},
 	}
 
-	failures = ValidateToolOrdering(transcript2, []string{"file_read", "file_write"}, true)
+	failures = ValidateToolOrdering(transcript2, []string{file_read, file_write}, true)
 	if len(failures) == 0 {
 		t.Error("Expected failures for non-adjacent tools when adjacent required")
 	}
@@ -178,47 +185,47 @@ func TestValidateToolOrderingEmpty(t *testing.T) {
 
 	// Empty transcript
 	transcript := &ToolTranscriptArtifact{Entries: []ToolTranscriptEntry{}}
-	if failures := ValidateToolOrdering(transcript, []string{"tool"}, false); len(failures) == 0 {
+	if failures := ValidateToolOrdering(transcript, []string{tool}, false); len(failures) == 0 {
 		t.Error("Expected failures for empty transcript")
 	}
 }
 
 func TestHasToolDependency(t *testing.T) {
 	deps := []ToolDependency{
-		{Tool: "file_write", Requires: []string{"file_read"}},
-		{Tool: "go_test", Requires: []string{"file_write"}},
+		{Tool: file_write, Requires: []string{file_read}},
+		{Tool: go_test, Requires: []string{file_write}},
 	}
 
-	if !HasToolDependency(deps, "file_write", "file_read") {
+	if !HasToolDependency(deps, file_write, file_read) {
 		t.Error("Expected to find file_write -> file_read dependency")
 	}
 
-	if !HasToolDependency(deps, "go_test", "file_write") {
+	if !HasToolDependency(deps, go_test, file_write) {
 		t.Error("Expected to find go_test -> file_write dependency")
 	}
 
-	if HasToolDependency(deps, "file_write", "nonexistent") {
+	if HasToolDependency(deps, file_write, nonexistent) {
 		t.Error("Expected not to find nonexistent dependency")
 	}
 
-	if HasToolDependency(deps, "nonexistent", "file_read") {
+	if HasToolDependency(deps, nonexistent, file_read) {
 		t.Error("Expected not to find dependency for nonexistent tool")
 	}
 }
 
 func TestAddDependency(t *testing.T) {
 	deps := []ToolDependency{
-		{Tool: "file_write", Requires: []string{"file_read"}},
+		{Tool: file_write, Requires: []string{file_read}},
 	}
 
 	// Add new dependency
-	newDeps := AddDependency(deps, ToolDependency{Tool: "go_test", Requires: []string{"file_write"}})
+	newDeps := AddDependency(deps, ToolDependency{Tool: go_test, Requires: []string{file_write}})
 	if len(newDeps) != 2 {
 		t.Errorf("Expected 2 dependencies, got %d", len(newDeps))
 	}
 
 	// Try to add duplicate (should not add)
-	newDeps = AddDependency(newDeps, ToolDependency{Tool: "file_write", Requires: []string{"file_read"}})
+	newDeps = AddDependency(newDeps, ToolDependency{Tool: file_write, Requires: []string{file_read}})
 	if len(newDeps) != 2 {
 		t.Errorf("Expected still 2 dependencies after duplicate, got %d", len(newDeps))
 	}
@@ -240,12 +247,12 @@ func TestNewDependencyValidator(t *testing.T) {
 
 func TestDependencyValidatorValidateEmpty(t *testing.T) {
 	rules := []ToolDependency{
-		{Tool: "", Requires: []string{"file_read"}}, // empty tool name
+		{Tool: "", Requires: []string{file_read}}, // empty tool name
 	}
 
 	transcript := &ToolTranscriptArtifact{
 		Entries: []ToolTranscriptEntry{
-			{Index: 0, Tool: "file_write"},
+			{Index: 0, Tool: file_write},
 		},
 	}
 
@@ -283,7 +290,7 @@ func TestDependencyPresets(t *testing.T) {
 	if GetPresetByName("code_edit") == nil {
 		t.Error("Expected to get code_edit preset")
 	}
-	if GetPresetByName("nonexistent") != nil {
+	if GetPresetByName(nonexistent) != nil {
 		t.Error("Expected nil for nonexistent preset")
 	}
 
@@ -309,16 +316,16 @@ func TestPresetCodeEditDependencies(t *testing.T) {
 	// go_build requires file_write OR file_edit
 	// go_test requires file_write OR file_edit OR go_build
 	rules := []ToolDependency{
-		{Tool: "file_write", Requires: []string{"file_read"}},
-		{Tool: "go_build", Requires: []string{"file_write"}},
-		{Tool: "go_test", Requires: []string{"go_build"}},
+		{Tool: file_write, Requires: []string{file_read}},
+		{Tool: go_build, Requires: []string{file_write}},
+		{Tool: go_test, Requires: []string{go_build}},
 	}
 	transcript := &ToolTranscriptArtifact{
 		Entries: []ToolTranscriptEntry{
-			{Index: 0, Tool: "file_read"},
-			{Index: 1, Tool: "file_write"},
-			{Index: 2, Tool: "go_build"},
-			{Index: 3, Tool: "go_test"},
+			{Index: 0, Tool: file_read},
+			{Index: 1, Tool: file_write},
+			{Index: 2, Tool: go_build},
+			{Index: 3, Tool: go_test},
 		},
 	}
 
@@ -332,11 +339,11 @@ func TestPresetCodeEditDependencies(t *testing.T) {
 func TestPresetCodeEditDependenciesViolation(t *testing.T) {
 	// Test the code edit preset catches violations
 	rules := []ToolDependency{
-		{Tool: "file_write", Requires: []string{"file_read"}},
+		{Tool: file_write, Requires: []string{file_read}},
 	}
 	transcript := &ToolTranscriptArtifact{
 		Entries: []ToolTranscriptEntry{
-			{Index: 0, Tool: "file_write"}, // Missing file_read prerequisite!
+			{Index: 0, Tool: file_write}, // Missing file_read prerequisite!
 		},
 	}
 
@@ -359,10 +366,10 @@ func containsStringInSlice(slice []string, substr string) bool {
 // Integration test with BuildToolTranscript
 func TestDependencyValidationWithRealTranscript(t *testing.T) {
 	events := []telemetry.Event{
-		{Type: telemetry.EventToolCall, Metadata: map[string]any{"tool": "file_read"}},
-		{Type: telemetry.EventToolResult, Metadata: map[string]any{"tool": "file_read", "success": true}},
-		{Type: telemetry.EventToolCall, Metadata: map[string]any{"tool": "file_write"}},
-		{Type: telemetry.EventToolResult, Metadata: map[string]any{"tool": "file_write", "success": true}},
+		{Type: telemetry.EventToolCall, Metadata: map[string]any{tool: file_read}},
+		{Type: telemetry.EventToolResult, Metadata: map[string]any{tool: file_read, "success": true}},
+		{Type: telemetry.EventToolCall, Metadata: map[string]any{tool: file_write}},
+		{Type: telemetry.EventToolResult, Metadata: map[string]any{tool: file_write, "success": true}},
 	}
 
 	transcript := BuildToolTranscript(events)
@@ -371,7 +378,7 @@ func TestDependencyValidationWithRealTranscript(t *testing.T) {
 	}
 
 	rules := []ToolDependency{
-		{Tool: "file_write", Requires: []string{"file_read"}},
+		{Tool: file_write, Requires: []string{file_read}},
 	}
 
 	validator := NewDependencyValidator(rules)

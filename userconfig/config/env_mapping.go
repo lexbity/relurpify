@@ -76,7 +76,7 @@ func parseBoolEnv(value string) (bool, error) {
 	switch strings.ToLower(strings.TrimSpace(value)) {
 	case "1", "true", "yes", "on":
 		return true, nil
-	case "0", "false", "no", "off":
+	case "0", falseEnvValue, "no", "off":
 		return false, nil
 	case "":
 		return false, nil
@@ -84,3 +84,5 @@ func parseBoolEnv(value string) (bool, error) {
 		return false, fmt.Errorf("unrecognized boolean value %q (expected 1/true/yes/on or 0/false/no/off)", value)
 	}
 }
+
+const falseEnvValue = "false"

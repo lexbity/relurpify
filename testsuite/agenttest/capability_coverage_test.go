@@ -16,6 +16,17 @@ import (
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
+const (
+	existing_tool = "existing_tool"
+	file_read = "file_read"
+	go_test = "go_test"
+	tool = "tool"
+	tool1 = "tool1"
+	tool2 = "tool2"
+	tool3 = "tool3"
+)
+
+
 // mockCapabilityRegistryProvider implements graph.WorkflowExecutor for testing
 type mockCapabilityRegistryProvider struct {
 	registry *registry.CapabilityRegistry
@@ -49,9 +60,9 @@ var _ graph.WorkflowExecutor = (*mockCapabilityRegistryProvider)(nil)
 
 func TestExtractCapabilityRegistry(t *testing.T) {
 	reg := registry.NewRegistry()
-	reg.Register(context.Background(), &mockTool{name: "tool1"})
-	reg.Register(context.Background(), &mockTool{name: "tool2"})
-	reg.Register(&mockTool{name: "tool3"})
+	reg.Register(context.Background(), &mockTool{name: tool1})
+	reg.Register(context.Background(), &mockTool{name: tool2})
+	reg.Register(&mockTool{name: tool3})
 
 	agent := &mockCapabilityRegistryProvider{registry: reg}
 
@@ -74,7 +85,7 @@ func TestExtractCapabilityRegistry(t *testing.T) {
 		toolsMap[tool] = true
 	}
 
-	for _, expected := range []string{"tool1", "tool2", "tool3"} {
+	for _, expected := range []string{tool1, tool2, tool3} {
 		if !toolsMap[expected] {
 			t.Errorf("Expected tool %s to be registered", expected)
 		}
@@ -99,14 +110,14 @@ func TestExtractCapabilityRegistry_NoRegistry(t *testing.T) {
 func TestComputeCoverage(t *testing.T) {
 	coverage := &CapabilityCoverage{
 		RegistryID:      "test-reg",
-		RegisteredTools: []string{"tool1", "tool2", "tool3", "tool4"},
+		RegisteredTools: []string{tool1, tool2, tool3, "tool4"},
 		ExercisedTools:  make(map[string]int),
 	}
 
 	toolCounts := map[string]int{
-		"tool1": 2,
-		"tool2": 5,
-		"tool3": 1,
+		tool1: 2,
+		tool2: 5,
+		tool3: 1,
 	}
 
 	err := ComputeCoverage(coverage, toolCounts)
@@ -136,7 +147,7 @@ func TestComputeCoverage(t *testing.T) {
 }
 
 func TestComputeCoverage_NilCoverage(t *testing.T) {
-	err := ComputeCoverage(nil, map[string]int{"tool1": 1})
+	err := ComputeCoverage(nil, map[string]int{tool1: 1})
 	if err == nil {
 		t.Error("Expected error for nil coverage")
 	}
@@ -149,7 +160,7 @@ func TestComputeCoverage_EmptyRegistry(t *testing.T) {
 		ExercisedTools:  make(map[string]int),
 	}
 
-	err := ComputeCoverage(coverage, map[string]int{"tool1": 1})
+	err := ComputeCoverage(coverage, map[string]int{tool1: 1})
 	if err != nil {
 		t.Fatalf("ComputeCoverage failed: %v", err)
 	}
@@ -161,11 +172,11 @@ func TestComputeCoverage_EmptyRegistry(t *testing.T) {
 
 func TestRegistryHasTool(t *testing.T) {
 	reg := registry.NewRegistry()
-	reg.Register(&mockTool{name: "existing_tool"})
+	reg.Register(&mockTool{name: existing_tool})
 
 	agent := &mockCapabilityRegistryProvider{registry: reg}
 
-	if !RegistryHasTool(agent, "existing_tool") {
+	if !RegistryHasTool(agent, existing_tool) {
 		t.Error("Expected RegistryHasTool to return true for existing tool")
 	}
 
@@ -173,7 +184,7 @@ func TestRegistryHasTool(t *testing.T) {
 		t.Error("Expected RegistryHasTool to return false for nonexistent tool")
 	}
 
-	if RegistryHasTool(nil, "existing_tool") {
+	if RegistryHasTool(nil, existing_tool) {
 		t.Error("Expected RegistryHasTool to return false for nil agent")
 	}
 
@@ -185,25 +196,25 @@ func TestRegistryHasTool(t *testing.T) {
 func TestValidateToolsRequired(t *testing.T) {
 	coverage := &CapabilityCoverage{
 		ExercisedTools: map[string]int{
-			"tool1": 2,
-			"tool2": 1,
+			tool1: 2,
+			tool2: 1,
 		},
 	}
 
 	// All required tools present
-	failures := ValidateToolsRequired(coverage, []string{"tool1", "tool2"})
+	failures := ValidateToolsRequired(coverage, []string{tool1, tool2})
 	if len(failures) > 0 {
 		t.Errorf("Expected no failures, got: %v", failures)
 	}
 
 	// Missing required tool
-	failures = ValidateToolsRequired(coverage, []string{"tool1", "tool3"})
+	failures = ValidateToolsRequired(coverage, []string{tool1, tool3})
 	if len(failures) != 1 {
 		t.Errorf("Expected 1 failure, got %d: %v", len(failures), failures)
 	}
 
 	// Nil coverage
-	failures = ValidateToolsRequired(nil, []string{"tool1"})
+	failures = ValidateToolsRequired(nil, []string{tool1})
 	if len(failures) != 1 {
 		t.Errorf("Expected 1 failure for nil coverage, got %d", len(failures))
 	}
@@ -217,16 +228,16 @@ func TestValidateToolsRequired(t *testing.T) {
 
 func TestBuildCoverageFromEvents(t *testing.T) {
 	reg := registry.NewRegistry()
-	reg.Register(&mockTool{name: "go_test"})
-	reg.Register(&mockTool{name: "file_read"})
+	reg.Register(&mockTool{name: go_test})
+	reg.Register(&mockTool{name: file_read})
 	reg.Register(&mockTool{name: "file_write"})
 
 	agent := &mockCapabilityRegistryProvider{registry: reg}
 
 	events := []telemetry.Event{
-		{Type: telemetry.EventToolCall, Metadata: map[string]any{"tool": "go_test"}},
-		{Type: telemetry.EventToolCall, Metadata: map[string]any{"tool": "file_read"}},
-		{Type: telemetry.EventToolCall, Metadata: map[string]any{"tool": "go_test"}},
+		{Type: telemetry.EventToolCall, Metadata: map[string]any{tool: go_test}},
+		{Type: telemetry.EventToolCall, Metadata: map[string]any{tool: file_read}},
+		{Type: telemetry.EventToolCall, Metadata: map[string]any{tool: go_test}},
 		{Type: telemetry.EventLLMResponse, Metadata: map[string]any{}},
 	}
 
@@ -240,12 +251,12 @@ func TestBuildCoverageFromEvents(t *testing.T) {
 	}
 
 	// Check exercised tools
-	if coverage.ExercisedTools["go_test"] != 2 {
-		t.Errorf("Expected go_test to be called 2 times, got %d", coverage.ExercisedTools["go_test"])
+	if coverage.ExercisedTools[go_test] != 2 {
+		t.Errorf("Expected go_test to be called 2 times, got %d", coverage.ExercisedTools[go_test])
 	}
 
-	if coverage.ExercisedTools["file_read"] != 1 {
-		t.Errorf("Expected file_read to be called 1 time, got %d", coverage.ExercisedTools["file_read"])
+	if coverage.ExercisedTools[file_read] != 1 {
+		t.Errorf("Expected file_read to be called 1 time, got %d", coverage.ExercisedTools[file_read])
 	}
 
 	// file_write should be in unexercised
@@ -264,9 +275,9 @@ func TestBuildCoverageFromEvents(t *testing.T) {
 func TestCoverageReport(t *testing.T) {
 	coverage := &CapabilityCoverage{
 		RegistryID:       "test-reg-123",
-		RegisteredTools:  []string{"tool1", "tool2", "tool3"},
-		ExercisedTools:   map[string]int{"tool1": 2, "tool2": 1},
-		UnexercisedTools: []string{"tool3"},
+		RegisteredTools:  []string{tool1, tool2, tool3},
+		ExercisedTools:   map[string]int{tool1: 2, tool2: 1},
+		UnexercisedTools: []string{tool3},
 		CoverageRatio:    0.6667,
 	}
 
@@ -281,7 +292,7 @@ func TestCoverageReport(t *testing.T) {
 		"Unexercised Tools: 1",
 		"tool1 (called 2 times)",
 		"tool2 (called 1 times)",
-		"tool3",
+		tool3,
 	}
 
 	for _, expected := range expectedSubstrings {

@@ -19,10 +19,13 @@ import (
 type ExecutionMode string
 
 const (
-	ExecutionModeStaged    ExecutionMode = "staged"
+	// ExecutionModeStaged is the default non-autopilot posture.
+	ExecutionModeStaged ExecutionMode = "staged"
+	// ExecutionModeAutopilot enables autopilot-style execution posture.
 	ExecutionModeAutopilot ExecutionMode = "autopilot"
 )
 
+// NormalizeExecutionMode maps persisted strings to a valid execution mode.
 func NormalizeExecutionMode(value string) ExecutionMode {
 	switch ExecutionMode(strings.ToLower(strings.TrimSpace(value))) {
 	case ExecutionModeAutopilot:
@@ -60,8 +63,8 @@ type RuntimeWorkspaceConfig struct {
 	ExecutionMode       string                        `yaml:"execution_mode,omitempty"`
 	Agents              []string                      `yaml:"agents"`
 	AllowedCapabilities []RuntimeCapabilitySelector   `yaml:"allowed_capabilities,omitempty"`
-	Nexus               RuntimeNexusConfig            `yaml:"nexus,omitempty"`
-	NodeRegistration    RuntimeNodeRegistrationConfig `yaml:"node_registration,omitempty"`
+	Nexus               runtimeNexusConfig            `yaml:"nexus,omitempty"`
+	NodeRegistration    runtimeNodeRegistrationConfig `yaml:"node_registration,omitempty"`
 	LastUpdated         int64                         `yaml:"last_updated"`
 }
 
@@ -90,13 +93,13 @@ type RuntimeKeybindingEntry struct {
 	DefaultKeys []string `yaml:"default_keys,omitempty"`
 }
 
-type RuntimeNexusConfig struct {
+type runtimeNexusConfig struct {
 	Enabled       bool   `yaml:"enabled,omitempty"`
 	Address       string `yaml:"address,omitempty"`
 	AutoReconnect bool   `yaml:"auto_reconnect,omitempty"`
 }
 
-type RuntimeNodeRegistrationConfig struct {
+type runtimeNodeRegistrationConfig struct {
 	Enabled   bool              `yaml:"enabled,omitempty"`
 	NodeID    string            `yaml:"node_id,omitempty"`
 	Name      string            `yaml:"name,omitempty"`
@@ -201,7 +204,7 @@ func SaveRuntimeWorkspaceConfigWithBackup(path string, cfg RuntimeWorkspaceConfi
 	return backup, nil
 }
 
-// SaveRuntimeProviderConfig persists provider editor state with a backup snapshot.
+// SaveRuntimeProviderConfigWithBackup persists provider editor state with a backup snapshot.
 func SaveRuntimeProviderConfigWithBackup(path string, cfg RuntimeProviderConfig) (string, error) {
 	if path == "" {
 		return "", fmt.Errorf("provider config path required")
@@ -298,8 +301,8 @@ func CreateTimestampedBackup(path string) (string, error) {
 	return backupPath, nil
 }
 
-func pruneTimestampedBackups(backupDir, base string, max int) error {
-	if max <= 0 {
+func pruneTimestampedBackups(backupDir, base string, limit int) error {
+	if limit <= 0 {
 		return nil
 	}
 	entries, err := os.ReadDir(backupDir)
@@ -331,7 +334,7 @@ func pruneTimestampedBackups(backupDir, base string, max int) error {
 			mod:  info.ModTime(),
 		})
 	}
-	if len(backups) <= max {
+	if len(backups) <= limit {
 		return nil
 	}
 	sort.Slice(backups, func(i, j int) bool {
@@ -340,7 +343,7 @@ func pruneTimestampedBackups(backupDir, base string, max int) error {
 		}
 		return backups[i].mod.Before(backups[j].mod)
 	})
-	for i := 0; i < len(backups)-max; i++ {
+	for i := 0; i < len(backups)-limit; i++ {
 		if err := os.Remove(backups[i].path); err != nil && !os.IsNotExist(err) {
 			return err
 		}

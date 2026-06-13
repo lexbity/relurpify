@@ -15,7 +15,7 @@ import (
 
 func TestBuildVerificationContractUsesPreparedRunDescriptor(t *testing.T) {
 	workspace := t.TempDir()
-	manifestPath := filepath.Join(workspace, "relurpify_cfg", "agent.yaml")
+	manifestPath := filepath.Join(workspace, relurpify_cfg, agent_yaml)
 	if err := fs.MkdirAllSecure(filepath.Dir(manifestPath)); err != nil {
 		t.Fatal(err)
 	}
@@ -43,20 +43,20 @@ spec:
 	}
 	suite := &Suite{
 		SourcePath: filepath.Join(workspace, "suite.yaml"),
-		Metadata:   SuiteMeta{Name: "euclo.code"},
+		Metadata:   SuiteMeta{Name: euclo_code},
 		Spec: SuiteSpec{
 			AgentName: "euclo",
-			Manifest:  filepath.ToSlash(filepath.Join(config.DirName, "agent.yaml")),
+			Manifest:  filepath.ToSlash(filepath.Join(config.DirName, agent_yaml)),
 			Models: []ModelSpec{{
-				Name:     "qwen2.5-coder:14b",
-				Provider: "ollama",
+				Name:     qwen2_5_coder_14b,
+				Provider: ollama,
 				Endpoint: "http://127.0.0.1:11434",
 			}},
 		},
 	}
 
-	runRoot := filepath.Join(workspace, "relurpify_cfg", "test_run", "run-1")
-	prepared, err := PrepareRun(suite, CaseSpec{Name: "smoke", Prompt: "hello"}, suite.Spec.Models[0], RunOptions{}, workspace, runRoot, "run-1")
+	runRoot := filepath.Join(workspace, relurpify_cfg, "test_run", run1)
+	prepared, err := PrepareRun(suite, CaseSpec{Name: smoke, Prompt: hello}, suite.Spec.Models[0], RunOptions{}, workspace, runRoot, run1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,7 +71,7 @@ spec:
 
 func TestLoadCaseReport(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "report.json")
-	report := CaseReport{Name: "smoke", Model: "qwen2.5-coder:14b", Success: true}
+	report := CaseReport{Name: smoke, Model: qwen2_5_coder_14b, Success: true}
 	data, err := json.Marshal(report)
 	if err != nil {
 		t.Fatal(err)
@@ -83,7 +83,7 @@ func TestLoadCaseReport(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if loaded == nil || !loaded.Success || loaded.Name != "smoke" {
+	if loaded == nil || !loaded.Success || loaded.Name != smoke {
 		t.Fatalf("unexpected report: %+v", loaded)
 	}
 }

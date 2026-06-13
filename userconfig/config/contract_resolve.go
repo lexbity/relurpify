@@ -9,13 +9,13 @@ import (
 )
 
 // EffectiveAgentContract captures the resolved runtime-facing contract derived
-// from the manifest spec and any later overlays.
+// from a manifest or document plus any later overlays.
 type EffectiveAgentContract struct {
 	AgentID     string
-	Spec        *ManifestSpec
 	AgentSpec   *agentspec.AgentRuntimeSpec
 	Permissions permissions.PermissionSet
 	Resources   ResourceSpec
+	Security    SecuritySpec
 	Sources     SourceSummary
 }
 
@@ -30,21 +30,28 @@ type SourceSummary struct {
 	RuntimeOverrides int
 }
 
-// ResolveOptions provides optional inputs layered on top of the raw manifest.
+// ResolveOptions provides optional inputs layered on top of the loaded config.
 type ResolveOptions struct {
 }
 
-// ResolveEffectiveResources merges defaults and manifest resources.
-func ResolveEffectiveResources(_ string, spec *ManifestSpec) (ResourceSpec, error) {
-	base := ResourceSpec{}
-	var overlays []*ResourceSpec
-	if spec != nil && spec.Defaults != nil && spec.Defaults.Resources != nil {
-		base = *spec.Defaults.Resources
+// ResolveEffectiveResources merges the document's resource section into an
+// effective runtime resource view.
+func ResolveEffectiveResources(_ string, doc *Document) (ResourceSpec, error) {
+	if doc == nil {
+		return ResourceSpec{}, fmt.Errorf("document required")
 	}
-	if spec != nil {
-		overlays = append(overlays, &spec.Resources)
+	node, ok := doc.Section("resources")
+	if !ok {
+		return ResourceSpec{}, nil
 	}
-	return MergeResourceSpecs(base, overlays...), nil
+	resources, err := DecodeResourceSection(node)
+	if err != nil {
+		return ResourceSpec{}, fmt.Errorf("decode resources: %w", err)
+	}
+	if resources == nil {
+		return ResourceSpec{}, fmt.Errorf("decode resources: nil result")
+	}
+	return *resources, nil
 }
 
 // MergeResourceSpecs overlays non-empty resource fields on top of a base spec.
@@ -70,47 +77,104 @@ func MergeResourceSpecs(base ResourceSpec, overlays ...*ResourceSpec) ResourceSp
 	return merged
 }
 
-// ResolveEffectiveAgentContract merges manifest defaults and optional overlays
-// into one runtime-facing contract. Permission resolution (decode + merge) is
-// handled on the governance side via governance/permissions functions.
-func ResolveEffectiveAgentContract(workspace string, spec *ManifestSpec, opts ResolveOptions) (*EffectiveAgentContract, error) {
-	if spec == nil {
-		return nil, fmt.Errorf("manifest spec required")
+// ResolveEffectiveAgentContract resolves a runtime-facing contract directly
+// from a loaded document. This is the canonical resolution path.
+func ResolveEffectiveAgentContract(workspace string, doc *Document, _ ResolveOptions) (*EffectiveAgentContract, error) {
+	if doc == nil {
+		return nil, fmt.Errorf("document required")
 	}
 	if strings.TrimSpace(workspace) == "" {
 		return nil, fmt.Errorf("workspace required")
 	}
+	if strings.TrimSpace(doc.Kind) != "AgentManifest" {
+		return nil, fmt.Errorf("unsupported document kind %q", doc.Kind)
+	}
+	if strings.TrimSpace(doc.Metadata.Name) == "" {
+		return nil, fmt.Errorf("document metadata.name required")
+	}
 
-	resources, err := ResolveEffectiveResources(workspace, spec)
+	contract, err := assembleEffectiveAgentContract(doc)
+	if err != nil {
+		return nil, err
+	}
+	contract.Sources.Workspace = workspace
+	return contract, nil
+}
+
+func assembleEffectiveAgentContract(doc *Document) (*EffectiveAgentContract, error) {
+	agentID := strings.TrimSpace(doc.Metadata.Name)
+	if agentID == "" {
+		return nil, fmt.Errorf("document metadata.name required")
+	}
+
+	perms, err := decodePermissionsSection(doc)
+	if err != nil {
+		return nil, fmt.Errorf("decode permissions: %w", err)
+	}
+	resources, err := ResolveEffectiveResources("", doc)
 	if err != nil {
 		return nil, fmt.Errorf("resolve resources: %w", err)
 	}
-
-	baseSpec := spec.Agent
-	if baseSpec == nil {
-		baseSpec = &agentspec.AgentRuntimeSpec{}
+	security, err := decodeSecuritySection(doc)
+	if err != nil {
+		return nil, fmt.Errorf("decode security: %w", err)
+	}
+	agentSpec, err := decodeAgentSection(doc)
+	if err != nil {
+		return nil, fmt.Errorf("decode agent: %w", err)
+	}
+	if agentSpec == nil {
+		return nil, fmt.Errorf("agent section required")
 	}
 
-	return &EffectiveAgentContract{
-		AgentID:     "",
-		Spec:        spec,
-		AgentSpec:   baseSpec,
-		Permissions: spec.Permissions,
-		Resources:   resources,
-		Sources:     SourceSummary{Workspace: workspace, GlobalDefaults: false},
-	}, nil
+	return BuildEffectiveAgentContract(agentID, agentSpec, perms, resources, security, SourceSummary{
+		ManifestName:    doc.Metadata.Name,
+		ManifestVersion: doc.Metadata.Version,
+	}), nil
+}
+
+func decodePermissionsSection(doc *Document) (permissions.PermissionSet, error) {
+	node, ok := doc.Section("permissions")
+	if !ok {
+		return permissions.PermissionSet{}, nil
+	}
+	ps, err := permissions.DecodeSection(node)
+	if err != nil || ps == nil {
+		return permissions.PermissionSet{}, err
+	}
+	return *ps, nil
+}
+
+func decodeAgentSection(doc *Document) (*agentspec.AgentRuntimeSpec, error) {
+	node, ok := doc.Section("agent")
+	if !ok {
+		return nil, fmt.Errorf("agent section not found")
+	}
+	return agentspec.DecodeSection(node)
+}
+
+func decodeSecuritySection(doc *Document) (SecuritySpec, error) {
+	node, ok := doc.Section("security")
+	if !ok {
+		return SecuritySpec{}, nil
+	}
+	ss, err := DecodeSecuritySection(node)
+	if err != nil || ss == nil {
+		return SecuritySpec{}, err
+	}
+	return *ss, nil
 }
 
 // BuildEffectiveAgentContract constructs an EffectiveAgentContract from
 // pre-resolved inputs. Callers (typically execution/session) are responsible
 // for decoding each section via the appropriate domain's DecodeSection.
-// The Manifest field is left nil — it is not needed for the Document path.
-func BuildEffectiveAgentContract(agentID string, agentSpec *agentspec.AgentRuntimeSpec, perms permissions.PermissionSet, resources ResourceSpec, sources SourceSummary) *EffectiveAgentContract {
+func BuildEffectiveAgentContract(agentID string, agentSpec *agentspec.AgentRuntimeSpec, perms permissions.PermissionSet, resources ResourceSpec, security SecuritySpec, sources SourceSummary) *EffectiveAgentContract {
 	return &EffectiveAgentContract{
 		AgentID:     agentID,
 		AgentSpec:   agentSpec,
 		Permissions: perms,
 		Resources:   resources,
+		Security:    security,
 		Sources:     sources,
 	}
 }

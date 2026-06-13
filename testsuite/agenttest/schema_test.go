@@ -14,21 +14,29 @@ import (
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
+const (
+	api_example_com                             = "api.example.com"
+	etc_passwd                                  = "/etc/passwd"
+	expected_nil_manifest_to_not_cover_anything = "Expected nil manifest to not cover anything"
+	home_user                                   = "/home/user"
+	var_log_log                                 = "/var/log/*.log"
+)
+
 // TestOutcomeSpecRoundTrip verifies marshal/unmarshal preserves the generic fields.
 func TestOutcomeSpecRoundTrip(t *testing.T) {
 	original := &OutcomeSpec{
 		NoFileChanges:        false,
 		FilesChanged:         []string{"file1.go", "file2.go"},
-		FilesContain:         []FileContentExpectation{{Path: "test.go", Contains: []string{"func"}, NotContains: []string{"panic"}}},
-		OutputContains:       []string{"success"},
+		FilesContain:         []FileContentExpectation{{Path: test_go, Contains: []string{"func"}, NotContains: []string{"panic"}}},
+		OutputContains:       []string{success},
 		OutputRegex:          []string{"^done$"},
-		StateKeyNotEmpty:     []string{"key1"},
-		StateKeysMustExist:   []string{"key2"},
+		StateKeyNotEmpty:     []string{key1},
+		StateKeysMustExist:   []string{key2},
 		MemoryRecordsCreated: 5,
 		WorkflowStateUpdated: true,
 		Verify: &VerifySpec{
 			Steps: []VerifyStepSpec{
-				{Tool: "go_test", Args: map[string]any{"package": "./...", "working_directory": "."}},
+				{Tool: go_test, Args: map[string]any{"package": "./...", "working_directory": "."}},
 			},
 			Script: "testsuite/agenttest_fixtures/gosuite/verify.sh",
 		},
@@ -77,12 +85,12 @@ func TestSecuritySpecRoundTrip(t *testing.T) {
 	original := &SecuritySpec{
 		NoWritesOutsideScope:     true,
 		NoReadsOutsideScope:      false,
-		ToolsMustNotCall:         []string{"file_write", "file_delete"},
+		ToolsMustNotCall:         []string{file_write, "file_delete"},
 		MutationEnforced:         true,
 		NoNetworkOutsideManifest: true,
 		NoExecOutsideManifest:    true,
 		ExpectedViolations: []ExpectedViolation{
-			{Kind: "file_write", Resource: "/etc/passwd", Reason: "expected block"},
+			{Kind: file_write, Resource: etc_passwd, Reason: "expected block"},
 		},
 	}
 
@@ -113,9 +121,9 @@ func TestSecuritySpecRoundTrip(t *testing.T) {
 // TestBenchmarkSpecRoundTrip verifies marshal/unmarshal preserves the generic fields.
 func TestBenchmarkSpecRoundTrip(t *testing.T) {
 	original := &BenchmarkSpec{
-		ToolsExpected:          []string{"file_read", "file_search"},
-		ToolsNotExpected:       []string{"go_test"},
-		ToolSequenceExpected:   []string{"file_read", "file_write"},
+		ToolsExpected:          []string{file_read, file_search},
+		ToolsNotExpected:       []string{go_test},
+		ToolSequenceExpected:   []string{file_read, file_write},
 		LLMCallsExpected:       10,
 		MaxToolCallsHint:       20,
 		MaxTotalToolTimeHintMs: 5000,
@@ -210,124 +218,132 @@ spec:
 	}
 }
 
-// TestManifestCoversFileAction verifies permission checking for file actions
-func TestManifestCoversFileAction(t *testing.T) {
-	m := &config.ManifestSpec{
-		Permissions: permissions.PermissionSet{
-			FileSystem: []permissions.FileSystemPermission{
-				{Action: permissions.FileSystemWrite, Path: "${workspace}/**"},
-				{Action: permissions.FileSystemRead, Path: "/tmp/*.log"},
-				{Action: permissions.FileSystemDelete, Path: "/var/data/*"},
-			},
-		},
+func testDocumentWithPermissions(t *testing.T) *config.Document {
+	t.Helper()
+	doc := &config.Document{
+		APIVersion: "relurpify.io/v1",
+		Kind:       "AgentManifest",
+		Metadata:   config.DocumentMetadata{Name: "coverage-agent"},
+		Spec:       map[string]yaml.Node{},
 	}
+	var node yaml.Node
+	if err := node.Encode(permissions.PermissionSet{
+		FileSystem: []permissions.FileSystemPermission{
+			{Action: permissions.FileSystemWrite, Path: "${workspace}/**"},
+			{Action: permissions.FileSystemRead, Path: "/tmp/*.log"},
+			{Action: permissions.FileSystemDelete, Path: "/var/data/*"},
+		},
+		Executables: []permissions.ExecutablePermission{
+			{Binary: "go"},
+			{Binary: "git"},
+			{Binary: "python*"},
+		},
+		Network: []permissions.NetworkPermission{
+			{Host: api_example_com, Port: 443},
+			{Host: "*.local", Port: 0},
+			{Host: "localhost", Port: 8080},
+		},
+	}); err != nil {
+		t.Fatalf("encode permissions: %v", err)
+	}
+	doc.Spec["permissions"] = node
+	return doc
+}
+
+// TestDocumentCoversFileAction verifies permission checking for file actions
+func TestDocumentCoversFileAction(t *testing.T) {
+	m := testDocumentWithPermissions(t)
 
 	workspace := "/home/user/project"
 
 	// Test: write within workspace should be covered
-	if !ManifestCoversFileAction(m, permissions.FileSystemWrite, "file.go", workspace) {
+	if !DocumentCoversFileAction(m, permissions.FileSystemWrite, "file.go", workspace) {
 		t.Error("Expected write to file.go to be covered by ${workspace}/**")
 	}
 
 	// Test: write to absolute path within workspace
-	if !ManifestCoversFileAction(m, permissions.FileSystemWrite, "/home/user/project/src/main.go", workspace) {
+	if !DocumentCoversFileAction(m, permissions.FileSystemWrite, "/home/user/project/src/main.go", workspace) {
 		t.Error("Expected write to /home/user/project/src/main.go to be covered")
 	}
 
 	// Test: read from /tmp with matching pattern
-	if !ManifestCoversFileAction(m, permissions.FileSystemRead, "/tmp/app.log", workspace) {
+	if !DocumentCoversFileAction(m, permissions.FileSystemRead, "/tmp/app.log", workspace) {
 		t.Error("Expected read of /tmp/app.log to be covered")
 	}
 
 	// Test: read from /tmp with non-matching pattern
-	if ManifestCoversFileAction(m, permissions.FileSystemRead, "/tmp/app.txt", workspace) {
+	if DocumentCoversFileAction(m, permissions.FileSystemRead, "/tmp/app.txt", workspace) {
 		t.Error("Expected read of /tmp/app.txt to NOT be covered (wrong extension)")
 	}
 
 	// Test: action not matching (write vs read)
-	if ManifestCoversFileAction(m, permissions.FileSystemWrite, "/tmp/app.log", workspace) {
+	if DocumentCoversFileAction(m, permissions.FileSystemWrite, "/tmp/app.log", workspace) {
 		t.Error("Expected write to /tmp/app.log to NOT be covered (pattern is read-only)")
 	}
 
 	// Test: nil manifest
-	if ManifestCoversFileAction(nil, permissions.FileSystemWrite, "file.go", workspace) {
-		t.Error("Expected nil manifest to not cover anything")
+	if DocumentCoversFileAction(nil, permissions.FileSystemWrite, "file.go", workspace) {
+		t.Error(expected_nil_manifest_to_not_cover_anything)
 	}
 }
 
-// TestManifestCoversExecutable verifies binary permission checking
-func TestManifestCoversExecutable(t *testing.T) {
-	m := &config.ManifestSpec{
-		Permissions: permissions.PermissionSet{
-			Executables: []permissions.ExecutablePermission{
-				{Binary: "go"},
-				{Binary: "git"},
-				{Binary: "python*"},
-			},
-		},
-	}
+// TestDocumentCoversExecutable verifies binary permission checking
+func TestDocumentCoversExecutable(t *testing.T) {
+	m := testDocumentWithPermissions(t)
 
 	// Test: declared binary
-	if !ManifestCoversExecutable(m, "go") {
+	if !DocumentCoversExecutable(m, "go") {
 		t.Error("Expected 'go' to be covered")
 	}
 
 	// Test: declared binary with path
-	if !ManifestCoversExecutable(m, "/usr/bin/git") {
+	if !DocumentCoversExecutable(m, "/usr/bin/git") {
 		t.Error("Expected '/usr/bin/git' to be covered (basename matches)")
 	}
 
 	// Test: glob match
-	if !ManifestCoversExecutable(m, "python3") {
+	if !DocumentCoversExecutable(m, "python3") {
 		t.Error("Expected 'python3' to be covered by 'python*' glob")
 	}
 
 	// Test: undeclared binary
-	if ManifestCoversExecutable(m, "rm") {
+	if DocumentCoversExecutable(m, "rm") {
 		t.Error("Expected 'rm' to NOT be covered")
 	}
 
 	// Test: nil manifest
-	if ManifestCoversExecutable(nil, "go") {
-		t.Error("Expected nil manifest to not cover anything")
+	if DocumentCoversExecutable(nil, "go") {
+		t.Error(expected_nil_manifest_to_not_cover_anything)
 	}
 }
 
-// TestManifestCoversNetworkCall verifies network permission checking
-func TestManifestCoversNetworkCall(t *testing.T) {
-	m := &config.ManifestSpec{
-		Permissions: permissions.PermissionSet{
-			Network: []permissions.NetworkPermission{
-				{Host: "api.example.com", Port: 443},
-				{Host: "*.local", Port: 0}, // any port
-				{Host: "localhost", Port: 8080},
-			},
-		},
-	}
+// TestDocumentCoversNetworkCall verifies network permission checking
+func TestDocumentCoversNetworkCall(t *testing.T) {
+	m := testDocumentWithPermissions(t)
 
 	// Test: exact host and port match
-	if !ManifestCoversNetworkCall(m, "api.example.com", 443) {
+	if !DocumentCoversNetworkCall(m, api_example_com, 443) {
 		t.Error("Expected api.example.com:443 to be covered")
 	}
 
 	// Test: wrong port
-	if ManifestCoversNetworkCall(m, "api.example.com", 80) {
+	if DocumentCoversNetworkCall(m, api_example_com, 80) {
 		t.Error("Expected api.example.com:80 to NOT be covered (wrong port)")
 	}
 
 	// Test: glob host with any port
-	if !ManifestCoversNetworkCall(m, "server.local", 1234) {
+	if !DocumentCoversNetworkCall(m, "server.local", 1234) {
 		t.Error("Expected server.local:1234 to be covered by *.local with any port")
 	}
 
 	// Test: undeclared host
-	if ManifestCoversNetworkCall(m, "evil.com", 443) {
+	if DocumentCoversNetworkCall(m, "evil.com", 443) {
 		t.Error("Expected evil.com to NOT be covered")
 	}
 
 	// Test: nil manifest
-	if ManifestCoversNetworkCall(nil, "localhost", 8080) {
-		t.Error("Expected nil manifest to not cover anything")
+	if DocumentCoversNetworkCall(nil, "localhost", 8080) {
+		t.Error(expected_nil_manifest_to_not_cover_anything)
 	}
 }
 
@@ -340,7 +356,7 @@ tools_must_not_call:
   - file_delete
 expected_violations:
   - kind: file_write
-    resource: "/etc/passwd"
+    resource: etc_passwd
     reason: "expected sandbox block"
   - kind: exec
     resource: "sudo"
@@ -357,11 +373,11 @@ expected_violations:
 	}
 
 	first := spec.ExpectedViolations[0]
-	if first.Kind != "file_write" {
-		t.Errorf("First violation Kind: got %q, want %q", first.Kind, "file_write")
+	if first.Kind != file_write {
+		t.Errorf("First violation Kind: got %q, want %q", first.Kind, file_write)
 	}
-	if first.Resource != "/etc/passwd" {
-		t.Errorf("First violation Resource: got %q, want %q", first.Resource, "/etc/passwd")
+	if first.Resource != etc_passwd {
+		t.Errorf("First violation Resource: got %q, want %q", first.Resource, etc_passwd)
 	}
 
 	second := spec.ExpectedViolations[1]
@@ -381,8 +397,8 @@ func TestPathMatchesGlob(t *testing.T) {
 		{"/home/user/file.txt", "/home/user/*.go", false},
 		{"/home/user/a/b/c/file.go", "/home/user/**/*.go", true},
 		{"/home/user/file.go", "/home/user/**", true},
-		{"/var/log/app.log", "/var/log/*.log", true},
-		{"/var/log/subdir/app.log", "/var/log/*.log", false},
+		{"/var/log/app.log", var_log_log, true},
+		{"/var/log/subdir/app.log", var_log_log, false},
 		{"/var/log/subdir/app.log", "/var/log/**/*.log", true},
 	}
 
@@ -401,9 +417,9 @@ func TestExpandPathPattern(t *testing.T) {
 		workspace string
 		want      string
 	}{
-		{"${workspace}/**", "/home/user", "/home/user/**"},
-		{"${workspace}/src/*.go", "/home/user", "/home/user/src/*.go"},
-		{"/var/log/*.log", "/home/user", "/var/log/*.log"},
+		{"${workspace}/**", home_user, "/home/user/**"},
+		{"${workspace}/src/*.go", home_user, "/home/user/src/*.go"},
+		{var_log_log, home_user, var_log_log},
 		{"${workspace}", "", "${workspace}"},
 	}
 

@@ -5,11 +5,16 @@ import (
 	"testing"
 )
 
+const (
+	Fmt_forbidden_check_test = "fmt"
+)
+
+
 func TestCheckForbiddenImports(t *testing.T) {
 	pkgs := []GoPackage{
 		{
 			ImportPath: ModulePath + "/framework/authorization",
-			Imports:    []string{ModulePath + "/governance/policy", "fmt"},
+			Imports:    []string{ModulePath + "/governance/policy", Fmt_forbidden_check_test},
 		},
 		{
 			ImportPath: ModulePath + "/agents/react",
@@ -25,11 +30,11 @@ func TestCheckForbiddenImports(t *testing.T) {
 		},
 		{
 			ImportPath: ModulePath + "/framework/coreutil", // NOT a match (segment boundary)
-			Imports:    []string{"fmt"},
+			Imports:    []string{Fmt_forbidden_check_test},
 		},
 		{
 			ImportPath: ModulePath + "/capability/typesafe", // NOT a match (segment boundary)
-			Imports:    []string{"fmt"},
+			Imports:    []string{Fmt_forbidden_check_test},
 		},
 	}
 

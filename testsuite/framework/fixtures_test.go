@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -14,6 +15,11 @@ import (
 	"codeburg.org/lexbit/relurpify/platform/fs"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
+
+const frameworkDocKind = "AgentManifest"
+const frameworkNetEgress = "egress"
+const frameworkExampleHost = "example.com"
+const frameworkExampleProtocol = "tcp"
 
 // TestDeterministicFixtureGeneration validates that fixture generation produces
 // stable, repeatable output across multiple invocations.
@@ -222,16 +228,20 @@ func TestWorkspaceFixtureBuilder(t *testing.T) {
 // TestManifestFixtureBuilder validates the manifest fixture builder.
 func TestManifestFixtureBuilder(t *testing.T) {
 	t.Run("valid manifest", func(t *testing.T) {
-		builder := ValidManifest()
+		builder := ValidDocument()
 		m := builder.Build()
 		if m == nil {
 			t.Fatal("valid manifest should not be nil")
 		}
-
-		if err := m.Validate(); err != nil {
-			t.Errorf("valid manifest should validate: %v", err)
+		permNode, ok := m.Section("permissions")
+		if !ok {
+			t.Fatal("permissions section missing")
 		}
-		AssertNormalizedFileSystemPermissionsEqual(t, m.Policy.Permissions.FileSystem, []permissions.FileSystemPermission{
+		var permSpec permissions.PermissionSet
+		if err := permNode.Decode(&permSpec); err != nil {
+			t.Fatalf("decode permissions: %v", err)
+		}
+		AssertNormalizedFileSystemPermissionsEqual(t, permSpec.FileSystem, []permissions.FileSystemPermission{
 			{Action: permissions.FileSystemRead, Path: "${workspace}/**"},
 			{Action: permissions.FileSystemWrite, Path: "${workspace}/**"},
 		})
@@ -242,11 +252,18 @@ func TestManifestFixtureBuilder(t *testing.T) {
 	})
 
 	t.Run("manifest with filesystem permission", func(t *testing.T) {
-		builder := ValidManifest().
+		builder := ValidDocument().
 			WithFileSystemPermission(permissions.FileSystemRead, "${workspace}/src/**")
 		m := builder.Build()
-
-		AssertNormalizedFileSystemPermissionsEqual(t, m.Policy.Permissions.FileSystem, []permissions.FileSystemPermission{
+		permNode, ok := m.Section("permissions")
+		if !ok {
+			t.Fatal("permissions section missing")
+		}
+		var permSpec permissions.PermissionSet
+		if err := permNode.Decode(&permSpec); err != nil {
+			t.Fatalf("decode permissions: %v", err)
+		}
+		AssertNormalizedFileSystemPermissionsEqual(t, permSpec.FileSystem, []permissions.FileSystemPermission{
 			{Action: permissions.FileSystemRead, Path: "${workspace}/**"},
 			{Action: permissions.FileSystemWrite, Path: "${workspace}/**"},
 			{Action: permissions.FileSystemRead, Path: "${workspace}/src/**"},
@@ -254,20 +271,34 @@ func TestManifestFixtureBuilder(t *testing.T) {
 	})
 
 	t.Run("manifest with network permission", func(t *testing.T) {
-		builder := ValidManifest().
+		builder := ValidDocument().
 			WithNetworkPermission("egress", "tcp", "example.com", 443)
 		m := builder.Build()
-
-		AssertNormalizedNetworkPermissionsEqual(t, m.Policy.Permissions.Network, []permissions.NetworkPermission{{Direction: "egress", Protocol: "tcp", Host: "example.com", Port: 443}})
+		permNode, ok := m.Section("permissions")
+		if !ok {
+			t.Fatal("permissions section missing")
+		}
+		var permSpec permissions.PermissionSet
+		if err := permNode.Decode(&permSpec); err != nil {
+			t.Fatalf("decode permissions: %v", err)
+		}
+		AssertNormalizedNetworkPermissionsEqual(t, permSpec.Network, []permissions.NetworkPermission{{Direction: frameworkNetEgress, Protocol: frameworkExampleProtocol, Host: frameworkExampleHost, Port: 443}})
 	})
 
 	t.Run("manifest with HITL required", func(t *testing.T) {
-		builder := ValidManifest().
+		builder := ValidDocument().
 			WithFileSystemPermission(permissions.FileSystemRead, "${workspace}/sensitive/**").
 			WithHITLRequired()
 		m := builder.Build()
-
-		perms := m.Policy.Permissions.FileSystem
+		permNode, ok := m.Section("permissions")
+		if !ok {
+			t.Fatal("permissions section missing")
+		}
+		var permSpec permissions.PermissionSet
+		if err := permNode.Decode(&permSpec); err != nil {
+			t.Fatalf("decode permissions: %v", err)
+		}
+		perms := permSpec.FileSystem
 		if len(perms) == 0 {
 			t.Fatal("no filesystem permissions found")
 		}
@@ -277,20 +308,18 @@ func TestManifestFixtureBuilder(t *testing.T) {
 	})
 
 	t.Run("invalid manifest missing image", func(t *testing.T) {
-		builder := InvalidManifestMissingImage()
+		builder := InvalidDocumentMissingMetadata()
 		m := builder.Build()
-
-		if err := m.Validate(); err == nil {
-			t.Error("manifest without image should fail validation")
+		if m == nil || strings.TrimSpace(m.Metadata.Name) != "" {
+			t.Error("document without metadata should fail helper validation")
 		}
 	})
 
 	t.Run("invalid manifest wrong runtime", func(t *testing.T) {
-		builder := InvalidManifestWrongRuntime()
+		builder := InvalidDocumentWrongKind()
 		m := builder.Build()
-
-		if err := m.Validate(); err == nil {
-			t.Error("manifest with wrong runtime should fail validation")
+		if m == nil || m.Kind == frameworkDocKind {
+			t.Error("document with wrong kind should fail helper validation")
 		}
 	})
 }

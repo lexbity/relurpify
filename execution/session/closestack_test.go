@@ -11,15 +11,15 @@ import (
 func TestCloseStack_CloseReverseOrder(t *testing.T) {
 	var order []string
 	cs := &CloseStack{}
-	cs.Add(func(ctx context.Context) error {
+	cs.Add(func(_ context.Context) error {
 		order = append(order, "first")
 		return nil
 	})
-	cs.Add(func(ctx context.Context) error {
+	cs.Add(func(_ context.Context) error {
 		order = append(order, "second")
 		return nil
 	})
-	cs.Add(func(ctx context.Context) error {
+	cs.Add(func(_ context.Context) error {
 		order = append(order, "third")
 		return nil
 	})
@@ -42,7 +42,7 @@ func TestCloseStack_CloseReverseOrder(t *testing.T) {
 func TestCloseStack_CloseReverseOrderSingleItem(t *testing.T) {
 	called := false
 	cs := &CloseStack{}
-	cs.Add(func(ctx context.Context) error {
+	cs.Add(func(_ context.Context) error {
 		called = true
 		return nil
 	})
@@ -57,10 +57,10 @@ func TestCloseStack_CloseReverseOrderSingleItem(t *testing.T) {
 
 func TestCloseStack_AggregatesErrors(t *testing.T) {
 	cs := &CloseStack{}
-	cs.Add(func(ctx context.Context) error {
+	cs.Add(func(_ context.Context) error {
 		return errors.New("error A")
 	})
-	cs.Add(func(ctx context.Context) error {
+	cs.Add(func(_ context.Context) error {
 		return errors.New("error B")
 	})
 
@@ -79,7 +79,7 @@ func TestCloseStack_AggregatesErrors(t *testing.T) {
 func TestCloseStack_Idempotent(t *testing.T) {
 	var callCount atomic.Int32
 	cs := &CloseStack{}
-	cs.Add(func(ctx context.Context) error {
+	cs.Add(func(_ context.Context) error {
 		callCount.Add(1)
 		return nil
 	})
@@ -104,7 +104,7 @@ func TestCloseStack_Idempotent(t *testing.T) {
 func TestCloseStack_NilCloseFn(t *testing.T) {
 	cs := &CloseStack{}
 	cs.Add(nil)
-	cs.Add(func(ctx context.Context) error {
+	cs.Add(func(_ context.Context) error {
 		return nil
 	})
 	cs.Add(nil)
@@ -133,7 +133,7 @@ func TestCloseStack_Len(t *testing.T) {
 	if cs.Len() != 0 {
 		t.Errorf("empty stack Len = %d, want 0", cs.Len())
 	}
-	cs.Add(func(ctx context.Context) error { return nil })
+	cs.Add(func(_ context.Context) error { return nil })
 	if cs.Len() != 1 {
 		t.Errorf("after add Len = %d, want 1", cs.Len())
 	}
@@ -155,11 +155,11 @@ func TestCloseStack_FailureAtStageNClosesNMinusOne(t *testing.T) {
 	// Resources 1 and 2 must be closed in reverse order.
 	var closed []string
 	cs := &CloseStack{}
-	cs.Add(func(ctx context.Context) error {
+	cs.Add(func(_ context.Context) error {
 		closed = append(closed, "resource1")
 		return nil
 	})
-	cs.Add(func(ctx context.Context) error {
+	cs.Add(func(_ context.Context) error {
 		closed = append(closed, "resource2")
 		return nil
 	})
@@ -184,12 +184,12 @@ func TestCloseStack_SkipNilItems(t *testing.T) {
 	var closed []string
 	cs := &CloseStack{}
 	cs.Add(nil)
-	cs.Add(func(ctx context.Context) error {
+	cs.Add(func(_ context.Context) error {
 		closed = append(closed, "second")
 		return nil
 	})
 	cs.Add(nil)
-	cs.Add(func(ctx context.Context) error {
+	cs.Add(func(_ context.Context) error {
 		closed = append(closed, "fourth")
 		return nil
 	})

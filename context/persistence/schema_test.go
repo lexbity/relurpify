@@ -7,6 +7,13 @@ import (
 	"time"
 )
 
+const (
+	Frameworkagentlifecycle_schema_test = "framework/agentlifecycle"
+	Wf123_schema_test = "wf-123"
+	Workflow_schema_test = "workflow"
+)
+
+
 func TestNewSchemaMetadata(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -17,9 +24,9 @@ func TestNewSchemaMetadata(t *testing.T) {
 	}{
 		{
 			name:          "valid metadata",
-			entityKind:    "workflow",
-			entityID:      "wf-123",
-			sourcePackage: "framework/agentlifecycle",
+			entityKind:    Workflow_schema_test,
+			entityID:      Wf123_schema_test,
+			sourcePackage: Frameworkagentlifecycle_schema_test,
 			wantErr:       false,
 		},
 		{
@@ -72,13 +79,13 @@ func TestSchemaMetadataValidate(t *testing.T) {
 		{
 			name: "valid metadata",
 			metadata: SchemaMetadata{
-				SchemaName:    "workflow",
+				SchemaName:    Workflow_schema_test,
 				SchemaVersion: 1,
-				EntityKind:    "workflow",
-				EntityID:      "wf-123",
+				EntityKind:    Workflow_schema_test,
+				EntityID:      Wf123_schema_test,
 				CreatedAt:     now,
 				UpdatedAt:     now,
-				SourcePackage: "framework/agentlifecycle",
+				SourcePackage: Frameworkagentlifecycle_schema_test,
 			},
 			wantErr: false,
 		},
@@ -86,11 +93,11 @@ func TestSchemaMetadataValidate(t *testing.T) {
 			name: "missing schema name",
 			metadata: SchemaMetadata{
 				SchemaVersion: 1,
-				EntityKind:    "workflow",
-				EntityID:      "wf-123",
+				EntityKind:    Workflow_schema_test,
+				EntityID:      Wf123_schema_test,
 				CreatedAt:     now,
 				UpdatedAt:     now,
-				SourcePackage: "framework/agentlifecycle",
+				SourcePackage: Frameworkagentlifecycle_schema_test,
 			},
 			wantErr: true,
 			errMsg:  "schema_name",
@@ -98,13 +105,13 @@ func TestSchemaMetadataValidate(t *testing.T) {
 		{
 			name: "invalid schema version",
 			metadata: SchemaMetadata{
-				SchemaName:    "workflow",
+				SchemaName:    Workflow_schema_test,
 				SchemaVersion: 0,
-				EntityKind:    "workflow",
-				EntityID:      "wf-123",
+				EntityKind:    Workflow_schema_test,
+				EntityID:      Wf123_schema_test,
 				CreatedAt:     now,
 				UpdatedAt:     now,
-				SourcePackage: "framework/agentlifecycle",
+				SourcePackage: Frameworkagentlifecycle_schema_test,
 			},
 			wantErr: true,
 			errMsg:  "schema_version",
@@ -112,12 +119,12 @@ func TestSchemaMetadataValidate(t *testing.T) {
 		{
 			name: "missing entity kind",
 			metadata: SchemaMetadata{
-				SchemaName:    "workflow",
+				SchemaName:    Workflow_schema_test,
 				SchemaVersion: 1,
-				EntityID:      "wf-123",
+				EntityID:      Wf123_schema_test,
 				CreatedAt:     now,
 				UpdatedAt:     now,
-				SourcePackage: "framework/agentlifecycle",
+				SourcePackage: Frameworkagentlifecycle_schema_test,
 			},
 			wantErr: true,
 			errMsg:  "entity_kind",
@@ -125,12 +132,12 @@ func TestSchemaMetadataValidate(t *testing.T) {
 		{
 			name: "missing entity id",
 			metadata: SchemaMetadata{
-				SchemaName:    "workflow",
+				SchemaName:    Workflow_schema_test,
 				SchemaVersion: 1,
-				EntityKind:    "workflow",
+				EntityKind:    Workflow_schema_test,
 				CreatedAt:     now,
 				UpdatedAt:     now,
-				SourcePackage: "framework/agentlifecycle",
+				SourcePackage: Frameworkagentlifecycle_schema_test,
 			},
 			wantErr: true,
 			errMsg:  "entity_id",
@@ -138,10 +145,10 @@ func TestSchemaMetadataValidate(t *testing.T) {
 		{
 			name: "missing source package",
 			metadata: SchemaMetadata{
-				SchemaName:    "workflow",
+				SchemaName:    Workflow_schema_test,
 				SchemaVersion: 1,
-				EntityKind:    "workflow",
-				EntityID:      "wf-123",
+				EntityKind:    Workflow_schema_test,
+				EntityID:      Wf123_schema_test,
 				CreatedAt:     now,
 				UpdatedAt:     now,
 			},
@@ -177,7 +184,7 @@ func TestCurrentSchemaVersions(t *testing.T) {
 	}
 
 	expectedKinds := []string{
-		"workflow",
+		Workflow_schema_test,
 		"workflow_run",
 		"delegation",
 		"delegation_transition",

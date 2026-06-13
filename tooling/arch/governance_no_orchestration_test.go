@@ -6,14 +6,21 @@ import (
 	"testing"
 )
 
+const (
+	Execution_governance_no_orchestration_test = "/execution"
+	Executionagentlifecycle_governance_no_orchestration_test = "/execution/agentlifecycle"
+	Fmt_governance_no_orchestration_test = "fmt"
+)
+
+
 func TestCheckGovernanceNoOrchestration_noViolation(t *testing.T) {
 	pkgs := []GoPackage{
 		mkPkg(ModulePath + "/governance/policy"),
-		mkPkg(ModulePath + "/execution/agentlifecycle"),
+		mkPkg(ModulePath + Executionagentlifecycle_governance_no_orchestration_test),
 	}
 	// governance imports only stdlib — no execution
-	pkgs[0].Imports = []string{"fmt", "errors"}
-	pkgs[1].Imports = []string{"fmt"}
+	pkgs[0].Imports = []string{Fmt_governance_no_orchestration_test, "errors"}
+	pkgs[1].Imports = []string{Fmt_governance_no_orchestration_test}
 
 	vios := CheckGovernanceNoOrchestration(pkgs)
 	if len(vios) != 0 {
@@ -24,13 +31,13 @@ func TestCheckGovernanceNoOrchestration_noViolation(t *testing.T) {
 func TestCheckGovernanceNoOrchestration_violation(t *testing.T) {
 	pkgs := []GoPackage{
 		mkPkg(ModulePath + "/governance/authorization"),
-		mkPkg(ModulePath + "/execution/agentlifecycle"),
+		mkPkg(ModulePath + Executionagentlifecycle_governance_no_orchestration_test),
 	}
 	pkgs[0].Imports = []string{
-		ModulePath + "/execution/agentlifecycle",
-		"fmt",
+		ModulePath + Executionagentlifecycle_governance_no_orchestration_test,
+		Fmt_governance_no_orchestration_test,
 	}
-	pkgs[1].Imports = []string{"fmt"}
+	pkgs[1].Imports = []string{Fmt_governance_no_orchestration_test}
 
 	vios := CheckGovernanceNoOrchestration(pkgs)
 	if len(vios) != 1 {
@@ -49,7 +56,7 @@ func TestCheckGovernanceNoOrchestration_governanceRootImport(t *testing.T) {
 	pkgs[0].Imports = []string{
 		ModulePath + "/execution/context",
 	}
-	pkgs[1].Imports = []string{"fmt"}
+	pkgs[1].Imports = []string{Fmt_governance_no_orchestration_test}
 
 	vios := CheckGovernanceNoOrchestration(pkgs)
 	if len(vios) != 1 {
@@ -60,12 +67,12 @@ func TestCheckGovernanceNoOrchestration_governanceRootImport(t *testing.T) {
 func TestCheckGovernanceNoOrchestration_notGovernance(t *testing.T) {
 	pkgs := []GoPackage{
 		mkPkg(ModulePath + "/capability/agentspec"),
-		mkPkg(ModulePath + "/execution"),
+		mkPkg(ModulePath + Execution_governance_no_orchestration_test),
 	}
 	pkgs[0].Imports = []string{
-		ModulePath + "/execution",
+		ModulePath + Execution_governance_no_orchestration_test,
 	}
-	pkgs[1].Imports = []string{"fmt"}
+	pkgs[1].Imports = []string{Fmt_governance_no_orchestration_test}
 
 	vios := CheckGovernanceNoOrchestration(pkgs)
 	if len(vios) != 0 {
@@ -79,7 +86,7 @@ func TestCheckGovernanceNoOrchestration_onlyTestFiles(t *testing.T) {
 			ImportPath:      ModulePath + "/governance/authorization",
 			OnlyTestGoFiles: true,
 			TestGoFiles:     []string{"auth_test.go"},
-			TestImports:     []string{ModulePath + "/execution"},
+			TestImports:     []string{ModulePath + Execution_governance_no_orchestration_test},
 		},
 	}
 	vios := CheckGovernanceNoOrchestration(pkgs)

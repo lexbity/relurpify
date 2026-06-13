@@ -9,6 +9,13 @@ import (
 	"codeburg.org/lexbit/relurpify/context/knowledge"
 )
 
+const (
+	Class_ast_summarizer = "class "
+	Import_ast_summarizer = "import "
+	Type_ast_summarizer = "type "
+)
+
+
 // ASTSummarizer preserves function signatures, class declarations, doc comments;
 // elides function bodies. Deterministic; no model call.
 type ASTSummarizer struct{}
@@ -149,13 +156,13 @@ func (s *ASTSummarizer) summarizeGo(content string) string {
 		}
 
 		// Type declarations - preserve
-		if strings.HasPrefix(trimmed, "type ") {
+		if strings.HasPrefix(trimmed, Type_ast_summarizer) {
 			result = append(result, line)
 			continue
 		}
 
 		// Package and imports - preserve
-		if strings.HasPrefix(trimmed, "package ") || strings.HasPrefix(trimmed, "import ") {
+		if strings.HasPrefix(trimmed, "package ") || strings.HasPrefix(trimmed, Import_ast_summarizer) {
 			result = append(result, line)
 			continue
 		}
@@ -200,7 +207,7 @@ func (s *ASTSummarizer) summarizePython(content string) string {
 		trimmed := strings.TrimSpace(line)
 
 		// Function/class definitions - preserve and mark body
-		if strings.HasPrefix(trimmed, "def ") || strings.HasPrefix(trimmed, "class ") {
+		if strings.HasPrefix(trimmed, "def ") || strings.HasPrefix(trimmed, Class_ast_summarizer) {
 			result = append(result, line)
 			// Look for function body start
 			currentIndent := len(indentRegex.FindString(line))
@@ -243,7 +250,7 @@ func (s *ASTSummarizer) summarizePython(content string) string {
 		}
 
 		// Import statements - preserve
-		if strings.HasPrefix(trimmed, "import ") || strings.HasPrefix(trimmed, "from ") {
+		if strings.HasPrefix(trimmed, Import_ast_summarizer) || strings.HasPrefix(trimmed, "from ") {
 			result = append(result, line)
 			continue
 		}
@@ -359,7 +366,7 @@ func (s *ASTSummarizer) summarizeJS(content string) string {
 		}
 
 		// Class declarations
-		if strings.HasPrefix(trimmed, "class ") {
+		if strings.HasPrefix(trimmed, Class_ast_summarizer) {
 			result = append(result, line)
 			continue
 		}
@@ -393,7 +400,7 @@ func (s *ASTSummarizer) summarizeJS(content string) string {
 		}
 
 		// Import/export - preserve
-		if strings.HasPrefix(trimmed, "import ") || strings.HasPrefix(trimmed, "export ") {
+		if strings.HasPrefix(trimmed, Import_ast_summarizer) || strings.HasPrefix(trimmed, "export ") {
 			result = append(result, line)
 			continue
 		}
@@ -406,7 +413,7 @@ func (s *ASTSummarizer) summarizeJS(content string) string {
 
 		// TypeScript interfaces/types
 		if strings.HasPrefix(trimmed, "interface ") ||
-			strings.HasPrefix(trimmed, "type ") ||
+			strings.HasPrefix(trimmed, Type_ast_summarizer) ||
 			strings.HasPrefix(trimmed, "declare ") {
 			result = append(result, line)
 			continue
@@ -434,8 +441,8 @@ func (s *ASTSummarizer) summarizeGeneric(content string) string {
 		}
 
 		// Keep class/type declarations
-		if strings.Contains(trimmed, "class ") || strings.Contains(trimmed, "struct ") ||
-			strings.Contains(trimmed, "interface ") || strings.Contains(trimmed, "type ") {
+		if strings.Contains(trimmed, Class_ast_summarizer) || strings.Contains(trimmed, "struct ") ||
+			strings.Contains(trimmed, "interface ") || strings.Contains(trimmed, Type_ast_summarizer) {
 			result = append(result, line)
 			continue
 		}

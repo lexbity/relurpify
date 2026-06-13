@@ -22,10 +22,31 @@ func AssembleContract(doc *config.Document) (*config.EffectiveAgentContract, err
 	agentID := doc.Metadata.Name
 
 	// Decode permissions section
-	perms, _ := decodePermissionsSection(doc)
+	perms, err := decodePermissionsSection(doc)
+	if err != nil {
+		return nil, fmt.Errorf("decode permissions: %w", err)
+	}
+
+	// Decode resource section
+	resources, err := decodeResourceSection(doc)
+	if err != nil {
+		return nil, fmt.Errorf("decode resources: %w", err)
+	}
+
+	// Decode security section
+	security, err := decodeSecuritySection(doc)
+	if err != nil {
+		return nil, fmt.Errorf("decode security: %w", err)
+	}
 
 	// Decode agent spec section
-	agentSpec, _ := decodeAgentSection(doc)
+	agentSpec, err := decodeAgentSection(doc)
+	if err != nil {
+		return nil, fmt.Errorf("decode agent: %w", err)
+	}
+	if agentSpec == nil {
+		return nil, fmt.Errorf("agent section required")
+	}
 
 	// Decode context policy section (best-effort, optional)
 	contextPolicy, _ := decodeContextPolicySection(doc)
@@ -36,7 +57,7 @@ func AssembleContract(doc *config.Document) (*config.EffectiveAgentContract, err
 		ManifestVersion: doc.Metadata.Version,
 	}
 
-	return config.BuildEffectiveAgentContract(agentID, agentSpec, perms, config.ResourceSpec{}, sources), nil
+	return config.BuildEffectiveAgentContract(agentID, agentSpec, perms, resources, security, sources), nil
 }
 
 func decodePermissionsSection(doc *config.Document) (permissions.PermissionSet, error) {
@@ -57,6 +78,30 @@ func decodeAgentSection(doc *config.Document) (*agentspec.AgentRuntimeSpec, erro
 		return nil, errors.New("agent section not found")
 	}
 	return agentspec.DecodeSection(node)
+}
+
+func decodeResourceSection(doc *config.Document) (config.ResourceSpec, error) {
+	node, ok := doc.Section("resources")
+	if !ok {
+		return config.ResourceSpec{}, nil
+	}
+	rs, err := config.DecodeResourceSection(node)
+	if err != nil || rs == nil {
+		return config.ResourceSpec{}, err
+	}
+	return *rs, nil
+}
+
+func decodeSecuritySection(doc *config.Document) (config.SecuritySpec, error) {
+	node, ok := doc.Section("security")
+	if !ok {
+		return config.SecuritySpec{}, nil
+	}
+	ss, err := config.DecodeSecuritySection(node)
+	if err != nil || ss == nil {
+		return config.SecuritySpec{}, err
+	}
+	return *ss, nil
 }
 
 func decodeContextPolicySection(doc *config.Document) (*execctx.ContextPolicyBundle, error) {

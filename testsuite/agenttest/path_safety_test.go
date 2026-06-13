@@ -8,9 +8,14 @@ import (
 	"testing"
 )
 
+const (
+	escape_txt = "../escape.txt"
+)
+
+
 func TestResolvePathWithinRejectsEscape(t *testing.T) {
 	root := t.TempDir()
-	if _, err := resolvePathWithin(root, "../escape.txt"); err == nil {
+	if _, err := resolvePathWithin(root, escape_txt); err == nil {
 		t.Fatal("expected traversal to fail")
 	}
 }
@@ -19,7 +24,7 @@ func TestApplySetupRejectsEscapingPath(t *testing.T) {
 	root := t.TempDir()
 	_, err := applySetup(root, root, SetupSpec{
 		Files: []SetupFileSpec{{
-			Path:    "../escape.txt",
+			Path:    escape_txt,
 			Content: "nope",
 		}},
 	}, false, nil)
@@ -31,7 +36,7 @@ func TestApplySetupRejectsEscapingPath(t *testing.T) {
 func TestApplyWorkspaceFilesRejectsEscapingPath(t *testing.T) {
 	root := t.TempDir()
 	err := applyWorkspaceFiles(root, root, []SetupFileSpec{{
-		Path:    "../escape.txt",
+		Path:    escape_txt,
 		Content: "nope",
 	}})
 	if err == nil {
@@ -40,7 +45,7 @@ func TestApplyWorkspaceFilesRejectsEscapingPath(t *testing.T) {
 }
 
 func TestResolveCaseExecutionRejectsEscapingTapePath(t *testing.T) {
-	layout := newRunCaseLayout(t.TempDir(), "smoke", "model")
+	layout := newRunCaseLayout(t.TempDir(), smoke, "model")
 	workspace := filepath.Join(t.TempDir(), "workspace")
 	targetWorkspace := t.TempDir()
 	suite := &Suite{
@@ -50,7 +55,7 @@ func TestResolveCaseExecutionRejectsEscapingTapePath(t *testing.T) {
 		},
 	}
 
-	_, err := resolveCaseExecution(suite, CaseSpec{Name: "smoke"}, ModelSpec{Name: "suite-model"}, "manifest-model", RunOptions{}, layout, targetWorkspace, workspace)
+	_, err := resolveCaseExecution(suite, CaseSpec{Name: smoke}, ModelSpec{Name: "suite-model"}, "manifest-model", RunOptions{}, layout, targetWorkspace, workspace)
 	if err == nil {
 		t.Fatal("expected escaping tape path to fail")
 	}

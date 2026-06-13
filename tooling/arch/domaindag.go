@@ -11,6 +11,24 @@ import (
 	"strings"
 )
 
+const (
+	Ayenitd_domaindag = "ayenitd"
+	Capability_domaindag = "capability"
+	Cognitionzoo_domaindag = "cognitionzoo"
+	Context_domaindag = "context"
+	Execution_domaindag = "execution"
+	Governance_domaindag = "governance"
+	Jobs_domaindag = "jobs"
+	Model_domaindag = "model"
+	Platform_domaindag = "platform"
+	Telemetry_domaindag = "telemetry"
+	Testsuite_domaindag = "testsuite"
+	Tooling_domaindag = "tooling"
+	Userconfig_domaindag = "userconfig"
+	C_2194 = "↔"
+)
+
+
 // DomainDAG encodes the allowed domain import directions from §2.1.
 // For each importing domain, allowedImports[domain] lists the set of domains
 // it is permitted to import from. Self-imports (same domain) are always allowed.
@@ -20,63 +38,63 @@ var DomainDAG = domainDAG()
 func domainDAG() map[string]map[string]bool {
 	d := map[string][]string{
 		"app": {
-			"named", "cognitionzoo", "ayenitd", "execution",
-			"context", "capability", "governance",
-			"model", "jobs", "telemetry", "userconfig",
-			"platform", "testsuite", "tooling",
+			"named", Cognitionzoo_domaindag, Ayenitd_domaindag, Execution_domaindag,
+			Context_domaindag, Capability_domaindag, Governance_domaindag,
+			Model_domaindag, Jobs_domaindag, Telemetry_domaindag, Userconfig_domaindag,
+			Platform_domaindag, Testsuite_domaindag, Tooling_domaindag,
 		},
 		"named": {
-			"cognitionzoo", "ayenitd", "execution",
-			"context", "capability", "governance",
-			"model", "jobs", "telemetry", "userconfig",
-			"platform", "testsuite", "tooling",
+			Cognitionzoo_domaindag, Ayenitd_domaindag, Execution_domaindag,
+			Context_domaindag, Capability_domaindag, Governance_domaindag,
+			Model_domaindag, Jobs_domaindag, Telemetry_domaindag, Userconfig_domaindag,
+			Platform_domaindag, Testsuite_domaindag, Tooling_domaindag,
 		},
-		"cognitionzoo": {
-			"ayenitd", "execution",
-			"context", "capability", "governance",
-			"model", "jobs", "telemetry", "userconfig",
-			"platform", "testsuite", "tooling",
+		Cognitionzoo_domaindag: {
+			Ayenitd_domaindag, Execution_domaindag,
+			Context_domaindag, Capability_domaindag, Governance_domaindag,
+			Model_domaindag, Jobs_domaindag, Telemetry_domaindag, Userconfig_domaindag,
+			Platform_domaindag, Testsuite_domaindag, Tooling_domaindag,
 		},
-		"ayenitd": {
-			"execution",
-			"context", "capability", "governance",
-			"model", "jobs", "telemetry", "userconfig",
-			"platform", "testsuite", "tooling",
+		Ayenitd_domaindag: {
+			Execution_domaindag,
+			Context_domaindag, Capability_domaindag, Governance_domaindag,
+			Model_domaindag, Jobs_domaindag, Telemetry_domaindag, Userconfig_domaindag,
+			Platform_domaindag, Testsuite_domaindag, Tooling_domaindag,
 		},
-		"execution": {
-			"context", "capability", "governance",
-			"model", "jobs", "telemetry", "userconfig",
-			"platform", "testsuite", "tooling",
+		Execution_domaindag: {
+			Context_domaindag, Capability_domaindag, Governance_domaindag,
+			Model_domaindag, Jobs_domaindag, Telemetry_domaindag, Userconfig_domaindag,
+			Platform_domaindag, Testsuite_domaindag, Tooling_domaindag,
 		},
-		"context": {
-			"capability", "governance",
-			"model", "jobs", "telemetry", "userconfig",
-			"platform", "testsuite", "tooling",
+		Context_domaindag: {
+			Capability_domaindag, Governance_domaindag,
+			Model_domaindag, Jobs_domaindag, Telemetry_domaindag, Userconfig_domaindag,
+			Platform_domaindag, Testsuite_domaindag, Tooling_domaindag,
 		},
-		"capability": {
-			"governance",
-			"model", "jobs", "telemetry", "userconfig",
-			"platform", "testsuite", "tooling",
+		Capability_domaindag: {
+			Governance_domaindag,
+			Model_domaindag, Jobs_domaindag, Telemetry_domaindag, Userconfig_domaindag,
+			Platform_domaindag, Testsuite_domaindag, Tooling_domaindag,
 		},
-		"governance": {
-			"model", "jobs", "telemetry", "userconfig",
-			"platform", "testsuite", "tooling",
+		Governance_domaindag: {
+			Model_domaindag, Jobs_domaindag, Telemetry_domaindag, Userconfig_domaindag,
+			Platform_domaindag, Testsuite_domaindag, Tooling_domaindag,
 		},
-		"model": {
-			"platform", "testsuite", "tooling",
+		Model_domaindag: {
+			Platform_domaindag, Testsuite_domaindag, Tooling_domaindag,
 		},
-		"jobs": {
-			"platform", "testsuite", "tooling",
+		Jobs_domaindag: {
+			Platform_domaindag, Testsuite_domaindag, Tooling_domaindag,
 		},
-		"telemetry": {
-			"platform", "testsuite", "tooling",
+		Telemetry_domaindag: {
+			Platform_domaindag, Testsuite_domaindag, Tooling_domaindag,
 		},
-		"userconfig": {
-			"platform", "testsuite", "tooling",
+		Userconfig_domaindag: {
+			Platform_domaindag, Testsuite_domaindag, Tooling_domaindag,
 		},
-		"platform": {
-			"capability", "governance", "context", "model",
-			"testsuite", "tooling",
+		Platform_domaindag: {
+			Capability_domaindag, Governance_domaindag, Context_domaindag, Model_domaindag,
+			Testsuite_domaindag, Tooling_domaindag,
 		},
 	}
 	out := make(map[string]map[string]bool, len(d))
@@ -215,10 +233,10 @@ func DomainCycleReport(pkgs []GoPackage, forward map[string][]string) []string {
 			if ba == 0 {
 				continue
 			}
-			if seen[a+"↔"+b] || seen[b+"↔"+a] {
+			if seen[a+C_2194+b] || seen[b+C_2194+a] {
 				continue
 			}
-			seen[a+"↔"+b] = true
+			seen[a+C_2194+b] = true
 
 			majority := "—"
 			if ab > ba {

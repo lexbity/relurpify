@@ -6,6 +6,8 @@ import (
 	"testing"
 )
 
+const falseEnvInput = "false"
+
 // TestParseBoolEnvFailsClosed asserts that parseBoolEnv rejects unrecognized
 // input with an error, rather than silently treating it as false. A
 // RELURPIFY_STRICT typo like "flase" or "enabled" must fail the boot loudly.
@@ -25,7 +27,7 @@ func TestParseBoolEnvFailsClosed(t *testing.T) {
 
 		// Accepted false values
 		{input: "0", want: false, wantErr: false},
-		{input: "false", want: false, wantErr: false},
+		{input: falseEnvInput, want: false, wantErr: false},
 		{input: "no", want: false, wantErr: false},
 		{input: "off", want: false, wantErr: false},
 

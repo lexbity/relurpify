@@ -8,17 +8,40 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/ports"
 )
 
+const (
+	color = "color"
+	color_always = "--color=always"
+	color_never = "--color=never"
+	colordiff = "colordiff"
+	echo = "echo"
+	glob = "--glob"
+	glob_2 = "glob"
+	goVar = "*.go"
+	hello = "hello"
+	output = "output"
+	output_path = "output_path"
+	pattern = "pattern"
+	patterns = "patterns"
+	result_json = "result.json"
+	rg = "rg"
+	rs = "*.rs"
+	verbose = "verbose"
+	verbose_2 = "--verbose"
+	world = "world"
+)
+
+
 func TestExpandCommandBaseOnly(t *testing.T) {
 	cmd, err := ExpandCommand(ports.ToolManifest{
 		Execution: ports.ToolManifestExecution{
 			Backend: ports.ToolBackendSubprocess,
 			Command: &ports.ToolManifestCommand{
-				Base: []string{"rg"},
+				Base: []string{rg},
 			},
 		},
 	}, nil)
 	require.NoError(t, err)
-	require.Equal(t, []string{"rg"}, cmd)
+	require.Equal(t, []string{rg}, cmd)
 }
 
 func TestExpandCommandBaseWithArgs(t *testing.T) {
@@ -26,13 +49,13 @@ func TestExpandCommandBaseWithArgs(t *testing.T) {
 		Execution: ports.ToolManifestExecution{
 			Backend: ports.ToolBackendSubprocess,
 			Command: &ports.ToolManifestCommand{
-				Base: []string{"echo"},
-				Args: []string{"hello", "world"},
+				Base: []string{echo},
+				Args: []string{hello, world},
 			},
 		},
 	}, nil)
 	require.NoError(t, err)
-	require.Equal(t, []string{"echo", "hello", "world"}, cmd)
+	require.Equal(t, []string{echo, hello, world}, cmd)
 }
 
 func TestExpandCommandWithPlaceholders(t *testing.T) {
@@ -40,52 +63,52 @@ func TestExpandCommandWithPlaceholders(t *testing.T) {
 		Execution: ports.ToolManifestExecution{
 			Backend: ports.ToolBackendSubprocess,
 			Command: &ports.ToolManifestCommand{
-				Base: []string{"echo"},
+				Base: []string{echo},
 				Args: []string{"${message}"},
 			},
 		},
 	}, map[string]any{
-		"message": "hello",
+		"message": hello,
 	})
 	require.NoError(t, err)
-	require.Equal(t, []string{"echo", "hello"}, cmd)
+	require.Equal(t, []string{echo, hello}, cmd)
 }
 
 func TestExpandCommandWithDefaultArgs(t *testing.T) {
 	cmd, err := ExpandCommand(ports.ToolManifest{
 		Execution: ports.ToolManifestExecution{
 			Backend:     ports.ToolBackendSubprocess,
-			Command:     &ports.ToolManifestCommand{Base: []string{"echo"}},
+			Command:     &ports.ToolManifestCommand{Base: []string{echo}},
 			DefaultArgs: []string{"-n"},
 		},
 	}, nil)
 	require.NoError(t, err)
-	require.Equal(t, []string{"echo", "-n"}, cmd)
+	require.Equal(t, []string{echo, "-n"}, cmd)
 }
 
 func TestExpandCommandWithRawArgs(t *testing.T) {
 	cmd, err := ExpandCommand(ports.ToolManifest{
 		Execution: ports.ToolManifestExecution{
 			Backend: ports.ToolBackendSubprocess,
-			Command: &ports.ToolManifestCommand{Base: []string{"echo"}},
+			Command: &ports.ToolManifestCommand{Base: []string{echo}},
 			Sandbox: &ports.ToolManifestSandbox{AllowFlags: true},
 		},
 	}, map[string]any{
-		"args": []any{"hello", "world"},
+		args: []any{hello, world},
 	})
 	require.NoError(t, err)
-	require.Equal(t, []string{"echo", "hello", "world"}, cmd)
+	require.Equal(t, []string{echo, hello, world}, cmd)
 }
 
 func TestExpandCommandRawArgsFlagGuard(t *testing.T) {
 	_, err := ExpandCommand(ports.ToolManifest{
 		Execution: ports.ToolManifestExecution{
 			Backend: ports.ToolBackendSubprocess,
-			Command: &ports.ToolManifestCommand{Base: []string{"echo"}},
+			Command: &ports.ToolManifestCommand{Base: []string{echo}},
 			// allow_flags defaults to false
 		},
 	}, map[string]any{
-		"args": []any{"--version"},
+		args: []any{"--version"},
 	})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "flag injection")
@@ -95,14 +118,14 @@ func TestExpandCommandRawArgsFlagAllowed(t *testing.T) {
 	cmd, err := ExpandCommand(ports.ToolManifest{
 		Execution: ports.ToolManifestExecution{
 			Backend: ports.ToolBackendSubprocess,
-			Command: &ports.ToolManifestCommand{Base: []string{"echo"}},
+			Command: &ports.ToolManifestCommand{Base: []string{echo}},
 			Sandbox: &ports.ToolManifestSandbox{AllowFlags: true},
 		},
 	}, map[string]any{
-		"args": []any{"--verbose"},
+		args: []any{verbose_2},
 	})
 	require.NoError(t, err)
-	require.Equal(t, []string{"echo", "--verbose"}, cmd)
+	require.Equal(t, []string{echo, verbose_2}, cmd)
 }
 
 func TestExpandCommandMissingPlaceholder(t *testing.T) {
@@ -110,7 +133,7 @@ func TestExpandCommandMissingPlaceholder(t *testing.T) {
 		Execution: ports.ToolManifestExecution{
 			Backend: ports.ToolBackendSubprocess,
 			Command: &ports.ToolManifestCommand{
-				Base: []string{"echo"},
+				Base: []string{echo},
 				Args: []string{"${missing}"},
 			},
 		},
@@ -126,20 +149,20 @@ func TestTypedFlagEqualsStyle(t *testing.T) {
 		Execution: ports.ToolManifestExecution{
 			Backend: ports.ToolBackendSubprocess,
 			Command: &ports.ToolManifestCommand{
-				Base: []string{"rg"},
+				Base: []string{rg},
 				Flags: map[string]ports.ToolManifestFlag{
-					"output": {
-						Param: "output_path",
+					output: {
+						Param: output_path,
 						Style: ports.FlagStyleEquals,
 					},
 				},
 			},
 		},
 	}, map[string]any{
-		"output_path": "result.json",
+		output_path: result_json,
 	})
 	require.NoError(t, err)
-	require.Equal(t, []string{"rg", "--output=result.json"}, cmd)
+	require.Equal(t, []string{rg, "--output=result.json"}, cmd)
 }
 
 func TestTypedFlagEqualsStyleDefaults(t *testing.T) {
@@ -147,20 +170,20 @@ func TestTypedFlagEqualsStyleDefaults(t *testing.T) {
 		Execution: ports.ToolManifestExecution{
 			Backend: ports.ToolBackendSubprocess,
 			Command: &ports.ToolManifestCommand{
-				Base: []string{"rg"},
+				Base: []string{rg},
 				Flags: map[string]ports.ToolManifestFlag{
-					"output": {
-						Param: "output_path",
+					output: {
+						Param: output_path,
 						// Style empty — defaults to equals
 					},
 				},
 			},
 		},
 	}, map[string]any{
-		"output_path": "result.json",
+		output_path: result_json,
 	})
 	require.NoError(t, err)
-	require.Equal(t, []string{"rg", "--output=result.json"}, cmd)
+	require.Equal(t, []string{rg, "--output=result.json"}, cmd)
 }
 
 func TestTypedFlagSeparateStyle(t *testing.T) {
@@ -168,20 +191,20 @@ func TestTypedFlagSeparateStyle(t *testing.T) {
 		Execution: ports.ToolManifestExecution{
 			Backend: ports.ToolBackendSubprocess,
 			Command: &ports.ToolManifestCommand{
-				Base: []string{"rg"},
+				Base: []string{rg},
 				Flags: map[string]ports.ToolManifestFlag{
-					"output": {
-						Param: "output_path",
+					output: {
+						Param: output_path,
 						Style: ports.FlagStyleSeparate,
 					},
 				},
 			},
 		},
 	}, map[string]any{
-		"output_path": "result.json",
+		output_path: result_json,
 	})
 	require.NoError(t, err)
-	require.Equal(t, []string{"rg", "--output", "result.json"}, cmd)
+	require.Equal(t, []string{rg, "--output", result_json}, cmd)
 }
 
 func TestTypedFlagRepeatEquals(t *testing.T) {
@@ -189,10 +212,10 @@ func TestTypedFlagRepeatEquals(t *testing.T) {
 		Execution: ports.ToolManifestExecution{
 			Backend: ports.ToolBackendSubprocess,
 			Command: &ports.ToolManifestCommand{
-				Base: []string{"rg"},
+				Base: []string{rg},
 				Flags: map[string]ports.ToolManifestFlag{
-					"glob": {
-						Param:  "patterns",
+					glob_2: {
+						Param:  patterns,
 						Style:  ports.FlagStyleEquals,
 						Repeat: true,
 					},
@@ -200,10 +223,10 @@ func TestTypedFlagRepeatEquals(t *testing.T) {
 			},
 		},
 	}, map[string]any{
-		"patterns": []any{"*.go", "*.rs"},
+		patterns: []any{goVar, rs},
 	})
 	require.NoError(t, err)
-	require.Equal(t, []string{"rg", "--glob=*.go", "--glob=*.rs"}, cmd)
+	require.Equal(t, []string{rg, "--glob=*.go", "--glob=*.rs"}, cmd)
 }
 
 func TestTypedFlagRepeatSeparate(t *testing.T) {
@@ -211,10 +234,10 @@ func TestTypedFlagRepeatSeparate(t *testing.T) {
 		Execution: ports.ToolManifestExecution{
 			Backend: ports.ToolBackendSubprocess,
 			Command: &ports.ToolManifestCommand{
-				Base: []string{"rg"},
+				Base: []string{rg},
 				Flags: map[string]ports.ToolManifestFlag{
-					"glob": {
-						Param:  "patterns",
+					glob_2: {
+						Param:  patterns,
 						Style:  ports.FlagStyleSeparate,
 						Repeat: true,
 					},
@@ -222,10 +245,10 @@ func TestTypedFlagRepeatSeparate(t *testing.T) {
 			},
 		},
 	}, map[string]any{
-		"patterns": []any{"*.go", "*.rs"},
+		patterns: []any{goVar, rs},
 	})
 	require.NoError(t, err)
-	require.Equal(t, []string{"rg", "--glob", "*.go", "--glob", "*.rs"}, cmd)
+	require.Equal(t, []string{rg, glob, goVar, glob, rs}, cmd)
 }
 
 func TestTypedFlagSeparateStyleWithAdversarialValue(t *testing.T) {
@@ -234,9 +257,9 @@ func TestTypedFlagSeparateStyleWithAdversarialValue(t *testing.T) {
 		Execution: ports.ToolManifestExecution{
 			Backend: ports.ToolBackendSubprocess,
 			Command: &ports.ToolManifestCommand{
-				Base: []string{"rg"},
+				Base: []string{rg},
 				Flags: map[string]ports.ToolManifestFlag{
-					"pattern": {
+					pattern: {
 						Param: "pat",
 						Style: ports.FlagStyleSeparate,
 					},
@@ -248,7 +271,7 @@ func TestTypedFlagSeparateStyleWithAdversarialValue(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Len(t, cmd, 3, "must produce exactly 3 tokens")
-	require.Equal(t, "rg", cmd[0])
+	require.Equal(t, rg, cmd[0])
 	require.Equal(t, "--pattern", cmd[1])
 	require.Equal(t, "a=b;c d", cmd[2])
 }
@@ -260,20 +283,20 @@ func TestBooleanFlagTrue(t *testing.T) {
 		Execution: ports.ToolManifestExecution{
 			Backend: ports.ToolBackendSubprocess,
 			Command: &ports.ToolManifestCommand{
-				Base: []string{"colordiff"},
+				Base: []string{colordiff},
 				Flags: map[string]ports.ToolManifestFlag{
-					"color": {
-						WhenTrue:  []string{"--color=always"},
-						WhenFalse: []string{"--color=never"},
+					color: {
+						WhenTrue:  []string{color_always},
+						WhenFalse: []string{color_never},
 					},
 				},
 			},
 		},
 	}, map[string]any{
-		"color": true,
+		color: true,
 	})
 	require.NoError(t, err)
-	require.Equal(t, []string{"colordiff", "--color=always"}, cmd)
+	require.Equal(t, []string{colordiff, color_always}, cmd)
 }
 
 func TestBooleanFlagFalse(t *testing.T) {
@@ -281,20 +304,20 @@ func TestBooleanFlagFalse(t *testing.T) {
 		Execution: ports.ToolManifestExecution{
 			Backend: ports.ToolBackendSubprocess,
 			Command: &ports.ToolManifestCommand{
-				Base: []string{"colordiff"},
+				Base: []string{colordiff},
 				Flags: map[string]ports.ToolManifestFlag{
-					"color": {
-						WhenTrue:  []string{"--color=always"},
-						WhenFalse: []string{"--color=never"},
+					color: {
+						WhenTrue:  []string{color_always},
+						WhenFalse: []string{color_never},
 					},
 				},
 			},
 		},
 	}, map[string]any{
-		"color": false,
+		color: false,
 	})
 	require.NoError(t, err)
-	require.Equal(t, []string{"colordiff", "--color=never"}, cmd)
+	require.Equal(t, []string{colordiff, color_never}, cmd)
 }
 
 func TestBooleanFlagNotProvided(t *testing.T) {
@@ -302,18 +325,18 @@ func TestBooleanFlagNotProvided(t *testing.T) {
 		Execution: ports.ToolManifestExecution{
 			Backend: ports.ToolBackendSubprocess,
 			Command: &ports.ToolManifestCommand{
-				Base: []string{"colordiff"},
+				Base: []string{colordiff},
 				Flags: map[string]ports.ToolManifestFlag{
-					"color": {
-						WhenTrue:  []string{"--color=always"},
-						WhenFalse: []string{"--color=never"},
+					color: {
+						WhenTrue:  []string{color_always},
+						WhenFalse: []string{color_never},
 					},
 				},
 			},
 		},
 	}, nil)
 	require.NoError(t, err)
-	require.Equal(t, []string{"colordiff"}, cmd)
+	require.Equal(t, []string{colordiff}, cmd)
 }
 
 func TestBooleanFlagOnlyWhenTrue(t *testing.T) {
@@ -321,19 +344,19 @@ func TestBooleanFlagOnlyWhenTrue(t *testing.T) {
 		Execution: ports.ToolManifestExecution{
 			Backend: ports.ToolBackendSubprocess,
 			Command: &ports.ToolManifestCommand{
-				Base: []string{"tool"},
+				Base: []string{tool},
 				Flags: map[string]ports.ToolManifestFlag{
-					"verbose": {
-						WhenTrue: []string{"--verbose"},
+					verbose: {
+						WhenTrue: []string{verbose_2},
 					},
 				},
 			},
 		},
 	}, map[string]any{
-		"verbose": true,
+		verbose: true,
 	})
 	require.NoError(t, err)
-	require.Equal(t, []string{"tool", "--verbose"}, cmd)
+	require.Equal(t, []string{tool, verbose_2}, cmd)
 }
 
 func TestBooleanFlagOnlyWhenTrueFalse(t *testing.T) {
@@ -341,19 +364,19 @@ func TestBooleanFlagOnlyWhenTrueFalse(t *testing.T) {
 		Execution: ports.ToolManifestExecution{
 			Backend: ports.ToolBackendSubprocess,
 			Command: &ports.ToolManifestCommand{
-				Base: []string{"tool"},
+				Base: []string{tool},
 				Flags: map[string]ports.ToolManifestFlag{
-					"verbose": {
-						WhenTrue: []string{"--verbose"},
+					verbose: {
+						WhenTrue: []string{verbose_2},
 					},
 				},
 			},
 		},
 	}, map[string]any{
-		"verbose": false,
+		verbose: false,
 	})
 	require.NoError(t, err)
-	require.Equal(t, []string{"tool"}, cmd)
+	require.Equal(t, []string{tool}, cmd)
 }
 
 // --- Combined tests ---
@@ -363,10 +386,10 @@ func TestTypedAndBooleanFlagsCombined(t *testing.T) {
 		Execution: ports.ToolManifestExecution{
 			Backend: ports.ToolBackendSubprocess,
 			Command: &ports.ToolManifestCommand{
-				Base: []string{"rg"},
+				Base: []string{rg},
 				Flags: map[string]ports.ToolManifestFlag{
-					"output": {
-						Param: "output_path",
+					output: {
+						Param: output_path,
 						Style: ports.FlagStyleEquals,
 					},
 					"hidden": {
@@ -376,26 +399,26 @@ func TestTypedAndBooleanFlagsCombined(t *testing.T) {
 			},
 		},
 	}, map[string]any{
-		"output_path": "out.json",
+		output_path: "out.json",
 		"hidden":      true,
 	})
 	require.NoError(t, err)
 	// Flags sorted: hidden < output
-	require.Equal(t, []string{"rg", "--hidden", "--output=out.json"}, cmd)
+	require.Equal(t, []string{rg, "--hidden", "--output=out.json"}, cmd)
 }
 
 func TestExpandCommandAllComponents(t *testing.T) {
 	cmd, err := ExpandCommand(ports.ToolManifest{
 		Parameters: []ports.ToolParameter{
-			{Name: "pattern", Type: "string", Required: true},
+			{Name: pattern, Type: "string", Required: true},
 		},
 		Execution: ports.ToolManifestExecution{
 			Backend: ports.ToolBackendSubprocess,
 			Command: &ports.ToolManifestCommand{
-				Base: []string{"rg"},
+				Base: []string{rg},
 				Args: []string{"${pattern}"},
 				Flags: map[string]ports.ToolManifestFlag{
-					"glob": {
+					glob_2: {
 						Param:  "globs",
 						Style:  ports.FlagStyleSeparate,
 						Repeat: true,
@@ -406,13 +429,13 @@ func TestExpandCommandAllComponents(t *testing.T) {
 			Sandbox:     &ports.ToolManifestSandbox{AllowFlags: true},
 		},
 	}, map[string]any{
-		"pattern": "func",
-		"globs":   []any{"*.go", "*.rs"},
-		"args":    []any{"--follow"},
+		pattern: "func",
+		"globs":   []any{goVar, rs},
+		args:    []any{"--follow"},
 	})
 	require.NoError(t, err)
 	// Order: base + flags(glob) + positional(pattern) + default_args + raw
-	require.Equal(t, []string{"rg", "--glob", "*.go", "--glob", "*.rs", "func", "--no-ignore", "--follow"}, cmd)
+	require.Equal(t, []string{rg, glob, goVar, glob, rs, "func", "--no-ignore", "--follow"}, cmd)
 }
 
 // --- Error cases ---
@@ -422,7 +445,7 @@ func TestMissingRequiredParamViaPlaceholder(t *testing.T) {
 		Execution: ports.ToolManifestExecution{
 			Backend: ports.ToolBackendSubprocess,
 			Command: &ports.ToolManifestCommand{
-				Base: []string{"echo"},
+				Base: []string{echo},
 				Args: []string{"${required_param}"},
 			},
 		},
@@ -436,7 +459,7 @@ func TestPartialPlaceholderTokenRejected(t *testing.T) {
 		Execution: ports.ToolManifestExecution{
 			Backend: ports.ToolBackendSubprocess,
 			Command: &ports.ToolManifestCommand{
-				Base: []string{"echo"},
+				Base: []string{echo},
 				Args: []string{"prefix_${x}_suffix"},
 			},
 		},
@@ -490,7 +513,7 @@ func TestAdversarialValuesStaySingleTokens(t *testing.T) {
 				Execution: ports.ToolManifestExecution{
 					Backend: ports.ToolBackendSubprocess,
 					Command: &ports.ToolManifestCommand{
-						Base: []string{"tool"},
+						Base: []string{tool},
 						Args: []string{"${x}"},
 					},
 				},
@@ -509,10 +532,10 @@ func TestParamNotProvidedTypedFlagSkipped(t *testing.T) {
 		Execution: ports.ToolManifestExecution{
 			Backend: ports.ToolBackendSubprocess,
 			Command: &ports.ToolManifestCommand{
-				Base: []string{"rg"},
+				Base: []string{rg},
 				Flags: map[string]ports.ToolManifestFlag{
-					"output": {
-						Param: "output_path",
+					output: {
+						Param: output_path,
 						Style: ports.FlagStyleEquals,
 					},
 				},
@@ -520,7 +543,7 @@ func TestParamNotProvidedTypedFlagSkipped(t *testing.T) {
 		},
 	}, nil)
 	require.NoError(t, err)
-	require.Equal(t, []string{"rg"}, cmd)
+	require.Equal(t, []string{rg}, cmd)
 }
 
 func TestBoolFlagNonBoolValueError(t *testing.T) {
@@ -528,17 +551,17 @@ func TestBoolFlagNonBoolValueError(t *testing.T) {
 		Execution: ports.ToolManifestExecution{
 			Backend: ports.ToolBackendSubprocess,
 			Command: &ports.ToolManifestCommand{
-				Base: []string{"tool"},
+				Base: []string{tool},
 				Flags: map[string]ports.ToolManifestFlag{
-					"verbose": {
-						WhenTrue: []string{"--verbose"},
+					verbose: {
+						WhenTrue: []string{verbose_2},
 					},
 				},
 			},
 		},
 	}, map[string]any{
-		"verbose": "not-a-bool",
+		verbose: "not-a-bool",
 	})
 	require.Error(t, err)
-	require.Contains(t, err.Error(), `flag "verbose" expects a boolean value`)
+	require.Contains(t, err.Error(), `flag verbose expects a boolean value`)
 }

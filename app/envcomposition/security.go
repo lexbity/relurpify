@@ -8,23 +8,27 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 	cfgsecurity "codeburg.org/lexbit/relurpify/userconfig/config/security"
 )
 
 // SecurityRuntimeInput carries the parameters for BuildSecurityRuntime.
 // When ExistingRunner is set it is used directly; otherwise a new runner is
-// built from SandboxBackend + SecurityBundle + ManifestSpec.
+// built from SandboxBackend + SecurityBundle + the resolved image/runtime/security inputs.
 type SecurityRuntimeInput struct {
 	Context           context.Context
 	Workspace         string
 	SandboxBackend    string
+	Runtime           string
+	Image             string
 	AgentID           string
 	AgentSpec         *agentspec.AgentRuntimeSpec
 	PermissionManager *fauthorization.PermissionManager
 	SecurityBundle    *cfgsecurity.Bundle
+	Security          config.SecuritySpec
+	Permissions       permissions.PermissionSet
 	ExistingRunner    sandbox.CommandRunner
-	ManifestSpec      *config.ManifestSpec
 	Strict            bool
 }
 
@@ -46,7 +50,7 @@ type SecurityRuntime struct {
 // Invariant chain:
 //  1. Select sandbox runtime (fail-closed on unsupported backend)
 //  2. Verify the sandbox (fail-closed)
-//  3. Build verified runner with manifest-derived CommandRunnerConfig
+//  3. Build verified runner with resolved CommandRunnerConfig
 //  4. Resolve CommandAuthorizationPolicy (default-deny if no PermissionManager)
 //  5. NewAuthorizedRunner(verified, policy)
 //  6. Compile PolicyEngine from agent spec
@@ -122,16 +126,14 @@ func BuildSecurityRuntime(ctx context.Context, in SecurityRuntimeInput) (*Securi
 // buildRunnerConfig constructs a CommandRunnerConfig from manifest-derived
 // hardening fields. Returns a minimal config with just Workspace when the
 // spec is nil.
-func buildRunnerConfig(workspace string, spec *config.ManifestSpec) *sandbox.CommandRunnerConfig {
+func buildRunnerConfig(workspace string, image string, security config.SecuritySpec) *sandbox.CommandRunnerConfig {
 	cfg := &sandbox.CommandRunnerConfig{
 		Workspace: workspace,
 	}
-	if spec != nil {
-		cfg.Image = spec.Image
-		cfg.RunAsUser = spec.Security.RunAsUser
-		cfg.ReadOnlyRoot = spec.Security.ReadOnlyRoot
-		cfg.NoNewPrivileges = spec.Security.NoNewPrivileges
-	}
+	cfg.Image = image
+	cfg.RunAsUser = security.RunAsUser
+	cfg.ReadOnlyRoot = security.ReadOnlyRoot
+	cfg.NoNewPrivileges = security.NoNewPrivileges
 	return cfg
 }
 
@@ -145,8 +147,8 @@ func buildRunnerImpl(in SecurityRuntimeInput) (sandbox.CommandRunner, *sandbox.C
 	if err != nil {
 		return nil, nil, fmt.Errorf("select sandbox runtime: %w", err)
 	}
-	runnerConfig := buildRunnerConfig(in.Workspace, in.ManifestSpec)
-	sboxPolicy := newSandboxPolicy(in.ManifestSpec, in.SecurityBundle.Sandbox.ProtectedPaths)
+	runnerConfig := buildRunnerConfig(in.Workspace, in.Image, in.Security)
+	sboxPolicy := newSandboxPolicy(in.Security, in.SecurityBundle.Sandbox.ProtectedPaths)
 	runner, err := sandbox.NewVerifiedCommandRunner(in.Context, sboxRuntime, sboxPolicy, runnerConfig)
 	if err != nil {
 		return nil, nil, fmt.Errorf("build verified runner: %w", err)
@@ -186,14 +188,11 @@ func newSandboxRuntime(backend string, sandboxCfg sandbox.SandboxConfig, image, 
 }
 
 // newSandboxPolicy constructs a sandbox policy from a manifest spec.
-func newSandboxPolicy(spec *config.ManifestSpec, protectedPaths []string) sandbox.SandboxPolicy {
+func newSandboxPolicy(spec config.SecuritySpec, protectedPaths []string) sandbox.SandboxPolicy {
 	policy := sandbox.SandboxPolicy{
 		ProtectedPaths: append([]string(nil), protectedPaths...),
 	}
-	if spec == nil {
-		return policy
-	}
-	policy.ReadOnlyRoot = spec.Security.ReadOnlyRoot
-	policy.NoNewPrivileges = spec.Security.NoNewPrivileges
+	policy.ReadOnlyRoot = spec.ReadOnlyRoot
+	policy.NoNewPrivileges = spec.NoNewPrivileges
 	return policy
 }

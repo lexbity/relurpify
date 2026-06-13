@@ -8,6 +8,29 @@ import (
 	"codeburg.org/lexbit/relurpify/platform/fs"
 )
 
+const (
+	Capability_domaindag_test = "/capability"
+	Capabilitya_domaindag_test = "/capability/a"
+	Capabilityc_domaindag_test = "/capability/c"
+	Capabilityclassification_domaindag_test = "/capability/classification"
+	Contexta_domaindag_test = "/context/a"
+	Contextb_domaindag_test = "/context/b"
+	Executiona_domaindag_test = "/execution/a"
+	Executionb_domaindag_test = "/execution/b"
+	Executionc_domaindag_test = "/execution/c"
+	Frameworktypes_domaindag_test = "/framework/types"
+	Frameworktypestypesgo_domaindag_test = "/framework/types/types.go"
+	Capability_domaindag_test_2 = "capability"
+	Context_domaindag_test = "context"
+	Execution_domaindag_test = "execution"
+	Fmt_domaindag_test = "fmt"
+	Governance_domaindag_test = "governance"
+	Model_domaindag_test = "model"
+	Platform_domaindag_test = "platform"
+	TypesGoFile_domaindag_test = "types.go"
+)
+
+
 func mkPkg(importPath string, goFiles ...string) GoPackage {
 	p := GoPackage{ImportPath: importPath}
 	if len(goFiles) > 0 {
@@ -19,7 +42,7 @@ func mkPkg(importPath string, goFiles ...string) GoPackage {
 }
 
 func TestAllowedDomainImport_sameDomain(t *testing.T) {
-	if !AllowedDomainImport("execution", "execution") {
+	if !AllowedDomainImport(Execution_domaindag_test, Execution_domaindag_test) {
 		t.Error("same domain should be allowed")
 	}
 }
@@ -29,16 +52,16 @@ func TestAllowedDomainImport_downward(t *testing.T) {
 		src, dst string
 		want     bool
 	}{
-		{"execution", "context", true},
-		{"execution", "capability", true},
-		{"execution", "governance", true},
-		{"context", "capability", true},
-		{"context", "governance", true},
-		{"capability", "governance", true},
-		{"governance", "model", true},
+		{Execution_domaindag_test, Context_domaindag_test, true},
+		{Execution_domaindag_test, Capability_domaindag_test_2, true},
+		{Execution_domaindag_test, Governance_domaindag_test, true},
+		{Context_domaindag_test, Capability_domaindag_test_2, true},
+		{Context_domaindag_test, Governance_domaindag_test, true},
+		{Capability_domaindag_test_2, Governance_domaindag_test, true},
+		{Governance_domaindag_test, Model_domaindag_test, true},
 		{"app", "named", true},
 		{"named", "cognitionzoo", true},
-		{"cognitionzoo", "execution", true},
+		{"cognitionzoo", Execution_domaindag_test, true},
 	}
 	for _, tt := range tests {
 		got := AllowedDomainImport(tt.src, tt.dst)
@@ -53,15 +76,15 @@ func TestAllowedDomainImport_upward(t *testing.T) {
 		src, dst string
 		want     bool
 	}{
-		{"context", "execution", false},
-		{"capability", "context", false},
-		{"capability", "execution", false},
-		{"governance", "capability", false},
-		{"governance", "context", false},
-		{"governance", "execution", false},
-		{"model", "capability", false},
-		{"telemetry", "governance", false},
-		{"userconfig", "governance", false},
+		{Context_domaindag_test, Execution_domaindag_test, false},
+		{Capability_domaindag_test_2, Context_domaindag_test, false},
+		{Capability_domaindag_test_2, Execution_domaindag_test, false},
+		{Governance_domaindag_test, Capability_domaindag_test_2, false},
+		{Governance_domaindag_test, Context_domaindag_test, false},
+		{Governance_domaindag_test, Execution_domaindag_test, false},
+		{Model_domaindag_test, Capability_domaindag_test_2, false},
+		{"telemetry", Governance_domaindag_test, false},
+		{"userconfig", Governance_domaindag_test, false},
 	}
 	for _, tt := range tests {
 		got := AllowedDomainImport(tt.src, tt.dst)
@@ -72,31 +95,31 @@ func TestAllowedDomainImport_upward(t *testing.T) {
 }
 
 func TestAllowedDomainImport_platform(t *testing.T) {
-	if !AllowedDomainImport("platform", "capability") {
+	if !AllowedDomainImport(Platform_domaindag_test, Capability_domaindag_test_2) {
 		t.Error("platform should be able to import capability")
 	}
-	if !AllowedDomainImport("platform", "governance") {
+	if !AllowedDomainImport(Platform_domaindag_test, Governance_domaindag_test) {
 		t.Error("platform should be able to import governance")
 	}
-	if !AllowedDomainImport("platform", "context") {
+	if !AllowedDomainImport(Platform_domaindag_test, Context_domaindag_test) {
 		t.Error("platform should be able to import context")
 	}
-	if !AllowedDomainImport("platform", "model") {
+	if !AllowedDomainImport(Platform_domaindag_test, Model_domaindag_test) {
 		t.Error("platform should be able to import model")
 	}
-	if AllowedDomainImport("platform", "execution") {
+	if AllowedDomainImport(Platform_domaindag_test, Execution_domaindag_test) {
 		t.Error("platform should NOT be able to import execution")
 	}
-	if AllowedDomainImport("platform", "agents") {
+	if AllowedDomainImport(Platform_domaindag_test, "agents") {
 		t.Error("platform should NOT be able to import agents")
 	}
 }
 
 func TestAllowedDomainImport_unrestricted(t *testing.T) {
-	if !AllowedDomainImport("testsuite", "execution") {
+	if !AllowedDomainImport("testsuite", Execution_domaindag_test) {
 		t.Error("testsuite should be unrestricted")
 	}
-	if !AllowedDomainImport("tooling", "capability") {
+	if !AllowedDomainImport("tooling", Capability_domaindag_test_2) {
 		t.Error("tooling should be unrestricted")
 	}
 	if !AllowedDomainImport("testsuite", "app") {
@@ -106,14 +129,14 @@ func TestAllowedDomainImport_unrestricted(t *testing.T) {
 
 func TestCheckDomainDirection_noViolations(t *testing.T) {
 	pkgs := []GoPackage{
-		mkPkg(ModulePath + "/execution/a"),
-		mkPkg(ModulePath + "/context/b"),
-		mkPkg(ModulePath + "/capability/c"),
+		mkPkg(ModulePath + Executiona_domaindag_test),
+		mkPkg(ModulePath + Contextb_domaindag_test),
+		mkPkg(ModulePath + Capabilityc_domaindag_test),
 	}
 	forward := map[string][]string{
-		ModulePath + "/execution/a":  {ModulePath + "/context/b"},
-		ModulePath + "/context/b":    {ModulePath + "/capability/c"},
-		ModulePath + "/capability/c": {"fmt"},
+		ModulePath + Executiona_domaindag_test:  {ModulePath + Contextb_domaindag_test},
+		ModulePath + Contextb_domaindag_test:    {ModulePath + Capabilityc_domaindag_test},
+		ModulePath + Capabilityc_domaindag_test: {Fmt_domaindag_test},
 	}
 	vios := CheckDomainDirection(pkgs, forward, "enforce", nil)
 	if len(vios) != 0 {
@@ -123,33 +146,33 @@ func TestCheckDomainDirection_noViolations(t *testing.T) {
 
 func TestCheckDomainDirection_upwardViolation(t *testing.T) {
 	pkgs := []GoPackage{
-		mkPkg(ModulePath + "/context/a"),
-		mkPkg(ModulePath + "/execution/b"),
+		mkPkg(ModulePath + Contexta_domaindag_test),
+		mkPkg(ModulePath + Executionb_domaindag_test),
 	}
 	forward := map[string][]string{
-		ModulePath + "/context/a":   {ModulePath + "/execution/b"},
-		ModulePath + "/execution/b": {"fmt"},
+		ModulePath + Contexta_domaindag_test:   {ModulePath + Executionb_domaindag_test},
+		ModulePath + Executionb_domaindag_test: {Fmt_domaindag_test},
 	}
 	vios := CheckDomainDirection(pkgs, forward, "enforce", nil)
 	if len(vios) == 0 {
 		t.Fatal("expected violation for context→execution")
 	}
-	if !strings.Contains(vios[0], "context") || !strings.Contains(vios[0], "execution") {
+	if !strings.Contains(vios[0], Context_domaindag_test) || !strings.Contains(vios[0], Execution_domaindag_test) {
 		t.Errorf("violation should mention domains, got: %s", vios[0])
 	}
 }
 
 func TestCheckDomainDirection_warnModeException(t *testing.T) {
 	pkgs := []GoPackage{
-		mkPkg(ModulePath + "/context/a"),
-		mkPkg(ModulePath + "/execution/b"),
+		mkPkg(ModulePath + Contexta_domaindag_test),
+		mkPkg(ModulePath + Executionb_domaindag_test),
 	}
 	forward := map[string][]string{
-		ModulePath + "/context/a":   {ModulePath + "/execution/b"},
-		ModulePath + "/execution/b": {"fmt"},
+		ModulePath + Contexta_domaindag_test:   {ModulePath + Executionb_domaindag_test},
+		ModulePath + Executionb_domaindag_test: {Fmt_domaindag_test},
 	}
 	exceptions := map[string]map[string]bool{
-		"context": {"execution": true},
+		Context_domaindag_test: {Execution_domaindag_test: true},
 	}
 	vios := CheckDomainDirection(pkgs, forward, "warn", exceptions)
 	if len(vios) != 0 {
@@ -159,30 +182,30 @@ func TestCheckDomainDirection_warnModeException(t *testing.T) {
 
 func TestDomainCycleReport_mutualPair(t *testing.T) {
 	pkgs := []GoPackage{
-		mkPkg(ModulePath + "/context/a"),
-		mkPkg(ModulePath + "/execution/b"),
+		mkPkg(ModulePath + Contexta_domaindag_test),
+		mkPkg(ModulePath + Executionb_domaindag_test),
 	}
 	forward := map[string][]string{
-		ModulePath + "/context/a":   {ModulePath + "/execution/b"},
-		ModulePath + "/execution/b": {ModulePath + "/context/a"},
+		ModulePath + Contexta_domaindag_test:   {ModulePath + Executionb_domaindag_test},
+		ModulePath + Executionb_domaindag_test: {ModulePath + Contexta_domaindag_test},
 	}
 	cycles := DomainCycleReport(pkgs, forward)
 	if len(cycles) == 0 {
 		t.Fatal("expected cycle between context and execution")
 	}
-	if !strings.Contains(cycles[0], "context") || !strings.Contains(cycles[0], "execution") {
+	if !strings.Contains(cycles[0], Context_domaindag_test) || !strings.Contains(cycles[0], Execution_domaindag_test) {
 		t.Errorf("cycle should mention both domains, got: %s", cycles[0])
 	}
 }
 
 func TestDomainCycleReport_noCycle(t *testing.T) {
 	pkgs := []GoPackage{
-		mkPkg(ModulePath + "/execution/a"),
-		mkPkg(ModulePath + "/context/b"),
+		mkPkg(ModulePath + Executiona_domaindag_test),
+		mkPkg(ModulePath + Contextb_domaindag_test),
 	}
 	forward := map[string][]string{
-		ModulePath + "/execution/a": {ModulePath + "/context/b"},
-		ModulePath + "/context/b":   {"fmt"},
+		ModulePath + Executiona_domaindag_test: {ModulePath + Contextb_domaindag_test},
+		ModulePath + Contextb_domaindag_test:   {Fmt_domaindag_test},
 	}
 	cycles := DomainCycleReport(pkgs, forward)
 	if len(cycles) != 0 {
@@ -192,24 +215,24 @@ func TestDomainCycleReport_noCycle(t *testing.T) {
 
 func TestCheckNoBucket_threeDomains(t *testing.T) {
 	dir := t.TempDir()
-	mkDirAll(t, dir+"/framework/types")
-	writeFile(t, dir+"/framework/types/types.go", "package types\ntype A struct { X int }\nconst Version = \"1.0\"\n")
+	mkDirAll(t, dir+Frameworktypes_domaindag_test)
+	writeFile(t, dir+Frameworktypestypesgo_domaindag_test, "package types\ntype A struct { X int }\nconst Version = \"1.0\"\n")
 
 	pkgs := []GoPackage{
 		{
-			ImportPath: ModulePath + "/framework/types",
-			Dir:        dir + "/framework/types",
-			GoFiles:    []string{"types.go"},
+			ImportPath: ModulePath + Frameworktypes_domaindag_test,
+			Dir:        dir + Frameworktypes_domaindag_test,
+			GoFiles:    []string{TypesGoFile_domaindag_test},
 		},
-		mkPkg(ModulePath + "/capability/a"),
-		mkPkg(ModulePath + "/context/b"),
-		mkPkg(ModulePath + "/execution/c"),
+		mkPkg(ModulePath + Capabilitya_domaindag_test),
+		mkPkg(ModulePath + Contextb_domaindag_test),
+		mkPkg(ModulePath + Executionc_domaindag_test),
 	}
 	reverse := map[string][]string{
-		ModulePath + "/framework/types": {
-			ModulePath + "/capability/a",
-			ModulePath + "/context/b",
-			ModulePath + "/execution/c",
+		ModulePath + Frameworktypes_domaindag_test: {
+			ModulePath + Capabilitya_domaindag_test,
+			ModulePath + Contextb_domaindag_test,
+			ModulePath + Executionc_domaindag_test,
 		},
 	}
 	vios := CheckNoBucket(pkgs, reverse, dir)
@@ -223,14 +246,14 @@ func TestCheckNoBucket_threeDomains(t *testing.T) {
 
 func TestCheckNoBucket_twoDomains(t *testing.T) {
 	pkgs := []GoPackage{
-		mkPkg(ModulePath + "/framework/types"),
-		mkPkg(ModulePath + "/capability/a"),
-		mkPkg(ModulePath + "/context/b"),
+		mkPkg(ModulePath + Frameworktypes_domaindag_test),
+		mkPkg(ModulePath + Capabilitya_domaindag_test),
+		mkPkg(ModulePath + Contextb_domaindag_test),
 	}
 	reverse := map[string][]string{
-		ModulePath + "/framework/types": {
-			ModulePath + "/capability/a",
-			ModulePath + "/context/b",
+		ModulePath + Frameworktypes_domaindag_test: {
+			ModulePath + Capabilitya_domaindag_test,
+			ModulePath + Contextb_domaindag_test,
 		},
 	}
 	vios := CheckNoBucket(pkgs, reverse, ".")
@@ -256,12 +279,12 @@ func TestDomainCycleReport_liveTreeHasLessThan5Cycles(t *testing.T) {
 func TestIsDomainVocabPackage_exempt(t *testing.T) {
 	dir := t.TempDir()
 	// Create capability/classification as a type-only package
-	mkDirAll(t, dir+"/capability/classification")
+	mkDirAll(t, dir+Capabilityclassification_domaindag_test)
 	writeFile(t, dir+"/capability/classification/effects.go", "package classification\ntype EffectKind string\nconst (\n\tEffectKindReadOnly EffectKind = \"read-only\"\n)\ntype ScopeKind string\nconst (\n\tScopeKindBuiltin ScopeKind = \"builtin\"\n)\n")
 
 	pkg := GoPackage{
-		ImportPath: ModulePath + "/capability/classification",
-		Dir:        dir + "/capability/classification",
+		ImportPath: ModulePath + Capabilityclassification_domaindag_test,
+		Dir:        dir + Capabilityclassification_domaindag_test,
 		GoFiles:    []string{"effects.go"},
 	}
 
@@ -273,13 +296,13 @@ func TestIsDomainVocabPackage_exempt(t *testing.T) {
 func TestIsDomainVocabPackage_nonExempt(t *testing.T) {
 	dir := t.TempDir()
 	// framework/types is NOT a recognized domain root
-	mkDirAll(t, dir+"/framework/types")
-	writeFile(t, dir+"/framework/types/types.go", "package types\ntype A struct{}\n")
+	mkDirAll(t, dir+Frameworktypes_domaindag_test)
+	writeFile(t, dir+Frameworktypestypesgo_domaindag_test, "package types\ntype A struct{}\n")
 
 	pkg := GoPackage{
-		ImportPath: ModulePath + "/framework/types",
-		Dir:        dir + "/framework/types",
-		GoFiles:    []string{"types.go"},
+		ImportPath: ModulePath + Frameworktypes_domaindag_test,
+		Dir:        dir + Frameworktypes_domaindag_test,
+		GoFiles:    []string{TypesGoFile_domaindag_test},
 	}
 
 	if isDomainVocabPackage(pkg, dir) {
@@ -290,12 +313,12 @@ func TestIsDomainVocabPackage_nonExempt(t *testing.T) {
 func TestIsDomainVocabPackage_exemptAtDomainRoot(t *testing.T) {
 	dir := t.TempDir()
 	// capability at root — type-only
-	mkDirAll(t, dir+"/capability")
+	mkDirAll(t, dir+Capability_domaindag_test)
 	writeFile(t, dir+"/capability/doc.go", "package capability\n// doc only\n")
 
 	pkg := GoPackage{
-		ImportPath: ModulePath + "/capability",
-		Dir:        dir + "/capability",
+		ImportPath: ModulePath + Capability_domaindag_test,
+		Dir:        dir + Capability_domaindag_test,
 		GoFiles:    []string{"doc.go"},
 	}
 
@@ -307,21 +330,21 @@ func TestIsDomainVocabPackage_exemptAtDomainRoot(t *testing.T) {
 func TestCheckNoBucket_exemptsDomainVocab(t *testing.T) {
 	dir := t.TempDir()
 	// Create capability/classification — type-only vocabulary
-	mkDirAll(t, dir+"/capability/classification")
+	mkDirAll(t, dir+Capabilityclassification_domaindag_test)
 	writeFile(t, dir+"/capability/classification/types.go", "package classification\ntype EffectKind string\nconst (\n\tA EffectKind = \"a\"\n)\n")
 
 	pkgs := []GoPackage{
 		{
-			ImportPath: ModulePath + "/capability/classification",
-			Dir:        dir + "/capability/classification",
-			GoFiles:    []string{"types.go"},
+			ImportPath: ModulePath + Capabilityclassification_domaindag_test,
+			Dir:        dir + Capabilityclassification_domaindag_test,
+			GoFiles:    []string{TypesGoFile_domaindag_test},
 		},
 		mkPkg(ModulePath + "/governance/risk"),
 		mkPkg(ModulePath + "/execution"),
 		mkPkg(ModulePath + "/context/knowledge"),
 	}
 	reverse := map[string][]string{
-		ModulePath + "/capability/classification": {
+		ModulePath + Capabilityclassification_domaindag_test: {
 			ModulePath + "/governance/risk",
 			ModulePath + "/execution",
 			ModulePath + "/context/knowledge",
@@ -336,24 +359,24 @@ func TestCheckNoBucket_exemptsDomainVocab(t *testing.T) {
 
 func TestCheckNoBucket_stillFlagsFrameworkTypes(t *testing.T) {
 	dir := t.TempDir()
-	mkDirAll(t, dir+"/framework/types")
-	writeFile(t, dir+"/framework/types/types.go", "package types\ntype A struct { X int }\n")
+	mkDirAll(t, dir+Frameworktypes_domaindag_test)
+	writeFile(t, dir+Frameworktypestypesgo_domaindag_test, "package types\ntype A struct { X int }\n")
 
 	pkgs := []GoPackage{
 		{
-			ImportPath: ModulePath + "/framework/types",
-			Dir:        dir + "/framework/types",
-			GoFiles:    []string{"types.go"},
+			ImportPath: ModulePath + Frameworktypes_domaindag_test,
+			Dir:        dir + Frameworktypes_domaindag_test,
+			GoFiles:    []string{TypesGoFile_domaindag_test},
 		},
-		mkPkg(ModulePath + "/capability/a"),
-		mkPkg(ModulePath + "/context/b"),
-		mkPkg(ModulePath + "/execution/c"),
+		mkPkg(ModulePath + Capabilitya_domaindag_test),
+		mkPkg(ModulePath + Contextb_domaindag_test),
+		mkPkg(ModulePath + Executionc_domaindag_test),
 	}
 	reverse := map[string][]string{
-		ModulePath + "/framework/types": {
-			ModulePath + "/capability/a",
-			ModulePath + "/context/b",
-			ModulePath + "/execution/c",
+		ModulePath + Frameworktypes_domaindag_test: {
+			ModulePath + Capabilitya_domaindag_test,
+			ModulePath + Contextb_domaindag_test,
+			ModulePath + Executionc_domaindag_test,
 		},
 	}
 

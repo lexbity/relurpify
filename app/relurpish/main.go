@@ -37,13 +37,15 @@ var (
 
 // main bootstraps the relurpish CLI/TUI entrypoint.
 func main() {
-	envSnapshot = os.Environ()
+	envSnapshot = config.ProcessEnv()
 	var ovErr error
 	envOverrides, ovErr = config.LoadEnvOverrides(envSnapshot)
 	if ovErr != nil {
 		log.Fatalf("invalid environment: %v", ovErr)
 	}
 	secrets = config.LoadSecrets(envSnapshot)
+	tui.SetReduceMotionPreference(config.LoadReduceMotionPreference(envSnapshot))
+	tui.SetTerminalNamePreference(config.LoadTerminalName(envSnapshot))
 	cfg.EnvOverrides = append([]string(nil), envSnapshot...)
 	cfg.Editor = envOverrides.Editor
 	cfg.SharedRoot = config.ResolveSharedRoot(envOverrides.XDGDataHome)

@@ -5,6 +5,13 @@ import (
 	"testing"
 )
 
+const (
+	Hello_validate_test = "Hello"
+	AgentGenericDefault_validate_test = "agent.generic.default"
+	FrameworkPromptV2_validate_test = "framework.prompt/v2"
+)
+
+
 func TestValidateConfig_RejectsMalformedV2Files(t *testing.T) {
 	cases := []struct {
 		name    string
@@ -14,25 +21,25 @@ func TestValidateConfig_RejectsMalformedV2Files(t *testing.T) {
 		{
 			name: "missing schema",
 			cfg: &PromptConfig{
-				ID:   "agent.generic.default",
-				Body: "Hello",
+				ID:   AgentGenericDefault_validate_test,
+				Body: Hello_validate_test,
 			},
 			wantSub: "unknown schema",
 		},
 		{
 			name: "missing id",
 			cfg: &PromptConfig{
-				Schema: "framework.prompt/v2",
-				Body:   "Hello",
+				Schema: FrameworkPromptV2_validate_test,
+				Body:   Hello_validate_test,
 			},
 			wantSub: "missing required field: id",
 		},
 		{
 			name: "unused variable",
 			cfg: &PromptConfig{
-				Schema: "framework.prompt/v2",
-				ID:     "agent.generic.default",
-				Body:   "Hello",
+				Schema: FrameworkPromptV2_validate_test,
+				ID:     AgentGenericDefault_validate_test,
+				Body:   Hello_validate_test,
 				Variables: map[string]VariableDecl{
 					"tone": {Default: "direct"},
 				},
@@ -42,8 +49,8 @@ func TestValidateConfig_RejectsMalformedV2Files(t *testing.T) {
 		{
 			name: "unresolved variable",
 			cfg: &PromptConfig{
-				Schema: "framework.prompt/v2",
-				ID:     "agent.generic.default",
+				Schema: FrameworkPromptV2_validate_test,
+				ID:     AgentGenericDefault_validate_test,
 				Body:   "Hello {tone}",
 			},
 			wantSub: "unknown variable",
@@ -51,8 +58,8 @@ func TestValidateConfig_RejectsMalformedV2Files(t *testing.T) {
 		{
 			name: "invalid body reference",
 			cfg: &PromptConfig{
-				Schema: "framework.prompt/v2",
-				ID:     "agent.generic.default",
+				Schema: FrameworkPromptV2_validate_test,
+				ID:     AgentGenericDefault_validate_test,
 				Body:   "Hello {1bad}",
 			},
 			wantSub: "invalid variable reference",
@@ -60,8 +67,8 @@ func TestValidateConfig_RejectsMalformedV2Files(t *testing.T) {
 		{
 			name: "empty body",
 			cfg: &PromptConfig{
-				Schema: "framework.prompt/v2",
-				ID:     "agent.generic.default",
+				Schema: FrameworkPromptV2_validate_test,
+				ID:     AgentGenericDefault_validate_test,
 				Body:   "  ",
 			},
 			wantSub: "prompt body is required",
@@ -80,8 +87,8 @@ func TestValidateConfig_RejectsMalformedV2Files(t *testing.T) {
 
 func TestValidateConfig_VariableDefaultsAndUsage(t *testing.T) {
 	issues := validateConfig(&PromptConfig{
-		Schema: "framework.prompt/v2",
-		ID:     "agent.generic.default",
+		Schema: FrameworkPromptV2_validate_test,
+		ID:     AgentGenericDefault_validate_test,
 		Body:   "Hello {name}",
 		Variables: map[string]VariableDecl{
 			"name": {Default: "world"},

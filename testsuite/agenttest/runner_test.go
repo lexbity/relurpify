@@ -21,6 +21,28 @@ import (
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
+const (
+	agenttests                = "agenttests"
+	api_ps                    = "/api/ps"
+	api_tags                  = "/api/tags"
+	application_json          = "application/json"
+	artifacts                 = "artifacts"
+	assertion                 = "assertion"
+	basic_edit_task           = "basic_edit_task"
+	content_type              = "Content-Type"
+	euclo_code                = "euclo.code"
+	euclo_code_testsuite_yaml = "euclo.code.testsuite.yaml"
+	kind                      = "kind"
+	manifest_model            = "manifest-model"
+	mode                      = "mode"
+	model                     = "model"
+	models                    = "models"
+	name                      = "name"
+	scope                     = "scope"
+	suite_model               = "suite-model"
+	testsuite                 = "testsuite"
+)
+
 type loadedOllamaServer struct {
 	URL    string
 	server *http.Server
@@ -63,12 +85,12 @@ func newLoadedOllamaServer(t *testing.T, modelName string) *loadedOllamaServer {
 	t.Helper()
 	return newTestHTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case "/api/tags":
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(fmt.Sprintf(`{"models":[{"name":%q,"model":%q,"digest":"sha256:test"}]}`, modelName, modelName)))
-		case "/api/ps":
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(fmt.Sprintf(`{"models":[{"name":%q,"model":%q,"digest":"sha256:test"}]}`, modelName, modelName)))
+		case api_tags:
+			w.Header().Set(content_type, application_json)
+			_, _ = w.Write([]byte(fmt.Sprintf(`{models:[{name:%q,model:%q,"digest":"sha256:test"}]}`, modelName, modelName)))
+		case api_ps:
+			w.Header().Set(content_type, application_json)
+			_, _ = w.Write([]byte(fmt.Sprintf(`{models:[{name:%q,model:%q,"digest":"sha256:test"}]}`, modelName, modelName)))
 		default:
 			http.NotFound(w, r)
 		}
@@ -77,7 +99,7 @@ func newLoadedOllamaServer(t *testing.T, modelName string) *loadedOllamaServer {
 
 func TestFallbackManifestPath(t *testing.T) {
 	workspace := t.TempDir()
-	manifestPath := filepath.Join(config.New(workspace).ConfigRoot(), "agent.yaml")
+	manifestPath := filepath.Join(config.New(workspace).ConfigRoot(), agent_yaml)
 	if err := fs.MkdirAllSecure(filepath.Dir(manifestPath)); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
@@ -85,7 +107,7 @@ func TestFallbackManifestPath(t *testing.T) {
 		t.Fatalf("write manifest: %v", err)
 	}
 
-	got := fallbackManifestPath(filepath.Join(workspace, "testsuite", "agent.yaml"), workspace)
+	got := fallbackManifestPath(filepath.Join(workspace, testsuite, agent_yaml), workspace)
 	if got != manifestPath {
 		t.Fatalf("expected %s, got %s", manifestPath, got)
 	}
@@ -136,10 +158,10 @@ func TestResolveCaseMaxRetries(t *testing.T) {
 }
 
 func TestResolveCaseExecutionPrefersCLIThenSuiteThenManifestModel(t *testing.T) {
-	layout := newRunCaseLayout(t.TempDir(), "smoke", "model")
+	layout := newRunCaseLayout(t.TempDir(), smoke, model)
 	suite := &Suite{Spec: SuiteSpec{}}
 
-	exec, err := resolveCaseExecution(suite, CaseSpec{Name: "smoke"}, ModelSpec{Name: "suite-model"}, "manifest-model", RunOptions{ModelOverride: "cli-model"}, layout, t.TempDir(), t.TempDir())
+	exec, err := resolveCaseExecution(suite, CaseSpec{Name: smoke}, ModelSpec{Name: suite_model}, manifest_model, RunOptions{ModelOverride: "cli-model"}, layout, t.TempDir(), t.TempDir())
 	if err != nil {
 		t.Fatalf("resolveCaseExecution cli override: %v", err)
 	}
@@ -147,26 +169,26 @@ func TestResolveCaseExecutionPrefersCLIThenSuiteThenManifestModel(t *testing.T) 
 		t.Fatalf("unexpected cli resolution: %#v", exec)
 	}
 
-	exec, err = resolveCaseExecution(suite, CaseSpec{Name: "smoke"}, ModelSpec{Name: "suite-model"}, "manifest-model", RunOptions{}, layout, t.TempDir(), t.TempDir())
+	exec, err = resolveCaseExecution(suite, CaseSpec{Name: smoke}, ModelSpec{Name: suite_model}, manifest_model, RunOptions{}, layout, t.TempDir(), t.TempDir())
 	if err != nil {
 		t.Fatalf("resolveCaseExecution suite model: %v", err)
 	}
-	if exec.Model != "suite-model" || exec.ModelSource != "suite_or_case" {
+	if exec.Model != suite_model || exec.ModelSource != "suite_or_case" {
 		t.Fatalf("unexpected suite resolution: %#v", exec)
 	}
 
-	exec, err = resolveCaseExecution(suite, CaseSpec{Name: "smoke"}, ModelSpec{}, "manifest-model", RunOptions{}, layout, t.TempDir(), t.TempDir())
+	exec, err = resolveCaseExecution(suite, CaseSpec{Name: smoke}, ModelSpec{}, manifest_model, RunOptions{}, layout, t.TempDir(), t.TempDir())
 	if err != nil {
 		t.Fatalf("resolveCaseExecution manifest model: %v", err)
 	}
-	if exec.Model != "manifest-model" || exec.ModelSource != "manifest" {
+	if exec.Model != manifest_model || exec.ModelSource != "manifest" {
 		t.Fatalf("unexpected manifest resolution: %#v", exec)
 	}
 }
 
 func TestResolveCaseModelProfileUsesWorkspaceRegistry(t *testing.T) {
 	workspace := t.TempDir()
-	profilesDir := filepath.Join(workspace, "relurpify_cfg", "model", "profiles")
+	profilesDir := filepath.Join(workspace, relurpify_cfg, model, "profiles")
 	if err := fs.MkdirAllSecure(profilesDir); err != nil {
 		t.Fatal(err)
 	}
@@ -198,7 +220,7 @@ repair:
 	}
 
 	provenance, profile, err := resolveCaseModelProfile(workspace, resolvedCaseExecution{
-		Provider: "ollama",
+		Provider: ollama,
 		Model:    "gemma4:e4b",
 	})
 	if err != nil {
@@ -219,21 +241,21 @@ repair:
 }
 
 func TestResolveCaseExecutionFailsWithoutResolvedModel(t *testing.T) {
-	layout := newRunCaseLayout(t.TempDir(), "smoke", "model")
-	_, err := resolveCaseExecution(&Suite{Spec: SuiteSpec{}}, CaseSpec{Name: "smoke"}, ModelSpec{}, "", RunOptions{}, layout, t.TempDir(), t.TempDir())
+	layout := newRunCaseLayout(t.TempDir(), smoke, model)
+	_, err := resolveCaseExecution(&Suite{Spec: SuiteSpec{}}, CaseSpec{Name: smoke}, ModelSpec{}, "", RunOptions{}, layout, t.TempDir(), t.TempDir())
 	if err == nil {
 		t.Fatal("expected missing model to fail")
 	}
 }
 
 func TestResolveCaseExecutionReplayRequiresTape(t *testing.T) {
-	layout := newRunCaseLayout(t.TempDir(), "smoke", "model")
+	layout := newRunCaseLayout(t.TempDir(), smoke, model)
 	suite := &Suite{
 		Spec: SuiteSpec{
 			Recording: RecordingSpec{Mode: "replay", Tape: "missing.jsonl"},
 		},
 	}
-	_, err := resolveCaseExecution(suite, CaseSpec{Name: "smoke"}, ModelSpec{Name: "suite-model"}, "manifest-model", RunOptions{}, layout, t.TempDir(), t.TempDir())
+	_, err := resolveCaseExecution(suite, CaseSpec{Name: smoke}, ModelSpec{Name: suite_model}, manifest_model, RunOptions{}, layout, t.TempDir(), t.TempDir())
 	if err == nil {
 		t.Fatal("expected replay without tape to fail")
 	}
@@ -241,8 +263,8 @@ func TestResolveCaseExecutionReplayRequiresTape(t *testing.T) {
 
 func TestResolveCaseExecutionUsesGoldenTapeForReplayStrategy(t *testing.T) {
 	workspace := t.TempDir()
-	suitePath := filepath.Join(workspace, "testsuite", "agenttests", "euclo.code.testsuite.yaml")
-	goldenDir := filepath.Join(workspace, "testsuite", "agenttests", "tapes", "euclo.code")
+	suitePath := filepath.Join(workspace, testsuite, agenttests, euclo_code_testsuite_yaml)
+	goldenDir := filepath.Join(workspace, testsuite, agenttests, "tapes", euclo_code)
 	if err := fs.MkdirAllSecure(goldenDir); err != nil {
 		t.Fatal(err)
 	}
@@ -250,16 +272,16 @@ func TestResolveCaseExecutionUsesGoldenTapeForReplayStrategy(t *testing.T) {
 	if err := fs.WriteFileSecure(goldenPath, []byte("{}\n")); err != nil {
 		t.Fatal(err)
 	}
-	layout := newRunCaseLayout(t.TempDir(), "basic_edit_task", "qwen2.5-coder:14b")
+	layout := newRunCaseLayout(t.TempDir(), basic_edit_task, qwen2_5_coder_14b)
 	suite := &Suite{
 		SourcePath: suitePath,
-		Metadata:   SuiteMeta{Name: "euclo.code"},
+		Metadata:   SuiteMeta{Name: euclo_code},
 		Spec: SuiteSpec{
 			Recording: RecordingSpec{Strategy: "replay-if-golden"},
 		},
 	}
 
-	exec, err := resolveCaseExecution(suite, CaseSpec{Name: "basic_edit_task"}, ModelSpec{Name: "qwen2.5-coder:14b"}, "manifest-model", RunOptions{}, layout, workspace, workspace)
+	exec, err := resolveCaseExecution(suite, CaseSpec{Name: basic_edit_task}, ModelSpec{Name: qwen2_5_coder_14b}, manifest_model, RunOptions{}, layout, workspace, workspace)
 	if err != nil {
 		t.Fatalf("resolveCaseExecution replay strategy: %v", err)
 	}
@@ -272,16 +294,16 @@ func TestResolveCaseExecutionUsesGoldenTapeForReplayStrategy(t *testing.T) {
 }
 
 func TestResolveCaseExecutionReplayIfGoldenFallsBackToLiveWhenMissing(t *testing.T) {
-	layout := newRunCaseLayout(t.TempDir(), "basic_edit_task", "qwen2.5-coder:14b")
+	layout := newRunCaseLayout(t.TempDir(), basic_edit_task, qwen2_5_coder_14b)
 	suite := &Suite{
-		SourcePath: filepath.Join(t.TempDir(), "testsuite", "agenttests", "euclo.code.testsuite.yaml"),
-		Metadata:   SuiteMeta{Name: "euclo.code"},
+		SourcePath: filepath.Join(t.TempDir(), testsuite, agenttests, euclo_code_testsuite_yaml),
+		Metadata:   SuiteMeta{Name: euclo_code},
 		Spec: SuiteSpec{
 			Recording: RecordingSpec{Strategy: "replay-if-golden"},
 		},
 	}
 
-	exec, err := resolveCaseExecution(suite, CaseSpec{Name: "basic_edit_task"}, ModelSpec{Name: "qwen2.5-coder:14b"}, "manifest-model", RunOptions{}, layout, t.TempDir(), t.TempDir())
+	exec, err := resolveCaseExecution(suite, CaseSpec{Name: basic_edit_task}, ModelSpec{Name: qwen2_5_coder_14b}, manifest_model, RunOptions{}, layout, t.TempDir(), t.TempDir())
 	if err != nil {
 		t.Fatalf("resolveCaseExecution replay-if-golden fallback: %v", err)
 	}
@@ -294,16 +316,16 @@ func TestResolveCaseExecutionReplayIfGoldenFallsBackToLiveWhenMissing(t *testing
 }
 
 func TestResolveCaseExecutionReplayOnlyFailsWithoutGoldenTape(t *testing.T) {
-	layout := newRunCaseLayout(t.TempDir(), "basic_edit_task", "qwen2.5-coder:14b")
+	layout := newRunCaseLayout(t.TempDir(), basic_edit_task, qwen2_5_coder_14b)
 	suite := &Suite{
-		SourcePath: filepath.Join(t.TempDir(), "testsuite", "agenttests", "euclo.code.testsuite.yaml"),
-		Metadata:   SuiteMeta{Name: "euclo.code"},
+		SourcePath: filepath.Join(t.TempDir(), testsuite, agenttests, euclo_code_testsuite_yaml),
+		Metadata:   SuiteMeta{Name: euclo_code},
 		Spec: SuiteSpec{
 			Recording: RecordingSpec{Strategy: "replay-only"},
 		},
 	}
 
-	_, err := resolveCaseExecution(suite, CaseSpec{Name: "basic_edit_task"}, ModelSpec{Name: "qwen2.5-coder:14b"}, "manifest-model", RunOptions{}, layout, t.TempDir(), t.TempDir())
+	_, err := resolveCaseExecution(suite, CaseSpec{Name: basic_edit_task}, ModelSpec{Name: qwen2_5_coder_14b}, manifest_model, RunOptions{}, layout, t.TempDir(), t.TempDir())
 	if err == nil {
 		t.Fatal("expected replay-only without golden tape to fail")
 	}
@@ -335,15 +357,15 @@ func TestExpandSuiteModelMatrixUsesDeterministicOrder(t *testing.T) {
 
 func TestProviderProvenanceForExecution(t *testing.T) {
 	prov := providerProvenanceForExecution(resolvedCaseExecution{
-		Provider:              "ollama",
-		Endpoint:              "http://localhost:11434",
-		ProviderResetStrategy: "model",
+		Provider:              ollama,
+		Endpoint:              http_localhost_11434,
+		ProviderResetStrategy: model,
 		ProviderResetBetween:  true,
 	})
 	if prov == nil {
 		t.Fatal("expected provider provenance")
 	}
-	if prov.Provider != "ollama" || prov.ResetStrategy != "model" || !prov.ResetBetween {
+	if prov.Provider != ollama || prov.ResetStrategy != model || !prov.ResetBetween {
 		t.Fatalf("unexpected provenance: %+v", prov)
 	}
 }
@@ -387,13 +409,13 @@ func TestShouldRestrictAllowedCapabilitiesForCase(t *testing.T) {
 	}
 	if !shouldRestrictAllowedCapabilitiesForCase(CaseSpec{
 		TaskType: "code-modification",
-		Context:  map[string]any{"mode": "debug"},
+		Context:  map[string]any{mode: "debug"},
 	}) {
 		t.Fatal("expected debug case to restrict to explicit allowed capabilities")
 	}
 	if shouldRestrictAllowedCapabilitiesForCase(CaseSpec{
 		TaskType: "code-modification",
-		Context:  map[string]any{"mode": "docs"},
+		Context:  map[string]any{mode: "docs"},
 	}) {
 		t.Fatal("expected docs edit case to keep default capabilities merged")
 	}
@@ -404,7 +426,7 @@ func TestSeedWorkflowRetrievalStateForCase(t *testing.T) {
 	task := &execution.Task{
 		Instruction: "Summarize README.md",
 		Context: map[string]any{
-			"mode":        "architect",
+			mode:          "architect",
 			"workflow_id": "wf-1",
 		},
 	}
@@ -439,7 +461,7 @@ func TestSeedWorkflowRetrievalStateForCaseSeedsCompiledPlanFromWorkflowKnowledge
 	task := &execution.Task{
 		Instruction: "Execute the compiled plan",
 		Context: map[string]any{
-			"mode":        "planning",
+			mode:          "planning",
 			"workflow_id": "wf-compiled",
 		},
 	}
@@ -470,9 +492,9 @@ func TestSeedWorkflowRetrievalStateForCaseSeedsCompiledPlanFromWorkflowKnowledge
 	if !ok || len(steps) != 1 {
 		t.Fatalf("expected a single seeded plan step, got %#v", plan["steps"])
 	}
-	scope, ok := steps[0]["scope"].([]string)
+	scope, ok := steps[0][scope].([]string)
 	if !ok || len(scope) != 1 || scope[0] != "testsuite/fixtures/rapid_arch_exec/slug.go" {
-		t.Fatalf("expected seeded scope from workflow knowledge, got %#v", steps[0]["scope"])
+		t.Fatalf("expected seeded scope from workflow knowledge, got %#v", steps[0][scope])
 	}
 	got, ok := state.GetWorkingValue("pipeline.workflow_retrieval")
 	if !ok {
@@ -485,7 +507,7 @@ func TestSeedWorkflowRetrievalStateForCaseSeedsCompiledPlanFromWorkflowKnowledge
 
 func TestRunnerPreflightSuiteChecksLoadedModels(t *testing.T) {
 	workspace := t.TempDir()
-	manifestPath := filepath.Join(workspace, "relurpify_cfg", "agent.yaml")
+	manifestPath := filepath.Join(workspace, relurpify_cfg, agent_yaml)
 	if err := fs.MkdirAllSecure(filepath.Dir(manifestPath)); err != nil {
 		t.Fatalf("mkdir manifest dir: %v", err)
 	}
@@ -516,12 +538,12 @@ spec:
 
 	server := newTestHTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case "/api/tags":
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"models":[]}`))
-		case "/api/ps":
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"models":[{"name":"qwen2.5-coder:14b"}]}`))
+		case api_tags:
+			w.Header().Set(content_type, application_json)
+			_, _ = w.Write([]byte(`{models:[]}`))
+		case api_ps:
+			w.Header().Set(content_type, application_json)
+			_, _ = w.Write([]byte(`{models:[{name:qwen2_5_coder_14b}]}`))
 		default:
 			http.NotFound(w, r)
 		}
@@ -529,15 +551,15 @@ spec:
 	defer server.Close()
 
 	suite := &Suite{
-		SourcePath: filepath.Join(workspace, "testsuite", "agenttests", "coding.testsuite.yaml"),
+		SourcePath: filepath.Join(workspace, testsuite, agenttests, "coding.testsuite.yaml"),
 		Spec: SuiteSpec{
 			AgentName: "coding",
 			Manifest:  "relurpify_cfg/agent.yaml",
 			Workspace: WorkspaceSpec{Strategy: "derived"},
-			Models:    []ModelSpec{{Name: "qwen2.5-coder:14b", Endpoint: server.URL}},
+			Models:    []ModelSpec{{Name: qwen2_5_coder_14b, Endpoint: server.URL}},
 			Cases: []CaseSpec{{
-				Name:   "smoke",
-				Prompt: "hello",
+				Name:   smoke,
+				Prompt: hello,
 			}},
 		},
 	}
@@ -549,7 +571,7 @@ spec:
 
 func TestRunnerPreflightSuiteFailsWhenModelNotLoaded(t *testing.T) {
 	workspace := t.TempDir()
-	manifestPath := filepath.Join(workspace, "relurpify_cfg", "agent.yaml")
+	manifestPath := filepath.Join(workspace, relurpify_cfg, agent_yaml)
 	if err := fs.MkdirAllSecure(filepath.Dir(manifestPath)); err != nil {
 		t.Fatalf("mkdir manifest dir: %v", err)
 	}
@@ -580,12 +602,12 @@ spec:
 
 	server := newTestHTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case "/api/tags":
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"models":[{"name":"other-model"}]}`))
-		case "/api/ps":
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"models":[]}`))
+		case api_tags:
+			w.Header().Set(content_type, application_json)
+			_, _ = w.Write([]byte(`{models:[{name:"other-model"}]}`))
+		case api_ps:
+			w.Header().Set(content_type, application_json)
+			_, _ = w.Write([]byte(`{models:[]}`))
 		default:
 			http.NotFound(w, r)
 		}
@@ -593,15 +615,15 @@ spec:
 	defer server.Close()
 
 	suite := &Suite{
-		SourcePath: filepath.Join(workspace, "testsuite", "agenttests", "coding.testsuite.yaml"),
+		SourcePath: filepath.Join(workspace, testsuite, agenttests, "coding.testsuite.yaml"),
 		Spec: SuiteSpec{
 			AgentName: "coding",
 			Manifest:  "relurpify_cfg/agent.yaml",
 			Workspace: WorkspaceSpec{Strategy: "derived"},
-			Models:    []ModelSpec{{Name: "qwen2.5-coder:14b", Endpoint: server.URL}},
+			Models:    []ModelSpec{{Name: qwen2_5_coder_14b, Endpoint: server.URL}},
 			Cases: []CaseSpec{{
-				Name:   "smoke",
-				Prompt: "hello",
+				Name:   smoke,
+				Prompt: hello,
 			}},
 		},
 	}
@@ -613,13 +635,13 @@ spec:
 }
 
 func TestClassifyCaseFailure(t *testing.T) {
-	if got := classifyCaseFailure(nil, `output missing "done"`); got != "assertion" {
+	if got := classifyCaseFailure(nil, `output missing "done"`); got != assertion {
 		t.Fatalf("expected assertion classification, got %q", got)
 	}
-	if got := classifyCaseFailure(assertionErr("mismatch for interaction 3"), "mismatch for interaction 3"); got != "assertion" {
+	if got := classifyCaseFailure(assertionErr("mismatch for interaction 3"), "mismatch for interaction 3"); got != assertion {
 		t.Fatalf("expected tape mismatch classification to be assertion, got %q", got)
 	}
-	if got := classifyCaseFailure(assertionErr("connection refused"), "connection refused"); got != "infra" {
+	if got := classifyCaseFailure(assertionErr("connection refused"), "connection refused"); got != infra {
 		t.Fatalf("expected infra classification, got %q", got)
 	}
 	if got := classifyCaseFailure(assertionErr("agent returned unsuccessful result"), "agent returned unsuccessful result"); got != "agent" {
@@ -655,9 +677,9 @@ func TestRunSuiteAggregatesCaseCounts(t *testing.T) {
 	report := &SuiteReport{
 		Cases: []CaseReport{
 			{Success: true},
-			{Success: false, FailureKind: "infra"},
+			{Success: false, FailureKind: infra},
 			{Skipped: true, Success: true},
-			{Success: false, FailureKind: "assertion"},
+			{Success: false, FailureKind: assertion},
 		},
 	}
 	for _, c := range report.Cases {
@@ -668,7 +690,7 @@ func TestRunSuiteAggregatesCaseCounts(t *testing.T) {
 			report.PassedCases++
 		default:
 			report.FailedCases++
-			if c.FailureKind == "infra" {
+			if c.FailureKind == infra {
 				report.InfraFailures++
 			} else {
 				report.AssertFailures++
@@ -705,11 +727,11 @@ func TestIncludeExpectedChangedFilesRestoresIgnoredExpectation(t *testing.T) {
 }
 
 func TestNewRunCaseLayoutUsesStructuredRunSubdirectories(t *testing.T) {
-	runRoot := filepath.Join("/tmp", "run-1")
+	runRoot := filepath.Join("/tmp", run1)
 	layout := newRunCaseLayout(runRoot, "Write Docs", "llama3.2")
 
 	caseKey := "Write_Docs__llama3_2"
-	if got := layout.ArtifactsDir; got != filepath.Join(runRoot, "artifacts", caseKey) {
+	if got := layout.ArtifactsDir; got != filepath.Join(runRoot, artifacts, caseKey) {
 		t.Fatalf("ArtifactsDir = %q", got)
 	}
 	if got := layout.TmpDir; got != filepath.Join(runRoot, "tmp", caseKey) {
@@ -724,10 +746,10 @@ func TestNewRunCaseLayoutUsesStructuredRunSubdirectories(t *testing.T) {
 	if got := layout.TelemetryPath; got != filepath.Join(runRoot, "telemetry", caseKey+".jsonl") {
 		t.Fatalf("TelemetryPath = %q", got)
 	}
-	if got := layout.TapePath; got != filepath.Join(runRoot, "artifacts", caseKey, "tape.jsonl") {
+	if got := layout.TapePath; got != filepath.Join(runRoot, artifacts, caseKey, "tape.jsonl") {
 		t.Fatalf("TapePath = %q", got)
 	}
-	if got := layout.InteractionTapePath; got != filepath.Join(runRoot, "artifacts", caseKey, "interaction.tape.jsonl") {
+	if got := layout.InteractionTapePath; got != filepath.Join(runRoot, artifacts, caseKey, "interaction.tape.jsonl") {
 		t.Fatalf("InteractionTapePath = %q", got)
 	}
 }
@@ -736,8 +758,8 @@ func TestMarshalInteractionRecords(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "interaction.tape.jsonl")
 	if err := euclosubject.WriteInteractionTape(path, map[string]any{
 		"euclo.interaction_records": []any{
-			map[string]any{"kind": "proposal", "phase": "scope"},
-			map[string]any{"kind": "question", "phase": "clarify"},
+			map[string]any{kind: "proposal", "phase": scope},
+			map[string]any{kind: "question", "phase": "clarify"},
 		},
 	}); err != nil {
 		t.Fatal(err)
@@ -750,7 +772,7 @@ func TestMarshalInteractionRecords(t *testing.T) {
 	if len(lines) != 2 {
 		t.Fatalf("expected 2 lines, got %d", len(lines))
 	}
-	if !strings.Contains(lines[0], `"kind":"proposal"`) {
+	if !strings.Contains(lines[0], `kind:"proposal"`) {
 		t.Fatalf("unexpected first line %q", lines[0])
 	}
 }

@@ -5,9 +5,15 @@ import (
 	"testing"
 )
 
+const (
+	AgentGenericDefault_markdown_test = "agent.generic.default"
+	Name_markdown_test = "name"
+)
+
+
 func TestResolvePrompt_SubstitutesOnlyEligibleMarkdownText(t *testing.T) {
 	cfg := &PromptConfig{
-		ID: "agent.generic.default",
+		ID: AgentGenericDefault_markdown_test,
 		Body: strings.Join([]string{
 			"Hello {name}",
 			"",
@@ -22,16 +28,16 @@ func TestResolvePrompt_SubstitutesOnlyEligibleMarkdownText(t *testing.T) {
 			`<span data-name="{name}"></span>`,
 		}, "\n"),
 		Variables: map[string]VariableDecl{
-			"name": {Default: "world"},
+			Name_markdown_test: {Default: "world"},
 		},
 	}
 
-	out, vars, err := resolvePrompt(cfg, RuntimeContext{Variables: map[string]string{"name": "Alice"}})
+	out, vars, err := resolvePrompt(cfg, RuntimeContext{Variables: map[string]string{Name_markdown_test: "Alice"}})
 	if err != nil {
 		t.Fatalf("resolvePrompt: %v", err)
 	}
-	if vars["name"] != "Alice" {
-		t.Fatalf("resolved variable = %q, want Alice", vars["name"])
+	if vars[Name_markdown_test] != "Alice" {
+		t.Fatalf("resolved variable = %q, want Alice", vars[Name_markdown_test])
 	}
 	if !strings.Contains(out, "Hello Alice") {
 		t.Fatalf("output missing substituted paragraph text: %q", out)
@@ -52,10 +58,10 @@ func TestResolvePrompt_SubstitutesOnlyEligibleMarkdownText(t *testing.T) {
 
 func TestResolvePrompt_EscapesBraces(t *testing.T) {
 	cfg := &PromptConfig{
-		ID:   "agent.generic.default",
+		ID:   AgentGenericDefault_markdown_test,
 		Body: `Use \{literal\} and {name}.`,
 		Variables: map[string]VariableDecl{
-			"name": {Default: "world"},
+			Name_markdown_test: {Default: "world"},
 		},
 	}
 
@@ -70,7 +76,7 @@ func TestResolvePrompt_EscapesBraces(t *testing.T) {
 
 func TestResolvePrompt_UnknownVariableErrors(t *testing.T) {
 	cfg := &PromptConfig{
-		ID:   "agent.generic.default",
+		ID:   AgentGenericDefault_markdown_test,
 		Body: `Hello {missing}.`,
 	}
 
@@ -85,7 +91,7 @@ func TestResolvePrompt_UnknownVariableErrors(t *testing.T) {
 
 func TestValidateConfig_IgnoresCodeBlockVariables(t *testing.T) {
 	cfg := &PromptConfig{
-		ID: "agent.generic.default",
+		ID: AgentGenericDefault_markdown_test,
 		Body: strings.Join([]string{
 			"```text",
 			"{tone}",

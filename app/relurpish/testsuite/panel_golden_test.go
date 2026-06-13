@@ -13,6 +13,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"gopkg.in/yaml.v3"
 
 	"codeburg.org/lexbit/relurpify/app/relurpish/euclotui"
 	runtimesvc "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
@@ -121,7 +122,7 @@ func normalizeGoldenText(s string) string {
 
 type sandboxFixtureRuntime struct {
 	workspace string
-	manifest  *config.ManifestSpec
+	document  *config.Document
 	backend   string
 }
 
@@ -129,16 +130,15 @@ func (r *sandboxFixtureRuntime) SessionInfo() tui.SessionInfo {
 	return tui.SessionInfo{Workspace: r.workspace}
 }
 
-func (r *sandboxFixtureRuntime) LoadSandboxManifest() (*config.ManifestSpec, error) {
-	if r.manifest == nil {
-		return nil, errors.New("manifest not set")
+func (r *sandboxFixtureRuntime) LoadSandboxDocument() (*config.Document, error) {
+	if r.document == nil {
+		return nil, errors.New("document not set")
 	}
-	m := *r.manifest
-	return &m, nil
+	return cloneDocumentFixture(r.document), nil
 }
 
-func (r *sandboxFixtureRuntime) SaveSandboxManifest(m *config.ManifestSpec) (string, error) {
-	r.manifest = m
+func (r *sandboxFixtureRuntime) SaveSandboxDocument(doc *config.Document) (string, error) {
+	r.document = doc
 	return filepath.Join(r.workspace, "relurpify_cfg", "agent.yaml.bak"), nil
 }
 
@@ -175,29 +175,46 @@ func (f *sessionInfoFixture) ReloadWorkspace(context.Context, string) error {
 	return nil
 }
 
-func testManifest() *config.ManifestSpec {
-	return &config.ManifestSpec{
-		Image:   "ghcr.io/example/runtime:0.4.1",
-		Runtime: "gvisor",
-		Permissions: permissions.PermissionSet{
-			FileSystem: []permissions.FileSystemPermission{
-				{Action: permissions.FileSystemRead, Path: "/workspace/**"},
-				{Action: permissions.FileSystemWrite, Path: "/workspace/**"},
-			},
-		},
-		Agent: &agentspec.AgentRuntimeSpec{
-			Implementation: "coding",
-			Mode:           agentspec.AgentModePrimary,
-			Model: agentspec.AgentModelConfig{
-				Provider: "ollama",
-				Name:     "qwen2.5-coder:14b",
-			},
-			Bash: agentspec.AgentBashPermissions{
-				AllowPatterns: []string{"git status"},
-				Default:       agentspec.AgentPermissionAsk,
-			},
-		},
+func testDocument() *config.Document {
+	doc := &config.Document{
+		APIVersion: "relurpify.io/v1",
+		Kind:       "AgentManifest",
+		Metadata:   config.DocumentMetadata{Name: "panel-agent"},
+		Spec:       map[string]yaml.Node{},
 	}
+	var permissionsNode yaml.Node
+	_ = permissionsNode.Encode(permissions.PermissionSet{
+		FileSystem: []permissions.FileSystemPermission{
+			{Action: permissions.FileSystemRead, Path: "/workspace/**"},
+			{Action: permissions.FileSystemWrite, Path: "/workspace/**"},
+		},
+	})
+	doc.Spec["permissions"] = permissionsNode
+	var agentNode yaml.Node
+	_ = agentNode.Encode(agentspec.AgentRuntimeSpec{
+		Implementation: "coding",
+		Mode:           agentspec.AgentModePrimary,
+		Model: agentspec.AgentModelConfig{
+			Provider: "ollama",
+			Name:     "qwen2.5-coder:14b",
+		},
+		Bash: agentspec.AgentBashPermissions{
+			AllowPatterns: []string{"git status"},
+			Default:       agentspec.AgentPermissionAsk,
+		},
+	})
+	doc.Spec["agent"] = agentNode
+	return doc
+}
+
+func cloneDocumentFixture(doc *config.Document) *config.Document {
+	if doc == nil {
+		return nil
+	}
+	var cloned config.Document
+	data, _ := yaml.Marshal(doc)
+	_ = yaml.Unmarshal(data, &cloned)
+	return &cloned
 }
 
 func withWorkingDir(t *testing.T, dir string) {
@@ -245,12 +262,12 @@ func TestPanelGoldenViews(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(sandboxDir, "relurpify_cfg"), fs.PublicDirMode); err != nil { // public: sandbox config dir
 		t.Fatalf("mkdir sandbox config: %v", err)
 	}
-	if err := config.SaveYAML(filepath.Join(sandboxDir, "relurpify_cfg", "agent.yaml"), testManifest()); err != nil {
+	if err := config.SaveYAML(filepath.Join(sandboxDir, "relurpify_cfg", "agent.yaml"), testDocument()); err != nil {
 		t.Fatalf("seed sandbox manifest: %v", err)
 	}
 	sandboxPane := tui.NewSandboxPane(&sandboxFixtureRuntime{
 		workspace: sandboxDir,
-		manifest:  testManifest(),
+		document:  testDocument(),
 		backend:   "gvisor",
 	})
 	sandboxPane.SetSize(96, 20)

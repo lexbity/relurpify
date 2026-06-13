@@ -19,19 +19,23 @@ import (
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 )
 
-// detectReduceMotion checks terminal and environment to decide whether
-// animations should be disabled. It is the single location where env var
-// reads for motion detection happen, keeping them out of library code.
-func detectReduceMotion() bool {
-	// 1. Explicit env var opt-out.
-	if v := os.Getenv("RELPURIFY_REDUCE_MOTION"); v != "" {
-		return true
-	}
-	// 2. CI environments — always reduce.
-	if v := os.Getenv("CI"); v != "" {
-		return true
-	}
-	if v := os.Getenv("GITHUB_ACTIONS"); v != "" {
+var reduceMotionPreference bool
+var terminalNamePreference string
+
+// SetReduceMotionPreference configures whether new TUI models should reduce motion.
+func SetReduceMotionPreference(reduced bool) {
+	reduceMotionPreference = reduced
+}
+
+// SetTerminalNamePreference configures the terminal name hint used by motion detection.
+func SetTerminalNamePreference(name string) {
+	terminalNamePreference = strings.TrimSpace(name)
+}
+
+// detectReduceMotion checks the terminal and the precomputed preference to
+// decide whether animations should be disabled.
+func detectReduceMotion(preferred bool) bool {
+	if preferred {
 		return true
 	}
 	// 3. Non-interactive / pipe — no terminal to animate on.
@@ -40,18 +44,12 @@ func detectReduceMotion() bool {
 		return true
 	}
 	// 4. SSH or remote session — local motion may not render smoothly.
-	if v := os.Getenv("SSH_TTY"); v != "" {
-		return true
-	}
-	if v := os.Getenv("SSH_CONNECTION"); v != "" {
-		return true
-	}
 	// 5. Dumb terminal or very limited colour support.
 	profile := termenv.EnvColorProfile()
 	if profile == termenv.Ascii {
 		return true
 	}
-	term := os.Getenv("TERM")
+	term := terminalNamePreference
 	if term == "dumb" || term == "" {
 		return true
 	}
@@ -312,7 +310,7 @@ func newRootModel(rt RuntimeAdapter, factory SurfaceFactory) RootModel {
 		activeSurface:     state.surface,
 		th:                resolveSurfaceTheme(state.surface),
 		anim:              NewAnimationManager(),
-		reduce:            NewReduceMotion(detectReduceMotion()),
+		reduce:            NewReduceMotion(detectReduceMotion(reduceMotionPreference)),
 	}
 	m.notifBar.SetInteractionRenderer(state.surface.RenderNotification)
 	m.propagateTheme()

@@ -12,9 +12,15 @@ import (
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
+const (
+	agent_yaml    = "agent.yaml"
+	hello         = "hello"
+	relurpify_cfg = "relurpify_cfg"
+)
+
 func TestPrepareRunWritesDescriptor(t *testing.T) {
 	workspace := t.TempDir()
-	manifestPath := filepath.Join(workspace, "relurpify_cfg", "agent.yaml")
+	manifestPath := filepath.Join(workspace, relurpify_cfg, agent_yaml)
 	if err := fs.MkdirAllSecure(filepath.Dir(manifestPath)); err != nil {
 		t.Fatal(err)
 	}
@@ -45,17 +51,17 @@ spec:
 		Metadata:   SuiteMeta{Name: "euclo.code"},
 		Spec: SuiteSpec{
 			AgentName: "euclo",
-			Manifest:  filepath.ToSlash(filepath.Join(config.DirName, "agent.yaml")),
+			Manifest:  filepath.ToSlash(filepath.Join(config.DirName, agent_yaml)),
 			Models: []ModelSpec{{
 				Name:     "qwen2.5-coder:14b",
-				Provider: "ollama",
+				Provider: ollama,
 				Endpoint: "http://127.0.0.1:11434",
 			}},
 		},
 	}
 
-	runRoot := filepath.Join(workspace, "relurpify_cfg", "test_run", "run-1")
-	prepared, err := PrepareRun(suite, CaseSpec{Name: "smoke", Prompt: "hello"}, suite.Spec.Models[0], RunOptions{}, workspace, runRoot, "run-1")
+	runRoot := filepath.Join(workspace, relurpify_cfg, "test_run", run1)
+	prepared, err := PrepareRun(suite, CaseSpec{Name: smoke, Prompt: hello}, suite.Spec.Models[0], RunOptions{}, workspace, runRoot, run1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,7 +78,7 @@ spec:
 
 func TestPrepareRunMaterializesCaseSetupFiles(t *testing.T) {
 	workspace := t.TempDir()
-	manifestPath := filepath.Join(workspace, "relurpify_cfg", "agent.yaml")
+	manifestPath := filepath.Join(workspace, relurpify_cfg, agent_yaml)
 	if err := fs.MkdirAllSecure(filepath.Dir(manifestPath)); err != nil {
 		t.Fatal(err)
 	}
@@ -103,30 +109,30 @@ spec:
 		Metadata:   SuiteMeta{Name: "euclo.code"},
 		Spec: SuiteSpec{
 			AgentName: "euclo",
-			Manifest:  filepath.ToSlash(filepath.Join(config.DirName, "agent.yaml")),
+			Manifest:  filepath.ToSlash(filepath.Join(config.DirName, agent_yaml)),
 			Models: []ModelSpec{{
 				Name:     "qwen2.5-coder:14b",
-				Provider: "ollama",
+				Provider: ollama,
 				Endpoint: "http://127.0.0.1:11434",
 			}},
 		},
 	}
 
-	runRoot := filepath.Join(workspace, "relurpify_cfg", "test_run", "run-1")
+	runRoot := filepath.Join(workspace, relurpify_cfg, "test_run", run1)
 	prepared, err := PrepareRun(suite, CaseSpec{
-		Name:   "smoke",
-		Prompt: "hello",
+		Name:   smoke,
+		Prompt: hello,
 		Setup: SetupSpec{
 			Files: []SetupFileSpec{{
 				Path:    "testsuite/agenttest_fixtures/gosuite/hello/hello.go",
 				Content: "package hello\n\nfunc Hello() string {\n  return \"hello\"\n}\n",
 			}},
 		},
-	}, suite.Spec.Models[0], RunOptions{}, workspace, runRoot, "run-1")
+	}, suite.Spec.Models[0], RunOptions{}, workspace, runRoot, run1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(filepath.Join(prepared.Descriptor.DerivedWorkspaceRoot, "testsuite", "agenttest_fixtures", "gosuite", "hello", "hello.go")); err != nil {
+	if _, err := os.Stat(filepath.Join(prepared.Descriptor.DerivedWorkspaceRoot, "testsuite", "agenttest_fixtures", "gosuite", hello, "hello.go")); err != nil {
 		t.Fatalf("expected case setup file in derived workspace: %v", err)
 	}
 }

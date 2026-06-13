@@ -9,6 +9,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+const (
+	loaded_model = "loaded-model"
+)
+
+
 func TestModelProvenanceDigest(t *testing.T) {
 	t.Run("nil provenance returns empty string", func(t *testing.T) {
 		digest := modelProvenanceDigest(nil)
@@ -61,7 +66,7 @@ func TestModelProvenanceName(t *testing.T) {
 	t.Run("loaded name takes precedence", func(t *testing.T) {
 		provenance := &BackendModelProvenance{
 			LoadedName:  "loaded-name",
-			LoadedModel: "loaded-model",
+			LoadedModel: loaded_model,
 		}
 		name := modelProvenanceName(provenance)
 		require.Equal(t, "loaded-name", name)
@@ -69,10 +74,10 @@ func TestModelProvenanceName(t *testing.T) {
 
 	t.Run("falls back to loaded model", func(t *testing.T) {
 		provenance := &BackendModelProvenance{
-			LoadedModel: "loaded-model",
+			LoadedModel: loaded_model,
 		}
 		name := modelProvenanceName(provenance)
-		require.Equal(t, "loaded-model", name)
+		require.Equal(t, loaded_model, name)
 	})
 
 	t.Run("both empty returns empty string", func(t *testing.T) {

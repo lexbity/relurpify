@@ -21,6 +21,14 @@ jobs:
         run: |
           go build ./...
           go vet ./...
+      - name: Contract dissolution gate
+        run: make check-contract-dissolution
+      - name: Contract migration baseline
+        run: make test-contract-migration
+      - name: Dev-agent revival baseline
+        run: make test-dev-agent-revival
+      - name: Tape fidelity baseline
+        run: make test-tape-fidelity
       - name: Lint Go — ratchet (Track R, new issues only, blocking)
         uses: golangci/golangci-lint-action@v6
         with:

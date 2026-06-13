@@ -10,27 +10,25 @@ import (
 // at the top of BuildSecurityRuntime and must never be bypassed.
 //
 // Current checks:
-//   - Backend/manifest runtime mismatch (e.g. manifest says gvisor but
+//   - Backend/runtime mismatch (e.g. runtime says gvisor but
 //     sandbox.backend is docker, which drifts the security model).
 //   - Under strict mode, a non-loopback bind is rejected (promoted from
 //     nexus SecurityWarnings to a hard gate).
 func ValidateSecurityRuntimeInput(in SecurityRuntimeInput) error {
 	var errs []error
 
-	// Check 1: Backend vs manifest runtime mismatch.
-	// If the manifest declares a specific runtime, the sandbox backend
+	// Check 1: Backend vs runtime mismatch.
+	// If the resolved runtime declares a specific backend, the sandbox backend
 	// must be compatible. A gvisor manifest with a docker backend would
 	// bypass gvisor's security model (protected paths, no-new-privileges,
 	// seccomp).
-	if in.ManifestSpec != nil {
-		manifestRuntime := strings.ToLower(strings.TrimSpace(in.ManifestSpec.Runtime))
-		if manifestRuntime != "" {
-			resolvedBackend := resolveEffectiveBackend(in.SandboxBackend)
-			if !backendsCompatible(manifestRuntime, resolvedBackend) {
-				errs = append(errs, fmt.Errorf(
-					"manifest runtime %q is incompatible with sandbox backend %q",
-					manifestRuntime, resolvedBackend))
-			}
+	manifestRuntime := strings.ToLower(strings.TrimSpace(in.Runtime))
+	if manifestRuntime != "" {
+		resolvedBackend := resolveEffectiveBackend(in.SandboxBackend)
+		if !backendsCompatible(manifestRuntime, resolvedBackend) {
+			errs = append(errs, fmt.Errorf(
+				"runtime %q is incompatible with sandbox backend %q",
+				manifestRuntime, resolvedBackend))
 		}
 	}
 
@@ -50,7 +48,7 @@ func resolveEffectiveBackend(backend string) string {
 	return b
 }
 
-// backendsCompatible returns true when the manifest runtime and the
+// backendsCompatible returns true when the runtime and the
 // resolved sandbox backend are compatible. The key rule: gvisor is
 // the only runtime that provides the full security model (protected
 // paths, no-new-privileges, seccomp). A docker backend with a gvisor

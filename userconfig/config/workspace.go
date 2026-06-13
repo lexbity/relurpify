@@ -185,6 +185,7 @@ func (c WorkspaceConfig) stateDirValue() string {
 	return strings.TrimSpace(*c.Paths.StateDir)
 }
 
+// StateDir returns the absolute runtime state directory for the workspace.
 func (c WorkspaceConfig) StateDir() string {
 	if c.StateDirAbs != "" {
 		return c.StateDirAbs
@@ -195,6 +196,7 @@ func (c WorkspaceConfig) StateDir() string {
 	return filepath.Join(c.WorkspaceAbs, c.stateDirValue())
 }
 
+// LogsDir returns the absolute runtime logs directory for the workspace.
 func (c WorkspaceConfig) LogsDir() string {
 	stateDir := c.StateDir()
 	if stateDir == "" {
@@ -203,6 +205,7 @@ func (c WorkspaceConfig) LogsDir() string {
 	return filepath.Join(stateDir, "logs")
 }
 
+// TelemetryDir returns the absolute runtime telemetry directory for the workspace.
 func (c WorkspaceConfig) TelemetryDir() string {
 	stateDir := c.StateDir()
 	if stateDir == "" {
@@ -211,6 +214,7 @@ func (c WorkspaceConfig) TelemetryDir() string {
 	return filepath.Join(stateDir, "telemetry")
 }
 
+// EventsFile returns the absolute runtime events database path for the workspace.
 func (c WorkspaceConfig) EventsFile() string {
 	stateDir := c.StateDir()
 	if stateDir == "" {

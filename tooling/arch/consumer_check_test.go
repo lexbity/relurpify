@@ -4,18 +4,27 @@ import (
 	"testing"
 )
 
+const (
+	ImportPathA_consumer_check_test = "codeburg.org/lexbit/relurpify/a"
+	ImportPathB_consumer_check_test = "codeburg.org/lexbit/relurpify/b"
+	ImportPathC_consumer_check_test = "codeburg.org/lexbit/relurpify/c"
+	ImportPathD_consumer_check_test = "codeburg.org/lexbit/relurpify/d"
+	ImportPathUnused_consumer_check_test = "codeburg.org/lexbit/relurpify/unused"
+)
+
+
 func TestCheckConsumers_noViolation(t *testing.T) {
 	pkgs := []GoPackage{
-		{ImportPath: "codeburg.org/lexbit/relurpify/a", Name: "a", GoFiles: []string{"a.go"}},
-		{ImportPath: "codeburg.org/lexbit/relurpify/b", Name: "b", GoFiles: []string{"b.go"}},
-		{ImportPath: "codeburg.org/lexbit/relurpify/c", Name: "c", GoFiles: []string{"c.go"}},
-		{ImportPath: "codeburg.org/lexbit/relurpify/d", Name: "d", GoFiles: []string{"d.go"}},
+		{ImportPath: ImportPathA_consumer_check_test, Name: "a", GoFiles: []string{"a.go"}},
+		{ImportPath: ImportPathB_consumer_check_test, Name: "b", GoFiles: []string{"b.go"}},
+		{ImportPath: ImportPathC_consumer_check_test, Name: "c", GoFiles: []string{"c.go"}},
+		{ImportPath: ImportPathD_consumer_check_test, Name: "d", GoFiles: []string{"d.go"}},
 	}
 	reverse := map[string][]string{
-		"codeburg.org/lexbit/relurpify/a": {"codeburg.org/lexbit/relurpify/b"},
-		"codeburg.org/lexbit/relurpify/b": {"codeburg.org/lexbit/relurpify/c"},
-		"codeburg.org/lexbit/relurpify/c": {"codeburg.org/lexbit/relurpify/d"},
-		"codeburg.org/lexbit/relurpify/d": {"codeburg.org/lexbit/relurpify/a"},
+		ImportPathA_consumer_check_test: {ImportPathB_consumer_check_test},
+		ImportPathB_consumer_check_test: {ImportPathC_consumer_check_test},
+		ImportPathC_consumer_check_test: {ImportPathD_consumer_check_test},
+		ImportPathD_consumer_check_test: {ImportPathA_consumer_check_test},
 	}
 	violations := CheckConsumers(pkgs, reverse, Allowlist{})
 	if len(violations) != 0 {
@@ -25,12 +34,12 @@ func TestCheckConsumers_noViolation(t *testing.T) {
 
 func TestCheckConsumers_unusedPackage(t *testing.T) {
 	pkgs := []GoPackage{
-		{ImportPath: "codeburg.org/lexbit/relurpify/a", Name: "a", GoFiles: []string{"a.go"}},
-		{ImportPath: "codeburg.org/lexbit/relurpify/unused", Name: "unused", GoFiles: []string{"unused.go"}},
+		{ImportPath: ImportPathA_consumer_check_test, Name: "a", GoFiles: []string{"a.go"}},
+		{ImportPath: ImportPathUnused_consumer_check_test, Name: "unused", GoFiles: []string{"unused.go"}},
 	}
 	reverse := map[string][]string{
-		"codeburg.org/lexbit/relurpify/a":      {},
-		"codeburg.org/lexbit/relurpify/unused": {},
+		ImportPathA_consumer_check_test:      {},
+		ImportPathUnused_consumer_check_test: {},
 	}
 	violations := CheckConsumers(pkgs, reverse, Allowlist{})
 	if len(violations) == 0 {
@@ -70,7 +79,7 @@ func TestCheckConsumers_testOnlyPackage(t *testing.T) {
 
 func TestCheckConsumers_allowlist(t *testing.T) {
 	pkgs := []GoPackage{
-		{ImportPath: "codeburg.org/lexbit/relurpify/unused", Name: "unused", GoFiles: []string{"unused.go"}},
+		{ImportPath: ImportPathUnused_consumer_check_test, Name: "unused", GoFiles: []string{"unused.go"}},
 	}
 	reverse := map[string][]string{}
 	allowlist := Allowlist{entries: map[string]map[string]bool{

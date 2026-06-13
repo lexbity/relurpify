@@ -6,11 +6,16 @@ import (
 	"testing"
 )
 
+const (
+	Livetreelistingfromsfailedv_agentenv_freeze_test = "live tree listing from %s failed: %v"
+)
+
+
 func TestNoNewAgentenvImporters(t *testing.T) {
 	root := filepath.Join("..", "..")
 	pkgs, err := ListPackages(root)
 	if err != nil {
-		t.Skipf("live tree listing from %s failed: %v", root, err)
+		t.Skipf(Livetreelistingfromsfailedv_agentenv_freeze_test, root, err)
 	}
 	forward, _ := ImportGraph(pkgs)
 	violations := CheckNoNewAgentenvImporters(pkgs, forward)
@@ -25,7 +30,7 @@ func TestAllowedAgentenvImportersReport(t *testing.T) {
 	root := filepath.Join("..", "..")
 	pkgs, err := ListPackages(root)
 	if err != nil {
-		t.Skipf("live tree listing from %s failed: %v", root, err)
+		t.Skipf(Livetreelistingfromsfailedv_agentenv_freeze_test, root, err)
 	}
 	forward, _ := ImportGraph(pkgs)
 	lines := AllowedAgentenvImportersReport(forward)
@@ -43,7 +48,7 @@ func TestNoAgentenvImportsInCognitionzoo(t *testing.T) {
 	root := filepath.Join("..", "..")
 	pkgs, err := ListPackages(root)
 	if err != nil {
-		t.Skipf("live tree listing from %s failed: %v", root, err)
+		t.Skipf(Livetreelistingfromsfailedv_agentenv_freeze_test, root, err)
 	}
 	forward, _ := ImportGraph(pkgs)
 
@@ -65,7 +70,7 @@ func TestNoAgentenvImportsInModel(t *testing.T) {
 	root := filepath.Join("..", "..")
 	pkgs, err := ListPackages(root)
 	if err != nil {
-		t.Skipf("live tree listing from %s failed: %v", root, err)
+		t.Skipf(Livetreelistingfromsfailedv_agentenv_freeze_test, root, err)
 	}
 	forward, _ := ImportGraph(pkgs)
 

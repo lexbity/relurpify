@@ -16,7 +16,7 @@ name: read_file
 	decl, body, err := SplitSchemaDocument("tool.yaml", data)
 	require.NoError(t, err)
 	require.Equal(t, "relurpify/tool/v1", decl.Raw)
-	require.Equal(t, "tool", decl.Kind)
+	require.Equal(t, schemaKindTool, decl.Kind)
 	require.Equal(t, 1, decl.Version)
 	require.Equal(t, 3, decl.Line)
 	require.Equal(t, "name: read_file\n", string(body))
@@ -55,7 +55,7 @@ func TestSchemaRegistryKnownKindsAreSorted(t *testing.T) {
 		"policy/sandbox",
 		"policy/shell",
 		"skill",
-		"tool",
+		schemaKindTool,
 		"workspace",
 	}, reg.KnownKinds())
 }

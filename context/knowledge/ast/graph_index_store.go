@@ -15,6 +15,18 @@ import (
 	"codeburg.org/lexbit/relurpify/context/knowledge/graphdb"
 )
 
+const (
+	AstFile_graph_index_store = "ast_file"
+	AstNode_graph_index_store = "ast_node"
+	Cat_graph_index_store = "cat:"
+	EdgeId_graph_index_store = "edge_id"
+	File_graph_index_store = "file:"
+	Storeisclosed_graph_index_store = "store is closed"
+	Type_graph_index_store = "type"
+	Type_graph_index_store_2 = "type:"
+)
+
+
 // GraphIndexStore implements IndexStore using a graphdb.Engine as the
 // durable backend.  AST concepts are mapped to graph records:
 //
@@ -36,7 +48,7 @@ func NewGraphIndexStore(g *graphdb.Engine) *GraphIndexStore {
 
 func (s *GraphIndexStore) SaveFile(metadata *FileMetadata) error {
 	if s.g.IsClosed() {
-		return errors.New("store is closed")
+		return errors.New(Storeisclosed_graph_index_store)
 	}
 	if metadata == nil {
 		return errors.New("metadata required")
@@ -63,8 +75,8 @@ func (s *GraphIndexStore) SaveFile(metadata *FileMetadata) error {
 	})
 	labels := []string{
 		"lang:" + metadata.Language,
-		"cat:" + string(metadata.Category),
-		"file:" + metadata.Path,
+		Cat_graph_index_store + string(metadata.Category),
+		File_graph_index_store + metadata.Path,
 	}
 	if metadata.ContentHash != "" {
 		labels = append(labels, "hash:"+metadata.ContentHash)
@@ -72,7 +84,7 @@ func (s *GraphIndexStore) SaveFile(metadata *FileMetadata) error {
 
 	return s.g.UpsertNode(context.TODO(), graphdb.NodeRecord{
 		ID:       metadata.ID,
-		Kind:     "ast_file",
+		Kind:     AstFile_graph_index_store,
 		SourceID: metadata.Path,
 		StableID: "path:" + metadata.Path,
 		Labels:   labels,
@@ -82,10 +94,10 @@ func (s *GraphIndexStore) SaveFile(metadata *FileMetadata) error {
 
 func (s *GraphIndexStore) GetFile(fileID string) (*FileMetadata, error) {
 	if s.g.IsClosed() {
-		return nil, errors.New("store is closed")
+		return nil, errors.New(Storeisclosed_graph_index_store)
 	}
 	node, ok := s.g.GetNode(fileID)
-	if !ok || node.Kind != "ast_file" {
+	if !ok || node.Kind != AstFile_graph_index_store {
 		return nil, os.ErrNotExist
 	}
 	return nodeToFileMetadata(node)
@@ -93,10 +105,10 @@ func (s *GraphIndexStore) GetFile(fileID string) (*FileMetadata, error) {
 
 func (s *GraphIndexStore) GetFileByPath(path string) (*FileMetadata, error) {
 	if s.g.IsClosed() {
-		return nil, errors.New("store is closed")
+		return nil, errors.New(Storeisclosed_graph_index_store)
 	}
 	// Use the stable ID which is "path:{path}".
-	nodes := s.g.ListNodesByLabel("ast_file", "file:"+path)
+	nodes := s.g.ListNodesByLabel(AstFile_graph_index_store, File_graph_index_store+path)
 	if len(nodes) == 0 {
 		return nil, os.ErrNotExist
 	}
@@ -105,13 +117,13 @@ func (s *GraphIndexStore) GetFileByPath(path string) (*FileMetadata, error) {
 
 func (s *GraphIndexStore) ListFiles(category Category) ([]*FileMetadata, error) {
 	if s.g.IsClosed() {
-		return nil, errors.New("store is closed")
+		return nil, errors.New(Storeisclosed_graph_index_store)
 	}
 	var nodes []graphdb.NodeRecord
 	if category == "" {
-		nodes = s.g.ListNodes("ast_file")
+		nodes = s.g.ListNodes(AstFile_graph_index_store)
 	} else {
-		nodes = s.g.ListNodesByLabel("ast_file", "cat:"+string(category))
+		nodes = s.g.ListNodesByLabel(AstFile_graph_index_store, Cat_graph_index_store+string(category))
 	}
 	out := make([]*FileMetadata, 0, len(nodes))
 	for _, n := range nodes {
@@ -126,7 +138,7 @@ func (s *GraphIndexStore) ListFiles(category Category) ([]*FileMetadata, error) 
 
 func (s *GraphIndexStore) DeleteFile(fileID string) error {
 	if s.g.IsClosed() {
-		return errors.New("store is closed")
+		return errors.New(Storeisclosed_graph_index_store)
 	}
 	return s.g.DeleteNode(context.TODO(), fileID)
 }
@@ -137,7 +149,7 @@ func (s *GraphIndexStore) DeleteFile(fileID string) error {
 
 func (s *GraphIndexStore) SaveNodes(nodes []*Node) error {
 	if s.g.IsClosed() {
-		return errors.New("store is closed")
+		return errors.New(Storeisclosed_graph_index_store)
 	}
 	records := make([]graphdb.NodeRecord, 0, len(nodes))
 	for _, n := range nodes {
@@ -156,7 +168,7 @@ func nodeToRecord(n *Node) graphdb.NodeRecord {
 	props := mustMarshal(map[string]any{
 		"parent_id":    n.ParentID,
 		"file_id":      n.FileID,
-		"type":         string(n.Type),
+		Type_graph_index_store:         string(n.Type),
 		"category":     string(n.Category),
 		"language":     n.Language,
 		"start_line":   n.StartLine,
@@ -170,18 +182,18 @@ func nodeToRecord(n *Node) graphdb.NodeRecord {
 		"content_hash": n.ContentHash,
 	})
 	labels := []string{
-		"type:" + string(n.Type),
-		"file:" + n.FileID,
+		Type_graph_index_store_2 + string(n.Type),
+		File_graph_index_store + n.FileID,
 	}
 	if n.Category != "" {
-		labels = append(labels, "cat:"+string(n.Category))
+		labels = append(labels, Cat_graph_index_store+string(n.Category))
 	}
 	if n.Name != "" {
 		labels = append(labels, "name:"+n.Name)
 	}
 	return graphdb.NodeRecord{
 		ID:     n.ID,
-		Kind:   "ast_node",
+		Kind:   AstNode_graph_index_store,
 		Labels: labels,
 		Props:  props,
 	}
@@ -189,10 +201,10 @@ func nodeToRecord(n *Node) graphdb.NodeRecord {
 
 func (s *GraphIndexStore) GetNode(nodeID string) (*Node, error) {
 	if s.g.IsClosed() {
-		return nil, errors.New("store is closed")
+		return nil, errors.New(Storeisclosed_graph_index_store)
 	}
 	node, ok := s.g.GetNode(nodeID)
-	if !ok || node.Kind != "ast_node" {
+	if !ok || node.Kind != AstNode_graph_index_store {
 		return nil, os.ErrNotExist
 	}
 	return nodeToASTNode(node)
@@ -200,9 +212,9 @@ func (s *GraphIndexStore) GetNode(nodeID string) (*Node, error) {
 
 func (s *GraphIndexStore) GetNodesByFile(fileID string) ([]*Node, error) {
 	if s.g.IsClosed() {
-		return nil, errors.New("store is closed")
+		return nil, errors.New(Storeisclosed_graph_index_store)
 	}
-	nodes := s.g.ListNodesByLabel("ast_node", "file:"+fileID)
+	nodes := s.g.ListNodesByLabel(AstNode_graph_index_store, File_graph_index_store+fileID)
 	out := make([]*Node, 0, len(nodes))
 	for _, n := range nodes {
 		an, err := nodeToASTNode(n)
@@ -216,9 +228,9 @@ func (s *GraphIndexStore) GetNodesByFile(fileID string) ([]*Node, error) {
 
 func (s *GraphIndexStore) GetNodesByType(nodeType NodeType) ([]*Node, error) {
 	if s.g.IsClosed() {
-		return nil, errors.New("store is closed")
+		return nil, errors.New(Storeisclosed_graph_index_store)
 	}
-	nodes := s.g.ListNodesByLabel("ast_node", "type:"+string(nodeType))
+	nodes := s.g.ListNodesByLabel(AstNode_graph_index_store, Type_graph_index_store_2+string(nodeType))
 	out := make([]*Node, 0, len(nodes))
 	for _, n := range nodes {
 		an, err := nodeToASTNode(n)
@@ -232,9 +244,9 @@ func (s *GraphIndexStore) GetNodesByType(nodeType NodeType) ([]*Node, error) {
 
 func (s *GraphIndexStore) GetNodesByName(name string) ([]*Node, error) {
 	if s.g.IsClosed() {
-		return nil, errors.New("store is closed")
+		return nil, errors.New(Storeisclosed_graph_index_store)
 	}
-	nodes := s.g.ListNodesByLabel("ast_node", "name:"+name)
+	nodes := s.g.ListNodesByLabel(AstNode_graph_index_store, "name:"+name)
 	out := make([]*Node, 0, len(nodes))
 	for _, n := range nodes {
 		an, err := nodeToASTNode(n)
@@ -248,16 +260,16 @@ func (s *GraphIndexStore) GetNodesByName(name string) ([]*Node, error) {
 
 func (s *GraphIndexStore) SearchNodes(query NodeQuery) ([]*Node, error) {
 	if s.g.IsClosed() {
-		return nil, errors.New("store is closed")
+		return nil, errors.New(Storeisclosed_graph_index_store)
 	}
 	// Use the index to narrow results.
 	var candidates []graphdb.NodeRecord
 	if len(query.Types) > 0 {
 		for _, t := range query.Types {
-			candidates = append(candidates, s.g.ListNodesByLabel("ast_node", "type:"+string(t))...)
+			candidates = append(candidates, s.g.ListNodesByLabel(AstNode_graph_index_store, Type_graph_index_store_2+string(t))...)
 		}
 	} else {
-		candidates = s.g.ListNodes("ast_node")
+		candidates = s.g.ListNodes(AstNode_graph_index_store)
 	}
 
 	out := make([]*Node, 0, len(candidates))
@@ -331,7 +343,7 @@ func (s *GraphIndexStore) DeleteNode(nodeID string) error {
 
 func (s *GraphIndexStore) SaveEdges(edges []*Edge) error {
 	if s.g.IsClosed() {
-		return errors.New("store is closed")
+		return errors.New(Storeisclosed_graph_index_store)
 	}
 	records := make([]graphdb.EdgeRecord, 0, len(edges))
 	for _, e := range edges {
@@ -354,14 +366,14 @@ func edgeToRecord(e *Edge) graphdb.EdgeRecord {
 		TargetID:  e.TargetID,
 		Kind:      graphdb.EdgeKind(e.Type),
 		Weight:    1,
-		Props:     mustMarshal(map[string]any{"edge_id": e.ID, "type": string(e.Type), "props": string(props)}),
+		Props:     mustMarshal(map[string]any{EdgeId_graph_index_store: e.ID, Type_graph_index_store: string(e.Type), "props": string(props)}),
 		CreatedAt: now,
 	}
 }
 
 func (s *GraphIndexStore) GetEdge(edgeID string) (*Edge, error) {
 	if s.g.IsClosed() {
-		return nil, errors.New("store is closed")
+		return nil, errors.New(Storeisclosed_graph_index_store)
 	}
 	// Find the edge by searching through connected nodes.
 	// Edge IDs are stored in edge props, so we need to search.
@@ -372,12 +384,12 @@ func (s *GraphIndexStore) GetEdge(edgeID string) (*Edge, error) {
 		edges := s.g.GetOutEdges(n.ID)
 		for _, e := range edges {
 			props := edgePropsToMap(e.Props)
-			if id, _ := props["edge_id"].(string); id == edgeID {
+			if id, _ := props[EdgeId_graph_index_store].(string); id == edgeID {
 				return &Edge{
 					ID:       edgeID,
 					SourceID: e.SourceID,
 					TargetID: e.TargetID,
-					Type:     EdgeType(props["type"].(string)),
+					Type:     EdgeType(props[Type_graph_index_store].(string)),
 				}, nil
 			}
 		}
@@ -387,7 +399,7 @@ func (s *GraphIndexStore) GetEdge(edgeID string) (*Edge, error) {
 
 func (s *GraphIndexStore) GetEdgesBySource(sourceID string) ([]*Edge, error) {
 	if s.g.IsClosed() {
-		return nil, errors.New("store is closed")
+		return nil, errors.New(Storeisclosed_graph_index_store)
 	}
 	gedges := s.g.GetOutEdges(sourceID)
 	return collectEdges(gedges)
@@ -395,7 +407,7 @@ func (s *GraphIndexStore) GetEdgesBySource(sourceID string) ([]*Edge, error) {
 
 func (s *GraphIndexStore) GetEdgesByTarget(targetID string) ([]*Edge, error) {
 	if s.g.IsClosed() {
-		return nil, errors.New("store is closed")
+		return nil, errors.New(Storeisclosed_graph_index_store)
 	}
 	gedges := s.g.GetInEdges(targetID)
 	return collectEdges(gedges)
@@ -403,7 +415,7 @@ func (s *GraphIndexStore) GetEdgesByTarget(targetID string) ([]*Edge, error) {
 
 func (s *GraphIndexStore) GetEdgesByType(edgeType EdgeType) ([]*Edge, error) {
 	if s.g.IsClosed() {
-		return nil, errors.New("store is closed")
+		return nil, errors.New(Storeisclosed_graph_index_store)
 	}
 	// Walk all nodes and collect edges matching the type.
 	var out []*Edge
@@ -421,7 +433,7 @@ func (s *GraphIndexStore) GetEdgesByType(edgeType EdgeType) ([]*Edge, error) {
 
 func (s *GraphIndexStore) SearchEdges(query EdgeQuery) ([]*Edge, error) {
 	if s.g.IsClosed() {
-		return nil, errors.New("store is closed")
+		return nil, errors.New(Storeisclosed_graph_index_store)
 	}
 	var candidates []graphdb.EdgeRecord
 	egk := toEdgeKinds(query.Types)
@@ -469,7 +481,7 @@ func (s *GraphIndexStore) SearchEdges(query EdgeQuery) ([]*Edge, error) {
 
 func (s *GraphIndexStore) DeleteEdge(edgeID string) error {
 	if s.g.IsClosed() {
-		return errors.New("store is closed")
+		return errors.New(Storeisclosed_graph_index_store)
 	}
 	edge, err := s.GetEdge(edgeID)
 	if err != nil {
@@ -522,7 +534,7 @@ func (s *GraphIndexStore) GetDependents(nodeID string) ([]*Node, error) {
 
 func (s *GraphIndexStore) traverseNodesRecursive(startNodeID string, dir graphdb.Direction) ([]*Node, error) {
 	if s.g.IsClosed() {
-		return nil, errors.New("store is closed")
+		return nil, errors.New(Storeisclosed_graph_index_store)
 	}
 	visited := make(map[string]bool)
 	var queue []string
@@ -586,7 +598,7 @@ func (s *GraphIndexStore) traverseNodesRecursive(startNodeID string, dir graphdb
 
 func (s *GraphIndexStore) traverseNodes(nodeID string, edgeType EdgeType, dir graphdb.Direction) ([]*Node, error) {
 	if s.g.IsClosed() {
-		return nil, errors.New("store is closed")
+		return nil, errors.New(Storeisclosed_graph_index_store)
 	}
 	neighborIDs := s.g.Neighbors(nodeID, dir, graphdb.EdgeKind(edgeType))
 	out := make([]*Node, 0, len(neighborIDs))
@@ -611,24 +623,24 @@ func (s *GraphIndexStore) traverseNodes(nodeID string, edgeType EdgeType, dir gr
 
 func (s *GraphIndexStore) BeginTransaction() (Transaction, error) {
 	if s.g.IsClosed() {
-		return nil, errors.New("store is closed")
+		return nil, errors.New(Storeisclosed_graph_index_store)
 	}
 	return &graphTransaction{store: s}, nil
 }
 
 func (s *GraphIndexStore) Vacuum() error {
 	if s.g.IsClosed() {
-		return errors.New("store is closed")
+		return errors.New(Storeisclosed_graph_index_store)
 	}
 	return nil
 }
 
 func (s *GraphIndexStore) GetStats() (*IndexStats, error) {
 	if s.g.IsClosed() {
-		return nil, errors.New("store is closed")
+		return nil, errors.New(Storeisclosed_graph_index_store)
 	}
-	files := s.g.ListNodes("ast_file")
-	nodes := s.g.ListNodes("ast_node")
+	files := s.g.ListNodes(AstFile_graph_index_store)
+	nodes := s.g.ListNodes(AstNode_graph_index_store)
 	stats := &IndexStats{
 		TotalFiles:      len(files),
 		TotalNodes:      len(nodes),
@@ -655,7 +667,7 @@ func (s *GraphIndexStore) GetStats() (*IndexStats, error) {
 		gedges := s.g.GetOutEdges(n.ID)
 		for _, e := range gedges {
 			props := edgePropsToMap(e.Props)
-			if et, ok := props["type"].(string); ok {
+			if et, ok := props[Type_graph_index_store].(string); ok {
 				stats.EdgesByType[EdgeType(et)]++
 				totalEdges++
 			}
@@ -821,8 +833,8 @@ func collectEdges(gedges []graphdb.EdgeRecord) ([]*Edge, error) {
 	out := make([]*Edge, 0, len(gedges))
 	for _, e := range gedges {
 		props := edgePropsToMap(e.Props)
-		edgeID, _ := props["edge_id"].(string)
-		et, _ := props["type"].(string)
+		edgeID, _ := props[EdgeId_graph_index_store].(string)
+		et, _ := props[Type_graph_index_store].(string)
 		out = append(out, &Edge{
 			ID:       edgeID,
 			SourceID: e.SourceID,

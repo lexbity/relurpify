@@ -41,9 +41,9 @@ func findAgentTestsDir(t *testing.T) []string {
 	t.Helper()
 	var testDirs []string
 	possiblePaths := []string{
-		filepath.Join("..", "agenttests"),
-		filepath.Join("..", "..", "testsuite", "agenttests"),
-		"agenttests",
+		filepath.Join("..", agenttests),
+		filepath.Join("..", "..", testsuite, agenttests),
+		agenttests,
 	}
 	for _, path := range possiblePaths {
 		if info, err := os.Stat(path); err == nil && info.IsDir() {

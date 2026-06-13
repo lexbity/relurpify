@@ -55,7 +55,7 @@ type Workspace struct {
 	Logger    *log.Logger
 
 	// Service management (new for dynamic lifecycle)
-	ServiceManager *serviceManager
+	ServiceManager ServiceManager
 }
 
 // Close releases all resources held by the Workspace. This includes:
@@ -140,15 +140,7 @@ func (w *Workspace) ListServices() []string {
 	if w.ServiceManager == nil {
 		return nil
 	}
-	sm := w.ServiceManager
-	sm.Mu.Lock()
-	defer sm.Mu.Unlock()
-
-	result := make([]string, 0, len(sm.Registry))
-	for id := range sm.Registry {
-		result = append(result, id)
-	}
-	return result
+	return w.ServiceManager.ListIDs()
 }
 
 // stopServices stops all running services but does not clear the registry or close stores.
@@ -173,7 +165,7 @@ type AgentBootstrapOptions struct {
 	AgentName            string
 	ConfigName           string
 	AgentSpec            *agentspec.AgentRuntimeSpec
-	ManifestSnapshot     *config.ManifestSnapshot
+	DocumentSnapshot     *config.DocumentSnapshot
 	SecurityBundle       *cfgsecurity.Bundle
 	ProfileResolution    modelselect.ProfileResolution
 	PermissionManager    permissions.PermissionManager
@@ -222,24 +214,21 @@ func BootstrapAgentRuntime(ctx context.Context, workspace string, opts AgentBoot
 	if workspace == "" {
 		return nil, fmt.Errorf("workspace required")
 	}
-	if opts.ManifestSnapshot == nil {
+	if opts.DocumentSnapshot == nil {
 		if opts.AgentSpec == nil {
-			return nil, fmt.Errorf("either manifest snapshot or agent spec required")
+			return nil, fmt.Errorf("either document snapshot or agent spec required")
 		}
-		opts.ManifestSnapshot = synthesizeManifestSnapshot(opts.AgentName, opts.AgentSpec)
+		opts.DocumentSnapshot = synthesizeDocumentSnapshot(opts.AgentName, opts.AgentSpec)
 	}
 	if opts.SecurityBundle == nil {
 		return nil, fmt.Errorf("security bundle required")
 	}
 
-	specForResolution := &opts.ManifestSnapshot.Spec
-	if opts.AgentSpec != nil {
-		clone := opts.ManifestSnapshot.Spec
-		clone.Agent = opts.AgentSpec
-		specForResolution = &clone
-	}
 	resolveOpts := config.ResolveOptions{}
-	effectiveContract, err := config.ResolveEffectiveAgentContract(workspace, specForResolution, resolveOpts)
+	if opts.DocumentSnapshot.Document == nil {
+		return nil, fmt.Errorf("document snapshot missing document")
+	}
+	effectiveContract, err := config.ResolveEffectiveAgentContract(workspace, opts.DocumentSnapshot.Document, resolveOpts)
 	if err != nil {
 		return nil, err
 	}
@@ -404,7 +393,7 @@ func OpenWorkspace(ctx context.Context, cfg WorkspaceConfig) (_ *Workspace, err 
 	}
 
 	// Embedded scope (nexus) has relaxed requirements: no LoadedConfig,
-	// ManifestSnapshot, or ProfileResolution needed. Full scope requires
+	// DocumentSnapshot, or ProfileResolution needed. Full scope requires
 	// the complete config tree.
 	isEmbedded := cfg.Scope == ScopeEmbeddedAgent
 
@@ -412,8 +401,8 @@ func OpenWorkspace(ctx context.Context, cfg WorkspaceConfig) (_ *Workspace, err 
 		if cfg.LoadedConfig == nil {
 			return nil, fmt.Errorf("loaded config required")
 		}
-		if cfg.ManifestSnapshot == nil {
-			return nil, fmt.Errorf("manifest snapshot required")
+		if cfg.DocumentSnapshot == nil {
+			return nil, fmt.Errorf("document snapshot required")
 		}
 		if cfg.ProfileResolution.Profile == nil {
 			return nil, fmt.Errorf("profile resolution required")
@@ -433,8 +422,8 @@ func OpenWorkspace(ctx context.Context, cfg WorkspaceConfig) (_ *Workspace, err 
 				log.Printf("WARN config: using default value file=%s key=%s default=%v", workspaceCfg.SourcePath, usage.Key, usage.Value)
 			}
 		}
-		if cfg.ManifestPath == "" {
-			cfg.ManifestPath = cfg.ManifestSnapshot.SourcePath
+		if cfg.ManifestPath == "" && cfg.DocumentSnapshot != nil {
+			cfg.ManifestPath = cfg.DocumentSnapshot.SourcePath
 		}
 		cfg.StateDir = workspaceCfg.StateDir()
 		if cfg.SandboxBackend == "" {
@@ -492,7 +481,7 @@ func OpenWorkspace(ctx context.Context, cfg WorkspaceConfig) (_ *Workspace, err 
 	if err != nil {
 		return nil, err
 	}
-	cleanup.Add(func(ctx context.Context) error { return logFile.Close() })
+	cleanup.Add(func(_ context.Context) error { return logFile.Close() })
 
 	// Phase C.5: Event Log Setup (gated by Scope.Services)
 	var eventLog event.Log
@@ -501,17 +490,13 @@ func OpenWorkspace(ctx context.Context, cfg WorkspaceConfig) (_ *Workspace, err 
 		if err != nil {
 			return nil, fmt.Errorf("create event log: %w", err)
 		}
-		cleanup.Add(func(ctx context.Context) error { return eventLog.Close() })
+		cleanup.Add(func(_ context.Context) error { return eventLog.Close() })
 	}
 
 	// Phase D: KnowledgeStore initialization deferred until after BootstrapAgentRuntime
 	// where the graphdb.Engine is available from IndexManager.
 
 	// Phase E: App-composed registration + security products
-	// For embedded scope, synthesize a minimal manifest snapshot if none provided.
-	if cfg.ManifestSnapshot == nil && cfg.AgentSpec != nil {
-		cfg.ManifestSnapshot = synthesizeManifestSnapshot(cfg.AgentName, cfg.AgentSpec)
-	}
 	registration := cfg.Registration
 	if registration == nil {
 		return nil, fmt.Errorf("app-composed registration required")
@@ -529,24 +514,13 @@ func OpenWorkspace(ctx context.Context, cfg WorkspaceConfig) (_ *Workspace, err 
 	}
 	runner := cfg.SecurityRuntime.Runner
 
-	// Resolve model from manifest if not overridden in manifest.
+	// Resolve model from the registered agent spec if not overridden in config.
 	inferenceModel := cfg.InferenceModel
-	if registration.ManifestSpec != nil && registration.ManifestSpec.Agent != nil {
-		if specModel := registration.ManifestSpec.Agent.Model.Name; specModel != "" && inferenceModel == "" {
-			inferenceModel = specModel
-		}
-	}
+	inferenceModel, logLLM := resolveRuntimeModelSettings(inferenceModel, cfg.DebugLLM, registration)
 
 	var model model.LanguageModel
-	var logLLM bool
 	profileResolution := cfg.ProfileResolution
 	if cfg.Scope.LLMBackend && backend != nil {
-		logLLM = cfg.DebugLLM
-		if registration.ManifestSpec != nil && registration.ManifestSpec.Agent != nil {
-			if registration.ManifestSpec.Agent.Logging != nil && registration.ManifestSpec.Agent.Logging.LLM != nil {
-				logLLM = *registration.ManifestSpec.Agent.Logging.LLM
-			}
-		}
 		backend.SetDebugLogging(logLLM)
 		if cfg.ModelProduct.ModelFactory != nil {
 			model = cfg.ModelProduct.ModelFactory(tel, logLLM)
@@ -572,7 +546,7 @@ func OpenWorkspace(ctx context.Context, cfg WorkspaceConfig) (_ *Workspace, err 
 		AgentID:             registration.ID,
 		AgentName:           cfg.AgentName,
 		ConfigName:          cfg.AgentName,
-		ManifestSnapshot:    cfg.ManifestSnapshot,
+		DocumentSnapshot:    cfg.DocumentSnapshot,
 		SecurityBundle:      cfg.SecurityBundle,
 		ProfileResolution:   profileResolution,
 		PermissionManager:   registration.Permissions,
@@ -625,10 +599,10 @@ func OpenWorkspace(ctx context.Context, cfg WorkspaceConfig) (_ *Workspace, err 
 	if err != nil {
 		return nil, fmt.Errorf("create artifact store: %w", err)
 	}
-	cleanup.Add(func(ctx context.Context) error { return artifactStore.Close() })
+	cleanup.Add(func(_ context.Context) error { return artifactStore.Close() })
 	env.ArtifactStore = artifactStore
 
-	var sm *serviceManager
+	var sm ServiceManager
 	if cfg.Scope.Services {
 		scheduler := NewServiceScheduler()
 		env.Scheduler = scheduler
@@ -639,9 +613,7 @@ func OpenWorkspace(ctx context.Context, cfg WorkspaceConfig) (_ *Workspace, err 
 			Notes:  []string{"workspace scheduler", "owned by workspace runtime"},
 		})
 		env.ServiceManager = sm
-		cleanup.Add(func(ctx context.Context) error {
-			return sm.Clear()
-		})
+		cleanup.Add(func(_ context.Context) error { return sm.Clear() })
 	}
 
 	if cfg.Scope.Knowledge {
@@ -696,6 +668,19 @@ func stringValue(v *string) string {
 		return ""
 	}
 	return *v
+}
+
+func resolveRuntimeModelSettings(inferenceModel string, debugLLM bool, registration *Registration) (string, bool) {
+	if registration == nil || registration.AgentSpec == nil {
+		return inferenceModel, debugLLM
+	}
+	if inferenceModel == "" && registration.AgentSpec.Model.Name != "" {
+		inferenceModel = registration.AgentSpec.Model.Name
+	}
+	if registration.AgentSpec.Logging != nil && registration.AgentSpec.Logging.LLM != nil {
+		debugLLM = *registration.AgentSpec.Logging.LLM
+	}
+	return inferenceModel, debugLLM
 }
 
 // setupTelemetry opens the log file, creates a logger, and assembles the

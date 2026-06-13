@@ -8,6 +8,11 @@ import (
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
+const (
+	ollama = "ollama"
+	run1   = "run-1"
+)
+
 func TestPreparedRunDescriptorValidateRequiresCoreFields(t *testing.T) {
 	var desc PreparedRunDescriptor
 	if err := desc.Validate(); err == nil {
@@ -34,8 +39,8 @@ func TestPreparedRunDescriptorNormalizesPaths(t *testing.T) {
 		SetupDir:             "./relurpify_cfg/test_run/run-1/setup",
 		ExecutionDir:         "./relurpify_cfg/test_run/run-1/execution",
 		BackendSelection:     PreparedRunSelectionSingle,
-		BackendProvider:      "ollama",
-		BackendFamily:        "ollama",
+		BackendProvider:      ollama,
+		BackendFamily:        ollama,
 		BackendEndpoint:      "http://127.0.0.1:11434",
 	}
 	if err := desc.Normalize(); err != nil {
@@ -47,7 +52,7 @@ func TestPreparedRunDescriptorNormalizesPaths(t *testing.T) {
 	if !filepath.IsAbs(desc.ManifestPath) {
 		t.Fatalf("ManifestPath not normalized to absolute path: %q", desc.ManifestPath)
 	}
-	if desc.RunID != "run-1" {
+	if desc.RunID != run1 {
 		t.Fatalf("RunID = %q, want run-1", desc.RunID)
 	}
 }
@@ -87,13 +92,13 @@ spec:
 			AgentName: "euclo",
 			Manifest:  filepath.ToSlash(filepath.Join(config.DirName, "agent.yaml")),
 			Models: []ModelSpec{
-				{Name: "model-a", Provider: "ollama", Endpoint: "http://127.0.0.1:11434"},
+				{Name: "model-a", Provider: ollama, Endpoint: "http://127.0.0.1:11434"},
 				{Name: "model-b", Provider: "lmstudio", Endpoint: "http://127.0.0.1:1234"},
 			},
 		},
 	}
-	runRoot := filepath.Join(workspace, "relurpify_cfg", "test_run", "run-1")
-	desc, err := BuildPreparedRunDescriptor(suite, CaseSpec{Name: "case", Prompt: "prompt"}, suite.Spec.Models[0], RunOptions{}, workspace, runRoot, "run-1")
+	runRoot := filepath.Join(workspace, "relurpify_cfg", "test_run", run1)
+	desc, err := BuildPreparedRunDescriptor(suite, CaseSpec{Name: "case", Prompt: "prompt"}, suite.Spec.Models[0], RunOptions{}, workspace, runRoot, run1)
 	if err != nil {
 		t.Fatalf("BuildPreparedRunDescriptor: %v", err)
 	}

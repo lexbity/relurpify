@@ -93,14 +93,14 @@ func validateToolManifestExecution(exec ports.ToolManifestExecution) error {
 	return nil
 }
 
-func validateToolManifestCapability(cap ports.ToolManifestCapability) error {
-	if strings.TrimSpace(cap.TrustClass) == "" {
+func validateToolManifestCapability(capability ports.ToolManifestCapability) error {
+	if strings.TrimSpace(capability.TrustClass) == "" {
 		return fmt.Errorf("capability.trust_class required")
 	}
-	if len(cap.RiskClass) == 0 {
+	if len(capability.RiskClass) == 0 {
 		return fmt.Errorf("capability.risk_class required")
 	}
-	if len(cap.EffectClass) == 0 {
+	if len(capability.EffectClass) == 0 {
 		return fmt.Errorf("capability.effect_class required")
 	}
 	return nil

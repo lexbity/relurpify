@@ -8,6 +8,8 @@ import (
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
+const promptBlockIDKey = "block_id"
+
 // BuildPromptRegistry constructs the workspace prompt registry and loads all
 // .prompt files from templates/prompts/ (framework, agents, named) first, then relurpify_cfg/prompts/.
 // Provider registration is deferred to named-agent Initialize() calls.
@@ -99,8 +101,8 @@ func (a promptTelemetryAdapter) EmitPromptContextMissing(e prompt.ContextMissing
 		TaskID:  e.PromptID,
 		Message: fmt.Sprintf("prompt %s/%s: %s", e.PromptID, e.BlockID, e.Message),
 		Metadata: map[string]any{
-			"block_id": e.BlockID,
-			"key":      e.Key,
+			promptBlockIDKey: e.BlockID,
+			"key":            e.Key,
 		},
 	})
 }
@@ -114,8 +116,8 @@ func (a promptTelemetryAdapter) EmitPromptValidationIssue(e prompt.ValidationIss
 		TaskID:  e.Issue.PromptID,
 		Message: e.Issue.Error(),
 		Metadata: map[string]any{
-			"severity": e.Issue.Severity.String(),
-			"block_id": e.Issue.BlockID,
+			"severity":       e.Issue.Severity.String(),
+			promptBlockIDKey: e.Issue.BlockID,
 		},
 	})
 }
@@ -129,9 +131,9 @@ func (a promptTelemetryAdapter) EmitPromptProviderFailed(e prompt.ProviderFailed
 		TaskID:  e.PromptID,
 		Message: fmt.Sprintf("prompt %s/%s provider %s failed: %s", e.PromptID, e.BlockID, e.ProviderName, e.Error),
 		Metadata: map[string]any{
-			"block_id":      e.BlockID,
-			"provider_name": e.ProviderName,
-			"error":         e.Error,
+			promptBlockIDKey: e.BlockID,
+			"provider_name":  e.ProviderName,
+			"error":          e.Error,
 		},
 	})
 }

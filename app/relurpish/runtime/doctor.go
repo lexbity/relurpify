@@ -12,6 +12,7 @@ import (
 	"codeburg.org/lexbit/relurpify/ayenitd"
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/platform/fs"
 	"codeburg.org/lexbit/relurpify/platform/llm"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
@@ -385,20 +386,13 @@ func summarizeManifestPolicy(doc *config.Document) string {
 		return ""
 	}
 	var parts []string
-	policyNode, ok := doc.Section("policy")
+	permNode, ok := doc.Section("permissions")
 	if ok {
-		var policySpec config.ManifestPolicySpec
-		if err := policyNode.Decode(&policySpec); err == nil {
-			permCount := len(policySpec.Permissions.FileSystem) + len(policySpec.Permissions.Executables) + len(policySpec.Permissions.Network)
+		var permSpec permissions.PermissionSet
+		if err := permNode.Decode(&permSpec); err == nil {
+			permCount := len(permSpec.FileSystem) + len(permSpec.Executables) + len(permSpec.Network)
 			if permCount > 0 {
-				parts = append(parts, fmt.Sprintf("policy-perms=%d", permCount))
-			}
-			if len(policySpec.Policies) > 0 {
-				parts = append(parts, fmt.Sprintf("policy-rules=%d", len(policySpec.Policies)))
-			}
-			if policySpec.Defaults != nil && policySpec.Defaults.Permissions != nil {
-				defaultPerms := policySpec.Defaults.Permissions
-				parts = append(parts, fmt.Sprintf("defaults=%d/%d/%d", len(defaultPerms.FileSystem), len(defaultPerms.Executables), len(defaultPerms.Network)))
+				parts = append(parts, fmt.Sprintf("permissions=%d", permCount))
 			}
 		}
 	}

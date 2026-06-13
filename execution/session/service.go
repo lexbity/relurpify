@@ -144,8 +144,21 @@ type ServiceRegistrationInfo struct {
 // within a workspace session.
 type ServiceManager interface {
 	RegisterService(id string, svc Service)
+	Register(id string, svc Service)
+	RegisterWithInfo(id string, svc Service, info ServiceRegistrationInfo)
+	Deregister(id string)
 	StartAll(ctx context.Context) error
+	StopAll() error
+	Get(id string) Service
+	Snapshot() []ServiceSnapshot
 	Snapshots() []ServiceSnapshot
+	Has(id string) bool
+	Count() int
+	ListIDs() []string
+	Clear() error
+	Start(ctx context.Context, id string) error
+	Stop(id string) error
+	Restart(ctx context.Context, id string) error
 }
 
 // serviceManager is the concrete implementation of ServiceManager.
@@ -160,7 +173,7 @@ type serviceManager struct {
 
 // NewServiceManager creates a new empty service registry ready for dynamic
 // service registration. Use this during Workspace initialization.
-func NewServiceManager() *serviceManager {
+func NewServiceManager() ServiceManager {
 	return &serviceManager{
 		Registry: make(map[string]Service),
 		Statuses: make(map[string]string),
@@ -247,7 +260,7 @@ func (sm *serviceManager) StartAll(ctx context.Context) error {
 		go func(id string, s Service) {
 			defer sm.Wg.Done()
 			defer started.Done()
-			if err := sm.startService(id, s, ctx); err != nil {
+			if err := sm.startService(ctx, id, s); err != nil {
 				log.Printf("service %s start failed: %v", id, err)
 			}
 		}(id, s)
@@ -365,7 +378,7 @@ func (sm *serviceManager) Clear() error {
 }
 
 // Start starts one registered service and updates its status.
-func (sm *serviceManager) Start(id string, ctx context.Context) error {
+func (sm *serviceManager) Start(ctx context.Context, id string) error {
 	if sm == nil {
 		return fmt.Errorf("service manager unavailable")
 	}
@@ -375,7 +388,7 @@ func (sm *serviceManager) Start(id string, ctx context.Context) error {
 	if !ok {
 		return fmt.Errorf("service %s not found", id)
 	}
-	return sm.startService(id, svc, ctx)
+	return sm.startService(ctx, id, svc)
 }
 
 // Stop stops one registered service and updates its status.
@@ -393,14 +406,14 @@ func (sm *serviceManager) Stop(id string) error {
 }
 
 // Restart stops and then starts one registered service.
-func (sm *serviceManager) Restart(id string, ctx context.Context) error {
+func (sm *serviceManager) Restart(ctx context.Context, id string) error {
 	if err := sm.Stop(id); err != nil {
 		return err
 	}
-	return sm.Start(id, ctx)
+	return sm.Start(ctx, id)
 }
 
-func (sm *serviceManager) startService(id string, svc Service, ctx context.Context) error {
+func (sm *serviceManager) startService(ctx context.Context, id string, svc Service) error {
 	if svc == nil {
 		return fmt.Errorf("service %s unavailable", id)
 	}
@@ -591,7 +604,7 @@ func matchesCron(expr string, t time.Time) bool {
 }
 
 // matchCronField checks if a value matches a cron field expression.
-func matchCronField(field string, value, min, max int) bool {
+func matchCronField(field string, value, lowerBound, upperBound int) bool {
 	// Handle wildcards
 	if field == "*" {
 		return true
@@ -610,7 +623,7 @@ func matchCronField(field string, value, min, max int) bool {
 
 		var start, end int
 		if parts[0] == "*" {
-			start, end = min, max
+			start, end = lowerBound, upperBound
 		} else if strings.Contains(parts[0], "-") {
 			rangeParts := strings.Split(parts[0], "-")
 			if len(rangeParts) != 2 {
@@ -631,7 +644,7 @@ func matchCronField(field string, value, min, max int) bool {
 			if err != nil {
 				return false
 			}
-			end = max
+			end = upperBound
 		}
 
 		for i := start; i <= end; i += step {

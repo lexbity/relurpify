@@ -390,17 +390,14 @@ func (r *Runtime) Status(ctx context.Context) StatusSnapshot {
 			r.Config.ConfigPath,
 		)
 	}
-	if r.AgentWorkspace().Registration != nil && r.AgentWorkspace().Registration.ManifestSnapshot != nil {
-		snapshot.ManifestFingerprint = fmt.Sprintf("%x", r.AgentWorkspace().Registration.ManifestSnapshot.Fingerprint)
-		snapshot.DeprecationNotices = append([]string(nil), r.AgentWorkspace().Registration.ManifestSnapshot.Warnings...)
+	if r.registration != nil && r.registration.DocumentSnapshot != nil {
+		snapshot.ManifestFingerprint = fmt.Sprintf("%x", r.registration.DocumentSnapshot.Fingerprint)
+		snapshot.DeprecationNotices = append([]string(nil), r.registration.DocumentSnapshot.Warnings...)
 	}
 	if r.AgentWorkspace().ProfileResolution.Profile != nil {
 		snapshot.SelectedProfile = r.AgentWorkspace().ProfileResolution.Profile.MatchPattern()
 	}
 	snapshot.ProfileReason = r.AgentWorkspace().ProfileResolution.Reason
 	snapshot.ProfileSource = r.AgentWorkspace().ProfileResolution.SourcePath
-	if r.AgentWorkspace().Registration != nil && r.AgentWorkspace().Registration.ManifestSpec != nil {
-		snapshot.ManifestPolicySummary = ""
-	}
 	return snapshot
 }

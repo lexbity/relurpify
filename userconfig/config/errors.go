@@ -15,6 +15,8 @@ const (
 	ErrKindSchema ErrorKind = "schema"
 )
 
+const nilText = "<nil>"
+
 var (
 	// ErrMissingSchemaDeclaration reports that a file does not begin with a
 	// required schema declaration.
@@ -45,7 +47,7 @@ type SchemaError struct {
 
 func (e *SchemaError) Error() string {
 	if e == nil {
-		return "<nil>"
+		return nilText
 	}
 	parts := make([]string, 0, 4)
 	parts = append(parts, "schema error")
@@ -83,7 +85,7 @@ type SecretFieldError struct {
 
 func (e *SecretFieldError) Error() string {
 	if e == nil {
-		return "<nil>"
+		return nilText
 	}
 	var b strings.Builder
 	b.WriteString("FATAL config: ")

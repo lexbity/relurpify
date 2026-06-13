@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	permissions "codeburg.org/lexbit/relurpify/governance/permissions"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
 	governanceports "codeburg.org/lexbit/relurpify/governance/ports"
@@ -16,77 +17,73 @@ import (
 	cfgsecurity "codeburg.org/lexbit/relurpify/userconfig/config/security"
 )
 
+const defaultToolPolicyAllow = "allow"
+
 // SandboxBackendFactory creates a governanceports.SandboxRuntime for the given backend.
 type SandboxBackendFactory func(ctx context.Context, backend string, cfg governanceports.SandboxConfig, image, workspace string) (governanceports.SandboxRuntime, error)
 
 // RuntimeConfig describes configuration for agent runtime registration.
 type RuntimeConfig struct {
-	ManifestPath     string
-	ManifestSnapshot *config.ManifestSnapshot
-	SecurityBundle   *cfgsecurity.Bundle
-	ConfigPath       string
-	Image            string
-	Backend          string
-	SandboxCfg       governanceports.SandboxConfig
-	BackendFactory   SandboxBackendFactory
-	AuditLimit       int
-	BaseFS           string
-	StateDir         string
-	HITLTimeout      time.Duration
+	ManifestPath       string
+	DocumentSnapshot   *config.DocumentSnapshot
+	AgentSpec          *agentspec.AgentRuntimeSpec
+	Permissions        permissions.PermissionSet
+	DefaultPermissions *permissions.PermissionSet
+	Security           config.SecuritySpec
+	Image              string
+	Runtime            string
+	DefaultToolPolicy  string
+	SecurityBundle     *cfgsecurity.Bundle
+	ConfigPath         string
+	Backend            string
+	SandboxCfg         governanceports.SandboxConfig
+	BackendFactory     SandboxBackendFactory
+	AuditLimit         int
+	BaseFS             string
+	StateDir           string
+	HITLTimeout        time.Duration
 }
 
 // AgentRegistration stores runtime metadata.
 type AgentRegistration struct {
-	ID               string
-	ManifestSpec     *config.ManifestSpec
-	ManifestSnapshot *config.ManifestSnapshot
-	Runtime          governanceports.SandboxRuntime
-	Permissions      *PermissionManager
-	Policy           PolicyEngine
-	Audit            policy.AuditLogger
-	HITL             *HITLBroker
+	ID                string
+	DocumentSnapshot  *config.DocumentSnapshot
+	AgentSpec         *agentspec.AgentRuntimeSpec
+	Permissions       *PermissionManager
+	PermissionSet     permissions.PermissionSet
+	Policy            PolicyEngine
+	Audit             policy.AuditLogger
+	HITL              *HITLBroker
+	Runtime           governanceports.SandboxRuntime
+	Image             string
+	SandboxRuntime    string
+	Security          config.SecuritySpec
+	DefaultToolPolicy string
 }
 
 // RegisterAgent validates the manifest and builds enforcement primitives.
 func RegisterAgent(ctx context.Context, cfg RuntimeConfig) (*AgentRegistration, error) {
-	if cfg.ManifestSnapshot == nil && cfg.ManifestPath == "" {
+	if cfg.DocumentSnapshot == nil && cfg.ManifestPath == "" {
 		return nil, errors.New("manifest path required")
 	}
 	if cfg.SecurityBundle == nil {
 		return nil, errors.New("security bundle required")
 	}
-	manifestSnapshot := cfg.ManifestSnapshot
+	documentSnapshot := cfg.DocumentSnapshot
 	var err error
-	if manifestSnapshot == nil {
+	if documentSnapshot == nil {
 		docSnapshot, docErr := config.LoadDocument(cfg.ManifestPath)
 		if docErr != nil {
-			return nil, fmt.Errorf("load manifest: %w", docErr)
+			return nil, fmt.Errorf("load document: %w", docErr)
 		}
-		manifestSnapshot = &config.ManifestSnapshot{
-			Spec:        config.ManifestSpec{},
-			Fingerprint: docSnapshot.Fingerprint,
-			LoadedAt:    docSnapshot.LoadedAt,
-			SourcePath:  docSnapshot.SourcePath,
-			Warnings:    docSnapshot.Warnings,
-		}
+		documentSnapshot = docSnapshot
 	}
-	if manifestSnapshot == nil {
-		return nil, errors.New("manifest missing")
+	if documentSnapshot == nil || documentSnapshot.Document == nil {
+		return nil, errors.New("document missing")
 	}
 
-	spec := &manifestSnapshot.Spec
-
-	// Resolve effective permissions via governance/permissions
-	var defaultPerms *permissions.PermissionSet
-	if spec.Defaults != nil {
-		defaultPerms = spec.Defaults.Permissions
-	}
-	specPerms := &spec.Permissions
-	effectivePerms := permissions.ResolveEffective(defaultPerms, specPerms)
-	image := cfg.Image
-	if image == "" {
-		image = spec.Image
-	}
+	effectivePerms := permissions.ResolveEffective(cfg.DefaultPermissions, &cfg.Permissions)
+	image := strings.TrimSpace(cfg.Image)
 	runtime, err := selectSandboxRuntime(ctx, cfg.Backend, cfg.SandboxCfg, image, cfg.BaseFS, cfg.BackendFactory)
 	if err != nil {
 		return nil, err
@@ -119,19 +116,17 @@ func RegisterAgent(ctx context.Context, cfg RuntimeConfig) (*AgentRegistration, 
 			},
 			[]string{stateDir},
 		)
-		if spec.Policies != nil {
-			if policy, ok := spec.Policies["default_tool_policy"]; ok {
-				if string(policy) == "allow" {
-					return nil, errors.New(
-						"agent spec sets default_policy=allow which is not permitted; " +
-							"use default_policy=ask for HITL or declare explicit permissions")
-				}
-				permManager.SetDefaultPolicy(string(policy))
+		if strings.TrimSpace(cfg.DefaultToolPolicy) != "" {
+			if strings.ToLower(strings.TrimSpace(cfg.DefaultToolPolicy)) == defaultToolPolicyAllow {
+				return nil, errors.New(
+					"agent spec sets default_policy=allow which is not permitted; " +
+						"use default_policy=ask for HITL or declare explicit permissions")
 			}
+			permManager.SetDefaultPolicy(cfg.DefaultToolPolicy)
 		}
 		permManager.AttachRuntime(ctx, runtime)
 	}
-	sboxPolicy := buildSandboxPolicy(spec, cfg.SecurityBundle.Sandbox.ProtectedPaths)
+	sboxPolicy := buildSandboxPolicy(cfg.Permissions, cfg.Security, cfg.SecurityBundle.Sandbox.ProtectedPaths)
 	if err := runtime.ValidatePolicy(sboxPolicy); err != nil {
 		return nil, fmt.Errorf("sandbox policy validation failed: %w", err)
 	}
@@ -139,13 +134,18 @@ func RegisterAgent(ctx context.Context, cfg RuntimeConfig) (*AgentRegistration, 
 		return nil, fmt.Errorf("sandbox policy application failed: %w", err)
 	}
 	return &AgentRegistration{
-		ID:               "",
-		ManifestSpec:     spec,
-		ManifestSnapshot: manifestSnapshot,
-		Runtime:          runtime,
-		Permissions:      permManager,
-		Audit:            audit,
-		HITL:             hitl,
+		ID:                "",
+		DocumentSnapshot:  documentSnapshot,
+		AgentSpec:         cfg.AgentSpec,
+		Permissions:       permManager,
+		PermissionSet:     cfg.Permissions,
+		Audit:             audit,
+		HITL:              hitl,
+		Runtime:           runtime,
+		Image:             image,
+		SandboxRuntime:    cfg.Runtime,
+		Security:          cfg.Security,
+		DefaultToolPolicy: cfg.DefaultToolPolicy,
 	}, nil
 }
 
@@ -157,18 +157,15 @@ func selectSandboxRuntime(ctx context.Context, backend string, sandboxCfg govern
 	return nil, fmt.Errorf("no sandbox backend factory configured")
 }
 
-// buildSandboxPolicy constructs a sandbox policy from a manifest spec and
+// buildSandboxPolicy constructs a sandbox policy from typed permissions and
 // protected paths.
-func buildSandboxPolicy(spec *config.ManifestSpec, protectedPaths []string) governanceports.SandboxPolicy {
+func buildSandboxPolicy(perms permissions.PermissionSet, security config.SecuritySpec, protectedPaths []string) governanceports.SandboxPolicy {
 	policy := governanceports.SandboxPolicy{
 		ProtectedPaths: append([]string(nil), protectedPaths...),
 	}
-	if spec == nil {
-		return policy
-	}
-	policy.NetworkRules = buildNetworkPolicy(spec.Permissions.Network)
-	policy.ReadOnlyRoot = spec.Security.ReadOnlyRoot
-	policy.NoNewPrivileges = spec.Security.NoNewPrivileges
+	policy.NetworkRules = buildNetworkPolicy(perms.Network)
+	policy.ReadOnlyRoot = security.ReadOnlyRoot
+	policy.NoNewPrivileges = security.NoNewPrivileges
 	return policy
 }
 

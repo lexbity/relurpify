@@ -19,6 +19,11 @@ import (
 	"codeburg.org/lexbit/relurpify/telemetry/perfstats"
 )
 
+const (
+	Capabilitysalreadyregistered_registry = "capability %s already registered"
+)
+
+
 // PermissionAware allows tools to receive the permission manager for fine-grained
 // runtime checks (e.g. verifying file paths against allowlists).
 type PermissionAware interface {
@@ -473,10 +478,10 @@ func (r *CapabilityRegistry) prepareDescriptorBatchEntryLocked(desc descriptor.C
 		return descriptor.CapabilityDescriptor{}, nil, err
 	}
 	if _, ok := r.capabilities[desc.ID]; ok {
-		return descriptor.CapabilityDescriptor{}, nil, fmt.Errorf("capability %s already registered", desc.ID)
+		return descriptor.CapabilityDescriptor{}, nil, fmt.Errorf(Capabilitysalreadyregistered_registry, desc.ID)
 	}
 	if _, ok := seenIDs[desc.ID]; ok {
-		return descriptor.CapabilityDescriptor{}, nil, fmt.Errorf("capability %s already registered", desc.ID)
+		return descriptor.CapabilityDescriptor{}, nil, fmt.Errorf(Capabilitysalreadyregistered_registry, desc.ID)
 	}
 	seenIDs[desc.ID] = struct{}{}
 	profile := buildDescriptorProfile(desc)
@@ -503,10 +508,10 @@ func (r *CapabilityRegistry) prepareHandlerBatchEntryLocked(ctx context.Context,
 		return descriptor.CapabilityDescriptor{}, nil, err
 	}
 	if _, ok := r.entries[desc.ID]; ok {
-		return descriptor.CapabilityDescriptor{}, nil, fmt.Errorf("capability %s already registered", desc.ID)
+		return descriptor.CapabilityDescriptor{}, nil, fmt.Errorf(Capabilitysalreadyregistered_registry, desc.ID)
 	}
 	if _, ok := seenIDs[desc.ID]; ok {
-		return descriptor.CapabilityDescriptor{}, nil, fmt.Errorf("capability %s already registered", desc.ID)
+		return descriptor.CapabilityDescriptor{}, nil, fmt.Errorf(Capabilitysalreadyregistered_registry, desc.ID)
 	}
 	seenIDs[desc.ID] = struct{}{}
 	profile := buildDescriptorProfile(desc)
@@ -547,10 +552,10 @@ func (r *CapabilityRegistry) prepareLegacyToolBatchEntryLocked(ctx context.Conte
 		return descriptor.CapabilityDescriptor{}, nil, fmt.Errorf("tool %s already registered", tool.Name())
 	}
 	if _, exists := r.capabilities[desc.ID]; exists {
-		return descriptor.CapabilityDescriptor{}, nil, fmt.Errorf("capability %s already registered", desc.ID)
+		return descriptor.CapabilityDescriptor{}, nil, fmt.Errorf(Capabilitysalreadyregistered_registry, desc.ID)
 	}
 	if _, exists := seenIDs[desc.ID]; exists {
-		return descriptor.CapabilityDescriptor{}, nil, fmt.Errorf("capability %s already registered", desc.ID)
+		return descriptor.CapabilityDescriptor{}, nil, fmt.Errorf(Capabilitysalreadyregistered_registry, desc.ID)
 	}
 	seenIDs[desc.ID] = struct{}{}
 	profile := buildDescriptorProfile(desc)

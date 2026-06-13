@@ -14,6 +14,10 @@ import (
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
+const (
+	smoke = "smoke"
+)
+
 func TestLiveCaseDriverUsesExecutionReportArtifact(t *testing.T) {
 	workspace := t.TempDir()
 	manifestPath := filepath.Join(workspace, "relurpify_cfg", "agent.yaml")
@@ -50,18 +54,18 @@ spec:
 			Manifest:  filepath.ToSlash(filepath.Join(config.DirName, "agent.yaml")),
 			Models: []ModelSpec{{
 				Name:     "qwen2.5-coder:14b",
-				Provider: "ollama",
+				Provider: ollama,
 				Endpoint: "http://127.0.0.1:11434",
 			}},
 		},
 	}
 
-	runRoot := filepath.Join(workspace, "relurpify_cfg", "test_run", "run-1")
-	prepared, err := PrepareRun(suite, CaseSpec{Name: "smoke", Prompt: "hello"}, suite.Spec.Models[0], RunOptions{}, workspace, runRoot, "run-1")
+	runRoot := filepath.Join(workspace, "relurpify_cfg", "test_run", run1)
+	prepared, err := PrepareRun(suite, CaseSpec{Name: smoke, Prompt: "hello"}, suite.Spec.Models[0], RunOptions{}, workspace, runRoot, run1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	report := CaseReport{Name: "smoke", Model: "qwen2.5-coder:14b", Success: true, Output: "ok", ArtifactsDir: prepared.Descriptor.ExecutionArtifactsDir}
+	report := CaseReport{Name: smoke, Model: "qwen2.5-coder:14b", Success: true, Output: "ok", ArtifactsDir: prepared.Descriptor.ExecutionArtifactsDir}
 	data, err := json.MarshalIndent(report, "", "  ")
 	if err != nil {
 		t.Fatal(err)
@@ -73,7 +77,7 @@ spec:
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := vs.Verify(context.Background(), prepared, suite, CaseSpec{Name: "smoke"})
+	result, err := vs.Verify(context.Background(), prepared, suite, CaseSpec{Name: smoke})
 	if err != nil {
 		t.Fatal(err)
 	}

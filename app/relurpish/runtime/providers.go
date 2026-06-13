@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -18,6 +19,10 @@ import (
 )
 
 var ErrSessionNotManaged = errors.New("provider session not managed")
+
+const providerKindMetadataKey = "provider_kind"
+
+var errUnsupportedRuntimeProviderConfig = errors.New("runtime provider config unsupported")
 
 // ManagedProvider is the minimal lifecycle surface for long-lived runtime services.
 type ManagedProvider interface {
@@ -54,6 +59,14 @@ func RegisterBuiltinProviders(ctx context.Context, rt *Runtime) error {
 	for _, providerCfg := range mergeConfiguredProviders(rt.AgentWorkspace().AgentSpec) {
 		provider, err := providerFromConfig(providerCfg)
 		if err != nil {
+			if errors.Is(err, errUnsupportedRuntimeProviderConfig) {
+				log.Printf("runtime provider config unsupported: id=%s kind=%s target=%s", providerCfg.ID, providerCfg.Kind, providerCfg.Target)
+				rt.emitProviderLifecycleEvent(providerCfg.ID, "", "provider_config_unsupported", err.Error(), map[string]any{
+					providerKindMetadataKey: string(providerCfg.Kind),
+					"provider_target":       providerCfg.Target,
+				})
+				continue
+			}
 			return err
 		}
 		if provider == nil {
@@ -118,7 +131,7 @@ func (r *Runtime) RegisterProvider(ctx context.Context, provider RuntimeProvider
 	r.providers = append(r.providers, runtimeProviderRecord{provider: provider, desc: providerDescriptor(provider)})
 	r.providersMu.Unlock()
 	r.emitProviderLifecycleEvent(providerDescriptor(provider).ID, "", "provider_admitted", "", map[string]any{
-		"provider_kind": string(providerDescriptor(provider).Kind),
+		providerKindMetadataKey: string(providerDescriptor(provider).Kind),
 	})
 	return nil
 }
@@ -132,8 +145,8 @@ func (r *Runtime) authorizeProviderActivation(ctx context.Context, desc provider
 			return fmt.Errorf("provider %s activation requires approval but permission manager is missing", desc.ID)
 		}
 		metadata := map[string]string{
-			"provider_id":   desc.ID,
-			"provider_kind": string(desc.Kind),
+			"provider_id":           desc.ID,
+			providerKindMetadataKey: string(desc.Kind),
 		}
 		if desc.Security.Origin != "" {
 			metadata["provider_origin"] = string(desc.Security.Origin)
@@ -189,8 +202,8 @@ func (r *Runtime) authorizeProviderActivation(ctx context.Context, desc provider
 			return fmt.Errorf("provider %s activation requires approval but permission manager is missing", desc.ID)
 		}
 		metadata := map[string]string{
-			"provider_id":   desc.ID,
-			"provider_kind": string(desc.Kind),
+			"provider_id":           desc.ID,
+			providerKindMetadataKey: string(desc.Kind),
 		}
 		if desc.Security.Origin != "" {
 			metadata["provider_origin"] = string(desc.Security.Origin)
@@ -225,7 +238,7 @@ func (r *Runtime) QuarantineProvider(ctx context.Context, providerID, reason str
 	}
 	err := record.provider.Close()
 	r.emitProviderLifecycleEvent(providerID, "", "provider_quarantined", reason, map[string]any{
-		"provider_kind": string(record.desc.Kind),
+		providerKindMetadataKey: string(record.desc.Kind),
 	})
 	return err
 }
@@ -253,7 +266,7 @@ func (r *Runtime) RevokeSession(ctx context.Context, sessionID, reason string) e
 		switch {
 		case err == nil:
 			r.emitProviderLifecycleEvent(record.desc.ID, sessionID, "session_revoked", reason, map[string]any{
-				"provider_kind": string(record.desc.Kind),
+				providerKindMetadataKey: string(record.desc.Kind),
 			})
 			return nil
 		case errors.Is(err, ErrSessionNotManaged):

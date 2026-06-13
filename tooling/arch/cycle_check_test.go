@@ -4,11 +4,20 @@ import (
 	"testing"
 )
 
+const (
+	ImportPathA_cycle_check_test = "codeburg.org/lexbit/relurpify/a"
+	ImportPathB_cycle_check_test = "codeburg.org/lexbit/relurpify/b"
+	ImportPathC_cycle_check_test = "codeburg.org/lexbit/relurpify/c"
+	ImportPathPlatformFs_cycle_check_test = "codeburg.org/lexbit/relurpify/platform/fs"
+	Fmt_cycle_check_test = "fmt"
+)
+
+
 func TestCheckCycles_noCycle(t *testing.T) {
 	forward := map[string][]string{
-		"codeburg.org/lexbit/relurpify/a": {"codeburg.org/lexbit/relurpify/b", "fmt"},
-		"codeburg.org/lexbit/relurpify/b": {"codeburg.org/lexbit/relurpify/c"},
-		"codeburg.org/lexbit/relurpify/c": {"os"},
+		ImportPathA_cycle_check_test: {ImportPathB_cycle_check_test, Fmt_cycle_check_test},
+		ImportPathB_cycle_check_test: {ImportPathC_cycle_check_test},
+		ImportPathC_cycle_check_test: {"os"},
 	}
 	violations := CheckCycles(forward, Allowlist{})
 	if len(violations) != 0 {
@@ -18,8 +27,8 @@ func TestCheckCycles_noCycle(t *testing.T) {
 
 func TestCheckCycles_directCycle(t *testing.T) {
 	forward := map[string][]string{
-		"codeburg.org/lexbit/relurpify/a": {"codeburg.org/lexbit/relurpify/b"},
-		"codeburg.org/lexbit/relurpify/b": {"codeburg.org/lexbit/relurpify/a"},
+		ImportPathA_cycle_check_test: {ImportPathB_cycle_check_test},
+		ImportPathB_cycle_check_test: {ImportPathA_cycle_check_test},
 	}
 	violations := CheckCycles(forward, Allowlist{})
 	if len(violations) == 0 {
@@ -29,7 +38,7 @@ func TestCheckCycles_directCycle(t *testing.T) {
 
 func TestCheckCycles_selfCycle(t *testing.T) {
 	forward := map[string][]string{
-		"codeburg.org/lexbit/relurpify/a": {"codeburg.org/lexbit/relurpify/a"},
+		ImportPathA_cycle_check_test: {ImportPathA_cycle_check_test},
 	}
 	violations := CheckCycles(forward, Allowlist{})
 	if len(violations) == 0 {
@@ -39,9 +48,9 @@ func TestCheckCycles_selfCycle(t *testing.T) {
 
 func TestCheckCycles_indirectCycle(t *testing.T) {
 	forward := map[string][]string{
-		"codeburg.org/lexbit/relurpify/a": {"codeburg.org/lexbit/relurpify/b"},
-		"codeburg.org/lexbit/relurpify/b": {"codeburg.org/lexbit/relurpify/c"},
-		"codeburg.org/lexbit/relurpify/c": {"codeburg.org/lexbit/relurpify/a"},
+		ImportPathA_cycle_check_test: {ImportPathB_cycle_check_test},
+		ImportPathB_cycle_check_test: {ImportPathC_cycle_check_test},
+		ImportPathC_cycle_check_test: {ImportPathA_cycle_check_test},
 	}
 	violations := CheckCycles(forward, Allowlist{})
 	if len(violations) == 0 {
@@ -51,8 +60,8 @@ func TestCheckCycles_indirectCycle(t *testing.T) {
 
 func TestCheckCycles_allowlist(t *testing.T) {
 	forward := map[string][]string{
-		"codeburg.org/lexbit/relurpify/a": {"codeburg.org/lexbit/relurpify/b"},
-		"codeburg.org/lexbit/relurpify/b": {"codeburg.org/lexbit/relurpify/a"},
+		ImportPathA_cycle_check_test: {ImportPathB_cycle_check_test},
+		ImportPathB_cycle_check_test: {ImportPathA_cycle_check_test},
 	}
 	allowlist := Allowlist{entries: map[string]map[string]bool{
 		"cycle": {
@@ -68,12 +77,12 @@ func TestCheckCycles_allowlist(t *testing.T) {
 
 func TestCheckLayerDirection_noViolation(t *testing.T) {
 	pkgs := []GoPackage{
-		{ImportPath: "codeburg.org/lexbit/relurpify/platform/fs", Name: "fs"},
-		{ImportPath: "codeburg.org/lexbit/relurpify/a", Name: "a"},
+		{ImportPath: ImportPathPlatformFs_cycle_check_test, Name: "fs"},
+		{ImportPath: ImportPathA_cycle_check_test, Name: "a"},
 	}
 	forward := map[string][]string{
-		"codeburg.org/lexbit/relurpify/platform/fs": {"fmt"},
-		"codeburg.org/lexbit/relurpify/a":           {"fmt"},
+		ImportPathPlatformFs_cycle_check_test: {Fmt_cycle_check_test},
+		ImportPathA_cycle_check_test:           {Fmt_cycle_check_test},
 	}
 	violations := CheckLayerDirection(pkgs, forward, Allowlist{})
 	if len(violations) != 0 {
@@ -83,12 +92,12 @@ func TestCheckLayerDirection_noViolation(t *testing.T) {
 
 func TestCheckLayerDirection_domainImportsPlatform(t *testing.T) {
 	pkgs := []GoPackage{
-		{ImportPath: "codeburg.org/lexbit/relurpify/a", Name: "a"},
-		{ImportPath: "codeburg.org/lexbit/relurpify/platform/fs", Name: "fs"},
+		{ImportPath: ImportPathA_cycle_check_test, Name: "a"},
+		{ImportPath: ImportPathPlatformFs_cycle_check_test, Name: "fs"},
 	}
 	forward := map[string][]string{
-		"codeburg.org/lexbit/relurpify/a":           {"codeburg.org/lexbit/relurpify/platform/fs"},
-		"codeburg.org/lexbit/relurpify/platform/fs": {"fmt"},
+		ImportPathA_cycle_check_test:           {ImportPathPlatformFs_cycle_check_test},
+		ImportPathPlatformFs_cycle_check_test: {Fmt_cycle_check_test},
 	}
 	violations := CheckLayerDirection(pkgs, forward, Allowlist{})
 	if len(violations) == 0 {
@@ -99,11 +108,11 @@ func TestCheckLayerDirection_domainImportsPlatform(t *testing.T) {
 func TestCheckLayerDirection_testsuiteAllowed(t *testing.T) {
 	pkgs := []GoPackage{
 		{ImportPath: "codeburg.org/lexbit/relurpify/testsuite/agenttest", Name: "agenttest"},
-		{ImportPath: "codeburg.org/lexbit/relurpify/platform/fs", Name: "fs"},
+		{ImportPath: ImportPathPlatformFs_cycle_check_test, Name: "fs"},
 	}
 	forward := map[string][]string{
-		"codeburg.org/lexbit/relurpify/testsuite/agenttest": {"codeburg.org/lexbit/relurpify/platform/fs"},
-		"codeburg.org/lexbit/relurpify/platform/fs":         {"fmt"},
+		"codeburg.org/lexbit/relurpify/testsuite/agenttest": {ImportPathPlatformFs_cycle_check_test},
+		ImportPathPlatformFs_cycle_check_test:         {Fmt_cycle_check_test},
 	}
 	violations := CheckLayerDirection(pkgs, forward, Allowlist{})
 	if len(violations) != 0 {
@@ -113,12 +122,12 @@ func TestCheckLayerDirection_testsuiteAllowed(t *testing.T) {
 
 func TestCheckLayerDirection_allowlist(t *testing.T) {
 	pkgs := []GoPackage{
-		{ImportPath: "codeburg.org/lexbit/relurpify/a", Name: "a"},
-		{ImportPath: "codeburg.org/lexbit/relurpify/platform/fs", Name: "fs"},
+		{ImportPath: ImportPathA_cycle_check_test, Name: "a"},
+		{ImportPath: ImportPathPlatformFs_cycle_check_test, Name: "fs"},
 	}
 	forward := map[string][]string{
-		"codeburg.org/lexbit/relurpify/a":           {"codeburg.org/lexbit/relurpify/platform/fs"},
-		"codeburg.org/lexbit/relurpify/platform/fs": {"fmt"},
+		ImportPathA_cycle_check_test:           {ImportPathPlatformFs_cycle_check_test},
+		ImportPathPlatformFs_cycle_check_test: {Fmt_cycle_check_test},
 	}
 	allowlist := Allowlist{entries: map[string]map[string]bool{
 		"layer": {"layer: codeburg.org/lexbit/relurpify/a imports platform package codeburg.org/lexbit/relurpify/platform/fs": true},

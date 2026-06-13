@@ -14,9 +14,11 @@ var defaultSchemaKinds = []string{
 	"policy/ingestion",
 	"model/provider",
 	"model/profile",
-	"tool",
+	schemaKindTool,
 	"skill",
 }
+
+const schemaKindTool = "tool"
 
 // SchemaRegistry tracks supported schema kinds and versions.
 type SchemaRegistry struct {
@@ -33,7 +35,7 @@ func NewSchemaRegistry() *SchemaRegistry {
 		_ = reg.Register(kind, 1)
 	}
 	// Tool schema v2: typed flags, chunking, telemetry hints.
-	_ = reg.Register("tool", 2)
+	_ = reg.Register(schemaKindTool, 2)
 	return reg
 }
 

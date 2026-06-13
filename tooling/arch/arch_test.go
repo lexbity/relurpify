@@ -4,13 +4,18 @@ import (
 	"testing"
 )
 
+const (
+	ImportPathCapability_arch_test = "codeburg.org/lexbit/relurpify/capability"
+)
+
+
 func TestPackageDomain(t *testing.T) {
 	tests := []struct {
 		importPath string
 		want       string
 	}{
 		{"codeburg.org/lexbit/relurpify", ""},
-		{"codeburg.org/lexbit/relurpify/capability", "capability"},
+		{ImportPathCapability_arch_test, "capability"},
 		{"codeburg.org/lexbit/relurpify/app/relurpish", "app"},
 		{"codeburg.org/lexbit/relurpify/governance/identity", "governance"},
 		{"codeburg.org/lexbit/relurpify/context/persistence", "context"},
@@ -36,7 +41,7 @@ func TestTrimModulePrefix(t *testing.T) {
 		want string
 	}{
 		{"codeburg.org/lexbit/relurpify", ""},
-		{"codeburg.org/lexbit/relurpify/capability", "capability"},
+		{ImportPathCapability_arch_test, "capability"},
 	}
 	for _, tt := range tests {
 		got := TrimModulePrefix(tt.path)
@@ -53,7 +58,7 @@ func TestIsStandardLib(t *testing.T) {
 	}{
 		{"fmt", true},
 		{"os", true},
-		{"codeburg.org/lexbit/relurpify/capability", false},
+		{ImportPathCapability_arch_test, false},
 		{"github.com/stretchr/testify/assert", true},
 	}
 	for _, tt := range tests {

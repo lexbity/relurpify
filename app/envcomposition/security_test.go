@@ -7,10 +7,11 @@ import (
 
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
-	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
 type fakeRunner struct{}
+
+const testSecurityRuntime = "gvisor"
 
 func (f fakeRunner) Run(context.Context, sandbox.CommandRequest) (*ports.CommandResult, error) {
 	return &ports.CommandResult{}, nil
@@ -19,7 +20,7 @@ func (f fakeRunner) Run(context.Context, sandbox.CommandRequest) (*ports.Command
 func TestValidateSecurityRuntimeInputRejectsBackendManifestMismatch(t *testing.T) {
 	err := ValidateSecurityRuntimeInput(SecurityRuntimeInput{
 		SandboxBackend: "docker",
-		ManifestSpec:   &config.ManifestSpec{Runtime: "gvisor"},
+		Runtime:        testSecurityRuntime,
 	})
 	if err == nil {
 		t.Fatal("expected backend mismatch error")

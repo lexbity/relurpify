@@ -10,6 +10,22 @@ import (
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 )
 
+const (
+	cli_jq = "cli_jq"
+	cli_tool = "cli_tool"
+	fileops = "fileops"
+	filesystem_read = "filesystem_read"
+	jq = "jq"
+	mkdir = "mkdir"
+	ok = "ok"
+	p = "-p"
+	somebinary = "somebinary"
+	stdout = "stdout"
+	text = "text"
+	tool = "tool"
+)
+
+
 // recordingRunner implements ports.CommandRunner by recording the request
 // and returning canned output.
 type recordingRunner struct {
@@ -31,47 +47,47 @@ func (r *recordingRunner) Run(_ context.Context, req ports.CommandRequest) (*por
 func TestSubprocessToolBasicExecute(t *testing.T) {
 	runner := &recordingRunner{stdout: "out", stderr: "err"}
 	tool := NewTool(ports.ToolManifest{
-		Name:   "cli_jq",
-		Family: "text",
+		Name:   cli_jq,
+		Family: text,
 		Execution: ports.ToolManifestExecution{
 			Backend: ports.ToolBackendSubprocess,
-			Command: &ports.ToolManifestCommand{Base: []string{"jq"}},
+			Command: &ports.ToolManifestCommand{Base: []string{jq}},
 		},
 	}, runner)
 
-	require.Equal(t, "cli_jq", tool.Name())
-	require.Equal(t, "text", tool.Category())
+	require.Equal(t, cli_jq, tool.Name())
+	require.Equal(t, text, tool.Category())
 	require.True(t, tool.IsAvailable(context.Background()))
 }
 
 func TestSubprocessToolExecuteReturnsStdoutStderrExitCode(t *testing.T) {
 	runner := &recordingRunner{stdout: "{}", stderr: ""}
 	tool := NewTool(ports.ToolManifest{
-		Name:   "cli_jq",
-		Family: "text",
+		Name:   cli_jq,
+		Family: text,
 		Execution: ports.ToolManifestExecution{
 			Backend: ports.ToolBackendSubprocess,
-			Command: &ports.ToolManifestCommand{Base: []string{"jq"}},
+			Command: &ports.ToolManifestCommand{Base: []string{jq}},
 		},
 	}, runner)
 
 	result, err := tool.Execute(context.Background(), map[string]any{
-		"args": []any{"."},
+		args: []any{"."},
 	})
 	require.NoError(t, err)
 	require.True(t, result.Success)
-	require.Equal(t, "{}", result.Data["stdout"])
+	require.Equal(t, "{}", result.Data[stdout])
 	require.Empty(t, result.Data["stderr"])
 	require.Equal(t, 0, result.Data["exit_code"])
 	require.Len(t, runner.requests, 1)
-	require.Equal(t, []string{"jq", "."}, runner.requests[0].Args)
+	require.Equal(t, []string{jq, "."}, runner.requests[0].Args)
 }
 
 func TestSubprocessToolExecuteWithStdin(t *testing.T) {
 	runner := &recordingRunner{stdout: "transformed"}
 	tool := NewTool(ports.ToolManifest{
 		Name:   "cli_sed",
-		Family: "text",
+		Family: text,
 		Execution: ports.ToolManifestExecution{
 			Backend: ports.ToolBackendSubprocess,
 			Command: &ports.ToolManifestCommand{Base: []string{"sed"}},
@@ -89,11 +105,11 @@ func TestSubprocessToolExecuteWithStdin(t *testing.T) {
 
 func TestSubprocessToolNonZeroExitCode(t *testing.T) {
 	tool := NewTool(ports.ToolManifest{
-		Name:   "cli_tool",
-		Family: "text",
+		Name:   cli_tool,
+		Family: text,
 		Execution: ports.ToolManifestExecution{
 			Backend: ports.ToolBackendSubprocess,
-			Command: &ports.ToolManifestCommand{Base: []string{"tool"}},
+			Command: &ports.ToolManifestCommand{Base: []string{tool}},
 		},
 	}, &exitCodeRunner{exitCode: 1, stderr: "parse error"})
 
@@ -107,11 +123,11 @@ func TestSubprocessToolErrorMapping(t *testing.T) {
 	runner := &recordingRunner{stderr: "raw error"}
 	runner.requests = nil
 	tool := NewTool(ports.ToolManifest{
-		Name:   "cli_jq",
-		Family: "text",
+		Name:   cli_jq,
+		Family: text,
 		Execution: ports.ToolManifestExecution{
 			Backend: ports.ToolBackendSubprocess,
-			Command: &ports.ToolManifestCommand{Base: []string{"jq"}},
+			Command: &ports.ToolManifestCommand{Base: []string{jq}},
 		},
 		Errors: map[string]string{
 			"1": "jq: parse error — check your filter syntax",
@@ -128,11 +144,11 @@ func TestSubprocessToolErrorMapping(t *testing.T) {
 func TestSubprocessToolExitsWithCodeErrorWhenNoStderr(t *testing.T) {
 	runner := &exitCodeRunner{exitCode: 2}
 	tool := NewTool(ports.ToolManifest{
-		Name:   "cli_tool",
-		Family: "text",
+		Name:   cli_tool,
+		Family: text,
 		Execution: ports.ToolManifestExecution{
 			Backend: ports.ToolBackendSubprocess,
-			Command: &ports.ToolManifestCommand{Base: []string{"tool"}},
+			Command: &ports.ToolManifestCommand{Base: []string{tool}},
 		},
 	}, runner)
 
@@ -145,10 +161,10 @@ func TestSubprocessToolExitsWithCodeErrorWhenNoStderr(t *testing.T) {
 func TestSubprocessToolWithoutRunnerReportsUnavailable(t *testing.T) {
 	tool := NewTool(ports.ToolManifest{
 		Name:   "missing",
-		Family: "text",
+		Family: text,
 		Execution: ports.ToolManifestExecution{
 			Backend: ports.ToolBackendSubprocess,
-			Command: &ports.ToolManifestCommand{Base: []string{"tool"}},
+			Command: &ports.ToolManifestCommand{Base: []string{tool}},
 		},
 	}, nil)
 
@@ -159,7 +175,7 @@ func TestSubprocessToolWithoutRunnerReportsUnavailable(t *testing.T) {
 }
 
 func TestSubprocessToolSandboxTimeouts(t *testing.T) {
-	runner := &recordingRunner{stdout: "ok"}
+	runner := &recordingRunner{stdout: ok}
 	tool := NewTool(ports.ToolManifest{
 		Name:   "cli_go",
 		Family: "build",
@@ -185,17 +201,17 @@ func TestSubprocessToolSandboxTimeouts(t *testing.T) {
 func TestFlagInjectionBlockedByDefault(t *testing.T) {
 	runner := &recordingRunner{}
 	tool := NewTool(ports.ToolManifest{
-		Name:   "cli_tool",
-		Family: "text",
+		Name:   cli_tool,
+		Family: text,
 		Execution: ports.ToolManifestExecution{
 			Backend: ports.ToolBackendSubprocess,
-			Command: &ports.ToolManifestCommand{Base: []string{"somebinary"}},
+			Command: &ports.ToolManifestCommand{Base: []string{somebinary}},
 			// no sandbox — allow_flags defaults to false
 		},
 	}, runner)
 
 	result, err := tool.Execute(context.Background(), map[string]any{
-		"args": []any{"--config=/etc/passwd"},
+		args: []any{"--config=/etc/passwd"},
 	})
 	require.NoError(t, err) // flag injection returns a structured result, not a Go error
 	require.False(t, result.Success)
@@ -206,16 +222,16 @@ func TestFlagInjectionBlockedByDefault(t *testing.T) {
 func TestSingleDashArgBlockedByDefault(t *testing.T) {
 	runner := &recordingRunner{}
 	tool := NewTool(ports.ToolManifest{
-		Name:   "cli_tool",
-		Family: "text",
+		Name:   cli_tool,
+		Family: text,
 		Execution: ports.ToolManifestExecution{
 			Backend: ports.ToolBackendSubprocess,
-			Command: &ports.ToolManifestCommand{Base: []string{"somebinary"}},
+			Command: &ports.ToolManifestCommand{Base: []string{somebinary}},
 		},
 	}, runner)
 
 	result, err := tool.Execute(context.Background(), map[string]any{
-		"args": []any{"-n", "10"},
+		args: []any{"-n", "10"},
 	})
 	require.NoError(t, err)
 	require.False(t, result.Success)
@@ -223,31 +239,31 @@ func TestSingleDashArgBlockedByDefault(t *testing.T) {
 }
 
 func TestFlagInjectionAllowedWhenOptedIn(t *testing.T) {
-	runner := &recordingRunner{stdout: "ok"}
+	runner := &recordingRunner{stdout: ok}
 	tool := NewTool(ports.ToolManifest{
-		Name:   "cli_tool",
-		Family: "text",
+		Name:   cli_tool,
+		Family: text,
 		Execution: ports.ToolManifestExecution{
 			Backend: ports.ToolBackendSubprocess,
-			Command: &ports.ToolManifestCommand{Base: []string{"somebinary"}},
+			Command: &ports.ToolManifestCommand{Base: []string{somebinary}},
 			Sandbox: &ports.ToolManifestSandbox{AllowFlags: true},
 		},
 	}, runner)
 
 	result, err := tool.Execute(context.Background(), map[string]any{
-		"args": []any{"--verbose"},
+		args: []any{"--verbose"},
 	})
 	require.NoError(t, err)
 	require.True(t, result.Success)
 	require.Len(t, runner.requests, 1)
-	require.Equal(t, []string{"somebinary", "--verbose"}, runner.requests[0].Args)
+	require.Equal(t, []string{somebinary, "--verbose"}, runner.requests[0].Args)
 }
 
 func TestNonFlagArgsAlwaysAllowed(t *testing.T) {
-	runner := &recordingRunner{stdout: "ok"}
+	runner := &recordingRunner{stdout: ok}
 	tool := NewTool(ports.ToolManifest{
-		Name:   "cli_tool",
-		Family: "text",
+		Name:   cli_tool,
+		Family: text,
 		Execution: ports.ToolManifestExecution{
 			Backend: ports.ToolBackendSubprocess,
 			Command: &ports.ToolManifestCommand{Base: []string{"cp"}},
@@ -255,7 +271,7 @@ func TestNonFlagArgsAlwaysAllowed(t *testing.T) {
 	}, runner)
 
 	result, err := tool.Execute(context.Background(), map[string]any{
-		"args": []any{"src/main.go", "/tmp/dest"},
+		args: []any{"src/main.go", "/tmp/dest"},
 	})
 	require.NoError(t, err)
 	require.True(t, result.Success)
@@ -264,10 +280,10 @@ func TestNonFlagArgsAlwaysAllowed(t *testing.T) {
 }
 
 func TestDoubleDashTerminatorAllowedWhenOptedIn(t *testing.T) {
-	runner := &recordingRunner{stdout: "ok"}
+	runner := &recordingRunner{stdout: ok}
 	tool := NewTool(ports.ToolManifest{
-		Name:   "cli_tool",
-		Family: "text",
+		Name:   cli_tool,
+		Family: text,
 		Execution: ports.ToolManifestExecution{
 			Backend: ports.ToolBackendSubprocess,
 			Command: &ports.ToolManifestCommand{Base: []string{"grep"}},
@@ -276,7 +292,7 @@ func TestDoubleDashTerminatorAllowedWhenOptedIn(t *testing.T) {
 	}, runner)
 
 	result, err := tool.Execute(context.Background(), map[string]any{
-		"args": []any{"--", "-pattern"},
+		args: []any{"--", "-pattern"},
 	})
 	require.NoError(t, err)
 	require.True(t, result.Success)
@@ -289,12 +305,12 @@ func TestDoubleDashTerminatorAllowedWhenOptedIn(t *testing.T) {
 func TestParityCLIJQ(t *testing.T) {
 	runner := &recordingRunner{stdout: "{\"key\": \"value\"}"}
 	tool := NewTool(ports.ToolManifest{
-		Name:   "cli_jq",
-		Family: "text",
+		Name:   cli_jq,
+		Family: text,
 		Intent: []string{"extract", "structured-data"},
 		Execution: ports.ToolManifestExecution{
 			Backend: ports.ToolBackendSubprocess,
-			Command: &ports.ToolManifestCommand{Base: []string{"jq"}},
+			Command: &ports.ToolManifestCommand{Base: []string{jq}},
 			Sandbox: &ports.ToolManifestSandbox{
 				AllowFlags:     true,
 				TimeoutSeconds: 30,
@@ -303,19 +319,19 @@ func TestParityCLIJQ(t *testing.T) {
 			SupportsWorkdir: true,
 		},
 		Capability: ports.ToolManifestCapability{
-			TrustClass:  "builtin_trusted",
-			RiskClass:   []string{"execute"},
-			EffectClass: []string{"filesystem_read"},
+			TrustClass:  builtin_trusted,
+			RiskClass:   []string{execute},
+			EffectClass: []string{filesystem_read},
 		},
 	}, runner)
 
 	result, err := tool.Execute(context.Background(), map[string]any{
-		"args":              []any{"."},
+		args:              []any{"."},
 		"working_directory": ".",
 	})
 	require.NoError(t, err)
 	require.True(t, result.Success)
-	require.JSONEq(t, `{"key": "value"}`, result.Data["stdout"].(string))
+	require.JSONEq(t, `{"key": "value"}`, result.Data[stdout].(string))
 	require.Len(t, runner.requests, 1)
 }
 
@@ -323,7 +339,7 @@ func TestParityCLIRG(t *testing.T) {
 	runner := &recordingRunner{stdout: "src/main.go:1:1: func main"}
 	tool := NewTool(ports.ToolManifest{
 		Name:   "cli_rg",
-		Family: "fileops",
+		Family: fileops,
 		Intent: []string{"search"},
 		Execution: ports.ToolManifestExecution{
 			Backend: ports.ToolBackendSubprocess,
@@ -336,25 +352,25 @@ func TestParityCLIRG(t *testing.T) {
 			SupportsWorkdir: true,
 		},
 		Capability: ports.ToolManifestCapability{
-			TrustClass:  "builtin_trusted",
-			RiskClass:   []string{"execute"},
-			EffectClass: []string{"filesystem_read"},
+			TrustClass:  builtin_trusted,
+			RiskClass:   []string{execute},
+			EffectClass: []string{filesystem_read},
 		},
 	}, runner)
 
 	result, err := tool.Execute(context.Background(), map[string]any{
-		"args": []any{"func"},
+		args: []any{"func"},
 	})
 	require.NoError(t, err)
 	require.True(t, result.Success)
-	require.Equal(t, "src/main.go:1:1: func main", result.Data["stdout"])
+	require.Equal(t, "src/main.go:1:1: func main", result.Data[stdout])
 }
 
 func TestParityCLISed(t *testing.T) {
 	runner := &recordingRunner{stdout: "hello world"}
 	tool := NewTool(ports.ToolManifest{
 		Name:   "cli_sed",
-		Family: "text",
+		Family: text,
 		Intent: []string{"transform", "edit"},
 		Execution: ports.ToolManifestExecution{
 			Backend: ports.ToolBackendSubprocess,
@@ -367,30 +383,30 @@ func TestParityCLISed(t *testing.T) {
 			SupportsWorkdir: true,
 		},
 		Capability: ports.ToolManifestCapability{
-			TrustClass:  "builtin_trusted",
-			RiskClass:   []string{"execute"},
-			EffectClass: []string{"filesystem_read"},
+			TrustClass:  builtin_trusted,
+			RiskClass:   []string{execute},
+			EffectClass: []string{filesystem_read},
 		},
 	}, runner)
 
 	result, err := tool.Execute(context.Background(), map[string]any{
-		"args":  []any{"s/foo/hello/"},
+		args:  []any{"s/foo/hello/"},
 		"stdin": "foo world",
 	})
 	require.NoError(t, err)
 	require.True(t, result.Success)
-	require.Equal(t, "hello world", result.Data["stdout"])
+	require.Equal(t, "hello world", result.Data[stdout])
 }
 
 func TestParityCLICurl(t *testing.T) {
 	runner := &recordingRunner{stdout: "response body"}
 	tool := NewTool(ports.ToolManifest{
-		Name:   "cli_curl",
-		Family: "network",
+		Name:   cli_curl,
+		Family: network,
 		Intent: []string{"fetch", "http"},
 		Execution: ports.ToolManifestExecution{
 			Backend: ports.ToolBackendSubprocess,
-			Command: &ports.ToolManifestCommand{Base: []string{"curl"}},
+			Command: &ports.ToolManifestCommand{Base: []string{curl}},
 			Sandbox: &ports.ToolManifestSandbox{
 				AllowFlags:     true,
 				TimeoutSeconds: 30,
@@ -399,30 +415,30 @@ func TestParityCLICurl(t *testing.T) {
 			SupportsWorkdir: true,
 		},
 		Capability: ports.ToolManifestCapability{
-			TrustClass:  "builtin_trusted",
-			RiskClass:   []string{"execute", "network"},
-			EffectClass: []string{"process_spawn"},
+			TrustClass:  builtin_trusted,
+			RiskClass:   []string{execute, network},
+			EffectClass: []string{process_spawn},
 		},
 	}, runner)
 
 	result, err := tool.Execute(context.Background(), map[string]any{
-		"args": []any{"https://example.com"},
+		args: []any{"https://example.com"},
 	})
 	require.NoError(t, err)
 	require.True(t, result.Success)
-	require.Equal(t, "response body", result.Data["stdout"])
+	require.Equal(t, "response body", result.Data[stdout])
 }
 
 func TestParityCLIMkdir(t *testing.T) {
 	runner := &recordingRunner{}
 	tool := NewTool(ports.ToolManifest{
 		Name:   "cli_mkdir",
-		Family: "fileops",
+		Family: fileops,
 		Intent: []string{"create"},
 		Execution: ports.ToolManifestExecution{
 			Backend:     ports.ToolBackendSubprocess,
-			Command:     &ports.ToolManifestCommand{Base: []string{"mkdir"}},
-			DefaultArgs: []string{"-p"},
+			Command:     &ports.ToolManifestCommand{Base: []string{mkdir}},
+			DefaultArgs: []string{p},
 			Sandbox: &ports.ToolManifestSandbox{
 				AllowFlags:     true,
 				TimeoutSeconds: 30,
@@ -431,19 +447,19 @@ func TestParityCLIMkdir(t *testing.T) {
 			SupportsWorkdir: true,
 		},
 		Capability: ports.ToolManifestCapability{
-			TrustClass:  "builtin_trusted",
-			RiskClass:   []string{"execute"},
-			EffectClass: []string{"filesystem_read"},
+			TrustClass:  builtin_trusted,
+			RiskClass:   []string{execute},
+			EffectClass: []string{filesystem_read},
 		},
 	}, runner)
 
 	result, err := tool.Execute(context.Background(), map[string]any{
-		"args": []any{"/tmp/newdir"},
+		args: []any{"/tmp/newdir"},
 	})
 	require.NoError(t, err)
 	require.True(t, result.Success)
 	require.Len(t, runner.requests, 1)
-	require.Equal(t, []string{"mkdir", "-p", "/tmp/newdir"}, runner.requests[0].Args)
+	require.Equal(t, []string{mkdir, p, "/tmp/newdir"}, runner.requests[0].Args)
 }
 
 // --- Param/tag/metadata parity ---
@@ -451,43 +467,43 @@ func TestParityCLIMkdir(t *testing.T) {
 func TestSubprocessToolPermissionsNotEmptyWithCommand(t *testing.T) {
 	runner := &recordingRunner{}
 	tool := NewTool(ports.ToolManifest{
-		Name:   "cli_jq",
-		Family: "text",
+		Name:   cli_jq,
+		Family: text,
 		Execution: ports.ToolManifestExecution{
 			Backend: ports.ToolBackendSubprocess,
-			Command: &ports.ToolManifestCommand{Base: []string{"jq"}},
+			Command: &ports.ToolManifestCommand{Base: []string{jq}},
 		},
 	}, runner)
 
 	perms := tool.Permissions()
 	require.NotNil(t, perms.Permissions)
 	require.Len(t, ps(perms.Permissions).Executables, 1, "Permissions must derive Executables from command.base")
-	require.Equal(t, "jq", ps(perms.Permissions).Executables[0].Binary)
+	require.Equal(t, jq, ps(perms.Permissions).Executables[0].Binary)
 }
 
 func TestSubprocessToolTagsFromCapability(t *testing.T) {
 	tool := NewTool(ports.ToolManifest{
-		Name:   "cli_jq",
-		Family: "text",
+		Name:   cli_jq,
+		Family: text,
 		Execution: ports.ToolManifestExecution{
 			Backend: ports.ToolBackendSubprocess,
-			Command: &ports.ToolManifestCommand{Base: []string{"jq"}},
+			Command: &ports.ToolManifestCommand{Base: []string{jq}},
 		},
 		Capability: ports.ToolManifestCapability{
-			RiskClass: []string{"execute"},
+			RiskClass: []string{execute},
 		},
 	}, nil)
 
-	require.Equal(t, []string{"execute"}, tool.Tags())
+	require.Equal(t, []string{execute}, tool.Tags())
 }
 
 func TestSubprocessToolNilRunner(t *testing.T) {
 	tool := NewTool(ports.ToolManifest{
 		Name:   "nil_runner",
-		Family: "text",
+		Family: text,
 		Execution: ports.ToolManifestExecution{
 			Backend: ports.ToolBackendSubprocess,
-			Command: &ports.ToolManifestCommand{Base: []string{"tool"}},
+			Command: &ports.ToolManifestCommand{Base: []string{tool}},
 		},
 	}, nil)
 
@@ -500,24 +516,24 @@ func TestSubprocessToolNilRunner(t *testing.T) {
 
 func TestPermissionsDerivesBinaryFromCommandBase(t *testing.T) {
 	tool := NewTool(ports.ToolManifest{
-		Name:   "cli_jq",
-		Family: "text",
+		Name:   cli_jq,
+		Family: text,
 		Execution: ports.ToolManifestExecution{
 			Backend: ports.ToolBackendSubprocess,
-			Command: &ports.ToolManifestCommand{Base: []string{"jq"}},
+			Command: &ports.ToolManifestCommand{Base: []string{jq}},
 		},
 	}, nil)
 
 	perms := tool.Permissions()
 	require.NotNil(t, perms.Permissions)
 	require.Len(t, ps(perms.Permissions).Executables, 1)
-	require.Equal(t, "jq", ps(perms.Permissions).Executables[0].Binary)
+	require.Equal(t, jq, ps(perms.Permissions).Executables[0].Binary)
 }
 
 func TestPermissionsEmptyWhenNoCommand(t *testing.T) {
 	tool := NewTool(ports.ToolManifest{
 		Name:   "empty",
-		Family: "text",
+		Family: text,
 		Execution: ports.ToolManifestExecution{
 			Backend: ports.ToolBackendSubprocess,
 		},
@@ -531,29 +547,29 @@ func TestPermissionsEmptyWhenNoCommand(t *testing.T) {
 func TestPermissionsIncludesDefaultArgs(t *testing.T) {
 	tool := NewTool(ports.ToolManifest{
 		Name:   "cli_mkdir",
-		Family: "fileops",
+		Family: fileops,
 		Execution: ports.ToolManifestExecution{
 			Backend:     ports.ToolBackendSubprocess,
-			Command:     &ports.ToolManifestCommand{Base: []string{"mkdir"}},
-			DefaultArgs: []string{"-p"},
+			Command:     &ports.ToolManifestCommand{Base: []string{mkdir}},
+			DefaultArgs: []string{p},
 		},
 	}, nil)
 
 	perms := tool.Permissions()
 	require.Len(t, ps(perms.Permissions).Executables, 1)
-	require.Equal(t, []string{"-p"}, ps(perms.Permissions).Executables[0].Args)
+	require.Equal(t, []string{p}, ps(perms.Permissions).Executables[0].Args)
 }
 
 func TestPermissionsHITLFalseByDefault(t *testing.T) {
 	tool := NewTool(ports.ToolManifest{
 		Name:   "cli_echo",
-		Family: "text",
+		Family: text,
 		Execution: ports.ToolManifestExecution{
 			Backend: ports.ToolBackendSubprocess,
 			Command: &ports.ToolManifestCommand{Base: []string{"echo"}},
 		},
 		Capability: ports.ToolManifestCapability{
-			RiskClass: []string{"execute"},
+			RiskClass: []string{execute},
 		},
 	}, nil)
 
@@ -569,7 +585,7 @@ func TestPermissionsHITLTrueForDestructiveTools(t *testing.T) {
 			Command: &ports.ToolManifestCommand{Base: []string{"gdb"}},
 		},
 		Capability: ports.ToolManifestCapability{
-			RiskClass: []string{"execute", "destructive"},
+			RiskClass: []string{execute, "destructive"},
 		},
 	}, nil)
 
@@ -580,11 +596,11 @@ func TestPermissionsHITLTrueForDestructiveTools(t *testing.T) {
 
 func TestPanicInRunnerReturnsStructuredResult(t *testing.T) {
 	tool := NewTool(ports.ToolManifest{
-		Name:   "cli_tool",
-		Family: "text",
+		Name:   cli_tool,
+		Family: text,
 		Execution: ports.ToolManifestExecution{
 			Backend: ports.ToolBackendSubprocess,
-			Command: &ports.ToolManifestCommand{Base: []string{"tool"}},
+			Command: &ports.ToolManifestCommand{Base: []string{tool}},
 		},
 	}, &panickingRunner{})
 
@@ -600,7 +616,7 @@ func TestPanicInExpandCommandDoesNotPanic(t *testing.T) {
 	runner := &recordingRunner{}
 	tool := NewTool(ports.ToolManifest{
 		Name:   "panic_test",
-		Family: "text",
+		Family: text,
 		Execution: ports.ToolManifestExecution{
 			Backend: ports.ToolBackendSubprocess,
 			Command: &ports.ToolManifestCommand{Base: []string{"echo"}},

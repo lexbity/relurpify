@@ -19,6 +19,18 @@ import (
 	fwtelemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
+const (
+	AgentId_capability_registry_wrappers = "agent_id"
+	Capability_capability_registry_wrappers = "capability"
+	Capabilityscompleted_capability_registry_wrappers = "capability %s completed"
+	CapabilityId_capability_registry_wrappers = "capability_id"
+	DurationMs_capability_registry_wrappers = "duration_ms"
+	Error_capability_registry_wrappers = "error"
+	Kind_capability_registry_wrappers = "kind"
+	RuntimeFamily_capability_registry_wrappers = "runtime_family"
+)
+
+
 // wrapTool decorates a tool with the instrumentation wrapper.
 func (r *CapabilityRegistry) wrapTool(tool ports.Tool) ports.Tool {
 	if tool == nil {
@@ -314,7 +326,7 @@ func (t *instrumentedTool) Execute(ctx context.Context, args map[string]any) (*p
 		spanAttrs := buildSpanAttrs(desc, t.Tool)
 		meta := map[string]any{
 			"tool":       t.Name(),
-			"agent_id":   stateSnapshot.agentID,
+			AgentId_capability_registry_wrappers:   stateSnapshot.agentID,
 			"args":       summarizeArgs(args),
 			"span_attrs": spanAttrs,
 		}
@@ -369,7 +381,7 @@ func (t *instrumentedTool) Execute(ctx context.Context, args map[string]any) (*p
 		spanAttrs := buildSpanAttrs(desc, t.Tool)
 		metadata := map[string]any{
 			"tool":       t.Name(),
-			"agent_id":   stateSnapshot.agentID,
+			AgentId_capability_registry_wrappers:   stateSnapshot.agentID,
 			"span_attrs": spanAttrs,
 		}
 		if traceCtx.TraceID != "" {
@@ -386,9 +398,9 @@ func (t *instrumentedTool) Execute(ctx context.Context, args map[string]any) (*p
 			}
 		}
 		if err != nil {
-			metadata["error"] = err.Error()
+			metadata[Error_capability_registry_wrappers] = err.Error()
 		}
-		metadata["duration_ms"] = time.Since(startedAt).Milliseconds()
+		metadata[DurationMs_capability_registry_wrappers] = time.Since(startedAt).Milliseconds()
 		stateSnapshot.telemetry.Emit(fwtelemetry.Event{
 			Type:      fwtelemetry.EventToolResult,
 			Timestamp: time.Now().UTC(),
@@ -425,9 +437,9 @@ func emitCapabilitySecurityEvent(telemetry fwtelemetry.Telemetry, event string, 
 	}
 	metadata := map[string]any{
 		"security_event": event,
-		"capability_id":  desc.ID,
-		"capability":     desc.Name,
-		"kind":           string(desc.Kind),
+		CapabilityId_capability_registry_wrappers:  desc.ID,
+		Capability_capability_registry_wrappers:     desc.Name,
+		Kind_capability_registry_wrappers:           string(desc.Kind),
 		"scope":          string(desc.Source.Scope),
 		"trust_class":    string(desc.TrustClass),
 		"exposure":       string(exposure),
@@ -497,11 +509,11 @@ func emitCapabilityInvocationTelemetry(telemetry fwtelemetry.Telemetry, desc des
 		Timestamp: time.Now().UTC(),
 		Message:   fmt.Sprintf("capability %s invoked", desc.Name),
 		Metadata: redactTelemetryMetadata(nil, map[string]any{
-			"capability_id":  desc.ID,
-			"capability":     desc.Name,
-			"kind":           string(desc.Kind),
-			"runtime_family": string(desc.RuntimeFamily),
-			"agent_id":       agentID,
+			CapabilityId_capability_registry_wrappers:  desc.ID,
+			Capability_capability_registry_wrappers:     desc.Name,
+			Kind_capability_registry_wrappers:           string(desc.Kind),
+			RuntimeFamily_capability_registry_wrappers: string(desc.RuntimeFamily),
+			AgentId_capability_registry_wrappers:       agentID,
 			"args":           summarizeArgs(args),
 		}),
 	})
@@ -512,11 +524,11 @@ func emitCapabilityResultTelemetry(telemetry fwtelemetry.Telemetry, desc descrip
 		return
 	}
 	metadata := map[string]any{
-		"capability_id":  desc.ID,
-		"capability":     desc.Name,
-		"kind":           string(desc.Kind),
-		"runtime_family": string(desc.RuntimeFamily),
-		"agent_id":       agentID,
+		CapabilityId_capability_registry_wrappers:  desc.ID,
+		Capability_capability_registry_wrappers:     desc.Name,
+		Kind_capability_registry_wrappers:           string(desc.Kind),
+		RuntimeFamily_capability_registry_wrappers: string(desc.RuntimeFamily),
+		AgentId_capability_registry_wrappers:       agentID,
 	}
 	if result != nil {
 		metadata["success"] = result.Success
@@ -525,13 +537,13 @@ func emitCapabilityResultTelemetry(telemetry fwtelemetry.Telemetry, desc descrip
 		}
 	}
 	if err != nil {
-		metadata["error"] = err.Error()
+		metadata[Error_capability_registry_wrappers] = err.Error()
 	}
-	metadata["duration_ms"] = duration.Milliseconds()
+	metadata[DurationMs_capability_registry_wrappers] = duration.Milliseconds()
 	telemetry.Emit(fwtelemetry.Event{
 		Type:      fwtelemetry.EventCapabilityResult,
 		Timestamp: time.Now().UTC(),
-		Message:   fmt.Sprintf("capability %s completed", desc.Name),
+		Message:   fmt.Sprintf(Capabilityscompleted_capability_registry_wrappers, desc.Name),
 		Metadata:  redactTelemetryMetadata(nil, metadata),
 	})
 }
@@ -541,23 +553,23 @@ func emitPromptCapabilityResultTelemetry(telemetry fwtelemetry.Telemetry, desc d
 		return
 	}
 	metadata := map[string]any{
-		"capability_id":  desc.ID,
-		"capability":     desc.Name,
-		"kind":           string(desc.Kind),
-		"runtime_family": string(desc.RuntimeFamily),
-		"agent_id":       agentID,
+		CapabilityId_capability_registry_wrappers:  desc.ID,
+		Capability_capability_registry_wrappers:     desc.Name,
+		Kind_capability_registry_wrappers:           string(desc.Kind),
+		RuntimeFamily_capability_registry_wrappers: string(desc.RuntimeFamily),
+		AgentId_capability_registry_wrappers:       agentID,
 	}
 	if result != nil {
 		metadata["message_count"] = len(result.Messages)
 	}
 	if err != nil {
-		metadata["error"] = err.Error()
+		metadata[Error_capability_registry_wrappers] = err.Error()
 	}
-	metadata["duration_ms"] = duration.Milliseconds()
+	metadata[DurationMs_capability_registry_wrappers] = duration.Milliseconds()
 	telemetry.Emit(fwtelemetry.Event{
 		Type:      fwtelemetry.EventCapabilityResult,
 		Timestamp: time.Now().UTC(),
-		Message:   fmt.Sprintf("capability %s completed", desc.Name),
+		Message:   fmt.Sprintf(Capabilityscompleted_capability_registry_wrappers, desc.Name),
 		Metadata:  redactTelemetryMetadata(nil, metadata),
 	})
 }
@@ -567,23 +579,23 @@ func emitResourceCapabilityResultTelemetry(telemetry fwtelemetry.Telemetry, desc
 		return
 	}
 	metadata := map[string]any{
-		"capability_id":  desc.ID,
-		"capability":     desc.Name,
-		"kind":           string(desc.Kind),
-		"runtime_family": string(desc.RuntimeFamily),
-		"agent_id":       agentID,
+		CapabilityId_capability_registry_wrappers:  desc.ID,
+		Capability_capability_registry_wrappers:     desc.Name,
+		Kind_capability_registry_wrappers:           string(desc.Kind),
+		RuntimeFamily_capability_registry_wrappers: string(desc.RuntimeFamily),
+		AgentId_capability_registry_wrappers:       agentID,
 	}
 	if result != nil {
 		metadata["content_count"] = len(result.Contents)
 	}
 	if err != nil {
-		metadata["error"] = err.Error()
+		metadata[Error_capability_registry_wrappers] = err.Error()
 	}
-	metadata["duration_ms"] = duration.Milliseconds()
+	metadata[DurationMs_capability_registry_wrappers] = duration.Milliseconds()
 	telemetry.Emit(fwtelemetry.Event{
 		Type:      fwtelemetry.EventCapabilityResult,
 		Timestamp: time.Now().UTC(),
-		Message:   fmt.Sprintf("capability %s completed", desc.Name),
+		Message:   fmt.Sprintf(Capabilityscompleted_capability_registry_wrappers, desc.Name),
 		Metadata:  redactTelemetryMetadata(nil, metadata),
 	})
 }

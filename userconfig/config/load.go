@@ -166,7 +166,7 @@ func Load(opts LoadOptions) (*AppConfig, *Secrets, error) {
 		Editor:     editor,
 		SharedRoot: sharedRoot,
 	}
-	fingerprint, err := ConfigFingerprint(appConfig)
+	fingerprint, err := fingerprintConfig(appConfig)
 	if err != nil {
 		return nil, nil, fmt.Errorf("fingerprint config: %w", err)
 	}
@@ -176,9 +176,9 @@ func Load(opts LoadOptions) (*AppConfig, *Secrets, error) {
 	return appConfig, &secrets, nil
 }
 
-// ConfigFingerprint computes a deterministic fingerprint for the resolved
+// fingerprintConfig computes a deterministic fingerprint for the resolved
 // configuration, excluding secrets.
-func ConfigFingerprint(cfg *AppConfig) (string, error) {
+func fingerprintConfig(cfg *AppConfig) (string, error) {
 	if cfg == nil {
 		return "", fmt.Errorf("app config required")
 	}

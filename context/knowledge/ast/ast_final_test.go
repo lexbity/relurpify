@@ -11,11 +11,20 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+const (
+	Testgo_ast_final_test = "/test.go"
+	Root_ast_final_test = ":root"
+	IndexDb_ast_final_test = "index.db"
+	Main_ast_final_test = "main"
+	SampleGoFile_ast_final_test = "sample.go"
+)
+
+
 // ==================== Persist and Transaction Tests ====================
 
 func TestIndexManagerPersistWithTransactionError(t *testing.T) {
 	tmpDir := t.TempDir()
-	store, err := NewTestStore(filepath.Join(tmpDir, "index.db"))
+	store, err := NewTestStore(filepath.Join(tmpDir, IndexDb_ast_final_test))
 	require.NoError(t, err)
 	defer func() { _ = store.Close() }()
 
@@ -25,15 +34,15 @@ func TestIndexManagerPersistWithTransactionError(t *testing.T) {
 	_ = store.Close()
 
 	now := time.Now()
-	fileID := GenerateFileID("/test.go")
+	fileID := GenerateFileID(Testgo_ast_final_test)
 	result := &ParseResult{
-		RootNode: &Node{ID: fileID + ":root", FileID: fileID, Type: NodeTypePackage, Name: "main", CreatedAt: now, UpdatedAt: now},
+		RootNode: &Node{ID: fileID + Root_ast_final_test, FileID: fileID, Type: NodeTypePackage, Name: Main_ast_final_test, CreatedAt: now, UpdatedAt: now},
 		Nodes: []*Node{
-			{ID: fileID + ":root", FileID: fileID, Type: NodeTypePackage, Name: "main", CreatedAt: now, UpdatedAt: now},
+			{ID: fileID + Root_ast_final_test, FileID: fileID, Type: NodeTypePackage, Name: Main_ast_final_test, CreatedAt: now, UpdatedAt: now},
 		},
 		Edges: []*Edge{},
 		Metadata: &FileMetadata{
-			ID: fileID, Path: "/test.go", Language: "go", Category: CategoryCode,
+			ID: fileID, Path: Testgo_ast_final_test, Language: "go", Category: CategoryCode,
 			ContentHash: "hash", IndexedAt: now,
 		},
 	}
@@ -44,22 +53,22 @@ func TestIndexManagerPersistWithTransactionError(t *testing.T) {
 
 func TestIndexManagerPersistWithContentHash(t *testing.T) {
 	tmpDir := t.TempDir()
-	store, err := NewTestStore(filepath.Join(tmpDir, "index.db"))
+	store, err := NewTestStore(filepath.Join(tmpDir, IndexDb_ast_final_test))
 	require.NoError(t, err)
 	defer func() { _ = store.Close() }()
 
 	manager := NewIndexManager(store, IndexConfig{WorkspacePath: tmpDir})
 
 	now := time.Now()
-	fileID := GenerateFileID("/test.go")
+	fileID := GenerateFileID(Testgo_ast_final_test)
 	result := &ParseResult{
-		RootNode: &Node{ID: fileID + ":root", FileID: fileID, Type: NodeTypePackage, Name: "main", CreatedAt: now, UpdatedAt: now},
+		RootNode: &Node{ID: fileID + Root_ast_final_test, FileID: fileID, Type: NodeTypePackage, Name: Main_ast_final_test, CreatedAt: now, UpdatedAt: now},
 		Nodes: []*Node{
-			{ID: fileID + ":root", FileID: fileID, Type: NodeTypePackage, Name: "main", CreatedAt: now, UpdatedAt: now},
+			{ID: fileID + Root_ast_final_test, FileID: fileID, Type: NodeTypePackage, Name: Main_ast_final_test, CreatedAt: now, UpdatedAt: now},
 		},
 		Edges: []*Edge{},
 		Metadata: &FileMetadata{
-			ID: fileID, Path: "/test.go", Language: "go", Category: CategoryCode,
+			ID: fileID, Path: Testgo_ast_final_test, Language: "go", Category: CategoryCode,
 			ContentHash: "", IndexedAt: now, // Empty hash
 		},
 	}
@@ -78,7 +87,7 @@ type Reader interface {
 	Read(p []byte) (n int, err error)
 }`
 	parser := NewGoParser()
-	result, err := parser.Parse(source, "sample.go")
+	result, err := parser.Parse(source, SampleGoFile_ast_final_test)
 	require.NoError(t, err)
 
 	// Should have package node and interface node
@@ -96,7 +105,7 @@ func TestGoParserBuildGenDeclNodesWithTypeAlias(t *testing.T) {
 	source := `package sample
 type MyString = string`
 	parser := NewGoParser()
-	result, err := parser.Parse(source, "sample.go")
+	result, err := parser.Parse(source, SampleGoFile_ast_final_test)
 	require.NoError(t, err)
 
 	// Should have package node and type alias node
@@ -115,7 +124,7 @@ func Multi() (int, string, error) {
 	return 0, "", nil
 }`
 	parser := NewGoParser()
-	result, err := parser.Parse(source, "sample.go")
+	result, err := parser.Parse(source, SampleGoFile_ast_final_test)
 	require.NoError(t, err)
 
 	var found bool
@@ -134,7 +143,7 @@ func Named() (x int, y string) {
 	return 0, ""
 }`
 	parser := NewGoParser()
-	result, err := parser.Parse(source, "sample.go")
+	result, err := parser.Parse(source, SampleGoFile_ast_final_test)
 	require.NoError(t, err)
 
 	var found bool
@@ -151,7 +160,7 @@ func TestGoParserDocStringEmpty(t *testing.T) {
 	source := `package sample
 func NoDocs() {}`
 	parser := NewGoParser()
-	result, err := parser.Parse(source, "sample.go")
+	result, err := parser.Parse(source, SampleGoFile_ast_final_test)
 	require.NoError(t, err)
 
 	var found bool
@@ -170,7 +179,7 @@ type MyStruct struct {}
 func (m MyStruct) Method() {}
 func (m *MyStruct) PtrMethod() {}`
 	parser := NewGoParser()
-	result, err := parser.Parse(source, "sample.go")
+	result, err := parser.Parse(source, SampleGoFile_ast_final_test)
 	require.NoError(t, err)
 
 	var methodCount int
@@ -187,7 +196,7 @@ func TestGoParserCollectCallEdgesEmptyBody(t *testing.T) {
 	source := `package sample
 func External() // declared but not defined`
 	parser := NewGoParser()
-	result, err := parser.Parse(source, "sample.go")
+	result, err := parser.Parse(source, SampleGoFile_ast_final_test)
 	require.NoError(t, err)
 
 	var found bool
@@ -219,7 +228,7 @@ func TestGraphNodeRecordWithInvalidMarshal(t *testing.T) {
 		},
 	}
 
-	record, ok := graphNodeRecord(node, "/test.go")
+	record, ok := graphNodeRecord(node, Testgo_ast_final_test)
 	// Should still succeed, props may contain partial data or be empty depending on implementation
 	assert.True(t, ok)
 	// Props could be nil or valid JSON (without the invalid field)
@@ -262,7 +271,7 @@ func TestParserRegistryGetParserNotFound(t *testing.T) {
 
 func TestIndexManagerCloseWhileRunning(t *testing.T) {
 	tmpDir := t.TempDir()
-	store, err := NewTestStore(filepath.Join(tmpDir, "index.db"))
+	store, err := NewTestStore(filepath.Join(tmpDir, IndexDb_ast_final_test))
 	require.NoError(t, err)
 
 	manager := NewIndexManager(store, IndexConfig{WorkspacePath: tmpDir})
@@ -342,7 +351,7 @@ func TestHashContentConsistent(t *testing.T) {
 
 func TestGetFileByPathNotFound(t *testing.T) {
 	tmpDir := t.TempDir()
-	store, err := NewTestStore(filepath.Join(tmpDir, "index.db"))
+	store, err := NewTestStore(filepath.Join(tmpDir, IndexDb_ast_final_test))
 	require.NoError(t, err)
 	defer func() { _ = store.Close() }()
 
@@ -353,7 +362,7 @@ func TestGetFileByPathNotFound(t *testing.T) {
 
 func TestGetEdgeNotFound(t *testing.T) {
 	tmpDir := t.TempDir()
-	store, err := NewTestStore(filepath.Join(tmpDir, "index.db"))
+	store, err := NewTestStore(filepath.Join(tmpDir, IndexDb_ast_final_test))
 	require.NoError(t, err)
 	defer func() { _ = store.Close() }()
 

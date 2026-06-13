@@ -4,6 +4,12 @@ import (
 	"testing"
 )
 
+const (
+	ImportPathFrameworkA_bucket_check_test = "codeburg.org/lexbit/relurpify/framework/a"
+	ImportPathFrameworkTypes_bucket_check_test = "codeburg.org/lexbit/relurpify/framework/types"
+)
+
+
 func emptyPkg(importPath string) GoPackage {
 	return GoPackage{ImportPath: importPath, GoFiles: []string{"a.go"}}
 }
@@ -27,13 +33,13 @@ func TestCheckBuckets_noViolation(t *testing.T) {
 
 func TestCheckBuckets_singleDomain(t *testing.T) {
 	pkgs := []GoPackage{
-		emptyPkg("codeburg.org/lexbit/relurpify/framework/types"),
-		emptyPkg("codeburg.org/lexbit/relurpify/framework/a"),
+		emptyPkg(ImportPathFrameworkTypes_bucket_check_test),
+		emptyPkg(ImportPathFrameworkA_bucket_check_test),
 		emptyPkg("codeburg.org/lexbit/relurpify/framework/b"),
 	}
 	reverse := map[string][]string{
-		"codeburg.org/lexbit/relurpify/framework/types": {
-			"codeburg.org/lexbit/relurpify/framework/a",
+		ImportPathFrameworkTypes_bucket_check_test: {
+			ImportPathFrameworkA_bucket_check_test,
 			"codeburg.org/lexbit/relurpify/framework/b",
 		},
 	}
@@ -46,16 +52,16 @@ func TestCheckBuckets_singleDomain(t *testing.T) {
 func TestCheckBuckets_typeOnlyBucket(t *testing.T) {
 	pkgs := []GoPackage{
 		{
-			ImportPath: "codeburg.org/lexbit/relurpify/framework/types",
+			ImportPath: ImportPathFrameworkTypes_bucket_check_test,
 			GoFiles:    []string{"types.go"},
 		},
-		emptyPkg("codeburg.org/lexbit/relurpify/framework/a"),
+		emptyPkg(ImportPathFrameworkA_bucket_check_test),
 		emptyPkg("codeburg.org/lexbit/relurpify/app/b"),
 		emptyPkg("codeburg.org/lexbit/relurpify/cognitionzoo/c"),
 	}
 	reverse := map[string][]string{
-		"codeburg.org/lexbit/relurpify/framework/types": {
-			"codeburg.org/lexbit/relurpify/framework/a",
+		ImportPathFrameworkTypes_bucket_check_test: {
+			ImportPathFrameworkA_bucket_check_test,
 			"codeburg.org/lexbit/relurpify/app/b",
 			"codeburg.org/lexbit/relurpify/cognitionzoo/c",
 		},

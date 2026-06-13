@@ -7,6 +7,11 @@ import (
 	"strings"
 )
 
+const (
+	Migration_sqlite_removal_check = "migration"
+)
+
+
 // SQLiteFreePackages lists module-relative package prefixes that must not
 // import "database/sql" or "github.com/mattn/go-sqlite3" in production code.
 // Migration files explicitly named "migration" are exempt.
@@ -33,19 +38,19 @@ func CheckSQLiteFree(pkgs []GoPackage, allowlist Allowlist) []string {
 			continue
 		}
 		// Exempt package paths containing "migration".
-		if hasPathPrefix(pkg.ImportPath, "migration") || containsInPath(pkg.ImportPath, "migration") {
+		if hasPathPrefix(pkg.ImportPath, Migration_sqlite_removal_check) || containsInPath(pkg.ImportPath, Migration_sqlite_removal_check) {
 			continue
 		}
 
 		// Check non-migration Go files in this package
 		var goFiles []string
 		for _, f := range pkg.GoFiles {
-			if !strings.Contains(strings.ToLower(f), "migration") {
+			if !strings.Contains(strings.ToLower(f), Migration_sqlite_removal_check) {
 				goFiles = append(goFiles, f)
 			}
 		}
 		for _, f := range pkg.TestGoFiles {
-			if !strings.Contains(strings.ToLower(f), "migration") {
+			if !strings.Contains(strings.ToLower(f), Migration_sqlite_removal_check) {
 				goFiles = append(goFiles, f)
 			}
 		}

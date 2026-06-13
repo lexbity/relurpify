@@ -14,7 +14,11 @@ import (
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
-func registerBrowserWorkspaceService(cfg WorkspaceConfig, registration *fauthorization.AgentRegistration, capRegistry *registry.CapabilityRegistry, sm session.ServiceManager, tel telemetry.Telemetry) error {
+type browserServiceRegistrar interface {
+	RegisterService(id string, svc session.Service)
+}
+
+func registerBrowserWorkspaceService(cfg WorkspaceConfig, registration *fauthorization.AgentRegistration, capRegistry *registry.CapabilityRegistry, sm browserServiceRegistrar, tel telemetry.Telemetry) error {
 	spec := browserWorkspaceAgentSpec(registration)
 	if !shouldEnableBrowserWorkspaceService(spec) {
 		return nil
@@ -53,10 +57,10 @@ func registerBrowserWorkspaceService(cfg WorkspaceConfig, registration *fauthori
 }
 
 func browserWorkspaceAgentSpec(registration *fauthorization.AgentRegistration) *agentspec.AgentRuntimeSpec {
-	if registration == nil || registration.ManifestSpec == nil {
+	if registration == nil {
 		return nil
 	}
-	return registration.ManifestSpec.Agent
+	return registration.AgentSpec
 }
 
 func shouldEnableBrowserWorkspaceService(spec *agentspec.AgentRuntimeSpec) bool {

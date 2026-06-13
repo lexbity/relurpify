@@ -5,6 +5,13 @@ import (
 	"testing"
 )
 
+const (
+	ParseBytesv_parser_test = "ParseBytes: %v"
+	Tagsvwantv_parser_test = "Tags = %#v, want %#v"
+	Tone_parser_test = "tone"
+)
+
+
 func TestParseBytes_V2Valid(t *testing.T) {
 	src := `---
 schema framework.prompt/v2
@@ -21,7 +28,7 @@ Use {tone} language for a {audience}.
 `
 	result, err := ParseBytes([]byte(src), "sample.prompt")
 	if err != nil {
-		t.Fatalf("ParseBytes: %v", err)
+		t.Fatalf(ParseBytesv_parser_test, err)
 	}
 	cfg := result.Config
 	if cfg.Schema != "framework.prompt/v2" {
@@ -31,10 +38,10 @@ Use {tone} language for a {audience}.
 		t.Fatalf("ID = %q, want agent.chainer.default", cfg.ID)
 	}
 	if got, want := cfg.Tags, []string{"system", "agent", "debug"}; !sameStrings(got, want) {
-		t.Fatalf("Tags = %#v, want %#v", got, want)
+		t.Fatalf(Tagsvwantv_parser_test, got, want)
 	}
-	if cfg.Variables["tone"].Default != "direct" {
-		t.Fatalf("tone default = %q, want direct", cfg.Variables["tone"].Default)
+	if cfg.Variables[Tone_parser_test].Default != "direct" {
+		t.Fatalf("tone default = %q, want direct", cfg.Variables[Tone_parser_test].Default)
 	}
 	if cfg.Variables["audience"].Default != "senior engineer" {
 		t.Fatalf("audience default = %q, want senior engineer", cfg.Variables["audience"].Default)
@@ -89,10 +96,10 @@ body
 `
 	result, err := ParseBytes([]byte(src), "tag-single.prompt")
 	if err != nil {
-		t.Fatalf("ParseBytes: %v", err)
+		t.Fatalf(ParseBytesv_parser_test, err)
 	}
 	if got, want := result.Config.Tags, []string{"system"}; !sameStrings(got, want) {
-		t.Fatalf("Tags = %#v, want %#v", got, want)
+		t.Fatalf(Tagsvwantv_parser_test, got, want)
 	}
 }
 
@@ -107,10 +114,10 @@ body
 `
 	result, err := ParseBytes([]byte(src), "tag-list.prompt")
 	if err != nil {
-		t.Fatalf("ParseBytes: %v", err)
+		t.Fatalf(ParseBytesv_parser_test, err)
 	}
 	if got, want := result.Config.Tags, []string{"agent", "debug"}; !sameStrings(got, want) {
-		t.Fatalf("Tags = %#v, want %#v", got, want)
+		t.Fatalf(Tagsvwantv_parser_test, got, want)
 	}
 }
 
@@ -125,10 +132,10 @@ body
 `
 	result, err := ParseBytes([]byte(src), "var.prompt")
 	if err != nil {
-		t.Fatalf("ParseBytes: %v", err)
+		t.Fatalf(ParseBytesv_parser_test, err)
 	}
-	if result.Config.Variables["tone"].Default != "direct" {
-		t.Fatalf("tone default = %q, want direct", result.Config.Variables["tone"].Default)
+	if result.Config.Variables[Tone_parser_test].Default != "direct" {
+		t.Fatalf("tone default = %q, want direct", result.Config.Variables[Tone_parser_test].Default)
 	}
 }
 

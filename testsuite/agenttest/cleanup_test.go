@@ -11,6 +11,11 @@ import (
 	"codeburg.org/lexbit/relurpify/platform/fs"
 )
 
+const (
+	file_write = "file_write"
+)
+
+
 // TestRepresentativeSuitesLoad verifies that the committed catalog now loads
 // under the strict generic schema.
 func TestRepresentativeSuitesLoad(t *testing.T) {
@@ -86,7 +91,7 @@ func TestReportSchemaStability(t *testing.T) {
 		Error:   "",
 		SecurityObservations: []SecurityObservation{
 			{
-				Kind:       "file_write",
+				Kind:       file_write,
 				Resource:   "/tmp/test.txt",
 				Action:     "write",
 				InScope:    true,
@@ -101,7 +106,7 @@ func TestReportSchemaStability(t *testing.T) {
 			{
 				Category: "tool_usage",
 				Field:    "tools_expected",
-				Expected: "file_write",
+				Expected: file_write,
 				Actual:   "true",
 				Matched:  true,
 			},
@@ -143,7 +148,7 @@ func TestReportSchemaStability(t *testing.T) {
 		t.Errorf("AssertionResults lost: got %d, want 2", len(roundTripped.AssertionResults))
 	}
 
-	if roundTripped.SecurityObservations[0].Kind != "file_write" {
+	if roundTripped.SecurityObservations[0].Kind != file_write {
 		t.Errorf("SecurityObservation.Kind mismatch: got %s, want file_write", roundTripped.SecurityObservations[0].Kind)
 	}
 	if roundTripped.BenchmarkObservations[0].Category != "tool_usage" {

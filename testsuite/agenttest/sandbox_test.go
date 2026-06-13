@@ -12,6 +12,10 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
 )
 
+const (
+	sandboxOK = "sandbox-ok"
+)
+
 // requiresRunsc skips the test when the Docker gVisor runtime is not available.
 func requiresRunsc(t *testing.T) {
 	t.Helper()
@@ -59,13 +63,13 @@ func TestNewWorkspaceSandboxRunner_AvailableBackend(t *testing.T) {
 
 	// Execute a trivial command to prove the sandbox works.
 	res, err := runner.Run(ctx, sandbox.CommandRequest{
-		Args: []string{"echo", "sandbox-ok"},
+		Args: []string{"echo", sandboxOK},
 	})
 	if err != nil {
 		t.Fatalf("run failed: %v", err)
 	}
-	if strings.TrimSpace(res.Stdout) != "sandbox-ok" {
-		t.Errorf("stdout = %q, want %q", res.Stdout, "sandbox-ok")
+	if strings.TrimSpace(res.Stdout) != sandboxOK {
+		t.Errorf("stdout = %q, want %q", res.Stdout, sandboxOK)
 	}
 }
 

@@ -6,6 +6,8 @@ import (
 	"testing"
 )
 
+const testSessionID = "test"
+
 func TestSessionClose_NilSafe(t *testing.T) {
 	var s *WorkspaceSession
 	err := s.Close(context.Background())
@@ -17,8 +19,8 @@ func TestSessionClose_NilSafe(t *testing.T) {
 func TestSessionClose_Idempotent(t *testing.T) {
 	callCount := 0
 	s := &WorkspaceSession{
-		ID: "test",
-		closeFn: func(ctx context.Context) error {
+		ID: testSessionID,
+		closeFn: func(_ context.Context) error {
 			callCount++
 			return nil
 		},
@@ -44,8 +46,8 @@ func TestSessionClose_Idempotent(t *testing.T) {
 func TestSessionClose_ReturnsError(t *testing.T) {
 	want := errors.New("close error")
 	s := &WorkspaceSession{
-		ID: "test",
-		closeFn: func(ctx context.Context) error {
+		ID: testSessionID,
+		closeFn: func(_ context.Context) error {
 			return want
 		},
 	}
@@ -58,7 +60,7 @@ func TestSessionClose_ReturnsError(t *testing.T) {
 
 func TestSessionClose_NilCloseFn(t *testing.T) {
 	s := &WorkspaceSession{
-		ID:      "test",
+		ID:      testSessionID,
 		closeFn: nil,
 	}
 	err := s.Close(context.Background())
@@ -72,8 +74,8 @@ func TestSessionClose_SecondCloseReturnsNil(t *testing.T) {
 	// a no-op returning nil (the sync.Once is already spent).
 	callCount := 0
 	s := &WorkspaceSession{
-		ID: "test",
-		closeFn: func(ctx context.Context) error {
+		ID: testSessionID,
+		closeFn: func(_ context.Context) error {
 			callCount++
 			return errors.New("close error")
 		},

@@ -10,6 +10,13 @@ import (
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 )
 
+const (
+	String_lsp_ast_tool = "string"
+	Symbol_lsp_ast_tool = "symbol"
+	Type_lsp_ast_tool = "type"
+)
+
+
 const astToolReadyTimeout = 2 * time.Second
 
 // ASTTool exposes the AST index for querying.
@@ -29,10 +36,10 @@ func (t *ASTTool) Description() string {
 func (t *ASTTool) Category() string { return "search" }
 func (t *ASTTool) Parameters() []ports.ToolParameter {
 	return []ports.ToolParameter{
-		{Name: "action", Type: "string", Description: "list_symbols|get_signature|find_callers|find_callees|get_imports|get_dependencies|search", Required: true},
-		{Name: "symbol", Type: "string", Description: "Target symbol name", Required: false},
-		{Name: "type", Type: "string", Description: "Filter by node type", Required: false},
-		{Name: "category", Type: "string", Description: "Filter by category", Required: false},
+		{Name: "action", Type: String_lsp_ast_tool, Description: "list_symbols|get_signature|find_callers|find_callees|get_imports|get_dependencies|search", Required: true},
+		{Name: Symbol_lsp_ast_tool, Type: String_lsp_ast_tool, Description: "Target symbol name", Required: false},
+		{Name: Type_lsp_ast_tool, Type: String_lsp_ast_tool, Description: "Filter by node type", Required: false},
+		{Name: "category", Type: String_lsp_ast_tool, Description: "Filter by category", Required: false},
 		{Name: "exported_only", Type: "boolean", Description: "Only include exported symbols", Required: false},
 	}
 }
@@ -80,7 +87,7 @@ func (t *ASTTool) waitUntilReady(ctx context.Context, timeout time.Duration) err
 }
 
 func (t *ASTTool) querySymbol(args map[string]any) (*Node, error) {
-	symbol := fmt.Sprint(args["symbol"])
+	symbol := fmt.Sprint(args[Symbol_lsp_ast_tool])
 	if symbol == "" {
 		return nil, fmt.Errorf("symbol parameter required")
 	}
@@ -96,7 +103,7 @@ func (t *ASTTool) querySymbol(args map[string]any) (*Node, error) {
 
 func (t *ASTTool) handleList(args map[string]any) (*ports.ToolResult, error) {
 	query := NodeQuery{Limit: 100}
-	if nodeType := fmt.Sprint(args["type"]); nodeType != "" {
+	if nodeType := fmt.Sprint(args[Type_lsp_ast_tool]); nodeType != "" {
 		query.Types = []NodeType{NodeType(nodeType)}
 	}
 	if category := fmt.Sprint(args["category"]); category != "" {
@@ -122,7 +129,7 @@ func (t *ASTTool) handleSignature(args map[string]any) (*ports.ToolResult, error
 	}
 	return successResult(map[string]any{
 		"name":       node.Name,
-		"type":       node.Type,
+		Type_lsp_ast_tool:       node.Type,
 		"signature":  node.Signature,
 		"doc_string": node.DocString,
 		"file_id":    node.FileID,
@@ -141,7 +148,7 @@ func (t *ASTTool) handleCallers(args map[string]any) (*ports.ToolResult, error) 
 		return nil, err
 	}
 	return successResult(map[string]any{
-		"symbol":  node.Name,
+		Symbol_lsp_ast_tool:  node.Name,
 		"callers": summarizeNodes(callers),
 	}), nil
 }
@@ -156,7 +163,7 @@ func (t *ASTTool) handleCallees(args map[string]any) (*ports.ToolResult, error) 
 		return nil, err
 	}
 	return successResult(map[string]any{
-		"symbol":  node.Name,
+		Symbol_lsp_ast_tool:  node.Name,
 		"callees": summarizeNodes(callees),
 	}), nil
 }
@@ -171,13 +178,13 @@ func (t *ASTTool) handleImports(args map[string]any) (*ports.ToolResult, error) 
 		return nil, err
 	}
 	return successResult(map[string]any{
-		"symbol":  node.Name,
+		Symbol_lsp_ast_tool:  node.Name,
 		"imports": summarizeNodes(imports),
 	}), nil
 }
 
 func (t *ASTTool) handleDependencies(args map[string]any) (*ports.ToolResult, error) {
-	symbol := fmt.Sprint(args["symbol"])
+	symbol := fmt.Sprint(args[Symbol_lsp_ast_tool])
 	if symbol == "" {
 		return nil, fmt.Errorf("symbol parameter required")
 	}
@@ -186,7 +193,7 @@ func (t *ASTTool) handleDependencies(args map[string]any) (*ports.ToolResult, er
 		return nil, err
 	}
 	return successResult(map[string]any{
-		"symbol":       symbol,
+		Symbol_lsp_ast_tool:       symbol,
 		"dependencies": summarizeNodes(graph.Dependencies),
 		"dependents":   summarizeNodes(graph.Dependents),
 	}), nil
@@ -202,7 +209,7 @@ func (t *ASTTool) Permissions() ports.ToolPermissions {
 	}
 }
 func (t *ASTTool) Tags() []string {
-	return []string{toolcapabilities.TagReadOnly, "ast", "symbol", "recovery"}
+	return []string{toolcapabilities.TagReadOnly, "ast", Symbol_lsp_ast_tool, "recovery"}
 }
 
 func successResult(data map[string]any) *ports.ToolResult {
@@ -221,7 +228,7 @@ func summarizeNodes(nodes []*Node) []map[string]any {
 		result = append(result, map[string]any{
 			"id":        node.ID,
 			"name":      node.Name,
-			"type":      node.Type,
+			Type_lsp_ast_tool:      node.Type,
 			"signature": node.Signature,
 			"file_id":   node.FileID,
 			"line":      node.StartLine,

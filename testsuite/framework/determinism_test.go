@@ -31,10 +31,18 @@ func TestRepeatedFixtureEquivalence(t *testing.T) {
 	})
 
 	t.Run("manifest fixture equivalence", func(t *testing.T) {
-		m1 := ValidManifest().Build()
-		m2 := ValidManifest().Build()
-
-		AssertNormalizedFileSystemPermissionsEqual(t, m1.Policy.Permissions.FileSystem, m2.Policy.Permissions.FileSystem)
+		m1 := ValidDocument().Build()
+		m2 := ValidDocument().Build()
+		p1, _ := m1.Section("permissions")
+		p2, _ := m2.Section("permissions")
+		var ps1, ps2 permissions.PermissionSet
+		if err := p1.Decode(&ps1); err != nil {
+			t.Fatalf("decode permissions: %v", err)
+		}
+		if err := p2.Decode(&ps2); err != nil {
+			t.Fatalf("decode permissions: %v", err)
+		}
+		AssertNormalizedFileSystemPermissionsEqual(t, ps1.FileSystem, ps2.FileSystem)
 	})
 
 	t.Run("policy rule fixture equivalence", func(t *testing.T) {

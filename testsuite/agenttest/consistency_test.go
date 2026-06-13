@@ -10,9 +10,9 @@ import (
 
 func TestComputeConsistency(t *testing.T) {
 	reports := []CaseReport{
-		{Success: true, ToolCalls: map[string]int{"tool1": 2, "tool2": 3}},
-		{Success: true, ToolCalls: map[string]int{"tool1": 2, "tool2": 3}},
-		{Success: false, ToolCalls: map[string]int{"tool1": 2, "tool2": 4}},
+		{Success: true, ToolCalls: map[string]int{tool1: 2, tool2: 3}},
+		{Success: true, ToolCalls: map[string]int{tool1: 2, tool2: 3}},
+		{Success: false, ToolCalls: map[string]int{tool1: 2, tool2: 4}},
 	}
 
 	report := ComputeConsistency(reports)
@@ -74,9 +74,9 @@ func TestComputeConsistencyWithFingerprints(t *testing.T) {
 
 func TestAnalyzeToolCallVariance(t *testing.T) {
 	reports := []CaseReport{
-		{ToolCalls: map[string]int{"tool1": 2, "tool2": 3}}, // total: 5
-		{ToolCalls: map[string]int{"tool1": 2, "tool2": 3}}, // total: 5
-		{ToolCalls: map[string]int{"tool1": 3, "tool2": 4}}, // total: 7
+		{ToolCalls: map[string]int{tool1: 2, tool2: 3}}, // total: 5
+		{ToolCalls: map[string]int{tool1: 2, tool2: 3}}, // total: 5
+		{ToolCalls: map[string]int{tool1: 3, tool2: 4}}, // total: 7
 	}
 
 	variance := AnalyzeToolCallVariance(reports)

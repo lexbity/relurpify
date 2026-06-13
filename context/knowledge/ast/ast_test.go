@@ -6,6 +6,11 @@ import (
 	"time"
 )
 
+const (
+	Custom_ast_test = "custom"
+)
+
+
 func TestLanguageDetector(t *testing.T) {
 	detector := NewLanguageDetector()
 	if lang := detector.Detect("main.go"); lang != "go" {
@@ -51,13 +56,13 @@ func (s *stubParser) SupportsIncremental() bool { return false }
 
 func TestParserRegistry(t *testing.T) {
 	registry := NewParserRegistry()
-	parser := &stubParser{language: "custom"}
+	parser := &stubParser{language: Custom_ast_test}
 	registry.Register(parser)
-	if _, ok := registry.GetParser("custom"); !ok {
+	if _, ok := registry.GetParser(Custom_ast_test); !ok {
 		t.Fatal("expected parser to be registered")
 	}
 	supported := registry.SupportedLanguages()
-	if len(supported) != 1 || supported[0] != "custom" {
+	if len(supported) != 1 || supported[0] != Custom_ast_test {
 		t.Fatalf("unexpected supported languages: %v", supported)
 	}
 }

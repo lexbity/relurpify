@@ -2,6 +2,11 @@ package prompt
 
 import "errors"
 
+const (
+	Duplicatepromptid_errors = "duplicate prompt id: "
+)
+
+
 // NotFoundError is returned when the requested prompt ID is not in the registry.
 type NotFoundError struct {
 	ID string
@@ -71,12 +76,12 @@ func (e *DuplicateIDError) Error() string {
 		return "duplicate prompt id"
 	}
 	if e.ExistingPath != "" && e.NewPath != "" {
-		return "duplicate prompt id: " + e.ID + " (" + e.ExistingPath + ", " + e.NewPath + ")"
+		return Duplicatepromptid_errors + e.ID + " (" + e.ExistingPath + ", " + e.NewPath + ")"
 	}
 	if e.NewPath != "" {
-		return "duplicate prompt id: " + e.ID + " (" + e.NewPath + ")"
+		return Duplicatepromptid_errors + e.ID + " (" + e.NewPath + ")"
 	}
-	return "duplicate prompt id: " + e.ID
+	return Duplicatepromptid_errors + e.ID
 }
 
 // UnknownVariableError is returned when a body references a variable that has

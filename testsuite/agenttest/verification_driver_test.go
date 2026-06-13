@@ -13,9 +13,13 @@ import (
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
+const (
+	hello_go = "hello.go"
+)
+
 func TestVerifyPreparedRunWritesVerificationReport(t *testing.T) {
 	workspace := t.TempDir()
-	manifestPath := filepath.Join(workspace, "relurpify_cfg", "agent.yaml")
+	manifestPath := filepath.Join(workspace, relurpify_cfg, agent_yaml)
 	if err := fs.MkdirAllSecure(filepath.Dir(manifestPath)); err != nil {
 		t.Fatal(err)
 	}
@@ -43,20 +47,20 @@ spec:
 	}
 	suite := &Suite{
 		SourcePath: filepath.Join(workspace, "suite.yaml"),
-		Metadata:   SuiteMeta{Name: "euclo.code"},
+		Metadata:   SuiteMeta{Name: euclo_code},
 		Spec: SuiteSpec{
 			AgentName: "euclo",
-			Manifest:  filepath.ToSlash(filepath.Join(config.DirName, "agent.yaml")),
+			Manifest:  filepath.ToSlash(filepath.Join(config.DirName, agent_yaml)),
 			Models: []ModelSpec{{
-				Name:     "qwen2.5-coder:14b",
-				Provider: "ollama",
+				Name:     qwen2_5_coder_14b,
+				Provider: ollama,
 				Endpoint: "http://127.0.0.1:11434",
 			}},
 		},
 	}
 
-	runRoot := filepath.Join(workspace, "relurpify_cfg", "test_run", "run-1")
-	prepared, err := PrepareRun(suite, CaseSpec{Name: "smoke", Prompt: "hello"}, suite.Spec.Models[0], RunOptions{}, workspace, runRoot, "run-1")
+	runRoot := filepath.Join(workspace, relurpify_cfg, "test_run", run1)
+	prepared, err := PrepareRun(suite, CaseSpec{Name: smoke, Prompt: hello}, suite.Spec.Models[0], RunOptions{}, workspace, runRoot, run1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,7 +79,7 @@ spec:
 		}
 	}
 
-	report, err := VerifyPreparedRun(context.Background(), prepared, CaseReport{Success: true, Output: "ok"}, suite, CaseSpec{Name: "smoke"}, nil)
+	report, err := VerifyPreparedRun(context.Background(), prepared, CaseReport{Success: true, Output: "ok"}, suite, CaseSpec{Name: smoke}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,14 +96,14 @@ spec:
 
 func TestEvaluateFileContentExpectations(t *testing.T) {
 	workspace := t.TempDir()
-	path := filepath.Join(workspace, "hello.go")
+	path := filepath.Join(workspace, hello_go)
 	if err := os.WriteFile(path, []byte("package hello\n\nfunc Hello() string {\n  return \"hello world\"\n}\n"), fs.PublicFileMode); err != nil { // public: test fixture
 		t.Fatal(err)
 	}
 
 	results, failures := evaluateFileContentExpectations([]FileContentExpectation{
 		{
-			Path:     "hello.go",
+			Path:     hello_go,
 			Contains: []string{"hello world"},
 		},
 	}, workspace)
@@ -112,7 +116,7 @@ func TestEvaluateFileContentExpectations(t *testing.T) {
 
 	results, failures = evaluateFileContentExpectations([]FileContentExpectation{
 		{
-			Path:     "hello.go",
+			Path:     hello_go,
 			Contains: []string{"goodbye"},
 		},
 	}, workspace)

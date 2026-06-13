@@ -10,11 +10,25 @@ import (
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
+const (
+	content = "content"
+	data = "data"
+	key = "key"
+	key1 = "key1"
+	key2 = "key2"
+	llm_call_1 = "llm_call_1"
+	path = "path"
+	test_go = "test.go"
+	value1 = "value1"
+	value2 = "value2"
+)
+
+
 func TestComputeFingerprint(t *testing.T) {
 	transcript := &ToolTranscriptArtifact{
 		Entries: []ToolTranscriptEntry{
-			{Index: 0, Tool: "file_read", CallMetadata: map[string]any{"path": "test.go"}, ResultMetadata: map[string]any{"content": "data"}},
-			{Index: 1, Tool: "go_test", CallMetadata: map[string]any{"pattern": "./..."}, ResultMetadata: map[string]any{"pass": true}},
+			{Index: 0, Tool: file_read, CallMetadata: map[string]any{path: test_go}, ResultMetadata: map[string]any{content: data}},
+			{Index: 1, Tool: go_test, CallMetadata: map[string]any{"pattern": "./..."}, ResultMetadata: map[string]any{"pass": true}},
 		},
 	}
 
@@ -27,7 +41,7 @@ func TestComputeFingerprint(t *testing.T) {
 		t.Errorf("Expected 2 tools in order, got %d", len(fp.ToolOrder))
 	}
 
-	if fp.ToolOrder[0] != "file_read" || fp.ToolOrder[1] != "go_test" {
+	if fp.ToolOrder[0] != file_read || fp.ToolOrder[1] != go_test {
 		t.Errorf("Unexpected tool order: %v", fp.ToolOrder)
 	}
 
@@ -173,9 +187,9 @@ func TestDeterminismScore(t *testing.T) {
 
 func TestExtractLLMFingerprints(t *testing.T) {
 	events := []telemetry.Event{
-		{Type: telemetry.EventToolCall, Metadata: map[string]any{"tool": "file_read"}},
-		{Type: telemetry.EventLLMResponse, Metadata: map[string]any{"content": "response1"}},
-		{Type: telemetry.EventLLMResponse, Metadata: map[string]any{"content": "response2"}},
+		{Type: telemetry.EventToolCall, Metadata: map[string]any{tool: file_read}},
+		{Type: telemetry.EventLLMResponse, Metadata: map[string]any{content: "response1"}},
+		{Type: telemetry.EventLLMResponse, Metadata: map[string]any{content: "response2"}},
 	}
 
 	fingerprints := ExtractLLMFingerprints(events)
@@ -185,37 +199,37 @@ func TestExtractLLMFingerprints(t *testing.T) {
 	}
 
 	// Check that different content produces different fingerprints
-	if fingerprints["llm_call_1"] == fingerprints["llm_call_2"] {
+	if fingerprints[llm_call_1] == fingerprints["llm_call_2"] {
 		t.Error("Expected different fingerprints for different content")
 	}
 
 	// Check that same content produces same fingerprint
 	events2 := []telemetry.Event{
-		{Type: telemetry.EventLLMResponse, Metadata: map[string]any{"content": "response1"}},
+		{Type: telemetry.EventLLMResponse, Metadata: map[string]any{content: "response1"}},
 	}
 	fingerprints2 := ExtractLLMFingerprints(events2)
 
-	if fingerprints["llm_call_1"] != fingerprints2["llm_call_1"] {
+	if fingerprints[llm_call_1] != fingerprints2[llm_call_1] {
 		t.Error("Expected same fingerprint for same content")
 	}
 }
 
 func TestCheckStateKeyStability(t *testing.T) {
 	snapshots := []*contextdata.Envelope{
-		{WorkingData: map[string]any{"key1": "value1", "key2": "value2"}},
-		{WorkingData: map[string]any{"key1": "value1", "key2": "value2"}},
-		{WorkingData: map[string]any{"key1": "value1", "key2": "value2"}},
+		{WorkingData: map[string]any{key1: value1, key2: value2}},
+		{WorkingData: map[string]any{key1: value1, key2: value2}},
+		{WorkingData: map[string]any{key1: value1, key2: value2}},
 	}
 
 	// All keys stable
-	failures := CheckStateKeyStability(snapshots, []string{"key1", "key2"})
+	failures := CheckStateKeyStability(snapshots, []string{key1, key2})
 	if len(failures) > 0 {
 		t.Errorf("Expected no failures for stable keys, got: %v", failures)
 	}
 
 	// Unstable key
-	snapshots[1].WorkingData["key2"] = "different"
-	failures = CheckStateKeyStability(snapshots, []string{"key1", "key2"})
+	snapshots[1].WorkingData[key2] = "different"
+	failures = CheckStateKeyStability(snapshots, []string{key1, key2})
 	if len(failures) != 1 {
 		t.Errorf("Expected 1 failure for unstable key2, got %d", len(failures))
 	}
@@ -223,14 +237,14 @@ func TestCheckStateKeyStability(t *testing.T) {
 
 func TestCheckStateKeyStability_EdgeCases(t *testing.T) {
 	// Empty snapshots
-	failures := CheckStateKeyStability([]*contextdata.Envelope{}, []string{"key"})
+	failures := CheckStateKeyStability([]*contextdata.Envelope{}, []string{key})
 	if failures != nil {
 		t.Error("Expected nil for empty snapshots")
 	}
 
 	// Single snapshot
-	snapshots := []*contextdata.Envelope{{WorkingData: map[string]any{"key": "value"}}}
-	failures = CheckStateKeyStability(snapshots, []string{"key"})
+	snapshots := []*contextdata.Envelope{{WorkingData: map[string]any{key: "value"}}}
+	failures = CheckStateKeyStability(snapshots, []string{key})
 	if len(failures) > 0 {
 		t.Error("Expected no failures for single snapshot")
 	}
@@ -245,15 +259,15 @@ func TestCheckStateKeyStability_EdgeCases(t *testing.T) {
 func TestBuildTranscriptFromTape(t *testing.T) {
 	tape := []map[string]any{
 		{
-			"tool":      "file_read",
-			"arguments": map[string]any{"path": "test.go"},
+			tool:      file_read,
+			"arguments": map[string]any{path: test_go},
 			"result": map[string]any{
 				"success": true,
-				"data":    map[string]any{"content": "hello"},
+				data:    map[string]any{content: "hello"},
 			},
 		},
 		{
-			"tool": "file_write",
+			tool: file_write,
 			"result": map[string]any{
 				"success": false,
 				"error":   "permission denied",
@@ -268,10 +282,10 @@ func TestBuildTranscriptFromTape(t *testing.T) {
 	}
 
 	// Check first entry
-	if transcript.Entries[0].Tool != "file_read" {
+	if transcript.Entries[0].Tool != file_read {
 		t.Errorf("Expected tool file_read, got %s", transcript.Entries[0].Tool)
 	}
-	if transcript.Entries[0].CallMetadata["path"] != "test.go" {
+	if transcript.Entries[0].CallMetadata[path] != test_go {
 		t.Error("Expected call metadata preserved")
 	}
 	if !transcript.Entries[0].Success {
@@ -279,7 +293,7 @@ func TestBuildTranscriptFromTape(t *testing.T) {
 	}
 
 	// Check second entry
-	if transcript.Entries[1].Tool != "file_write" {
+	if transcript.Entries[1].Tool != file_write {
 		t.Errorf("Expected tool file_write, got %s", transcript.Entries[1].Tool)
 	}
 	if transcript.Entries[1].Success {
@@ -292,9 +306,9 @@ func TestBuildTranscriptFromTape(t *testing.T) {
 
 func TestBuildTranscriptFromTape_SkipsEmpty(t *testing.T) {
 	tape := []map[string]any{
-		{"not_tool": "data"},
-		{"tool": ""},
-		{"tool": "valid"},
+		{"not_tool": data},
+		{tool: ""},
+		{tool: "valid"},
 	}
 
 	transcript := BuildTranscriptFromTape(tape)

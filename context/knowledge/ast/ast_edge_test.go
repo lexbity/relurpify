@@ -14,12 +14,19 @@ import (
 	"codeburg.org/lexbit/relurpify/platform/fs"
 )
 
+const (
+	IndexDb_ast_edge_test = "index.db"
+	MainGoFile_ast_edge_test = "main.go"
+	PackagemainfuncHello_ast_edge_test = "package main\nfunc Hello() {}\n"
+)
+
+
 // ==================== IndexManager Edge Cases ====================
 
 func TestIndexManagerStartIndexingWhenReady(t *testing.T) {
 	manager, tmpDir := newTestIndexManager(t)
-	path := filepath.Join(tmpDir, "main.go")
-	require.NoError(t, fs.WriteFileSecure(path, []byte("package main\nfunc Hello() {}\n")))
+	path := filepath.Join(tmpDir, MainGoFile_ast_edge_test)
+	require.NoError(t, fs.WriteFileSecure(path, []byte(PackagemainfuncHello_ast_edge_test)))
 	require.NoError(t, manager.IndexWorkspace())
 	require.True(t, manager.Ready())
 
@@ -30,15 +37,15 @@ func TestIndexManagerStartIndexingWhenReady(t *testing.T) {
 
 func TestIndexManagerStartIndexingWhenRunning(t *testing.T) {
 	tmpDir := t.TempDir()
-	store, err := NewTestStore(filepath.Join(tmpDir, "index.db"))
+	store, err := NewTestStore(filepath.Join(tmpDir, IndexDb_ast_edge_test))
 	require.NoError(t, err)
 	defer func() { _ = store.Close() }()
 
 	manager := NewIndexManager(store, IndexConfig{WorkspacePath: tmpDir})
 
 	// Create a file to index
-	path := filepath.Join(tmpDir, "main.go")
-	require.NoError(t, fs.WriteFileSecure(path, []byte("package main\nfunc Hello() {}\n")))
+	path := filepath.Join(tmpDir, MainGoFile_ast_edge_test)
+	require.NoError(t, fs.WriteFileSecure(path, []byte(PackagemainfuncHello_ast_edge_test)))
 
 	// First start indexing
 	require.NoError(t, manager.StartIndexing(context.Background()))
@@ -50,14 +57,14 @@ func TestIndexManagerStartIndexingWhenRunning(t *testing.T) {
 
 func TestIndexManagerRefreshFileWithPathFilter(t *testing.T) {
 	tmpDir := t.TempDir()
-	store, err := NewTestStore(filepath.Join(tmpDir, "index.db"))
+	store, err := NewTestStore(filepath.Join(tmpDir, IndexDb_ast_edge_test))
 	require.NoError(t, err)
 	defer func() { _ = store.Close() }()
 
 	manager := NewIndexManager(store, IndexConfig{WorkspacePath: tmpDir})
 
-	path := filepath.Join(tmpDir, "main.go")
-	require.NoError(t, fs.WriteFileSecure(path, []byte("package main\nfunc Hello() {}\n")))
+	path := filepath.Join(tmpDir, MainGoFile_ast_edge_test)
+	require.NoError(t, fs.WriteFileSecure(path, []byte(PackagemainfuncHello_ast_edge_test)))
 	require.NoError(t, manager.IndexFile(context.Background(), path))
 
 	// Verify file was indexed
@@ -85,7 +92,7 @@ func TestIndexManagerRefreshFileWithPathFilter(t *testing.T) {
 
 func TestIndexManagerRemoveIndexedFileNotFound(t *testing.T) {
 	tmpDir := t.TempDir()
-	store, err := NewTestStore(filepath.Join(tmpDir, "index.db"))
+	store, err := NewTestStore(filepath.Join(tmpDir, IndexDb_ast_edge_test))
 	require.NoError(t, err)
 	defer func() { _ = store.Close() }()
 
@@ -98,14 +105,14 @@ func TestIndexManagerRemoveIndexedFileNotFound(t *testing.T) {
 
 func TestIndexManagerRemoveIndexedFileWithError(t *testing.T) {
 	tmpDir := t.TempDir()
-	store, err := NewTestStore(filepath.Join(tmpDir, "index.db"))
+	store, err := NewTestStore(filepath.Join(tmpDir, IndexDb_ast_edge_test))
 	require.NoError(t, err)
 	defer func() { _ = store.Close() }()
 
 	manager := NewIndexManager(store, IndexConfig{WorkspacePath: tmpDir})
 
-	path := filepath.Join(tmpDir, "main.go")
-	require.NoError(t, fs.WriteFileSecure(path, []byte("package main\nfunc Hello() {}\n")))
+	path := filepath.Join(tmpDir, MainGoFile_ast_edge_test)
+	require.NoError(t, fs.WriteFileSecure(path, []byte(PackagemainfuncHello_ast_edge_test)))
 	require.NoError(t, manager.IndexFile(context.Background(), path))
 
 	// Close the store to cause errors
@@ -118,7 +125,7 @@ func TestIndexManagerRemoveIndexedFileWithError(t *testing.T) {
 
 func TestIndexManagerCloseWithGraphDB(t *testing.T) {
 	tmpDir := t.TempDir()
-	store, err := NewTestStore(filepath.Join(tmpDir, "index.db"))
+	store, err := NewTestStore(filepath.Join(tmpDir, IndexDb_ast_edge_test))
 	require.NoError(t, err)
 	defer func() { _ = store.Close() }()
 
@@ -141,7 +148,7 @@ func TestIndexManagerLastIndexedAtNotFound(t *testing.T) {
 
 func TestIndexManagerPersistErrorCases(t *testing.T) {
 	tmpDir := t.TempDir()
-	store, err := NewTestStore(filepath.Join(tmpDir, "index.db"))
+	store, err := NewTestStore(filepath.Join(tmpDir, IndexDb_ast_edge_test))
 	require.NoError(t, err)
 	defer func() { _ = store.Close() }()
 
@@ -155,7 +162,7 @@ func TestIndexManagerPersistErrorCases(t *testing.T) {
 
 func TestIndexManagerIndexFileReadError(t *testing.T) {
 	tmpDir := t.TempDir()
-	store, err := NewTestStore(filepath.Join(tmpDir, "index.db"))
+	store, err := NewTestStore(filepath.Join(tmpDir, IndexDb_ast_edge_test))
 	require.NoError(t, err)
 	defer func() { _ = store.Close() }()
 
@@ -168,8 +175,8 @@ func TestIndexManagerIndexFileReadError(t *testing.T) {
 
 func TestIndexManagerIndexFileWithConcurrentAccess(t *testing.T) {
 	manager, tmpDir := newTestIndexManager(t)
-	path := filepath.Join(tmpDir, "main.go")
-	require.NoError(t, fs.WriteFileSecure(path, []byte("package main\nfunc Hello() {}\n")))
+	path := filepath.Join(tmpDir, MainGoFile_ast_edge_test)
+	require.NoError(t, fs.WriteFileSecure(path, []byte(PackagemainfuncHello_ast_edge_test)))
 
 	// Lock the indexing map to simulate concurrent access
 	manager.mu.Lock()
@@ -189,7 +196,7 @@ func TestIndexManagerIndexFileWithConcurrentAccess(t *testing.T) {
 
 func TestIndexManagerBuildSymbolNodesWithChildren(t *testing.T) {
 	tmpDir := t.TempDir()
-	store, err := NewTestStore(filepath.Join(tmpDir, "index.db"))
+	store, err := NewTestStore(filepath.Join(tmpDir, IndexDb_ast_edge_test))
 	require.NoError(t, err)
 	defer func() { _ = store.Close() }()
 
@@ -219,7 +226,7 @@ func TestIndexManagerBuildSymbolNodesWithChildren(t *testing.T) {
 
 func TestIndexManagerBuildSymbolNodesWithEmptyKind(t *testing.T) {
 	tmpDir := t.TempDir()
-	store, err := NewTestStore(filepath.Join(tmpDir, "index.db"))
+	store, err := NewTestStore(filepath.Join(tmpDir, IndexDb_ast_edge_test))
 	require.NoError(t, err)
 	defer func() { _ = store.Close() }()
 
@@ -263,8 +270,8 @@ func TestIndexManagerSanitizeSymbolName(t *testing.T) {
 
 func TestIndexManagerWaitUntilReadyAlreadyReady(t *testing.T) {
 	manager, tmpDir := newTestIndexManager(t)
-	path := filepath.Join(tmpDir, "main.go")
-	require.NoError(t, fs.WriteFileSecure(path, []byte("package main\nfunc Hello() {}\n")))
+	path := filepath.Join(tmpDir, MainGoFile_ast_edge_test)
+	require.NoError(t, fs.WriteFileSecure(path, []byte(PackagemainfuncHello_ast_edge_test)))
 	require.NoError(t, manager.IndexWorkspace())
 
 	// Should return immediately since already ready
@@ -277,7 +284,7 @@ func TestIndexManagerWaitUntilReadyAlreadyReady(t *testing.T) {
 
 func TestIndexManagerWaitUntilReadyWithError(t *testing.T) {
 	tmpDir := t.TempDir()
-	store, err := NewTestStore(filepath.Join(tmpDir, "index.db"))
+	store, err := NewTestStore(filepath.Join(tmpDir, IndexDb_ast_edge_test))
 	require.NoError(t, err)
 	defer func() { _ = store.Close() }()
 
@@ -294,15 +301,15 @@ func TestIndexManagerWaitUntilReadyWithError(t *testing.T) {
 
 func TestIndexManagerIndexWorkspaceContextCanceled(t *testing.T) {
 	tmpDir := t.TempDir()
-	store, err := NewTestStore(filepath.Join(tmpDir, "index.db"))
+	store, err := NewTestStore(filepath.Join(tmpDir, IndexDb_ast_edge_test))
 	require.NoError(t, err)
 	defer func() { _ = store.Close() }()
 
 	manager := NewIndexManager(store, IndexConfig{WorkspacePath: tmpDir})
 
 	// Create a file
-	path := filepath.Join(tmpDir, "main.go")
-	require.NoError(t, fs.WriteFileSecure(path, []byte("package main\nfunc Hello() {}\n")))
+	path := filepath.Join(tmpDir, MainGoFile_ast_edge_test)
+	require.NoError(t, fs.WriteFileSecure(path, []byte(PackagemainfuncHello_ast_edge_test)))
 
 	// Cancel context immediately
 	ctx, cancel := context.WithCancel(context.Background())
@@ -317,7 +324,7 @@ func TestIndexManagerGetCallGraphWithMultipleResults(t *testing.T) {
 	manager, tmpDir := newTestIndexManager(t)
 
 	// Create file with multiple functions
-	path := filepath.Join(tmpDir, "main.go")
+	path := filepath.Join(tmpDir, MainGoFile_ast_edge_test)
 	require.NoError(t, fs.WriteFileSecure(path, []byte("package main\nfunc A() {}\nfunc B() { A() }\nfunc C() { A() }\n")))
 	require.NoError(t, manager.IndexFile(context.Background(), path))
 
@@ -330,14 +337,14 @@ func TestIndexManagerGetCallGraphWithMultipleResults(t *testing.T) {
 
 func TestIndexManagerGetCallGraphStoreError(t *testing.T) {
 	tmpDir := t.TempDir()
-	store, err := NewTestStore(filepath.Join(tmpDir, "index.db"))
+	store, err := NewTestStore(filepath.Join(tmpDir, IndexDb_ast_edge_test))
 	require.NoError(t, err)
 
 	manager := NewIndexManager(store, IndexConfig{WorkspacePath: tmpDir})
 
 	// Index a file first
-	path := filepath.Join(tmpDir, "main.go")
-	require.NoError(t, fs.WriteFileSecure(path, []byte("package main\nfunc Hello() {}\n")))
+	path := filepath.Join(tmpDir, MainGoFile_ast_edge_test)
+	require.NoError(t, fs.WriteFileSecure(path, []byte(PackagemainfuncHello_ast_edge_test)))
 	require.NoError(t, manager.IndexFile(context.Background(), path))
 
 	// Close store to cause errors
@@ -350,15 +357,15 @@ func TestIndexManagerGetCallGraphStoreError(t *testing.T) {
 
 func TestIndexManagerRunWorkspaceIndexWithContextError(t *testing.T) {
 	tmpDir := t.TempDir()
-	store, err := NewTestStore(filepath.Join(tmpDir, "index.db"))
+	store, err := NewTestStore(filepath.Join(tmpDir, IndexDb_ast_edge_test))
 	require.NoError(t, err)
 	defer func() { _ = store.Close() }()
 
 	manager := NewIndexManager(store, IndexConfig{WorkspacePath: tmpDir})
 
 	// Create a file
-	path := filepath.Join(tmpDir, "main.go")
-	require.NoError(t, fs.WriteFileSecure(path, []byte("package main\nfunc Hello() {}\n")))
+	path := filepath.Join(tmpDir, MainGoFile_ast_edge_test)
+	require.NoError(t, fs.WriteFileSecure(path, []byte(PackagemainfuncHello_ast_edge_test)))
 
 	// Use canceled context
 	ctx, cancel := context.WithCancel(context.Background())
@@ -371,7 +378,7 @@ func TestIndexManagerRunWorkspaceIndexWithContextError(t *testing.T) {
 
 func TestIndexManagerIndexFilesParallelError(t *testing.T) {
 	tmpDir := t.TempDir()
-	store, err := NewTestStore(filepath.Join(tmpDir, "index.db"))
+	store, err := NewTestStore(filepath.Join(tmpDir, IndexDb_ast_edge_test))
 	require.NoError(t, err)
 	defer func() { _ = store.Close() }()
 
@@ -429,7 +436,7 @@ func TestMarkdownParserParseIncremental(t *testing.T) {
 
 func TestIndexManagerIndexFileParseErrorFallbackToSymbols(t *testing.T) {
 	tmpDir := t.TempDir()
-	store, err := NewTestStore(filepath.Join(tmpDir, "index.db"))
+	store, err := NewTestStore(filepath.Join(tmpDir, IndexDb_ast_edge_test))
 	require.NoError(t, err)
 	defer func() { _ = store.Close() }()
 

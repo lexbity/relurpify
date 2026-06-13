@@ -36,7 +36,7 @@ type AgentBootstrapOptions struct {
 	AgentName           string
 	ConfigName          string
 	AgentSpec           *agentspec.AgentRuntimeSpec
-	ManifestSnapshot    *config.ManifestSnapshot
+	DocumentSnapshot    *config.DocumentSnapshot
 	SecurityBundle      *cfgsecurity.Bundle
 	ProfileResolution   modelselect.ProfileResolution
 	PermissionManager   permissions.PermissionManager
@@ -77,7 +77,7 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 		AgentName:           opts.AgentName,
 		ConfigName:          opts.ConfigName,
 		AgentSpec:           opts.AgentSpec,
-		ManifestSnapshot:    opts.ManifestSnapshot,
+		DocumentSnapshot:    opts.DocumentSnapshot,
 		SecurityBundle:      opts.SecurityBundle,
 		ProfileResolution:   opts.ProfileResolution,
 		PermissionManager:   opts.PermissionManager,

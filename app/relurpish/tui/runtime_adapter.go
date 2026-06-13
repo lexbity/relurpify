@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"gopkg.in/yaml.v3"
+
 	runtimesvc "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
@@ -77,10 +79,10 @@ type RuntimeAdapter interface {
 	// SaveToolPolicy persists a per-tool execution policy to the agent manifest.
 	// toolName is the bare tool name (e.g. "cli_mkdir"); level is typically AgentPermissionAllow.
 	SaveToolPolicy(toolName string, level agentspec.AgentPermissionLevel) error
-	// LoadSandboxManifest returns the current workspace manifest spec.
-	LoadSandboxManifest() (*config.ManifestSpec, error)
-	// SaveSandboxManifest persists a sandbox manifest spec with backup.
-	SaveSandboxManifest(m *config.ManifestSpec) (string, error)
+	// LoadSandboxDocument returns the current workspace manifest envelope.
+	LoadSandboxDocument() (*config.Document, error)
+	// SaveSandboxDocument persists a sandbox manifest envelope with backup.
+	SaveSandboxDocument(doc *config.Document) (string, error)
 	// SandboxBackend returns the active sandbox backend name.
 	SandboxBackend() string
 	// SaveSandboxBackend persists the active sandbox backend in workspace config.
@@ -219,21 +221,18 @@ func (r *runtimeAdapter) SessionInfo() SessionInfo {
 		}
 	}
 
-	if r.rt.AgentWorkspace().Registration != nil && r.rt.AgentWorkspace().Registration.ManifestSpec != nil {
-		spec := r.rt.AgentWorkspace().Registration.ManifestSpec
-		if spec.Agent != nil {
-			if spec.Agent.Model.Provider != "" {
-				info.Provider = spec.Agent.Model.Provider
-			}
-			if spec.Agent.Model.Name != "" {
-				info.Model = spec.Agent.Model.Name
-			}
-			if spec.Agent.Mode != "" {
-				info.Role = string(spec.Agent.Mode)
-			}
-			if spec.Agent.Context.MaxTokens > 0 {
-				info.MaxTokens = spec.Agent.Context.MaxTokens
-			}
+	if spec := r.rt.AgentWorkspace().AgentSpec; spec != nil {
+		if spec.Model.Provider != "" {
+			info.Provider = spec.Model.Provider
+		}
+		if spec.Model.Name != "" {
+			info.Model = spec.Model.Name
+		}
+		if spec.Mode != "" {
+			info.Role = string(spec.Mode)
+		}
+		if spec.Context.MaxTokens > 0 {
+			info.MaxTokens = spec.Context.MaxTokens
 		}
 	}
 	info.Mode, info.Strategy = describeAgentRuntime(r.rt.Agent)
@@ -848,59 +847,53 @@ func (r *runtimeAdapter) SaveToolPolicy(toolName string, level agentspec.AgentPe
 	if manifestPath == "" {
 		return fmt.Errorf("manifest path not set")
 	}
-	spec := r.rt.AgentWorkspace().Registration.ManifestSpec
-	if spec == nil {
-		spec = &config.ManifestSpec{}
+	doc, err := config.LoadDocument(manifestPath)
+	if err != nil {
+		return err
 	}
-	if spec.Agent == nil {
-		spec.Agent = &agentspec.AgentRuntimeSpec{}
+	agentSpec, err := runtimeAgentSpec(doc.Document)
+	if err != nil {
+		return err
 	}
-	if spec.Agent.ToolExecutionPolicy == nil {
-		spec.Agent.ToolExecutionPolicy = make(map[string]agentspec.ToolPolicy)
+	if agentSpec.ToolExecutionPolicy == nil {
+		agentSpec.ToolExecutionPolicy = make(map[string]agentspec.ToolPolicy)
 	}
-	spec.Agent.ToolExecutionPolicy[strings.TrimSpace(toolName)] = agentspec.ToolPolicy{Execute: level}
-	if _, err := runtimesvc.SaveManifestSpecWithBackup(manifestPath, spec); err != nil {
+	agentSpec.ToolExecutionPolicy[strings.TrimSpace(toolName)] = agentspec.ToolPolicy{Execute: level}
+	if err := upsertSandboxAgentDocument(doc.Document, agentSpec); err != nil {
+		return err
+	}
+	if _, err := config.SaveDocumentWithBackup(manifestPath, doc.Document); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (r *runtimeAdapter) LoadSandboxManifest() (*config.ManifestSpec, error) {
+func (r *runtimeAdapter) LoadSandboxDocument() (*config.Document, error) {
 	if r == nil || r.rt == nil {
 		return nil, fmt.Errorf("runtime unavailable")
 	}
-	if r.rt.AgentWorkspace().Registration != nil && r.rt.AgentWorkspace().Registration.ManifestSpec != nil {
-		return r.rt.AgentWorkspace().Registration.ManifestSpec, nil
-	}
 	if r.rt.Config.ManifestPath == "" {
-		return nil, fmt.Errorf("manifest unavailable")
+		return nil, fmt.Errorf("document unavailable")
 	}
-	docSnapshot, err := config.LoadDocument(r.rt.Config.ManifestPath)
+	snapshot, err := config.LoadDocument(r.rt.Config.ManifestPath)
 	if err != nil {
 		return nil, err
 	}
-	spec := &config.ManifestSpec{}
-	if node, ok := docSnapshot.Document.Section("agent"); ok {
-		var agentSpec agentspec.AgentRuntimeSpec
-		if err := node.Decode(&agentSpec); err == nil {
-			spec.Agent = &agentSpec
-		}
-	}
-	return spec, nil
+	return snapshot.Document, nil
 }
 
-func (r *runtimeAdapter) SaveSandboxManifest(spec *config.ManifestSpec) (string, error) {
+func (r *runtimeAdapter) SaveSandboxDocument(doc *config.Document) (string, error) {
 	if r == nil || r.rt == nil {
 		return "", fmt.Errorf("runtime unavailable")
 	}
-	if spec == nil {
-		return "", fmt.Errorf("manifest required")
+	if doc == nil {
+		return "", fmt.Errorf("document required")
 	}
 	path := strings.TrimSpace(r.rt.Config.ManifestPath)
 	if path == "" {
-		return "", fmt.Errorf("manifest path not set")
+		return "", fmt.Errorf("document path not set")
 	}
-	return runtimesvc.SaveManifestSpecWithBackup(path, spec)
+	return config.SaveDocumentWithBackup(path, doc)
 }
 
 func (r *runtimeAdapter) SandboxBackend() string {
@@ -1034,48 +1027,67 @@ func (r *runtimeAdapter) Diagnostics() DiagnosticsInfo {
 	d.ActiveProfile = info.Profile
 	d.ProfileReason = info.ProfileReason
 	d.ProfileSource = info.ProfileSource
-	if r.rt.AgentWorkspace().Registration != nil && r.rt.AgentWorkspace().Registration.ManifestSnapshot != nil {
-		d.ManifestFingerprint = fmt.Sprintf("%x", r.rt.AgentWorkspace().Registration.ManifestSnapshot.Fingerprint)
-	}
+	d.ManifestFingerprint = r.rt.ManifestFingerprint()
 	if r.rt.Config.Workspace != "" {
 		d.ProtectedPaths = config.New(r.rt.Config.Workspace).GovernanceRoots(
 			r.rt.Config.ManifestPath,
 			r.rt.Config.ConfigPath,
 		)
 	}
-	if r.rt.AgentWorkspace().Registration != nil && r.rt.AgentWorkspace().Registration.ManifestSpec != nil {
-		d.ManifestPolicy = manifestPolicySummary(r.rt.AgentWorkspace().Registration.ManifestSpec)
-		d.DeprecationNotices = append([]string(nil), r.rt.AgentWorkspace().Registration.ManifestSpec.CompatibilityWarnings...)
-	}
+	d.DeprecationNotices = r.rt.ManifestDeprecationNotices()
+	d.ManifestPolicy = agentSpecPolicySummary(r.rt.AgentWorkspace().AgentSpec)
 
 	return d
 }
 
-func manifestPolicySummary(spec *config.ManifestSpec) string {
+func agentSpecPolicySummary(spec *agentspec.AgentRuntimeSpec) string {
 	if spec == nil {
 		return ""
 	}
 	parts := []string{}
-	if spec.Policy != nil {
-		policy := spec.Policy
-		permCount := len(policy.Permissions.FileSystem) + len(policy.Permissions.Executables) + len(policy.Permissions.Network)
-		if permCount > 0 {
-			parts = append(parts, fmt.Sprintf("policy-perms=%d", permCount))
-		}
-		if len(policy.Policies) > 0 {
-			parts = append(parts, fmt.Sprintf("policy-rules=%d", len(policy.Policies)))
-		}
-		if policy.Defaults != nil {
-			if policy.Defaults.Permissions != nil {
-				defaultPerms := policy.Defaults.Permissions
-				parts = append(parts, fmt.Sprintf("defaults=%d/%d/%d", len(defaultPerms.FileSystem), len(defaultPerms.Executables), len(defaultPerms.Network)))
-			}
-		}
+	if spec.ToolCallingIntent != "" || spec.NativeToolCalling != nil {
+		parts = append(parts, fmt.Sprintf("tool-calling=%s", spec.ResolveToolCallingIntent()))
 	}
-	if spec.Agent != nil {
-		parts = append(parts, fmt.Sprintf("tool-calling=%s", spec.Agent.ResolveToolCallingIntent()))
+	if len(spec.ToolExecutionPolicy) > 0 {
+		parts = append(parts, fmt.Sprintf("tool-rules=%d", len(spec.ToolExecutionPolicy)))
+	}
+	if len(spec.ProviderPolicies) > 0 {
+		parts = append(parts, fmt.Sprintf("provider-rules=%d", len(spec.ProviderPolicies)))
 	}
 	return strings.Join(parts, ", ")
+}
+
+func runtimeAgentSpec(doc *config.Document) (*agentspec.AgentRuntimeSpec, error) {
+	if doc == nil {
+		return nil, fmt.Errorf("document unavailable")
+	}
+	node, ok := doc.Section("agent")
+	if !ok {
+		return &agentspec.AgentRuntimeSpec{}, nil
+	}
+	spec, err := agentspec.DecodeSection(node)
+	if err != nil {
+		return nil, err
+	}
+	return spec, nil
+}
+
+func upsertSandboxAgentDocument(doc *config.Document, agentSpec *agentspec.AgentRuntimeSpec) error {
+	if doc == nil {
+		return fmt.Errorf("document unavailable")
+	}
+	if agentSpec == nil {
+		return fmt.Errorf("agent spec required")
+	}
+	var agentNode yaml.Node
+	if err := agentNode.Encode(agentSpec); err != nil {
+		return fmt.Errorf("encode agent section: %w", err)
+	}
+	if doc.Spec == nil {
+		doc.Spec = make(map[string]yaml.Node)
+	}
+	doc.Spec["agent"] = agentNode
+	return nil
 }
 
 func (r *runtimeAdapter) ApplyChatPolicy(subtab SubTabID) error {
@@ -1127,7 +1139,7 @@ func (r *runtimeAdapter) RestartService(ctx context.Context, id string) error {
 	if r == nil || r.rt == nil || r.rt.AgentWorkspace() == nil || r.rt.AgentWorkspace().ServiceManager == nil {
 		return fmt.Errorf("runtime unavailable")
 	}
-	return r.rt.AgentWorkspace().ServiceManager.Restart(id, ctx)
+	return r.rt.AgentWorkspace().ServiceManager.Restart(ctx, id)
 }
 
 func (r *runtimeAdapter) RestartAllServices(ctx context.Context) error {

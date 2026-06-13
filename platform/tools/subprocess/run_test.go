@@ -24,21 +24,21 @@ func (r *fakeRunner) Run(_ context.Context, req ports.CommandRequest) (*ports.Co
 }
 
 func TestRunBasicOutput(t *testing.T) {
-	runner := &fakeRunner{result: &ports.CommandResult{Stdout: "hello", Stderr: "", ExitCode: 0, StdoutBytes: 5}}
+	runner := &fakeRunner{result: &ports.CommandResult{Stdout: hello, Stderr: "", ExitCode: 0, StdoutBytes: 5}}
 	spec := RunSpec{
-		Command: []string{"echo", "hello"},
+		Command: []string{echo, hello},
 	}
 	result, err := Run(context.Background(), runner, spec)
 	require.NoError(t, err)
 	require.True(t, result.Success)
-	require.Equal(t, "hello", result.Stdout)
+	require.Equal(t, hello, result.Stdout)
 	require.Empty(t, result.Stderr)
 	require.Equal(t, 0, result.ExitCode)
 }
 
 func TestRunNonZeroExitCode(t *testing.T) {
 	runner := &fakeRunner{result: &ports.CommandResult{Stderr: "error msg", ExitCode: 1}}
-	spec := RunSpec{Command: []string{"tool"}}
+	spec := RunSpec{Command: []string{tool}}
 	result, err := Run(context.Background(), runner, spec)
 	require.NoError(t, err)
 	require.False(t, result.Success)
@@ -47,7 +47,7 @@ func TestRunNonZeroExitCode(t *testing.T) {
 
 func TestRunExitCodeFallbackWhenNoStderr(t *testing.T) {
 	runner := &fakeRunner{result: &ports.CommandResult{ExitCode: 2}}
-	spec := RunSpec{Command: []string{"tool"}}
+	spec := RunSpec{Command: []string{tool}}
 	result, err := Run(context.Background(), runner, spec)
 	require.NoError(t, err)
 	require.False(t, result.Success)
@@ -57,7 +57,7 @@ func TestRunExitCodeFallbackWhenNoStderr(t *testing.T) {
 func TestRunErrorMapping(t *testing.T) {
 	runner := &fakeRunner{result: &ports.CommandResult{Stderr: "raw", ExitCode: 1}}
 	spec := RunSpec{
-		Command:  []string{"jq"},
+		Command:  []string{jq},
 		ErrorMap: map[string]string{"1": "jq: parse error"},
 	}
 	result, err := Run(context.Background(), runner, spec)
@@ -67,23 +67,23 @@ func TestRunErrorMapping(t *testing.T) {
 }
 
 func TestRunMissingRunner(t *testing.T) {
-	_, err := Run(context.Background(), nil, RunSpec{Command: []string{"tool"}})
+	_, err := Run(context.Background(), nil, RunSpec{Command: []string{tool}})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "command runner missing")
 }
 
 func TestRunPanicRecovery(t *testing.T) {
 	runner := &fakeRunner{panic: true}
-	result, err := Run(context.Background(), runner, RunSpec{Command: []string{"tool"}})
+	result, err := Run(context.Background(), runner, RunSpec{Command: []string{tool}})
 	require.NoError(t, err)
 	require.False(t, result.Success)
 	require.Contains(t, result.Error, "panicked")
 }
 
 func TestRunSandboxTimeouts(t *testing.T) {
-	recorded := &recordingRunner{stdout: "ok"}
+	recorded := &recordingRunner{stdout: ok}
 	spec := RunSpec{
-		Command: []string{"tool"},
+		Command: []string{tool},
 		Sandbox: ports.ToolManifestSandbox{
 			TimeoutSeconds: 30,
 			MemoryMB:       512,
@@ -97,9 +97,9 @@ func TestRunSandboxTimeouts(t *testing.T) {
 }
 
 func TestRunEgressGuardBlocksPrivateHost(t *testing.T) {
-	runner := &fakeRunner{result: &ports.CommandResult{Stdout: "ok", StdoutBytes: 2}}
+	runner := &fakeRunner{result: &ports.CommandResult{Stdout: ok, StdoutBytes: 2}}
 	spec := RunSpec{
-		Command:       []string{"curl", "http://169.254.169.254/latest/meta-data/"},
+		Command:       []string{curl, http_169_254_169_254_latest_meta_data},
 		NetworkAccess: true,
 	}
 	result, err := Run(context.Background(), runner, spec)
@@ -109,9 +109,9 @@ func TestRunEgressGuardBlocksPrivateHost(t *testing.T) {
 }
 
 func TestRunEgressGuardAllowsPublicHost(t *testing.T) {
-	runner := &fakeRunner{result: &ports.CommandResult{Stdout: "ok", StdoutBytes: 2}}
+	runner := &fakeRunner{result: &ports.CommandResult{Stdout: ok, StdoutBytes: 2}}
 	spec := RunSpec{
-		Command:       []string{"curl", "https://8.8.8.8/"},
+		Command:       []string{curl, "https://8.8.8.8/"},
 		NetworkAccess: true,
 	}
 	result, err := Run(context.Background(), runner, spec)
@@ -120,11 +120,11 @@ func TestRunEgressGuardAllowsPublicHost(t *testing.T) {
 }
 
 func TestRunEgressGuardBypassedWithAllowHosts(t *testing.T) {
-	runner := &fakeRunner{result: &ports.CommandResult{Stdout: "ok", StdoutBytes: 2}}
+	runner := &fakeRunner{result: &ports.CommandResult{Stdout: ok, StdoutBytes: 2}}
 	spec := RunSpec{
-		Command:       []string{"curl", "http://127.0.0.1:8080/health"},
+		Command:       []string{curl, "http://127.0.0.1:8080/health"},
 		NetworkAccess: true,
-		AllowHosts:    []string{"127.0.0.1"},
+		AllowHosts:    []string{_127_0_0_1},
 	}
 	result, err := Run(context.Background(), runner, spec)
 	require.NoError(t, err)
@@ -132,9 +132,9 @@ func TestRunEgressGuardBypassedWithAllowHosts(t *testing.T) {
 }
 
 func TestRunEgressGuardSkippedWhenNoNetworkAccess(t *testing.T) {
-	runner := &fakeRunner{result: &ports.CommandResult{Stdout: "ok", StdoutBytes: 2}}
+	runner := &fakeRunner{result: &ports.CommandResult{Stdout: ok, StdoutBytes: 2}}
 	spec := RunSpec{
-		Command:       []string{"curl", "http://127.0.0.1:8080/health"},
+		Command:       []string{curl, "http://127.0.0.1:8080/health"},
 		NetworkAccess: false,
 	}
 	result, err := Run(context.Background(), runner, spec)
@@ -143,9 +143,9 @@ func TestRunEgressGuardSkippedWhenNoNetworkAccess(t *testing.T) {
 }
 
 func TestRunCargoIsolationNotAppliedToNonCargo(t *testing.T) {
-	runner := &fakeRunner{result: &ports.CommandResult{Stdout: "ok", StdoutBytes: 2}}
+	runner := &fakeRunner{result: &ports.CommandResult{Stdout: ok, StdoutBytes: 2}}
 	spec := RunSpec{
-		Command:             []string{"echo", "hello"},
+		Command:             []string{echo, hello},
 		ApplyCargoIsolation: false,
 	}
 	result, err := Run(context.Background(), runner, spec)
@@ -160,7 +160,7 @@ func TestRunEnvelopeIncludesRefs(t *testing.T) {
 		StdoutRef:   "store://stdout/abc",
 		StderrRef:   "store://stderr/def",
 	}}
-	spec := RunSpec{Command: []string{"tool"}}
+	spec := RunSpec{Command: []string{tool}}
 	result, err := Run(context.Background(), runner, spec)
 	require.NoError(t, err)
 	require.True(t, result.Success)

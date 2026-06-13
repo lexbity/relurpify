@@ -8,6 +8,11 @@ import (
 	"time"
 )
 
+const (
+	Markdown_parser_markdown = "markdown"
+)
+
+
 // MarkdownParser extracts headings, code blocks, and links.
 type MarkdownParser struct {
 	heading   *regexp.Regexp
@@ -24,7 +29,7 @@ func NewMarkdownParser() *MarkdownParser {
 	}
 }
 
-func (mp *MarkdownParser) Language() string          { return "markdown" }
+func (mp *MarkdownParser) Language() string          { return Markdown_parser_markdown }
 func (mp *MarkdownParser) Category() Category        { return CategoryDoc }
 func (mp *MarkdownParser) SupportsIncremental() bool { return false }
 func (mp *MarkdownParser) ParseIncremental(*ParseResult, []ContentChange) (*ParseResult, error) {
@@ -41,7 +46,7 @@ func (mp *MarkdownParser) Parse(content string, filePath string) (*ParseResult, 
 		FileID:    fileID,
 		Type:      NodeTypeDocument,
 		Category:  CategoryDoc,
-		Language:  "markdown",
+		Language:  Markdown_parser_markdown,
 		Name:      filepath.Base(filePath),
 		StartLine: 1,
 		EndLine:   len(lines),
@@ -70,7 +75,7 @@ func (mp *MarkdownParser) Parse(content string, filePath string) (*ParseResult, 
 			FileID:    fileID,
 			Type:      NodeTypeHeading,
 			Category:  CategoryDoc,
-			Language:  "markdown",
+			Language:  Markdown_parser_markdown,
 			Name:      strings.TrimSpace(match[2]),
 			StartLine: idx + 1,
 			EndLine:   idx + 1,
@@ -97,7 +102,7 @@ func (mp *MarkdownParser) Parse(content string, filePath string) (*ParseResult, 
 			FileID:    fileID,
 			Type:      NodeTypeCodeBlock,
 			Category:  CategoryDoc,
-			Language:  "markdown",
+			Language:  Markdown_parser_markdown,
 			Name:      fmt.Sprintf("Code Block %d", i+1),
 			CreatedAt: now,
 			UpdatedAt: now,
@@ -120,7 +125,7 @@ func (mp *MarkdownParser) Parse(content string, filePath string) (*ParseResult, 
 			FileID:    fileID,
 			Type:      NodeTypeLink,
 			Category:  CategoryDoc,
-			Language:  "markdown",
+			Language:  Markdown_parser_markdown,
 			Name:      link[1],
 			CreatedAt: now,
 			UpdatedAt: now,
@@ -135,7 +140,7 @@ func (mp *MarkdownParser) Parse(content string, filePath string) (*ParseResult, 
 		ID:            fileID,
 		Path:          filePath,
 		RelativePath:  filepath.Base(filePath),
-		Language:      "markdown",
+		Language:      Markdown_parser_markdown,
 		Category:      CategoryDoc,
 		LineCount:     len(lines),
 		TokenCount:    len(content),

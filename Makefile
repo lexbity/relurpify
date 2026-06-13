@@ -1,4 +1,5 @@
 .PHONY: test-unit test-integ test-scenario test-all
+.PHONY: test-contract-migration test-dev-agent-revival test-tape-fidelity check-contract-dissolution
 .PHONY: lint-config lint-config-boundary test-boundary generate-templates check-template-drift check-boot-root check-config-tree-drift
 .PHONY: lint-layering lint-invariants lint-all lint-arch lint-go lint-go-fix
 .PHONY: domain-check domain-cycles no-bucket no-dead exception-count
@@ -111,3 +112,23 @@ test-scenario:
 	go test ./... -tags scenario -count=1 -timeout 180s
 
 test-all: test-unit test-integ test-scenario
+
+# Phase 0 baseline gates for the contract-dissolution / dev-agent-revival track.
+# These are intentionally explicit package subsets so the baseline is readable.
+check-contract-dissolution:
+	@rg -n "\\bManifestSpec\\b|\\bManifestSnapshot\\b|\\bManifestPolicySpec\\b|\\bManifestDefaults\\b" --glob '*.go' . >/dev/null && { echo "[FAIL] check-contract-dissolution: manifest spine still present"; exit 1; } || true
+	@echo "[PASS] check-contract-dissolution: manifest spine removed"
+
+test-contract-migration:
+	@$(MAKE) check-contract-dissolution
+	@mkdir -p /tmp/relurpify-go-cache
+	GOCACHE=/tmp/relurpify-go-cache go test ./userconfig/... ./execution/session/... ./governance/... ./app/envcomposition/... ./ayenitd/... -count=1
+
+test-dev-agent-revival:
+	@mkdir -p /tmp/relurpify-go-cache
+	GOCACHE=/tmp/relurpify-go-cache go build ./app/dev-agent-cli/...
+	GOCACHE=/tmp/relurpify-go-cache go test ./app/dev-agent-cli/... -count=1
+
+test-tape-fidelity:
+	@mkdir -p /tmp/relurpify-go-cache
+	GOCACHE=/tmp/relurpify-go-cache go test ./platform/llm/... ./testsuite/agenttest/... ./app/relurpish/testsuite/... -count=1

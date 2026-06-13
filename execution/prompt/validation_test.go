@@ -7,9 +7,16 @@ import (
 	"testing/fstest"
 )
 
+const (
+	Agentdup_validation_test = "agent.dup"
+	AgentGenericDefault_validation_test = "agent.generic.default"
+	FrameworkPromptV2_validation_test = "framework.prompt/v2"
+)
+
+
 func TestValidateConfig_MissingSchema(t *testing.T) {
 	issues := validateConfig(&PromptConfig{
-		ID:   "agent.generic.default",
+		ID:   AgentGenericDefault_validation_test,
 		Body: "Hello",
 	})
 	if !hasIssueContaining(issues, "unknown schema") {
@@ -19,7 +26,7 @@ func TestValidateConfig_MissingSchema(t *testing.T) {
 
 func TestValidateConfig_MissingID(t *testing.T) {
 	issues := validateConfig(&PromptConfig{
-		Schema: "framework.prompt/v2",
+		Schema: FrameworkPromptV2_validation_test,
 		Body:   "Hello",
 	})
 	if !hasIssueContaining(issues, "missing required field: id") {
@@ -30,8 +37,8 @@ func TestValidateConfig_MissingID(t *testing.T) {
 func TestRegistry_DuplicateIDError(t *testing.T) {
 	reg := NewRegistry()
 	err := reg.LoadFS(fstest.MapFS{
-		"a.prompt": {Data: []byte(promptFile("agent.dup", nil, nil, "one"))},
-		"b.prompt": {Data: []byte(promptFile("agent.dup", nil, nil, "two"))},
+		"a.prompt": {Data: []byte(promptFile(Agentdup_validation_test, nil, nil, "one"))},
+		"b.prompt": {Data: []byte(promptFile(Agentdup_validation_test, nil, nil, "two"))},
 	}, "fixtures")
 	if err == nil {
 		t.Fatal("expected duplicate id error")
@@ -40,7 +47,7 @@ func TestRegistry_DuplicateIDError(t *testing.T) {
 	if !errors.As(err, &dupErr) {
 		t.Fatalf("error = %v, want DuplicateIDError", err)
 	}
-	if dupErr.ID != "agent.dup" {
+	if dupErr.ID != Agentdup_validation_test {
 		t.Fatalf("DuplicateIDError.ID = %q, want agent.dup", dupErr.ID)
 	}
 }
@@ -99,8 +106,8 @@ body
 
 func TestValidateConfig_UnresolvedVariableReference(t *testing.T) {
 	issues := validateConfig(&PromptConfig{
-		Schema: "framework.prompt/v2",
-		ID:     "agent.generic.default",
+		Schema: FrameworkPromptV2_validation_test,
+		ID:     AgentGenericDefault_validation_test,
 		Body:   "Use {tone}.",
 	})
 	if !hasIssueContaining(issues, "unknown variable") {
@@ -110,8 +117,8 @@ func TestValidateConfig_UnresolvedVariableReference(t *testing.T) {
 
 func TestValidateConfig_InvalidMarkdownBody(t *testing.T) {
 	issues := validateConfig(&PromptConfig{
-		Schema: "framework.prompt/v2",
-		ID:     "agent.generic.default",
+		Schema: FrameworkPromptV2_validation_test,
+		ID:     AgentGenericDefault_validation_test,
 		Body:   "Use {1bad}.",
 	})
 	if !hasIssueContaining(issues, "invalid variable reference") {
@@ -121,8 +128,8 @@ func TestValidateConfig_InvalidMarkdownBody(t *testing.T) {
 
 func TestValidateConfig_EmptyBodyPolicy(t *testing.T) {
 	issues := validateConfig(&PromptConfig{
-		Schema: "framework.prompt/v2",
-		ID:     "agent.generic.default",
+		Schema: FrameworkPromptV2_validation_test,
+		ID:     AgentGenericDefault_validation_test,
 		Body:   "  ",
 	})
 	if !hasIssueContaining(issues, "prompt body is required") {

@@ -17,6 +17,7 @@ import (
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	"codeburg.org/lexbit/relurpify/platform/fs"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
+	"gopkg.in/yaml.v3"
 )
 
 func TestConfigForWorkspaceRebindsPaths(t *testing.T) {
@@ -153,28 +154,43 @@ func TestResolveInteractionFrameDoesNotResumeOutcomeFeedback(t *testing.T) {
 	}
 }
 
-func TestSaveAgentManifestWithBackup(t *testing.T) {
+func TestSaveAgentDocumentWithBackup(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "relurpify_cfg", "agent.yaml")
 	if err := os.MkdirAll(filepath.Dir(path), fs.PublicDirMode); err != nil { // public: test dir
-		t.Fatalf("mkdir manifest dir: %v", err)
+		t.Fatalf("mkdir document dir: %v", err)
 	}
-	seed := &config.ManifestSpec{
-		Image:   "ghcr.io/example/runtime:0.4.1",
-		Runtime: "gvisor",
-		Policy: &config.ManifestPolicySpec{
-			Permissions: permissions.PermissionSet{
-				FileSystem: []permissions.FileSystemPermission{{Action: permissions.FileSystemRead, Path: "/workspace/**"}},
-			},
-		},
+	seed := &config.Document{
+		APIVersion: "relurpify/v1alpha1",
+		Kind:       "AgentManifest",
+		Metadata:   config.DocumentMetadata{Name: "document-save"},
+		Spec:       map[string]yaml.Node{},
 	}
-	if err := config.SaveYAML(path, seed); err != nil {
-		t.Fatalf("seed manifest: %v", err)
+	permNode := yaml.Node{}
+	if err := permNode.Encode(permissions.PermissionSet{
+		FileSystem: []permissions.FileSystemPermission{{Action: permissions.FileSystemRead, Path: "/workspace/**"}},
+	}); err != nil {
+		t.Fatalf("encode permissions: %v", err)
 	}
-	updated := *seed
-	updated.Image = "ghcr.io/example/runtime:0.5.0"
+	seed.Spec["permissions"] = permNode
+	if _, err := config.SaveDocumentWithBackup(path, seed); err != nil {
+		t.Fatalf("seed document: %v", err)
+	}
+	updated := &config.Document{
+		APIVersion: seed.APIVersion,
+		Kind:       seed.Kind,
+		Metadata:   seed.Metadata,
+		Spec:       map[string]yaml.Node{},
+	}
+	updatedPermNode := yaml.Node{}
+	if err := updatedPermNode.Encode(permissions.PermissionSet{
+		FileSystem: []permissions.FileSystemPermission{{Action: permissions.FileSystemWrite, Path: "/workspace/**"}},
+	}); err != nil {
+		t.Fatalf("encode updated permissions: %v", err)
+	}
+	updated.Spec["permissions"] = updatedPermNode
 
-	backup, err := SaveManifestSpecWithBackup(path, &updated)
+	backup, err := config.SaveDocumentWithBackup(path, updated)
 	if err != nil {
 		t.Fatalf("save with backup: %v", err)
 	}
@@ -186,9 +202,9 @@ func TestSaveAgentManifestWithBackup(t *testing.T) {
 	}
 	data, err := os.ReadFile(filepath.Clean(path))
 	if err != nil {
-		t.Fatalf("read manifest: %v", err)
+		t.Fatalf("read document: %v", err)
 	}
-	if string(data) == "" || !strings.Contains(string(data), "0.5.0") {
-		t.Fatalf("manifest not updated after save: %s", string(data))
+	if string(data) == "" || !strings.Contains(string(data), "fs:write") {
+		t.Fatalf("document not updated after save: %s", string(data))
 	}
 }

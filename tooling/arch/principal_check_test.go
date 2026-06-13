@@ -5,15 +5,20 @@ import (
 	"testing"
 )
 
+const (
+	Governanceports_principal_check_test = "/governance/ports"
+)
+
+
 func TestCheckPrincipalContextWrite_noViolation(t *testing.T) {
 	pkgs := []GoPackage{
 		{
 			ImportPath: ModulePath + "/execution/agentlifecycle",
 			GoFiles:    []string{"execute.go"},
-			Imports:    []string{ModulePath + "/governance/ports"},
+			Imports:    []string{ModulePath + Governanceports_principal_check_test},
 		},
 		{
-			ImportPath: ModulePath + "/governance/ports",
+			ImportPath: ModulePath + Governanceports_principal_check_test,
 			GoFiles:    []string{"authorization.go"},
 		},
 	}
@@ -28,7 +33,7 @@ func TestCheckPrincipalContextWrite_violation(t *testing.T) {
 		{
 			ImportPath: ModulePath + "/capability/descriptor",
 			GoFiles:    []string{"descriptor.go"},
-			Imports:    []string{ModulePath + "/governance/ports"},
+			Imports:    []string{ModulePath + Governanceports_principal_check_test},
 		},
 	}
 	vios := CheckPrincipalContextWrite(pkgs)
@@ -42,7 +47,7 @@ func TestCheckPrincipalContextWrite_executionAgentlifecycleAllowed(t *testing.T)
 		{
 			ImportPath: ModulePath + "/execution/agentlifecycle",
 			GoFiles:    []string{"execute.go", "types.go"},
-			Imports:    []string{ModulePath + "/governance/ports", "fmt"},
+			Imports:    []string{ModulePath + Governanceports_principal_check_test, "fmt"},
 		},
 		{
 			ImportPath: ModulePath + "/governance/ports/authorization",

@@ -1,5 +1,14 @@
 package config
 
+import "os"
+
+// ProcessEnv returns the current process environment as a stable snapshot.
+// The process boundary belongs in userconfig so app packages do not read env
+// directly.
+func ProcessEnv() []string {
+	return os.Environ()
+}
+
 // LoadEnvOverrides resolves RELURPIFY_* config overrides from the supplied env list.
 // An unrecognized RELURPIFY_STRICT value is returned as an error — a typo like
 // "flase" or "enabled" fails the boot loudly rather than being silently ignored.
@@ -28,4 +37,30 @@ func LoadSecrets(env []string) Secrets {
 		NexusToken:      lookupEnv(env, "RELURPIFY_NEXUS_TOKEN"),
 		NexusAdminToken: lookupEnv(env, "RELURPIFY_NEXUS_ADMIN_TOKEN"),
 	}
+}
+
+// LoadReduceMotionPreference resolves the user/env-driven preference for
+// reduced motion in the TUI.
+func LoadReduceMotionPreference(env []string) bool {
+	if lookupEnv(env, "RELURPIFY_REDUCE_MOTION") != "" {
+		return true
+	}
+	if lookupEnv(env, "CI") != "" {
+		return true
+	}
+	if lookupEnv(env, "GITHUB_ACTIONS") != "" {
+		return true
+	}
+	if lookupEnv(env, "SSH_TTY") != "" {
+		return true
+	}
+	if lookupEnv(env, "SSH_CONNECTION") != "" {
+		return true
+	}
+	return false
+}
+
+// LoadTerminalName returns the terminal type hint from the supplied env list.
+func LoadTerminalName(env []string) string {
+	return lookupEnv(env, "TERM")
 }

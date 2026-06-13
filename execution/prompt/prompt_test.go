@@ -7,6 +7,17 @@ import (
 	"testing/fstest"
 )
 
+const (
+	AgentGenericDefault_prompt_test = "agent.generic.default"
+	Agentone_prompt_test = "agent.one"
+	Agentthree_prompt_test = "agent.three"
+	Debug_prompt_test = "debug"
+	FrameworkPromptV2_prompt_test = "framework.prompt/v2"
+	Name_prompt_test = "name"
+	System_prompt_test = "system"
+)
+
+
 func TestParseBytes_V2ContractHappyPath(t *testing.T) {
 	src := `---
 schema framework.prompt/v2
@@ -24,13 +35,13 @@ Use {tone} language.
 	if err != nil {
 		t.Fatalf("ParseBytes: %v", err)
 	}
-	if result.Config.Schema != "framework.prompt/v2" {
+	if result.Config.Schema != FrameworkPromptV2_prompt_test {
 		t.Fatalf("Schema = %q, want framework.prompt/v2", result.Config.Schema)
 	}
-	if result.Config.ID != "agent.generic.default" {
+	if result.Config.ID != AgentGenericDefault_prompt_test {
 		t.Fatalf("ID = %q, want agent.generic.default", result.Config.ID)
 	}
-	if got, want := result.Config.Tags, []string{"system", "agent", "debug"}; !reflect.DeepEqual(got, want) {
+	if got, want := result.Config.Tags, []string{System_prompt_test, "agent", Debug_prompt_test}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("Tags = %#v, want %#v", got, want)
 	}
 	out, _, err := resolvePrompt(result.Config, RuntimeContext{})
@@ -44,11 +55,11 @@ Use {tone} language.
 
 func TestResolvePrompt_Deterministic(t *testing.T) {
 	cfg := &PromptConfig{
-		Schema: "framework.prompt/v2",
-		ID:     "agent.generic.default",
+		Schema: FrameworkPromptV2_prompt_test,
+		ID:     AgentGenericDefault_prompt_test,
 		Body:   "Hello {name}.",
 		Variables: map[string]VariableDecl{
-			"name": {Default: "world"},
+			Name_prompt_test: {Default: "world"},
 		},
 	}
 
@@ -68,25 +79,25 @@ func TestResolvePrompt_Deterministic(t *testing.T) {
 func TestRegistry_TagSearchContracts(t *testing.T) {
 	reg := NewRegistry()
 	if err := reg.LoadFS(fstest.MapFS{
-		"one.prompt":   {Data: []byte(promptFile("agent.one", []string{"system", "agent"}, nil, "One"))},
-		"two.prompt":   {Data: []byte(promptFile("agent.two", []string{"debug"}, nil, "Two"))},
-		"three.prompt": {Data: []byte(promptFile("agent.three", []string{"system", "debug"}, nil, "Three"))},
+		"one.prompt":   {Data: []byte(promptFile(Agentone_prompt_test, []string{System_prompt_test, "agent"}, nil, "One"))},
+		"two.prompt":   {Data: []byte(promptFile("agent.two", []string{Debug_prompt_test}, nil, "Two"))},
+		"three.prompt": {Data: []byte(promptFile(Agentthree_prompt_test, []string{System_prompt_test, Debug_prompt_test}, nil, "Three"))},
 	}, "fixtures"); err != nil {
 		t.Fatalf("LoadFS: %v", err)
 	}
 
-	if got, want := idsOf(reg.Filter(FilterOptions{Tags: []string{"system"}})), []string{"agent.one", "agent.three"}; !reflect.DeepEqual(got, want) {
+	if got, want := idsOf(reg.Filter(FilterOptions{Tags: []string{System_prompt_test}})), []string{Agentone_prompt_test, Agentthree_prompt_test}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("single-tag filter = %#v, want %#v", got, want)
 	}
-	if got, want := idsOf(reg.Filter(FilterOptions{Tags: []string{"system", "debug"}})), []string{"agent.one", "agent.three", "agent.two"}; !reflect.DeepEqual(got, want) {
+	if got, want := idsOf(reg.Filter(FilterOptions{Tags: []string{System_prompt_test, Debug_prompt_test}})), []string{Agentone_prompt_test, Agentthree_prompt_test, "agent.two"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("multi-tag filter = %#v, want %#v", got, want)
 	}
 }
 
 func TestResolvePrompt_SafeNodeExclusions(t *testing.T) {
 	cfg := &PromptConfig{
-		Schema: "framework.prompt/v2",
-		ID:     "agent.generic.default",
+		Schema: FrameworkPromptV2_prompt_test,
+		ID:     AgentGenericDefault_prompt_test,
 		Body: strings.Join([]string{
 			"Hello {name}",
 			"",
@@ -99,11 +110,11 @@ func TestResolvePrompt_SafeNodeExclusions(t *testing.T) {
 			`[link {name}](https://example.com/{name})`,
 		}, "\n"),
 		Variables: map[string]VariableDecl{
-			"name": {Default: "world"},
+			Name_prompt_test: {Default: "world"},
 		},
 	}
 
-	out, _, err := resolvePrompt(cfg, RuntimeContext{Variables: map[string]string{"name": "Alice"}})
+	out, _, err := resolvePrompt(cfg, RuntimeContext{Variables: map[string]string{Name_prompt_test: "Alice"}})
 	if err != nil {
 		t.Fatalf("resolvePrompt: %v", err)
 	}
