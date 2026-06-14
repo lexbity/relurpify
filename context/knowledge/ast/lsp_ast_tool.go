@@ -13,9 +13,8 @@ import (
 const (
 	String_lsp_ast_tool = "string"
 	Symbol_lsp_ast_tool = "symbol"
-	Type_lsp_ast_tool = "type"
+	Type_lsp_ast_tool   = "type"
 )
-
 
 const astToolReadyTimeout = 2 * time.Second
 
@@ -128,13 +127,13 @@ func (t *ASTTool) handleSignature(args map[string]any) (*ports.ToolResult, error
 		return nil, err
 	}
 	return successResult(map[string]any{
-		"name":       node.Name,
-		Type_lsp_ast_tool:       node.Type,
-		"signature":  node.Signature,
-		"doc_string": node.DocString,
-		"file_id":    node.FileID,
-		"line":       node.StartLine,
-		"exported":   node.IsExported,
+		"name":            node.Name,
+		Type_lsp_ast_tool: node.Type,
+		"signature":       node.Signature,
+		"doc_string":      node.DocString,
+		"file_id":         node.FileID,
+		"line":            node.StartLine,
+		"exported":        node.IsExported,
 	}), nil
 }
 
@@ -148,8 +147,8 @@ func (t *ASTTool) handleCallers(args map[string]any) (*ports.ToolResult, error) 
 		return nil, err
 	}
 	return successResult(map[string]any{
-		Symbol_lsp_ast_tool:  node.Name,
-		"callers": summarizeNodes(callers),
+		Symbol_lsp_ast_tool: node.Name,
+		"callers":           summarizeNodes(callers),
 	}), nil
 }
 
@@ -163,8 +162,8 @@ func (t *ASTTool) handleCallees(args map[string]any) (*ports.ToolResult, error) 
 		return nil, err
 	}
 	return successResult(map[string]any{
-		Symbol_lsp_ast_tool:  node.Name,
-		"callees": summarizeNodes(callees),
+		Symbol_lsp_ast_tool: node.Name,
+		"callees":           summarizeNodes(callees),
 	}), nil
 }
 
@@ -178,8 +177,8 @@ func (t *ASTTool) handleImports(args map[string]any) (*ports.ToolResult, error) 
 		return nil, err
 	}
 	return successResult(map[string]any{
-		Symbol_lsp_ast_tool:  node.Name,
-		"imports": summarizeNodes(imports),
+		Symbol_lsp_ast_tool: node.Name,
+		"imports":           summarizeNodes(imports),
 	}), nil
 }
 
@@ -193,9 +192,9 @@ func (t *ASTTool) handleDependencies(args map[string]any) (*ports.ToolResult, er
 		return nil, err
 	}
 	return successResult(map[string]any{
-		Symbol_lsp_ast_tool:       symbol,
-		"dependencies": summarizeNodes(graph.Dependencies),
-		"dependents":   summarizeNodes(graph.Dependents),
+		Symbol_lsp_ast_tool: symbol,
+		"dependencies":      summarizeNodes(graph.Dependencies),
+		"dependents":        summarizeNodes(graph.Dependents),
 	}), nil
 }
 
@@ -226,13 +225,13 @@ func summarizeNodes(nodes []*Node) []map[string]any {
 			continue
 		}
 		result = append(result, map[string]any{
-			"id":        node.ID,
-			"name":      node.Name,
-			Type_lsp_ast_tool:      node.Type,
-			"signature": node.Signature,
-			"file_id":   node.FileID,
-			"line":      node.StartLine,
-			"exported":  node.IsExported,
+			"id":              node.ID,
+			"name":            node.Name,
+			Type_lsp_ast_tool: node.Type,
+			"signature":       node.Signature,
+			"file_id":         node.FileID,
+			"line":            node.StartLine,
+			"exported":        node.IsExported,
 		})
 	}
 	return result

@@ -4,6 +4,7 @@ package paradigm
 
 import (
 	registry "codeburg.org/lexbit/relurpify/capability/registry"
+	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/context/contextstream"
 	"codeburg.org/lexbit/relurpify/context/knowledge"
 	"codeburg.org/lexbit/relurpify/context/knowledge/ast"
@@ -21,6 +22,8 @@ type Deps struct {
 	Config         *execution.Config
 	Model          model.LanguageModel
 	Registry       *registry.CapabilityRegistry
+	CommandRunner  sandbox.CommandRunner
+	CommandPolicy  sandbox.CommandPolicy
 	WorkingMemory  *memory.WorkingMemoryStore
 	IndexManager   *ast.IndexManager
 	SearchEngine   *search.SearchEngine

@@ -223,27 +223,27 @@ func TestShellInjectionArgsAreInert(t *testing.T) {
 // ---------- Duplicate tool names rejected at registration ----------
 
 func TestDuplicateToolNamesRejected(t *testing.T) {
-	def1 := &toolcapabilities.ToolManifest{
+	def1 := &ports.ToolManifest{
 		Name: "duplicate_tool",
-		Execution: toolcapabilities.ToolManifestExecution{
+		Execution: ports.ToolManifestExecution{
 			Backend: ports.ToolBackendSubprocess,
-			Command: &toolcapabilities.ToolManifestCommand{Base: []string{"echo"}},
+			Command: &ports.ToolManifestCommand{Base: []string{"echo"}},
 		},
-		Capability: toolcapabilities.ToolManifestCapability{
+		Capability: ports.ToolManifestCapability{
 			TrustClass: "builtin_trusted",
 		},
 	}
-	def2 := &toolcapabilities.ToolManifest{
+	def2 := &ports.ToolManifest{
 		Name: "duplicate_tool",
-		Execution: toolcapabilities.ToolManifestExecution{
+		Execution: ports.ToolManifestExecution{
 			Backend: ports.ToolBackendSubprocess,
-			Command: &toolcapabilities.ToolManifestCommand{Base: []string{"cat"}},
+			Command: &ports.ToolManifestCommand{Base: []string{"cat"}},
 		},
-		Capability: toolcapabilities.ToolManifestCapability{
+		Capability: ports.ToolManifestCapability{
 			TrustClass: "builtin_trusted",
 		},
 	}
-	_, err := config.BuildRegistry([]*toolcapabilities.ToolManifest{def1, def2}, nil, nil, nil)
+	_, err := config.BuildRegistry([]*ports.ToolManifest{def1, def2}, nil, nil, nil)
 	if err == nil {
 		t.Fatal("expected error for duplicate tool name, got nil")
 	}

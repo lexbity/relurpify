@@ -12,13 +12,12 @@ import (
 )
 
 const (
-	Testgo_ast_final_test = "/test.go"
-	Root_ast_final_test = ":root"
-	IndexDb_ast_final_test = "index.db"
-	Main_ast_final_test = "main"
+	Testgo_ast_final_test       = "/test.go"
+	Root_ast_final_test         = ":root"
+	IndexDb_ast_final_test      = "index.db"
+	Main_ast_final_test         = "main"
 	SampleGoFile_ast_final_test = "sample.go"
 )
-
 
 // ==================== Persist and Transaction Tests ====================
 

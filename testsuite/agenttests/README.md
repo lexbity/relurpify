@@ -120,13 +120,15 @@ Rerun one family or one case when debugging:
 ./dev-agent agenttest run --suite testsuite/agenttests/euclo.rapid.chat.testsuite.yaml --case rapid_chat_implement_single_edit --timeout 75s
 ```
 
-The legacy aggregate entrypoint remains available for compatibility:
+Tape workflow commands are available through the same CLI:
 
 ```
-./dev-agent agenttest run --suite testsuite/agenttests/euclo.rapid.testsuite.yaml --tier live-flaky
+./dev-agent agenttest promote --suite testsuite/agenttests/euclo.code.testsuite.yaml --run relurpify_cfg/test_runs/euclo/<run_id> --case basic_edit_task
+./dev-agent agenttest report --agent euclo
+./dev-agent agenttest rerecord --agent euclo
 ```
 
-Or filter the same lightweight cases by tag:
+Run the same lightweight cases by tag:
 
 ```
 ./dev-agent agenttest run --agent euclo --tag rapid-iteration --tier live-flaky

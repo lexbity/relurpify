@@ -11,20 +11,19 @@ import (
 )
 
 const (
-	cli_jq = "cli_jq"
-	cli_tool = "cli_tool"
-	fileops = "fileops"
+	cli_jq          = "cli_jq"
+	cli_tool        = "cli_tool"
+	fileops         = "fileops"
 	filesystem_read = "filesystem_read"
-	jq = "jq"
-	mkdir = "mkdir"
-	ok = "ok"
-	p = "-p"
-	somebinary = "somebinary"
-	stdout = "stdout"
-	text = "text"
-	tool = "tool"
+	jq              = "jq"
+	mkdir           = "mkdir"
+	ok              = "ok"
+	p               = "-p"
+	somebinary      = "somebinary"
+	stdout          = "stdout"
+	text            = "text"
+	tool            = "tool"
 )
-
 
 // recordingRunner implements ports.CommandRunner by recording the request
 // and returning canned output.
@@ -326,7 +325,7 @@ func TestParityCLIJQ(t *testing.T) {
 	}, runner)
 
 	result, err := tool.Execute(context.Background(), map[string]any{
-		args:              []any{"."},
+		args:                []any{"."},
 		"working_directory": ".",
 	})
 	require.NoError(t, err)
@@ -390,7 +389,7 @@ func TestParityCLISed(t *testing.T) {
 	}, runner)
 
 	result, err := tool.Execute(context.Background(), map[string]any{
-		args:  []any{"s/foo/hello/"},
+		args:    []any{"s/foo/hello/"},
 		"stdin": "foo world",
 	})
 	require.NoError(t, err)

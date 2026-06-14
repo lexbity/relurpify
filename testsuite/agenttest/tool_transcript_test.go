@@ -18,7 +18,7 @@ func TestBuildToolTranscriptPairsCallsAndResults(t *testing.T) {
 			Timestamp: base,
 			Message:   "tool file_search invoked",
 			Metadata: map[string]any{
-				tool:     file_search,
+				tool:       file_search,
 				"agent_id": "agent-1",
 				"args":     map[string]any{"needle": "euclo"},
 			},
@@ -28,8 +28,8 @@ func TestBuildToolTranscriptPairsCallsAndResults(t *testing.T) {
 			Timestamp: base.Add(2 * time.Second),
 			Message:   "tool file_search completed",
 			Metadata: map[string]any{
-				tool:        file_search,
-				success:     true,
+				tool:          file_search,
+				success:       true,
 				"duration_ms": int64(2000),
 			},
 		},

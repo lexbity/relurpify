@@ -16,16 +16,15 @@ import (
 )
 
 const (
-	AstFile_graph_index_store = "ast_file"
-	AstNode_graph_index_store = "ast_node"
-	Cat_graph_index_store = "cat:"
-	EdgeId_graph_index_store = "edge_id"
-	File_graph_index_store = "file:"
+	AstFile_graph_index_store       = "ast_file"
+	AstNode_graph_index_store       = "ast_node"
+	Cat_graph_index_store           = "cat:"
+	EdgeId_graph_index_store        = "edge_id"
+	File_graph_index_store          = "file:"
 	Storeisclosed_graph_index_store = "store is closed"
-	Type_graph_index_store = "type"
-	Type_graph_index_store_2 = "type:"
+	Type_graph_index_store          = "type"
+	Type_graph_index_store_2        = "type:"
 )
-
 
 // GraphIndexStore implements IndexStore using a graphdb.Engine as the
 // durable backend.  AST concepts are mapped to graph records:
@@ -82,7 +81,7 @@ func (s *GraphIndexStore) SaveFile(metadata *FileMetadata) error {
 		labels = append(labels, "hash:"+metadata.ContentHash)
 	}
 
-	return s.g.UpsertNode(context.TODO(), graphdb.NodeRecord{
+	return s.g.UpsertNode(context.Background(), graphdb.NodeRecord{
 		ID:       metadata.ID,
 		Kind:     AstFile_graph_index_store,
 		SourceID: metadata.Path,
@@ -140,7 +139,7 @@ func (s *GraphIndexStore) DeleteFile(fileID string) error {
 	if s.g.IsClosed() {
 		return errors.New(Storeisclosed_graph_index_store)
 	}
-	return s.g.DeleteNode(context.TODO(), fileID)
+	return s.g.DeleteNode(context.Background(), fileID)
 }
 
 // ────────────────────────────────────────────────────────────────────
@@ -161,25 +160,25 @@ func (s *GraphIndexStore) SaveNodes(nodes []*Node) error {
 	if len(records) == 0 {
 		return nil
 	}
-	return s.g.UpsertNodes(context.TODO(), records)
+	return s.g.UpsertNodes(context.Background(), records)
 }
 
 func nodeToRecord(n *Node) graphdb.NodeRecord {
 	props := mustMarshal(map[string]any{
-		"parent_id":    n.ParentID,
-		"file_id":      n.FileID,
-		Type_graph_index_store:         string(n.Type),
-		"category":     string(n.Category),
-		"language":     n.Language,
-		"start_line":   n.StartLine,
-		"end_line":     n.EndLine,
-		"start_col":    n.StartCol,
-		"end_col":      n.EndCol,
-		"name":         n.Name,
-		"signature":    n.Signature,
-		"doc_string":   n.DocString,
-		"is_exported":  n.IsExported,
-		"content_hash": n.ContentHash,
+		"parent_id":            n.ParentID,
+		"file_id":              n.FileID,
+		Type_graph_index_store: string(n.Type),
+		"category":             string(n.Category),
+		"language":             n.Language,
+		"start_line":           n.StartLine,
+		"end_line":             n.EndLine,
+		"start_col":            n.StartCol,
+		"end_col":              n.EndCol,
+		"name":                 n.Name,
+		"signature":            n.Signature,
+		"doc_string":           n.DocString,
+		"is_exported":          n.IsExported,
+		"content_hash":         n.ContentHash,
 	})
 	labels := []string{
 		Type_graph_index_store_2 + string(n.Type),
@@ -334,7 +333,7 @@ func queryMatches(n *Node, q NodeQuery) bool {
 }
 
 func (s *GraphIndexStore) DeleteNode(nodeID string) error {
-	return s.g.DeleteNode(context.TODO(), nodeID)
+	return s.g.DeleteNode(context.Background(), nodeID)
 }
 
 // ────────────────────────────────────────────────────────────────────
@@ -355,7 +354,7 @@ func (s *GraphIndexStore) SaveEdges(edges []*Edge) error {
 	if len(records) == 0 {
 		return nil
 	}
-	return s.g.LinkEdges(context.TODO(), records)
+	return s.g.LinkEdges(context.Background(), records)
 }
 
 func edgeToRecord(e *Edge) graphdb.EdgeRecord {
@@ -493,7 +492,7 @@ func (s *GraphIndexStore) DeleteEdge(edgeID string) error {
 	if edge == nil {
 		return nil
 	}
-	return s.g.Unlink(context.TODO(), edge.SourceID, edge.TargetID, graphdb.EdgeKind(edge.Type), true)
+	return s.g.Unlink(context.Background(), edge.SourceID, edge.TargetID, graphdb.EdgeKind(edge.Type), true)
 }
 
 // ────────────────────────────────────────────────────────────────────

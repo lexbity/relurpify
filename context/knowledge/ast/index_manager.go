@@ -48,6 +48,7 @@ type workspaceIndexState struct {
 	ready   bool
 	err     error
 	readyCh chan struct{}
+	cancel  context.CancelFunc
 }
 
 var (
@@ -224,8 +225,12 @@ func (im *IndexManager) StartIndexing(ctx context.Context) error {
 		}
 		return err
 	}
+	indexCtx, cancel := context.WithCancel(ctx)
+	im.mu.Lock()
+	im.workspaceIndex.cancel = cancel
+	im.mu.Unlock()
 	go func() {
-		im.finishWorkspaceIndex(im.runWorkspaceIndex(ctx))
+		im.finishWorkspaceIndex(im.runWorkspaceIndex(indexCtx))
 	}()
 	return nil
 }
@@ -461,6 +466,10 @@ func (im *IndexManager) finishWorkspaceIndex(err error) {
 	im.workspaceIndex.running = false
 	im.workspaceIndex.ready = err == nil
 	im.workspaceIndex.err = err
+	if im.workspaceIndex.cancel != nil {
+		im.workspaceIndex.cancel()
+		im.workspaceIndex.cancel = nil
+	}
 	close(im.workspaceIndex.readyCh)
 }
 
@@ -472,9 +481,20 @@ func (im *IndexManager) Close(ctx context.Context) error {
 	im.mu.Lock()
 	running := im.workspaceIndex.running
 	readyCh := im.workspaceIndex.readyCh
+	cancel := im.workspaceIndex.cancel
 	im.mu.Unlock()
 	if running && readyCh != nil {
-		<-readyCh
+		// Abort any in-flight workspace index so Close cannot block
+		// indefinitely on a slow or stuck pass (e.g. an embedding backend
+		// that never responds). Fall back to the caller's ctx deadline in
+		// case the index goroutine does not honor cancellation.
+		if cancel != nil {
+			cancel()
+		}
+		select {
+		case <-readyCh:
+		case <-ctx.Done():
+		}
 	}
 	var firstErr error
 	if im.GraphDB != nil {

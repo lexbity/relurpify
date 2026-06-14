@@ -149,6 +149,11 @@ func (a *ReActAgent) recoveryToolAllowed(env *contextdata.Envelope, task *execut
 }
 
 func (a *ReActAgent) toolAllowedBySkillConfig(task *execution.Task, phase, toolName string) bool {
+	if requested := explicitlyRequestedToolNames(task); len(requested) > 0 {
+		if _, ok := requested[strings.ToLower(strings.TrimSpace(toolName))]; ok {
+			return true
+		}
+	}
 	resolved := a.resolvedAgentPolicy()
 	if len(resolved.PhaseCapabilities) == 0 {
 		return true

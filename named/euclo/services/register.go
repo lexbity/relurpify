@@ -1,6 +1,7 @@
 package services
 
 import (
+	"codeburg.org/lexbit/relurpify/capability/descriptor"
 	registry "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/execution/prompt"
 	thoughtrecipe "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
@@ -38,9 +39,17 @@ func (r *Registration) RegisterPromptProviders(reg prompt.Registry) error {
 	return r.promptRegistrar.RegisterAll(reg)
 }
 
-// LoadThoughtRecipes loads all thoughtrecipes.
-func (r *Registration) LoadThoughtRecipes() (*thoughtrecipe.LoadResult, error) {
-	return r.thoughtrecipeLoader.LoadAll()
+// LoadThoughtRecipes loads all thoughtrecipes from the given workspace using the
+// provided capability registry for semantic validation.
+func (r *Registration) LoadThoughtRecipes(workspace string, caps thoughtrecipe.CapabilityRegistryLookup) (*thoughtrecipe.LoadResult, error) {
+	return r.thoughtrecipeLoader.LoadAll(workspace, caps)
+}
+
+func CapabilityLookup(reg *registry.CapabilityRegistry) thoughtrecipe.CapabilityRegistryLookup {
+	if reg == nil {
+		return nil
+	}
+	return capabilityLookupAdapter{reg: reg}
 }
 
 // Option configures the Registration.
@@ -88,5 +97,16 @@ type PromptRegistrar interface {
 
 // ThoughtRecipeLoader abstracts thoughtrecipe loading.
 type ThoughtRecipeLoader interface {
-	LoadAll() (*thoughtrecipe.LoadResult, error)
+	LoadAll(workspace string, caps thoughtrecipe.CapabilityRegistryLookup) (*thoughtrecipe.LoadResult, error)
+}
+
+type capabilityLookupAdapter struct {
+	reg *registry.CapabilityRegistry
+}
+
+func (a capabilityLookupAdapter) Select(id string) (descriptor.CapabilityDescriptor, bool) {
+	if a.reg == nil {
+		return descriptor.CapabilityDescriptor{}, false
+	}
+	return a.reg.GetCapability(id)
 }

@@ -688,7 +688,7 @@ func (p *ChatPane) runStream(ctx context.Context, run *tui.RunState, metadata ma
 	callback := func(token string) {
 		sendRunMsg(run, tui.StreamTokenMsg{RunID: run.ID, TokenType: tui.TokenText, Token: token})
 	}
-	result, err := p.runtime.ExecuteInstructionStream(ctx, run.Prompt, execution.TaskTypeCodeGeneration, metadata, callback)
+	result, err := p.runtime.SubmitTurn(ctx, run.Prompt, execution.TaskTypeCodeGeneration, metadata, callback)
 	if err != nil {
 		sendRunFinal(run, tui.StreamErrorMsg{RunID: run.ID, Error: err})
 		sendRunFinal(run, tui.StreamCompleteMsg{RunID: run.ID, Duration: time.Since(start), TokensUsed: 0})

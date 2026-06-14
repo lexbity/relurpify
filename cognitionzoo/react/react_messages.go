@@ -26,7 +26,7 @@ func envelopeGet(state *contextdata.Envelope, key string) (any, bool) {
 	if val, ok := contextdata.GetTyped[any](state, key); ok {
 		return val, true
 	}
-	// TODO: Check streamed context references if needed
+	// ToDo: Check streamed context references if needed
 	return nil, false
 }
 

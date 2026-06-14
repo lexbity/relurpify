@@ -8,6 +8,7 @@ import (
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/context/contextstream"
 	execution "codeburg.org/lexbit/relurpify/execution"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclokeys"
 	"codeburg.org/lexbit/relurpify/named/euclo/families"
 )
 
@@ -268,7 +269,7 @@ func TestIntakePipelineNodeExecute_AllSteps(t *testing.T) {
 	trigger := &MockStreamTrigger{}
 	node := NewIntakePipelineNode("test-node", registry, 100, contextstream.ModeBlocking, trigger)
 	env := contextdata.NewEnvelope("test-task", "test-session")
-	contextdata.SetTyped(env, "task.input", &execution.Task{Instruction: "analyze code"})
+	contextdata.SetTyped(env, euclokeys.KeyTaskInput, &execution.Task{Instruction: "analyze code"})
 	result, err := node.Execute(context.Background(), env)
 	if err != nil {
 		t.Fatalf("Execute failed: %v", err)

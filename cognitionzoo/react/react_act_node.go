@@ -360,7 +360,7 @@ func (n *reactActNode) recordObservation(ctx context.Context, env *contextdata.E
 		summary := strings.TrimSpace(observation.Summary)
 		knowledge.IngestObservationAsync(contextdata.WithEnvelope(ctx, env), n.agent.OutputIngester, summary)
 	}
-	// TODO: ContextManager integration requires framework-level fixes for missing types
+	// ToDo: ContextManager integration requires framework-level fixes for missing types
 	// (core.ToolResultContextItem, core.FileContextItem)
 	// if visible && n.agent.contextPolicy != nil && n.agent.contextPolicy.ContextManager != nil {
 	// 	summaryEnvelope := capresult.SummarizeCapabilityResultEnvelope(envelope, observation.Summary)

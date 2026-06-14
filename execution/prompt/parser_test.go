@@ -7,10 +7,9 @@ import (
 
 const (
 	ParseBytesv_parser_test = "ParseBytes: %v"
-	Tagsvwantv_parser_test = "Tags = %#v, want %#v"
-	Tone_parser_test = "tone"
+	Tagsvwantv_parser_test  = "Tags = %#v, want %#v"
+	Tone_parser_test        = "tone"
 )
-
 
 func TestParseBytes_V2Valid(t *testing.T) {
 	src := `---

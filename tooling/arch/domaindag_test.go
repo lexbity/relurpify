@@ -9,27 +9,26 @@ import (
 )
 
 const (
-	Capability_domaindag_test = "/capability"
-	Capabilitya_domaindag_test = "/capability/a"
-	Capabilityc_domaindag_test = "/capability/c"
+	Capability_domaindag_test               = "/capability"
+	Capabilitya_domaindag_test              = "/capability/a"
+	Capabilityc_domaindag_test              = "/capability/c"
 	Capabilityclassification_domaindag_test = "/capability/classification"
-	Contexta_domaindag_test = "/context/a"
-	Contextb_domaindag_test = "/context/b"
-	Executiona_domaindag_test = "/execution/a"
-	Executionb_domaindag_test = "/execution/b"
-	Executionc_domaindag_test = "/execution/c"
-	Frameworktypes_domaindag_test = "/framework/types"
-	Frameworktypestypesgo_domaindag_test = "/framework/types/types.go"
-	Capability_domaindag_test_2 = "capability"
-	Context_domaindag_test = "context"
-	Execution_domaindag_test = "execution"
-	Fmt_domaindag_test = "fmt"
-	Governance_domaindag_test = "governance"
-	Model_domaindag_test = "model"
-	Platform_domaindag_test = "platform"
-	TypesGoFile_domaindag_test = "types.go"
+	Contexta_domaindag_test                 = "/context/a"
+	Contextb_domaindag_test                 = "/context/b"
+	Executiona_domaindag_test               = "/execution/a"
+	Executionb_domaindag_test               = "/execution/b"
+	Executionc_domaindag_test               = "/execution/c"
+	Frameworktypes_domaindag_test           = "/framework/types"
+	Frameworktypestypesgo_domaindag_test    = "/framework/types/types.go"
+	Capability_domaindag_test_2             = "capability"
+	Context_domaindag_test                  = "context"
+	Execution_domaindag_test                = "execution"
+	Fmt_domaindag_test                      = "fmt"
+	Governance_domaindag_test               = "governance"
+	Model_domaindag_test                    = "model"
+	Platform_domaindag_test                 = "platform"
+	TypesGoFile_domaindag_test              = "types.go"
 )
-
 
 func mkPkg(importPath string, goFiles ...string) GoPackage {
 	p := GoPackage{ImportPath: importPath}

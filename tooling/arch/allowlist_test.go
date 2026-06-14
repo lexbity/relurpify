@@ -5,12 +5,11 @@ import (
 )
 
 const (
-	Consumer_allowlist_test = "consumer"
+	Consumer_allowlist_test                          = "consumer"
 	Consumerdeadhasnonontestimporters_allowlist_test = "consumer: dead has no non-test importers"
-	Cycle_allowlist_test = "cycle"
-	Layer_allowlist_test = "layer"
+	Cycle_allowlist_test                             = "cycle"
+	Layer_allowlist_test                             = "layer"
 )
-
 
 func TestAllowlistContains(t *testing.T) {
 	a := Allowlist{entries: map[string]map[string]bool{

@@ -199,7 +199,7 @@ func (n *IntakePipelineNode) maybeStreamContext(ctx context.Context, templateStr
 }
 
 func taskFromEnvelope(env *contextdata.Envelope) (*execution.Task, error) {
-	for _, key := range []string{euclokeys.KeyTaskInputLegacy, euclokeys.KeyTaskInput, euclokeys.KeyTaskRaw} {
+	for _, key := range []string{euclokeys.KeyTaskInput, euclokeys.KeyTaskRaw} {
 		if task, ok := contextdata.GetTyped[*execution.Task](env, key); ok {
 			if !ok {
 				return nil, fmt.Errorf("%s is not *execution.Task", key)

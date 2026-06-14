@@ -22,8 +22,6 @@ var ErrSessionNotManaged = errors.New("provider session not managed")
 
 const providerKindMetadataKey = "provider_kind"
 
-var errUnsupportedRuntimeProviderConfig = errors.New("runtime provider config unsupported")
-
 // ManagedProvider is the minimal lifecycle surface for long-lived runtime services.
 type ManagedProvider interface {
 	Close() error
@@ -56,52 +54,19 @@ type runtimeProviderRecord struct {
 
 // RegisterBuiltinProviders installs builtin runtime-managed providers declared by the agent spec.
 func RegisterBuiltinProviders(ctx context.Context, rt *Runtime) error {
-	for _, providerCfg := range mergeConfiguredProviders(rt.AgentWorkspace().AgentSpec) {
-		provider, err := providerFromConfig(providerCfg)
-		if err != nil {
-			if errors.Is(err, errUnsupportedRuntimeProviderConfig) {
-				log.Printf("runtime provider config unsupported: id=%s kind=%s target=%s", providerCfg.ID, providerCfg.Kind, providerCfg.Target)
-				rt.emitProviderLifecycleEvent(providerCfg.ID, "", "provider_config_unsupported", err.Error(), map[string]any{
-					providerKindMetadataKey: string(providerCfg.Kind),
-					"provider_target":       providerCfg.Target,
-				})
-				continue
-			}
-			return err
-		}
-		if provider == nil {
-			continue
-		}
-		if err := rt.RegisterProvider(ctx, provider); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func mergeConfiguredProviders(spec *agentspec.AgentRuntimeSpec) []provider.ProviderConfig {
-	if spec == nil || len(spec.Providers) == 0 {
+	if rt == nil || rt.AgentWorkspace() == nil || rt.AgentWorkspace().AgentSpec == nil {
 		return nil
 	}
-	out := make([]provider.ProviderConfig, len(spec.Providers))
-	for i, providerSpec := range spec.Providers {
-		out[i] = provider.ProviderConfig{
-			ID:              providerSpec.ID,
-			Kind:            providerSpec.Kind,
-			Enabled:         providerSpec.Enabled,
-			Target:          providerSpec.Target,
-			ActivationScope: providerSpec.ActivationScope,
-			TrustBaseline:   providerSpec.TrustBaseline,
-			Recoverability:  policy.RecoverabilityMode(providerSpec.Recoverability),
-		}
-		if len(providerSpec.Config) > 0 {
-			out[i].Config = make(map[string]any, len(providerSpec.Config))
-			for key, value := range providerSpec.Config {
-				out[i].Config[key] = value
-			}
-		}
+	for _, providerSpec := range rt.AgentWorkspace().AgentSpec.Providers {
+		log.Printf("runtime provider config unsupported: id=%s kind=%s target=%s", providerSpec.ID, providerSpec.Kind, providerSpec.Target)
+		rt.emitProviderLifecycleEvent(providerSpec.ID, "", "provider_config_unsupported", "runtime provider config unsupported", map[string]any{
+			providerKindMetadataKey: string(providerSpec.Kind),
+			"provider_target":       providerSpec.Target,
+			"activation_scope":      providerSpec.ActivationScope,
+			"recoverability":        string(providerSpec.Recoverability),
+		})
 	}
-	return out
+	return nil
 }
 
 // RegisterProvider initializes a provider against the runtime and records it

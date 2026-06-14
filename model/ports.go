@@ -21,6 +21,7 @@ type LLMOptions struct {
 	Stop           []string
 	TopP           float64
 	Stream         bool
+	Config         map[string]any
 	StreamCallback func(string) `json:"-"`
 }
 

@@ -30,21 +30,34 @@ type ModelProfileConfig struct {
 }
 
 // LoadProfileDir loads all *.llm.yaml files from model/profiles/.
-// It returns a hard error if default.llm.yaml is absent.
+// It returns a hard error if a blocking diagnostic is encountered.
 func LoadProfileDir(dir string, decode Decoder) ([]*ModelProfileConfig, error) {
+	loaded, diags, err := LoadProfileDirDetailed(dir, decode)
+	if err != nil {
+		return nil, err
+	}
+	if HasBlockingDiagnostics(diags) {
+		return nil, diagnosticsError("profile", diags)
+	}
+	return loaded, nil
+}
+
+// LoadProfileDirDetailed loads all *.llm.yaml files and preserves partial
+// results together with per-file diagnostics.
+func LoadProfileDirDetailed(dir string, decode Decoder) ([]*ModelProfileConfig, []LoadDiagnostic, error) {
 	if strings.TrimSpace(dir) == "" {
-		return nil, fmt.Errorf("profile dir required")
+		return nil, nil, fmt.Errorf("profile dir required")
 	}
 	absDir, err := filepath.Abs(dir)
 	if err != nil {
-		return nil, fmt.Errorf("resolve profile dir: %w", err)
+		return nil, nil, fmt.Errorf("resolve profile dir: %w", err)
 	}
 	entries, err := os.ReadDir(absDir)
 	if err != nil {
-		return nil, fmt.Errorf("read profile dir: %w", err)
+		return nil, []LoadDiagnostic{{Path: absDir, Severity: "blocking", Message: fmt.Sprintf("read profile dir: %v", err)}}, nil
 	}
 	if len(entries) == 0 {
-		return nil, fmt.Errorf("profile dir %q is empty", absDir)
+		return nil, []LoadDiagnostic{{Path: absDir, Severity: "blocking", Message: fmt.Sprintf("profile dir %q is empty", absDir)}}, nil
 	}
 	workspaceRoot := filepath.Clean(filepath.Join(absDir, "..", "..", ".."))
 
@@ -61,30 +74,38 @@ func LoadProfileDir(dir string, decode Decoder) ([]*ModelProfileConfig, error) {
 	}
 	sort.Strings(paths)
 	if len(paths) == 0 {
-		return nil, fmt.Errorf("profile dir %q contains no *.llm.yaml files", absDir)
+		return nil, []LoadDiagnostic{{Path: absDir, Severity: "blocking", Message: fmt.Sprintf("profile dir %q contains no *.llm.yaml files", absDir)}}, nil
 	}
 
-	var errs []error
+	var diags []LoadDiagnostic
 	var defaultProfile *ModelProfileConfig
 	out := make([]*ModelProfileConfig, 0, len(paths))
 	for _, path := range paths {
 		body, err := readConfigFile(workspaceRoot, path)
 		if err != nil {
-			errs = append(errs, fmt.Errorf("read %s: %w", path, err))
+			diags = append(diags, LoadDiagnostic{Path: path, Severity: "blocking", Message: fmt.Sprintf("read %s: %v", path, err)})
 			continue
 		}
 		if decode == nil {
-			errs = append(errs, fmt.Errorf("decoder required for %s", path))
+			diags = append(diags, LoadDiagnostic{Path: path, Severity: "blocking", Message: fmt.Sprintf("decoder required for %s", path)})
 			continue
 		}
 		var profile ModelProfileConfig
 		if _, err := decode(path, body, &profile); err != nil {
-			errs = append(errs, err)
+			severity := "blocking"
+			if !isDefaultProfilePath(path) {
+				severity = "warning"
+			}
+			diags = append(diags, LoadDiagnostic{Path: path, Severity: severity, Message: err.Error()})
 			continue
 		}
 		profile.SourcePath = path
 		if err := profile.Validate(); err != nil {
-			errs = append(errs, fmt.Errorf("%s: %w", path, err))
+			severity := "blocking"
+			if !isDefaultProfilePath(path) {
+				severity = "warning"
+			}
+			diags = append(diags, LoadDiagnostic{Path: path, Severity: severity, Message: fmt.Sprintf("%s: %v", path, err)})
 			continue
 		}
 		if isDefaultProfilePath(path) {
@@ -94,13 +115,10 @@ func LoadProfileDir(dir string, decode Decoder) ([]*ModelProfileConfig, error) {
 		out = append(out, &profile)
 	}
 	if defaultProfile == nil {
-		errs = append(errs, fmt.Errorf("default.llm.yaml required in %s", absDir))
-	}
-	if len(errs) > 0 {
-		return nil, errors.Join(errs...)
+		diags = append(diags, LoadDiagnostic{Path: filepath.Join(absDir, "default.llm.yaml"), Severity: "blocking", Message: fmt.Sprintf("default.llm.yaml required in %s", absDir)})
 	}
 	out = append(out, defaultProfile)
-	return out, nil
+	return out, diags, nil
 }
 
 // MatchProfile returns the first matching profile by glob, falling back to default.llm.yaml.
@@ -168,4 +186,15 @@ func (p ModelProfileConfig) Validate() error {
 
 func isDefaultProfilePath(path string) bool {
 	return strings.EqualFold(filepath.Base(path), "default.llm.yaml")
+}
+
+func diagnosticsError(section string, diags []LoadDiagnostic) error {
+	if len(diags) == 0 {
+		return nil
+	}
+	var errs []error
+	for _, diag := range diags {
+		errs = append(errs, fmt.Errorf("%s: %s", diag.Path, diag.Message))
+	}
+	return fmt.Errorf("load %s: %w", section, errors.Join(errs...))
 }

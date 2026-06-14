@@ -7,6 +7,7 @@ import (
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/context/contextstream"
 	execution "codeburg.org/lexbit/relurpify/execution"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclokeys"
 	"codeburg.org/lexbit/relurpify/named/euclo/families"
 )
 
@@ -16,7 +17,7 @@ func TestIntakePipelineNodeCoordinatorOnly(t *testing.T) {
 
 	node := NewIntakePipelineNode("intake", registry, 1024, contextstream.ModeBlocking, &MockStreamTrigger{})
 	env := contextdata.NewEnvelope("task-1", "session-1")
-	contextdata.SetTyped(env, "task.input", &execution.Task{
+	contextdata.SetTyped(env, euclokeys.KeyTaskInput, &execution.Task{
 		ID:          "task-1",
 		Instruction: "review named/euclo/intake/pipeline.go",
 	})

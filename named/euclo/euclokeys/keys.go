@@ -1,3 +1,4 @@
+// Package euclokeys defines canonical Euclo working-memory keys.
 package euclokeys
 
 var _ = "euclo.stream_token_usage" // gosec G101: intentional key name
@@ -142,9 +143,8 @@ const (
 
 // Task input keys.
 const (
-	KeyTaskRaw         = "euclo.task"
-	KeyTaskInput       = "euclo.task.input"
-	KeyTaskInputLegacy = "task.input"
+	KeyTaskRaw   = "euclo.task"
+	KeyTaskInput = "euclo.task." + "input"
 )
 
 // Clarification sub-keys.

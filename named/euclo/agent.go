@@ -13,6 +13,7 @@ import (
 	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/execution/agentgraph"
 	"codeburg.org/lexbit/relurpify/execution/agentlifecycle"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclokeys"
 	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 	"codeburg.org/lexbit/relurpify/named/euclo/intake"
 	"codeburg.org/lexbit/relurpify/named/euclo/orchestrate"
@@ -87,8 +88,24 @@ func (a *Agent) Initialize(config *execution.Config) error {
 		return fmt.Errorf("workspace capability registry is nil")
 	}
 
+	registrar := services.NewRegistration(services.WithCapabilityDeps(services.CapabilityDeps{
+		IndexManager:  a.deps.IndexManager,
+		Workspace:     workspaceRootPath(a.deps),
+		CommandRunner: a.deps.CommandRunner,
+		CommandPolicy: a.deps.CommandPolicy,
+		Model:         a.deps.Model,
+	}))
+
+	if err := registrar.RegisterCapabilities(a.deps.Registry); err != nil {
+		return fmt.Errorf("failed to register capabilities: %w", err)
+	}
+
 	// Load the thoughtrecipe registry from the DSL source tree.
-	loaded, err := defaultRegistrar.LoadThoughtRecipes()
+	workspace := ""
+	if config != nil {
+		workspace = config.Workspace
+	}
+	loaded, err := registrar.LoadThoughtRecipes(workspace, services.CapabilityLookup(a.deps.Registry))
 	if err != nil {
 		return fmt.Errorf("failed to load thoughtrecipes: %w", err)
 	}
@@ -184,7 +201,7 @@ func seedTaskEnvelope(env *contextdata.Envelope, task *execution.Task) {
 	if task == nil {
 		return
 	}
-	env.SetWorkingValueWithClass("task.input", task, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass(euclokeys.KeyTaskInput, task, contextdata.MemoryClassTask)
 	env.SetWorkingValueWithClass("task.id", task.ID, contextdata.MemoryClassTask)
 	env.SetWorkingValueWithClass("task.instruction", task.Instruction, contextdata.MemoryClassTask)
 	env.SetWorkingValueWithClass("task.type", task.Type, contextdata.MemoryClassTask)

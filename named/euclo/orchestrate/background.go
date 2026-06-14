@@ -212,7 +212,7 @@ func (n *BackgroundJobNode) buildJobSpec(env *contextdata.Envelope) (jobs.Spec, 
 		payload = value
 	}
 	if payload == nil {
-		if task, ok := contextdata.GetTyped[any](env, euclostate.KeyTaskInputLegacy); ok {
+		if task, ok := contextdata.GetTyped[any](env, euclostate.KeyTaskInput); ok {
 			payload = task
 		}
 	}

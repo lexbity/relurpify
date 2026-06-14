@@ -13,11 +13,10 @@ import (
 )
 
 const (
-	Graphdb_index_manager_graph_test = "graphdb"
-	MainGoFile_index_manager_graph_test = "main.go"
+	Graphdb_index_manager_graph_test                = "graphdb"
+	MainGoFile_index_manager_graph_test             = "main.go"
 	PackagesamplefuncHello_index_manager_graph_test = "package sample\nfunc Hello() {}\n"
 )
-
 
 func TestIndexManagerPopulatesGraphDBForGoFile(t *testing.T) {
 	manager, tmpDir := newTestIndexManager(t)

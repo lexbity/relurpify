@@ -130,7 +130,9 @@ func ApplyProfile(target any, profile *cfgmodel.ModelProfileConfig) bool {
 	if target == nil || profile == nil {
 		return false
 	}
-	setter, ok := target.(interface{ SetProfile(*cfgmodel.ModelProfileConfig) })
+	setter, ok := target.(interface {
+		SetProfile(*cfgmodel.ModelProfileConfig)
+	})
 	if !ok {
 		return false
 	}

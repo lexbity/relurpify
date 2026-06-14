@@ -439,6 +439,7 @@ func normalizeCapabilityTags(tags []string) []string {
 	set := make(map[string]struct{}, len(tags))
 	for _, tag := range tags {
 		tag = strings.ToLower(strings.TrimSpace(tag))
+		tag = strings.ReplaceAll(tag, "_", "-")
 		if tag == "" || isReservedSecurityTag(tag) {
 			continue
 		}

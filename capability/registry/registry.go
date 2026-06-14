@@ -23,7 +23,6 @@ const (
 	Capabilitysalreadyregistered_registry = "capability %s already registered"
 )
 
-
 // PermissionAware allows tools to receive the permission manager for fine-grained
 // runtime checks (e.g. verifying file paths against allowlists).
 type PermissionAware interface {

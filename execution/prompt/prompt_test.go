@@ -9,14 +9,13 @@ import (
 
 const (
 	AgentGenericDefault_prompt_test = "agent.generic.default"
-	Agentone_prompt_test = "agent.one"
-	Agentthree_prompt_test = "agent.three"
-	Debug_prompt_test = "debug"
-	FrameworkPromptV2_prompt_test = "framework.prompt/v2"
-	Name_prompt_test = "name"
-	System_prompt_test = "system"
+	Agentone_prompt_test            = "agent.one"
+	Agentthree_prompt_test          = "agent.three"
+	Debug_prompt_test               = "debug"
+	FrameworkPromptV2_prompt_test   = "framework.prompt/v2"
+	Name_prompt_test                = "name"
+	System_prompt_test              = "system"
 )
-
 
 func TestParseBytes_V2ContractHappyPath(t *testing.T) {
 	src := `---

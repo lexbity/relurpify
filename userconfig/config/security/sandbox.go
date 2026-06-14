@@ -12,13 +12,13 @@ func SandboxPolicyPath(workspace string) string {
 }
 
 type sandboxPolicyFile struct {
-	ReadOnlyRoot    bool                  `yaml:"read_only_root,omitempty"`
-	ProtectedPaths  []string              `yaml:"protected_paths,omitempty"`
-	NoNewPrivileges bool                  `yaml:"no_new_privileges,omitempty"`
-	SeccompProfile  string                `yaml:"seccomp_profile,omitempty"`
-	AllowedEnvKeys  []string              `yaml:"allowed_env_keys,omitempty"`
-	DeniedEnvKeys   []string              `yaml:"denied_env_keys,omitempty"`
-	NetworkRules    []NetworkRule         `yaml:"network_rules,omitempty"`
+	ReadOnlyRoot    bool          `yaml:"read_only_root,omitempty"`
+	ProtectedPaths  []string      `yaml:"protected_paths,omitempty"`
+	NoNewPrivileges bool          `yaml:"no_new_privileges,omitempty"`
+	SeccompProfile  string        `yaml:"seccomp_profile,omitempty"`
+	AllowedEnvKeys  []string      `yaml:"allowed_env_keys,omitempty"`
+	DeniedEnvKeys   []string      `yaml:"denied_env_keys,omitempty"`
+	NetworkRules    []NetworkRule `yaml:"network_rules,omitempty"`
 }
 
 // LoadSandboxPolicy loads and validates the sandbox policy file.
@@ -39,6 +39,25 @@ func LoadSandboxPolicy(path, workspace string, decode Decoder) (*SandboxPolicy, 
 		AllowedEnvKeys:  append([]string(nil), file.AllowedEnvKeys...),
 		DeniedEnvKeys:   append([]string(nil), file.DeniedEnvKeys...),
 		NetworkRules:    append([]NetworkRule(nil), file.NetworkRules...),
+	}
+	for i, rule := range policy.NetworkRules {
+		if strings.TrimSpace(rule.Direction) == "" {
+			return nil, fmt.Errorf("network_rules[%d] invalid: direction required", i)
+		}
+		switch strings.ToLower(strings.TrimSpace(rule.Direction)) {
+		case "egress", "ingress":
+		default:
+			return nil, fmt.Errorf("network_rules[%d] invalid: unsupported direction %q", i, rule.Direction)
+		}
+		if strings.TrimSpace(rule.Protocol) == "" {
+			return nil, fmt.Errorf("network_rules[%d] invalid: protocol required", i)
+		}
+		if strings.TrimSpace(rule.Host) == "" {
+			return nil, fmt.Errorf("network_rules[%d] invalid: host required", i)
+		}
+		if rule.Port < 0 {
+			return nil, fmt.Errorf("network_rules[%d] invalid: invalid port %d", i, rule.Port)
+		}
 	}
 	policy.ProtectedPaths = injectProtectedRoot(absWorkspace, policy.ProtectedPaths)
 	return policy, nil

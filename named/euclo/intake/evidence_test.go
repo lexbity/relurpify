@@ -7,6 +7,7 @@ import (
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/context/contextstream"
 	execution "codeburg.org/lexbit/relurpify/execution"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclokeys"
 	"codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
 )
 
@@ -75,7 +76,7 @@ func TestBuildIntentEvidenceFlagsMissingFields(t *testing.T) {
 func TestIntakePipelineWritesEvidenceToEnvelope(t *testing.T) {
 	node := NewIntakePipelineNode("test-intake", nil, 128, contextstream.ModeBlocking, nil)
 	env := contextdata.NewEnvelope("task-1", "session-1")
-	contextdata.SetTyped(env, "task.input", &execution.Task{
+	contextdata.SetTyped(env, euclokeys.KeyTaskInput, &execution.Task{
 		ID:          "task-1",
 		Instruction: "Please review named/euclo/intake/types.go",
 	})

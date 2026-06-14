@@ -168,7 +168,6 @@ func seedTask(env *contextdata.Envelope, instruction string, userFiles ...string
 		Context:     map[string]any{},
 		Metadata:    map[string]any{},
 	}
-	contextdata.SetTyped(env, euclostate.KeyTaskInputLegacy, task)
 	contextdata.SetTyped(env, euclostate.KeyTaskInput, task)
 	taskEnvelope := &intake.TaskEnvelope{
 		TaskID:    env.TaskID,

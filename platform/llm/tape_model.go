@@ -317,7 +317,7 @@ func (t *TapeModel) validateHeader(currentProvider, currentModel, currentDigest 
 		return err
 	}
 	if inspection.Header == nil {
-		log.Printf("WARNING: tape has no header - cannot verify model compatibility. Consider re-recording.")
+		log.Printf("WARNING: tape has no header - cannot verify recorded model. Consider re-recording.")
 		return nil
 	}
 	h := inspection.Header
@@ -450,7 +450,7 @@ func inspectLoadedTape(path string, entries []tapeEntry) (*TapeInspection, error
 	if entries[0].Kind == "_header" {
 		inspection.Header = entries[0].Request.Header
 		if inspection.Header == nil {
-			log.Printf("WARNING: tape header entry missing header payload - cannot verify model compatibility. Consider re-recording.")
+			log.Printf("WARNING: tape header entry missing header payload - cannot verify recorded model. Consider re-recording.")
 		}
 	} else {
 		inspection.Legacy = true

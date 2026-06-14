@@ -7,11 +7,10 @@ import (
 )
 
 const (
-	Execution_governance_no_orchestration_test = "/execution"
+	Execution_governance_no_orchestration_test               = "/execution"
 	Executionagentlifecycle_governance_no_orchestration_test = "/execution/agentlifecycle"
-	Fmt_governance_no_orchestration_test = "fmt"
+	Fmt_governance_no_orchestration_test                     = "fmt"
 )
-
 
 func TestCheckGovernanceNoOrchestration_noViolation(t *testing.T) {
 	pkgs := []GoPackage{

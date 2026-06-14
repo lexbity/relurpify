@@ -167,15 +167,23 @@ func BuildDoctorReport(ctx context.Context, cfg Config, secrets config.Secrets) 
 	report.Inference = env.Inference
 	if strings.EqualFold(strings.TrimSpace(cfg.InferenceProvider), "tape") {
 		report.ModelProfilesExists = true
-	} else if reg, err := modelselect.LoadProfileRegistry(config.New(cfg.Workspace).ModelProfilesDir()); err == nil {
-		resolution := reg.Resolve(cfg.InferenceProvider, report.Inference.SelectedModel)
-		if resolution.SourcePath != "" {
-			report.ModelProfilesExists = true
-		} else {
-			report.ModelProfilesError = "no workspace model profile matched the selected model"
-		}
 	} else {
-		report.ModelProfilesError = err.Error()
+		bundle, diags, err := config.LoadDiagnostic(config.LoadOptions{WorkspaceRoot: cfg.Workspace})
+		if err != nil {
+			report.ModelProfilesError = err.Error()
+		} else if bundle.Config != nil {
+			reg := modelselect.NewProfileRegistryFromProfiles(bundle.Config.Model.Profiles)
+			resolution := reg.Resolve(cfg.InferenceProvider, report.Inference.SelectedModel)
+			if resolution.SourcePath != "" {
+				report.ModelProfilesExists = true
+			} else if diag := firstConfigDiagnostic(diags, "profile"); diag != nil && strings.EqualFold(strings.TrimSpace(diag.Severity), "blocking") {
+				report.ModelProfilesError = diag.Message
+			} else {
+				report.ModelProfilesError = "no workspace model profile matched the selected model"
+			}
+		} else {
+			report.ModelProfilesError = "workspace config bundle unavailable"
+		}
 	}
 	// Convert ayenitd probe results
 	// Map available Config fields to ayenitd.WorkspaceConfig.

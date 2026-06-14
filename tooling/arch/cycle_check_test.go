@@ -5,13 +5,12 @@ import (
 )
 
 const (
-	ImportPathA_cycle_check_test = "codeburg.org/lexbit/relurpify/a"
-	ImportPathB_cycle_check_test = "codeburg.org/lexbit/relurpify/b"
-	ImportPathC_cycle_check_test = "codeburg.org/lexbit/relurpify/c"
+	ImportPathA_cycle_check_test          = "codeburg.org/lexbit/relurpify/a"
+	ImportPathB_cycle_check_test          = "codeburg.org/lexbit/relurpify/b"
+	ImportPathC_cycle_check_test          = "codeburg.org/lexbit/relurpify/c"
 	ImportPathPlatformFs_cycle_check_test = "codeburg.org/lexbit/relurpify/platform/fs"
-	Fmt_cycle_check_test = "fmt"
+	Fmt_cycle_check_test                  = "fmt"
 )
-
 
 func TestCheckCycles_noCycle(t *testing.T) {
 	forward := map[string][]string{
@@ -82,7 +81,7 @@ func TestCheckLayerDirection_noViolation(t *testing.T) {
 	}
 	forward := map[string][]string{
 		ImportPathPlatformFs_cycle_check_test: {Fmt_cycle_check_test},
-		ImportPathA_cycle_check_test:           {Fmt_cycle_check_test},
+		ImportPathA_cycle_check_test:          {Fmt_cycle_check_test},
 	}
 	violations := CheckLayerDirection(pkgs, forward, Allowlist{})
 	if len(violations) != 0 {
@@ -96,7 +95,7 @@ func TestCheckLayerDirection_domainImportsPlatform(t *testing.T) {
 		{ImportPath: ImportPathPlatformFs_cycle_check_test, Name: "fs"},
 	}
 	forward := map[string][]string{
-		ImportPathA_cycle_check_test:           {ImportPathPlatformFs_cycle_check_test},
+		ImportPathA_cycle_check_test:          {ImportPathPlatformFs_cycle_check_test},
 		ImportPathPlatformFs_cycle_check_test: {Fmt_cycle_check_test},
 	}
 	violations := CheckLayerDirection(pkgs, forward, Allowlist{})
@@ -112,7 +111,7 @@ func TestCheckLayerDirection_testsuiteAllowed(t *testing.T) {
 	}
 	forward := map[string][]string{
 		"codeburg.org/lexbit/relurpify/testsuite/agenttest": {ImportPathPlatformFs_cycle_check_test},
-		ImportPathPlatformFs_cycle_check_test:         {Fmt_cycle_check_test},
+		ImportPathPlatformFs_cycle_check_test:               {Fmt_cycle_check_test},
 	}
 	violations := CheckLayerDirection(pkgs, forward, Allowlist{})
 	if len(violations) != 0 {
@@ -126,7 +125,7 @@ func TestCheckLayerDirection_allowlist(t *testing.T) {
 		{ImportPath: ImportPathPlatformFs_cycle_check_test, Name: "fs"},
 	}
 	forward := map[string][]string{
-		ImportPathA_cycle_check_test:           {ImportPathPlatformFs_cycle_check_test},
+		ImportPathA_cycle_check_test:          {ImportPathPlatformFs_cycle_check_test},
 		ImportPathPlatformFs_cycle_check_test: {Fmt_cycle_check_test},
 	}
 	allowlist := Allowlist{entries: map[string]map[string]bool{

@@ -35,7 +35,7 @@ func TestNewRegistrationAppliesOverrides(t *testing.T) {
 		t.Fatal("expected custom prompt registrar to be called")
 	}
 
-	loaded, err := reg.LoadThoughtRecipes()
+	loaded, err := reg.LoadThoughtRecipes(t.TempDir(), nil)
 	if err != nil {
 		t.Fatalf("LoadThoughtRecipes returned error: %v", err)
 	}
@@ -84,7 +84,7 @@ func TestDefaultPromptRegistrarRegistersAndSkipsDuplicates(t *testing.T) {
 func TestDefaultThoughtRecipeLoaderLoadsRegistry(t *testing.T) {
 	var loader defaultThoughtRecipeLoader
 
-	result, err := loader.LoadAll()
+	result, err := loader.LoadAll(t.TempDir(), nil)
 	if err != nil {
 		t.Fatalf("LoadAll returned error: %v", err)
 	}
@@ -122,7 +122,7 @@ type stubThoughtRecipeLoader struct {
 	result *thoughtrecipepkg.LoadResult
 }
 
-func (s *stubThoughtRecipeLoader) LoadAll() (*thoughtrecipepkg.LoadResult, error) {
+func (s *stubThoughtRecipeLoader) LoadAll(string, thoughtrecipepkg.CapabilityRegistryLookup) (*thoughtrecipepkg.LoadResult, error) {
 	s.called = true
 	if s.result == nil {
 		s.result = &thoughtrecipepkg.LoadResult{Registry: thoughtrecipepkg.NewThoughtRecipeRegistry()}

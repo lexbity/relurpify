@@ -2,11 +2,11 @@ package runtime
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -16,7 +16,6 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	registry "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
-	agents "codeburg.org/lexbit/relurpify/cognitionzoo"
 	"codeburg.org/lexbit/relurpify/cognitionzoo/paradigm"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/context/knowledge/ast"
@@ -31,8 +30,11 @@ import (
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/governance/policy"
 	"codeburg.org/lexbit/relurpify/model"
+	"codeburg.org/lexbit/relurpify/named/euclo"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclocontract"
 	intentcontext "codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
+	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
 	"codeburg.org/lexbit/relurpify/platform/llm"
 	"codeburg.org/lexbit/relurpify/platform/observability"
 	"codeburg.org/lexbit/relurpify/telemetry"
@@ -173,16 +175,13 @@ func New(ctx context.Context, cfg Config, secrets config.Secrets) (*Runtime, err
 
 	// App-level environment composition starts here. agentenv consumes the
 	// resulting products while the old environment object is being dissolved.
-	docSnapshot, err := config.LoadDocument(cfg.ManifestPath)
+	contract, err := config.OverlaySecurityBundle(euclocontract.DefaultContract(), &loadedConfig.Security)
 	if err != nil {
-		return nil, fmt.Errorf("load manifest: %w", err)
+		return nil, fmt.Errorf("overlay security bundle: %w", err)
 	}
-	contract, err := config.ResolveEffectiveAgentContract(cfg.Workspace, docSnapshot.Document, config.ResolveOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("resolve effective contract: %w", err)
-	}
+	docSnapshot := builtinDocumentSnapshot(contract)
 	agentSpec := convertAgentSpec(contract.AgentSpec)
-	contractPerms := convertPermissionSet(contract.Permissions)
+	contractPerms := contract.Permissions
 	securityBundle := loadedConfig.Security
 	profileRegistry, err := modelselect.BuildProfileRegistry(loadedConfig.Model.Profiles)
 	if err != nil {
@@ -279,6 +278,9 @@ func New(ctx context.Context, cfg Config, secrets config.Secrets) (*Runtime, err
 	if err != nil {
 		return nil, fmt.Errorf("compose model runtime: %w", err)
 	}
+	if cfg.ModelFactoryWrapper != nil && modelProduct.ModelFactory != nil {
+		modelProduct.ModelFactory = cfg.ModelFactoryWrapper(modelProduct.ModelFactory)
+	}
 	registrationView := &session.Registration{
 		ID:          registration.ID,
 		AgentSpec:   agentSpec,
@@ -309,6 +311,7 @@ func New(ctx context.Context, cfg Config, secrets config.Secrets) (*Runtime, err
 		Strict:                     envOverrides.Strict,
 		LoadedConfig:               loadedConfig,
 		DocumentSnapshot:           docSnapshot,
+		Contract:                   contract,
 		ProfileResolution:          profileResolution,
 		SecurityBundle:             &securityBundle,
 		Registration:               registrationView,
@@ -380,7 +383,9 @@ func New(ctx context.Context, cfg Config, secrets config.Secrets) (*Runtime, err
 					}
 				})
 			}
-			if docSnapshot != nil {
+			// S2: built-in contract has no source path; skip reload event.
+			// S8: replace with contract-fingerprint event.
+			if docSnapshot != nil && docSnapshot.SourcePath != "" {
 				emitDocumentReloadedEvent(ctx, env.EventLog, registration.ID, cfg.AgentLabel(), docSnapshot)
 			}
 		} else if logger != nil {
@@ -434,8 +439,11 @@ func New(ctx context.Context, cfg Config, secrets config.Secrets) (*Runtime, err
 	}
 	// Nexus gateway and node provider registration removed (app/nexus shelved)
 
-	agent := instantiateAgent(cfg, rt.paradigmDeps())
-	rt.wireRuntimeAgentDependencies(agent)
+	agent, err := instantiateAgent(rt.paradigmDeps())
+	if err != nil {
+		_ = rt.Close(ctx)
+		return nil, fmt.Errorf("instantiate agent: %w", err)
+	}
 
 	// Enforce the effective (post-definition) tool policies before initializing.
 	if env.Config != nil && env.Config.AgentSpec != nil {
@@ -443,6 +451,7 @@ func New(ctx context.Context, cfg Config, secrets config.Secrets) (*Runtime, err
 	}
 
 	rt.Agent = agent
+	emitAgentStartupEvent(ctx, eventTelemetry.Log, eventTelemetry.Partition, registration.ID, cfg.AgentLabel(), agent)
 	if err := ayenitd.RegisterWorkspaceServices(ctx, ayenitd.WorkspaceConfig{Workspace: cfg.Workspace}, sess, rt.Tools, registration); err != nil {
 		_ = rt.Close(ctx)
 		return nil, fmt.Errorf("register workspace services: %w", err)
@@ -496,7 +505,7 @@ func (r *Runtime) ManifestFingerprint() string {
 	return fmt.Sprintf("%x", r.registration.DocumentSnapshot.Fingerprint)
 }
 
-// ManifestDeprecationNotices returns manifest compatibility warnings when available.
+// ManifestDeprecationNotices returns manifest deprecation notices when available.
 func (r *Runtime) ManifestDeprecationNotices() []string {
 	if r == nil || r.registration == nil || r.registration.DocumentSnapshot == nil {
 		return nil
@@ -506,19 +515,7 @@ func (r *Runtime) ManifestDeprecationNotices() []string {
 
 // AvailableAgents lists known agent presets and definitions.
 func (r *Runtime) AvailableAgents() []string {
-	seen := map[string]struct{}{
-		"coding":     {},
-		"planner":    {},
-		"react":      {},
-		"reflection": {},
-		"expert":     {},
-	}
-	out := make([]string, 0, len(seen))
-	for name := range seen {
-		out = append(out, name)
-	}
-	sort.Strings(out)
-	return out
+	return []string{AgentLabelEuclo}
 }
 
 // SwitchAgent reinitializes the runtime with a new agent preset.
@@ -587,18 +584,10 @@ func (r *Runtime) applyResolvedAgentState(name string, effectiveContract *config
 		AgentSpec:         agentSpecCap,
 		Telemetry:         r.Workspace.Telemetry,
 	}
-	agent := instantiateAgent(cfg, &paradigm.Deps{
-		Model:         r.Model,
-		Registry:      r.Tools,
-		IndexManager:  r.IndexManager,
-		SearchEngine:  r.SearchEngine,
-		WorkingMemory: r.Memory,
-		Config:        agentCfg,
-	})
-	if agent == nil {
-		return fmt.Errorf("agent %s not available", name)
+	agent, err := instantiateAgent(r.switchAgentDeps(agentCfg))
+	if err != nil {
+		return fmt.Errorf("instantiate agent %q: %w", name, err)
 	}
-	r.wireRuntimeAgentDependencies(agent)
 	r.Tools.UseAgentSpec(r.Workspace.Registration.ID, agentSpecCap)
 	r.Workspace.Registration.Policy = nil
 	r.Agent = agent
@@ -610,24 +599,33 @@ func (r *Runtime) applyResolvedAgentState(name string, effectiveContract *config
 	return nil
 }
 
-// instantiateAgent picks the concrete agent implementation for the CLI preset.
-func instantiateAgent(cfg Config, deps *paradigm.Deps) agentgraph.WorkflowExecutor {
-	paths := config.New(cfg.Workspace)
-	builder := agents.NewAgentBuilder().WithDeps(deps)
-	switch cfg.AgentLabel() {
-	case "planner":
-		agent, _ := builder.Build("planner")
-		return configureBuiltAgent(agent, paths)
-	case "react":
-		agent, _ := builder.Build("react")
-		return configureBuiltAgent(agent, paths)
-	case "reflection":
-		agent, _ := builder.Build("reflection")
-		return configureBuiltAgent(agent, paths)
-	default:
-		agent, _ := builder.Build("react")
-		return configureBuiltAgent(agent, paths)
+// builtinDocumentSnapshot creates a minimal DocumentSnapshot for the built-in
+// euclo contract. The snapshot carries a synthetic fingerprint derived from the
+// contract and is used for agent registration metadata. The real contract
+// fingerprint lands in S8.
+func builtinDocumentSnapshot(contract *config.EffectiveAgentContract) *config.DocumentSnapshot {
+	if contract == nil {
+		return nil
 	}
+	fp := sha256.Sum256([]byte("euclo-builtin-contract"))
+	return &config.DocumentSnapshot{
+		Document: &config.Document{
+			APIVersion: "relurpify.io/v1",
+			Kind:       "AgentManifest",
+			Metadata:   config.DocumentMetadata{Name: contract.AgentID},
+		},
+		Fingerprint: fp,
+		SourcePath:  "",
+		LoadedAt:    time.Now().UTC(),
+	}
+}
+
+// instantiateAgent builds the euclo workflow executor.
+func instantiateAgent(deps *paradigm.Deps) (agentgraph.WorkflowExecutor, error) {
+	if deps == nil || deps.Registry == nil {
+		return nil, fmt.Errorf("instantiate euclo: capability registry is required")
+	}
+	return euclo.New(deps, euclo.WithCheckpointRepository(deps.AgentLifecycle)), nil
 }
 
 func (r *Runtime) paradigmDeps() *paradigm.Deps {
@@ -635,6 +633,8 @@ func (r *Runtime) paradigmDeps() *paradigm.Deps {
 		Config:         r.Workspace.Environment.Config,
 		Model:          r.Model,
 		Registry:       r.Tools,
+		CommandRunner:  r.Workspace.Environment.CommandRunner,
+		CommandPolicy:  r.Workspace.Environment.CommandPolicy,
 		WorkingMemory:  r.Memory,
 		IndexManager:   r.IndexManager,
 		SearchEngine:   r.SearchEngine,
@@ -646,20 +646,52 @@ func (r *Runtime) paradigmDeps() *paradigm.Deps {
 	}
 }
 
-func (r *Runtime) resolveEffectiveContractForAgent(name string) (*config.EffectiveAgentContract, *session.CompiledPolicy, error) {
-	if r.documentSnapshot == nil || r.documentSnapshot.Document == nil {
-		return nil, nil, fmt.Errorf("manifest snapshot missing")
+func (r *Runtime) switchAgentDeps(agentCfg *execution.Config) *paradigm.Deps {
+	deps := r.paradigmDeps()
+	if deps == nil {
+		return nil
 	}
-	effectiveContract, err := config.ResolveEffectiveAgentContract(r.Config.Workspace, r.documentSnapshot.Document, config.ResolveOptions{})
+	deps.Config = agentCfg
+	return deps
+}
+
+func emitAgentStartupEvent(ctx context.Context, eventLog event.Log, partition, agentID, label string, agent agentgraph.WorkflowExecutor) {
+	if eventLog == nil {
+		return
+	}
+	if strings.TrimSpace(partition) == "" {
+		partition = "local"
+	}
+	payload := map[string]any{
+		"agent_id":      agentID,
+		"agent_label":   label,
+		"executor_type": fmt.Sprintf("%T", agent),
+	}
+	data, err := json.Marshal(payload)
 	if err != nil {
-		return nil, nil, fmt.Errorf("resolve effective contract: %w", err)
+		return
 	}
+	_, _ = eventLog.Append(ctx, partition, []event.FrameworkEvent{{
+		Timestamp: time.Now().UTC(),
+		Type:      event.EventAgentRunStarted,
+		Payload:   data,
+		Actor:     observability.Actor{Kind: "agent", ID: agentID, Label: label},
+		Partition: partition,
+	}})
+}
+
+func (r *Runtime) resolveEffectiveContractForAgent(name string) (*config.EffectiveAgentContract, *session.CompiledPolicy, error) {
+	if strings.TrimSpace(name) == "" {
+		return nil, nil, fmt.Errorf("agent name required")
+	}
+	// S2: euclo is the only agent; use the built-in contract.
+	effectiveContract := euclocontract.DefaultContract()
 	if effectiveContract.AgentID == "" {
-		return nil, nil, fmt.Errorf("agent id required")
+		return nil, nil, fmt.Errorf("agent id required for agent %q", name)
 	}
 	agentSpecCap := convertAgentSpec(effectiveContract.AgentSpec)
 	if agentSpecCap == nil {
-		return nil, nil, fmt.Errorf("agent spec required")
+		return nil, nil, fmt.Errorf("agent spec required for agent %q", name)
 	}
 	compiledPolicy := &session.CompiledPolicy{
 		AgentID: effectiveContract.AgentID,
@@ -667,16 +699,6 @@ func (r *Runtime) resolveEffectiveContractForAgent(name string) (*config.Effecti
 		Engine:  r.Workspace.PolicyEngine,
 	}
 	return effectiveContract, compiledPolicy, nil
-}
-
-func configureBuiltAgent(agent agentgraph.WorkflowExecutor, paths config.Paths) agentgraph.WorkflowExecutor {
-	_ = paths
-	return agent
-}
-
-func (r *Runtime) wireRuntimeAgentDependencies(agent agentgraph.WorkflowExecutor) {
-	_ = r
-	_ = agent
 }
 
 // RunTask executes a task against the configured agent while preserving shared
@@ -698,7 +720,35 @@ func (r *Runtime) RunTask(ctx context.Context, task *execution.Task) (*execution
 		}
 	}
 	r.trackInteractionEnvelope(task.ID, env)
+	if err := r.Agent.Initialize(&execution.Config{Workspace: r.Config.Workspace}); err != nil {
+		return nil, fmt.Errorf("initialize agent: %w", err)
+	}
 	return r.Agent.Execute(ctx, task, env)
+}
+
+func (r *Runtime) submitTurn(ctx context.Context, instruction string, taskType execution.TaskType, metadata map[string]any, callback func(string)) (*execution.Result, error) {
+	if taskType == "" {
+		taskType = execution.TaskTypeExecute
+	}
+	if callback != nil {
+		if metadata == nil {
+			metadata = make(map[string]any)
+		}
+		metadata["stream_callback"] = callback
+	}
+
+	task := &execution.Task{
+		ID:          fmt.Sprintf("chat-%d", time.Now().UnixNano()),
+		Instruction: instruction,
+		Type:        string(taskType),
+		Context:     metadata,
+		Metadata:    metadata,
+	}
+	if task.Context == nil {
+		task.Context = make(map[string]any)
+	}
+	task.Context["workspace"] = r.Config.Workspace
+	return r.RunTask(ctx, task)
 }
 
 // ResolveInteractionFrame writes a UI response back into the live envelope for
@@ -744,34 +794,20 @@ func (r *Runtime) ResolveInteractionFrame(ctx context.Context, taskID, frameID, 
 	return nil
 }
 
+// SubmitTurn is the canonical turn submission entry used by the TUI.
+func (r *Runtime) SubmitTurn(ctx context.Context, instruction string, taskType execution.TaskType, metadata map[string]any, callback func(string)) (*execution.Result, error) {
+	return r.submitTurn(ctx, instruction, taskType, metadata, callback)
+}
+
 // ExecuteInstruction convenience helper.
 func (r *Runtime) ExecuteInstruction(ctx context.Context, instruction string, taskType execution.TaskType, metadata map[string]any) (*execution.Result, error) {
-	if taskType == "" {
-		taskType = execution.TaskTypeExecute
-	}
-
-	task := &execution.Task{
-		ID:          fmt.Sprintf("chat-%d", time.Now().UnixNano()),
-		Instruction: instruction,
-		Type:        string(taskType),
-		Context:     metadata,
-		Metadata:    metadata,
-	}
-	if task.Context == nil {
-		task.Context = make(map[string]any)
-	}
-	task.Context["workspace"] = r.Config.Workspace
-	return r.RunTask(ctx, task)
+	return r.submitTurn(ctx, instruction, taskType, metadata, nil)
 }
 
 // ExecuteInstructionStream is like ExecuteInstruction but wires a streaming
 // callback so the LLM emits tokens incrementally via callback as they arrive.
 func (r *Runtime) ExecuteInstructionStream(ctx context.Context, instruction string, taskType execution.TaskType, metadata map[string]any, callback func(string)) (*execution.Result, error) {
-	if metadata == nil {
-		metadata = make(map[string]any)
-	}
-	metadata["stream_callback"] = callback
-	return r.ExecuteInstruction(ctx, instruction, taskType, metadata)
+	return r.submitTurn(ctx, instruction, taskType, metadata, callback)
 }
 
 func (r *Runtime) trackInteractionEnvelope(taskID string, env *contextdata.Envelope) {
@@ -839,7 +875,7 @@ func (r *Runtime) resumeInteractionTask(ctx context.Context, env *contextdata.En
 	if env == nil {
 		return nil, fmt.Errorf("interaction envelope unavailable")
 	}
-	value, ok := contextdata.GetTyped[any](env, "task.input")
+	value, ok := contextdata.GetTyped[any](env, euclostate.KeyTaskInput)
 	if !ok || value == nil {
 		return nil, fmt.Errorf("task input unavailable for resume")
 	}

@@ -15,11 +15,10 @@ import (
 
 const (
 	Injectedpanicfortesting_invoke_panic_test = "injected panic for testing"
-	Output_invoke_panic_test = "output"
-	TestTool_invoke_panic_test = "test_tool"
-	Unexpectederrorv_invoke_panic_test = "unexpected error: %v"
+	Output_invoke_panic_test                  = "output"
+	TestTool_invoke_panic_test                = "test_tool"
+	Unexpectederrorv_invoke_panic_test        = "unexpected error: %v"
 )
-
 
 var errSentinel = errors.New("sentinel error")
 

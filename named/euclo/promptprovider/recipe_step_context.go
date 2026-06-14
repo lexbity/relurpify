@@ -187,7 +187,7 @@ func clarificationStateFromRuntime(ctx prompt.RuntimeContext) *intentcontext.Cla
 		}
 	}
 	if ctx.Envelope != nil {
-		if state, err := intentcontext.NewStateStore().Read(context.TODO(), ctx.Envelope); err == nil {
+		if state, err := intentcontext.NewStateStore().Read(context.Background(), ctx.Envelope); err == nil {
 			return state
 		}
 	}

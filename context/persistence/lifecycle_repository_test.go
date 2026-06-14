@@ -10,25 +10,24 @@ import (
 )
 
 const (
-	Art1_lifecycle_repository_test = "art-1"
-	Attempt456_lifecycle_repository_test = "attempt-456"
-	Completed_lifecycle_repository_test = "completed"
-	Del1_lifecycle_repository_test = "del-1"
-	Evt_lifecycle_repository_test = "evt"
-	Key1_lifecycle_repository_test = "key1"
-	Lb1_lifecycle_repository_test = "lb-1"
-	Lineage123_lifecycle_repository_test = "lineage-123"
-	Provider1_lifecycle_repository_test = "provider-1"
-	Run1_lifecycle_repository_test = "run-1"
+	Art1_lifecycle_repository_test         = "art-1"
+	Attempt456_lifecycle_repository_test   = "attempt-456"
+	Completed_lifecycle_repository_test    = "completed"
+	Del1_lifecycle_repository_test         = "del-1"
+	Evt_lifecycle_repository_test          = "evt"
+	Key1_lifecycle_repository_test         = "key1"
+	Lb1_lifecycle_repository_test          = "lb-1"
+	Lineage123_lifecycle_repository_test   = "lineage-123"
+	Provider1_lifecycle_repository_test    = "provider-1"
+	Run1_lifecycle_repository_test         = "run-1"
 	Runroundtrip_lifecycle_repository_test = "run-roundtrip"
-	Running_lifecycle_repository_test = "running"
-	Test_lifecycle_repository_test = "test"
-	Wf1_lifecycle_repository_test = "wf-1"
-	Wfroundtrip_lifecycle_repository_test = "wf-roundtrip"
-	Wftest1_lifecycle_repository_test = "wf-test-1"
-	Wftest2_lifecycle_repository_test = "wf-test-2"
+	Running_lifecycle_repository_test      = "running"
+	Test_lifecycle_repository_test         = "test"
+	Wf1_lifecycle_repository_test          = "wf-1"
+	Wfroundtrip_lifecycle_repository_test  = "wf-roundtrip"
+	Wftest1_lifecycle_repository_test      = "wf-test-1"
+	Wftest2_lifecycle_repository_test      = "wf-test-2"
 )
-
 
 func setupTestDB(t *testing.T) *graphdb.Engine {
 	t.Helper()

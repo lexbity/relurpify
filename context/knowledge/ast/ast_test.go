@@ -10,7 +10,6 @@ const (
 	Custom_ast_test = "custom"
 )
 
-
 func TestLanguageDetector(t *testing.T) {
 	detector := NewLanguageDetector()
 	if lang := detector.Detect("main.go"); lang != "go" {

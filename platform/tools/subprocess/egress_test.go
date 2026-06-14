@@ -10,21 +10,20 @@ import (
 )
 
 const (
-	_10_0_0_1 = "10.0.0.1"
-	_10_0_0_5 = "10.0.0.5"
-	_127_0_0_1 = "127.0.0.1"
-	_8_8_8_8 = "8.8.8.8"
-	args = "args"
-	builtin_trusted = "builtin_trusted"
-	cli_curl = "cli_curl"
-	curl = "curl"
-	execute = "execute"
-	header = "--header"
+	_10_0_0_1                             = "10.0.0.1"
+	_10_0_0_5                             = "10.0.0.5"
+	_127_0_0_1                            = "127.0.0.1"
+	_8_8_8_8                              = "8.8.8.8"
+	args                                  = "args"
+	builtin_trusted                       = "builtin_trusted"
+	cli_curl                              = "cli_curl"
+	curl                                  = "curl"
+	execute                               = "execute"
+	header                                = "--header"
 	http_169_254_169_254_latest_meta_data = "http://169.254.169.254/latest/meta-data/"
-	network = "network"
-	process_spawn = "process_spawn"
+	network                               = "network"
+	process_spawn                         = "process_spawn"
 )
-
 
 // blockedEgressRunner records whether Run was called.
 type blockedEgressRunner struct {
@@ -59,10 +58,10 @@ func newNetworkTool(runner ports.CommandRunner) ports.Tool {
 func TestNetworkToolBlocksPrivateAndMetadataHosts(t *testing.T) {
 	blocked := []string{
 		http_169_254_169_254_latest_meta_data, // cloud metadata URL
-		"https://127.0.0.1:6443/healthz",           // loopback service
-		"http://[::1]/",                            // IPv6 loopback URL
-		_10_0_0_5,                                 // bare RFC-1918 IP (nc/ping style)
-		"192.168.1.1:8080",                         // host:port
+		"https://127.0.0.1:6443/healthz",      // loopback service
+		"http://[::1]/",                       // IPv6 loopback URL
+		_10_0_0_5,                             // bare RFC-1918 IP (nc/ping style)
+		"192.168.1.1:8080",                    // host:port
 	}
 	for _, target := range blocked {
 		r := &blockedEgressRunner{}
@@ -205,9 +204,9 @@ func TestExtractHost(t *testing.T) {
 		{"https://8.8.8.8/", _8_8_8_8},
 		{"https://example.com/path", "example.com"},
 		{"user:pass@host.com:8080/path", "host.com"},
-		{"-H", "-H"},             // extractHost does not filter flags; firstBlockedEgressHost does
+		{"-H", "-H"},     // extractHost does not filter flags; firstBlockedEgressHost does
 		{header, header}, // same
-		{"", ""},                 // empty
+		{"", ""},         // empty
 		{"localhost", "localhost"},
 		{"[::1]", "::1"},
 	}

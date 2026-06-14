@@ -292,17 +292,36 @@ func ensureWorkspace() string {
 
 func discoverSuites(ws, agentName string) []string {
 	canonicalDir := filepath.Join(ws, "testsuite", "agenttests")
-	pattern := "*.testsuite.yaml"
+	prefix := ""
 	if strings.TrimSpace(agentName) != "" {
-		pattern = fmt.Sprintf("%s*.testsuite.yaml", sanitizeName(agentName))
+		prefix = sanitizeName(agentName)
 	}
-	matches, _ := filepath.Glob(filepath.Join(canonicalDir, pattern))
+	suffix := ".testsuite.yaml"
+
+	readSuites := func(dir string) []string {
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			return nil
+		}
+		var matches []string
+		for _, entry := range entries {
+			if entry.IsDir() {
+				continue
+			}
+			name := entry.Name()
+			if strings.HasSuffix(name, suffix) && (prefix == "" || strings.HasPrefix(name, prefix)) {
+				matches = append(matches, filepath.Join(dir, name))
+			}
+		}
+		return matches
+	}
+
+	matches := readSuites(canonicalDir)
 	if len(matches) > 0 {
 		return matches
 	}
 	fallbackDir := config.New(ws).TestsuitesDir()
-	matches, _ = filepath.Glob(filepath.Join(fallbackDir, pattern))
-	return matches
+	return readSuites(fallbackDir)
 }
 
 func resolveTapeSuitePaths(ws string, suites []string, agentName string) ([]string, error) {

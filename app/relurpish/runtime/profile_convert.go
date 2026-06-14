@@ -3,11 +3,10 @@ package runtime
 import (
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/model"
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
-	"codeburg.org/lexbit/relurpify/governance/permissions"
-	cfgmodel "codeburg.org/lexbit/relurpify/userconfig/config/model"
+	"codeburg.org/lexbit/relurpify/model"
 	cfg "codeburg.org/lexbit/relurpify/userconfig/config"
+	cfgmodel "codeburg.org/lexbit/relurpify/userconfig/config/model"
 )
 
 func convertProfileConfig(cfg *cfgmodel.ModelProfileConfig) *model.ModelProfile {
@@ -71,57 +70,3 @@ func convertAgentSpec(in *cfg.AgentSpec) *agentspec.AgentRuntimeSpec {
 	return out
 }
 
-func convertPermissionSet(in cfg.PermissionSet) permissions.PermissionSet {
-	out := permissions.PermissionSet{
-		FileSystem:   make([]permissions.FileSystemPermission, len(in.FileSystem)),
-		Executables:  make([]permissions.ExecutablePermission, len(in.Executables)),
-		Network:      make([]permissions.NetworkPermission, len(in.Network)),
-		Capabilities: make([]permissions.CapabilityPermission, len(in.Capabilities)),
-		IPC:          make([]permissions.IPCPermission, len(in.IPC)),
-		HITLRequired: append([]string(nil), in.HITLRequired...),
-	}
-	for i, v := range in.FileSystem {
-		out.FileSystem[i] = permissions.FileSystemPermission{
-			Action:        permissions.FileSystemAction(v.Action),
-			Path:          v.Path,
-			Justification: v.Justification,
-			HITLRequired:  v.HITLRequired,
-			ReadOnlyMount: v.ReadOnlyMount,
-		}
-	}
-	for i, v := range in.Executables {
-		out.Executables[i] = permissions.ExecutablePermission{
-			Binary:        v.Binary,
-			Args:          append([]string(nil), v.Args...),
-			Env:           append([]string(nil), v.Env...),
-			Checksum:      v.Checksum,
-			HITLRequired:  v.HITLRequired,
-			ProxyRequired: v.ProxyRequired,
-		}
-	}
-	for i, v := range in.Network {
-		out.Network[i] = permissions.NetworkPermission{
-			Direction:    v.Direction,
-			Protocol:     v.Protocol,
-			Host:         v.Host,
-			Port:         v.Port,
-			Description:  v.Description,
-			HITLRequired: v.HITLRequired,
-		}
-	}
-	for i, v := range in.Capabilities {
-		out.Capabilities[i] = permissions.CapabilityPermission{
-			Capability:    v.Capability,
-			Justification: v.Justification,
-		}
-	}
-	for i, v := range in.IPC {
-		out.IPC[i] = permissions.IPCPermission{
-			Kind:         v.Kind,
-			Target:       v.Target,
-			Description:  v.Description,
-			HITLRequired: v.HITLRequired,
-		}
-	}
-	return out
-}

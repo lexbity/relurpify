@@ -6,11 +6,10 @@ import (
 )
 
 const (
-	Hello_validate_test = "Hello"
+	Hello_validate_test               = "Hello"
 	AgentGenericDefault_validate_test = "agent.generic.default"
-	FrameworkPromptV2_validate_test = "framework.prompt/v2"
+	FrameworkPromptV2_validate_test   = "framework.prompt/v2"
 )
-
 
 func TestValidateConfig_RejectsMalformedV2Files(t *testing.T) {
 	cases := []struct {

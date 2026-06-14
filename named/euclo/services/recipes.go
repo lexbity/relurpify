@@ -3,6 +3,7 @@ package services
 import (
 	"errors"
 	"os"
+	"strings"
 
 	thoughtrecipepkg "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
 )
@@ -10,9 +11,9 @@ import (
 // defaultThoughtRecipeLoader implements ThoughtRecipeLoader using the Euclo DSL source scan.
 type defaultThoughtRecipeLoader struct{}
 
-func (r *defaultThoughtRecipeLoader) LoadAll() (*thoughtrecipepkg.LoadResult, error) {
-	loader := thoughtrecipepkg.NewLoader()
-	result, err := loader.LoadWorkspace(".")
+func (r *defaultThoughtRecipeLoader) LoadAll(workspace string, caps thoughtrecipepkg.CapabilityRegistryLookup) (*thoughtrecipepkg.LoadResult, error) {
+	loader := thoughtrecipepkg.NewLoader().WithCapabilityRegistry(caps)
+	result, err := loader.LoadWorkspace(strings.TrimSpace(workspace))
 	if err == nil && result != nil {
 		return result, nil
 	}

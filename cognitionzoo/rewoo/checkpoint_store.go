@@ -338,9 +338,7 @@ func (s *RewooCheckpointStore) persistPlanArtifact(ctx context.Context, checkpoi
 	if err := s.lifecycleRepo.UpsertArtifact(ctx, record); err != nil {
 		return nil
 	}
-	// Phase 1 stub: return nil instead of artifact reference
-	// TODO: Restore in Phase 8 when workflowutil is rewritten
-	return nil
+	return artifactReferenceFromRecord(record)
 }
 
 func (s *RewooCheckpointStore) persistToolResultsArtifact(ctx context.Context, checkpointID, workflowID, runID string, results []RewooStepResult) *relurpctx.ArtifactReference {
@@ -365,9 +363,7 @@ func (s *RewooCheckpointStore) persistToolResultsArtifact(ctx context.Context, c
 	if err := s.lifecycleRepo.UpsertArtifact(ctx, record); err != nil {
 		return nil
 	}
-	// Phase 1 stub: return nil instead of artifact reference
-	// TODO: Restore in Phase 8 when workflowutil is rewritten
-	return nil
+	return artifactReferenceFromRecord(record)
 }
 
 func (s *RewooCheckpointStore) persistSynthesisArtifact(ctx context.Context, checkpointID, workflowID, runID, synthesis string, results []RewooStepResult) *relurpctx.ArtifactReference {
@@ -395,9 +391,27 @@ func (s *RewooCheckpointStore) persistSynthesisArtifact(ctx context.Context, che
 	if err := s.lifecycleRepo.UpsertArtifact(ctx, record); err != nil {
 		return nil
 	}
-	// Phase 1 stub: return nil instead of artifact reference
-	// TODO: Restore in Phase 8 when workflowutil is rewritten
-	return nil
+	return artifactReferenceFromRecord(record)
+}
+
+func artifactReferenceFromRecord(record agentlifecycle.WorkflowArtifactRecord) *relurpctx.ArtifactReference {
+	ref := &relurpctx.ArtifactReference{
+		ArtifactID:   record.ArtifactID,
+		WorkflowID:   record.WorkflowID,
+		RunID:        record.RunID,
+		Kind:         record.Kind,
+		ContentType:  record.ContentType,
+		StorageKind:  string(record.StorageKind),
+		Summary:      record.SummaryText,
+		RawSizeBytes: record.RawSizeBytes,
+	}
+	if len(record.SummaryMetadata) > 0 {
+		ref.Metadata = make(map[string]string, len(record.SummaryMetadata))
+		for key, value := range record.SummaryMetadata {
+			ref.Metadata[key] = fmt.Sprint(value)
+		}
+	}
+	return ref
 }
 
 func mustJSON(v any) []byte {

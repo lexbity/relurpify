@@ -7,7 +7,7 @@ The `agenttest` package provides a comprehensive YAML-driven testing framework f
 This framework allows defining test suites in YAML format that specify:
 - **Test cases**: Prompts, context, and expected outcomes
 - **Outcome assertions**: Hard pass/fail criteria for goal achievement
-- **Security assertions**: Sandbox and manifest contract validation
+- **Security assertions**: Sandbox and document contract validation
 - **Benchmark observations**: Behavioral telemetry (soft assertions that don't fail tests)
 
 ## OSB Model
@@ -65,11 +65,10 @@ spec:
 
 ### Test Runner (`runner.go`, `runner_case.go`)
 
-The test runner prepares live test cases, writes a prepared-run descriptor, and
-then verifies the resulting run artifacts:
+The test runner prepares live test cases and verifies the resulting run artifacts:
 - Loads YAML test suites
-- Prepares the derived workspace and descriptor
-- Hands execution to `dev-agent-cli prepared-run`
+- Prepares the derived workspace and execution inputs
+- Invokes `dev-agent agenttest run`
 - Captures execution output, file changes, and tool transcripts
 - Produces structured `CaseReport` with OSB observations
 
@@ -124,7 +123,8 @@ go test ./testsuite/agenttest/... -run "TestCapability"
 
 ### Using the CLI
 
-The `dev-agent-cli` provides commands for working with test suites:
+The `dev-agent` CLI provides commands for working with test suites and tape
+workflow:
 
 ```bash
 # Run a specific test suite
@@ -137,7 +137,12 @@ dev-agent agenttest run --suite coding.testsuite.yaml --model qwen2.5-coder:14b
 dev-agent agenttest run --suite coding.testsuite.yaml --case simple_file_edit
 
 # Run by capability
-dev-agent agenttest run --capability code-edit-v1
+dev-agent agenttest run --agent euclo --tag coverage-matrix
+
+# Promote, report, and rerecord tape fixtures
+dev-agent agenttest promote --suite testsuite/agenttests/euclo.code.testsuite.yaml --run relurpify_cfg/test_runs/euclo/<run_id> --case basic_edit_task
+dev-agent agenttest report --agent euclo
+dev-agent agenttest rerecord --agent euclo
 ```
 
 ## Directory Structure

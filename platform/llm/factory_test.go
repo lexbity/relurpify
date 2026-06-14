@@ -14,6 +14,7 @@ const (
 	factoryTestEndpoint         = "http://localhost:11434"
 	factoryTestProviderOllama   = "ollama"
 	factoryTestProviderLMStudio = "lmstudio"
+	factoryTestProviderOffline  = "offline"
 	factoryTestProviderTape     = "tape"
 	factoryTestModel            = "test-model"
 	factoryTestTapeModel        = "tape-model"
@@ -23,11 +24,17 @@ const (
 	factoryTestTapeResponse     = "hello from tape"
 )
 
-func TestRegisteredProvidersIncludesTape(t *testing.T) {
+func TestRegisteredProvidersIncludesBuiltinsAndOffline(t *testing.T) {
 	registered := RegisteredProviders()
-	require.Contains(t, registered, "ollama")
-	require.Contains(t, registered, "lmstudio")
-	require.Contains(t, registered, "tape")
+	require.ElementsMatch(t, []string{"ollama", "lmstudio", "offline", "tape"}, registered)
+}
+
+func TestRegisterProviderPanicsOnDuplicateInTests(t *testing.T) {
+	require.Panics(t, func() {
+		RegisterProvider(factoryTestProviderOffline, func(ProviderConfig, ProviderSecrets) (ManagedBackend, error) {
+			return offlineBackend{}, nil
+		})
+	})
 }
 
 func TestFactory_OllamaDefault(t *testing.T) {

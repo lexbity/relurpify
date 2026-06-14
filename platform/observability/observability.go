@@ -37,12 +37,12 @@ const (
 	EventBackendRestart        EventType = "backend_restart"
 	EventChunkCommitted        EventType = "chunk_committed"
 	EventSummaryCommitted      EventType = "summary_committed"
-	EventContextPolicyReloaded  EventType = "context_policy_reloaded"
+	EventContextPolicyReloaded EventType = "context_policy_reloaded"
 	EventProviderSessionEnded  EventType = "provider_session_ended"
 	EventCompilerWarning       EventType = "compiler_warning"
 	EventBootstrapComplete     EventType = "bootstrap_complete"
-	EventBudgetSnapshot        = "budget.snapshot"
-	EventSessionResetRequired   = "session.reset_required"
+	EventBudgetSnapshot                  = "budget.snapshot"
+	EventSessionResetRequired            = "session.reset_required"
 )
 
 // Actor identifies the origin of an event.
@@ -195,10 +195,10 @@ func ResponseIngesterFromContext(ctx context.Context) ResponseIngester {
 // ContextBudgetAdvisor tracks consumed token budget across LLM calls and advises the compiler.
 type ContextBudgetAdvisor struct {
 	ModelContextSize     int
-	ReservedOutputTokens  int
-	EstimationFallback    int
+	ReservedOutputTokens int
+	EstimationFallback   int
 
-	mu              sync.Mutex
+	mu               sync.Mutex
 	consumedTokens   int
 	callCount        int
 	estimatedCalls   int

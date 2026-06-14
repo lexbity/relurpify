@@ -27,7 +27,6 @@ import (
 )
 
 // TaskPayload retrieves workflow retrieval payload from task context.
-// This replaces the workflowutil.TaskPayload stub.
 func TaskPayload(task *execution.Task, key string) []byte {
 	if task == nil || task.Context == nil {
 		return nil
@@ -556,20 +555,8 @@ func (n *plannerExecuteNode) Execute(ctx context.Context, env *contextdata.Envel
 			})
 			continue
 		}
-		// TODO: envelope equivalent of CapabilityAvailable
-		// if !n.agent.Tools.CapabilityAvailable(ctx, env, step.Tool) {
-		if false {
-			skippedTools = append(skippedTools, map[string]string{
-				"id":     step.ID,
-				"tool":   step.Tool,
-				"reason": "capability unavailable",
-			})
-			continue
-		}
 		params := normalizePlannerStepParams(n.agent.Tools, step.Tool, step.Params)
-		// TODO: envelope equivalent of InvokeCapability
-		// result, err := n.agent.Tools.InvokeCapability(ctx, env, step.Tool, params)
-		result, err := n.agent.Tools.InvokeCapability(ctx, nil, step.Tool, params)
+		result, err := n.agent.Tools.InvokeCapability(ctx, env.State(), step.Tool, params)
 		if err != nil {
 			return nil, err
 		}

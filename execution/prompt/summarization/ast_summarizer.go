@@ -10,11 +10,10 @@ import (
 )
 
 const (
-	Class_ast_summarizer = "class "
+	Class_ast_summarizer  = "class "
 	Import_ast_summarizer = "import "
-	Type_ast_summarizer = "type "
+	Type_ast_summarizer   = "type "
 )
-
 
 // ASTSummarizer preserves function signatures, class declarations, doc comments;
 // elides function bodies. Deterministic; no model call.

@@ -11,10 +11,9 @@ import (
 )
 
 const (
-	arg1 = "arg1"
+	arg1      = "arg1"
 	test_tool = "test_tool"
 )
-
 
 // Test that ToolResponseOverride struct fields are properly set
 type testOverride struct {

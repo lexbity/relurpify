@@ -5,13 +5,12 @@ import (
 )
 
 const (
-	ImportPathA_consumer_check_test = "codeburg.org/lexbit/relurpify/a"
-	ImportPathB_consumer_check_test = "codeburg.org/lexbit/relurpify/b"
-	ImportPathC_consumer_check_test = "codeburg.org/lexbit/relurpify/c"
-	ImportPathD_consumer_check_test = "codeburg.org/lexbit/relurpify/d"
+	ImportPathA_consumer_check_test      = "codeburg.org/lexbit/relurpify/a"
+	ImportPathB_consumer_check_test      = "codeburg.org/lexbit/relurpify/b"
+	ImportPathC_consumer_check_test      = "codeburg.org/lexbit/relurpify/c"
+	ImportPathD_consumer_check_test      = "codeburg.org/lexbit/relurpify/d"
 	ImportPathUnused_consumer_check_test = "codeburg.org/lexbit/relurpify/unused"
 )
-
 
 func TestCheckConsumers_noViolation(t *testing.T) {
 	pkgs := []GoPackage{

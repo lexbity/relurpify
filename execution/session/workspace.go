@@ -224,13 +224,19 @@ func BootstrapAgentRuntime(ctx context.Context, workspace string, opts AgentBoot
 		return nil, fmt.Errorf("security bundle required")
 	}
 
-	resolveOpts := config.ResolveOptions{}
-	if opts.DocumentSnapshot.Document == nil {
-		return nil, fmt.Errorf("document snapshot missing document")
-	}
-	effectiveContract, err := config.ResolveEffectiveAgentContract(workspace, opts.DocumentSnapshot.Document, resolveOpts)
-	if err != nil {
-		return nil, err
+	var effectiveContract *config.EffectiveAgentContract
+	if opts.Contract != nil {
+		effectiveContract = opts.Contract
+	} else {
+		resolveOpts := config.ResolveOptions{}
+		if opts.DocumentSnapshot.Document == nil {
+			return nil, fmt.Errorf("document snapshot missing document")
+		}
+		var err error
+		effectiveContract, err = config.ResolveEffectiveAgentContract(workspace, opts.DocumentSnapshot.Document, resolveOpts)
+		if err != nil {
+			return nil, err
+		}
 	}
 	agentSpec := effectiveContract.AgentSpec
 	agentSpecCap := convertAgentSpec(agentSpec)
@@ -365,8 +371,7 @@ func buildCompiledPolicy(contract *config.EffectiveAgentContract, engine regpkg.
 // Feature assembly is governed by cfg.Scope. Security and capability
 // assembly are unconditional; LLM backend, knowledge, services, and
 // telemetry-sink construction are gated behind their respective scope
-// flags. A zero-value scope defaults to ScopeFull for backward
-// compatibility.
+// flags. A zero-value scope defaults to ScopeFull for legacy behavior.
 //
 // Builder taxonomy (design decision 8):
 //
@@ -548,6 +553,7 @@ func OpenWorkspace(ctx context.Context, cfg WorkspaceConfig) (_ *Workspace, err 
 		AgentName:           cfg.AgentName,
 		ConfigName:          cfg.AgentName,
 		DocumentSnapshot:    cfg.DocumentSnapshot,
+		Contract:            cfg.Contract,
 		SecurityBundle:      cfg.SecurityBundle,
 		ProfileResolution:   profileResolution,
 		PermissionManager:   registration.Permissions,

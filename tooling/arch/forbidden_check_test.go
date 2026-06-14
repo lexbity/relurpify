@@ -9,7 +9,6 @@ const (
 	Fmt_forbidden_check_test = "fmt"
 )
 
-
 func TestCheckForbiddenImports(t *testing.T) {
 	pkgs := []GoPackage{
 		{

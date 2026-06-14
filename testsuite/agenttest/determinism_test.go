@@ -11,18 +11,17 @@ import (
 )
 
 const (
-	content = "content"
-	data = "data"
-	key = "key"
-	key1 = "key1"
-	key2 = "key2"
+	content    = "content"
+	data       = "data"
+	key        = "key"
+	key1       = "key1"
+	key2       = "key2"
 	llm_call_1 = "llm_call_1"
-	path = "path"
-	test_go = "test.go"
-	value1 = "value1"
-	value2 = "value2"
+	path       = "path"
+	test_go    = "test.go"
+	value1     = "value1"
+	value2     = "value2"
 )
-
 
 func TestComputeFingerprint(t *testing.T) {
 	transcript := &ToolTranscriptArtifact{
@@ -259,11 +258,11 @@ func TestCheckStateKeyStability_EdgeCases(t *testing.T) {
 func TestBuildTranscriptFromTape(t *testing.T) {
 	tape := []map[string]any{
 		{
-			tool:      file_read,
+			tool:        file_read,
 			"arguments": map[string]any{path: test_go},
 			"result": map[string]any{
 				"success": true,
-				data:    map[string]any{content: "hello"},
+				data:      map[string]any{content: "hello"},
 			},
 		},
 		{

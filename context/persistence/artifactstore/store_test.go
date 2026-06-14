@@ -13,14 +13,13 @@ import (
 )
 
 const (
-	Data1_store_test = "data1"
-	Session_store_test = "session"
+	Data1_store_test    = "data1"
+	Session_store_test  = "session"
 	Session1_store_test = "session-1"
 	Session2_store_test = "session-2"
-	Test_store_test = "test"
-	Text_store_test = "text"
+	Test_store_test     = "test"
+	Text_store_test     = "text"
 )
-
 
 func TestPutOpenRoundTrip(t *testing.T) {
 	workspace := t.TempDir()

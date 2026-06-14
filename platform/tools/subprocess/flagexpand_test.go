@@ -9,27 +9,26 @@ import (
 )
 
 const (
-	color = "color"
+	color        = "color"
 	color_always = "--color=always"
-	color_never = "--color=never"
-	colordiff = "colordiff"
-	echo = "echo"
-	glob = "--glob"
-	glob_2 = "glob"
-	goVar = "*.go"
-	hello = "hello"
-	output = "output"
-	output_path = "output_path"
-	pattern = "pattern"
-	patterns = "patterns"
-	result_json = "result.json"
-	rg = "rg"
-	rs = "*.rs"
-	verbose = "verbose"
-	verbose_2 = "--verbose"
-	world = "world"
+	color_never  = "--color=never"
+	colordiff    = "colordiff"
+	echo         = "echo"
+	glob         = "--glob"
+	glob_2       = "glob"
+	goVar        = "*.go"
+	hello        = "hello"
+	output       = "output"
+	output_path  = "output_path"
+	pattern      = "pattern"
+	patterns     = "patterns"
+	result_json  = "result.json"
+	rg           = "rg"
+	rs           = "*.rs"
+	verbose      = "verbose"
+	verbose_2    = "--verbose"
+	world        = "world"
 )
-
 
 func TestExpandCommandBaseOnly(t *testing.T) {
 	cmd, err := ExpandCommand(ports.ToolManifest{
@@ -400,7 +399,7 @@ func TestTypedAndBooleanFlagsCombined(t *testing.T) {
 		},
 	}, map[string]any{
 		output_path: "out.json",
-		"hidden":      true,
+		"hidden":    true,
 	})
 	require.NoError(t, err)
 	// Flags sorted: hidden < output
@@ -430,7 +429,7 @@ func TestExpandCommandAllComponents(t *testing.T) {
 		},
 	}, map[string]any{
 		pattern: "func",
-		"globs":   []any{goVar, rs},
+		"globs": []any{goVar, rs},
 		args:    []any{"--follow"},
 	})
 	require.NoError(t, err)

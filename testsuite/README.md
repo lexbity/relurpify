@@ -195,6 +195,22 @@ GOCACHE=$PWD/.gocache GOMODCACHE=$PWD/.gomodcache \
   ./dev-agent agenttest run --agent react
 ```
 
+### Tape Workflow
+
+The shared tape library and CLI tape commands cover promotion, coverage reporting,
+and rerecord planning:
+
+```bash
+# Promote a completed run into golden tape fixtures
+./dev-agent agenttest promote --suite testsuite/agenttests/euclo.code.testsuite.yaml --run relurpify_cfg/test_runs/euclo/<run_id> --case basic_edit_task
+
+# Report current tape and baseline coverage
+./dev-agent agenttest report --agent euclo
+
+# Plan rerecording for missing or stale fixtures
+./dev-agent agenttest rerecord --agent euclo
+```
+
 ### Output Artifacts
 
 Each run writes to the active workspace's `relurpify_cfg/test_runs/{agent}/{run_id}/`:
@@ -664,17 +680,17 @@ Each case runs in a freshly derived isolated workspace:
 1. **Copy** — the target workspace is copied to a temp directory, excluding patterns in `spec.workspace.exclude`.
 2. **Overlay** — `setup.files` entries are written into the temp workspace.
 3. **Config** — a minimal `relurpify_cfg/` is materialized with the agent manifest.
-4. **Descriptor** — a prepared-run descriptor is written with workspace, telemetry, and verification paths.
+4. **Inputs** — the runner materializes workspace, telemetry, and verification paths.
 5. **Snapshot** — a SHA-256 hash of every file is recorded before execution starts.
-6. **Execute** — `dev-agent-cli` consumes the descriptor, composes the runtime, and runs the case against the isolated workspace.
+6. **Execute** — `dev-agent agenttest run` composes the runtime and runs the case against the isolated workspace.
 7. **Diff** — file hashes are recomputed; changed files are determined by hash delta.
 
 All assertions that reference file paths resolve against the isolated workspace.
 
-### 2. Prepared-run handoff
+### 2. Runtime handoff
 
-The runner now prepares a descriptor and hands execution to `dev-agent`, which:
-- resolves the agent definition from the manifest
+The runner hands execution to `dev-agent agenttest run`, which:
+- resolves the agent definition from the loaded document
 - registers capabilities (tools, relurpic, MCP)
 - applies the effective capability policy
 - composes the live workspace services through the real registration path

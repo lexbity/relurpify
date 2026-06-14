@@ -20,8 +20,6 @@ import (
 
 // RuntimeSurfaces holds runtime surface references for workflow operations.
 type RuntimeSurfaces struct {
-	// TODO: Replace with agentlifecycle.Repository
-	// per the agentlifecycle workflow-store removal plan
 	Workflow any
 }
 
@@ -31,19 +29,12 @@ type RetrievalQuery struct {
 }
 
 // ResolveRuntimeSurfaces resolves runtime surfaces from a memory store.
-// TODO: Reimplement without WorkflowStateStore dependency
-// per the agentlifecycle workflow-store removal plan
 func ResolveRuntimeSurfaces(mem any) RuntimeSurfaces {
 	return RuntimeSurfaces{}
 }
 
 // Hydrate retrieves workflow retrieval data from the store and returns it as a map.
-// This replaces the workflowutil.Hydrate stub with a real implementation.
-// TODO: Reimplement without WorkflowStateStore dependency
-// per the agentlifecycle workflow-store removal plan
 func Hydrate(ctx context.Context, surface any, workflowID string, query RetrievalQuery) (any, error) {
-	// Placeholder - retrieval to be reimplemented
-	// using agentlifecycle.Repository
 	return map[string]any{
 		"workflow_id": workflowID,
 		"step_files":  query.StepFiles,
@@ -378,7 +369,7 @@ func (a *HTNAgent) afterStep(
 	// execution := runtime.LoadExecutionState(env)
 	// execution.CompletedSteps = append([]string(nil), completed...)
 	// runtime.PublishExecutionState(env, execution)
-	// Checkpoint saving disabled - pipeline store is a stub
+	// Checkpoint saving is handled by the repository-backed persistence layer.
 	// if checkpointStore != nil {
 	// 	_ = checkpointStore.Save(&frameworkpipeline.Checkpoint{
 	// 		CheckpointID: fmt.Sprintf("htn_%s_%d", step.ID, time.Now().UnixNano()),

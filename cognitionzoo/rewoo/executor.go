@@ -139,9 +139,7 @@ func (e *rewooExecutor) executeStep(ctx context.Context, env *contextdata.Envelo
 	}
 
 	// Registry.InvokeCapability - framework capability invocation
-	// TODO: framework needs envelope equivalent of InvokeCapability
-	// For now, use nil state as placeholder
-	toolResult, err := e.Registry.InvokeCapability(ctx, nil, step.Tool, step.Params)
+	toolResult, err := e.Registry.InvokeCapability(ctx, env.State(), step.Tool, step.Params)
 	if err == nil && toolResult != nil && !toolResult.Success {
 		err = errors.New(toolResult.Error)
 	}

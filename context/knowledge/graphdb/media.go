@@ -124,7 +124,7 @@ func GenerateSyntheticRepo(e *Engine, root string, fileCount int, filesPerType i
 			filename := fmt.Sprintf("%s/file-%s-%d%s", root, mediaLabel(mt), i, suffix)
 			id := fmt.Sprintf("file:sha256:%x", []byte(filename))
 			meta := GenerateSyntheticFileMeta(filename, mt, int64(100+i*50))
-			if err := e.IndexFileMeta(context.TODO(), id, root, nil, meta); err != nil {
+			if err := e.IndexFileMeta(context.Background(), id, root, nil, meta); err != nil {
 				panic(err)
 			}
 			created++

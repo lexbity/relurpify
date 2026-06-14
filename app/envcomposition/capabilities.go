@@ -64,6 +64,7 @@ type CapabilityRuntimeOptions struct {
 type PermissionManager interface {
 	regpkg.PermissionManagerHandle
 	CheckFileAccess(context.Context, string, permissions.FileSystemAction, string) error
+	StaticallyAllowsFileAccess(permissions.FileSystemAction, string) bool
 	SetEventLogger(func(context.Context, permissions.PermissionDescriptor, string, string, map[string]any))
 	DefaultPolicy() string
 }
@@ -89,7 +90,7 @@ func BuildCapabilityRuntime(ctx context.Context, workspace string, runner *fsand
 	if err != nil {
 		return nil, err
 	}
-	toolManifests := convertToolManifests(platformCfg.ToolManifests)
+	toolManifests := platformCfg.ToolManifests
 	registry.UseToolAdmission(regpkg.NewToolAdmissionPolicy(toolManifests))
 	defer func() {
 		if err != nil {
@@ -169,7 +170,10 @@ func BuildCapabilityRuntime(ctx context.Context, workspace string, runner *fsand
 		if cfg.PermissionManager == nil {
 			return true
 		}
-		return cfg.PermissionManager.CheckFileAccess(ctx, cfg.AgentID, action, path) == nil
+		// Indexing is a background system operation: use a non-interactive
+		// static check so an ungranted path is simply skipped rather than
+		// escalated to a HITL prompt that would block boot with no approver.
+		return cfg.PermissionManager.StaticallyAllowsFileAccess(action, path)
 	})
 	attachASTSymbolProviderFn(manager, registry)
 	addTools(ast.NewASTTool(manager))
@@ -207,7 +211,7 @@ func BuildMinimalToolRegistry(ctx context.Context, workspace string, runner fsan
 	if err != nil {
 		return nil, fmt.Errorf("load tool manifests: %w", err)
 	}
-	tools := toolcapabilities.Build(workspace, commandRunnerAdapter{runner: runner}, convertToolManifests(manifests),
+	tools := toolcapabilities.Build(workspace, commandRunnerAdapter{runner: runner}, manifests,
 		toolcapabilities.StrictMode(),
 		toolcapabilities.WithBackendBuilder("subprocess", subprocess.BackendBuilder()),
 		toolcapabilities.WithBackendBuilder("composite", composite.BackendBuilder()),
@@ -225,224 +229,6 @@ func BuildMinimalToolRegistry(ctx context.Context, workspace string, runner fsan
 		}
 	}
 	return capReg, nil
-}
-
-func convertToolManifests(in []*config.ToolManifest) []*ports.ToolManifest {
-	if len(in) == 0 {
-		return nil
-	}
-	out := make([]*ports.ToolManifest, 0, len(in))
-	for _, manifest := range in {
-		if manifest == nil {
-			continue
-		}
-		out = append(out, &ports.ToolManifest{
-			Name:          manifest.Name,
-			Version:       manifest.Version,
-			Family:        manifest.Family,
-			Intent:        append([]string(nil), manifest.Intent...),
-			Description:   manifest.Description,
-			Guidance:      convertToolManifestGuidance(manifest.Guidance),
-			Parameters:    convertToolParameters(manifest.Parameters),
-			Execution:     convertToolManifestExecution(manifest.Execution),
-			Returns:       convertToolManifestReturns(manifest.Returns),
-			Errors:        copyStringMap(manifest.Errors),
-			Capability:    convertToolManifestCapability(manifest.Capability),
-			RateLimit:     convertToolRateLimit(manifest.RateLimit),
-			Composition:   convertToolManifestComposition(manifest.Composition),
-			SourcePath:    manifest.SourcePath,
-			CanonicalName: manifest.CanonicalName,
-		})
-	}
-	return out
-}
-
-// ToPortsToolManifest converts the local userconfig tool DTO into the ports-layer tool manifest.
-func ToPortsToolManifest(in config.ToolManifest) ports.ToolManifest {
-	return ports.ToolManifest{
-		Name:          in.Name,
-		Version:       in.Version,
-		Family:        in.Family,
-		Intent:        append([]string(nil), in.Intent...),
-		Description:   in.Description,
-		Guidance:      convertToolManifestGuidance(in.Guidance),
-		Parameters:    convertToolParameters(in.Parameters),
-		Execution:     convertToolManifestExecution(in.Execution),
-		Returns:       convertToolManifestReturns(in.Returns),
-		Errors:        copyStringMap(in.Errors),
-		Capability:    convertToolManifestCapability(in.Capability),
-		RateLimit:     convertToolRateLimit(in.RateLimit),
-		Composition:   convertToolManifestComposition(in.Composition),
-		SourcePath:    in.SourcePath,
-		CanonicalName: in.CanonicalName,
-	}
-}
-
-func convertToolParameters(in []config.ToolParameter) []ports.ToolParameter {
-	if len(in) == 0 {
-		return nil
-	}
-	out := make([]ports.ToolParameter, len(in))
-	for i, param := range in {
-		out[i] = ports.ToolParameter{
-			Name:        param.Name,
-			Type:        ports.ToolParameterType(param.Type),
-			Description: param.Description,
-			Required:    param.Required,
-			Default:     param.Default,
-		}
-	}
-	return out
-}
-
-func convertToolManifestExecution(in config.ToolManifestExecution) ports.ToolManifestExecution {
-	return ports.ToolManifestExecution{
-		Backend:          ports.ToolBackend(in.Backend),
-		Implementation:   in.Implementation,
-		Command:          convertToolManifestCommand(in.Command),
-		PlatformVariants: convertToolManifestCommandMap(in.PlatformVariants),
-		Sandbox:          convertToolManifestSandbox(in.Sandbox),
-		Stdin:            in.Stdin,
-		DefaultArgs:      append([]string(nil), in.DefaultArgs...),
-		AllowStdin:       in.AllowStdin,
-		SupportsWorkdir:  in.SupportsWorkdir,
-	}
-}
-
-func convertToolManifestCommandMap(in map[string]config.ToolManifestCommand) map[string]ports.ToolManifestCommand {
-	if len(in) == 0 {
-		return nil
-	}
-	out := make(map[string]ports.ToolManifestCommand, len(in))
-	for key, value := range in {
-		out[key] = *convertToolManifestCommand(&value)
-	}
-	return out
-}
-
-func convertToolManifestCommand(in *config.ToolManifestCommand) *ports.ToolManifestCommand {
-	if in == nil {
-		return nil
-	}
-	return &ports.ToolManifestCommand{
-		Base:  append([]string(nil), in.Base...),
-		Args:  append([]string(nil), in.Args...),
-		Flags: convertToolManifestFlags(in.Flags),
-	}
-}
-
-func convertToolManifestFlags(in map[string]config.ToolManifestFlag) map[string]ports.ToolManifestFlag {
-	if len(in) == 0 {
-		return nil
-	}
-	out := make(map[string]ports.ToolManifestFlag, len(in))
-	for key, value := range in {
-		out[key] = ports.ToolManifestFlag{
-			WhenTrue:  append([]string(nil), value.WhenTrue...),
-			WhenFalse: append([]string(nil), value.WhenFalse...),
-			Param:     value.Param,
-			Style:     value.Style,
-			Type:      value.Type,
-			Repeat:    value.Repeat,
-		}
-	}
-	return out
-}
-
-func convertToolManifestComposition(in *config.ToolManifestComposition) *ports.ToolManifestComposition {
-	if in == nil {
-		return nil
-	}
-	out := &ports.ToolManifestComposition{Steps: make([]ports.ToolManifestCompositionStep, len(in.Steps))}
-	for i, step := range in.Steps {
-		out.Steps[i] = ports.ToolManifestCompositionStep{
-			Tool:  step.Tool,
-			Args:  copyAnyMap(step.Args),
-			Alias: step.Alias,
-		}
-	}
-	return out
-}
-
-func convertToolManifestSandbox(in *config.ToolManifestSandbox) *ports.ToolManifestSandbox {
-	if in == nil {
-		return nil
-	}
-	return &ports.ToolManifestSandbox{
-		AllowedRoot:    in.AllowedRoot,
-		TimeoutSeconds: in.TimeoutSeconds,
-		NetworkAccess:  in.NetworkAccess,
-		AllowFlags:     in.AllowFlags,
-		MemoryMB:       in.MemoryMB,
-		PidsLimit:      in.PidsLimit,
-		CPUs:           in.CPUs,
-		AllowHosts:     append([]string(nil), in.AllowHosts...),
-	}
-}
-
-func convertToolManifestGuidance(in *config.ToolManifestGuidance) *ports.ToolManifestGuidance {
-	if in == nil {
-		return nil
-	}
-	return &ports.ToolManifestGuidance{
-		UseWhen:   append([]string(nil), in.UseWhen...),
-		AvoidWhen: append([]string(nil), in.AvoidWhen...),
-	}
-}
-
-func convertToolManifestReturns(in config.ToolManifestReturns) ports.ToolManifestReturns {
-	return ports.ToolManifestReturns{
-		Type:     in.Type,
-		Chunking: convertToolManifestReturnsChunking(in.Chunking),
-	}
-}
-
-func convertToolManifestReturnsChunking(in *config.ToolManifestReturnsChunking) *ports.ToolManifestReturnsChunking {
-	if in == nil {
-		return nil
-	}
-	return &ports.ToolManifestReturnsChunking{
-		Mode:      in.Mode,
-		ItemPath:  in.ItemPath,
-		RefFields: append([]string(nil), in.RefFields...),
-	}
-}
-
-func convertToolManifestCapability(in config.ToolManifestCapability) ports.ToolManifestCapability {
-	return ports.ToolManifestCapability{
-		TrustClass:  in.TrustClass,
-		RiskClass:   append([]string(nil), in.RiskClass...),
-		EffectClass: append([]string(nil), in.EffectClass...),
-	}
-}
-
-func convertToolRateLimit(in *config.ToolRateLimit) *ports.ToolRateLimit {
-	if in == nil {
-		return nil
-	}
-	return &ports.ToolRateLimit{PerSecond: in.PerSecond, Burst: in.Burst}
-}
-
-func copyStringMap(in map[string]string) map[string]string {
-	if len(in) == 0 {
-		return nil
-	}
-	out := make(map[string]string, len(in))
-	for key, value := range in {
-		out[key] = value
-	}
-	return out
-}
-
-func copyAnyMap(in map[string]any) map[string]any {
-	if len(in) == 0 {
-		return nil
-	}
-	out := make(map[string]any, len(in))
-	for key, value := range in {
-		out[key] = value
-	}
-	return out
 }
 
 type commandRunnerAdapter struct {

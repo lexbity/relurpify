@@ -6,7 +6,6 @@ const (
 	Duplicatepromptid_errors = "duplicate prompt id: "
 )
 
-
 // NotFoundError is returned when the requested prompt ID is not in the registry.
 type NotFoundError struct {
 	ID string

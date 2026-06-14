@@ -101,7 +101,12 @@ type WorkspaceConfig struct {
 	// LoadedConfig contains the resolved config tree produced by config.
 	LoadedConfig *config.AppConfig
 	// DocumentSnapshot contains the loaded document used for contract resolution.
+	// When Contract is provided, the document is used only for metadata/fingerprint.
 	DocumentSnapshot *config.DocumentSnapshot
+	// Contract is a pre-resolved effective agent contract. When non-nil,
+	// BootstrapAgentRuntime uses it directly instead of resolving from
+	// DocumentSnapshot. S2: euclo uses the built-in contract.
+	Contract *config.EffectiveAgentContract
 	// ProfileResolution is the pre-resolved model profile selected by the caller.
 	ProfileResolution modelselect.ProfileResolution
 	// SecurityBundle contains the loaded security policy bundle.

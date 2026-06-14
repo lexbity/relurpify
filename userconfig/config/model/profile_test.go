@@ -61,6 +61,49 @@ generation:
 	require.Contains(t, err.Error(), "default.llm.yaml required")
 }
 
+func TestLoadProfileDirDetailedKeepsValidProfilesWhenNonDefaultBroken(t *testing.T) {
+	dir := t.TempDir()
+	base := filepath.Join(dir, "relurpify_cfg", "model", "profiles")
+	writeProfileTestFile(t, filepath.Join(base, "default.llm.yaml"), `schema: relurpify/model/profile/v1
+pattern: "*"
+tool_calling:
+  intent: auto
+context:
+  max_tokens: 1024
+generation:
+  temperature: 0.2
+  top_p: 0.9
+`)
+	writeProfileTestFile(t, filepath.Join(base, "gemma.llm.yaml"), `schema: relurpify/model/profile/v1
+pattern: "gemma*"
+tool_calling:
+  intent: native
+context:
+  max_tokens: 0
+generation:
+  temperature: 0.1
+  top_p: 0.9
+`)
+	writeProfileTestFile(t, filepath.Join(base, "codex.llm.yaml"), `schema: relurpify/model/profile/v1
+pattern: "codex*"
+tool_calling:
+  intent: native
+context:
+  max_tokens: 2048
+generation:
+  temperature: 0.1
+  top_p: 0.95
+`)
+
+	profiles, diags, err := LoadProfileDirDetailed(base, testDecode)
+	require.NoError(t, err)
+	require.Len(t, profiles, 2)
+	require.Len(t, diags, 1)
+	require.Equal(t, "warning", diags[0].Severity)
+	require.Contains(t, diags[0].Path, "gemma.llm.yaml")
+	require.ElementsMatch(t, []string{"codex*", "*"}, []string{profiles[0].Pattern, profiles[1].Pattern})
+}
+
 func TestMatchProfile_SpecificBeforeDefault(t *testing.T) {
 	profiles := []*ModelProfileConfig{
 		{Pattern: "gemma*", SourcePath: "relurpify_cfg/model/profiles/gemma.llm.yaml"},

@@ -48,7 +48,17 @@ func RunToolTest(t *testing.T, workspace string, tc *ToolTestCase) {
 	var manifest *toolcapabilities.ToolManifest
 	for _, m := range manifests {
 		if toolcapabilities.NormalizeToolName(m.Name) == toolcapabilities.NormalizeToolName(tc.Tool) {
-			manifest = m
+			var converted toolcapabilities.ToolManifest
+			data, err := json.Marshal(m)
+			if err != nil {
+				t.Fatalf("marshal: %v", err)
+			}
+			if err := json.Unmarshal(data, &converted); err != nil {
+				t.Fatalf("unmarshal: %v", err)
+			}
+			converted.SourcePath = m.SourcePath
+			converted.CanonicalName = m.CanonicalName
+			manifest = &converted
 			break
 		}
 	}

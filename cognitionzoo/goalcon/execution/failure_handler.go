@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/cognitionzoo/goalcon/audit"
+	goaltypes "codeburg.org/lexbit/relurpify/cognitionzoo/goalcon/types"
 )
 
 // FailureCategory classifies the nature of a failure.
@@ -242,17 +243,47 @@ func (fd *FailureDetector) ShouldRetry(fc *FailureContext, policy *RetryPolicy) 
 	return false
 }
 
+type operatorRegistry interface {
+	OperatorsSatisfying(goaltypes.Predicate) []*goaltypes.Operator
+	All() []*goaltypes.Operator
+}
+
 // SuggestAlternativeOperators recommends alternatives to a failed operator.
-// This method will be used in Phase 6+ to guide re-planning.
 func (fd *FailureDetector) SuggestAlternativeOperators(fc *FailureContext, registry any) []any {
 	if fc == nil || registry == nil {
 		return nil
 	}
+	reg, ok := registry.(operatorRegistry)
+	if !ok {
+		return nil
+	}
 
-	// Get all operators that could satisfy the same predicates
-	// This is a placeholder; actual implementation would query registry
-	// for operators that provide the same effects
-	return nil
+	var failed *goaltypes.Operator
+	for _, op := range reg.All() {
+		if op != nil && op.Name == fc.ToolName {
+			failed = op
+			break
+		}
+	}
+	if failed == nil {
+		return nil
+	}
+
+	suggestions := make([]any, 0)
+	seen := make(map[string]struct{})
+	for _, effect := range failed.Effects {
+		for _, candidate := range reg.OperatorsSatisfying(effect) {
+			if candidate == nil || candidate.Name == failed.Name {
+				continue
+			}
+			if _, dup := seen[candidate.Name]; dup {
+				continue
+			}
+			seen[candidate.Name] = struct{}{}
+			suggestions = append(suggestions, candidate.Name)
+		}
+	}
+	return suggestions
 }
 
 // FormatFailureReport generates a human-readable failure report.

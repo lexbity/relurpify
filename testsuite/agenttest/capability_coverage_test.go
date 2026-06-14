@@ -18,14 +18,13 @@ import (
 
 const (
 	existing_tool = "existing_tool"
-	file_read = "file_read"
-	go_test = "go_test"
-	tool = "tool"
-	tool1 = "tool1"
-	tool2 = "tool2"
-	tool3 = "tool3"
+	file_read     = "file_read"
+	go_test       = "go_test"
+	tool          = "tool"
+	tool1         = "tool1"
+	tool2         = "tool2"
+	tool3         = "tool3"
 )
-
 
 // mockCapabilityRegistryProvider implements graph.WorkflowExecutor for testing
 type mockCapabilityRegistryProvider struct {

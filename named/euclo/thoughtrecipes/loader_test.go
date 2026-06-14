@@ -1,7 +1,6 @@
 package thoughtrecipe
 
 import (
-	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -9,30 +8,6 @@ import (
 	"codeburg.org/lexbit/relurpify/execution/prompt/prompttest"
 	"codeburg.org/lexbit/relurpify/named/euclo/surface"
 )
-
-func TestThoughtRecipeLoaderRejectsBytes(t *testing.T) {
-	loader := NewLoader()
-
-	_, err := loader.LoadFromBytes([]byte("thoughtrecipe test\n"))
-	if err == nil {
-		t.Fatal("expected legacy thoughtrecipe loader rejection")
-	}
-	if !errors.Is(err, ErrYAMLThoughtRecipeLoadingRemoved) {
-		t.Fatalf("expected ErrYAMLThoughtRecipeLoadingRemoved, got %v", err)
-	}
-}
-
-func TestThoughtRecipeLoaderRejectsFiles(t *testing.T) {
-	loader := NewLoader()
-
-	_, err := loader.LoadFromFile("test.thoughtrecipe")
-	if err == nil {
-		t.Fatal("expected file loader rejection")
-	}
-	if !errors.Is(err, ErrYAMLThoughtRecipeLoadingRemoved) {
-		t.Fatalf("expected ErrYAMLThoughtRecipeLoadingRemoved, got %v", err)
-	}
-}
 
 func TestThoughtRecipeLoaderScansAcceptedExtensionsInOrder(t *testing.T) {
 	root := t.TempDir()

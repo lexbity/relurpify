@@ -14,17 +14,17 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"codeburg.org/lexbit/relurpify/app/envcomposition"
 	"codeburg.org/lexbit/relurpify/app/relurpish/euclotui"
 	runtimesvc "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
 	"codeburg.org/lexbit/relurpify/app/relurpish/tui"
+	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/platform/tools/subprocess"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
 func init() {
-	cfg.SubprocessToolFactory = func(m config.ToolManifest) any {
-		return subprocess.NewTool(envcomposition.ToPortsToolManifest(m), nil)
+	cfg.SubprocessToolFactory = func(m ports.ToolManifest) any {
+		return subprocess.NewTool(m, nil)
 	}
 }
 
@@ -74,7 +74,6 @@ func newRootCmd() *cobra.Command {
 	root.PersistentFlags().StringVar(&cfg.InferenceEndpoint, "inference-endpoint", cfg.InferenceEndpoint, "Inference backend endpoint URL")
 	root.PersistentFlags().StringVar(&cfg.InferenceModel, "inference-model", cfg.InferenceModel, "Inference backend model name")
 	root.PersistentFlags().StringVar(&cfg.SandboxBackend, "sandbox-backend", cfg.SandboxBackend, "Sandbox backend to use (gvisor or docker)")
-	root.PersistentFlags().StringVar(&cfg.AgentName, "agent", cfg.AgentLabel(), "Agent preset (coding, planner, react, reflection)")
 	root.PersistentFlags().StringVar(&cfg.Sandbox.RunscPath, "runsc", cfg.Sandbox.RunscPath, "runsc binary path")
 	root.PersistentFlags().StringVar(&cfg.Sandbox.ContainerRuntime, "container-runtime", cfg.Sandbox.ContainerRuntime, "Container runtime (docker/containerd)")
 	root.PersistentFlags().StringVar(&cfg.Sandbox.Platform, "sandbox-platform", cfg.Sandbox.Platform, "Sandbox platform hint (gVisor: kvm/ptrace)")
@@ -139,7 +138,7 @@ func runWithRuntime(cmd *cobra.Command, fn func(context.Context, *runtimesvc.Run
 	if err != nil {
 		return err
 	}
-	defer func() { _ = rt.Close(context.TODO()) }()
+	defer func() { _ = rt.Close(context.Background()) }()
 	return fn(ctx, rt)
 }
 

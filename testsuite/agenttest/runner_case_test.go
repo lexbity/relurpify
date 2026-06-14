@@ -13,7 +13,6 @@ const (
 	loaded_model = "loaded-model"
 )
 
-
 func TestModelProvenanceDigest(t *testing.T) {
 	t.Run("nil provenance returns empty string", func(t *testing.T) {
 		digest := modelProvenanceDigest(nil)

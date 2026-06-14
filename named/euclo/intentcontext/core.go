@@ -370,7 +370,7 @@ func (c *IntentCore) ApplyProjection(ctx context.Context, env *contextdata.Envel
 
 // GroundedAnchors returns the current grounded anchors in working memory.
 func (c *IntentCore) GroundedAnchors(env *contextdata.Envelope) []retrieval.AnchorRef {
-	state, err := c.readState(context.TODO(), env)
+	state, err := c.readState(context.Background(), env)
 	if err != nil || state == nil {
 		return nil
 	}

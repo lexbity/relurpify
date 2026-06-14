@@ -4,7 +4,7 @@
 // # Managed backends
 //
 // Provider subpackages implement the platform LanguageModel interface
-// against local or OpenAI-compatible backends. LLM parameters are normalized
+// against local or OpenAI API backends. LLM parameters are normalized
 // by the transport-specific adapters.
 //
 // # InstrumentedModel

@@ -11,12 +11,11 @@ import (
 )
 
 const (
-	files = "files"
+	files     = "files"
 	hello_txt = "hello.txt"
-	matches = "matches"
-	src = "src"
+	matches   = "matches"
+	src       = "src"
 )
-
 
 func TestReadWriteListFileTools(t *testing.T) {
 	dir := t.TempDir()
@@ -203,8 +202,8 @@ func TestSearchInFilesToolSupportsCaseSensitiveMatching(t *testing.T) {
 
 	tool := &SearchInFilesTool{BasePath: dir}
 	res, err := tool.Execute(context.Background(), map[string]any{
-		directory:      ".",
-		pattern:        "todo",
+		directory:        ".",
+		pattern:          "todo",
 		"case_sensitive": true,
 	})
 	require.NoError(t, err)

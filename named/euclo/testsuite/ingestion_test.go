@@ -42,7 +42,7 @@ func TestEndToEndFileSelectionGrounding(t *testing.T) {
 		},
 		Metadata: map[string]any{},
 	})
-	contextdata.SetTyped(env, euclostate.KeyTaskInputLegacy, &execution.Task{
+	contextdata.SetTyped(env, euclostate.KeyTaskInput, &execution.Task{
 		ID:          "task-file-grounding",
 		Type:        "euclo",
 		Instruction: "review the auth package",

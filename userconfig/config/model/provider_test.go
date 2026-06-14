@@ -80,6 +80,29 @@ kind: ollama
 	require.Contains(t, err.Error(), "endpoint invalid")
 }
 
+func TestLoadProviderDirDetailedKeepsValidProvidersWhenOneBroken(t *testing.T) {
+	dir := t.TempDir()
+	base := filepath.Join(dir, "relurpify_cfg", "model", "provider")
+	writeModelTestFile(t, filepath.Join(base, "ollama.provider.yaml"), `schema: relurpify/model/provider/v1
+name: ollama
+endpoint: http://localhost:11434
+kind: ollama
+`)
+	writeModelTestFile(t, filepath.Join(base, "broken.provider.yaml"), `schema: relurpify/model/provider/v1
+name: broken
+endpoint: not-a-url
+kind: ollama
+`)
+
+	providers, diags, err := LoadProviderDirDetailed(base, testDecode)
+	require.NoError(t, err)
+	require.Len(t, providers, 1)
+	require.Len(t, diags, 1)
+	require.Equal(t, "blocking", diags[0].Severity)
+	require.Contains(t, diags[0].Path, "broken.provider.yaml")
+	require.Equal(t, "ollama", providers[0].Name)
+}
+
 func TestLoadProviderDir_MissingDir(t *testing.T) {
 	_, err := LoadProviderDir(filepath.Join(t.TempDir(), "missing"), testDecode)
 	require.Error(t, err)

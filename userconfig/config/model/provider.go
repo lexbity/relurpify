@@ -1,7 +1,6 @@
 package model
 
 import (
-	"errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -27,21 +26,34 @@ type ResolvedProvider struct {
 }
 
 // LoadProviderDir loads all *.provider.yaml files from model/provider/.
-// It returns a hard error if the directory is missing or empty.
+// It returns a hard error if a blocking diagnostic is encountered.
 func LoadProviderDir(dir string, decode Decoder) ([]*ResolvedProvider, error) {
+	loaded, diags, err := LoadProviderDirDetailed(dir, decode)
+	if err != nil {
+		return nil, err
+	}
+	if HasBlockingDiagnostics(diags) {
+		return nil, diagnosticsError("provider", diags)
+	}
+	return loaded, nil
+}
+
+// LoadProviderDirDetailed loads provider manifests and preserves partial
+// results together with per-file diagnostics.
+func LoadProviderDirDetailed(dir string, decode Decoder) ([]*ResolvedProvider, []LoadDiagnostic, error) {
 	if strings.TrimSpace(dir) == "" {
-		return nil, fmt.Errorf("provider dir required")
+		return nil, nil, fmt.Errorf("provider dir required")
 	}
 	absDir, err := filepath.Abs(dir)
 	if err != nil {
-		return nil, fmt.Errorf("resolve provider dir: %w", err)
+		return nil, nil, fmt.Errorf("resolve provider dir: %w", err)
 	}
 	entries, err := os.ReadDir(absDir)
 	if err != nil {
-		return nil, fmt.Errorf("read provider dir: %w", err)
+		return nil, []LoadDiagnostic{{Path: absDir, Severity: "blocking", Message: fmt.Sprintf("read provider dir: %v", err)}}, nil
 	}
 	if len(entries) == 0 {
-		return nil, fmt.Errorf("provider dir %q is empty", absDir)
+		return nil, []LoadDiagnostic{{Path: absDir, Severity: "blocking", Message: fmt.Sprintf("provider dir %q is empty", absDir)}}, nil
 	}
 
 	workspaceRoot := filepath.Clean(filepath.Join(absDir, "..", "..", ".."))
@@ -58,49 +70,46 @@ func LoadProviderDir(dir string, decode Decoder) ([]*ResolvedProvider, error) {
 	}
 	sort.Strings(paths)
 	if len(paths) == 0 {
-		return nil, fmt.Errorf("provider dir %q contains no *.provider.yaml files", absDir)
+		return nil, []LoadDiagnostic{{Path: absDir, Severity: "blocking", Message: fmt.Sprintf("provider dir %q contains no *.provider.yaml files", absDir)}}, nil
 	}
 
-	var errs []error
+	var diags []LoadDiagnostic
 	loaded := make([]*ResolvedProvider, 0, len(paths))
 	seenNames := map[string]string{}
 	for _, path := range paths {
 		body, err := readConfigFile(workspaceRoot, path)
 		if err != nil {
-			errs = append(errs, fmt.Errorf("read %s: %w", path, err))
+			diags = append(diags, LoadDiagnostic{Path: path, Severity: "blocking", Message: fmt.Sprintf("read %s: %v", path, err)})
 			continue
 		}
 		if err := rejectForbiddenSecretFields(path, body); err != nil {
-			errs = append(errs, err)
+			diags = append(diags, LoadDiagnostic{Path: path, Severity: "blocking", Message: err.Error()})
 			continue
 		}
 		if decode == nil {
-			errs = append(errs, fmt.Errorf("decoder required for %s", path))
+			diags = append(diags, LoadDiagnostic{Path: path, Severity: "blocking", Message: fmt.Sprintf("decoder required for %s", path)})
 			continue
 		}
 		var provider ResolvedProvider
 		if _, err := decode(path, body, &provider); err != nil {
-			errs = append(errs, err)
+			diags = append(diags, LoadDiagnostic{Path: path, Severity: "blocking", Message: err.Error()})
 			continue
 		}
 		provider.SourcePath = path
 		if err := validateResolvedProvider(&provider); err != nil {
-			errs = append(errs, fmt.Errorf("%s: %w", path, err))
+			diags = append(diags, LoadDiagnostic{Path: path, Severity: "blocking", Message: fmt.Sprintf("%s: %v", path, err)})
 			continue
 		}
 		key := strings.ToLower(strings.TrimSpace(provider.Name))
 		if prev, ok := seenNames[key]; ok {
-			errs = append(errs, fmt.Errorf("duplicate provider name %q in %s and %s", provider.Name, prev, path))
+			diags = append(diags, LoadDiagnostic{Path: path, Severity: "blocking", Message: fmt.Sprintf("duplicate provider name %q in %s and %s", provider.Name, prev, path)})
 			continue
 		}
 		seenNames[key] = path
 		loaded = append(loaded, &provider)
 	}
 
-	if len(errs) > 0 {
-		return nil, errors.Join(errs...)
-	}
-	return loaded, nil
+	return loaded, diags, nil
 }
 
 func validateResolvedProvider(provider *ResolvedProvider) error {
@@ -137,10 +146,10 @@ func validateResolvedProvider(provider *ResolvedProvider) error {
 
 func validateProviderKind(kind string) error {
 	switch strings.ToLower(strings.TrimSpace(kind)) {
-	case "ollama", "openai_compatible", "lmstudio":
+	case "ollama", "openai_compatible", "lmstudio", "offline":
 		return nil
 	default:
-		return fmt.Errorf("kind %q must be one of ollama, openai_compatible, lmstudio", kind)
+		return fmt.Errorf("kind %q must be one of ollama, openai_compatible, lmstudio, offline", kind)
 	}
 }
 

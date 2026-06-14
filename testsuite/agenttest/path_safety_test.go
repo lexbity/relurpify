@@ -12,7 +12,6 @@ const (
 	escape_txt = "../escape.txt"
 )
 
-
 func TestResolvePathWithinRejectsEscape(t *testing.T) {
 	root := t.TempDir()
 	if _, err := resolvePathWithin(root, escape_txt); err == nil {

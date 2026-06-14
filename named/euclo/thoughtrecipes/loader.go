@@ -1,23 +1,19 @@
 package thoughtrecipe
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
-
-	"codeburg.org/lexbit/relurpify/named/euclo/surface"
 )
 
 // Loader scans Euclo DSL thoughtrecipe sources from the workspace.
 type Loader struct {
-	PromptRegistry PromptRegistryLookup
-	RecipeRegistry ThoughtRecipeRegistryLookup
+	PromptRegistry    PromptRegistryLookup
+	RecipeRegistry    ThoughtRecipeRegistryLookup
+	CapabilityRegistry CapabilityRegistryLookup
 }
-
-var ErrYAMLThoughtRecipeLoadingRemoved = errors.New("euclo thoughtrecipe source loading has been removed")
 
 // LoadWarning captures a non-fatal loader diagnostic.
 type LoadWarning struct {
@@ -59,15 +55,10 @@ func (l *Loader) WithRecipeRegistry(reg ThoughtRecipeRegistryLookup) *Loader {
 	return l
 }
 
-// LoadFromFile reports that legacy file-based thoughtrecipe loading is no longer supported.
-func (l *Loader) LoadFromFile(path string) (*surface.ThoughtRecipe, error) {
-	return nil, fmt.Errorf("%w: %s", ErrYAMLThoughtRecipeLoadingRemoved, path)
-}
-
-// LoadFromBytes reports that legacy in-memory thoughtrecipe loading is no longer supported.
-func (l *Loader) LoadFromBytes(data []byte) (*surface.ThoughtRecipe, error) {
-	_ = data
-	return nil, ErrYAMLThoughtRecipeLoadingRemoved
+// WithCapabilityRegistry wires capability lookup into the loader's semantic checks.
+func (l *Loader) WithCapabilityRegistry(reg CapabilityRegistryLookup) *Loader {
+	l.CapabilityRegistry = reg
+	return l
 }
 
 // LoadWorkspace scans the Euclo source root under workspaceRoot and returns the
@@ -151,6 +142,7 @@ func (l *Loader) loadThoughtRecipeSource(result *LoadResult, source SourceFile) 
 		return err
 	}
 	symbols := NewSymbolTable(doc)
+	symbols.WithCapabilityRegistry(l.CapabilityRegistry)
 	symbols.WithPromptRegistry(l.PromptRegistry)
 	if l.RecipeRegistry != nil {
 		symbols.WithRecipeRegistry(l.RecipeRegistry)

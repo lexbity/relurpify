@@ -2,6 +2,7 @@ package agenttest
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -30,7 +31,24 @@ func buildVerifyToolIndex(workspace string, runner sandbox.CommandRunner) map[st
 	if err != nil {
 		return nil
 	}
-	tools := toolcapabilities.Build(workspace, commandRunnerAdapter{runner: runner}, manifests,
+	toolManifests := make([]*toolcapabilities.ToolManifest, 0, len(manifests))
+	for _, manifest := range manifests {
+		if manifest == nil {
+			continue
+		}
+		var converted toolcapabilities.ToolManifest
+		data, err := json.Marshal(manifest)
+		if err != nil {
+			return nil
+		}
+		if err := json.Unmarshal(data, &converted); err != nil {
+			return nil
+		}
+		converted.SourcePath = manifest.SourcePath
+		converted.CanonicalName = manifest.CanonicalName
+		toolManifests = append(toolManifests, &converted)
+	}
+	tools := toolcapabilities.Build(workspace, commandRunnerAdapter{runner: runner}, toolManifests,
 		toolcapabilities.WithBackendBuilder("subprocess", subprocess.BackendBuilder()),
 		toolcapabilities.WithBackendBuilder("composite", composite.BackendBuilder()),
 	)

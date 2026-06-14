@@ -9,10 +9,9 @@ import (
 
 const (
 	Frameworkagentlifecycle_schema_test = "framework/agentlifecycle"
-	Wf123_schema_test = "wf-123"
-	Workflow_schema_test = "workflow"
+	Wf123_schema_test                   = "wf-123"
+	Workflow_schema_test                = "workflow"
 )
-
 
 func TestNewSchemaMetadata(t *testing.T) {
 	tests := []struct {

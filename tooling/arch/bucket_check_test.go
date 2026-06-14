@@ -5,10 +5,9 @@ import (
 )
 
 const (
-	ImportPathFrameworkA_bucket_check_test = "codeburg.org/lexbit/relurpify/framework/a"
+	ImportPathFrameworkA_bucket_check_test     = "codeburg.org/lexbit/relurpify/framework/a"
 	ImportPathFrameworkTypes_bucket_check_test = "codeburg.org/lexbit/relurpify/framework/types"
 )
-
 
 func emptyPkg(importPath string) GoPackage {
 	return GoPackage{ImportPath: importPath, GoFiles: []string{"a.go"}}

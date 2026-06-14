@@ -46,7 +46,7 @@ func (r *LifecycleRepository) CreateWorkflow(workflow contextports.WorkflowRecor
 		Props:  props,
 		Labels: []string{"workflow"},
 	}
-	return r.db.UpsertNode(context.TODO(), node)
+	return r.db.UpsertNode(context.Background(), node)
 }
 
 func (r *LifecycleRepository) GetWorkflow(workflowID string) (*contextports.WorkflowRecord, error) {
@@ -95,13 +95,13 @@ func (r *LifecycleRepository) CreateRun(run contextports.WorkflowRunRecord) erro
 		Labels: []string{"workflow_run"},
 	}
 
-	if err := r.db.UpsertNode(context.TODO(), node); err != nil {
+	if err := r.db.UpsertNode(context.Background(), node); err != nil {
 		return err
 	}
 
 	// Link to workflow
 	if run.WorkflowID != "" {
-		return r.db.Link(context.TODO(), run.WorkflowID, run.RunID, graphdb.EdgeKindWorkflowHasRun, "", 0, nil)
+		return r.db.Link(context.Background(), run.WorkflowID, run.RunID, graphdb.EdgeKindWorkflowHasRun, "", 0, nil)
 	}
 	return nil
 }
@@ -168,7 +168,7 @@ func (r *LifecycleRepository) UpdateRunStatus(runID string, status string) error
 	}
 
 	node.Props = props
-	return r.db.UpsertNode(context.TODO(), node)
+	return r.db.UpsertNode(context.Background(), node)
 }
 
 // Delegation operations
@@ -194,20 +194,20 @@ func (r *LifecycleRepository) UpsertDelegation(entry contextports.DelegationEntr
 		Labels: []string{"delegation"},
 	}
 
-	if err := r.db.UpsertNode(context.TODO(), node); err != nil {
+	if err := r.db.UpsertNode(context.Background(), node); err != nil {
 		return err
 	}
 
 	// Link to workflow
 	if entry.WorkflowID != "" {
-		if err := r.db.Link(context.TODO(), entry.WorkflowID, entry.DelegationID, graphdb.EdgeKindWorkflowHasDelegation, "", 0, nil); err != nil {
+		if err := r.db.Link(context.Background(), entry.WorkflowID, entry.DelegationID, graphdb.EdgeKindWorkflowHasDelegation, "", 0, nil); err != nil {
 			return err
 		}
 	}
 
 	// Link to run if provided
 	if entry.RunID != "" {
-		if err := r.db.Link(context.TODO(), entry.RunID, entry.DelegationID, graphdb.EdgeKindWorkflowHasDelegation, "", 0, nil); err != nil {
+		if err := r.db.Link(context.Background(), entry.RunID, entry.DelegationID, graphdb.EdgeKindWorkflowHasDelegation, "", 0, nil); err != nil {
 			return err
 		}
 	}
@@ -288,12 +288,12 @@ func (r *LifecycleRepository) AppendDelegationTransition(transition contextports
 		Labels: []string{"delegation_transition"},
 	}
 
-	if err := r.db.UpsertNode(context.TODO(), node); err != nil {
+	if err := r.db.UpsertNode(context.Background(), node); err != nil {
 		return err
 	}
 
 	if transition.DelegationID != "" {
-		return r.db.Link(context.TODO(), transition.DelegationID, transID, graphdb.EdgeKindDelegationHasTransition, "", 0, nil)
+		return r.db.Link(context.Background(), transition.DelegationID, transID, graphdb.EdgeKindDelegationHasTransition, "", 0, nil)
 	}
 	return nil
 }
@@ -340,20 +340,20 @@ func (r *LifecycleRepository) AppendEvent(event contextports.WorkflowEventRecord
 		Labels: []string{"workflow_event"},
 	}
 
-	if err := r.db.UpsertNode(context.TODO(), node); err != nil {
+	if err := r.db.UpsertNode(context.Background(), node); err != nil {
 		return err
 	}
 
 	// Link to workflow
 	if event.WorkflowID != "" {
-		if err := r.db.Link(context.TODO(), event.WorkflowID, event.EventID, graphdb.EdgeKindWorkflowHasEvent, "", 0, nil); err != nil {
+		if err := r.db.Link(context.Background(), event.WorkflowID, event.EventID, graphdb.EdgeKindWorkflowHasEvent, "", 0, nil); err != nil {
 			return err
 		}
 	}
 
 	// Link to run if provided
 	if event.RunID != "" {
-		if err := r.db.Link(context.TODO(), event.RunID, event.EventID, graphdb.EdgeKindWorkflowRunHasEvent, "", 0, nil); err != nil {
+		if err := r.db.Link(context.Background(), event.RunID, event.EventID, graphdb.EdgeKindWorkflowRunHasEvent, "", 0, nil); err != nil {
 			return err
 		}
 	}
@@ -410,20 +410,20 @@ func (r *LifecycleRepository) UpsertArtifact(artifact contextports.WorkflowArtif
 		Labels: []string{"workflow_artifact"},
 	}
 
-	if err := r.db.UpsertNode(context.TODO(), node); err != nil {
+	if err := r.db.UpsertNode(context.Background(), node); err != nil {
 		return err
 	}
 
 	// Link to workflow
 	if artifact.WorkflowID != "" {
-		if err := r.db.Link(context.TODO(), artifact.WorkflowID, artifact.ArtifactID, graphdb.EdgeKindWorkflowHasArtifact, "", 0, nil); err != nil {
+		if err := r.db.Link(context.Background(), artifact.WorkflowID, artifact.ArtifactID, graphdb.EdgeKindWorkflowHasArtifact, "", 0, nil); err != nil {
 			return err
 		}
 	}
 
 	// Link to run if provided
 	if artifact.RunID != "" {
-		if err := r.db.Link(context.TODO(), artifact.RunID, artifact.ArtifactID, graphdb.EdgeKindWorkflowRunHasArtifact, "", 0, nil); err != nil {
+		if err := r.db.Link(context.Background(), artifact.RunID, artifact.ArtifactID, graphdb.EdgeKindWorkflowRunHasArtifact, "", 0, nil); err != nil {
 			return err
 		}
 	}
@@ -507,18 +507,18 @@ func (r *LifecycleRepository) UpsertLineageBinding(binding contextports.LineageB
 		Labels: []string{"lineage_binding"},
 	}
 
-	if err := r.db.UpsertNode(context.TODO(), node); err != nil {
+	if err := r.db.UpsertNode(context.Background(), node); err != nil {
 		return err
 	}
 
 	if binding.WorkflowID != "" {
-		if err := r.db.Link(context.TODO(), binding.WorkflowID, binding.BindingID, graphdb.EdgeKindLineageBindingForWorkflow, "", 0, nil); err != nil {
+		if err := r.db.Link(context.Background(), binding.WorkflowID, binding.BindingID, graphdb.EdgeKindLineageBindingForWorkflow, "", 0, nil); err != nil {
 			return err
 		}
 	}
 
 	if binding.FromRunID != "" {
-		if err := r.db.Link(context.TODO(), binding.FromRunID, binding.BindingID, graphdb.EdgeKindLineageBindingForRun, "", 0, nil); err != nil {
+		if err := r.db.Link(context.Background(), binding.FromRunID, binding.BindingID, graphdb.EdgeKindLineageBindingForRun, "", 0, nil); err != nil {
 			return err
 		}
 	}

@@ -8,6 +8,7 @@ import (
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
+	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
 )
 
 type ResumeOutcome struct {
@@ -52,7 +53,7 @@ func (r *Runtime) ResumeSession(ctx context.Context, workflowID string) (*Resume
 	}
 
 	env := contextdata.NewEnvelope(task.ID, "")
-	env.SetWorkingValueWithClass("task.input", task, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass(euclostate.KeyTaskInput, task, contextdata.MemoryClassTask)
 
 	pendingFrame, _ := interaction.ResumeFrame(env)
 	restoredMode := ""

@@ -13,22 +13,21 @@ import (
 )
 
 const (
-	build = "build"
-	cargo = "cargo"
-	cargo_toml = "Cargo.toml"
-	cli_cargo = "cli_cargo"
-	_fmt = "_fmt"
-	manifest_path = "--manifest-path"
-	nested = "nested"
-	release = "--release"
-	skip = "skip"
-	src = "src"
-	target = "target"
-	test = "test"
+	build             = "build"
+	cargo             = "cargo"
+	cargo_toml        = "Cargo.toml"
+	cli_cargo         = "cli_cargo"
+	_fmt              = "_fmt"
+	manifest_path     = "--manifest-path"
+	nested            = "nested"
+	release           = "--release"
+	skip              = "skip"
+	src               = "src"
+	target            = "target"
+	test              = "test"
 	working_directory = "working_directory"
-	workspace_n = "[workspace]\n"
+	workspace_n       = "[workspace]\n"
 )
-
 
 func TestCargoIsolationNotAppliedToNonCargoTool(t *testing.T) {
 	runner := &recordingRunner{stdout: ok}

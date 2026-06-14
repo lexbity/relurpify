@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/descriptor"
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	capability "codeburg.org/lexbit/relurpify/capability/registry"
@@ -178,9 +177,7 @@ func (e *StepExecutor) lookupCapability(toolName string) *descriptor.CapabilityD
 	return nil
 }
 
-// executeToolStep invokes a capability via the registry.
-// In Phase 4, this is a placeholder that returns success.
-// In Phase 5+, this would integrate with real agents to execute the capability.
+// executeToolStep invokes a capability via the registry and returns the live result.
 func (e *StepExecutor) executeToolStep(
 	ctx context.Context,
 	step plan.PlanStep,
@@ -190,19 +187,23 @@ func (e *StepExecutor) executeToolStep(
 	if cap == nil {
 		return nil, fmt.Errorf("capability is nil")
 	}
+	if e == nil || e.registry == nil {
+		return nil, fmt.Errorf("capability registry is nil")
+	}
+	if state == nil {
+		state = contextdata.NewEnvelope("goalcon", "session")
+	}
 
-	// Phase 4: Placeholder implementation
-	// Returns success for all capabilities
-	// In Phase 5+, would actually invoke the capability via agent
+	toolResult, err := e.registry.InvokeCapability(ctx, state.State(), step.Tool, step.Params)
+	if err != nil {
+		return nil, err
+	}
+	if toolResult == nil {
+		toolResult = &ports.ToolResult{Success: false, Error: "capability returned nil result"}
+	}
 	return &execution.Result{
-		Success: true,
-		Data: execution.NewToolResultPayload(map[string]any{
-			"step_id":     step.ID,
-			"tool":        step.Tool,
-			"capability":  cap.Name,
-			"executed":    true,
-			"placeholder": true, // Indicates this is not a real execution
-		}),
+		Success: toolResult.Success,
+		Data:    execution.NewToolResultPayload(toolResult.Data),
 	}, nil
 }
 
@@ -237,21 +238,8 @@ func (e *StepExecutor) recordAudit(result *StepExecutionResult, step plan.PlanSt
 		toolResultEnv.Error = toolResult.Error
 	}
 
-	// Create a minimal CapabilityResultEnvelope from the step execution
-	envelope := &capresult.CapabilityResultEnvelope{
-		Descriptor:  *cap,
-		Result:      toolResultEnv,
-		Disposition: capresult.ContentDispositionMetadataOnly,
-		RecordedAt:  time.Now().UTC(),
-	}
-
-	// For Phase 5 placeholder, we use metadata-only insertion
-	decision := capresult.InsertionDecision{
-		Action: agentspec.InsertionActionMetadataOnly,
-		Reason: "phase-5-placeholder-execution",
-	}
-
-	e.auditTrail.RecordInvocation(step.ID, envelope, decision)
+	envelope := capresult.NewCapabilityResultEnvelope(*cap, toolResultEnv, capresult.ContentDispositionRaw, nil, nil)
+	e.auditTrail.RecordInvocation(step.ID, envelope, capresult.DefaultInsertionDecision(*cap, capresult.ContentDispositionRaw))
 }
 
 // recordMetrics records step execution metrics if recorder available.

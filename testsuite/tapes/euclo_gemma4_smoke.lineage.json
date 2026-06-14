@@ -1,0 +1,16 @@
+{
+  "suite_name": "euclo_gemma4_smoke",
+  "suite_path": "testsuite/agenttests/euclo_gemma4_smoke.testsuite.yaml",
+  "classification": "capability",
+  "case_name": "smoke",
+  "model": "gemma4:e4b",
+  "provider": "tape",
+  "layer": "smoke",
+  "promoted_artifacts": [
+    "tape.jsonl"
+  ],
+  "source_run_dir": "testsuite/runs/euclo_gemma4_smoke/2026-06-13T00:00:00Z",
+  "source_artifacts": "testsuite/runs/euclo_gemma4_smoke/2026-06-13T00:00:00Z/artifacts/smoke__gemma4_e4b",
+  "destination_tape": "testsuite/tapes/euclo_gemma4_smoke.tape.jsonl",
+  "created_at": "2026-06-13T00:00:00Z"
+}

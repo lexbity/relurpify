@@ -8,11 +8,10 @@ import (
 )
 
 const (
-	Agentdup_validation_test = "agent.dup"
+	Agentdup_validation_test            = "agent.dup"
 	AgentGenericDefault_validation_test = "agent.generic.default"
-	FrameworkPromptV2_validation_test = "framework.prompt/v2"
+	FrameworkPromptV2_validation_test   = "framework.prompt/v2"
 )
-
 
 func TestValidateConfig_MissingSchema(t *testing.T) {
 	issues := validateConfig(&PromptConfig{

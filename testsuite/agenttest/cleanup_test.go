@@ -15,7 +15,6 @@ const (
 	file_write = "file_write"
 )
 
-
 // TestRepresentativeSuitesLoad verifies that the committed catalog now loads
 // under the strict generic schema.
 func TestRepresentativeSuitesLoad(t *testing.T) {

@@ -12,22 +12,21 @@ import (
 )
 
 const (
-	Ayenitd_domaindag = "ayenitd"
-	Capability_domaindag = "capability"
+	Ayenitd_domaindag      = "ayenitd"
+	Capability_domaindag   = "capability"
 	Cognitionzoo_domaindag = "cognitionzoo"
-	Context_domaindag = "context"
-	Execution_domaindag = "execution"
-	Governance_domaindag = "governance"
-	Jobs_domaindag = "jobs"
-	Model_domaindag = "model"
-	Platform_domaindag = "platform"
-	Telemetry_domaindag = "telemetry"
-	Testsuite_domaindag = "testsuite"
-	Tooling_domaindag = "tooling"
-	Userconfig_domaindag = "userconfig"
-	C_2194 = "↔"
+	Context_domaindag      = "context"
+	Execution_domaindag    = "execution"
+	Governance_domaindag   = "governance"
+	Jobs_domaindag         = "jobs"
+	Model_domaindag        = "model"
+	Platform_domaindag     = "platform"
+	Telemetry_domaindag    = "telemetry"
+	Testsuite_domaindag    = "testsuite"
+	Tooling_domaindag      = "tooling"
+	Userconfig_domaindag   = "userconfig"
+	C_2194                 = "↔"
 )
-
 
 // DomainDAG encodes the allowed domain import directions from §2.1.
 // For each importing domain, allowedImports[domain] lists the set of domains

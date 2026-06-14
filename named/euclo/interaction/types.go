@@ -35,7 +35,7 @@ const (
 type ActionSlot struct {
 	ID       string // Slot identifier
 	Label    string // Human-readable label
-	Shortcut string // Legacy shortcut key
+	Shortcut string // Keyboard shortcut key
 	Action   string // Action identifier
 	Risk     string // "low" | "medium" | "high"
 	Default  bool   // Whether this is the default slot
@@ -83,7 +83,7 @@ func ShouldResumeExecution(frameType FrameType) bool {
 	}
 }
 
-// FrameMetadata preserves the timestamp field used by the legacy renderers.
+// FrameMetadata carries auxiliary metadata for interaction rendering.
 type FrameMetadata struct {
 	Timestamp time.Time
 }
@@ -107,20 +107,20 @@ type FrameResult struct {
 	RespondedAt time.Time      // When the response was received
 }
 
-// Candidate is a legacy candidate entry.
+// Candidate is a candidate entry rendered by the interaction surfaces.
 type Candidate struct {
 	ID         string
 	Summary    string
 	Properties map[string]string
 }
 
-// CandidatesContent is the legacy candidate-selection payload.
+// CandidatesContent is the candidate-selection payload.
 type CandidatesContent struct {
 	Candidates    []Candidate
 	RecommendedID string
 }
 
-// ComparisonContent is the legacy comparison payload.
+// ComparisonContent is the comparison payload.
 type ComparisonContent struct {
 	Dimensions []string
 	Matrix     [][]string
@@ -133,13 +133,13 @@ type DraftItem struct {
 	Content  string
 }
 
-// DraftContent is the legacy draft payload.
+// DraftContent is the draft payload.
 type DraftContent struct {
 	Kind  string
 	Items []DraftItem
 }
 
-// ResultContent is the legacy result payload.
+// ResultContent is the result payload.
 type ResultContent struct {
 	Status    string
 	Detail    string
@@ -148,7 +148,7 @@ type ResultContent struct {
 	Evidence  []EvidenceItem
 }
 
-// EvidenceItem is a legacy result evidence entry.
+// EvidenceItem is a result evidence entry.
 type EvidenceItem struct {
 	Kind   string
 	Detail string
@@ -163,7 +163,7 @@ type HITLResponse struct {
 	RespondedAt time.Time      // Timestamp when the response was recorded
 }
 
-// Finding is a legacy evidence/result finding.
+// Finding is an evidence or result finding.
 type Finding struct {
 	Location    string
 	Severity    string
@@ -172,27 +172,27 @@ type Finding struct {
 	Description string
 }
 
-// FindingsContent is the legacy findings payload.
+// FindingsContent is the findings payload.
 type FindingsContent struct {
 	Critical []Finding
 	Warning  []Finding
 	Info     []Finding
 }
 
-// StatusContent is the legacy status payload.
+// StatusContent is the status payload.
 type StatusContent struct {
 	Message string
 	Detail  string
 }
 
-// SummaryContent is the legacy summary payload.
+// SummaryContent is the summary payload.
 type SummaryContent struct {
 	Description string
 	Artifacts   []string
 	Changes     []string
 }
 
-// TransitionContent is the legacy mode transition payload.
+// TransitionContent is the mode transition payload.
 type TransitionContent struct {
 	FromMode string
 	ToMode   string
@@ -209,13 +209,13 @@ type SessionListItem struct {
 	LastActiveAt  string
 }
 
-// SessionListContent is the legacy session-list payload.
+// SessionListContent is the session-list payload.
 type SessionListContent struct {
 	Workspace string
 	Sessions  []SessionListItem
 }
 
-// ContextFile is a legacy sidebar entry.
+// ContextFile is a sidebar entry.
 type ContextFile struct {
 	Path            string
 	Source          string
@@ -223,14 +223,14 @@ type ContextFile struct {
 	InsertionAction string
 }
 
-// KnowledgeItem is a legacy knowledge-summary item.
+// KnowledgeItem is a knowledge-summary item.
 type KnowledgeItem struct {
 	Kind    string
 	Title   string
 	Summary string
 }
 
-// PipelineTrace is a legacy trace summary.
+// PipelineTrace is a trace summary.
 type PipelineTrace struct {
 	AnchorsExtracted      int
 	AnchorsConfirmed      int
@@ -243,7 +243,7 @@ type PipelineTrace struct {
 	FallbackReason        string
 }
 
-// ArchaeoFinding is a legacy explore entry.
+// ArchaeoFinding is an explore entry.
 type ArchaeoFinding struct {
 	ID          string
 	Kind        string
@@ -253,7 +253,7 @@ type ArchaeoFinding struct {
 	Severity    string
 }
 
-// ArchaeoFindingsContent is the legacy findings payload for the archaeo pane.
+// ArchaeoFindingsContent is the findings payload for the archaeo pane.
 type ArchaeoFindingsContent struct {
 	Blobs []ArchaeoFinding
 }
@@ -273,8 +273,8 @@ type InteractionFrame struct {
 	Resume        *ClarificationResumeMetadata // Resume metadata for pending clarification
 	Selection     *SelectionFrame              // Typed payload for selection-style frames
 	Payload       map[string]any               // Frame-specific payload data
-	Content       any                          // Legacy payload field used by older renderers
-	Metadata      FrameMetadata                // Legacy metadata field used by older renderers
+	Content       any                          // Frame-specific payload data for renderers that consume typed content
+	Metadata      FrameMetadata                // Frame metadata used by renderers and logs
 	CreatedAt     time.Time                    // When the frame was created
 	RespondedAt   *time.Time                   // When the frame was responded to (nil if pending)
 	Response      *FrameResult                 // The user's response (nil if pending)

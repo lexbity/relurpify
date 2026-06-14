@@ -7,9 +7,13 @@ import (
 	"time"
 
 	fsandbox "codeburg.org/lexbit/relurpify/capability/sandbox"
+	"codeburg.org/lexbit/relurpify/capability/ports"
 	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
+	"codeburg.org/lexbit/relurpify/model"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
+
+const AgentLabelEuclo = "euclo"
 
 // Config captures every knob shared across the relurpish CLI, TUI, and server
 // entry points. Keeping it as a lightweight struct makes it trivial to reuse in
@@ -45,7 +49,8 @@ type Config struct {
 	AuditLimit                 int
 	HITLTimeout                time.Duration
 	Editor                     string
-	SubprocessToolFactory      func(config.ToolManifest) any
+	SubprocessToolFactory      func(ports.ToolManifest) any
+	ModelFactoryWrapper        func(model.ModelFactory) model.ModelFactory
 }
 
 // DefaultConfig infers sensible defaults based on the current working
@@ -57,13 +62,14 @@ func DefaultConfig() Config {
 	}
 	return Config{
 		Workspace:      cwd,
-		ManifestPath:   "relurpify_cfg/agents/coding.yaml",
+		ManifestPath:   "relurpify_cfg/agents/euclo.yaml",
 		AgentsDir:      "relurpify_cfg/agents",
 		MemoryPath:     ".relurpify_state/memory",
 		LogPath:        ".relurpify_state/logs/relurpish.log",
 		TelemetryPath:  ".relurpify_state/telemetry/telemetry.jsonl",
 		EventsPath:     ".relurpify_state/events.db",
 		ConfigPath:     ".relurpify_state/workspace.yaml",
+		AgentName:      AgentLabelEuclo,
 		ServerAddr:     ":8080",
 		AuditLimit:     512,
 		HITLTimeout:    45 * time.Second,
@@ -91,7 +97,7 @@ func (c *Config) Normalize() error {
 	c.Workspace = absWorkspace
 	paths := config.New(c.Workspace)
 	if c.AgentName == "" {
-		c.AgentName = "coding"
+		c.AgentName = AgentLabelEuclo
 	}
 	if c.ManifestPath == "" {
 		c.ManifestPath = filepath.Join(paths.AgentsDir(), c.AgentName+".yaml")
@@ -134,9 +140,6 @@ func (c *Config) Normalize() error {
 	}
 	if !filepath.IsAbs(c.ConfigPath) {
 		c.ConfigPath = filepath.Join(c.Workspace, c.ConfigPath)
-	}
-	if c.AgentName == "" {
-		c.AgentName = "coding"
 	}
 	if c.InferenceProvider == "" {
 		c.InferenceProvider = "ollama"
@@ -183,12 +186,5 @@ func (c Config) InferenceNativeToolCallingValue() bool {
 // AgentLabel returns the normalized agent identifier used across telemetry and
 // UI views.
 func (c Config) AgentLabel() string {
-	switch c.AgentName {
-	case "planner", "react", "reflection", "expert":
-		return c.AgentName
-	case "coding", "coder":
-		return "coding"
-	default:
-		return "coding"
-	}
+	return AgentLabelEuclo
 }

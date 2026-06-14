@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 
+	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"gopkg.in/yaml.v3"
 )
 
@@ -19,11 +20,11 @@ func DecodeAgentSection(node yaml.Node) (*AgentSpec, error) {
 }
 
 // DecodePermissionsSection decodes a permissions YAML section node into a typed PermissionSet.
-func DecodePermissionsSection(node yaml.Node) (*PermissionSet, error) {
+func DecodePermissionsSection(node yaml.Node) (*permissions.PermissionSet, error) {
 	if node.Kind == 0 {
 		return nil, fmt.Errorf("permissions section node is absent")
 	}
-	var ps PermissionSet
+	var ps permissions.PermissionSet
 	if err := node.Decode(&ps); err != nil {
 		return nil, fmt.Errorf("decode permissions section: %w", err)
 	}

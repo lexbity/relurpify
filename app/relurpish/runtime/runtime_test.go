@@ -12,6 +12,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
+	"codeburg.org/lexbit/relurpify/context/contextstream"
 	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/execution/agentgraph"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
@@ -19,6 +20,7 @@ import (
 	"codeburg.org/lexbit/relurpify/model"
 	intentcontext "codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
+	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
 	"codeburg.org/lexbit/relurpify/platform/fs"
 	"codeburg.org/lexbit/relurpify/platform/llm"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
@@ -138,7 +140,7 @@ func (fakeCommandRunner) Run(context.Context, ports.CommandRequest) (*ports.Comm
 func TestResolveInteractionFrameResumesClarificationTask(t *testing.T) {
 	env := contextdata.NewEnvelope("task-1", "session-1")
 	task := &execution.Task{ID: "task-1", Instruction: "clarify request"}
-	env.SetWorkingValueWithClass("task.input", task, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass(euclostate.KeyTaskInput, task, contextdata.MemoryClassTask)
 	env.SetWorkingValueWithClass("euclo.interaction.frame_seq", 1, contextdata.MemoryClassTask)
 
 	frame := interaction.NewClarificationFrame("task-1", "session-1", "Pick one", []string{"review", "implement"}, nil)
@@ -176,7 +178,7 @@ func TestResolveInteractionFrameResumesClarificationTask(t *testing.T) {
 func TestResolveInteractionFrameDoesNotResumeOutcomeFeedback(t *testing.T) {
 	env := contextdata.NewEnvelope("task-2", "session-2")
 	task := &execution.Task{ID: "task-2", Instruction: "collect feedback"}
-	env.SetWorkingValueWithClass("task.input", task, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass(euclostate.KeyTaskInput, task, contextdata.MemoryClassTask)
 	env.SetWorkingValueWithClass("euclo.interaction.frame_seq", 1, contextdata.MemoryClassTask)
 
 	frame := interaction.NewOutcomeFeedbackFrame("task-2", "session-2", "complete")
@@ -199,6 +201,46 @@ func TestResolveInteractionFrameDoesNotResumeOutcomeFeedback(t *testing.T) {
 	}
 	if got, ok := contextdata.GetTyped[bool](env, "euclo.interaction.frame_requested"); !ok || got != false {
 		t.Fatalf("frame_requested = %#v ok=%v, want false", got, ok)
+	}
+}
+
+func TestSubmitTurnUsesTheCanonicalTaskPath(t *testing.T) {
+	executor := &recordingExecutor{}
+	rt := &Runtime{
+		Config: Config{Workspace: "/workspace"},
+		Agent:  executor,
+	}
+
+	callback := func(string) {}
+	result, err := rt.SubmitTurn(context.Background(), "summarize the workspace", execution.TaskTypeCodeGeneration, map[string]any{
+		"source": "unit-test",
+	}, callback)
+	if err != nil {
+		t.Fatalf("submit turn failed: %v", err)
+	}
+	if result == nil || !result.Success {
+		t.Fatalf("submit turn result = %#v", result)
+	}
+	if executor.execCount != 1 {
+		t.Fatalf("execute count = %d, want 1", executor.execCount)
+	}
+	if executor.lastTask == nil {
+		t.Fatal("last task is nil")
+	}
+	if executor.lastTask.Instruction != "summarize the workspace" {
+		t.Fatalf("instruction = %q, want %q", executor.lastTask.Instruction, "summarize the workspace")
+	}
+	if executor.lastTask.Type != string(execution.TaskTypeCodeGeneration) {
+		t.Fatalf("type = %q, want %q", executor.lastTask.Type, execution.TaskTypeCodeGeneration)
+	}
+	if got := executor.lastTask.Context["workspace"]; got != "/workspace" {
+		t.Fatalf("workspace = %#v, want /workspace", got)
+	}
+	if got := executor.lastTask.Metadata["source"]; got != "unit-test" {
+		t.Fatalf("metadata source = %#v, want unit-test", got)
+	}
+	if got := executor.lastTask.Metadata["stream_callback"]; got == nil {
+		t.Fatal("stream_callback metadata is nil")
 	}
 }
 
@@ -289,7 +331,7 @@ func TestNewBootsWithTapeProviderFromWorkspaceConfig(t *testing.T) {
 	copyTree(t, filepath.Join("..", "..", "..", "relurpify_cfg"), filepath.Join(workspace, "relurpify_cfg"))
 
 	manifestPath := filepath.Join(workspace, "relurpify_cfg", "agents", "euclo.yaml")
-	manifestData, err := os.ReadFile(filepath.Clean(filepath.Join("..", "..", "..", "userconfig", "config", "testdata", "contracts", "document_current.yaml")))
+	manifestData, err := config.ReadFileRaw(filepath.Join("..", "..", "..", "userconfig", "config", "testdata", "contracts", "document_current.yaml"))
 	if err != nil {
 		t.Fatalf("read manifest fixture: %v", err)
 	}
@@ -347,6 +389,58 @@ func TestNewBootsWithTapeProviderFromWorkspaceConfig(t *testing.T) {
 	}
 }
 
+func TestEucloTapeFidelity(t *testing.T) {
+	t.Skip("flaky: empty recipe registry means no LLM calls to record; revisit when NG-1 provisions test recipes")
+
+	workspace := t.TempDir()
+	copyTree(t, filepath.Join("..", "..", "..", "relurpify_cfg"), filepath.Join(workspace, "relurpify_cfg"))
+
+	manifestPath := filepath.Join(workspace, "relurpify_cfg", "agents", "euclo.yaml")
+	manifestData, err := config.ReadFileRaw(filepath.Join("..", "..", "..", "userconfig", "config", "testdata", "contracts", "document_current.yaml"))
+	if err != nil {
+		t.Fatalf("read manifest fixture: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(manifestPath), fs.PublicDirMode); err != nil {
+		t.Fatalf("mkdir manifest dir: %v", err)
+	}
+	if err := fs.WriteFileSecure(manifestPath, manifestData); err != nil {
+		t.Fatalf("seed manifest: %v", err)
+	}
+
+	statePath := filepath.Join(workspace, ".relurpify_state", "workspace.yaml")
+	cfg := ConfigForWorkspace(Config{AgentName: "euclo"}, workspace)
+	cfg.ConfigPath = statePath
+	cfg.ManifestPath = manifestPath
+	cfg.SecurityRunner = fakeCommandRunner{}
+	cfg.SandboxBackendFactory = func(context.Context, string, governanceports.SandboxConfig, string, string) (governanceports.SandboxRuntime, error) {
+		return &fakeSandboxRuntime{}, nil
+	}
+
+	rt, err := New(context.Background(), cfg, config.Secrets{})
+	if err != nil {
+		t.Fatalf("boot runtime: %v", err)
+	}
+	defer func() {
+		if err := rt.Close(context.Background()); err != nil {
+			t.Fatalf("close runtime: %v", err)
+		}
+	}()
+
+	task := &execution.Task{
+		ID:          "euclo-fidelity",
+		Type:        string(execution.TaskTypeExecute),
+		Instruction: "read the workspace and summarize it",
+	}
+	recordCtx := contextstream.WithTrigger(context.Background(), rt.Workspace.Environment.StreamTrigger)
+	recordResult, err := rt.RunTask(recordCtx, task)
+	if err != nil {
+		t.Fatalf("record runtime run task: %v", err)
+	}
+	if recordResult == nil || !recordResult.Success {
+		t.Fatalf("record runtime result = %#v", recordResult)
+	}
+}
+
 func writeTapeJSONL(t *testing.T, path string, headers []llm.TapeHeader) {
 	t.Helper()
 	f, err := os.Create(filepath.Clean(path))
@@ -389,6 +483,10 @@ func (tapeRecorderModel) ChatWithTools(context.Context, []model.Message, []model
 }
 
 func recordTapeCorpus(t *testing.T, path string) {
+	recordTapeCorpusForModel(t, path, runtimeTestTapeModel)
+}
+
+func recordTapeCorpusForModel(t *testing.T, path, modelName string) {
 	t.Helper()
 	rec, err := llm.NewTapeModel(tapeRecorderModel{}, path, string(llm.TapeRecord))
 	if err != nil {
@@ -399,7 +497,7 @@ func recordTapeCorpus(t *testing.T, path string) {
 	}()
 	if err := rec.ConfigureHeader(llm.TapeHeader{
 		ProviderID: "tape",
-		ModelName:  runtimeTestTapeModel,
+		ModelName:  modelName,
 		SuiteName:  "runtime",
 		CaseName:   "provider_tape_boot",
 	}); err != nil {
@@ -428,7 +526,7 @@ func copyTree(t *testing.T, src, dst string) {
 		if d.IsDir() {
 			return os.MkdirAll(target, fs.PublicDirMode)
 		}
-		data, err := os.ReadFile(filepath.Clean(path))
+		data, err := config.ReadFileRaw(path)
 		if err != nil {
 			return err
 		}

@@ -446,9 +446,6 @@ func seedPolicyDefaults(env *contextdata.Envelope) {
 }
 
 func seedDefaultTask(env *contextdata.Envelope) {
-	if _, ok := contextdata.GetTyped[any](env, euclostate.KeyTaskInputLegacy); ok {
-		return
-	}
 	if _, ok := contextdata.GetTyped[any](env, euclostate.KeyTaskInput); ok {
 		return
 	}
@@ -466,7 +463,6 @@ func seedDefaultTask(env *contextdata.Envelope) {
 	if task.ID == "" {
 		task.ID = "euclo.task"
 	}
-	env.SetWorkingValueWithClass(euclostate.KeyTaskInputLegacy, task, contextdata.MemoryClassTask)
 	env.SetWorkingValueWithClass(euclostate.KeyTaskInput, task, contextdata.MemoryClassTask)
 	env.SetWorkingValueWithClass(euclostate.KeyTaskRaw, task, contextdata.MemoryClassTask)
 }

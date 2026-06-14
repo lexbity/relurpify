@@ -21,7 +21,7 @@ func (c *WorkspaceConfig) Validate() error {
 	if backend != "" {
 		if _, ok := supportedSandboxBackends[backend]; !ok {
 			supported := "docker, gvisor"
-		return fmt.Errorf("sandbox.backend must be one of %s (got %q)", supported, backend)
+			return fmt.Errorf("sandbox.backend must be one of %s (got %q)", supported, backend)
 		}
 	}
 	return nil

@@ -11,7 +11,6 @@ const (
 	Migration_sqlite_removal_check = "migration"
 )
 
-
 // SQLiteFreePackages lists module-relative package prefixes that must not
 // import "database/sql" or "github.com/mattn/go-sqlite3" in production code.
 // Migration files explicitly named "migration" are exempt.

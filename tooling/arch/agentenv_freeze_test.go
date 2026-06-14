@@ -10,7 +10,6 @@ const (
 	Livetreelistingfromsfailedv_agentenv_freeze_test = "live tree listing from %s failed: %v"
 )
 
-
 func TestNoNewAgentenvImporters(t *testing.T) {
 	root := filepath.Join("..", "..")
 	pkgs, err := ListPackages(root)

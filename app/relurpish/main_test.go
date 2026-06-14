@@ -51,7 +51,7 @@ func TestNewRootCmdPersistentPreRunNormalizesConfig(t *testing.T) {
 	require.NoError(t, root.PersistentPreRunE(root, nil))
 
 	require.True(t, filepath.IsAbs(cfg.Workspace))
-	require.Equal(t, "coding", cfg.AgentName)
+	require.Equal(t, "euclo", cfg.AgentName)
 	require.Equal(t, "ollama", cfg.InferenceProvider)
 	require.Equal(t, "http://localhost:11434", cfg.InferenceEndpoint)
 	require.Equal(t, 256, cfg.AuditLimit)

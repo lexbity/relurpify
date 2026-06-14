@@ -62,7 +62,7 @@ func (b *mockOllamaBackend) SetProfile(profile *model.ModelProfile)           {}
 func (b *mockOllamaBackend) Reset(ctx context.Context, strategy string) error { return nil }
 
 func init() {
-	llm.RegisterProvider("ollama", func(cfg llm.ProviderConfig, secrets llm.ProviderSecrets) (llm.ManagedBackend, error) {
+	llm.RegisterProvider("mock-ollama", func(cfg llm.ProviderConfig, secrets llm.ProviderSecrets) (llm.ManagedBackend, error) {
 		_ = cfg
 		_ = secrets
 		return &mockOllamaBackend{}, nil
@@ -195,7 +195,7 @@ func testDocument() *config.Document {
 		Implementation: "coding",
 		Mode:           agentspec.AgentModePrimary,
 		Model: agentspec.AgentModelConfig{
-			Provider: "ollama",
+			Provider: "mock-ollama",
 			Name:     "qwen2.5-coder:14b",
 		},
 		Bash: agentspec.AgentBashPermissions{
@@ -280,6 +280,14 @@ func TestPanelGoldenViews(t *testing.T) {
 
 	aiProvider := tui.NewAIProviderPane(&sessionInfoFixture{workspace: workdir})
 	aiProvider.SetSize(96, 18)
+	providerPath := config.New(workdir).RuntimeProvidersFile()
+	if err := fs.MkdirAllSecure(filepath.Dir(providerPath)); err != nil {
+		t.Fatalf("mkdir provider dir: %v", err)
+	}
+	if err := fs.WriteFileSecure(providerPath, []byte("provider: mock-ollama\n")); err != nil {
+		t.Fatalf("seed provider config: %v", err)
+	}
+	aiProvider.Refresh()
 	tui.SetAIProviderModelsForTest(aiProvider, []llm.ModelInfo{
 		{Name: "qwen2.5-coder:14b", Family: "qwen"},
 		{Name: "llama3:latest", Family: "llama"},

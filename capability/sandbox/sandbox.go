@@ -8,6 +8,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"codeburg.org/lexbit/relurpify/platform/safeexec"
 )
 
 // Validate/Supports methods live on the sandbox types.
@@ -199,16 +201,7 @@ func (g *SandboxRuntimeImpl) commandContext(ctx context.Context, name string, ar
 	if err != nil {
 		resolvedPath = name
 	}
-	cmd := &exec.Cmd{
-		Path: resolvedPath,
-		Args: append([]string{resolvedPath}, args...),
-	}
-	go func() {
-		<-ctx.Done()
-		if cmd.Process != nil {
-			_ = cmd.Process.Kill()
-		}
-	}()
+	cmd := safeexec.CommandContext(ctx, safeexec.Prepare(resolvedPath, args...))
 	return cmd, cancel
 }
 

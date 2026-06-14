@@ -45,7 +45,24 @@ func (t *subprocessTool) Permissions() ports.ToolPermissions {
 	return ports.ToolPermissions{Permissions: perms}
 }
 func (t *subprocessTool) Tags() []string {
-	return append([]string(nil), t.manifest.Capability.RiskClass...)
+	if len(t.manifest.Capability.RiskClass) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(t.manifest.Capability.RiskClass))
+	seen := make(map[string]struct{}, len(t.manifest.Capability.RiskClass))
+	for _, tag := range t.manifest.Capability.RiskClass {
+		tag = strings.ToLower(strings.TrimSpace(tag))
+		tag = strings.ReplaceAll(tag, "_", "-")
+		if tag == "" {
+			continue
+		}
+		if _, ok := seen[tag]; ok {
+			continue
+		}
+		seen[tag] = struct{}{}
+		out = append(out, tag)
+	}
+	return out
 }
 
 // Execute runs the tool with the given arguments. It expands the command

@@ -1,7 +1,6 @@
 package thoughtrecipe
 
 import (
-	"fmt"
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/named/euclo/surface"
@@ -25,24 +24,6 @@ type Compiler struct{}
 // NewCompiler creates a new thoughtrecipe compiler.
 func NewCompiler() *Compiler {
 	return &Compiler{}
-}
-
-// Compile reports that the legacy graph-node compiler has been removed.
-func (c *Compiler) Compile(thoughtrecipe *surface.ThoughtRecipe) ([]CompiledNode, error) {
-	_ = c
-	if thoughtrecipe == nil {
-		return nil, fmt.Errorf("thoughtrecipe is nil")
-	}
-	return nil, fmt.Errorf("legacy thoughtrecipe compiler removed; lower the AST directly into an execution plan")
-}
-
-// CompilePlan reports that the synthetic legacy compiler path has been removed.
-func (c *Compiler) CompilePlan(thoughtrecipe *surface.ThoughtRecipe) (*ExecutionPlan, error) {
-	_ = c
-	if thoughtrecipe == nil {
-		return nil, fmt.Errorf("thoughtrecipe is nil")
-	}
-	return nil, fmt.Errorf("legacy thoughtrecipe compiler removed; lower the AST directly into an execution plan")
 }
 
 func executionParadigmForStep(step surface.ThoughtRecipeStep) string {

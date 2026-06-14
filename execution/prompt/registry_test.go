@@ -14,23 +14,22 @@ import (
 )
 
 const (
-	Allidsvwantv_registry_test = "All ids = %#v, want %#v"
-	LoadFSv_registry_test = "LoadFS: %v"
+	Allidsvwantv_registry_test        = "All ids = %#v, want %#v"
+	LoadFSv_registry_test             = "LoadFS: %v"
 	Resolveoutputqwantq_registry_test = "Resolve output = %q, want %q"
-	Resolvev_registry_test = "Resolve: %v"
-	Speaktone_registry_test = "Speak {tone}."
-	Aprompt_registry_test = "a.prompt"
-	Agentdup_registry_test = "agent.dup"
-	Agentone_registry_test = "agent.one"
-	Agenttwo_registry_test = "agent.two"
-	Bprompt_registry_test = "b.prompt"
-	Debug_registry_test = "debug"
-	Direct_registry_test = "direct"
-	Fixtures_registry_test = "fixtures"
-	System_registry_test = "system"
-	Tone_registry_test = "tone"
+	Resolvev_registry_test            = "Resolve: %v"
+	Speaktone_registry_test           = "Speak {tone}."
+	Aprompt_registry_test             = "a.prompt"
+	Agentdup_registry_test            = "agent.dup"
+	Agentone_registry_test            = "agent.one"
+	Agenttwo_registry_test            = "agent.two"
+	Bprompt_registry_test             = "b.prompt"
+	Debug_registry_test               = "debug"
+	Direct_registry_test              = "direct"
+	Fixtures_registry_test            = "fixtures"
+	System_registry_test              = "system"
+	Tone_registry_test                = "tone"
 )
-
 
 func TestRegistry_LoadDirV2Prompts(t *testing.T) {
 	dir := t.TempDir()

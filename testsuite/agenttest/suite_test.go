@@ -11,20 +11,19 @@ import (
 )
 
 const (
-	agenttestsuite = "AgentTestSuite"
-	coding = "coding"
-	mystery = "mystery"
+	agenttestsuite           = "AgentTestSuite"
+	coding                   = "coding"
+	mystery                  = "mystery"
 	relurpify_cfg_agent_yaml = "relurpify_cfg/agent.yaml"
-	relurpify_cfg = "relurpify_cfg"
-	agent_yaml = "agent.yaml"
-	smoke = "smoke"
-	hello = "hello"
-	notes_txt = "notes.txt"
-	go_test = "go test"
-	relurpify_v1alpha1 = "relurpify/v1alpha1"
-	summarize = "summarize"
+	relurpify_cfg            = "relurpify_cfg"
+	agent_yaml               = "agent.yaml"
+	smoke                    = "smoke"
+	hello                    = "hello"
+	notes_txt                = "notes.txt"
+	go_test                  = "go test"
+	relurpify_v1alpha1       = "relurpify/v1alpha1"
+	summarize                = "summarize"
 )
-
 
 func TestSuiteValidateDefaultsDerivedWorkspaceSettings(t *testing.T) {
 	suite := &Suite{

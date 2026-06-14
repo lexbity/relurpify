@@ -14,7 +14,6 @@ const (
 	Str17460_markdown = "```"
 )
 
-
 var markdownParser = goldmark.New(
 	goldmark.WithParserOptions(
 		parser.WithAutoHeadingID(),

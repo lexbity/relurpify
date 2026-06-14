@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"time"
 
+	goaltypes "codeburg.org/lexbit/relurpify/cognitionzoo/goalcon/types"
 	"codeburg.org/lexbit/relurpify/cognitionzoo/plan"
 	relurpctx "codeburg.org/lexbit/relurpify/context"
 	"codeburg.org/lexbit/relurpify/context/knowledge/memory"
@@ -296,8 +297,34 @@ func (r *MetricsRecorder) EstimateOperatorQuality(operatorName string) float64 {
 // ComparatorByQuality returns a comparator function for sorting operators by estimated quality.
 func (r *MetricsRecorder) ComparatorByQuality() func(op1, op2 any) bool {
 	return func(op1, op2 any) bool {
-		// Simple comparator placeholder - can be customized based on operator type
-		return false
+		name1, ok1 := operatorName(op1)
+		name2, ok2 := operatorName(op2)
+		if !ok1 || !ok2 {
+			return false
+		}
+		return r.EstimateOperatorQuality(name1) > r.EstimateOperatorQuality(name2)
+	}
+}
+
+func operatorName(value any) (string, bool) {
+	switch v := value.(type) {
+	case string:
+		if v == "" {
+			return "", false
+		}
+		return v, true
+	case *goaltypes.Operator:
+		if v == nil || v.Name == "" {
+			return "", false
+		}
+		return v.Name, true
+	case goaltypes.Operator:
+		if v.Name == "" {
+			return "", false
+		}
+		return v.Name, true
+	default:
+		return "", false
 	}
 }
 

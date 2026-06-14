@@ -146,7 +146,7 @@ func (s *BrowserService) Stop() error {
 
 	var errs []error
 	for _, handle := range handles {
-		if err := handle.Close(context.TODO()); err != nil {
+		if err := handle.Close(context.Background()); err != nil {
 			errs = append(errs, err)
 		}
 	}

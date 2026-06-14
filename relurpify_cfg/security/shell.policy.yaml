@@ -1,5 +1,7 @@
 schema: relurpify/policy/shell/v1
 
 rules:
-  - pattern: '(^|\s)git\s+reset\s+--hard(\s|$)'
+  - id: deny-git-reset-hard
+    pattern: '(^|\s)git\s+reset\s+--hard(\s|$)'
     reason: Destructive git reset is blocked
+    action: block

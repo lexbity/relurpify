@@ -28,7 +28,6 @@ const (
 	Capabilitysnotfound_invoke = "capability %s not found"
 )
 
-
 // InvokeCapability executes an invocable capability by capability ID or public name.
 func (r *CapabilityRegistry) InvokeCapability(ctx context.Context, state ports.State, idOrName string, args map[string]any) (*ports.ToolResult, error) {
 	if r == nil {

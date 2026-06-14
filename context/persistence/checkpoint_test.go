@@ -13,9 +13,8 @@ import (
 
 const (
 	Checkpoint1_checkpoint_test = "checkpoint-1"
-	Run1_checkpoint_test = "run-1"
+	Run1_checkpoint_test        = "run-1"
 )
-
 
 func TestSaveAndLoadCheckpointArtifact(t *testing.T) {
 	var artifacts []contextports.WorkflowArtifactRecord

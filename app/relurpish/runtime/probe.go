@@ -203,7 +203,9 @@ func detectInferenceBackend(ctx context.Context, cfg Config, secrets config.Secr
 		selected = models[0].Name
 	}
 	report.SelectedModel = selected
-	if reg, err := modelselect.LoadProfileRegistry(config.New(cfg.Workspace).ModelProfilesDir()); err == nil {
+	bundle, diags, err := config.LoadDiagnostic(config.LoadOptions{WorkspaceRoot: cfg.Workspace})
+	if err == nil && bundle.Config != nil {
+		reg := modelselect.NewProfileRegistryFromProfiles(bundle.Config.Model.Profiles)
 		resolution := reg.Resolve(cfg.InferenceProvider, selected)
 		report.SelectedProfile = filepath.Base(resolution.SourcePath)
 		if report.SelectedProfile == "." || report.SelectedProfile == "" {
@@ -211,6 +213,11 @@ func detectInferenceBackend(ctx context.Context, cfg Config, secrets config.Secr
 		}
 		report.ProfileReason = resolution.Reason
 		report.ProfileSource = resolution.SourcePath
+		if report.SelectedProfile == "" {
+			if diag := firstConfigDiagnostic(diags, "profile"); diag != nil && strings.EqualFold(strings.TrimSpace(diag.Severity), "blocking") {
+				report.Error = diag.Message
+			}
+		}
 	}
 	for _, model := range models {
 		if model.Name == selected {

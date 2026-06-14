@@ -263,7 +263,7 @@ func (h *clarificationCapabilityHandler) Invoke(ctx context.Context, st ports.St
 }
 
 func instructionFromEnvelope(env *contextdata.Envelope) string {
-	if v, ok := contextdata.GetTyped[any](env, euclostate.KeyTaskInputLegacy); ok {
+	if v, ok := contextdata.GetTyped[any](env, euclostate.KeyTaskInput); ok {
 		if task, ok := v.(*execution.Task); ok && task != nil {
 			return strings.TrimSpace(task.Instruction)
 		}

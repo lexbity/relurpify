@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"testing"
 )
 
 type providerFactory func(ProviderConfig, ProviderSecrets) (ManagedBackend, error)
@@ -23,6 +24,11 @@ func RegisterProvider(name string, factory providerFactory) {
 	}
 	providerFactoriesMu.Lock()
 	defer providerFactoriesMu.Unlock()
+	if _, exists := providerFactories[name]; exists {
+		if testing.Testing() {
+			panic(fmt.Sprintf("provider %q already registered", name))
+		}
+	}
 	providerFactories[name] = factory
 }
 
@@ -80,6 +86,10 @@ func applyProviderDefaults(cfg *ProviderConfig) {
 	case "lmstudio":
 		if strings.TrimSpace(cfg.Endpoint) == "" {
 			cfg.Endpoint = "http://localhost:1234"
+		}
+	case "offline":
+		if strings.TrimSpace(cfg.Model) == "" {
+			cfg.Model = "offline-synthetic"
 		}
 	}
 }

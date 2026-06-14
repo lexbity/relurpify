@@ -65,6 +65,7 @@ type RuntimeAdapter interface {
 	HITLServiceIface
 	ExecuteInstruction(ctx context.Context, instruction string, taskType execution.TaskType, metadata map[string]any) (*execution.Result, error)
 	ExecuteInstructionStream(ctx context.Context, instruction string, taskType execution.TaskType, metadata map[string]any, callback func(string)) (*execution.Result, error)
+	SubmitTurn(ctx context.Context, instruction string, taskType execution.TaskType, metadata map[string]any, callback func(string)) (*execution.Result, error)
 	AvailableAgents() []string
 	SwitchAgent(name string) error
 	SessionInfo() SessionInfo
@@ -364,6 +365,13 @@ func (r *runtimeAdapter) ExecuteInstructionStream(ctx context.Context, instructi
 		return nil, fmt.Errorf("runtime unavailable")
 	}
 	return r.rt.ExecuteInstructionStream(ctx, instruction, taskType, metadata, callback)
+}
+
+func (r *runtimeAdapter) SubmitTurn(ctx context.Context, instruction string, taskType execution.TaskType, metadata map[string]any, callback func(string)) (*execution.Result, error) {
+	if r == nil || r.rt == nil {
+		return nil, fmt.Errorf("runtime unavailable")
+	}
+	return r.rt.SubmitTurn(ctx, instruction, taskType, metadata, callback)
 }
 
 func (r *runtimeAdapter) InferenceModels(ctx context.Context) ([]string, error) {

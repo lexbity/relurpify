@@ -24,6 +24,7 @@ relurpify/
 
 /REFERENCE_ONLY
 *.db
+/dev-agent-cli
 
 # Build artifacts from test fixtures
 testsuite/agenttest_fixtures/**/target/

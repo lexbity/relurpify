@@ -304,6 +304,28 @@ func (m *PermissionManager) CheckFileAccess(ctx context.Context, agentID string,
 	return nil
 }
 
+// StaticallyAllowsFileAccess reports whether the given filesystem access is
+// permitted by a declared, non-HITL grant — without ever prompting for
+// approval. It is the non-interactive counterpart to CheckFileAccess, intended
+// for background/system operations (e.g. workspace indexing) that must skip
+// disallowed paths rather than block on a HITL request that no human will
+// answer. A path requiring HITL, lacking a static grant, or escaping the
+// workspace returns false.
+func (m *PermissionManager) StaticallyAllowsFileAccess(action permissions.FileSystemAction, path string) bool {
+	if m == nil {
+		return false
+	}
+	clean, err := m.normalizePath(path)
+	if err != nil {
+		return false
+	}
+	perm := m.findFilesystemPermission(action, clean)
+	if perm == nil {
+		return false
+	}
+	return !perm.HITLRequired
+}
+
 // CheckFilePermission implements permissions.FilePermissionChecker.
 // It validates a file operation against the agent's file matrix.
 func (m *PermissionManager) CheckFilePermission(ctx context.Context, agentID, basePath, action, absPath string, matrix AgentFileMatrix) error {

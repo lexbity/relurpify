@@ -15,11 +15,10 @@ import (
 )
 
 const (
-	IndexDb_ast_edge_test = "index.db"
-	MainGoFile_ast_edge_test = "main.go"
+	IndexDb_ast_edge_test              = "index.db"
+	MainGoFile_ast_edge_test           = "main.go"
 	PackagemainfuncHello_ast_edge_test = "package main\nfunc Hello() {}\n"
 )
-
 
 // ==================== IndexManager Edge Cases ====================
 

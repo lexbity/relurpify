@@ -8,7 +8,6 @@ const (
 	Yaml_language_detector = "yaml"
 )
 
-
 // LanguageDetector maps filenames/extensions to languages.
 type LanguageDetector struct {
 	extensionMap map[string]string

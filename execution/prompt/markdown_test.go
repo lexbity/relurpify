@@ -7,9 +7,8 @@ import (
 
 const (
 	AgentGenericDefault_markdown_test = "agent.generic.default"
-	Name_markdown_test = "name"
+	Name_markdown_test                = "name"
 )
-
 
 func TestResolvePrompt_SubstitutesOnlyEligibleMarkdownText(t *testing.T) {
 	cfg := &PromptConfig{

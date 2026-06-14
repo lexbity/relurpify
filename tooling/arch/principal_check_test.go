@@ -9,7 +9,6 @@ const (
 	Governanceports_principal_check_test = "/governance/ports"
 )
 
-
 func TestCheckPrincipalContextWrite_noViolation(t *testing.T) {
 	pkgs := []GoPackage{
 		{

@@ -258,17 +258,17 @@ type AuditSpec struct {
 // ContextPolicy defines the context policy section in an agent manifest.
 // This mirrors execution/context.ContextPolicyBundle to avoid import cycles.
 type ContextPolicy struct {
-	CompilationMode       string                    `yaml:"compilation_mode,omitempty" json:"compilation_mode,omitempty"`
-	DefaultTrustClass     string                    `yaml:"default_trust_class,omitempty" json:"default_trust_class,omitempty"`
-	Rankers               []string                  `yaml:"rankers,omitempty" json:"rankers,omitempty"`
-	Scanners              []string                  `yaml:"scanners,omitempty" json:"scanners,omitempty"`
-	Summarizers           []string                  `yaml:"summarizers,omitempty" json:"summarizers,omitempty"`
-	Quota                 *QuotaSpec                `yaml:"quota,omitempty" json:"quota,omitempty"`
-	RateLimit             *RateLimitSpec            `yaml:"rate_limit,omitempty" json:"rate_limit,omitempty"`
-	TrustDemotedPolicy    string                    `yaml:"trust_demoted_policy,omitempty" json:"trust_demoted_policy,omitempty"`
-	DegradedChunkPolicy   string                    `yaml:"degraded_chunk_policy,omitempty" json:"degraded_chunk_policy,omitempty"`
-	BudgetShortfallPolicy string                    `yaml:"budget_shortfall_policy,omitempty" json:"budget_shortfall_policy,omitempty"`
-	SubstitutionPrefs     []SubstitutionPreference  `yaml:"substitution_preferences,omitempty" json:"substitution_preferences,omitempty"`
+	CompilationMode       string                   `yaml:"compilation_mode,omitempty" json:"compilation_mode,omitempty"`
+	DefaultTrustClass     string                   `yaml:"default_trust_class,omitempty" json:"default_trust_class,omitempty"`
+	Rankers               []string                 `yaml:"rankers,omitempty" json:"rankers,omitempty"`
+	Scanners              []string                 `yaml:"scanners,omitempty" json:"scanners,omitempty"`
+	Summarizers           []string                 `yaml:"summarizers,omitempty" json:"summarizers,omitempty"`
+	Quota                 *QuotaSpec               `yaml:"quota,omitempty" json:"quota,omitempty"`
+	RateLimit             *RateLimitSpec           `yaml:"rate_limit,omitempty" json:"rate_limit,omitempty"`
+	TrustDemotedPolicy    string                   `yaml:"trust_demoted_policy,omitempty" json:"trust_demoted_policy,omitempty"`
+	DegradedChunkPolicy   string                   `yaml:"degraded_chunk_policy,omitempty" json:"degraded_chunk_policy,omitempty"`
+	BudgetShortfallPolicy string                   `yaml:"budget_shortfall_policy,omitempty" json:"budget_shortfall_policy,omitempty"`
+	SubstitutionPrefs     []SubstitutionPreference `yaml:"substitution_preferences,omitempty" json:"substitution_preferences,omitempty"`
 }
 
 // QuotaSpec defines quota limits.

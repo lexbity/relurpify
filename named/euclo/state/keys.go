@@ -146,9 +146,8 @@ const (
 
 // Task input — multi-key pattern; all three are set together.
 const (
-	KeyTaskRaw         = euclokeys.KeyTaskRaw
-	KeyTaskInput       = euclokeys.KeyTaskInput
-	KeyTaskInputLegacy = euclokeys.KeyTaskInputLegacy
+	KeyTaskRaw   = euclokeys.KeyTaskRaw
+	KeyTaskInput = euclokeys.KeyTaskInput
 )
 
 // Clarification sub-keys written by clarification.go and recipe_executor.go.

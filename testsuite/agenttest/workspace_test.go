@@ -13,14 +13,13 @@ import (
 )
 
 const (
-	a_txt = "a.txt"
-	agents = "agents"
+	a_txt          = "a.txt"
+	agents         = "agents"
 	coding_go_yaml = "coding-go.yaml"
-	manifest_yaml = "manifest.yaml"
-	templates = "templates"
-	workspace = "workspace"
+	manifest_yaml  = "manifest.yaml"
+	templates      = "templates"
+	workspace      = "workspace"
 )
-
 
 func TestSnapshotAndDiffWorkspace(t *testing.T) {
 	t.Helper()

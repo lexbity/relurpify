@@ -48,3 +48,12 @@ func ReadConfigFile(workspaceRoot, path string) ([]byte, error) {
 
 	return os.ReadFile(filepath.Clean(absPath))
 }
+
+// ReadFileRaw reads a file path after cleaning it. It is intended for trusted
+// fixture and migration code that already owns the path.
+func ReadFileRaw(path string) ([]byte, error) {
+	if strings.TrimSpace(path) == "" {
+		return nil, fmt.Errorf("file path required")
+	}
+	return os.ReadFile(filepath.Clean(path))
+}

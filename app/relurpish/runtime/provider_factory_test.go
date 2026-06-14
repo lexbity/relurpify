@@ -2,13 +2,11 @@ package runtime
 
 import (
 	"context"
-	"errors"
 	"path/filepath"
 	"sync"
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
-	"codeburg.org/lexbit/relurpify/capability/provider"
 	"codeburg.org/lexbit/relurpify/execution/session"
 	"codeburg.org/lexbit/relurpify/telemetry"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
@@ -33,7 +31,7 @@ func (r *recordingTelemetry) len() int {
 	return len(r.events)
 }
 
-func TestRegisterBuiltinProvidersSkipsUnsupportedProviderConfig(t *testing.T) {
+func TestRegisterBuiltinProvidersWarnsAndSkipsConfiguredProviders(t *testing.T) {
 	telemetrySink := &recordingTelemetry{}
 	rt := &Runtime{
 		Workspace: &session.Workspace{
@@ -53,21 +51,27 @@ func TestRegisterBuiltinProvidersSkipsUnsupportedProviderConfig(t *testing.T) {
 	if err := RegisterBuiltinProviders(context.Background(), rt); err != nil {
 		t.Fatalf("RegisterBuiltinProviders returned error: %v", err)
 	}
-	if got := telemetrySink.len(); got == 0 {
-		t.Fatal("expected unsupported provider telemetry event")
+	if got := telemetrySink.len(); got != 1 {
+		t.Fatalf("telemetry event count = %d, want 1", got)
 	}
-}
-
-func TestProviderFromConfigRejectsUnsupportedConfig(t *testing.T) {
-	_, err := providerFromConfig(provider.ProviderConfig{
-		ID:   "external-search",
-		Kind: agentspec.ProviderKindPlugin,
-	})
-	if err == nil {
-		t.Fatal("expected unsupported provider config error")
+	event := telemetrySink.events[0]
+	if event.Type != telemetry.EventStateChange {
+		t.Fatalf("event type = %s, want state_change", event.Type)
 	}
-	if !errors.Is(err, errUnsupportedRuntimeProviderConfig) {
-		t.Fatalf("error = %v, want unsupported provider config", err)
+	if got := event.Message; got != "provider config unsupported" {
+		t.Fatalf("event message = %q, want %q", got, "provider config unsupported")
+	}
+	if got := event.Metadata["provider_event"]; got != "provider_config_unsupported" {
+		t.Fatalf("provider_event = %#v, want %q", got, "provider_config_unsupported")
+	}
+	if got := event.Metadata["provider_id"]; got != "external-search" {
+		t.Fatalf("provider_id = %#v, want %q", got, "external-search")
+	}
+	if got := event.Metadata["provider_kind"]; got != string(agentspec.ProviderKindPlugin) {
+		t.Fatalf("provider_kind = %#v, want %q", got, string(agentspec.ProviderKindPlugin))
+	}
+	if got := len(rt.registeredProviders()); got != 0 {
+		t.Fatalf("registered providers = %d, want 0", got)
 	}
 }
 

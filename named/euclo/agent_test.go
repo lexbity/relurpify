@@ -11,6 +11,7 @@ import (
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/execution/agentgraph"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclokeys"
 	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 	"codeburg.org/lexbit/relurpify/named/euclo/intake"
 	"codeburg.org/lexbit/relurpify/named/euclo/state"
@@ -94,8 +95,8 @@ func TestExecuteSeedsTaskEnvelope(t *testing.T) {
 
 	seedTaskEnvelope(envelope, task)
 
-	if got, ok := contextdata.GetTyped[*execution.Task](envelope, "task.input"); !ok || got != task {
-		t.Fatalf("expected task.input to be seeded with task pointer, got=%v ok=%v", got, ok)
+	if got, ok := contextdata.GetTyped[*execution.Task](envelope, euclokeys.KeyTaskInput); !ok || got != task {
+		t.Fatalf("expected %s to be seeded with task pointer, got=%v ok=%v", euclokeys.KeyTaskInput, got, ok)
 	}
 	if got, ok := contextdata.GetTyped[string](envelope, "task.id"); !ok || got != task.ID {
 		t.Fatalf("expected task.id = %q, got=%v ok=%v", task.ID, got, ok)

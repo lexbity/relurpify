@@ -12,11 +12,10 @@ import (
 )
 
 const (
-	git_commit = "git_commit"
-	go_build = "go_build"
+	git_commit  = "git_commit"
+	go_build    = "go_build"
 	nonexistent = "nonexistent"
 )
-
 
 func TestDependencyValidatorValidate(t *testing.T) {
 	// Test requires constraint

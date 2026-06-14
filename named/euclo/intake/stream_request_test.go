@@ -7,6 +7,7 @@ import (
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/context/contextstream"
 	execution "codeburg.org/lexbit/relurpify/execution"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclokeys"
 	"codeburg.org/lexbit/relurpify/named/euclo/families"
 	"codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
 )
@@ -175,7 +176,7 @@ func TestIntakePipelineNodeExecute(t *testing.T) {
 	node := NewIntakePipelineNode("intake", registry, 1000, contextstream.ModeBlocking, trigger)
 
 	env := contextdata.NewEnvelope("task-123", "session-456")
-	contextdata.SetTyped(env, "task.input", &execution.Task{Instruction: "analyze the codebase"})
+	contextdata.SetTyped(env, euclokeys.KeyTaskInput, &execution.Task{Instruction: "analyze the codebase"})
 	result, err := node.Execute(context.Background(), env)
 
 	if err != nil {

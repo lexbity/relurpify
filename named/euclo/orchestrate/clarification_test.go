@@ -23,7 +23,7 @@ func TestClarificationCapability_RequestWritesClarificationRequest(t *testing.T)
 		Context:     map[string]any{},
 		Metadata:    map[string]any{},
 	}
-	contextdata.SetTyped(env, "task.input", task)
+	contextdata.SetTyped(env, state.KeyTaskInput, task)
 	state.SetIntentClassification(env, &intake.IntentClassification{
 		WinningFamily: "implementation",
 		FamilyCandidates: []families.FamilyCandidate{

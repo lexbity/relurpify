@@ -14,15 +14,14 @@ import (
 
 const (
 	Relurpify_state_gc_test = ".relurpify_state"
-	Artifacts_gc_test = "artifacts"
-	Old_gc_test = "old"
-	Remove_gc_test = "remove"
-	Session_gc_test = "session"
-	Small_gc_test = "small"
-	Test_gc_test = "test"
-	Text_gc_test = "text"
+	Artifacts_gc_test       = "artifacts"
+	Old_gc_test             = "old"
+	Remove_gc_test          = "remove"
+	Session_gc_test         = "session"
+	Small_gc_test           = "small"
+	Test_gc_test            = "test"
+	Text_gc_test            = "text"
 )
-
 
 func TestGCSessionRemovesOnlyThatSession(t *testing.T) {
 	workspace := t.TempDir()

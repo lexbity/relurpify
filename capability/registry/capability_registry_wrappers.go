@@ -20,16 +20,15 @@ import (
 )
 
 const (
-	AgentId_capability_registry_wrappers = "agent_id"
-	Capability_capability_registry_wrappers = "capability"
+	AgentId_capability_registry_wrappers              = "agent_id"
+	Capability_capability_registry_wrappers           = "capability"
 	Capabilityscompleted_capability_registry_wrappers = "capability %s completed"
-	CapabilityId_capability_registry_wrappers = "capability_id"
-	DurationMs_capability_registry_wrappers = "duration_ms"
-	Error_capability_registry_wrappers = "error"
-	Kind_capability_registry_wrappers = "kind"
-	RuntimeFamily_capability_registry_wrappers = "runtime_family"
+	CapabilityId_capability_registry_wrappers         = "capability_id"
+	DurationMs_capability_registry_wrappers           = "duration_ms"
+	Error_capability_registry_wrappers                = "error"
+	Kind_capability_registry_wrappers                 = "kind"
+	RuntimeFamily_capability_registry_wrappers        = "runtime_family"
 )
-
 
 // wrapTool decorates a tool with the instrumentation wrapper.
 func (r *CapabilityRegistry) wrapTool(tool ports.Tool) ports.Tool {
@@ -325,10 +324,10 @@ func (t *instrumentedTool) Execute(ctx context.Context, args map[string]any) (*p
 	if stateSnapshot.telemetry != nil {
 		spanAttrs := buildSpanAttrs(desc, t.Tool)
 		meta := map[string]any{
-			"tool":       t.Name(),
-			AgentId_capability_registry_wrappers:   stateSnapshot.agentID,
-			"args":       summarizeArgs(args),
-			"span_attrs": spanAttrs,
+			"tool":                               t.Name(),
+			AgentId_capability_registry_wrappers: stateSnapshot.agentID,
+			"args":                               summarizeArgs(args),
+			"span_attrs":                         spanAttrs,
 		}
 		if traceCtx.TraceID != "" {
 			meta["trace_id"] = traceCtx.TraceID
@@ -380,9 +379,9 @@ func (t *instrumentedTool) Execute(ctx context.Context, args map[string]any) (*p
 	if stateSnapshot.telemetry != nil {
 		spanAttrs := buildSpanAttrs(desc, t.Tool)
 		metadata := map[string]any{
-			"tool":       t.Name(),
-			AgentId_capability_registry_wrappers:   stateSnapshot.agentID,
-			"span_attrs": spanAttrs,
+			"tool":                               t.Name(),
+			AgentId_capability_registry_wrappers: stateSnapshot.agentID,
+			"span_attrs":                         spanAttrs,
 		}
 		if traceCtx.TraceID != "" {
 			metadata["trace_id"] = traceCtx.TraceID
@@ -437,12 +436,12 @@ func emitCapabilitySecurityEvent(telemetry fwtelemetry.Telemetry, event string, 
 	}
 	metadata := map[string]any{
 		"security_event": event,
-		CapabilityId_capability_registry_wrappers:  desc.ID,
-		Capability_capability_registry_wrappers:     desc.Name,
-		Kind_capability_registry_wrappers:           string(desc.Kind),
-		"scope":          string(desc.Source.Scope),
-		"trust_class":    string(desc.TrustClass),
-		"exposure":       string(exposure),
+		CapabilityId_capability_registry_wrappers: desc.ID,
+		Capability_capability_registry_wrappers:   desc.Name,
+		Kind_capability_registry_wrappers:         string(desc.Kind),
+		"scope":                                   string(desc.Source.Scope),
+		"trust_class":                             string(desc.TrustClass),
+		"exposure":                                string(exposure),
 	}
 	if desc.Source.ProviderID != "" {
 		metadata["provider_id"] = desc.Source.ProviderID
@@ -510,11 +509,11 @@ func emitCapabilityInvocationTelemetry(telemetry fwtelemetry.Telemetry, desc des
 		Message:   fmt.Sprintf("capability %s invoked", desc.Name),
 		Metadata: redactTelemetryMetadata(nil, map[string]any{
 			CapabilityId_capability_registry_wrappers:  desc.ID,
-			Capability_capability_registry_wrappers:     desc.Name,
-			Kind_capability_registry_wrappers:           string(desc.Kind),
+			Capability_capability_registry_wrappers:    desc.Name,
+			Kind_capability_registry_wrappers:          string(desc.Kind),
 			RuntimeFamily_capability_registry_wrappers: string(desc.RuntimeFamily),
 			AgentId_capability_registry_wrappers:       agentID,
-			"args":           summarizeArgs(args),
+			"args":                                     summarizeArgs(args),
 		}),
 	})
 }
@@ -525,8 +524,8 @@ func emitCapabilityResultTelemetry(telemetry fwtelemetry.Telemetry, desc descrip
 	}
 	metadata := map[string]any{
 		CapabilityId_capability_registry_wrappers:  desc.ID,
-		Capability_capability_registry_wrappers:     desc.Name,
-		Kind_capability_registry_wrappers:           string(desc.Kind),
+		Capability_capability_registry_wrappers:    desc.Name,
+		Kind_capability_registry_wrappers:          string(desc.Kind),
 		RuntimeFamily_capability_registry_wrappers: string(desc.RuntimeFamily),
 		AgentId_capability_registry_wrappers:       agentID,
 	}
@@ -554,8 +553,8 @@ func emitPromptCapabilityResultTelemetry(telemetry fwtelemetry.Telemetry, desc d
 	}
 	metadata := map[string]any{
 		CapabilityId_capability_registry_wrappers:  desc.ID,
-		Capability_capability_registry_wrappers:     desc.Name,
-		Kind_capability_registry_wrappers:           string(desc.Kind),
+		Capability_capability_registry_wrappers:    desc.Name,
+		Kind_capability_registry_wrappers:          string(desc.Kind),
 		RuntimeFamily_capability_registry_wrappers: string(desc.RuntimeFamily),
 		AgentId_capability_registry_wrappers:       agentID,
 	}
@@ -580,8 +579,8 @@ func emitResourceCapabilityResultTelemetry(telemetry fwtelemetry.Telemetry, desc
 	}
 	metadata := map[string]any{
 		CapabilityId_capability_registry_wrappers:  desc.ID,
-		Capability_capability_registry_wrappers:     desc.Name,
-		Kind_capability_registry_wrappers:           string(desc.Kind),
+		Capability_capability_registry_wrappers:    desc.Name,
+		Kind_capability_registry_wrappers:          string(desc.Kind),
 		RuntimeFamily_capability_registry_wrappers: string(desc.RuntimeFamily),
 		AgentId_capability_registry_wrappers:       agentID,
 	}

@@ -21,7 +21,7 @@ tools:
 
 	policy, err := LoadLocalToolPolicy(path, workspace, testDecode)
 	require.NoError(t, err)
-	require.Equal(t, "ask", string(policy["git"].Execute))
+	require.Equal(t, "ask", policy["git"].Execute)
 }
 
 func TestLoadLocalToolPolicyRejectsInvalidExecute(t *testing.T) {

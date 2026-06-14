@@ -13,18 +13,17 @@ import (
 )
 
 const (
-	case1 = "case1"
-	file_search = "file_search"
-	infra = "infra"
-	outcome = "outcome"
+	case1                = "case1"
+	file_search          = "file_search"
+	infra                = "infra"
+	outcome              = "outcome"
 	outcome_must_succeed = "outcome.must_succeed"
-	security = "security"
-	success = "success"
-	token_usage = "token_usage"
-	tool_usage = "tool_usage"
-	tools_expected = "tools_expected"
+	security             = "security"
+	success              = "success"
+	token_usage          = "token_usage"
+	tool_usage           = "tool_usage"
+	tools_expected       = "tools_expected"
 )
-
 
 // TestCapabilityCoverage_ExercisesAllTools verifies the coverage framework works
 func TestCapabilityCoverage_ExercisesAllTools(t *testing.T) {

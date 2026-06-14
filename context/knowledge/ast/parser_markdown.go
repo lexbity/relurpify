@@ -12,7 +12,6 @@ const (
 	Markdown_parser_markdown = "markdown"
 )
 
-
 // MarkdownParser extracts headings, code blocks, and links.
 type MarkdownParser struct {
 	heading   *regexp.Regexp

@@ -8,7 +8,6 @@ const (
 	ImportPathCapability_arch_test = "codeburg.org/lexbit/relurpify/capability"
 )
 
-
 func TestPackageDomain(t *testing.T) {
 	tests := []struct {
 		importPath string

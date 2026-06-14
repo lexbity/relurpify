@@ -17,6 +17,7 @@ import (
 	"codeburg.org/lexbit/relurpify/execution/compiler"
 	"codeburg.org/lexbit/relurpify/model"
 	"codeburg.org/lexbit/relurpify/platform/llm"
+	"codeburg.org/lexbit/relurpify/platform/observability"
 	"codeburg.org/lexbit/relurpify/telemetry"
 )
 
@@ -39,13 +40,32 @@ func (t *phase9Telemetry) Snapshot() []telemetry.Event {
 	return out
 }
 
+type phase9ObservabilityTelemetry struct {
+	parent *phase9Telemetry
+}
+
+func (o *phase9ObservabilityTelemetry) Emit(event observability.Event) {
+	o.parent.Emit(telemetry.Event{
+		Type:      telemetry.EventType(event.Type),
+		NodeID:    event.NodeID,
+		TaskID:    event.TaskID,
+		Message:   event.Message,
+		Timestamp: event.Timestamp,
+		Metadata:  event.Metadata,
+		Seq:       event.Seq,
+		Partition: event.Partition,
+		Payload:   event.Payload,
+		Actor:     event.Actor.Label,
+	})
+}
+
 type phase9UsageModel struct{}
 
 func (phase9UsageModel) Generate(context.Context, string, *llm.LLMOptions) (*llm.LLMResponse, error) {
 	return &llm.LLMResponse{
 		Text:         "hello",
 		FinishReason: "stop",
-		Usage:        telemetry.TokenUsageReport{PromptTokens: 600, CompletionTokens: 10, TotalTokens: 610},
+		Usage:        model.TokenUsage{PromptTokens: 600, CompletionTokens: 10, TotalTokens: 610},
 	}, nil
 }
 
@@ -59,7 +79,7 @@ func (phase9UsageModel) Chat(context.Context, []llm.Message, *llm.LLMOptions) (*
 	return &llm.LLMResponse{
 		Text:         "hello",
 		FinishReason: "stop",
-		Usage:        telemetry.TokenUsageReport{PromptTokens: 600, CompletionTokens: 10, TotalTokens: 610},
+		Usage:        model.TokenUsage{PromptTokens: 600, CompletionTokens: 10, TotalTokens: 610},
 	}, nil
 }
 
@@ -67,7 +87,7 @@ func (phase9UsageModel) ChatWithTools(context.Context, []llm.Message, []llm.LLMT
 	return &llm.LLMResponse{
 		Text:         "hello",
 		FinishReason: "stop",
-		Usage:        telemetry.TokenUsageReport{PromptTokens: 600, CompletionTokens: 10, TotalTokens: 610},
+		Usage:        model.TokenUsage{PromptTokens: 600, CompletionTokens: 10, TotalTokens: 610},
 	}, nil
 }
 
@@ -206,7 +226,7 @@ func TestProvenance_FullChain(t *testing.T) {
 func TestBudgetExhaustion_ResetProtocol(t *testing.T) {
 	advisor := &telemetry.ContextBudgetAdvisor{ModelContextSize: 2048}
 	tel := &phase9Telemetry{}
-	model := llm.NewInstrumentedModel(phase9UsageModel{}, tel, false)
+	model := llm.NewInstrumentedModel(phase9UsageModel{}, &phase9ObservabilityTelemetry{parent: tel}, false)
 	ctx := telemetry.WithAdvisor(context.Background(), advisor)
 	ctx = telemetry.WithSnapshotEmitter(ctx, telemetry.NewSnapshotEmitter(advisor, tel, 1))
 

@@ -24,7 +24,9 @@ rules:
 	blacklist, err := LoadShellPolicy(path, workspace, testDecode)
 	require.NoError(t, err)
 	require.NotNil(t, blacklist)
-	require.NotNil(t, blacklist.Check("git reset --hard"))
+	require.Len(t, blacklist.Rules, 1)
+	require.Equal(t, "deny-git-reset-hard", blacklist.Rules[0].ID)
+	require.Equal(t, "block", blacklist.Rules[0].Action)
 }
 
 func TestLoadShellPolicyRejectsInvalidRegex(t *testing.T) {
