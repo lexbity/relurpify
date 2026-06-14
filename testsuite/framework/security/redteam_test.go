@@ -310,7 +310,10 @@ func TestOutputCeilingDefault(t *testing.T) {
 func TestRunnerUsesContainerHandleNotPgidKill(t *testing.T) {
 	// Phase 2 replaced the pgid-kill goroutine with ContainerHandle teardown.
 	// Verify ContainerHandle is constructible and has a Teardown method.
-	h := sandbox.NewContainerHandle("test", "docker", "docker")
+	// Use a nonexistent binary so Teardown does not shell out to the real
+	// Docker daemon during `go test ./...` (which can trigger desktop
+	// privilege prompts); this test only checks constructibility + no-panic.
+	h := sandbox.NewContainerHandle("test", "docker", "nonexistent-binary")
 	if h == nil {
 		t.Fatal("ContainerHandle should be constructible")
 	}

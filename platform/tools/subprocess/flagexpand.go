@@ -147,7 +147,7 @@ func expandBooleanFlag(key string, flag ports.ToolManifestFlag, args map[string]
 	}
 	b, err := toBool(val)
 	if err != nil {
-		return nil, fmt.Errorf("flag %q expects a boolean value for parameter %q", key, key)
+		return nil, fmt.Errorf("flag %q expects a boolean value", key)
 	}
 	if b {
 		return copyStrings(flag.WhenTrue), nil

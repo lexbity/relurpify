@@ -1552,7 +1552,7 @@ func TestDeleteFileTool_DeleteDirectory(t *testing.T) {
 	assert.True(t, os.IsNotExist(err))
 
 	// Dir should be in trash
-	trashDir := filepath.Join(dir, ".trash", subdir)
+	trashDir := filepath.Join(dir, ".trash", filepath.Base(subdir))
 	info, err := os.Stat(trashDir)
 	require.NoError(t, err)
 	assert.True(t, info.IsDir())
@@ -1701,9 +1701,9 @@ func TestCopyFile_ExercisePath(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify content was copied
-	content, err := os.ReadFile(filepath.Clean(dst))
+	copied, err := os.ReadFile(filepath.Clean(dst))
 	require.NoError(t, err)
-	assert.Equal(t, content, string(content))
+	assert.Equal(t, []byte(content), copied)
 }
 
 // ============== CreateFileTool with Nested Directories ==============

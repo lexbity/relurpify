@@ -84,6 +84,7 @@ func TestSearchInFilesTool(t *testing.T) {
 	var decoded []map[string]any
 	require.NoError(t, json.Unmarshal(bytes, &decoded))
 	assert.NotEmpty(t, decoded)
+	assert.Equal(t, file, decoded[0]["file"])
 }
 
 func TestSearchInFilesToolDefaultsDirectory(t *testing.T) {
@@ -192,7 +193,7 @@ func TestSearchInFilesToolDefaultsToCaseInsensitiveMatching(t *testing.T) {
 	var decoded []map[string]any
 	require.NoError(t, json.Unmarshal(bytes, &decoded))
 	assert.Len(t, decoded, 1)
-	assert.Equal(t, file, decoded[0][file])
+	assert.Equal(t, file, decoded[0]["file"])
 }
 
 func TestSearchInFilesToolSupportsCaseSensitiveMatching(t *testing.T) {

@@ -25,10 +25,22 @@ func Prepare(name string, args ...string) Args {
 	return Args{Name: filepath.Base(name), Args: sanitised}
 }
 
+// resolvePath mirrors the PATH lookup that exec.Command performs internally.
+// We build *exec.Cmd by hand to keep gosec G204 quiet, which bypasses that
+// lookup, so cmd.Path would otherwise be a bare base name (e.g. "runsc") that
+// fork/exec cannot locate. Resolving here restores normal lookup behaviour;
+// on failure we leave the base name so the error surfaces at Run.
+func resolvePath(name string) string {
+	if resolved, err := exec.LookPath(name); err == nil {
+		return resolved
+	}
+	return name
+}
+
 // Command creates an *exec.Cmd from the prepared args.
 func Command(a Args) *exec.Cmd {
 	cmd := &exec.Cmd{
-		Path: a.Name,
+		Path: resolvePath(a.Name),
 		Args: append([]string{a.Name}, a.Args...),
 	}
 	return cmd
@@ -37,7 +49,7 @@ func Command(a Args) *exec.Cmd {
 // CommandContext creates an *exec.Cmd with context from the prepared args.
 func CommandContext(ctx context.Context, a Args) *exec.Cmd {
 	cmd := &exec.Cmd{
-		Path: a.Name,
+		Path: resolvePath(a.Name),
 		Args: append([]string{a.Name}, a.Args...),
 	}
 	go func() {

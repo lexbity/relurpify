@@ -2,6 +2,7 @@ package registry
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -49,14 +50,16 @@ func newTestState(manager PermissionManagerHandle, toolPolicy map[string]agentsp
 	}
 }
 
+const testToolDenyName = "_test_tool"
+
 func TestAskPath_TriggersApproval(t *testing.T) {
 	manager := &mockApprovalManager{}
 	state := newTestState(manager, map[string]agentspec.ToolPolicy{
-		"_test_tool": {Execute: agentspec.AgentPermissionAsk},
+		testToolDenyName: {Execute: agentspec.AgentPermissionAsk},
 	})
 	desc := descriptor.CapabilityDescriptor{
-		ID:            "_test_tool",
-		Name:          "_test_tool",
+		ID:            testToolDenyName,
+		Name:          testToolDenyName,
 		Kind:          agentspec.CapabilityKindTool,
 		RuntimeFamily: agentspec.CapabilityRuntimeFamilyLocalTool,
 	}
@@ -72,31 +75,63 @@ func TestAskPath_TriggersApproval(t *testing.T) {
 func TestDenyPath_BlocksExecution(t *testing.T) {
 	manager := &mockApprovalManager{}
 	state := newTestState(manager, map[string]agentspec.ToolPolicy{
-		"_test_tool": {Execute: agentspec.AgentPermissionDeny},
+		testToolDenyName: {Execute: agentspec.AgentPermissionDeny},
 	})
 	desc := descriptor.CapabilityDescriptor{
-		ID:            "_test_tool",
-		Name:          "_test_tool",
+		ID:            testToolDenyName,
+		Name:          testToolDenyName,
 		Kind:          agentspec.CapabilityKindTool,
 		RuntimeFamily: agentspec.CapabilityRuntimeFamilyLocalTool,
 	}
 
-	if err := enforceDescriptorExecutionPolicies(context.Background(), desc, state, nil); err == nil {
+	err := enforceDescriptorExecutionPolicies(context.Background(), desc, state, nil)
+	if err == nil {
 		t.Fatal("deny should return an error")
 	}
 	if manager.approvalCount() != 0 {
 		t.Fatalf("expected 0 approvals for deny, got %d", manager.approvalCount())
+	}
+	if !strings.Contains(err.Error(), "tool policy") {
+		t.Fatalf("deny error %q should contain rejecting layer 'tool policy'", err.Error())
+	}
+}
+
+func TestDenyPath_NormalizedError(t *testing.T) {
+	// Verify the error from deny goes through normalizeToolExecutionPolicyError
+	// and produces a user-facing error mentioning the tool name.
+	innerErr := enforceDescriptorExecutionPolicies(context.Background(),
+		descriptor.CapabilityDescriptor{
+			ID:            testToolDenyName,
+			Name:          testToolDenyName,
+			Kind:          agentspec.CapabilityKindTool,
+			RuntimeFamily: agentspec.CapabilityRuntimeFamilyLocalTool,
+		},
+		newTestState(&mockApprovalManager{}, map[string]agentspec.ToolPolicy{
+			testToolDenyName: {Execute: agentspec.AgentPermissionDeny},
+		}),
+		nil,
+	)
+	normalized := normalizeToolExecutionPolicyError(testToolDenyName, innerErr)
+	if normalized == nil {
+		t.Fatal("normalized error should not be nil")
+	}
+	msg := normalized.Error()
+	if !strings.Contains(msg, testToolDenyName) {
+		t.Fatalf("normalized error %q should mention tool name %q", msg, testToolDenyName)
+	}
+	if !strings.Contains(msg, "blocked") {
+		t.Fatalf("normalized error %q should mention 'blocked'", msg)
 	}
 }
 
 func TestAllowPath_PassesWithoutApproval(t *testing.T) {
 	manager := &mockApprovalManager{}
 	state := newTestState(manager, map[string]agentspec.ToolPolicy{
-		"_test_tool": {Execute: agentspec.AgentPermissionAllow},
+		testToolDenyName: {Execute: agentspec.AgentPermissionAllow},
 	})
 	desc := descriptor.CapabilityDescriptor{
-		ID:            "_test_tool",
-		Name:          "_test_tool",
+		ID:            testToolDenyName,
+		Name:          testToolDenyName,
 		Kind:          agentspec.CapabilityKindTool,
 		RuntimeFamily: agentspec.CapabilityRuntimeFamilyLocalTool,
 	}

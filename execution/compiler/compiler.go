@@ -19,6 +19,13 @@ import (
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
+const (
+	// MaxActivePins caps how many files can be pinned simultaneously.
+	MaxActivePins = 8
+	// PinRefTokenBudget is the fixed per-pin token budget for a reference chunk.
+	PinRefTokenBudget = 64
+)
+
 // Compiler performs live context assembly with caching and event-driven invalidation.
 type Compiler struct {
 	retriever         *retrieval.Retriever
@@ -144,28 +151,78 @@ func (c *Compiler) Compile(ctx context.Context, request CompilationRequest) (*Co
 		rankedChunks = retrievalResult.Ranked
 	}
 
-	// Stage 3/4: Trust and freshness filtering
+	// Stage 5: Pin reference floor
+	pinAnchors := extractPinAnchors(request.Query.Anchors)
+	var pinRefs []PinReference
+	var evictedPinContent []string
+	var pinPaths map[string]struct{}
+	if len(pinAnchors) > 0 {
+	if len(pinAnchors) > MaxActivePins {
+		for _, dropped := range pinAnchors[MaxActivePins:] {
+				path := anchorFilePath(dropped)
+				c.emitWarning("pin_cap_exceeded", map[string]any{"path": path})
+			}
+			pinAnchors = pinAnchors[:MaxActivePins]
+		}
+		pinPaths = pinPathsFromAnchors(pinAnchors)
+		for _, pa := range pinAnchors {
+			path := anchorFilePath(pa)
+			if path == "" {
+				continue
+			}
+			pinRefs = append(pinRefs, c.buildPinReference(path))
+		}
+		// Build set of chunk IDs for pinned files and boost their rank.
+		pinContentIDs := c.collectPinContentIDs(pinPaths)
+		rankedChunks = boostPinContentRank(rankedChunks, pinContentIDs)
+	}
 	filteredChunks := c.applyFilters(rankedChunks)
 
-	// Stage 6: Budget fitting (tail-drop)
-	finalChunks, shortfall := c.applyBudget(filteredChunks, request.MaxTokens)
+	// Stage 6: Budget fitting (tail-drop) with pin reservation.
+	contentBudget := applyPinReservedBudget(request.MaxTokens, len(pinRefs))
+	finalChunks, contentShortfall := c.applyBudget(filteredChunks, contentBudget)
+
+	// Track content chunks evicted by budget for pinned files.
+	var pinContentIDs map[knowledge.ChunkID]struct{}
+	if len(pinAnchors) > 0 {
+		pinContentIDs = c.collectPinContentIDs(pinPaths)
+	}
+	if len(pinContentIDs) > 0 && contentShortfall > 0 {
+		inFinal := make(map[knowledge.ChunkID]struct{}, len(finalChunks))
+		for _, fc := range finalChunks {
+			inFinal[fc.ChunkID] = struct{}{}
+		}
+		for cid := range pinContentIDs {
+			if _, kept := inFinal[cid]; !kept {
+				// We know the path from pinPaths; report eviction per pinned path.
+				for path := range pinPaths {
+					if evictedPinContent == nil || !containsString(evictedPinContent, path) {
+						evictedPinContent = append(evictedPinContent, path)
+						c.emitWarning("pin_content_evicted", map[string]any{"path": path})
+					}
+				}
+				break
+			}
+		}
+	}
 
 	// Stage 6b: Summary substitution for budget pressure
 	substitutions := make([]SummarySubstitution, 0)
-	if shortfall > 0 && len(finalChunks) > 0 {
-		substitutedChunks, subs := c.trySummarySubstitution(ctx, finalChunks, request.MaxTokens)
+	if contentShortfall > 0 && len(finalChunks) > 0 {
+		substitutedChunks, subs := c.trySummarySubstitution(ctx, finalChunks, contentBudget)
 		finalChunks = substitutedChunks
 		substitutions = subs
-		// Recalculate shortfall after substitution
-		_, shortfall = c.applyBudget(finalChunks, request.MaxTokens)
+		_, contentShortfall = c.applyBudget(finalChunks, contentBudget)
 	}
 
 	// Build result
 	result := &CompilationResult{
 		RankedChunks:       finalChunks,
 		SkippedStaleChunks: skippedStaleChunks,
-		ShortfallTokens:    shortfall,
+		ShortfallTokens:    contentShortfall,
 		Substitutions:      substitutions,
+		PinReferences:      pinRefs,
+		EvictedPinContent:  evictedPinContent,
 	}
 
 	// Build ChunkReference slice for contextdata.Envelope
@@ -205,12 +262,12 @@ func (c *Compiler) Compile(ctx context.Context, request CompilationRequest) (*Co
 		EventLogSeq:     request.EventLogSeq,
 		RankersUsed:     c.getAdmittedRankerNames(admittedRankers),
 		Dependencies:    dependencies,
-		BudgetShortfall: shortfall,
+		BudgetShortfall: contentShortfall,
 		AssemblyMetadata: contextdata.AssemblyMeta{
 			CompilationID:   c.newID(),
 			EventLogSeq:     request.EventLogSeq,
 			BudgetTokens:    request.MaxTokens,
-			ShortfallTokens: shortfall,
+			ShortfallTokens: contentShortfall,
 			AssembledAt:     c.now(),
 		},
 	}
@@ -960,6 +1017,137 @@ func (c *Compiler) persistCompilationRecord(ctx context.Context, record *Compila
 	return nil
 }
 
+// extractPinAnchors collects unique pin anchors from the query.
+// A pin anchor has Class "session_pin".
+func extractPinAnchors(anchors []retrieval.AnchorRef) []retrieval.AnchorRef {
+	var pins []retrieval.AnchorRef
+	seen := make(map[string]struct{})
+	for _, a := range anchors {
+		if a.Class != "session_pin" {
+			continue
+		}
+		key := a.AnchorID
+		if key == "" {
+			key = a.Term
+		}
+		if key == "" {
+			continue
+		}
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		pins = append(pins, a)
+	}
+	return pins
+}
+
+// anchorFilePath extracts the file path from a pin anchor.
+func anchorFilePath(a retrieval.AnchorRef) string {
+	path := strings.TrimPrefix(a.AnchorID, "pin:")
+	if path == "" {
+		path = a.Term
+	}
+	return strings.TrimSpace(path)
+}
+
+// buildPinReference creates a bounded reference chunk for a pinned file.
+// It uses the file path and any content hash found in the store to produce
+// a short digest. The reference is always smaller than pinRefTokenBudget.
+func (c *Compiler) buildPinReference(path string) PinReference {
+	ref := PinReference{Path: path, TokenEstimate: PinRefTokenBudget}
+
+	if c.chunkStore == nil {
+		return ref
+	}
+	chunks, err := c.chunkStore.FindByFilePath(path)
+	if err != nil {
+		return ref
+	}
+	for _, ch := range chunks {
+		if ch.ContentHash != "" {
+			ref.ContentHash = ch.ContentHash
+		}
+		body := strings.TrimSpace(ch.Body.Raw)
+		if body != "" {
+			if len(body) > 120 {
+				body = body[:120]
+			}
+			ref.ShortDigest = body
+			break
+		}
+	}
+	return ref
+}
+
+// collectPinContentIDs builds a set of chunk IDs belonging to pinned file paths.
+func (c *Compiler) collectPinContentIDs(pinPaths map[string]struct{}) map[knowledge.ChunkID]struct{} {
+	if c.chunkStore == nil || len(pinPaths) == 0 {
+		return nil
+	}
+	ids := make(map[knowledge.ChunkID]struct{})
+	for path := range pinPaths {
+		chunks, err := c.chunkStore.FindByFilePath(path)
+		if err != nil {
+			continue
+		}
+		for _, ch := range chunks {
+			ids[ch.ID] = struct{}{}
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	return ids
+}
+
+// boostPinContentRank gives a score premium to chunks belonging to pinned files
+// so they rank higher at equal budget.
+func boostPinContentRank(ranked []retrieval.RankedChunk, pinContentIDs map[knowledge.ChunkID]struct{}) []retrieval.RankedChunk {
+	if len(pinContentIDs) == 0 {
+		return ranked
+	}
+	out := make([]retrieval.RankedChunk, len(ranked))
+	copy(out, ranked)
+	for i, rc := range out {
+		if _, pinned := pinContentIDs[rc.ChunkID]; pinned {
+			out[i].Score += 1000.0
+		}
+	}
+	return out
+}
+
+// pinPathsFromAnchors extracts pin file paths from anchors.
+func pinPathsFromAnchors(pins []retrieval.AnchorRef) map[string]struct{} {
+	paths := make(map[string]struct{}, len(pins))
+	for _, p := range pins {
+		path := anchorFilePath(p)
+		if path != "" {
+			paths[path] = struct{}{}
+		}
+	}
+	return paths
+}
+
+// applyPinReservedBudget subtracts pin-reference token budget from maxTokens
+// and returns the adjusted budget for content chunks.
+func applyPinReservedBudget(maxTokens int, pinCount int) int {
+	reserved := pinCount * PinRefTokenBudget
+	if maxTokens <= reserved {
+		return maxTokens
+	}
+	return maxTokens - reserved
+}
+
+func containsString(slice []string, s string) bool {
+	for _, v := range slice {
+		if v == s {
+			return true
+		}
+	}
+	return false
+}
+
 func isSpeculativeCompilation(metadata map[string]any) bool {
 	if len(metadata) == 0 {
 		return false
@@ -982,6 +1170,47 @@ func (c *Compiler) emitWarning(message string, metadata map[string]any) {
 		Timestamp: c.now(),
 		Metadata:  metadata,
 	})
+}
+
+// ListCompilationRecords returns all compilation records from the knowledge store.
+func (c *Compiler) ListCompilationRecords(ctx context.Context) ([]CompilationRecord, error) {
+	if c.chunkStore == nil {
+		return nil, fmt.Errorf("chunk store not configured")
+	}
+
+	chunks, err := c.chunkStore.FindAll()
+	if err != nil {
+		return nil, fmt.Errorf("find chunks: %w", err)
+	}
+
+	var records []CompilationRecord
+	for _, chunk := range chunks {
+		if chunk.SourceOrigin != "compilation_record" {
+			continue
+		}
+
+		var record CompilationRecord
+		content, ok := chunk.Body.Fields["content"]
+		if !ok {
+			content = chunk.Body.Raw
+		}
+
+		var data []byte
+		switch v := content.(type) {
+		case string:
+			data = []byte(v)
+		case []byte:
+			data = v
+		default:
+			continue
+		}
+
+		if err := json.Unmarshal(data, &record); err != nil {
+			continue
+		}
+		records = append(records, record)
+	}
+	return records, nil
 }
 
 // LoadCompilationRecord loads a compilation record by ID from the knowledge store.

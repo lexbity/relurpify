@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/governance/permissions"
+	configpermissions "codeburg.org/lexbit/relurpify/platform/configpermissions"
 )
 
 // EffectiveAgentContract captures the resolved runtime-facing contract derived
@@ -12,7 +12,7 @@ import (
 type EffectiveAgentContract struct {
 	AgentID     string
 	AgentSpec   *AgentSpec
-	Permissions permissions.PermissionSet
+	Permissions configpermissions.PermissionSet
 	Resources   ResourceSpec
 	Security    SecuritySpec
 	Sources     SourceSummary
@@ -132,14 +132,14 @@ func assembleEffectiveAgentContract(doc *Document) (*EffectiveAgentContract, err
 	}), nil
 }
 
-func decodePermissionsSection(doc *Document) (permissions.PermissionSet, error) {
+func decodePermissionsSection(doc *Document) (configpermissions.PermissionSet, error) {
 	node, ok := doc.Section("permissions")
 	if !ok {
-		return permissions.PermissionSet{}, nil
+		return configpermissions.PermissionSet{}, nil
 	}
 	ps, err := DecodePermissionsSection(node)
 	if err != nil || ps == nil {
-		return permissions.PermissionSet{}, err
+		return configpermissions.PermissionSet{}, err
 	}
 	return *ps, nil
 }
@@ -167,7 +167,7 @@ func decodeSecuritySection(doc *Document) (SecuritySpec, error) {
 // BuildEffectiveAgentContract constructs an EffectiveAgentContract from
 // pre-resolved inputs. Callers (typically execution/session) are responsible
 // for decoding each section via the appropriate domain's DecodeSection.
-func BuildEffectiveAgentContract(agentID string, agentSpec *AgentSpec, perms permissions.PermissionSet, resources ResourceSpec, security SecuritySpec, sources SourceSummary) *EffectiveAgentContract {
+func BuildEffectiveAgentContract(agentID string, agentSpec *AgentSpec, perms configpermissions.PermissionSet, resources ResourceSpec, security SecuritySpec, sources SourceSummary) *EffectiveAgentContract {
 	return &EffectiveAgentContract{
 		AgentID:     agentID,
 		AgentSpec:   agentSpec,

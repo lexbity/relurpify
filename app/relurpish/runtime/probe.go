@@ -126,8 +126,22 @@ func ProbeEnvironment(ctx context.Context, cfg Config, secrets config.Secrets, b
 	}
 }
 
+// sandboxProbeDisabled suppresses the external runsc/docker/containerd version
+// probes. It exists so the package's own tests can disable shelling out to
+// those binaries (via TestMain), which would otherwise run `docker info` and
+// friends during `go test ./...` and trigger desktop privilege-elevation
+// prompts. It is never set in production code.
+var sandboxProbeDisabled bool
+
 // detectSandbox inspects runsc/docker/containerd availability and versions.
 func detectSandbox(ctx context.Context, cfg Config) SandboxReport {
+	if sandboxProbeDisabled {
+		return SandboxReport{
+			Runsc:      SandboxBinary{Name: "runsc", Error: "sandbox probe disabled"},
+			Docker:     SandboxBinary{Name: "docker", Error: "sandbox probe disabled"},
+			Containerd: SandboxBinary{Name: "containerd", Error: "sandbox probe disabled"},
+		}
+	}
 	report := SandboxReport{
 		Runsc:      inspectRunsc(ctx, cfg.Sandbox.RunscPath, cfg.CommandPolicy),
 		Docker:     inspectDocker(ctx, cfg.CommandPolicy),

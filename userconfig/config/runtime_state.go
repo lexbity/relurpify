@@ -1,7 +1,6 @@
 package config
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -249,18 +248,6 @@ func SaveYAML(path string, v any) error {
 		return err
 	}
 	data, err := yaml.Marshal(v)
-	if err != nil {
-		return err
-	}
-	return fs.WriteFileSecure(path, data)
-}
-
-// SaveJSON marshals v to pretty JSON and overwrites path.
-func SaveJSON(path string, v any) error {
-	if err := fs.MkdirAllSecure(filepath.Dir(path)); err != nil {
-		return err
-	}
-	data, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
 		return err
 	}

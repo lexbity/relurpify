@@ -66,6 +66,9 @@ func newRootCmd() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: false,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			if offline, _ := cmd.Flags().GetBool("offline"); offline {
+				cfg.InferenceProvider = "offline"
+			}
 			return cfg.Normalize()
 		},
 	}
@@ -73,6 +76,8 @@ func newRootCmd() *cobra.Command {
 	root.PersistentFlags().StringVar(&cfg.ManifestPath, "manifest", cfg.ManifestPath, "Agent manifest path")
 	root.PersistentFlags().StringVar(&cfg.InferenceEndpoint, "inference-endpoint", cfg.InferenceEndpoint, "Inference backend endpoint URL")
 	root.PersistentFlags().StringVar(&cfg.InferenceModel, "inference-model", cfg.InferenceModel, "Inference backend model name")
+	root.PersistentFlags().StringVar(&cfg.InferenceProvider, "inference-provider", cfg.InferenceProvider, "Inference backend provider (ollama, lmstudio, offline)")
+	root.PersistentFlags().Bool("offline", false, "Use offline backend (sugar for --inference-provider offline)")
 	root.PersistentFlags().StringVar(&cfg.SandboxBackend, "sandbox-backend", cfg.SandboxBackend, "Sandbox backend to use (gvisor or docker)")
 	root.PersistentFlags().StringVar(&cfg.Sandbox.RunscPath, "runsc", cfg.Sandbox.RunscPath, "runsc binary path")
 	root.PersistentFlags().StringVar(&cfg.Sandbox.ContainerRuntime, "container-runtime", cfg.Sandbox.ContainerRuntime, "Container runtime (docker/containerd)")

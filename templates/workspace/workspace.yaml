@@ -6,7 +6,7 @@ paths:
 
 model:
   provider: ollama
-  name: qwen2.5-coder:14b
+  name: gemma4:e4b
 
 sandbox:
   backend: gvisor
@@ -20,31 +20,3 @@ audit:
 
 telemetry:
   enabled: false
-
-agents:
-  - name: euclo
-    filesystem:
-      - action: [fs:read, fs:list, fs:write, fs:create, fs:execute]
-        path: "${workspace}/**"
-        exclude:
-          - "${workspace}/relurpify_cfg/**"
-          - "${workspace}/.git/**"
-
-  - name: rex
-    filesystem:
-      - action: [fs:read, fs:list]
-        path: "${workspace}/**"
-        exclude:
-          - "${workspace}/relurpify_cfg/**"
-
-  - name: testfu
-    model: qwen2.5-coder:14b
-    filesystem:
-      - action: [fs:read, fs:list]
-        path: "${workspace}/**"
-        exclude:
-          - "${workspace}/relurpify_cfg/**"
-      - action: [fs:write, fs:create]
-        path: "${workspace}/.relurpify_state/test_run/**"
-
-  - name: factory

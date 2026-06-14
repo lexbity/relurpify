@@ -5,8 +5,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"codeburg.org/lexbit/relurpify/capability/ports"
-	"codeburg.org/lexbit/relurpify/capability/toolcapabilities"
+	ports "codeburg.org/lexbit/relurpify/platform/configmanifest"
 )
 
 const (
@@ -323,7 +322,7 @@ func TestValidateV2ChunkingPasses(t *testing.T) {
 		Returns: ports.ToolManifestReturns{
 			Type: "json",
 			Chunking: &ports.ToolManifestReturnsChunking{
-				Mode:      toolcapabilities.ChunkingModePerItem,
+				Mode:      ports.ChunkingModePerItem,
 				ItemPath:  "matches[]",
 				RefFields: []string{"path", "line"},
 			},

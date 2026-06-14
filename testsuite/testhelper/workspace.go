@@ -1,6 +1,7 @@
 package testhelper
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"os/exec"
@@ -15,11 +16,16 @@ type WorkspaceOpts struct {
 	Provider  string
 	SeedFiles map[string]string
 	Recipes   map[string]string
+	// CliGitExec controls the cli_git execute policy written to
+	// relurpify_cfg/security/localtool.policy.yaml.
+	// Default: "allow" | "ask" | "deny".
+	CliGitExec string
 }
 
 // WriteCleanWorkspace copies the checked-in relurpify_cfg tree into workspace,
-// rewrites the workspace provider, seeds the euclo manifest, and adds any
-// requested root files.
+// rewrites the workspace provider, writes the split localtool policy from
+// opts.CliGitExec, and adds any requested seed files and recipes.
+// No per-agent YAML manifest is written.
 func WriteCleanWorkspace(t *testing.T, workspace string, opts WorkspaceOpts) {
 	t.Helper()
 
@@ -31,61 +37,54 @@ func WriteCleanWorkspace(t *testing.T, workspace string, opts WorkspaceOpts) {
 	repoRoot := RepoRoot(t)
 	copyTree(t, filepath.Join(repoRoot, "relurpify_cfg"), filepath.Join(workspace, "relurpify_cfg"))
 
-	workspacePath := filepath.Join(workspace, "relurpify_cfg", "workspace.yaml")
-	workspaceData, err := os.ReadFile(filepath.Clean(workspacePath))
-	if err != nil {
-		t.Fatalf("read workspace config: %v", err)
-	}
-	updated := strings.Replace(string(workspaceData), "provider: ollama", "provider: "+provider, 1)
-	if updated == string(workspaceData) {
-		t.Fatalf("workspace provider rewrite did not change %s", workspacePath)
-	}
-	if err := fs.WriteFileSecure(workspacePath, []byte(updated)); err != nil {
-		t.Fatalf("rewrite workspace config: %v", err)
+	// Write workspace.yaml with the requested provider.
+	wsPath := filepath.Join(workspace, "relurpify_cfg", "workspace.yaml")
+	wsContent := fmt.Sprintf(`schema: relurpify/workspace/v1
+
+paths:
+  state_dir: .relurpify_state
+
+model:
+  provider: %s
+  name: gemma4:e4b
+
+sandbox:
+  backend: gvisor
+
+logging:
+  level: info
+  format: json
+
+audit:
+  retention_days: 7
+
+telemetry:
+  enabled: false
+`, provider)
+	if err := fs.WriteFileSecure(wsPath, []byte(wsContent)); err != nil {
+		t.Fatalf("write workspace config: %v", err)
 	}
 
-	manifestPath := filepath.Join(workspace, "relurpify_cfg", "agents", "euclo.yaml")
-	if err := os.MkdirAll(filepath.Dir(manifestPath), fs.PublicDirMode); err != nil {
-		t.Fatalf("mkdir manifest dir: %v", err)
+	// Write the split localtool policy.
+	cliGitExec := strings.TrimSpace(opts.CliGitExec)
+	if cliGitExec == "" {
+		cliGitExec = "allow"
 	}
-	manifestData, err := os.ReadFile(filepath.Clean(filepath.Join(repoRoot, "userconfig", "config", "testdata", "contracts", "document_current.yaml")))
-	if err != nil {
-		t.Fatalf("read euclo manifest fixture: %v", err)
+	policyDir := filepath.Join(workspace, "relurpify_cfg", "security")
+	if err := os.MkdirAll(policyDir, fs.PublicDirMode); err != nil {
+		t.Fatalf("mkdir security dir: %v", err)
 	}
-	manifestText := string(manifestData)
-	manifestText = strings.Replace(manifestText,
-		"    hitl_required:\n      - filesystem\n",
-		"    hitl_required: []\n",
-		1,
-	)
-	manifestText = strings.Replace(manifestText,
-		"    capabilities:\n      - capability: cap_net_bind_service\n",
-		"    capabilities:\n      - capability: cap_net_bind_service\n",
-		1,
-	)
-	manifestText = strings.Replace(manifestText,
-		"path: ${workspace}/docs/**",
-		"path: ${workspace}/**",
-		1,
-	)
-	manifestText = strings.Replace(manifestText,
-		`    executables:
-      - binary: git
-        args:
-          - status
-`,
-		`    executables:
-      - binary: git
-        args:
-          - "*"
-`,
-		1,
-	)
-	if !strings.Contains(manifestText, "binary: git") {
-		t.Fatalf("euclo manifest git permission rewrite failed")
-	}
-	if err := fs.WriteFileSecure(manifestPath, []byte(manifestText)); err != nil {
-		t.Fatalf("write euclo manifest: %v", err)
+	policyContent := fmt.Sprintf(`schema: relurpify/policy/localtool/v1
+
+tools:
+  cli_git:
+    execute: %s
+  bash:
+    execute: ask
+`, cliGitExec)
+	policyPath := filepath.Join(policyDir, "localtool.policy.yaml")
+	if err := fs.WriteFileSecure(policyPath, []byte(policyContent)); err != nil {
+		t.Fatalf("write localtool policy: %v", err)
 	}
 
 	for name, content := range opts.SeedFiles {
@@ -121,6 +120,14 @@ func WriteCleanWorkspace(t *testing.T, workspace string, opts WorkspaceOpts) {
 			}
 		}
 	}
+}
+
+// WriteCleanWorkspaceAsk is a convenience wrapper that writes the workspace
+// with cli_git: execute: ask.
+func WriteCleanWorkspaceAsk(t *testing.T, workspace string, opts WorkspaceOpts) {
+	t.Helper()
+	opts.CliGitExec = "ask"
+	WriteCleanWorkspace(t, workspace, opts)
 }
 
 // InitGitRepo initializes a git repository in workspace and creates an initial commit.

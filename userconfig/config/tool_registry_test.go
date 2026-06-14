@@ -8,7 +8,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"codeburg.org/lexbit/relurpify/capability/ports"
+	ports "codeburg.org/lexbit/relurpify/platform/configmanifest"
 	"codeburg.org/lexbit/relurpify/platform/fs"
 	"codeburg.org/lexbit/relurpify/platform/tools/subprocess"
 	"codeburg.org/lexbit/relurpify/userconfig/config/security"
@@ -136,9 +136,9 @@ type stubTool struct {
 	name string
 }
 
-func (t stubTool) Name() string                { return t.name }
-func (t stubTool) Description() string         { return t.name }
-func (t stubTool) Category() string            { return "demo" }
+func (t stubTool) Name() string                      { return t.name }
+func (t stubTool) Description() string               { return t.name }
+func (t stubTool) Category() string                  { return "demo" }
 func (t stubTool) Parameters() []ports.ToolParameter { return nil }
 func (t stubTool) Execute(context.Context, map[string]any) (*ports.ToolResult, error) {
 	return &ports.ToolResult{Success: true}, nil

@@ -562,5 +562,5 @@ func TestBoolFlagNonBoolValueError(t *testing.T) {
 		verbose: "not-a-bool",
 	})
 	require.Error(t, err)
-	require.Contains(t, err.Error(), `flag verbose expects a boolean value`)
+	require.Contains(t, err.Error(), `flag "verbose" expects a boolean value`)
 }

@@ -224,11 +224,10 @@ func TestProvenance_FullChain(t *testing.T) {
 }
 
 func TestBudgetExhaustion_ResetProtocol(t *testing.T) {
-	advisor := &telemetry.ContextBudgetAdvisor{ModelContextSize: 2048}
+	advisor := &observability.ContextBudgetAdvisor{ModelContextSize: 2048}
 	tel := &phase9Telemetry{}
 	model := llm.NewInstrumentedModel(phase9UsageModel{}, &phase9ObservabilityTelemetry{parent: tel}, false)
-	ctx := telemetry.WithAdvisor(context.Background(), advisor)
-	ctx = telemetry.WithSnapshotEmitter(ctx, telemetry.NewSnapshotEmitter(advisor, tel, 1))
+	ctx := observability.WithAdvisor(context.Background(), advisor)
 
 	_, err := model.Chat(ctx, []llm.Message{{Role: "user", Content: "ping"}}, nil)
 	require.NoError(t, err)

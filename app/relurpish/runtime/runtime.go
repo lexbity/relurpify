@@ -2,7 +2,6 @@ package runtime
 
 import (
 	"context"
-	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -22,6 +21,7 @@ import (
 	"codeburg.org/lexbit/relurpify/context/knowledge/graphdb"
 	"codeburg.org/lexbit/relurpify/context/knowledge/memory"
 	"codeburg.org/lexbit/relurpify/context/knowledge/search"
+	"codeburg.org/lexbit/relurpify/execution/compiler"
 	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/execution/agentgraph"
 	"codeburg.org/lexbit/relurpify/execution/agentlifecycle"
@@ -54,6 +54,7 @@ type Runtime struct {
 	Memory           *memory.WorkingMemoryStore
 	Agent            agentgraph.WorkflowExecutor
 	Model            model.LanguageModel
+	Compiler         *compiler.Compiler
 	IndexManager     *ast.IndexManager
 	GraphDB          *graphdb.Engine
 	SearchEngine     *search.SearchEngine
@@ -179,7 +180,7 @@ func New(ctx context.Context, cfg Config, secrets config.Secrets) (*Runtime, err
 	if err != nil {
 		return nil, fmt.Errorf("overlay security bundle: %w", err)
 	}
-	docSnapshot := builtinDocumentSnapshot(contract)
+	docSnapshot := builtinDocumentSnapshot(contract, cfg.Workspace)
 	agentSpec := convertAgentSpec(contract.AgentSpec)
 	contractPerms := contract.Permissions
 	securityBundle := loadedConfig.Security
@@ -410,6 +411,7 @@ func New(ctx context.Context, cfg Config, secrets config.Secrets) (*Runtime, err
 		Tools:                env.Registry,
 		Memory:               env.WorkingMemory,
 		Model:                env.Model,
+		Compiler:             env.Compiler,
 		IndexManager:         env.IndexManager,
 		GraphDB:              graphDBFromIndexManager(env.IndexManager),
 		SearchEngine:         env.SearchEngine,
@@ -439,6 +441,15 @@ func New(ctx context.Context, cfg Config, secrets config.Secrets) (*Runtime, err
 	}
 	// Nexus gateway and node provider registration removed (app/nexus shelved)
 
+	if ws != nil && ws.Telemetry != nil {
+		ws.Telemetry.Emit(telemetry.Event{
+			Type:      telemetry.EventStateChange,
+			Timestamp: time.Now().UTC(),
+			Message:   "backend_selected",
+			Metadata:  map[string]any{"provider": cfg.InferenceProvider},
+		})
+	}
+
 	agent, err := instantiateAgent(rt.paradigmDeps())
 	if err != nil {
 		_ = rt.Close(ctx)
@@ -452,6 +463,7 @@ func New(ctx context.Context, cfg Config, secrets config.Secrets) (*Runtime, err
 
 	rt.Agent = agent
 	emitAgentStartupEvent(ctx, eventTelemetry.Log, eventTelemetry.Partition, registration.ID, cfg.AgentLabel(), agent)
+	emitContractResolvedEvent(ctx, eventTelemetry.Log, eventTelemetry.Partition, registration.ID, cfg.AgentLabel(), docSnapshot)
 	if err := ayenitd.RegisterWorkspaceServices(ctx, ayenitd.WorkspaceConfig{Workspace: cfg.Workspace}, sess, rt.Tools, registration); err != nil {
 		_ = rt.Close(ctx)
 		return nil, fmt.Errorf("register workspace services: %w", err)
@@ -600,21 +612,19 @@ func (r *Runtime) applyResolvedAgentState(name string, effectiveContract *config
 }
 
 // builtinDocumentSnapshot creates a minimal DocumentSnapshot for the built-in
-// euclo contract. The snapshot carries a synthetic fingerprint derived from the
-// contract and is used for agent registration metadata. The real contract
-// fingerprint lands in S8.
-func builtinDocumentSnapshot(contract *config.EffectiveAgentContract) *config.DocumentSnapshot {
+// euclo contract. The fingerprint is computed from the contract and the raw
+// security bundle bytes via config.ContractFingerprint.
+func builtinDocumentSnapshot(contract *config.EffectiveAgentContract, workspace string) *config.DocumentSnapshot {
 	if contract == nil {
 		return nil
 	}
-	fp := sha256.Sum256([]byte("euclo-builtin-contract"))
 	return &config.DocumentSnapshot{
 		Document: &config.Document{
 			APIVersion: "relurpify.io/v1",
 			Kind:       "AgentManifest",
 			Metadata:   config.DocumentMetadata{Name: contract.AgentID},
 		},
-		Fingerprint: fp,
+		Fingerprint: config.ContractFingerprint(contract, workspace),
 		SourcePath:  "",
 		LoadedAt:    time.Now().UTC(),
 	}
@@ -674,6 +684,31 @@ func emitAgentStartupEvent(ctx context.Context, eventLog event.Log, partition, a
 	_, _ = eventLog.Append(ctx, partition, []event.FrameworkEvent{{
 		Timestamp: time.Now().UTC(),
 		Type:      event.EventAgentRunStarted,
+		Payload:   data,
+		Actor:     observability.Actor{Kind: "agent", ID: agentID, Label: label},
+		Partition: partition,
+	}})
+}
+
+func emitContractResolvedEvent(ctx context.Context, eventLog event.Log, partition, agentID, label string, snapshot *config.DocumentSnapshot) {
+	if eventLog == nil || snapshot == nil {
+		return
+	}
+	if strings.TrimSpace(partition) == "" {
+		partition = "local"
+	}
+	payload := map[string]any{
+		"contract_source": "builtin+split",
+		"fingerprint":     fmt.Sprintf("%x", snapshot.Fingerprint),
+		"agent_id":        agentID,
+	}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return
+	}
+	_, _ = eventLog.Append(ctx, partition, []event.FrameworkEvent{{
+		Timestamp: time.Now().UTC(),
+		Type:      event.EventContractResolved,
 		Payload:   data,
 		Actor:     observability.Actor{Kind: "agent", ID: agentID, Label: label},
 		Partition: partition,

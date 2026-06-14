@@ -4,6 +4,8 @@ import (
 	"context"
 	"sync"
 	"time"
+
+	"codeburg.org/lexbit/relurpify/platform/observability"
 )
 
 // ContextBudgetAdvisor tracks consumed token budget across LLM calls and
@@ -22,29 +24,29 @@ type ContextBudgetAdvisor struct {
 	resetNotified    bool
 }
 
-// WithAdvisor stores the advisor in the context via the telemetry.UsageObserver
+// WithAdvisor stores the advisor in the context via the observability.UsageObserver
 // interface key so that platform/llm.InstrumentedModel can retrieve it without
 // importing framework packages.
 func WithAdvisor(ctx context.Context, advisor *ContextBudgetAdvisor) context.Context {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	return WithUsageObserver(ctx, advisor)
+	return observability.WithUsageObserver(ctx, advisor)
 }
 
-// AdvisorFromContext extracts the advisor from the telemetry.UsageObserver context key.
+// AdvisorFromContext extracts the advisor from the observability.UsageObserver context key.
 func AdvisorFromContext(ctx context.Context) *ContextBudgetAdvisor {
 	if ctx == nil {
 		return nil
 	}
-	obs := UsageObserverFromContext(ctx)
+	obs := observability.UsageObserverFromContext(ctx)
 	advisor, _ := obs.(*ContextBudgetAdvisor)
 	return advisor
 }
 
-// RecordTokenUsage implements telemetry.UsageObserver.
-func (a *ContextBudgetAdvisor) RecordTokenUsage(usage TokenUsage) {
-	a.RecordCall(usage)
+// RecordTokenUsage implements observability.UsageObserver.
+func (a *ContextBudgetAdvisor) RecordTokenUsage(usage observability.TokenUsage) {
+	a.RecordCall(TokenUsage(usage))
 }
 
 // RecordCall updates internal accounting from an LLM response.

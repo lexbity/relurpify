@@ -42,18 +42,6 @@ func TestQA_StartupAgentIsEuclo(t *testing.T) {
 	workspace := t.TempDir()
 	copyTree(t, filepath.Join("..", "..", "..", "relurpify_cfg"), filepath.Join(workspace, "relurpify_cfg"))
 
-	manifestPath := filepath.Join(workspace, "relurpify_cfg", "agents", "euclo.yaml")
-	manifestData, err := config.ReadFileRaw(filepath.Join("..", "..", "..", "userconfig", "config", "testdata", "contracts", "document_current.yaml"))
-	if err != nil {
-		t.Fatalf("read manifest fixture: %v", err)
-	}
-	if err := fs.MkdirAllSecure(filepath.Dir(manifestPath)); err != nil {
-		t.Fatalf("mkdir manifest: %v", err)
-	}
-	if err := fs.WriteFileSecure(manifestPath, manifestData); err != nil {
-		t.Fatalf("write manifest: %v", err)
-	}
-
 	cfg := ConfigForWorkspace(Config{AgentName: "euclo"}, workspace)
 	cfg.SecurityRunner = fakeCommandRunner{}
 	cfg.SandboxBackendFactory = func(context.Context, string, governanceports.SandboxConfig, string, string) (governanceports.SandboxRuntime, error) {

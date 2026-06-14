@@ -2,6 +2,7 @@ package sandbox
 
 import (
 	"context"
+	"os"
 	"os/exec"
 	"strings"
 	"sync"
@@ -153,26 +154,31 @@ func TestRunConfig_ReturnsStored(t *testing.T) {
 // ----------------------------------------------------------------------------
 
 func TestVerify_SkipsIfAlreadyVerified(t *testing.T) {
-	gt := NewSandboxRuntime(SandboxConfig{Platform: "kvm"}) // Use kvm to pass basic checks if possible
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	requireSandboxIntegration(t)
+	if !isBinaryExists("runsc") || !isBinaryExists("docker") {
+		t.Skip("Skipping Verify() skip-path test: runsc or docker binary not found on PATH")
+	}
+	gt := NewSandboxRuntime(SandboxConfig{Platform: "kvm"})
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	// First call verifies and sets verified=true
-	// Second call should be fast and skip checks
-	if err := gt.Verify(ctx); err != nil && !errorsAsBinaryNotFound(t, err) {
-		t.Errorf("Verify() second call skipped as expected but got error: %v", err)
-	} else if err == nil && errorsAsBinaryNotFound(t, nil) {
-		t.Error("Verify() on non-existent binaries should skip checks only after first success")
+	// First call must actually run the checks and mark the runtime verified.
+	if err := gt.Verify(ctx); err != nil {
+		t.Fatalf("first Verify() failed: %v", err)
 	}
-}
+	if !gt.verified {
+		t.Fatal("expected verified=true after first Verify()")
+	}
 
-// Helper to differentiate between "verification failed" and "binary not found (setup)"
-func errorsAsBinaryNotFound(_ *testing.T, err error) bool {
-	if err == nil {
-		return false
+	// Make the skip path observable: point the runtime at a binary that does
+	// not exist. A second Verify() must still succeed *because* it
+	// short-circuits on g.verified rather than re-running checkRunsc. If the
+	// `if g.verified { return nil }` guard were removed, this would fail with a
+	// "runsc binary not found" error.
+	gt.config.RunscPath = "definitely-not-a-real-binary"
+	if err := gt.Verify(ctx); err != nil {
+		t.Errorf("second Verify() should skip checks once verified, got: %v", err)
 	}
-	errStr := strings.ToLower(err.Error())
-	return strings.Contains(errStr, "not found") || strings.Contains(errStr, "invalid version")
 }
 
 // Helper for Verify tests - checks if binary exists on PATH
@@ -181,8 +187,21 @@ func isBinaryExists(binary string) bool {
 	return err == nil
 }
 
+// requireSandboxIntegration gates tests that execute real external commands
+// (runsc --version, docker info). These contact the Docker daemon / launch
+// runsc, which on some desktops triggers a privilege-elevation prompt, so they
+// must not run during a default `go test ./...`. Opt in with
+// RELURPIFY_SANDBOX_INTEGRATION=1, mirroring the browser stress-test gate.
+func requireSandboxIntegration(t *testing.T) {
+	t.Helper()
+	if testing.Short() || os.Getenv("RELURPIFY_SANDBOX_INTEGRATION") == "" {
+		t.Skip("set RELURPIFY_SANDBOX_INTEGRATION=1 to run sandbox Verify integration tests (they exec docker/runsc)")
+	}
+}
+
 // Skip verify integration test if binaries not available, so CI doesn't fail
 func TestVerify_RunsOnlyIfBinariesExist(t *testing.T) {
+	requireSandboxIntegration(t)
 	if !isBinaryExists("runsc") || !isBinaryExists("docker") {
 		t.Skip("Skipping Verify() integration tests: runsc or docker binary not found on PATH")
 	}
@@ -233,22 +252,26 @@ func TestVerify_DockerMissing_FailsGracefully(t *testing.T) {
 }
 
 func TestVerify_PlatformHintMismatchAnnotates(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	requireSandboxIntegration(t)
+	if !isBinaryExists("runsc") {
+		t.Skip("Skipping platform-hint annotation test: runsc binary not found on PATH")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	gt := NewSandboxRuntime(SandboxConfig{Platform: "kvm"}) // Expect kvm in version string
+	// A platform hint that cannot appear in the runsc version string must be
+	// annotated as "not found" but must remain non-fatal. checkRunsc is
+	// exercised directly so the assertion is independent of the container
+	// runtime check.
+	const bogusPlatform = "nonexistent-platform"
+	gt := NewSandboxRuntime(SandboxConfig{Platform: bogusPlatform})
 
-	// Force platform mismatch by testing against a different platform's binary signature if possible
-	// This is a softer check - in practice, runsc reports its build type which may not match our hint
-	if err := gt.Verify(ctx); err != nil {
-		errStr := strings.ToLower(err.Error())
-		// If we get an error due to version string mismatch, check that it doesn't block execution entirely
-		// and the version is annotated with platform hint message. This tests the fallback logic in CheckRunsc.
-		if errorsAsBinaryNotFound(t, nil) { // Check if we hit the expected non-fatal behavior
-			t.Logf("Verify() handled platform mismatch as non-fatal: %v", err)
-		} else {
-			t.Logf("Platform hint mismatch logged via version string: %s", errStr)
-		}
+	if err := gt.checkRunsc(ctx); err != nil {
+		t.Fatalf("platform hint mismatch should be non-fatal, got: %v", err)
+	}
+	want := "(platform hint " + bogusPlatform + " not found)"
+	if !strings.Contains(gt.version, want) {
+		t.Errorf("expected version string annotated with %q, got: %q", want, gt.version)
 	}
 }
 

@@ -50,6 +50,8 @@ type CompilationResult struct {
 	SkippedStaleChunks []knowledge.ChunkID
 	StreamedRefs       []contextdata.ChunkReference // Populated into Envelope.References.StreamedContext
 	Substitutions      []SummarySubstitution
+	PinReferences      []PinReference // Reserved-budget reference floor for pinned files
+	EvictedPinContent  []string       // Paths of pinned files whose content chunks were evicted by budget
 	TotalTokens        int
 	ShortfallTokens    int // If > 0, budget could not be met
 	ReplayMode         ReplayMode
@@ -69,6 +71,16 @@ type CompilationRecord struct {
 	BudgetShortfall     int
 	DeterministicDigest string                   // Hash for determinism verification
 	AssemblyMetadata    contextdata.AssemblyMeta // Compiler assembly provenance
+}
+
+// PinReference captures a bounded reference floor for a pinned file.
+// It holds path, content hash, and a short digest so the consumer
+// always has a usable handle to the original file regardless of budget.
+type PinReference struct {
+	Path         string `json:"path"`
+	ContentHash  string `json:"content_hash"`
+	ShortDigest  string `json:"short_digest"`
+	TokenEstimate int   `json:"token_estimate"`
 }
 
 // SummarySubstitution records when a chunk was replaced with its summary.

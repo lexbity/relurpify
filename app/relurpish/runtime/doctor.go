@@ -15,6 +15,7 @@ import (
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/platform/fs"
 	"codeburg.org/lexbit/relurpify/platform/llm"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclocontract"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 	"codeburg.org/lexbit/relurpify/userconfig/modelselect"
 	"codeburg.org/lexbit/relurpify/userconfig/templates"
@@ -45,6 +46,7 @@ type DoctorReport struct {
 	ManifestWarnings      []string
 	DeprecationNotices    []string
 	ProtectedPaths        []string
+	ContractSource        string // "builtin+split" | "manifest"
 	ManifestFingerprint   string
 	ManifestPolicySummary string
 	Inference             InferenceBackendReport
@@ -112,6 +114,7 @@ func BuildDoctorReport(ctx context.Context, cfg Config, secrets config.Secrets) 
 	}
 	if _, err := os.Stat(cfg.ManifestPath); err == nil {
 		report.ManifestExists = true
+		report.ContractSource = "manifest"
 		if snapshot, err := config.LoadDocument(cfg.ManifestPath); err != nil {
 			report.ManifestError = err.Error()
 		} else {
@@ -122,6 +125,10 @@ func BuildDoctorReport(ctx context.Context, cfg Config, secrets config.Secrets) 
 				report.DeprecationNotices = append(report.DeprecationNotices, snapshot.Warnings...)
 			}
 		}
+	} else {
+		report.ContractSource = "builtin+split"
+		fp := config.ContractFingerprint(euclocontract.DefaultContract(), cfg.Workspace)
+		report.ManifestFingerprint = fmt.Sprintf("%x", fp)
 	}
 	report.ProtectedPaths = config.New(cfg.Workspace).GovernanceRoots(cfg.ManifestPath, cfg.ConfigPath, config.DefaultWorkspaceConfigPath(cfg.Workspace))
 

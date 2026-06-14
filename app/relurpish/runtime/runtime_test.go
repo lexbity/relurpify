@@ -330,18 +330,6 @@ func TestNewBootsWithTapeProviderFromWorkspaceConfig(t *testing.T) {
 	workspace := t.TempDir()
 	copyTree(t, filepath.Join("..", "..", "..", "relurpify_cfg"), filepath.Join(workspace, "relurpify_cfg"))
 
-	manifestPath := filepath.Join(workspace, "relurpify_cfg", "agents", "euclo.yaml")
-	manifestData, err := config.ReadFileRaw(filepath.Join("..", "..", "..", "userconfig", "config", "testdata", "contracts", "document_current.yaml"))
-	if err != nil {
-		t.Fatalf("read manifest fixture: %v", err)
-	}
-	if err := os.MkdirAll(filepath.Dir(manifestPath), fs.PublicDirMode); err != nil {
-		t.Fatalf("mkdir manifest dir: %v", err)
-	}
-	if err := fs.WriteFileSecure(manifestPath, manifestData); err != nil {
-		t.Fatalf("seed manifest: %v", err)
-	}
-
 	statePath := filepath.Join(workspace, ".relurpify_state", "workspace.yaml")
 	tapePath := config.DefaultWorkspaceStateTapeFile(workspace)
 	recordTapeCorpus(t, tapePath)
@@ -355,7 +343,6 @@ func TestNewBootsWithTapeProviderFromWorkspaceConfig(t *testing.T) {
 
 	cfg := ConfigForWorkspace(Config{AgentName: "euclo"}, workspace)
 	cfg.ConfigPath = statePath
-	cfg.ManifestPath = manifestPath
 	cfg.InferenceProvider = ""
 	cfg.InferenceModel = ""
 	cfg.InferenceTapePath = tapePath
@@ -395,22 +382,7 @@ func TestEucloTapeFidelity(t *testing.T) {
 	workspace := t.TempDir()
 	copyTree(t, filepath.Join("..", "..", "..", "relurpify_cfg"), filepath.Join(workspace, "relurpify_cfg"))
 
-	manifestPath := filepath.Join(workspace, "relurpify_cfg", "agents", "euclo.yaml")
-	manifestData, err := config.ReadFileRaw(filepath.Join("..", "..", "..", "userconfig", "config", "testdata", "contracts", "document_current.yaml"))
-	if err != nil {
-		t.Fatalf("read manifest fixture: %v", err)
-	}
-	if err := os.MkdirAll(filepath.Dir(manifestPath), fs.PublicDirMode); err != nil {
-		t.Fatalf("mkdir manifest dir: %v", err)
-	}
-	if err := fs.WriteFileSecure(manifestPath, manifestData); err != nil {
-		t.Fatalf("seed manifest: %v", err)
-	}
-
-	statePath := filepath.Join(workspace, ".relurpify_state", "workspace.yaml")
 	cfg := ConfigForWorkspace(Config{AgentName: "euclo"}, workspace)
-	cfg.ConfigPath = statePath
-	cfg.ManifestPath = manifestPath
 	cfg.SecurityRunner = fakeCommandRunner{}
 	cfg.SandboxBackendFactory = func(context.Context, string, governanceports.SandboxConfig, string, string) (governanceports.SandboxRuntime, error) {
 		return &fakeSandboxRuntime{}, nil

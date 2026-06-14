@@ -291,6 +291,20 @@ func enforceDescriptorExecutionPoliciesWithProfile(ctx context.Context, desc des
 	return nil
 }
 
+// authToolView adapts a ports.Tool to the structural surface the authorization
+// permission manager expects. It bridges the capability-owned
+// ports.ToolPermissions wrapper down to the canonical *permissions.PermissionSet
+// so authorization can read tool permissions without importing capability/ports.
+type authToolView struct {
+	tool ports.Tool
+}
+
+func (a authToolView) Name() string   { return a.tool.Name() }
+func (a authToolView) Tags() []string { return a.tool.Tags() }
+func (a authToolView) PermissionSet() *permissions.PermissionSet {
+	return a.tool.Permissions().Permissions
+}
+
 // Execute authorizes the wrapped tool before delegating to the original implementation.
 func (t *instrumentedTool) Execute(ctx context.Context, args map[string]any) (*ports.ToolResult, error) {
 	desc := descriptor.ToolDescriptor(ctx, t.Tool)
@@ -307,7 +321,7 @@ func (t *instrumentedTool) Execute(ctx context.Context, args map[string]any) (*p
 		return nil, normalizeToolExecutionPolicyError(t.Name(), err)
 	}
 	if stateSnapshot.manager != nil {
-		if err := stateSnapshot.manager.AuthorizeTool(ctx, stateSnapshot.agentID, t.Tool, args); err != nil {
+		if err := stateSnapshot.manager.AuthorizeTool(ctx, stateSnapshot.agentID, authToolView{tool: t.Tool}, args); err != nil {
 			var denied *permissions.PermissionDeniedError
 			if errors.As(err, &denied) {
 				return nil, fmt.Errorf("tool %s blocked: %w", t.Name(), err)

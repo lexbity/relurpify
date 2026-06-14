@@ -2,7 +2,6 @@ package tui
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -228,7 +227,7 @@ func (p *SecurityGuardPane) loadGuardRules() {
 		return
 	}
 	var rules []policy.PolicyRule
-	if err := json.Unmarshal(data, &rules); err != nil {
+	if err := yaml.Unmarshal(data, &rules); err != nil {
 		p.status = fmt.Sprintf("policy rules parse failed: %v", err)
 		p.guardRules = nil
 		return
@@ -443,7 +442,7 @@ func (p *SecurityGuardPane) saveCmd() tea.Cmd {
 		if err := config.SaveYAML(shellPath, securityGuardFile{Version: "1", Rules: shellRules}); err != nil {
 			return sandboxPersistedMsg{Err: err}
 		}
-		if err := config.SaveJSON(guardPath, guardRules); err != nil {
+		if err := config.SaveYAML(guardPath, guardRules); err != nil {
 			return sandboxPersistedMsg{Err: err}
 		}
 		if p.runtime != nil {

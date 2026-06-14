@@ -2,14 +2,12 @@ package runtime
 
 import (
 	"context"
-	"path/filepath"
 	"sync"
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/execution/session"
 	"codeburg.org/lexbit/relurpify/telemetry"
-	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
 const testRuntimeProviderAgentID = "euclo"
@@ -75,19 +73,13 @@ func TestRegisterBuiltinProvidersWarnsAndSkipsConfiguredProviders(t *testing.T) 
 	}
 }
 
-func TestResolveEffectiveContractForAgentUsesDocumentSnapshot(t *testing.T) {
-	docPath := filepath.Join("..", "..", "..", "userconfig", "config", "testdata", "contracts", "document_current.yaml")
-	docSnapshot, err := config.LoadDocument(docPath)
-	if err != nil {
-		t.Fatalf("load document snapshot: %v", err)
-	}
+func TestResolveEffectiveContractForAgentReturnsBuiltinContract(t *testing.T) {
 	rt := &Runtime{
 		Config: Config{Workspace: "/workspace"},
 		Workspace: &session.Workspace{
 			Registration: &session.Registration{ID: testRuntimeProviderAgentID},
 			PolicyEngine: nil,
 		},
-		documentSnapshot: docSnapshot,
 	}
 
 	contract, compiledPolicy, err := rt.resolveEffectiveContractForAgent(testRuntimeProviderAgentID)
@@ -99,5 +91,8 @@ func TestResolveEffectiveContractForAgentUsesDocumentSnapshot(t *testing.T) {
 	}
 	if compiledPolicy == nil {
 		t.Fatal("expected compiled policy")
+	}
+	if contract.AgentID != "euclo" {
+		t.Fatalf("contract agent id = %q, want %q", contract.AgentID, "euclo")
 	}
 }

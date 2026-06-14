@@ -56,4 +56,5 @@ const (
 	EventSummaryCommitted      = "summary.committed.v1"
 	EventContextPolicyReloaded = "context_policy.reloaded.v1"
 	EventProviderSessionEnded  = "provider.session.ended.v1"
+	EventContractResolved      = "contract.resolved.v1"
 )

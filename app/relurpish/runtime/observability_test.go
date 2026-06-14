@@ -11,6 +11,7 @@ import (
 	"codeburg.org/lexbit/relurpify/named/euclo"
 	"codeburg.org/lexbit/relurpify/platform/observability"
 	"codeburg.org/lexbit/relurpify/telemetry/event"
+	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
 type recordingEventLog struct {
@@ -50,6 +51,50 @@ func (l *recordingEventLog) LoadSnapshot(_ context.Context, _ string) (uint64, [
 
 func (l *recordingEventLog) Close() error {
 	return nil
+}
+
+func TestEmitContractResolvedEventRecordsSourceAndFingerprint(t *testing.T) {
+	log := &recordingEventLog{}
+	fp := [32]byte{1, 2, 3, 4}
+	snapshot := &config.DocumentSnapshot{
+		Document:    &config.Document{Kind: "AgentManifest", Metadata: config.DocumentMetadata{Name: "euclo"}},
+		Fingerprint: fp,
+	}
+
+	emitContractResolvedEvent(context.Background(), log, "", "agent-123", AgentLabelEuclo, snapshot)
+
+	if len(log.events) != 1 {
+		t.Fatalf("expected 1 event, got %d", len(log.events))
+	}
+
+	ev := log.events[0]
+	if ev.Type != event.EventContractResolved {
+		t.Fatalf("event type = %q, want %q", ev.Type, event.EventContractResolved)
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(ev.Payload, &payload); err != nil {
+		t.Fatalf("unmarshal payload: %v", err)
+	}
+	if payload["contract_source"] != "builtin+split" {
+		t.Fatalf("contract_source = %v, want %q", payload["contract_source"], "builtin+split")
+	}
+	if payload["fingerprint"] == "" {
+		t.Fatal("fingerprint is empty")
+	}
+	if payload["agent_id"] != "agent-123" {
+		t.Fatalf("agent_id = %v, want %q", payload["agent_id"], "agent-123")
+	}
+}
+
+func TestEmitContractResolvedEvent_SkipsNilEventLog(t *testing.T) {
+	emitContractResolvedEvent(context.Background(), nil, "", "agent-123", AgentLabelEuclo, &config.DocumentSnapshot{})
+	// Should not panic.
+}
+
+func TestEmitContractResolvedEvent_SkipsNilSnapshot(t *testing.T) {
+	emitContractResolvedEvent(context.Background(), &recordingEventLog{}, "", "agent-123", AgentLabelEuclo, nil)
+	// Should not panic.
 }
 
 func TestEmitAgentStartupEventRecordsEucloActor(t *testing.T) {

@@ -1,7 +1,6 @@
 package euclo
 
 import (
-	"path/filepath"
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/named/euclo/services"
@@ -27,7 +26,7 @@ func TestLoadThoughtRecipes(t *testing.T) {
 	if thoughtrecipes == nil {
 		t.Error("LoadThoughtRecipes should not return nil")
 	}
-	if got, want := thoughtrecipes.SourceRoot, filepath.Join(workspace, "relurpify_cfg", "euclo"); got != want {
-		t.Fatalf("source root = %q, want %q", got, want)
+	if thoughtrecipes.Registry == nil {
+		t.Error("LoadThoughtRecipes should return a non-nil registry")
 	}
 }

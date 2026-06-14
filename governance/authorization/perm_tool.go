@@ -11,10 +11,14 @@ import (
 )
 
 // toolLike is the narrow tool surface needed by permission authorization.
+// It deliberately exposes the permission set as the canonical
+// *permissions.PermissionSet rather than a capability-owned wrapper type so a
+// foreign tool can satisfy it structurally without governance importing the
+// capability domain (which would invert the allowed package direction).
 type toolLike interface {
 	Name() string
 	Tags() []string
-	Permissions() ToolPermissions
+	PermissionSet() *permissions.PermissionSet
 }
 
 // toolAdapter wraps a foreign tool implementation to satisfy authorization.Tool.
@@ -26,7 +30,7 @@ func (a *toolAdapter) Name() string   { return a.inner.Name() }
 func (a *toolAdapter) Tags() []string { return a.inner.Tags() }
 func (a *toolAdapter) Permissions() ToolPermissions {
 	return ToolPermissions{
-		Permissions: a.inner.Permissions().Permissions,
+		Permissions: a.inner.PermissionSet(),
 	}
 }
 
