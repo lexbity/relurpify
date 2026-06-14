@@ -9,12 +9,8 @@ import (
 )
 
 // requiresRunsc skips the test when the Docker gVisor runtime is not available.
-// These tests launch real `docker run --runtime runsc` containers, so they are
-// gated behind the sandbox-integration opt-in to keep `go test ./...` from
-// contacting the Docker daemon (and triggering desktop privilege prompts).
 func requiresRunsc(t *testing.T) {
 	t.Helper()
-	requireSandboxIntegration(t)
 	if _, err := exec.LookPath("runsc"); err != nil {
 		t.Skip("skipping: runsc not found on PATH")
 	}

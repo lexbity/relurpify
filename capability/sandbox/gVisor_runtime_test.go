@@ -2,7 +2,6 @@ package sandbox
 
 import (
 	"context"
-	"os"
 	"os/exec"
 	"strings"
 	"sync"
@@ -154,7 +153,6 @@ func TestRunConfig_ReturnsStored(t *testing.T) {
 // ----------------------------------------------------------------------------
 
 func TestVerify_SkipsIfAlreadyVerified(t *testing.T) {
-	requireSandboxIntegration(t)
 	if !isBinaryExists("runsc") || !isBinaryExists("docker") {
 		t.Skip("Skipping Verify() skip-path test: runsc or docker binary not found on PATH")
 	}
@@ -187,21 +185,8 @@ func isBinaryExists(binary string) bool {
 	return err == nil
 }
 
-// requireSandboxIntegration gates tests that execute real external commands
-// (runsc --version, docker info). These contact the Docker daemon / launch
-// runsc, which on some desktops triggers a privilege-elevation prompt, so they
-// must not run during a default `go test ./...`. Opt in with
-// RELURPIFY_SANDBOX_INTEGRATION=1, mirroring the browser stress-test gate.
-func requireSandboxIntegration(t *testing.T) {
-	t.Helper()
-	if testing.Short() || os.Getenv("RELURPIFY_SANDBOX_INTEGRATION") == "" {
-		t.Skip("set RELURPIFY_SANDBOX_INTEGRATION=1 to run sandbox Verify integration tests (they exec docker/runsc)")
-	}
-}
-
 // Skip verify integration test if binaries not available, so CI doesn't fail
 func TestVerify_RunsOnlyIfBinariesExist(t *testing.T) {
-	requireSandboxIntegration(t)
 	if !isBinaryExists("runsc") || !isBinaryExists("docker") {
 		t.Skip("Skipping Verify() integration tests: runsc or docker binary not found on PATH")
 	}
@@ -252,7 +237,6 @@ func TestVerify_DockerMissing_FailsGracefully(t *testing.T) {
 }
 
 func TestVerify_PlatformHintMismatchAnnotates(t *testing.T) {
-	requireSandboxIntegration(t)
 	if !isBinaryExists("runsc") {
 		t.Skip("Skipping platform-hint annotation test: runsc binary not found on PATH")
 	}
