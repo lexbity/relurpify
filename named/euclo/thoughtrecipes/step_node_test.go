@@ -117,6 +117,61 @@ func TestThoughtRecipeStepNodeExecuteCapability(t *testing.T) {
 	}
 }
 
+func TestThoughtRecipeStepNodeExecuteCapabilityDeniedByAllowlistSkipsWithoutEscalation(t *testing.T) {
+	reg := regpkg.NewRegistry()
+	handler := &stubCapabilityHandler{id: "euclo:cap.blocked"}
+	if err := reg.RegisterInvocableCapability(context.Background(), handler); err != nil {
+		t.Fatalf("register invocable capability: %v", err)
+	}
+
+	env := contextdata.NewEnvelope("task-allowlist", "session-allowlist")
+	step := ExecutionStep{
+		ID:           "step-denied",
+		CapabilityID: "euclo:cap.blocked",
+		Step: surface.ThoughtRecipeStep{
+			ID:           "step-denied",
+			CapabilityID: "euclo:cap.blocked",
+			OnError: &surface.StepErrorPolicy{
+				Action:   "skip",
+				RetryMax: 0,
+				Fallback: "recovery-step",
+			},
+			Config: map[string]any{},
+		},
+	}
+
+	scoped := reg.WithAllowlist([]string{"euclo:cap.allowed"})
+	node := NewThoughtRecipeStepNode("step-denied.execute", &paradigm.Deps{Registry: scoped}, step)
+	result, err := node.Execute(context.Background(), env)
+	if err != nil {
+		t.Fatalf("Execute returned error: %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected result")
+	}
+	if !result.Success {
+		t.Fatalf("expected skipped success result, got %+v", result)
+	}
+	if handler.args != nil {
+		t.Fatalf("expected denied capability not to invoke handler, got args %#v", handler.args)
+	}
+	if got, ok := execution.ResultField(result.Data, "skipped"); !ok || got != true {
+		t.Fatalf("expected skipped payload, got %v (ok=%v)", got, ok)
+	}
+	if got, ok := execution.ResultField(result.Data, "error"); ok {
+		t.Fatalf("expected no error payload after skip, got %v", got)
+	}
+	if got, ok := execution.ResultField(result.Data, "on_error_action"); !ok || got != "skip" {
+		t.Fatalf("expected on_error_action skip, got %v (ok=%v)", got, ok)
+	}
+	if got, ok := execution.ResultField(result.Data, "on_error_fallback"); !ok || got != "recovery-step" {
+		t.Fatalf("expected on_error_fallback recovery-step, got %v (ok=%v)", got, ok)
+	}
+	if got, ok := result.Metadata["on_error_resolved"]; !ok || got != "skipped" {
+		t.Fatalf("expected resolved metadata skipped, got %v (ok=%v)", got, ok)
+	}
+}
+
 func TestThoughtRecipeStepNodeBuildRuntimeContextClarificationState(t *testing.T) {
 	env := contextdata.NewEnvelope("task-clarify", "session-clarify")
 	state := intentcontext.NewState("task-clarify", "session-clarify")
@@ -169,6 +224,67 @@ func TestThoughtRecipeStepNodeBuildRuntimeContextClarificationState(t *testing.T
 	}
 	if got := rctx.Variables["instruction"]; got == "" {
 		t.Fatal("expected instruction variable to be populated")
+	}
+}
+
+func TestThoughtRecipeStepNodeBuildRuntimeContextIncludesStepContext(t *testing.T) {
+	env := contextdata.NewEnvelope("task-step-context", "session-step-context")
+	step := ExecutionStep{
+		ID:       "context.step",
+		Paradigm: "react",
+		Goal:     "Resolve the step context.",
+		Step: surface.ThoughtRecipeStep{
+			ID:   "context.step",
+			Type: "run",
+			Parent: surface.ThoughtRecipeStepAgent{
+				Paradigm: "react",
+			},
+			Context: surface.ThoughtRecipeStepContext{
+				Stream: &surface.ThoughtRecipeStreamSpec{
+					QueryTemplate: "find relevant symbols",
+					MaxTokens:     128,
+					Mode:          "latest",
+				},
+				Ingest: &surface.ThoughtRecipeIngestSpec{
+					Mode:          "files_only",
+					IncludeGlobs:  []string{"**/*.go"},
+					ExcludeGlobs:  []string{"**/vendor/**"},
+					WorkspaceRoot: "/workspace",
+				},
+				Inherit: []string{"state.findings"},
+				Capture: []string{"output.result"},
+			},
+		},
+	}
+	node := NewThoughtRecipeStepNode("context.step", &paradigm.Deps{}, step)
+	rctx := node.buildRuntimeContext(context.Background(), env)
+
+	if got, ok := rctx.State["execution_step_context_stream_query"]; !ok || got != "find relevant symbols" {
+		t.Fatalf("stream query = %#v (ok=%v), want find relevant symbols", got, ok)
+	}
+	if got, ok := rctx.State["execution_step_context_stream_max_tokens"]; !ok || got != 128 {
+		t.Fatalf("stream max tokens = %#v (ok=%v), want 128", got, ok)
+	}
+	if got, ok := rctx.State["execution_step_context_stream_mode"]; !ok || got != "latest" {
+		t.Fatalf("stream mode = %#v (ok=%v), want latest", got, ok)
+	}
+	if got, ok := rctx.State["execution_step_context_ingest_mode"]; !ok || got != "files_only" {
+		t.Fatalf("ingest mode = %#v (ok=%v), want files_only", got, ok)
+	}
+	if got, ok := rctx.State["execution_step_context_ingest_workspace_root"]; !ok || got != "/workspace" {
+		t.Fatalf("workspace root = %#v (ok=%v), want /workspace", got, ok)
+	}
+	if got, ok := rctx.State["execution_step_context_ingest_include_globs"]; !ok || !equalStringSlices(got.([]string), []string{"**/*.go"}) {
+		t.Fatalf("include globs = %#v (ok=%v), want [**/*.go]", got, ok)
+	}
+	if got, ok := rctx.State["execution_step_context_ingest_exclude_globs"]; !ok || !equalStringSlices(got.([]string), []string{"**/vendor/**"}) {
+		t.Fatalf("exclude globs = %#v (ok=%v), want [**/vendor/**]", got, ok)
+	}
+	if got, ok := rctx.State["execution_step_context_inherit"]; !ok || !equalStringSlices(got.([]string), []string{"state.findings"}) {
+		t.Fatalf("inherit = %#v (ok=%v), want [state.findings]", got, ok)
+	}
+	if got, ok := rctx.State["execution_step_context_capture"]; !ok || !equalStringSlices(got.([]string), []string{"output.result"}) {
+		t.Fatalf("capture = %#v (ok=%v), want [output.result]", got, ok)
 	}
 }
 

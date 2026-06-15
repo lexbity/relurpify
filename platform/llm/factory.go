@@ -45,7 +45,11 @@ func New(cfg ProviderConfig, secrets ProviderSecrets) (ManagedBackend, error) {
 	if !ok {
 		return nil, fmt.Errorf("unknown provider %q", cfg.Provider)
 	}
-	return factory(cfg, secrets)
+	backend, err := factory(cfg, secrets)
+	if err != nil {
+		return nil, err
+	}
+	return newCallingModeManagedBackend(backend), nil
 }
 
 // RegisteredProviders returns the list of provider names that have been

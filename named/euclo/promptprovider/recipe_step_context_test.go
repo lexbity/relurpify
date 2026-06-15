@@ -168,6 +168,49 @@ func TestThoughtRecipeStepContextProviderReadsClarificationStateFromEnvelope(t *
 	}
 }
 
+func TestThoughtRecipeStepContextProviderRendersStepContext(t *testing.T) {
+	env := contextdata.NewEnvelope("task-step-context", "session-step-context")
+	provider := &thoughtrecipeStepContextProvider{}
+	out := provider.Provide(prompt.NewRuntimeContext(env, "react", "thoughtrecipe").
+		WithStateValue("execution_step_context_stream_query", "find relevant symbols").
+		WithStateValue("execution_step_context_stream_max_tokens", 128).
+		WithStateValue("execution_step_context_stream_mode", "latest").
+		WithStateValue("execution_step_context_ingest_mode", "files_only").
+		WithStateValue("execution_step_context_ingest_include_globs", []string{"**/*.go"}).
+		WithStateValue("execution_step_context_ingest_exclude_globs", []string{"**/vendor/**"}).
+		WithStateValue("execution_step_context_ingest_workspace_root", "/workspace").
+		WithStateValue("execution_step_context_inherit", []string{"state.findings"}).
+		WithStateValue("execution_step_context_capture", []string{"output.result"}))
+
+	if !strings.Contains(out.Content, "Step Context Stream Query: find relevant symbols") {
+		t.Fatalf("expected stream query in provider output, got %q", out.Content)
+	}
+	if !strings.Contains(out.Content, "Step Context Stream Max Tokens: 128") {
+		t.Fatalf("expected stream max tokens in provider output, got %q", out.Content)
+	}
+	if !strings.Contains(out.Content, "Step Context Stream Mode: latest") {
+		t.Fatalf("expected stream mode in provider output, got %q", out.Content)
+	}
+	if !strings.Contains(out.Content, "Step Context Ingest Mode: files_only") {
+		t.Fatalf("expected ingest mode in provider output, got %q", out.Content)
+	}
+	if !strings.Contains(out.Content, "Step Context Ingest Workspace Root: /workspace") {
+		t.Fatalf("expected ingest workspace root in provider output, got %q", out.Content)
+	}
+	if !strings.Contains(out.Content, "Step Context Ingest Include Globs: **/*.go") {
+		t.Fatalf("expected ingest include globs in provider output, got %q", out.Content)
+	}
+	if !strings.Contains(out.Content, "Step Context Ingest Exclude Globs: **/vendor/**") {
+		t.Fatalf("expected ingest exclude globs in provider output, got %q", out.Content)
+	}
+	if !strings.Contains(out.Content, "Step Context Inherit: state.findings") {
+		t.Fatalf("expected inherit in provider output, got %q", out.Content)
+	}
+	if !strings.Contains(out.Content, "Step Context Capture: output.result") {
+		t.Fatalf("expected capture in provider output, got %q", out.Content)
+	}
+}
+
 func TestThoughtRecipeStepContextProviderGolden(t *testing.T) {
 	env := contextdata.NewEnvelope("task-golden", "session-golden")
 	state := intentcontext.NewState("task-golden", "session-golden")

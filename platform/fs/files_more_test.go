@@ -584,7 +584,7 @@ func TestDeleteFileTool_NonExistent(t *testing.T) {
 
 func TestFileOperations(t *testing.T) {
 	tools := FileOperations(tmp)
-	require.Len(t, tools, 6)
+	require.Len(t, tools, 7)
 
 	names := make([]string, len(tools))
 	for i, tool := range tools {
@@ -593,6 +593,7 @@ func TestFileOperations(t *testing.T) {
 
 	assert.Contains(t, names, "file_read")
 	assert.Contains(t, names, "file_write")
+	assert.Contains(t, names, "file_edit")
 	assert.Contains(t, names, "file_list")
 	assert.Contains(t, names, "file_search")
 	assert.Contains(t, names, "file_create")
@@ -1749,13 +1750,14 @@ func TestWriteFileTool_DeepNesting(t *testing.T) {
 
 func TestFileOperations_ReturnsCorrectTools(t *testing.T) {
 	tools := FileOperations(tmp)
-	require.Len(t, tools, 6)
+	require.Len(t, tools, 7)
 
 	// Verify each tool is the correct type
 	assert.IsType(t, &ReadFileTool{}, tools[0])
 	assert.IsType(t, &WriteFileTool{}, tools[1])
-	assert.IsType(t, &ListFilesTool{}, tools[2])
-	assert.IsType(t, &SearchInFilesTool{}, tools[3])
-	assert.IsType(t, &CreateFileTool{}, tools[4])
-	assert.IsType(t, &DeleteFileTool{}, tools[5])
+	assert.IsType(t, &EditFileTool{}, tools[2])
+	assert.IsType(t, &ListFilesTool{}, tools[3])
+	assert.IsType(t, &SearchInFilesTool{}, tools[4])
+	assert.IsType(t, &CreateFileTool{}, tools[5])
+	assert.IsType(t, &DeleteFileTool{}, tools[6])
 }

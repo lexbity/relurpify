@@ -31,6 +31,7 @@ import (
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	"codeburg.org/lexbit/relurpify/named/euclo/reporting"
 	"codeburg.org/lexbit/relurpify/named/euclo/state"
+	"codeburg.org/lexbit/relurpify/named/euclo/surface"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
@@ -305,6 +306,20 @@ func (n *ThoughtRecipeStepNode) executeCapability(ctx context.Context, env *cont
 		"capability_id": n.step.CapabilityID,
 	}
 	success := err == nil
+	errorPolicy := n.step.Step.OnError
+	policyAction := ""
+	policyFallback := ""
+	if errorPolicy != nil {
+		policyAction = strings.ToLower(strings.TrimSpace(errorPolicy.Action))
+		policyFallback = strings.TrimSpace(errorPolicy.Fallback)
+		if policyAction == "" {
+			policyAction = "fail"
+		}
+		data["on_error_action"] = policyAction
+		if policyFallback != "" {
+			data["on_error_fallback"] = policyFallback
+		}
+	}
 	if toolResult != nil {
 		data["output"] = toolResult.Data
 		if toolResult.Metadata != nil {
@@ -320,6 +335,21 @@ func (n *ThoughtRecipeStepNode) executeCapability(ctx context.Context, env *cont
 	if err != nil {
 		data["error"] = err.Error()
 	}
+	if err != nil {
+		switch policyAction {
+		case "skip":
+			success = true
+			data["skipped"] = true
+			if msg, ok := data["error"].(string); ok && strings.TrimSpace(msg) != "" {
+				data["skipped_reason"] = msg
+			}
+			delete(data, "error")
+		case "fallback", "fail", "":
+			success = false
+		default:
+			success = false
+		}
+	}
 
 	if n.deps.IngestOutputs && n.deps.OutputIngester != nil {
 		if payload, marshalErr := json.Marshal(data); marshalErr == nil {
@@ -334,6 +364,19 @@ func (n *ThoughtRecipeStepNode) executeCapability(ctx context.Context, env *cont
 	}
 	if msg, ok := data["error"].(string); ok && strings.TrimSpace(msg) != "" {
 		result.Error = msg
+	}
+	if errorPolicy != nil {
+		result.Metadata = map[string]any{
+			"on_error_action": policyAction,
+		}
+		if policyFallback != "" {
+			result.Metadata["on_error_fallback"] = policyFallback
+		}
+		if skipped, _ := data["skipped"].(bool); skipped {
+			result.Metadata["on_error_resolved"] = "skipped"
+		} else if !success {
+			result.Metadata["on_error_resolved"] = policyAction
+		}
 	}
 
 	if err := n.writeCaptures(env, result); err != nil {
@@ -633,6 +676,11 @@ func (n *ThoughtRecipeStepNode) stepRuntimeState(data map[string]any) map[string
 			return n.renderTemplate(n.step.Prompt, data)
 		}(),
 	}
+	if ctxState := stepContextRuntimeState(n.step.Step.Context); len(ctxState) > 0 {
+		for k, v := range ctxState {
+			state[k] = v
+		}
+	}
 	if len(n.step.Sources) > 0 {
 		state["execution_sources"] = append([]string(nil), n.step.Sources...)
 	}
@@ -660,6 +708,42 @@ func (n *ThoughtRecipeStepNode) stepRuntimeState(data map[string]any) map[string
 		state["execution_clarification_requery_on_success"] = cfg.RequeryOnSuccess
 	}
 	return state
+}
+
+func stepContextRuntimeState(ctx surface.ThoughtRecipeStepContext) map[string]any {
+	out := make(map[string]any)
+	if stream := ctx.Stream; stream != nil {
+		if query := strings.TrimSpace(stream.QueryTemplate); query != "" {
+			out["execution_step_context_stream_query"] = query
+		}
+		if maxTokens := stream.MaxTokens; maxTokens > 0 {
+			out["execution_step_context_stream_max_tokens"] = maxTokens
+		}
+		if mode := strings.TrimSpace(stream.Mode); mode != "" {
+			out["execution_step_context_stream_mode"] = mode
+		}
+	}
+	if ingest := ctx.Ingest; ingest != nil {
+		if mode := strings.TrimSpace(ingest.Mode); mode != "" {
+			out["execution_step_context_ingest_mode"] = mode
+		}
+		if len(ingest.IncludeGlobs) > 0 {
+			out["execution_step_context_ingest_include_globs"] = append([]string(nil), ingest.IncludeGlobs...)
+		}
+		if len(ingest.ExcludeGlobs) > 0 {
+			out["execution_step_context_ingest_exclude_globs"] = append([]string(nil), ingest.ExcludeGlobs...)
+		}
+		if root := strings.TrimSpace(ingest.WorkspaceRoot); root != "" {
+			out["execution_step_context_ingest_workspace_root"] = root
+		}
+	}
+	if len(ctx.Inherit) > 0 {
+		out["execution_step_context_inherit"] = append([]string(nil), ctx.Inherit...)
+	}
+	if len(ctx.Capture) > 0 {
+		out["execution_step_context_capture"] = append([]string(nil), ctx.Capture...)
+	}
+	return out
 }
 
 func (n *ThoughtRecipeStepNode) writeStepMetadata(env *contextdata.Envelope) {

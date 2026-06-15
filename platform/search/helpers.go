@@ -5,6 +5,8 @@ import (
 	"bytes"
 	"path/filepath"
 	"strings"
+
+	securefs "codeburg.org/lexbit/relurpify/platform/fs"
 )
 
 func shouldSkipGeneratedDir(name string) bool {
@@ -28,6 +30,10 @@ func preparePath(base, path string) string {
 		return path
 	}
 	return filepath.Join(base, path)
+}
+
+func resolveWithinBase(base, candidate string) (string, error) {
+	return securefs.ResolveWithinBase(base, candidate)
 }
 
 const scanChunkSize = 64 * 1024

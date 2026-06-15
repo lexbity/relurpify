@@ -2,7 +2,19 @@
 
 End-user Bubble Tea shell for Relurpify.
 
-Current top-level panes:
+## Quick start (zero external deps)
+
+```bash
+relurpish doctor --offline --fix   # materialize workspace config, check readiness
+relurpish chat --offline           # boot euclo with no external process
+```
+
+The `--offline` flag selects the built-in offline inference backend, which
+requires no network, no Ollama, and no API key. Turn submissions use a
+deterministic scripted model — enough to verify plumbing (tool dispatch,
+streaming, context compilation) without a real LLM.
+
+## Panes
 
 - `chat`
 - `planner`
@@ -10,7 +22,7 @@ Current top-level panes:
 - `config`
 - `session`
 
-It provides:
+## Features
 
 - interactive agent chat
 - euclo planner/debug integration

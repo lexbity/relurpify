@@ -15,6 +15,12 @@ import (
 
 type thoughtrecipeStepContextProvider struct{}
 
+// NewThoughtRecipeStepContextProvider constructs the Euclo thoughtrecipe step
+// context provider.
+func NewThoughtRecipeStepContextProvider() prompt.ContextProvider {
+	return &thoughtrecipeStepContextProvider{}
+}
+
 func (p *thoughtrecipeStepContextProvider) Provide(ctx prompt.RuntimeContext) prompt.ContextChunk {
 	state := clarificationStateFromRuntime(ctx)
 	if state == nil {
@@ -46,6 +52,33 @@ func (p *thoughtrecipeStepContextProvider) Provide(ctx prompt.RuntimeContext) pr
 	}
 	if promptID := strings.TrimSpace(ctx.Variables["prompt_id"]); promptID != "" {
 		sv.ClarificationRuntimeLines = append(sv.ClarificationRuntimeLines, fmt.Sprintf("Prompt ID: %s", promptID))
+	}
+	if query := runtimeString(ctx, "execution_step_context_stream_query"); query != "" {
+		sv.ClarificationRuntimeLines = append(sv.ClarificationRuntimeLines, fmt.Sprintf("Step Context Stream Query: %s", query))
+	}
+	if maxTokens, ok := runtimeInt(ctx, "execution_step_context_stream_max_tokens"); ok {
+		sv.ClarificationRuntimeLines = append(sv.ClarificationRuntimeLines, fmt.Sprintf("Step Context Stream Max Tokens: %d", maxTokens))
+	}
+	if mode := runtimeString(ctx, "execution_step_context_stream_mode"); mode != "" {
+		sv.ClarificationRuntimeLines = append(sv.ClarificationRuntimeLines, fmt.Sprintf("Step Context Stream Mode: %s", mode))
+	}
+	if mode := runtimeString(ctx, "execution_step_context_ingest_mode"); mode != "" {
+		sv.ClarificationRuntimeLines = append(sv.ClarificationRuntimeLines, fmt.Sprintf("Step Context Ingest Mode: %s", mode))
+	}
+	if root := runtimeString(ctx, "execution_step_context_ingest_workspace_root"); root != "" {
+		sv.ClarificationRuntimeLines = append(sv.ClarificationRuntimeLines, fmt.Sprintf("Step Context Ingest Workspace Root: %s", root))
+	}
+	if values := runtimeStrings(ctx, "execution_step_context_ingest_include_globs"); len(values) > 0 {
+		sv.ClarificationRuntimeLines = append(sv.ClarificationRuntimeLines, "Step Context Ingest Include Globs: "+strings.Join(values, ", "))
+	}
+	if values := runtimeStrings(ctx, "execution_step_context_ingest_exclude_globs"); len(values) > 0 {
+		sv.ClarificationRuntimeLines = append(sv.ClarificationRuntimeLines, "Step Context Ingest Exclude Globs: "+strings.Join(values, ", "))
+	}
+	if values := runtimeStrings(ctx, "execution_step_context_inherit"); len(values) > 0 {
+		sv.ClarificationRuntimeLines = append(sv.ClarificationRuntimeLines, "Step Context Inherit: "+strings.Join(values, ", "))
+	}
+	if values := runtimeStrings(ctx, "execution_step_context_capture"); len(values) > 0 {
+		sv.ClarificationRuntimeLines = append(sv.ClarificationRuntimeLines, "Step Context Capture: "+strings.Join(values, ", "))
 	}
 	if evidence := intentEvidenceFromRuntime(ctx); evidence != nil {
 		if action := strings.TrimSpace(evidence.ActionType); action != "" {
@@ -137,7 +170,17 @@ func (p *thoughtrecipeStepContextProvider) Describe() prompt.ProviderMetadata {
 		Name:        "euclo.thoughtrecipe_step_context",
 		Description: "Provides clarification runtime context for thoughtrecipe step prompts",
 		Paradigms:   []string{"euclo"},
-		ReadsKeys:   surface.PromptReadsKeys(),
+		ReadsKeys: append(surface.PromptReadsKeys(),
+			"execution_step_context_stream_query",
+			"execution_step_context_stream_max_tokens",
+			"execution_step_context_stream_mode",
+			"execution_step_context_ingest_mode",
+			"execution_step_context_ingest_include_globs",
+			"execution_step_context_ingest_exclude_globs",
+			"execution_step_context_ingest_workspace_root",
+			"execution_step_context_inherit",
+			"execution_step_context_capture",
+		),
 	}
 }
 
@@ -201,6 +244,84 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+func runtimeString(ctx prompt.RuntimeContext, key string) string {
+	if ctx.State != nil {
+		if value, ok := ctx.State[key]; ok && value != nil {
+			switch v := value.(type) {
+			case string:
+				return strings.TrimSpace(v)
+			case fmt.Stringer:
+				return strings.TrimSpace(v.String())
+			default:
+				return strings.TrimSpace(fmt.Sprint(v))
+			}
+		}
+	}
+	return ""
+}
+
+func runtimeInt(ctx prompt.RuntimeContext, key string) (int, bool) {
+	if ctx.State == nil {
+		return 0, false
+	}
+	value, ok := ctx.State[key]
+	if !ok || value == nil {
+		return 0, false
+	}
+	switch v := value.(type) {
+	case int:
+		return v, true
+	case int8:
+		return int(v), true
+	case int16:
+		return int(v), true
+	case int32:
+		return int(v), true
+	case int64:
+		return int(v), true
+	case float32:
+		return int(v), true
+	case float64:
+		return int(v), true
+	default:
+		return 0, false
+	}
+}
+
+func runtimeStrings(ctx prompt.RuntimeContext, key string) []string {
+	if ctx.State == nil {
+		return nil
+	}
+	value, ok := ctx.State[key]
+	if !ok || value == nil {
+		return nil
+	}
+	switch v := value.(type) {
+	case []string:
+		out := make([]string, 0, len(v))
+		for _, item := range v {
+			if trimmed := strings.TrimSpace(item); trimmed != "" {
+				out = append(out, trimmed)
+			}
+		}
+		return out
+	case []any:
+		out := make([]string, 0, len(v))
+		for _, item := range v {
+			if trimmed := strings.TrimSpace(fmt.Sprint(item)); trimmed != "" {
+				out = append(out, trimmed)
+			}
+		}
+		return out
+	default:
+		trimmed := strings.TrimSpace(fmt.Sprint(value))
+		if trimmed == "" {
+			return nil
+		}
+		return []string{trimmed}
+	}
 }
 
 func anchorSummaries(anchors []retrieval.AnchorRef) []string {

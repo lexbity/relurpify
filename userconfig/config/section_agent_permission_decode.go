@@ -3,7 +3,7 @@ package config
 import (
 	"fmt"
 
-	configpermissions "codeburg.org/lexbit/relurpify/platform/configpermissions"
+	configpermissions "codeburg.org/lexbit/relurpify/governance/permissions"
 	"gopkg.in/yaml.v3"
 )
 

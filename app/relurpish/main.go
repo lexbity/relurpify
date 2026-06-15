@@ -244,6 +244,7 @@ func renderDoctorReport(w io.Writer, report runtimesvc.DoctorReport) {
 	_, _ = fmt.Fprintf(w, "  provider: %s\n", cmp.Or(report.Inference.Provider, "unknown"))
 	_, _ = fmt.Fprintf(w, "  endpoint: %s\n", cmp.Or(report.Inference.Endpoint, "-"))
 	_, _ = fmt.Fprintf(w, "  state: %s\n", cmp.Or(string(report.Inference.State), "unknown"))
+	_, _ = fmt.Fprintf(w, "  tool_calling_mode: %s\n", cmp.Or(report.Inference.ToolCallingMode, "unknown"))
 	if len(report.Inference.Models) > 0 {
 		_, _ = fmt.Fprintf(w, "  models: %s\n", strings.Join(report.Inference.Models, ", "))
 	} else {

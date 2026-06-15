@@ -21,6 +21,7 @@ import (
 var expectedNativeKeys = []string{
 	"file_create",
 	"file_delete",
+	"file_edit",
 	"file_list",
 	"file_read",
 	"file_search",

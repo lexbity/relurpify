@@ -15,8 +15,8 @@ import (
 func TestCapabilityRegistry_DefaultAliases(t *testing.T) {
 	reg := registry.NewRegistry()
 	desc := descriptor.CapabilityDescriptor{
-		ID:            "cap:file_write",
-		Name:          "file_write",
+		ID:            "cap:file_edit",
+		Name:          "file_edit",
 		Kind:          agentspec.CapabilityKindTool,
 		RuntimeFamily: agentspec.CapabilityRuntimeFamilyLocalTool,
 	}
@@ -24,10 +24,10 @@ func TestCapabilityRegistry_DefaultAliases(t *testing.T) {
 		t.Fatalf("register capability: %v", err)
 	}
 
-	// Verify default tool aliasing file_edit -> file_write
+	// Verify file_edit resolves as its own canonical capability.
 	resolved, ok := reg.GetCapability("file_edit")
 	if !ok {
-		t.Fatalf("expected to resolve file_edit alias")
+		t.Fatalf("expected to resolve file_edit capability")
 	}
 	if resolved.ID != desc.ID {
 		t.Fatalf("expected resolved capability ID to be %q, got %q", desc.ID, resolved.ID)

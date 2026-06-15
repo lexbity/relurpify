@@ -492,15 +492,6 @@ func equalStringSlices(got, want []string) bool {
 	return true
 }
 
-func containsAllStrings(haystack string, want ...string) bool {
-	for _, needle := range want {
-		if !strings.Contains(haystack, needle) {
-			return false
-		}
-	}
-	return true
-}
-
 func TestThoughtRecipeExecutorNodeUsesScopedToolsFromSource(t *testing.T) {
 	toolReg := regpkg.NewRegistry()
 	for _, name := range []string{"scope_read", "scope_write"} {
@@ -572,7 +563,13 @@ run reviewer:
 	}
 }
 
-func TestThoughtRecipeExecutorNodeSupportsFallbackPromptModeWithScopedTools(t *testing.T) {
+// In fallback (non-native) mode the executor MUST behave identically to native mode at
+// this layer: it always calls ChatWithTools with the *scoped* tool set and never renders a
+// prompt itself. Fallback rendering (tools-into-prompt) is owned by platform/llm's
+// FallbackToolModel decorator — which named/euclo is architecturally forbidden to import —
+// and is proven in platform/llm and testsuite/conformance, not here. This test guards that
+// the executor does not branch on calling mode and does not leak an ungranted capability.
+func TestThoughtRecipeExecutorNodeDelegatesFallbackRenderingAndScopesTools(t *testing.T) {
 	toolReg := regpkg.NewRegistry()
 	for _, name := range []string{"scope_read", "scope_write"} {
 		if err := toolReg.RegisterLegacyTool(context.Background(), recordingThoughtRecipeTool{name: name}); err != nil {
@@ -593,11 +590,17 @@ run reviewer:
 
 	model, _, _ := executeThoughtRecipeFromSource(t, source, toolReg, toolReg, nil, false)
 
-	if got, want := len(model.generatePrompts), 1; got != want {
-		t.Fatalf("generate prompt count = %d, want %d", got, want)
+	// The executor delegates calling-mode handling to the model layer: it calls
+	// ChatWithTools, not Generate, regardless of NativeToolCalling.
+	if got := len(model.generatePrompts); got != 0 {
+		t.Fatalf("executor rendered %d prompt(s) itself; rendering must be delegated to the decorator", got)
 	}
-	if prompt := model.generatePrompts[0]; !containsAllStrings(prompt, "scope_read") || strings.Contains(prompt, "scope_write") {
-		t.Fatalf("fallback prompt = %q", prompt)
+	if got, want := len(model.chatToolSpecs), 1; got != want {
+		t.Fatalf("ChatWithTools call count = %d, want %d", got, want)
+	}
+	// Only the granted capability is in scope; scope_write was never granted.
+	if got, want := toolSpecNames(model.chatToolSpecs[0]), []string{"scope_read"}; !equalStringSlices(got, want) {
+		t.Fatalf("scoped tool names = %#v, want %#v", got, want)
 	}
 }
 

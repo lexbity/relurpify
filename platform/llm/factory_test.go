@@ -29,6 +29,20 @@ func TestRegisteredProvidersIncludesBuiltinsAndOffline(t *testing.T) {
 	require.ElementsMatch(t, []string{"ollama", "lmstudio", "offline", "tape"}, registered)
 }
 
+func TestRegisteredProvidersExactSet(t *testing.T) {
+	registered := RegisteredProviders()
+	require.Len(t, registered, 4, "expected exactly 4 registered providers")
+	require.ElementsMatch(t, []string{"ollama", "lmstudio", "offline", "tape"}, registered)
+}
+
+func TestRegisteredProvidersDoesNotContainEmptyOrUnknown(t *testing.T) {
+	registered := RegisteredProviders()
+	for _, name := range registered {
+		require.NotEmpty(t, name, "provider name should not be empty")
+		require.NotEqual(t, "unknown", name)
+	}
+}
+
 func TestRegisterProviderPanicsOnDuplicateInTests(t *testing.T) {
 	require.Panics(t, func() {
 		RegisterProvider(factoryTestProviderOffline, func(ProviderConfig, ProviderSecrets) (ManagedBackend, error) {

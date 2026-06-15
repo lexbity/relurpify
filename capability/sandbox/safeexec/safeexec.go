@@ -1,6 +1,10 @@
 // Package safeexec wraps os/exec.Command to avoid gosec G204 false positives
 // when the command name and arguments are constructed from trusted values
 // that have been sanitised via filepath.Base / filepath.Clean.
+//
+// It lives under capability/sandbox because the sandbox runtime is its only
+// consumer; keeping it here avoids a capability→platform import that would
+// otherwise close a capability↔platform domain cycle.
 package safeexec
 
 import (

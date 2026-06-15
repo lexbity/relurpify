@@ -155,6 +155,23 @@ func TestProbeWorkspace_DiskSpaceIsNonRequired(t *testing.T) {
 	}
 }
 
+func TestProbeWorkspace_OfflineProviderReady(t *testing.T) {
+	cfg := ayenitd.WorkspaceConfig{
+		Workspace:         t.TempDir(),
+		InferenceProvider: "offline",
+		InferenceEndpoint: "",
+		InferenceModel:    "offline-synthetic",
+	}
+	results := ayenitd.ProbeWorkspace(context.Background(), cfg, llm.ProviderSecrets{}, nil)
+	r := findResult(t, results, "inference_backend")
+	if !r.OK {
+		t.Fatalf("offline inference_backend should be OK (no network needed), got: %s", r.Message)
+	}
+	if !r.Required {
+		t.Error("inference_backend: should be required")
+	}
+}
+
 func TestProbeWorkspace_AllResultNamesPresent(t *testing.T) {
 	results := ayenitd.ProbeWorkspace(context.Background(), probeCfg(t.TempDir()), llm.ProviderSecrets{}, fakeBackend{
 		models: []llm.ModelInfo{{Name: "qwen2.5-coder:14b"}},

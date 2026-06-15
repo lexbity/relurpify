@@ -6,6 +6,7 @@ import (
 	"cmp"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -18,6 +19,10 @@ import (
 	"codeburg.org/lexbit/relurpify/model"
 	"codeburg.org/lexbit/relurpify/platform/observability"
 )
+
+// ErrNativeToolCallingRequired is returned when ChatWithTools is invoked on a
+// client that cannot speak native structured tool calling.
+var ErrNativeToolCallingRequired = errors.New("native tool calling is required for ChatWithTools")
 
 // Client implements LanguageModel for Ollama.
 type Client struct {
@@ -154,7 +159,7 @@ func (c *Client) Chat(ctx context.Context, messages []Message, options *LLMOptio
 // ChatWithTools handles tool calling metadata.
 func (c *Client) ChatWithTools(ctx context.Context, messages []Message, tools []LLMToolSpec, options *LLMOptions) (*LLMResponse, error) {
 	if !c.nativeToolCallingEnabled() {
-		return c.Chat(ctx, messages, options)
+		return nil, ErrNativeToolCallingRequired
 	}
 	payload := map[string]any{
 		"model":    c.model(options),

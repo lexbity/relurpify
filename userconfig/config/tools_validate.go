@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	configmanifest "codeburg.org/lexbit/relurpify/platform/configmanifest"
+	configmanifest "codeburg.org/lexbit/relurpify/capability/ports"
 )
 
 func validateToolManifest(path string, manifest *configmanifest.ToolManifest) error {

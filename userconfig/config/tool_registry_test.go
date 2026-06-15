@@ -8,7 +8,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	ports "codeburg.org/lexbit/relurpify/platform/configmanifest"
+	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/platform/fs"
 	"codeburg.org/lexbit/relurpify/platform/tools/subprocess"
 	"codeburg.org/lexbit/relurpify/userconfig/config/security"

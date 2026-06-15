@@ -100,6 +100,41 @@ func TestInstrumentedModel_ProxiesProfileAwareBehavior(t *testing.T) {
 	require.True(t, ok)
 }
 
+func TestInstrumentedModel_EmitsToolCallingModeMetadata(t *testing.T) {
+	tests := []struct {
+		name   string
+		native bool
+		want   string
+	}{
+		{name: "native", native: true, want: "native"},
+		{name: "fallback", native: false, want: "fallback"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			sink := &llmEventSink{}
+			inner := &profileAwareStubModel{}
+			profile := &ModelProfile{}
+			profile.ToolCalling.NativeAPI = tc.native
+			inner.SetProfile(profile)
+			instrumented := NewInstrumentedModel(inner, sink, false)
+
+			resp, err := instrumented.Chat(context.Background(), []model.Message{{Role: "user", Content: "ping"}}, nil)
+			require.NoError(t, err)
+			require.Equal(t, "ok", resp.Text)
+
+			require.Eventually(t, func() bool {
+				return len(sink.Snapshot()) >= 2
+			}, time.Second, 10*time.Millisecond)
+
+			events := sink.Snapshot()
+			require.Len(t, events, 2)
+			for _, event := range events {
+				require.Equal(t, tc.want, event.Metadata["tool_calling_mode"])
+			}
+		})
+	}
+}
+
 func TestInstrumentedModel_IngestsLLMResponse(t *testing.T) {
 	engine, err := graphdb.Open(context.Background(), graphdb.DefaultOptions(t.TempDir()))
 	require.NoError(t, err)

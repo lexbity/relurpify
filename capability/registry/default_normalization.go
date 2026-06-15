@@ -47,7 +47,7 @@ var DefaultToolNameNormalization = map[string]string{
 	"load_file":                  FileRead_default_normalization,
 	"write_file":                 FileWrite_default_normalization,
 	"edit_file":                  FileWrite_default_normalization,
-	"file_edit":                  FileWrite_default_normalization,
+	"file_edit":                  "file_edit",
 	"save_file":                  FileWrite_default_normalization,
 	"update_file":                FileWrite_default_normalization,
 	"str_replace_editor":         FileWrite_default_normalization, // Anthropic-style file edit block

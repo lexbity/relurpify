@@ -169,6 +169,9 @@ func (m *InstrumentedModel) emitPrompt(ctx context.Context, kind string, base ma
 	metadata := map[string]any{
 		"kind": kind,
 	}
+	if m.Inner != nil {
+		metadata["tool_calling_mode"] = ToolCallingModeLabel(m.Inner)
+	}
 	for k, v := range base {
 		metadata[k] = v
 	}
@@ -228,6 +231,9 @@ func (m *InstrumentedModel) emitResponse(ctx context.Context, kind string, resp 
 	taskID, taskMeta := taskInfo(ctx)
 	metadata := map[string]any{
 		"kind": kind,
+	}
+	if m.Inner != nil {
+		metadata["tool_calling_mode"] = ToolCallingModeLabel(m.Inner)
 	}
 	for k, v := range taskMeta {
 		metadata[k] = v

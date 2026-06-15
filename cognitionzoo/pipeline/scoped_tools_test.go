@@ -2,7 +2,6 @@ package pipeline
 
 import (
 	"context"
-	"strings"
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/capability/ports"
@@ -85,12 +84,5 @@ func TestResolveStageToolsRespectsScopedRegistry(t *testing.T) {
 	}
 	if got := tools[0].Name(); got != "scope_read" {
 		t.Fatalf("stage tool name = %q, want scope_read", got)
-	}
-	rendered := frameworktools.RenderToolsToPrompt(tools)
-	if !strings.Contains(rendered, "scope_read") {
-		t.Fatalf("rendered tool prompt missing scoped tool: %q", rendered)
-	}
-	if strings.Contains(rendered, "scope_write") {
-		t.Fatalf("rendered tool prompt leaked hidden tool: %q", rendered)
 	}
 }

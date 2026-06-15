@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	configmanifest "codeburg.org/lexbit/relurpify/platform/configmanifest"
+	configmanifest "codeburg.org/lexbit/relurpify/capability/ports"
 )
 
 // DefaultToolManifestDir returns the canonical tool manifest directory.

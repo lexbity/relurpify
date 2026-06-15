@@ -12,6 +12,9 @@ const (
 	ScenarioGreeting    ScenarioKind = "greeting"
 	ScenarioEcho        ScenarioKind = "echo"
 	ScenarioFileRead    ScenarioKind = "tool:file_read"
+	ScenarioFileList    ScenarioKind = "tool:file_list"
+	ScenarioSearchGrep  ScenarioKind = "tool:search_grep"
+	ScenarioFileEdit    ScenarioKind = "tool:file_edit"
 	ScenarioExecRunCode ScenarioKind = "tool:exec_run_code"
 	ScenarioCliGit      ScenarioKind = "tool:cli_git"
 	ScenarioHITL        ScenarioKind = "hitl"
@@ -52,6 +55,18 @@ func parseScenarioString(raw string) (Scenario, error) {
 		return Scenario{}, fmt.Errorf("offline_scenario %q missing path", raw)
 	case strings.HasPrefix(raw, "tool:file_read:"):
 		return Scenario{Kind: ScenarioFileRead, ToolArg: strings.TrimPrefix(raw, "tool:file_read:")}, nil
+	case raw == "tool:file_list":
+		return Scenario{}, fmt.Errorf("offline_scenario %q missing path", raw)
+	case strings.HasPrefix(raw, "tool:file_list:"):
+		return Scenario{Kind: ScenarioFileList, ToolArg: strings.TrimPrefix(raw, "tool:file_list:")}, nil
+	case raw == "tool:search_grep":
+		return Scenario{}, fmt.Errorf("offline_scenario %q missing pattern", raw)
+	case strings.HasPrefix(raw, "tool:search_grep:"):
+		return Scenario{Kind: ScenarioSearchGrep, ToolArg: strings.TrimPrefix(raw, "tool:search_grep:")}, nil
+	case raw == "tool:file_edit":
+		return Scenario{}, fmt.Errorf("offline_scenario %q missing path", raw)
+	case strings.HasPrefix(raw, "tool:file_edit:"):
+		return Scenario{Kind: ScenarioFileEdit, ToolArg: strings.TrimPrefix(raw, "tool:file_edit:")}, nil
 	case strings.HasPrefix(raw, "tool:exec_run_code:"):
 		return Scenario{Kind: ScenarioExecRunCode, ToolArg: strings.TrimPrefix(raw, "tool:exec_run_code:")}, nil
 	case strings.HasPrefix(raw, "tool:cli_git:"):

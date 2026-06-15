@@ -1,4 +1,4 @@
-.PHONY: test-unit test-integ test-scenario test-all
+.PHONY: test-unit test-integ test-scenario test-conformance test-all
 .PHONY: test-contract-migration test-dev-agent test-tape-fidelity check-contract-dissolution grep-architecture-gates
 .PHONY: lint-config lint-config-boundary test-boundary generate-templates check-template-drift check-boot-root check-config-tree-drift
 .PHONY: lint-layering lint-invariants lint-all lint-arch lint-go lint-go-fix
@@ -79,11 +79,17 @@ lint-graduated:
 	fi
 
 lint-config:
-	$(GO_OFFLINE_ENV) go run ./app/relurplint --check all
+	@mkdir -p /tmp/relurpify-go-cache /tmp/relurpify-go-tmp
+	$(GO_OFFLINE_ENV) GOCACHE=/tmp/relurpify-go-cache GOTMPDIR=/tmp/relurpify-go-tmp go run ./app/relurplint --check all
 
 
 test-unit: lint-config
-	$(GO_OFFLINE_ENV) go test ./... -count=1 -timeout 60s
+	@mkdir -p /tmp/relurpify-go-cache /tmp/relurpify-go-tmp
+	$(GO_OFFLINE_ENV) GOCACHE=/tmp/relurpify-go-cache GOTMPDIR=/tmp/relurpify-go-tmp go test ./... -count=1 -timeout 60s
+
+test-conformance: lint-config
+	@mkdir -p /tmp/relurpify-go-cache /tmp/relurpify-go-tmp
+	$(GO_OFFLINE_ENV) GOCACHE=/tmp/relurpify-go-cache GOTMPDIR=/tmp/relurpify-go-tmp go test ./testsuite/conformance -count=1 -timeout 60s
 
 test-integ:
 	$(GO_OFFLINE_ENV) go test ./... -tags integration -count=1 -timeout 120s
@@ -118,6 +124,25 @@ test-tape-fidelity:
 
 grep-architecture-gates:
 	@$(MAKE) check-contract-dissolution
+	@if rg -n "ResolveCallingMode|RenderToolsToPrompt|ParseToolCallsFromText" cognitionzoo capability/registry --glob '*.go' >/dev/null; then echo "[FAIL] grep-architecture-gates: legacy tool-calling wire symbols remain in cognitionzoo or capability/registry"; exit 1; fi
+	@if rg -n "return c\\.Chat\\(ctx, messages, options\\)" platform/llm/ollama/client.go >/dev/null; then echo "[FAIL] grep-architecture-gates: ollama client still drops tools in non-native mode"; exit 1; fi
 	@if rg -n "os\\.(Getenv|LookupEnv|Environ)" app execution governance platform/llm testsuite --glob '*.go' >/dev/null; then echo "[FAIL] grep-architecture-gates: direct env access remains outside userconfig"; exit 1; fi
 	@if rg -n "shim|compatibility|stub|backward compatibility" app/dev-agent-cli userconfig execution/session app/relurpish testsuite/agenttest platform/llm --glob '*.go' --glob '!**/*_test.go' >/dev/null; then echo "[FAIL] grep-architecture-gates: compatibility language remains in touched production code"; exit 1; fi
 	@echo "[PASS] grep-architecture-gates: architecture fences are clean"
+
+# Slice 10 structural gates: enforce that dead code and forbidden patterns
+# never reappear in production code.
+check-gates-slice10:
+	@echo "[check] AC-12: no dead modelselect loaders..."
+	@if rg -n "modelselect\.LoadProfileRegistry|modelselect\.LoadProviderRegistry" -g '*.go' -g '!*_test.go' . 2>/dev/null | grep -q .; then echo "[FAIL] AC-12: dead LoadProfileRegistry/LoadProviderRegistry still referenced"; exit 1; fi
+	@echo "[PASS] AC-12: no dead modelselect loader references"
+	@echo "[check] provider_factory.go absent..."
+	@if test -f app/relurpish/runtime/provider_factory.go; then echo "[FAIL] provider_factory.go still present"; exit 1; fi
+	@echo "[PASS] provider_factory.go absent"
+	@echo "[check] AC-10: product code does not set offline_scenario..."
+	@! grep -rn '"offline_scenario"' --include='*.go' app/relurpish/ | grep -v '_test.go' >/dev/null 2>&1 || { echo "[FAIL] AC-10: product code in app/relurpish sets offline_scenario"; exit 1; }
+	@echo "[PASS] AC-10: no product code sets offline_scenario"
+	@echo "[check] AC-10: real backends do not import offline scenario..."
+	@! grep -q 'platform/llm/offline' platform/llm/providers_ollama.go platform/llm/providers_lmstudio.go 2>/dev/null || { echo "[FAIL] AC-10: ollama/lmstudio imports offline scenario"; exit 1; }
+	@echo "[PASS] AC-10: real backends do not import offline scenario"
+	@echo "[PASS] All Slice 10 gates passed"

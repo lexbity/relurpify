@@ -160,10 +160,16 @@ func TestReActUsesScopedRegistryForPromptAndNativeToolCalling(t *testing.T) {
 	if _, err := fallbackStep.Execute(context.Background(), contextdata.NewEnvelope("task-2", "session-2")); err != nil {
 		t.Fatalf("fallback execute failed: %v", err)
 	}
-	if got, want := len(fallbackModel.generatePrompts), 1; got != want {
+	if got, want := len(fallbackModel.generatePrompts), 0; got != want {
 		t.Fatalf("fallback prompt count = %d, want %d", got, want)
 	}
-	if prompt := fallbackModel.generatePrompts[0]; !strings.Contains(prompt, "scope_read") || strings.Contains(prompt, "scope_write") {
-		t.Fatalf("fallback prompt does not match scoped tool surface: %q", prompt)
+	if got, want := len(fallbackModel.chatToolSpecs), 1; got != want {
+		t.Fatalf("fallback tool call count = %d, want %d", got, want)
+	}
+	if got, want := len(fallbackModel.chatToolSpecs[0]), 1; got != want {
+		t.Fatalf("fallback tool spec count = %d, want %d", got, want)
+	}
+	if got := fallbackModel.chatToolSpecs[0][0].Name; got != "scope_read" {
+		t.Fatalf("fallback tool spec name = %q, want scope_read", got)
 	}
 }

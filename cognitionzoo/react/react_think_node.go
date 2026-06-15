@@ -8,7 +8,6 @@ import (
 
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
-	frameworktools "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/execution/agentgraph"
@@ -55,14 +54,7 @@ func (n *reactThinkNode) Execute(ctx context.Context, env *contextdata.Envelope)
 	var err error
 	tools := n.agent.availableToolsForPhase(ctx, env, n.task)
 	recordActiveToolNames(env, tools)
-	configNativeTC := n.agent.Config != nil && n.agent.Config.NativeToolCalling
-	profileNativeTC := false
-	if !configNativeTC {
-		if pm, ok := n.agent.Model.(model.ProfiledModel); ok {
-			profileNativeTC = pm.UsesNativeToolCalling()
-		}
-	}
-	useToolCalling := len(tools) > 0 && (configNativeTC || profileNativeTC)
+	useToolCalling := len(tools) > 0
 	streamCB := n.streamCallback()
 	if useToolCalling {
 		messages := n.ensureMessages(env, tools)
@@ -138,17 +130,6 @@ func (n *reactThinkNode) normalizeDecision(ctx context.Context, env *contextdata
 			}, toolCalls, nil
 		}
 	}
-	detectedCalls := filterToolCalls(frameworktools.ParseToolCallsFromText(resp.Text))
-	if len(detectedCalls) > 0 {
-		if maxTools > 0 && len(detectedCalls) > maxTools {
-			detectedCalls = detectedCalls[:maxTools]
-		}
-		return decisionPayload{
-			Thought:   trimToBudget(resp.Text, 220),
-			Complete:  false,
-			Timestamp: time.Now().UTC(),
-		}, detectedCalls, nil
-	}
 	parsed, err := parseDecision(resp.Text)
 	if err == nil && (parsed.Tool != "" || parsed.Complete) {
 		return parsed, nil, nil
@@ -164,16 +145,10 @@ func (n *reactThinkNode) normalizeDecision(ctx context.Context, env *contextdata
 		repaired, repairErr = n.repairDecision(ctx, tools, resp.Text, useToolCalling)
 	}
 	if repairErr != nil || repairStrategy != "llm" {
-		if textSuggestsPendingToolCall(resp.Text) {
-			return decisionPayload{Thought: trimToBudget(resp.Text, 220), Complete: false, Timestamp: time.Now().UTC()}, nil, nil
-		}
 		return decisionPayload{Thought: trimToBudget(resp.Text, 220), Complete: true, Timestamp: time.Now().UTC()}, nil, nil
 	}
 	parsed, err = parseDecision(repaired)
 	if err != nil {
-		if textSuggestsPendingToolCall(resp.Text) {
-			return decisionPayload{Thought: trimToBudget(resp.Text, 220), Complete: false, Timestamp: time.Now().UTC()}, nil, nil
-		}
 		return decisionPayload{Thought: trimToBudget(resp.Text, 220), Complete: true, Timestamp: time.Now().UTC()}, nil, nil
 	}
 	if parsed.Tool != "" {
@@ -196,28 +171,6 @@ func (n *reactThinkNode) repairDecision(ctx context.Context, tools []ports.Tool,
 	}
 	_ = useToolCalling
 	return resp.Text, nil
-}
-
-// textSuggestsPendingToolCall returns true when the raw LLM response text looks
-// like it was attempting to call a tool but the JSON could not be parsed.
-// Used as a last-resort fallback before declaring the iteration complete so that
-// embedded tool calls are not silently dropped when repair also fails.
-func textSuggestsPendingToolCall(text string) bool {
-	lower := strings.ToLower(text)
-	if !strings.Contains(lower, `"tool"`) {
-		return false
-	}
-	if strings.Contains(lower, `"complete":true`) || strings.Contains(lower, `"action":"complete"`) {
-		return false
-	}
-	// Confirm the "tool" key has a non-empty quoted value.
-	idx := strings.Index(lower, `"tool"`)
-	after := strings.TrimSpace(lower[idx+6:])
-	if !strings.HasPrefix(after, ":") {
-		return false
-	}
-	val := strings.TrimSpace(after[1:])
-	return strings.HasPrefix(val, `"`) && !strings.HasPrefix(val, `""`)
 }
 
 func filterToolCalls(calls []model.ToolCall) []model.ToolCall {
@@ -413,7 +366,18 @@ Return ONLY structured JSON. No prose outside the JSON object.`, strings.Join(li
 
 // minimalReactUserPrompt is the inline fallback prompt body.
 func minimalReactUserPrompt(task *execution.Task, tools []ports.Tool) string {
-	toolSection := frameworktools.RenderToolsToPrompt(tools)
+	var toolSection strings.Builder
+	for _, tool := range tools {
+		if toolSection.Len() > 0 {
+			toolSection.WriteString("\n")
+		}
+		toolSection.WriteString("- ")
+		toolSection.WriteString(tool.Name())
+		if desc := strings.TrimSpace(tool.Description()); desc != "" {
+			toolSection.WriteString(": ")
+			toolSection.WriteString(desc)
+		}
+	}
 	instruction := ""
 	if task != nil {
 		instruction = task.Instruction
@@ -426,5 +390,5 @@ Work step-by-step. Prefer the smallest useful action. Do not restate the task.
 Task: %s
 
 Return ONLY JSON with fields:
-{"thought":"short reasoning","action":"tool|complete","tool":"tool name or empty","arguments":{},"complete":true|false,"summary":"final answer when complete"}`, toolSection, instruction)
+{"thought":"short reasoning","action":"tool|complete","tool":"tool name or empty","arguments":{},"complete":true|false,"summary":"final answer when complete"}`, toolSection.String(), instruction)
 }

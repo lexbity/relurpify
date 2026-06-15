@@ -27,6 +27,8 @@ jobs:
         run: make test-contract-migration
       - name: Architecture grep gates
         run: make grep-architecture-gates
+      - name: Slice 10 structural gates (AC-10, AC-12, provider_factory)
+        run: make check-gates-slice10
       - name: Dev-agent baseline
         run: make test-dev-agent
       - name: Tape fidelity baseline

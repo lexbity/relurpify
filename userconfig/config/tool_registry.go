@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	configmanifest "codeburg.org/lexbit/relurpify/platform/configmanifest"
+	configmanifest "codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/userconfig/config/security"
 )
 

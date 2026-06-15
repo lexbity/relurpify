@@ -5,7 +5,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	ports "codeburg.org/lexbit/relurpify/platform/configmanifest"
+	"codeburg.org/lexbit/relurpify/capability/ports"
 )
 
 const (

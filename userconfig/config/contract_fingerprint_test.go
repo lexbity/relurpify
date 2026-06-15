@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	permissions "codeburg.org/lexbit/relurpify/platform/configpermissions"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
 )
 
 func TestContractFingerprint_StableOnUnchangedInput(t *testing.T) {

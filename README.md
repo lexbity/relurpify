@@ -15,7 +15,6 @@
 Relurpify is a fullstack Agent framework 
 - generic execution Agent library 
 - LLM oriented memory/context/graph/sandbox management framework 
-- (Rex) event agent, distributed coordination fabric , protocol platform 
 - archaeology memory system 
 - extensive testsuite
 - (Euclo) coding agent 
@@ -34,7 +33,17 @@ Relurpify is a fullstack Agent framework
 - Go `1.25+`
 - Docker or another supported container runtime
 - gVisor `runsc`
-- Ollama
+- Ollama (or use `--offline` for a zero-dep demo/CI path)
+
+> **Quick start with no external dependencies:**
+> ```bash
+> go build ./app/relurpish
+> ./relurpish doctor --offline --fix
+> ./relurpish chat --offline
+> ```
+> The built-in `offline` backend is a deterministic scripted model that
+> exercises the full agent plumbing (tool dispatch, streaming, BKC compile)
+> without requiring Ollama, Docker, or network access.
 
 In sandboxed environments you may also want repo-local Go caches:
 

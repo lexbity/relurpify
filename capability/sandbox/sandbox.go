@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/platform/safeexec"
+	"codeburg.org/lexbit/relurpify/capability/sandbox/safeexec"
 )
 
 // Validate/Supports methods live on the sandbox types.

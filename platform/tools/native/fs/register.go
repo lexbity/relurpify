@@ -10,6 +10,7 @@ func Constructors() map[string]ports.NativeToolConstructor {
 	return map[string]ports.NativeToolConstructor{
 		"file_read":   func(basePath string) ports.Tool { return &platformfs.ReadFileTool{BasePath: basePath} },
 		"file_write":  func(basePath string) ports.Tool { return &platformfs.WriteFileTool{BasePath: basePath} },
+		"file_edit":   func(basePath string) ports.Tool { return &platformfs.EditFileTool{BasePath: basePath} },
 		"file_list":   func(basePath string) ports.Tool { return &platformfs.ListFilesTool{BasePath: basePath} },
 		"file_search": func(basePath string) ports.Tool { return &platformfs.SearchInFilesTool{BasePath: basePath} },
 		"file_create": func(basePath string) ports.Tool { return &platformfs.CreateFileTool{BasePath: basePath} },

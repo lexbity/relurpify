@@ -61,6 +61,7 @@ type InferenceBackendReport struct {
 	State           llm.BackendHealthState
 	Models          []string
 	SelectedModel   string
+	ToolCallingMode string
 	SelectedProfile string
 	ProfileReason   string
 	ProfileSource   string
@@ -186,6 +187,9 @@ func detectInferenceBackend(ctx context.Context, cfg Config, secrets config.Secr
 		}
 	} else if report.State == "" {
 		report.State = llm.BackendHealthReady
+	}
+	if backend != nil {
+		report.ToolCallingMode = llm.ToolCallingModeLabel(backend.Model())
 	}
 	models, err := backend.ListModels(ctx)
 	if err != nil {

@@ -39,7 +39,10 @@ func (t *GrepTool) Execute(ctx context.Context, args map[string]any) (*ports.Too
 	if root == "" {
 		root = "."
 	}
-	root = preparePath(t.BasePath, root)
+	root, err = resolveWithinBase(t.BasePath, root)
+	if err != nil {
+		return nil, err
+	}
 	pattern := strings.ToLower(params.Pattern)
 	type match struct {
 		File    string `json:"file"`
@@ -56,6 +59,10 @@ func (t *GrepTool) Execute(ctx context.Context, args map[string]any) (*ports.Too
 				return filepath.SkipDir
 			}
 			return nil
+		}
+		path, err = resolveWithinBase(t.BasePath, path)
+		if err != nil {
+			return err
 		}
 		file, err := os.Open(filepath.Clean(path)) //nolint:gosec
 		if err != nil {
@@ -113,7 +120,10 @@ func (t *SimilarityTool) Execute(ctx context.Context, args map[string]any) (*por
 	if err != nil {
 		return nil, err
 	}
-	root := preparePath(t.BasePath, params.Directory)
+	root, err := resolveWithinBase(t.BasePath, params.Directory)
+	if err != nil {
+		return nil, err
+	}
 	target := sanitizeSnippet(params.Snippet)
 	terms := semanticTerms(params.Snippet)
 	type match struct {
@@ -131,6 +141,10 @@ func (t *SimilarityTool) Execute(ctx context.Context, args map[string]any) (*por
 		}
 		if !isSimilarityCandidate(path) {
 			return nil
+		}
+		path, err = resolveWithinBase(t.BasePath, path)
+		if err != nil {
+			return err
 		}
 		data, err := os.ReadFile(filepath.Clean(path)) //nolint:gosec
 		if err != nil {
@@ -184,7 +198,11 @@ func (t *SemanticSearchTool) Execute(ctx context.Context, args map[string]any) (
 	query := strings.ToLower(params.Query)
 	terms := semanticTerms(query)
 	var hits []map[string]any
-	err = filepath.Walk(t.BasePath, func(path string, info os.FileInfo, err error) error {
+	root, err := resolveWithinBase(t.BasePath, ".")
+	if err != nil {
+		return nil, err
+	}
+	err = filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -196,6 +214,10 @@ func (t *SemanticSearchTool) Execute(ctx context.Context, args map[string]any) (
 		}
 		if !isSemanticCandidate(path) {
 			return nil
+		}
+		path, err = resolveWithinBase(t.BasePath, path)
+		if err != nil {
+			return err
 		}
 		data, err := os.ReadFile(filepath.Clean(path)) //nolint:gosec
 		if err != nil {

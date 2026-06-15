@@ -81,6 +81,9 @@ run reviewer:
 `)
 
 	reg := registry.NewRegistry()
+	if err := reg.RegisterLegacyTool(context.Background(), semanticTestTool{name: "file_edit", available: true}); err != nil {
+		t.Fatalf("register file_edit: %v", err)
+	}
 	if err := reg.RegisterLegacyTool(context.Background(), semanticTestTool{name: "file_write", available: true}); err != nil {
 		t.Fatalf("register file_write: %v", err)
 	}
@@ -94,13 +97,13 @@ run reviewer:
 	}
 
 	trigger := doc.Declarations[0].(*TriggerDecl)
-	if got, want := trigger.ToolPolicies[0].ResolvedToolNames, []string{"file_write", "file_search"}; !equalStrings(got, want) {
+	if got, want := trigger.ToolPolicies[0].ResolvedToolNames, []string{"file_edit", "file_search", "file_write"}; !equalStrings(got, want) {
 		t.Fatalf("trigger resolved tool names = %#v, want %#v", got, want)
 	}
 
 	run := doc.Declarations[3].(*RunDecl)
 	policy := run.Items[0].(*ToolInvokePolicyDecl)
-	if got, want := policy.ResolvedToolNames, []string{"file_search", "file_write"}; !equalStrings(got, want) {
+	if got, want := policy.ResolvedToolNames, []string{"file_search", "file_edit"}; !equalStrings(got, want) {
 		t.Fatalf("run resolved tool names = %#v, want %#v", got, want)
 	}
 }

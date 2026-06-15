@@ -120,10 +120,11 @@ func TestBackend_ConformanceSuite(t *testing.T) {
 			resp, err := backend.(interface {
 				Model() model.LanguageModel
 			}).Model().ChatWithTools(context.Background(), []model.Message{{Role: "user", Content: "ping"}}, []model.LLMToolSpec{{Name: "echo"}}, nil)
-			if err != nil {
-				return "", err
+			require.ErrorIs(t, err, ErrNativeToolCallingRequired)
+			if resp != nil {
+				return resp.Text, nil
 			}
-			return resp.Text, nil
+			return "native tool calling required", nil
 		},
 		Warm: func(backend any) error {
 			return backend.(interface{ Warm(context.Context) error }).Warm(context.Background())
@@ -264,8 +265,8 @@ func TestBackend_ChatWithTools_NativeDisabled(t *testing.T) {
 
 	backend := NewBackend(Config{Endpoint: srv.URL, Model: "test-model", NativeToolCalling: false}, "")
 	resp, err := backend.Model().ChatWithTools(context.Background(), []model.Message{{Role: "user", Content: "ping"}}, nil, nil)
-	require.NoError(t, err)
-	assert.Equal(t, "ok", resp.Text)
+	require.ErrorIs(t, err, ErrNativeToolCallingRequired)
+	require.Nil(t, resp)
 }
 
 func TestBackend_Streaming(t *testing.T) {

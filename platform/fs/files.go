@@ -76,7 +76,10 @@ func (t *ReadFileTool) Execute(ctx context.Context, args map[string]any) (*ports
 	if err != nil {
 		return nil, err
 	}
-	path := t.preparePath(params.Path)
+	path, err := ResolveWithinBase(t.BasePath, params.Path)
+	if err != nil {
+		return nil, err
+	}
 
 	if err := t.enforceSandboxScope(permissions.FileSystemRead, path); err != nil {
 		return nil, err
@@ -162,7 +165,10 @@ func (t *WriteFileTool) Execute(ctx context.Context, args map[string]any) (*port
 	if err != nil {
 		return nil, err
 	}
-	path := t.preparePath(params.Path)
+	path, err := ResolveWithinBase(t.BasePath, params.Path)
+	if err != nil {
+		return nil, err
+	}
 
 	if err := t.enforceSandboxScope(permissions.FileSystemWrite, path); err != nil {
 		return nil, err
@@ -178,7 +184,10 @@ func (t *WriteFileTool) Execute(ctx context.Context, args map[string]any) (*port
 	content := []byte(params.Content)
 	if t.Backup {
 		if _, err := os.Stat(path); err == nil {
-			backup := path + ".bak"
+			backup, err := ResolveWithinBase(t.BasePath, path+".bak")
+			if err != nil {
+				return nil, err
+			}
 			// Check sandbox scope for backup path
 			if err := t.enforceSandboxScope(permissions.FileSystemWrite, backup); err != nil {
 				return nil, fmt.Errorf("backup blocked: %w", err)
@@ -216,6 +225,202 @@ func (t *WriteFileTool) Permissions() ports.ToolPermissions {
 }
 func (t *WriteFileTool) Tags() []string {
 	return []string{ports.TagDestructive, "file", "edit"}
+}
+
+// EditFileTool performs exact string replacement inside an existing file.
+type EditFileTool struct {
+	BasePath string
+	spec     *agentspec.AgentRuntimeSpec
+	manager  FilePermissionChecker
+	agentID  string
+	scope    *permissions.FileScopePolicy
+}
+
+func (t *EditFileTool) SetPermissionManager(manager FilePermissionChecker, agentID string) {
+	t.manager = manager
+	t.agentID = agentID
+}
+
+func (t *EditFileTool) SetAgentSpec(spec *agentspec.AgentRuntimeSpec, agentID string) {
+	t.spec = spec
+	t.agentID = agentID
+}
+
+func (t *EditFileTool) SetSandboxScope(scope *permissions.FileScopePolicy) {
+	t.scope = scope
+}
+
+func (t *EditFileTool) Name() string        { return "file_edit" }
+func (t *EditFileTool) Description() string { return "Replaces an exact string in an existing file." }
+func (t *EditFileTool) Category() string    { return "file" }
+func (t *EditFileTool) Parameters() []ports.ToolParameter {
+	return []ports.ToolParameter{
+		{Name: "path", Type: "string", Required: true},
+		{Name: "old_string", Type: "string", Required: true},
+		{Name: "new_string", Type: "string", Required: true},
+		{Name: "expected_count", Type: "integer", Required: false, Default: 1},
+	}
+}
+func (t *EditFileTool) ParamKeys() []string {
+	return FileEditParamKeys()
+}
+
+func (t *EditFileTool) Execute(ctx context.Context, args map[string]any) (*ports.ToolResult, error) {
+	params, err := ParseFileEditParams(args)
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(params.OldString) == "" {
+		return nil, fmt.Errorf("old_string must not be empty")
+	}
+	expectedCount := 1
+	if _, ok := args["expected_count"]; ok {
+		expectedCount = params.ExpectedCount
+		if expectedCount <= 0 {
+			return nil, fmt.Errorf("expected_count must be >= 1")
+		}
+	}
+
+	path, err := ResolveWithinBase(t.BasePath, params.Path)
+	if err != nil {
+		return nil, err
+	}
+	if err := t.enforceSandboxScope(permissions.FileSystemWrite, path); err != nil {
+		return nil, err
+	}
+	if err := t.enforceFileMatrix(ctx, "edit", path); err != nil {
+		return nil, err
+	}
+
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
+	if info.IsDir() {
+		return &ports.ToolResult{Success: false, Error: fmt.Sprintf("%s is a directory; use file_list to explore it", path)}, nil
+	}
+	data, err := os.ReadFile(filepath.Clean(path))
+	if err != nil {
+		return nil, err
+	}
+	if !isText(data) {
+		return &ports.ToolResult{Success: false, Error: "binary file detected; cannot edit binary files"}, nil
+	}
+
+	content := string(data)
+	count := strings.Count(content, params.OldString)
+	if count != expectedCount {
+		return &ports.ToolResult{
+			Success: false,
+			Error:   fmt.Sprintf("edit blocked: expected %d occurrence(s) of %q, found %d", expectedCount, params.OldString, count),
+		}, nil
+	}
+
+	updated := strings.Replace(content, params.OldString, params.NewString, expectedCount)
+	if updated == content {
+		return &ports.ToolResult{
+			Success: true,
+			Data: map[string]any{
+				"path":             path,
+				"replaced_count":   expectedCount,
+				"previous_content": content,
+				"content":          updated,
+			},
+		}, nil
+	}
+
+	f, openErr := os.OpenFile(filepath.Clean(path), os.O_WRONLY|os.O_TRUNC|syscall.O_NOFOLLOW, info.Mode().Perm())
+	if openErr != nil {
+		return nil, fmt.Errorf("open %s for edit: %w", path, openErr)
+	}
+	if _, writeErr := f.Write([]byte(updated)); writeErr != nil {
+		_ = f.Close()
+		return nil, writeErr
+	}
+	if closeErr := f.Close(); closeErr != nil {
+		return nil, closeErr
+	}
+	return &ports.ToolResult{
+		Success: true,
+		Data: map[string]any{
+			"path":             path,
+			"replaced_count":   expectedCount,
+			"previous_content": content,
+			"content":          updated,
+		},
+	}, nil
+}
+func (t *EditFileTool) IsAvailable(ctx context.Context) bool {
+	return true
+}
+
+func (t *EditFileTool) Permissions() ports.ToolPermissions {
+	return ports.ToolPermissions{Permissions: policy.NewFileSystemPermissionSet(t.BasePath, permissions.FileSystemWrite)}
+}
+func (t *EditFileTool) Tags() []string {
+	return []string{ports.TagDestructive, "file", "edit"}
+}
+
+func (t *EditFileTool) enforceFileMatrix(ctx context.Context, action string, absPath string) error {
+	if t == nil || t.spec == nil {
+		return nil
+	}
+	return enforceFileMatrix(ctx, t.manager, t.agentID, t.BasePath, action, absPath, t.spec.Files)
+}
+
+func (t *EditFileTool) enforceSandboxScope(action permissions.FileSystemAction, path string) error {
+	if t == nil || t.scope == nil {
+		return nil
+	}
+	return t.scope.Check(action, path)
+}
+
+func (t *EditFileTool) Rollback(ctx context.Context, token ports.RollbackToken) error {
+	if token.Result == nil || token.Result.Data == nil {
+		return fmt.Errorf("rollback token missing edit result data")
+	}
+	path := strings.TrimSpace(fmt.Sprint(token.Result.Data["path"]))
+	previous, _ := token.Result.Data["previous_content"].(string)
+	current, _ := token.Result.Data["content"].(string)
+	if path == "" {
+		return fmt.Errorf("rollback token missing path")
+	}
+	if previous == "" && current == "" {
+		return fmt.Errorf("rollback token missing edit content")
+	}
+
+	resolved, err := ResolveWithinBase(t.BasePath, path)
+	if err != nil {
+		return err
+	}
+	if err := t.enforceSandboxScope(permissions.FileSystemWrite, resolved); err != nil {
+		return err
+	}
+	if err := t.enforceFileMatrix(ctx, "edit", resolved); err != nil {
+		return err
+	}
+
+	data, err := os.ReadFile(filepath.Clean(resolved))
+	if err != nil {
+		return err
+	}
+	if string(data) != current {
+		return fmt.Errorf("rollback refused: file content changed since edit")
+	}
+
+	info, err := os.Stat(resolved)
+	if err != nil {
+		return err
+	}
+	f, openErr := os.OpenFile(filepath.Clean(resolved), os.O_WRONLY|os.O_TRUNC|syscall.O_NOFOLLOW, info.Mode().Perm())
+	if openErr != nil {
+		return fmt.Errorf("open %s for rollback: %w", resolved, openErr)
+	}
+	if _, writeErr := f.Write([]byte(previous)); writeErr != nil {
+		_ = f.Close()
+		return writeErr
+	}
+	return f.Close()
 }
 
 // ListFilesTool lists files filtered by pattern.
@@ -257,7 +462,10 @@ func (t *ListFilesTool) Execute(ctx context.Context, args map[string]any) (*port
 	if dirText == "" {
 		dirText = "."
 	}
-	dir := t.preparePath(dirText)
+	dir, err := ResolveWithinBase(t.BasePath, dirText)
+	if err != nil {
+		return nil, err
+	}
 	if err := t.enforceSandboxScope(permissions.FileSystemList, dir); err != nil {
 		return nil, err
 	}
@@ -285,6 +493,10 @@ func (t *ListFilesTool) Execute(ctx context.Context, args map[string]any) (*port
 			if sandboxProtectedPath(err) {
 				return nil
 			}
+			return err
+		}
+		path, err = ResolveWithinBase(t.BasePath, path)
+		if err != nil {
 			return err
 		}
 
@@ -358,7 +570,10 @@ func (t *SearchInFilesTool) Execute(ctx context.Context, args map[string]any) (*
 	if dirText == "" {
 		dirText = "."
 	}
-	dir := t.preparePath(dirText)
+	dir, err := ResolveWithinBase(t.BasePath, dirText)
+	if err != nil {
+		return nil, err
+	}
 	if err := t.enforceSandboxScope(permissions.FileSystemRead, dir); err != nil {
 		return nil, err
 	}
@@ -395,6 +610,10 @@ func (t *SearchInFilesTool) Execute(ctx context.Context, args map[string]any) (*
 			if sandboxProtectedPath(err) {
 				return nil
 			}
+			return err
+		}
+		path, err = ResolveWithinBase(t.BasePath, path)
+		if err != nil {
 			return err
 		}
 
@@ -482,7 +701,10 @@ func (t *CreateFileTool) Execute(ctx context.Context, args map[string]any) (*por
 	if err != nil {
 		return nil, err
 	}
-	path := t.preparePath(params.Path)
+	path, err := ResolveWithinBase(t.BasePath, params.Path)
+	if err != nil {
+		return nil, err
+	}
 
 	if err := t.enforceSandboxScope(permissions.FileSystemWrite, path); err != nil {
 		return nil, err
@@ -552,7 +774,10 @@ func (t *DeleteFileTool) Execute(ctx context.Context, args map[string]any) (*por
 	if err != nil {
 		return nil, err
 	}
-	path := t.preparePath(params.Path)
+	path, err := ResolveWithinBase(t.BasePath, params.Path)
+	if err != nil {
+		return nil, err
+	}
 
 	if err := t.enforceSandboxScope(permissions.FileSystemDelete, path); err != nil {
 		return nil, err
@@ -568,6 +793,10 @@ func (t *DeleteFileTool) Execute(ctx context.Context, args map[string]any) (*por
 	trash := t.TrashDir
 	if trash == "" {
 		trash = filepath.Join(t.BasePath, ".trash")
+	}
+	trash, err = ResolveWithinBase(t.BasePath, trash)
+	if err != nil {
+		return nil, err
 	}
 	if err := MkdirAllSecure(trash); err != nil {
 		return nil, err
@@ -823,6 +1052,7 @@ func FileOperations(basePath string) []ports.Tool {
 	return []ports.Tool{
 		&ReadFileTool{BasePath: basePath},
 		&WriteFileTool{BasePath: basePath, Backup: true},
+		&EditFileTool{BasePath: basePath},
 		&ListFilesTool{BasePath: basePath},
 		&SearchInFilesTool{BasePath: basePath},
 		&CreateFileTool{BasePath: basePath},

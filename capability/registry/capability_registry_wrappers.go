@@ -424,6 +424,14 @@ func (t *instrumentedTool) Execute(ctx context.Context, args map[string]any) (*p
 	return result, err
 }
 
+func (t *instrumentedTool) Rollback(ctx context.Context, token ports.RollbackToken) error {
+	revertible, ok := t.Tool.(ports.RevertibleTool)
+	if !ok {
+		return fmt.Errorf("rollback not supported for tool %q", t.Name())
+	}
+	return revertible.Rollback(ctx, token)
+}
+
 func normalizeToolExecutionPolicyError(name string, err error) error {
 	if err == nil {
 		return nil
