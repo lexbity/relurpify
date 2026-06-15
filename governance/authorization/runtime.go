@@ -11,28 +11,46 @@ import (
 	permissions "codeburg.org/lexbit/relurpify/governance/permissions"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
 	governanceports "codeburg.org/lexbit/relurpify/governance/ports"
-	"codeburg.org/lexbit/relurpify/userconfig/config"
-	"codeburg.org/lexbit/relurpify/userconfig/config/secretscan"
-	cfgsecurity "codeburg.org/lexbit/relurpify/userconfig/config/security"
 )
 
 const defaultToolPolicyAllow = "allow"
 
+// runtimeStateDirName is the workspace-relative runtime state directory used as a
+// filesystem-guard root fallback when the caller does not supply StateDir. Kept
+// local to avoid importing userconfig (mirrors userconfig secretscan.RuntimeStateDirName).
+const runtimeStateDirName = ".relurpify_state"
+
 // SandboxBackendFactory creates a governanceports.SandboxRuntime for the given backend.
 type SandboxBackendFactory func(ctx context.Context, backend string, cfg governanceports.SandboxConfig, image, workspace string) (governanceports.SandboxRuntime, error)
 
+// SandboxSecurity is the governance-local projection of the security settings a
+// sandbox needs. It decouples governance from userconfig.SecuritySpec; the
+// composition root maps the config type into this value.
+type SandboxSecurity struct {
+	RunAsUser       int
+	ReadOnlyRoot    bool
+	NoNewPrivileges bool
+}
+
 // RuntimeConfig describes configuration for agent runtime registration.
+//
+// DocumentSnapshot and AgentSpec are opaque carriers (consumer-defined-interface
+// inversion): governance does not read their internals, it only stores and
+// forwards them. The composition root supplies concrete userconfig types and the
+// config-aware consumers (probe, runtime) type-assert them back. This keeps
+// governance free of any userconfig/config import (breaking the
+// governance↔userconfig domain cycle). It mirrors the existing
+// CompiledPolicyBundle.Spec any pattern in this package.
 type RuntimeConfig struct {
-	ManifestPath       string
-	DocumentSnapshot   *config.DocumentSnapshot
-	AgentSpec          *config.AgentSpec
+	DocumentSnapshot   any
+	AgentSpec          any
 	Permissions        permissions.PermissionSet
 	DefaultPermissions *permissions.PermissionSet
-	Security           config.SecuritySpec
+	Security           SandboxSecurity
+	ProtectedPaths     []string
 	Image              string
 	Runtime            string
 	DefaultToolPolicy  string
-	SecurityBundle     *cfgsecurity.Bundle
 	ConfigPath         string
 	Backend            string
 	SandboxCfg         governanceports.SandboxConfig
@@ -43,11 +61,12 @@ type RuntimeConfig struct {
 	HITLTimeout        time.Duration
 }
 
-// AgentRegistration stores runtime metadata.
+// AgentRegistration stores runtime metadata. DocumentSnapshot and AgentSpec are
+// opaque carriers (see RuntimeConfig).
 type AgentRegistration struct {
 	ID                string
-	DocumentSnapshot  *config.DocumentSnapshot
-	AgentSpec         *config.AgentSpec
+	DocumentSnapshot  any
+	AgentSpec         any
 	Permissions       *PermissionManager
 	PermissionSet     permissions.PermissionSet
 	Policy            PolicyEngine
@@ -56,31 +75,17 @@ type AgentRegistration struct {
 	Runtime           governanceports.SandboxRuntime
 	Image             string
 	SandboxRuntime    string
-	Security          config.SecuritySpec
+	Security          SandboxSecurity
 	DefaultToolPolicy string
 }
 
 // RegisterAgent validates the manifest and builds enforcement primitives.
 func RegisterAgent(ctx context.Context, cfg RuntimeConfig) (*AgentRegistration, error) {
-	if cfg.DocumentSnapshot == nil && cfg.ManifestPath == "" {
-		return nil, errors.New("manifest path required")
-	}
-	if cfg.SecurityBundle == nil {
-		return nil, errors.New("security bundle required")
-	}
-	documentSnapshot := cfg.DocumentSnapshot
-	var err error
-	if documentSnapshot == nil {
-		docSnapshot, docErr := config.LoadDocument(cfg.ManifestPath)
-		if docErr != nil {
-			return nil, fmt.Errorf("load document: %w", docErr)
-		}
-		documentSnapshot = docSnapshot
-	}
-	if documentSnapshot == nil || documentSnapshot.Document == nil {
-		return nil, errors.New("document missing")
+	if cfg.DocumentSnapshot == nil {
+		return nil, errors.New("document snapshot required")
 	}
 
+	var err error
 	effectivePerms := permissions.ResolveEffective(cfg.DefaultPermissions, &cfg.Permissions)
 	image := strings.TrimSpace(cfg.Image)
 	runtime, err := selectSandboxRuntime(ctx, cfg.Backend, cfg.SandboxCfg, image, cfg.BaseFS, cfg.BackendFactory)
@@ -106,7 +111,7 @@ func RegisterAgent(ctx context.Context, cfg RuntimeConfig) (*AgentRegistration, 
 	if permManager != nil {
 		stateDir := cfg.StateDir
 		if strings.TrimSpace(stateDir) == "" && strings.TrimSpace(cfg.BaseFS) != "" {
-			stateDir = filepath.Join(cfg.BaseFS, secretscan.RuntimeStateDirName)
+			stateDir = filepath.Join(cfg.BaseFS, runtimeStateDirName)
 		}
 		permManager.SetFilesystemGuardRoots(
 			[]string{
@@ -125,7 +130,7 @@ func RegisterAgent(ctx context.Context, cfg RuntimeConfig) (*AgentRegistration, 
 		}
 		permManager.AttachRuntime(ctx, runtime)
 	}
-	sboxPolicy := buildSandboxPolicy(cfg.Permissions, cfg.Security, cfg.SecurityBundle.Sandbox.ProtectedPaths)
+	sboxPolicy := buildSandboxPolicy(cfg.Permissions, cfg.Security, cfg.ProtectedPaths)
 	if err := runtime.ValidatePolicy(sboxPolicy); err != nil {
 		return nil, fmt.Errorf("sandbox policy validation failed: %w", err)
 	}
@@ -134,7 +139,7 @@ func RegisterAgent(ctx context.Context, cfg RuntimeConfig) (*AgentRegistration, 
 	}
 	return &AgentRegistration{
 		ID:                "",
-		DocumentSnapshot:  documentSnapshot,
+		DocumentSnapshot:  cfg.DocumentSnapshot,
 		AgentSpec:         cfg.AgentSpec,
 		Permissions:       permManager,
 		PermissionSet:     cfg.Permissions,
@@ -158,7 +163,7 @@ func selectSandboxRuntime(ctx context.Context, backend string, sandboxCfg govern
 
 // buildSandboxPolicy constructs a sandbox policy from typed permissions and
 // protected paths.
-func buildSandboxPolicy(perms permissions.PermissionSet, security config.SecuritySpec, protectedPaths []string) governanceports.SandboxPolicy {
+func buildSandboxPolicy(perms permissions.PermissionSet, security SandboxSecurity, protectedPaths []string) governanceports.SandboxPolicy {
 	policy := governanceports.SandboxPolicy{
 		ProtectedPaths: append([]string(nil), protectedPaths...),
 	}

@@ -21,10 +21,10 @@ import (
 	"codeburg.org/lexbit/relurpify/context/knowledge/graphdb"
 	"codeburg.org/lexbit/relurpify/context/knowledge/memory"
 	"codeburg.org/lexbit/relurpify/context/knowledge/search"
-	"codeburg.org/lexbit/relurpify/execution/compiler"
 	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/execution/agentgraph"
 	"codeburg.org/lexbit/relurpify/execution/agentlifecycle"
+	"codeburg.org/lexbit/relurpify/execution/compiler"
 	"codeburg.org/lexbit/relurpify/execution/session"
 	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
@@ -191,21 +191,24 @@ func New(ctx context.Context, cfg Config, secrets config.Secrets) (*Runtime, err
 	profileResolution := profileRegistry.Resolve(cfg.InferenceProvider, cfg.InferenceModel)
 	backendProfile := convertProfileConfig(profileResolution.Profile)
 	registration, err := fauthorization.RegisterAgent(ctx, fauthorization.RuntimeConfig{
-		ManifestPath:     cfg.ManifestPath,
 		DocumentSnapshot: docSnapshot,
 		AgentSpec:        contract.AgentSpec,
 		Permissions:      contractPerms,
-		Security:         contract.Security,
-		Image:            "",
-		Runtime:          "",
-		SecurityBundle:   &securityBundle,
-		ConfigPath:       cfg.ConfigPath,
-		Backend:          cfg.SandboxBackend,
-		BackendFactory:   backendFactory,
-		AuditLimit:       cfg.AuditLimit,
-		BaseFS:           cfg.Workspace,
-		StateDir:         config.DefaultWorkspaceStateDir(cfg.Workspace),
-		HITLTimeout:      cfg.HITLTimeout,
+		Security: fauthorization.SandboxSecurity{
+			RunAsUser:       contract.Security.RunAsUser,
+			ReadOnlyRoot:    contract.Security.ReadOnlyRoot,
+			NoNewPrivileges: contract.Security.NoNewPrivileges,
+		},
+		Image:          "",
+		Runtime:        "",
+		ProtectedPaths: securityBundle.Sandbox.ProtectedPaths,
+		ConfigPath:     cfg.ConfigPath,
+		Backend:        cfg.SandboxBackend,
+		BackendFactory: backendFactory,
+		AuditLimit:     cfg.AuditLimit,
+		BaseFS:         cfg.Workspace,
+		StateDir:       config.DefaultWorkspaceStateDir(cfg.Workspace),
+		HITLTimeout:    cfg.HITLTimeout,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("compose authorization registration: %w", err)
@@ -335,8 +338,7 @@ func New(ctx context.Context, cfg Config, secrets config.Secrets) (*Runtime, err
 	baseTelemetry := ws.Telemetry
 	if registration != nil && registration.Permissions != nil {
 		var bashCfg *fauthorization.BashConfig
-		if registration.AgentSpec != nil {
-			spec := registration.AgentSpec
+		if spec, ok := registration.AgentSpec.(*config.AgentSpec); ok && spec != nil {
 			bashCfg = &fauthorization.BashConfig{
 				AllowPatterns: spec.Bash.AllowPatterns,
 				DenyPatterns:  spec.Bash.DenyPatterns,
@@ -511,18 +513,26 @@ func (r *Runtime) Close(ctx context.Context) error {
 // ManifestFingerprint returns the fingerprint of the loaded manifest snapshot
 // when available.
 func (r *Runtime) ManifestFingerprint() string {
-	if r == nil || r.registration == nil || r.registration.DocumentSnapshot == nil {
+	if r == nil || r.registration == nil {
 		return ""
 	}
-	return fmt.Sprintf("%x", r.registration.DocumentSnapshot.Fingerprint)
+	ds, ok := r.registration.DocumentSnapshot.(*config.DocumentSnapshot)
+	if !ok || ds == nil {
+		return ""
+	}
+	return fmt.Sprintf("%x", ds.Fingerprint)
 }
 
 // ManifestDeprecationNotices returns manifest deprecation notices when available.
 func (r *Runtime) ManifestDeprecationNotices() []string {
-	if r == nil || r.registration == nil || r.registration.DocumentSnapshot == nil {
+	if r == nil || r.registration == nil {
 		return nil
 	}
-	return append([]string(nil), r.registration.DocumentSnapshot.Warnings...)
+	ds, ok := r.registration.DocumentSnapshot.(*config.DocumentSnapshot)
+	if !ok || ds == nil {
+		return nil
+	}
+	return append([]string(nil), ds.Warnings...)
 }
 
 // AvailableAgents lists known agent presets and definitions.
