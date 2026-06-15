@@ -28,11 +28,13 @@ check-template-drift:
 		echo "[FAIL] workspace.yaml drifts from embedded template"; \
 		exitcode=1; \
 	fi; \
-	echo "[check-template-drift] verifying agent manifest..."; \
-	if ! diff -q "$$tmpdir/workspace/agent.yaml" "relurpify_cfg/agents/euclo.yaml"; then \
-		echo "[FAIL] agents/euclo.yaml drifts from embedded template"; \
-		exitcode=1; \
-	fi; \
+	echo "[check-template-drift] verifying decomposed security/model files..."; \
+	for f in security/localtool.policy.yaml security/sandbox.policy.yaml security/shell.policy.yaml model/profiles/default.llm.yaml; do \
+		if ! diff -q "$$tmpdir/workspace/$$f" "relurpify_cfg/$$f"; then \
+			echo "[FAIL] $$f drifts from embedded template"; \
+			exitcode=1; \
+		fi; \
+	done; \
 	if [ "$$exitcode" -eq 0 ]; then \
 		echo "[PASS] embedded templates match relurpify_cfg/"; \
 	else \

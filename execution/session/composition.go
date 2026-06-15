@@ -66,7 +66,6 @@ type CompiledPolicy struct {
 // while app/envcomposition takes over concrete app wiring.
 type WorkspaceConfig struct {
 	Workspace                  string
-	ManifestPath               string
 	ConfigPath                 string
 	StateDir                   string
 	InferenceProvider          string

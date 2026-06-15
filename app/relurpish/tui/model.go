@@ -93,6 +93,10 @@ type RootModel struct {
 	activeAgent   string
 	agentPicker   *AgentPicker
 	startupLocked bool
+	// startupAgent is the agent activated at construction (before any startup
+	// gate). The gate parks the active agent at "none" while locked; on unlock
+	// it is restored to startupAgent so chat reaches the real agent surface.
+	startupAgent string
 
 	// Session-level state shared across panes
 	sharedSess     *Session
@@ -295,6 +299,7 @@ func newRootModel(rt RuntimeAdapter, factory SurfaceFactory) RootModel {
 		notifQ:            notifQ,
 		overlays:          NewOverlayStack(),
 		activeAgent:       initialAgent,
+		startupAgent:      initialAgent,
 		agentPicker:       NewAgentPicker(),
 		activeTab:         state.tabs.ActiveTab().ID,
 		focus:             NewFocusRouter(),
@@ -521,10 +526,32 @@ func (m RootModel) Init() tea.Cmd {
 	if m.chat != nil {
 		cmds = append(cmds, m.chat.Init())
 	}
+	if cmd := m.startupDoctorReportCmd(); cmd != nil {
+		cmds = append(cmds, cmd)
+	}
 	if tick := m.anim.TickCmd(); tick != nil {
 		cmds = append(cmds, tick)
 	}
 	return tea.Batch(cmds...)
+}
+
+// startupDoctorReportCmd builds the initial doctor report off the UI thread and
+// delivers it as a DoctorStatusMsg, so applyDoctorReport runs once at boot and
+// unlocks the startup gate when the workspace is healthy. Without this, a fully
+// ready workspace boots locked on the Doctor tab until the user manually
+// refreshes ('r'): the construction-time gate only sees the empty zero-value
+// report. Returns nil when no runtime is wired (degraded/headless construction).
+func (m RootModel) startupDoctorReportCmd() tea.Cmd {
+	rt := m.runtime
+	if rt == nil {
+		return nil
+	}
+	return func() tea.Msg {
+		return DoctorStatusMsg{
+			Action: "refresh",
+			Report: rt.BuildDoctorReport(context.Background()),
+		}
+	}
 }
 
 // restorePromptCmd checks for a saved session and emits sessionFoundMsg if one exists.
@@ -1335,6 +1362,17 @@ func (m *RootModel) applyDoctorReport(report DoctorReport) {
 		m.startupLocked = false
 		if controller, ok := m.baseSurface.(StartupGateController); ok && controller != nil {
 			controller.SetDoctorReport(report)
+		}
+		// The lock path parks the active agent surface at "none"; restore the
+		// real agent surface so the Chat tab renders the agent (not the gate).
+		// The runtime's active agent was never changed (parking is surface-only),
+		// so activateSurface is the correct symmetric inverse — switchActiveAgent
+		// would redundantly re-invoke runtime.SwitchAgent and can fail.
+		if m.activeAgentName() == "none" && m.startupAgent != "" && m.startupAgent != "none" {
+			if m.sharedSess != nil {
+				m.sharedSess.Agent = m.startupAgent
+			}
+			m.activateSurface(m.startupAgent)
 		}
 		m.setActiveTab(TabChat)
 		m.addSystemMessage("Doctor checks passed; startup checks are healthy")

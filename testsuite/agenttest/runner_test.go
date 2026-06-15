@@ -97,22 +97,6 @@ func newLoadedOllamaServer(t *testing.T, modelName string) *loadedOllamaServer {
 	}))
 }
 
-func TestFallbackManifestPath(t *testing.T) {
-	workspace := t.TempDir()
-	manifestPath := filepath.Join(config.New(workspace).ConfigRoot(), agent_yaml)
-	if err := fs.MkdirAllSecure(filepath.Dir(manifestPath)); err != nil {
-		t.Fatalf("mkdir: %v", err)
-	}
-	if err := fs.WriteFileSecure(manifestPath, []byte("test")); err != nil {
-		t.Fatalf("write manifest: %v", err)
-	}
-
-	got := fallbackManifestPath(filepath.Join(workspace, testsuite, agent_yaml), workspace)
-	if got != manifestPath {
-		t.Fatalf("expected %s, got %s", manifestPath, got)
-	}
-}
-
 func TestParseSetupFileModeDefaultsAndOctal(t *testing.T) {
 	mode, err := parseSetupFileMode("")
 	if err != nil {

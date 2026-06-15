@@ -11,17 +11,17 @@ func LocalToolPolicyPath(workspace string) string {
 	return filepath.Join(workspace, "relurpify_cfg", "security", "localtool.policy.yaml")
 }
 
-type localToolPolicyFile struct {
+type LocalToolPolicyFile struct {
 	Tools map[string]ToolPolicy `yaml:"tools,omitempty"`
 }
 
 // LoadLocalToolPolicy loads and validates the local tool policy file.
 func LoadLocalToolPolicy(path, workspace string, decode Decoder) (map[string]ToolPolicy, error) {
-	var file localToolPolicyFile
+	var file LocalToolPolicyFile
 	if err := loadAndDecode(path, workspace, decode, LocalToolPolicyPath, &file); err != nil {
 		return nil, err
 	}
-	if err := validateLocalToolPolicies(file.Tools); err != nil {
+	if err := ValidateLocalToolPolicies(file.Tools); err != nil {
 		return nil, err
 	}
 	out := make(map[string]ToolPolicy, len(file.Tools))
@@ -31,7 +31,7 @@ func LoadLocalToolPolicy(path, workspace string, decode Decoder) (map[string]Too
 	return out, nil
 }
 
-func validateLocalToolPolicies(policies map[string]ToolPolicy) error {
+func ValidateLocalToolPolicies(policies map[string]ToolPolicy) error {
 	for name, policy := range policies {
 		if strings.TrimSpace(name) == "" {
 			return fmt.Errorf("local tool policy contains empty tool name")

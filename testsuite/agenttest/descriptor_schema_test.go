@@ -31,7 +31,6 @@ func TestPreparedRunDescriptorNormalizesPaths(t *testing.T) {
 		WorkspaceRoot:        ".",
 		RunRoot:              "./relurpify_cfg/test_run/run-1",
 		DerivedWorkspaceRoot: "./derived",
-		ManifestPath:         "./relurpify_cfg/agent.yaml",
 		ConfigPath:           "./relurpify_cfg/config.yaml",
 		AgentsDir:            "./relurpify_cfg/agents",
 		LogsDir:              "./relurpify_cfg/test_run/run-1/execution/logs",
@@ -48,9 +47,6 @@ func TestPreparedRunDescriptorNormalizesPaths(t *testing.T) {
 	}
 	if !filepath.IsAbs(desc.WorkspaceRoot) {
 		t.Fatalf("WorkspaceRoot not normalized to absolute path: %q", desc.WorkspaceRoot)
-	}
-	if !filepath.IsAbs(desc.ManifestPath) {
-		t.Fatalf("ManifestPath not normalized to absolute path: %q", desc.ManifestPath)
 	}
 	if desc.RunID != run1 {
 		t.Fatalf("RunID = %q, want run-1", desc.RunID)

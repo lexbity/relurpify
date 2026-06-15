@@ -35,7 +35,6 @@ func TestNewRootCmdPersistentPreRunNormalizesConfig(t *testing.T) {
 	workspace := t.TempDir()
 	cfg = runtimesvc.Config{
 		Workspace:     workspace,
-		ManifestPath:  "agent.yaml",
 		AgentsDir:     "agents",
 		MemoryPath:    "memory",
 		LogPath:       "logs/relurpish.log",
@@ -56,7 +55,6 @@ func TestNewRootCmdPersistentPreRunNormalizesConfig(t *testing.T) {
 	require.Equal(t, "http://localhost:11434", cfg.InferenceEndpoint)
 	require.Equal(t, 256, cfg.AuditLimit)
 	require.Equal(t, 30*time.Second, cfg.HITLTimeout)
-	require.True(t, filepath.IsAbs(cfg.ManifestPath))
 	require.True(t, filepath.IsAbs(cfg.AgentsDir))
 	require.True(t, filepath.IsAbs(cfg.MemoryPath))
 	require.True(t, filepath.IsAbs(cfg.LogPath))

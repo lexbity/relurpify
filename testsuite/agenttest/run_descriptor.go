@@ -28,7 +28,6 @@ type PreparedRunDescriptor struct {
 	WorkspaceRoot         string                       `json:"workspace_root"`
 	RunRoot               string                       `json:"run_root"`
 	DerivedWorkspaceRoot  string                       `json:"derived_workspace_root"`
-	ManifestPath          string                       `json:"manifest_path"`
 	ConfigPath            string                       `json:"config_path"`
 	AgentsDir             string                       `json:"agents_dir"`
 	LogsDir               string                       `json:"logs_dir"`
@@ -118,25 +117,6 @@ func BuildPreparedRunDescriptor(suite *Suite, c CaseSpec, model ModelSpec, opts 
 	if suitePath == "" {
 		suitePath = suite.SourcePath
 	}
-	manifestPath := suite.ResolvePath(suite.Spec.Manifest)
-	manifestPath = resolveAgainstWorkspace(targetWorkspace, manifestPath, suite.Spec.Manifest)
-	manifestPath = fallbackManifestPath(manifestPath, targetWorkspace)
-	if manifestPath == "" {
-		return nil, fmt.Errorf("manifest path required")
-	}
-	manifestPath = cleanAbsolutePath(manifestPath)
-	docSnapshot, err := config.LoadDocument(manifestPath)
-	if err != nil {
-		return nil, err
-	}
-	var sandboxBackend string
-	if node, ok := docSnapshot.Document.Spec["runtime"]; ok {
-		var runtimeStr string
-		if err := node.Decode(&runtimeStr); err == nil {
-			sandboxBackend = strings.TrimSpace(runtimeStr)
-		}
-	}
-
 	backendTargets := buildPreparedBackendTargets(suite, c, model, opts)
 	backendSelection := PreparedRunSelectionSingle
 	if len(backendTargets) > 1 {
@@ -170,7 +150,6 @@ func BuildPreparedRunDescriptor(suite *Suite, c CaseSpec, model ModelSpec, opts 
 		WorkspaceRoot:         targetWorkspace,
 		RunRoot:               artifacts.RunRoot,
 		DerivedWorkspaceRoot:  artifacts.SetupWorkspaceDir,
-		ManifestPath:          manifestPath,
 		ConfigPath:            filepath.Join(artifacts.SetupWorkspaceDir, config.DirName, "config.yaml"),
 		AgentsDir:             filepath.Join(artifacts.SetupWorkspaceDir, config.DirName, "agents"),
 		LogsDir:               artifacts.ExecutionLogsDir,
@@ -199,7 +178,6 @@ func BuildPreparedRunDescriptor(suite *Suite, c CaseSpec, model ModelSpec, opts 
 		StrictMode:            suite.IsStrictRun(opts.Profile, opts.Strict),
 		MaxIterations:         resolveCaseMaxIterations(opts, c),
 		MaxRetries:            resolveCaseMaxRetries(opts),
-		SandboxBackend:        sandboxBackend,
 		SetupOverlays:         setupOverlays,
 		SeededState:           seededState,
 		Verification:          verification,
@@ -221,7 +199,6 @@ func (d *PreparedRunDescriptor) Normalize() error {
 	d.WorkspaceRoot = cleanAbsolutePath(d.WorkspaceRoot)
 	d.RunRoot = cleanAbsolutePath(d.RunRoot)
 	d.DerivedWorkspaceRoot = cleanAbsolutePath(d.DerivedWorkspaceRoot)
-	d.ManifestPath = cleanAbsolutePath(d.ManifestPath)
 	d.ConfigPath = cleanAbsolutePath(d.ConfigPath)
 	d.AgentsDir = cleanAbsolutePath(d.AgentsDir)
 	d.LogsDir = cleanAbsolutePath(d.LogsDir)
@@ -286,9 +263,6 @@ func (d *PreparedRunDescriptor) Validate() error {
 	}
 	if d.DerivedWorkspaceRoot == "" {
 		return fmt.Errorf("derived_workspace_root required")
-	}
-	if d.ManifestPath == "" {
-		return fmt.Errorf("manifest_path required")
 	}
 	if d.ConfigPath == "" {
 		return fmt.Errorf("config_path required")

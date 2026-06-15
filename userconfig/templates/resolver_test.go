@@ -54,25 +54,6 @@ func TestResolverWorkspaceConfigTemplate(t *testing.T) {
 	}
 }
 
-func TestResolverWorkspaceAgentTemplate(t *testing.T) {
-	root := t.TempDir()
-	templatePath := filepath.Join(root, "templates", "workspace", "agent.yaml")
-	if err := fs.MkdirAllSecure(filepath.Dir(templatePath)); err != nil {
-		t.Fatal(err)
-	}
-	if err := fs.WriteFileSecure(templatePath, []byte("schema: relurpify/agent/v1")); err != nil {
-		t.Fatal(err)
-	}
-	r := NewResolver(root)
-	got, err := r.ResolveWorkspaceAgentTemplate()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got != templatePath {
-		t.Fatalf("ResolveWorkspaceAgentTemplate() = %q, want %q", got, templatePath)
-	}
-}
-
 func TestResolverWorkspaceSecurityTemplate(t *testing.T) {
 	root := t.TempDir()
 	templatePath := filepath.Join(root, "templates", "workspace", "security", "sandbox.policy.yaml")

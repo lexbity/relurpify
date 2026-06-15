@@ -69,11 +69,6 @@ func DefaultWorkspaceConfigPath(workspace string) string {
 	return filepath.Join(workspace, "relurpify_cfg", "workspace.yaml")
 }
 
-// DefaultWorkspaceStateConfigPath returns the canonical workspace.yaml location under state.
-func DefaultWorkspaceStateConfigPath(workspace string) string {
-	return filepath.Join(DefaultWorkspaceStateDir(workspace), "workspace.yaml")
-}
-
 // DefaultWorkspaceStateDir returns the default runtime state directory.
 func DefaultWorkspaceStateDir(workspace string) string {
 	return filepath.Join(workspace, defaultWorkspaceStateDir)

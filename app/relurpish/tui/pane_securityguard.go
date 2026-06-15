@@ -13,10 +13,10 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 
+	policy "codeburg.org/lexbit/relurpify/governance/policy"
+
 	tea "github.com/charmbracelet/bubbletea"
 	"gopkg.in/yaml.v3"
-
-	policy "codeburg.org/lexbit/relurpify/governance/policy"
 )
 
 type securityGuardRuntime interface {
@@ -79,7 +79,6 @@ func (p *SecurityGuardPane) SetFilter(filter string) {
 
 func (p *SecurityGuardPane) Refresh() {
 	p.loadShellRules()
-	p.loadGuardRules()
 }
 
 func (p *SecurityGuardPane) Update(msg tea.Msg) (*SecurityGuardPane, tea.Cmd) {
@@ -196,11 +195,6 @@ func (p *SecurityGuardPane) loadShellRules() {
 		p.shellRules = nil
 		return
 	}
-	if err := config.RejectForbiddenSecretFields(path, data); err != nil {
-		p.status = fmt.Sprintf("shell blacklist secret field rejected: %v", err)
-		p.shellRules = nil
-		return
-	}
 	var file securityGuardFile
 	if err := yaml.Unmarshal(data, &file); err != nil {
 		p.status = fmt.Sprintf("shell blacklist parse failed: %v", err)
@@ -208,31 +202,6 @@ func (p *SecurityGuardPane) loadShellRules() {
 		return
 	}
 	p.shellRules = append([]sandbox.BlacklistRule(nil), file.Rules...)
-}
-
-func (p *SecurityGuardPane) loadGuardRules() {
-	workspace := ""
-	if p.runtime != nil {
-		workspace = p.runtime.SessionInfo().Workspace
-	}
-	path := filepath.Join(config.New(workspace).ConfigRoot(), "policy_rules.yaml")
-	data, err := os.ReadFile(filepath.Clean(path))
-	if err != nil {
-		if os.IsNotExist(err) {
-			p.guardRules = nil
-			return
-		}
-		p.status = fmt.Sprintf("policy rules load failed: %v", err)
-		p.guardRules = nil
-		return
-	}
-	var rules []policy.PolicyRule
-	if err := yaml.Unmarshal(data, &rules); err != nil {
-		p.status = fmt.Sprintf("policy rules parse failed: %v", err)
-		p.guardRules = nil
-		return
-	}
-	p.guardRules = append([]policy.PolicyRule(nil), rules...)
 }
 
 func (p *SecurityGuardPane) beginEdit() {
@@ -423,26 +392,16 @@ func (p *SecurityGuardPane) saveCmd() tea.Cmd {
 		workspace = p.runtime.SessionInfo().Workspace
 	}
 	shellRules := append([]sandbox.BlacklistRule(nil), p.shellRules...)
-	guardRules := append([]policy.PolicyRule(nil), p.guardRules...)
 	return func() tea.Msg {
 		if workspace == "" {
 			return sandboxPersistedMsg{Err: fmt.Errorf("workspace unavailable")}
 		}
-		paths := config.New(workspace)
-		shellPath := filepath.Join(paths.ConfigRoot(), "security", "shell.policy.yaml")
-		guardPath := filepath.Join(paths.ConfigRoot(), "policy_rules.yaml")
-		shellBackup, err := config.CreateTimestampedBackup(shellPath)
-		if err != nil {
-			return sandboxPersistedMsg{Err: err}
-		}
-		guardBackup, err := config.CreateTimestampedBackup(guardPath)
+		shellPath := filepath.Join(config.New(workspace).ConfigRoot(), "security", "shell.policy.yaml")
+		backup, err := config.CreateTimestampedBackup(shellPath)
 		if err != nil {
 			return sandboxPersistedMsg{Err: err}
 		}
 		if err := config.SaveYAML(shellPath, securityGuardFile{Version: "1", Rules: shellRules}); err != nil {
-			return sandboxPersistedMsg{Err: err}
-		}
-		if err := config.SaveYAML(guardPath, guardRules); err != nil {
 			return sandboxPersistedMsg{Err: err}
 		}
 		if p.runtime != nil {
@@ -453,10 +412,6 @@ func (p *SecurityGuardPane) saveCmd() tea.Cmd {
 					return chatSystemMsg{Text: fmt.Sprintf("security save failed after reload: %v", err)}
 				}
 			}
-		}
-		backup := shellBackup
-		if backup == "" {
-			backup = guardBackup
 		}
 		return chatSystemMsg{Text: fmt.Sprintf("security rules saved (backup: %s)", backup)}
 	}

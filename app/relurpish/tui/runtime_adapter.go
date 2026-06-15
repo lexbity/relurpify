@@ -23,6 +23,7 @@ import (
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
 	"codeburg.org/lexbit/relurpify/platform/llm"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
+	"codeburg.org/lexbit/relurpify/userconfig/config/security"
 )
 
 const contextFileMaxBytes = 8000
@@ -238,7 +239,7 @@ func (r *runtimeAdapter) SessionInfo() SessionInfo {
 		if spec.Mode != "" {
 			info.Role = string(spec.Mode)
 		}
-		if spec.Context.MaxTokens > 0 {
+		if spec.Context != nil && spec.Context.MaxTokens > 0 {
 			info.MaxTokens = spec.Context.MaxTokens
 		}
 	}
@@ -870,27 +871,15 @@ func (r *runtimeAdapter) SaveToolPolicy(toolName string, level agentspec.AgentPe
 	if r == nil || r.rt == nil {
 		return fmt.Errorf("runtime unavailable")
 	}
-	manifestPath := r.rt.Config.ManifestPath
-	if manifestPath == "" {
-		return fmt.Errorf("manifest path not set")
-	}
-	doc, err := config.LoadDocument(manifestPath)
+	workspace := r.rt.Config.Workspace
+	localtoolPath := security.LocalToolPolicyPath(workspace)
+	policy, err := security.LoadLocalToolPolicy("", workspace, config.StrictDecode)
 	if err != nil {
-		return err
+		return fmt.Errorf("load local tool policy: %w", err)
 	}
-	agentSpec, err := runtimeAgentSpec(doc.Document)
-	if err != nil {
-		return err
-	}
-	if agentSpec.ToolExecutionPolicy == nil {
-		agentSpec.ToolExecutionPolicy = make(map[string]agentspec.ToolPolicy)
-	}
-	agentSpec.ToolExecutionPolicy[strings.TrimSpace(toolName)] = agentspec.ToolPolicy{Execute: level}
-	if err := upsertSandboxAgentDocument(doc.Document, agentSpec); err != nil {
-		return err
-	}
-	if _, err := config.SaveDocumentWithBackup(manifestPath, doc.Document); err != nil {
-		return err
+	policy[strings.TrimSpace(toolName)] = security.ToolPolicy{Execute: string(level)}
+	if err := config.SaveLocalToolPolicy(localtoolPath, policy); err != nil {
+		return fmt.Errorf("save local tool policy: %w", err)
 	}
 	return nil
 }
@@ -899,14 +888,30 @@ func (r *runtimeAdapter) LoadSandboxDocument() (*config.Document, error) {
 	if r == nil || r.rt == nil {
 		return nil, fmt.Errorf("runtime unavailable")
 	}
-	if r.rt.Config.ManifestPath == "" {
-		return nil, fmt.Errorf("document unavailable")
+	ws := r.rt.AgentWorkspace()
+	if ws == nil || ws.EffectiveContract == nil {
+		return &config.Document{}, nil
 	}
-	snapshot, err := config.LoadDocument(r.rt.Config.ManifestPath)
-	if err != nil {
-		return nil, err
+	ec := ws.EffectiveContract
+	doc := &config.Document{
+		APIVersion: "relurpify.io/v1",
+		Kind:       "AgentManifest",
+		Metadata:   config.DocumentMetadata{Name: ec.AgentID},
+		Spec:       make(map[string]yaml.Node),
 	}
-	return snapshot.Document, nil
+	if len(ec.Permissions.FileSystem) > 0 || len(ec.Permissions.Executables) > 0 {
+		var permNode yaml.Node
+		if err := permNode.Encode(ec.Permissions); err == nil {
+			doc.Spec["permissions"] = permNode
+		}
+	}
+	if ec.AgentSpec != nil {
+		var agentNode yaml.Node
+		if err := agentNode.Encode(ec.AgentSpec); err == nil {
+			doc.Spec["agent"] = agentNode
+		}
+	}
+	return doc, nil
 }
 
 func (r *runtimeAdapter) SaveSandboxDocument(doc *config.Document) (string, error) {
@@ -916,11 +921,29 @@ func (r *runtimeAdapter) SaveSandboxDocument(doc *config.Document) (string, erro
 	if doc == nil {
 		return "", fmt.Errorf("document required")
 	}
-	path := strings.TrimSpace(r.rt.Config.ManifestPath)
-	if path == "" {
-		return "", fmt.Errorf("document path not set")
+	workspace := r.rt.Config.Workspace
+
+	// Write tool execution policy changes to security/localtool.policy.yaml.
+	if agentNode, ok := doc.Section("agent"); ok {
+		var agentSpec agentspec.AgentRuntimeSpec
+		if err := agentNode.Decode(&agentSpec); err == nil && len(agentSpec.ToolExecutionPolicy) > 0 {
+			localtoolPath := security.LocalToolPolicyPath(workspace)
+			toolPolicies := make(map[string]security.ToolPolicy, len(agentSpec.ToolExecutionPolicy))
+			for name, tp := range agentSpec.ToolExecutionPolicy {
+				toolPolicies[name] = security.ToolPolicy{Execute: string(tp.Execute)}
+			}
+			if err := config.SaveLocalToolPolicy(localtoolPath, toolPolicies); err != nil {
+				return "", fmt.Errorf("save local tool policy: %w", err)
+			}
+		}
 	}
-	return config.SaveDocumentWithBackup(path, doc)
+
+	// Reload workspace so effective contract picks up the decomposed edit.
+	if err := r.ReloadWorkspace(context.Background(), workspace); err != nil {
+		return "", fmt.Errorf("reload workspace after sandbox save: %w", err)
+	}
+
+	return "", nil
 }
 
 func (r *runtimeAdapter) SandboxBackend() string {
@@ -1057,10 +1080,7 @@ func (r *runtimeAdapter) Diagnostics() DiagnosticsInfo {
 	d.ProfileSource = info.ProfileSource
 	d.ManifestFingerprint = r.rt.ManifestFingerprint()
 	if r.rt.Config.Workspace != "" {
-		d.ProtectedPaths = config.New(r.rt.Config.Workspace).GovernanceRoots(
-			r.rt.Config.ManifestPath,
-			r.rt.Config.ConfigPath,
-		)
+		d.ProtectedPaths = config.New(r.rt.Config.Workspace).GovernanceRoots()
 	}
 	d.DeprecationNotices = r.rt.ManifestDeprecationNotices()
 	if ws := r.rt.AgentWorkspace(); ws != nil {
@@ -1085,39 +1105,6 @@ func agentSpecPolicySummary(spec *agentspec.AgentRuntimeSpec) string {
 		parts = append(parts, fmt.Sprintf("provider-rules=%d", len(spec.ProviderPolicies)))
 	}
 	return strings.Join(parts, ", ")
-}
-
-func runtimeAgentSpec(doc *config.Document) (*agentspec.AgentRuntimeSpec, error) {
-	if doc == nil {
-		return nil, fmt.Errorf("document unavailable")
-	}
-	node, ok := doc.Section("agent")
-	if !ok {
-		return &agentspec.AgentRuntimeSpec{}, nil
-	}
-	spec, err := agentspec.DecodeSection(node)
-	if err != nil {
-		return nil, err
-	}
-	return spec, nil
-}
-
-func upsertSandboxAgentDocument(doc *config.Document, agentSpec *agentspec.AgentRuntimeSpec) error {
-	if doc == nil {
-		return fmt.Errorf("document unavailable")
-	}
-	if agentSpec == nil {
-		return fmt.Errorf("agent spec required")
-	}
-	var agentNode yaml.Node
-	if err := agentNode.Encode(agentSpec); err != nil {
-		return fmt.Errorf("encode agent section: %w", err)
-	}
-	if doc.Spec == nil {
-		doc.Spec = make(map[string]yaml.Node)
-	}
-	doc.Spec["agent"] = agentNode
-	return nil
 }
 
 func (r *runtimeAdapter) ApplyChatPolicy(subtab SubTabID) error {

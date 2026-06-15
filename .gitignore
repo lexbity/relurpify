@@ -9,6 +9,7 @@
 testdata/
 relurpify/
 .relurpish/
+.relurpify_state/
 /relurpish
 /relurpify_cfg/test_run/
 /relurpify_cfg/test_runs/

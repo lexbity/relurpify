@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	aconvert "codeburg.org/lexbit/relurpify/capability/agentspec/convert"
 	regpkg "codeburg.org/lexbit/relurpify/capability/registry"
 	fsandbox "codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/context/knowledge/ast"
@@ -267,13 +268,12 @@ func BootstrapAgentRuntime(ctx context.Context, workspace string, opts AgentBoot
 			return nil, err
 		}
 	}
-	agentSpec := effectiveContract.AgentSpec
-	agentSpecCap := convertAgentSpec(agentSpec)
+	agentSpecCap := aconvert.ConvertAgentSpec(effectiveContract.AgentSpec)
 	fileScope := fsandbox.NewFileScopePolicy(workspace, append([]string(nil), opts.SecurityBundle.Sandbox.ProtectedPaths...))
 
 	resolvedModel := opts.InferenceModel
 	if resolvedModel == "" {
-		resolvedModel = agentSpec.Model.Name
+		resolvedModel = effectiveContract.AgentSpec.Model.Name
 	}
 
 	authRunner, ok := opts.Runner.(*fsandbox.AuthorizedRunner)
@@ -299,7 +299,7 @@ func BootstrapAgentRuntime(ctx context.Context, workspace string, opts AgentBoot
 		}
 	}
 	if opts.ProfileResolution.Profile != nil {
-		registry.SetModelProfile(convertProfileConfig(opts.ProfileResolution.Profile))
+		registry.SetModelProfile(aconvert.ConvertProfileConfig(opts.ProfileResolution.Profile))
 	}
 	compiledPolicy, err := buildCompiledPolicy(effectiveContract, opts.PolicyEngine, nil)
 	if err != nil {
@@ -456,9 +456,6 @@ func OpenWorkspace(ctx context.Context, cfg WorkspaceConfig) (_ *Workspace, err 
 			for _, usage := range workspaceCfg.DefaultsUsed {
 				log.Printf("WARN config: using default value file=%s key=%s default=%v", workspaceCfg.SourcePath, usage.Key, usage.Value)
 			}
-		}
-		if cfg.ManifestPath == "" && cfg.DocumentSnapshot != nil {
-			cfg.ManifestPath = cfg.DocumentSnapshot.SourcePath
 		}
 		cfg.StateDir = workspaceCfg.StateDir()
 		if cfg.SandboxBackend == "" {
@@ -689,9 +686,6 @@ func validateConfig(cfg WorkspaceConfig) error {
 		return fmt.Errorf("Workspace is required")
 	}
 	if cfg.Scope != ScopeEmbeddedAgent {
-		if cfg.ManifestPath == "" {
-			return fmt.Errorf("ManifestPath is required")
-		}
 		if cfg.InferenceEndpoint == "" {
 			return fmt.Errorf("InferenceEndpoint is required")
 		}

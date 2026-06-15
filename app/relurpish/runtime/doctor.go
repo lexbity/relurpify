@@ -2,18 +2,14 @@ package runtime
 
 import (
 	"context"
-	"encoding/hex"
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"codeburg.org/lexbit/relurpify/ayenitd"
-	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
-	"codeburg.org/lexbit/relurpify/governance/permissions"
 	platformfs "codeburg.org/lexbit/relurpify/platform/fs"
 	"codeburg.org/lexbit/relurpify/platform/llm"
 	"codeburg.org/lexbit/relurpify/named/euclo/euclocontract"
@@ -93,6 +89,10 @@ func (r DoctorReport) Ready() bool {
 // BuildDoctorReport checks workspace state and local runtime dependencies
 // without requiring the runtime to start successfully.
 func BuildDoctorReport(ctx context.Context, cfg Config, secrets config.Secrets) DoctorReport {
+	// Diagnostics are non-interactive: strip the HITL-gated command policy so
+	// dependency/chromium probes (and ProbeEnvironment below) never block on
+	// approval. See diagnosticConfig.
+	cfg = diagnosticConfig(cfg)
 	paths := config.New(cfg.Workspace)
 	report := DoctorReport{
 		Workspace:  cfg.Workspace,
@@ -140,46 +140,26 @@ func BuildDoctorReport(ctx context.Context, cfg Config, secrets config.Secrets) 
 	if strings.EqualFold(strings.TrimSpace(cfg.InferenceProvider), "tape") && strings.TrimSpace(cfg.InferenceTapePath) == "" {
 		cfg.InferenceTapePath = config.DefaultWorkspaceStateTapeFile(cfg.Workspace)
 	}
-	if _, err := os.Stat(cfg.ManifestPath); err == nil {
-		report.ManifestExists = true
-		report.ContractSource = "manifest"
-		if snapshot, err := config.LoadDocument(cfg.ManifestPath); err != nil {
-			report.ManifestError = err.Error()
-		} else {
-			report.ManifestFingerprint = hex.EncodeToString(snapshot.Fingerprint[:])
-			report.ManifestPolicySummary = summarizeManifestPolicy(snapshot.Document)
-			if len(snapshot.Warnings) > 0 {
-				report.ManifestWarnings = append(report.ManifestWarnings, snapshot.Warnings...)
-				report.DeprecationNotices = append(report.DeprecationNotices, snapshot.Warnings...)
-			}
-		}
-	} else {
-		report.ContractSource = "builtin+split"
-		fp := config.ContractFingerprint(euclocontract.DefaultContract(), cfg.Workspace)
-		report.ManifestFingerprint = fmt.Sprintf("%x", fp)
-	}
-	report.ProtectedPaths = config.New(cfg.Workspace).GovernanceRoots(cfg.ManifestPath, cfg.ConfigPath, config.DefaultWorkspaceConfigPath(cfg.Workspace))
+	report.ContractSource = "builtin+split"
+	fp := config.ContractFingerprint(euclocontract.DefaultContract(), cfg.Workspace)
+	report.ManifestFingerprint = fmt.Sprintf("%x", fp)
+	report.ProtectedPaths = config.New(cfg.Workspace).GovernanceRoots(config.DefaultWorkspaceConfigPath(cfg.Workspace))
 
 	resolver := te.NewResolver(cfg.SharedRoot)
 	if starterConfig, err := resolver.ResolveWorkspaceConfigTemplate(); err == nil {
-		if starterManifest, err := resolver.ResolveWorkspaceAgentTemplate(); err == nil {
-			sandboxTemplate, sandboxErr := resolver.ResolveWorkspaceSecurityTemplate("sandbox")
-			shellTemplate, shellErr := resolver.ResolveWorkspaceSecurityTemplate("shell")
-			localToolTemplate, localToolErr := resolver.ResolveWorkspaceSecurityTemplate("localtool")
-			ingestionTemplate, ingestionErr := resolver.ResolveWorkspaceSecurityTemplate("workspaceingestion")
-			if sandboxErr == nil && shellErr == nil && localToolErr == nil && ingestionErr == nil {
-				report.StarterTemplatesReady = true
-				_ = starterConfig
-				_ = starterManifest
-				_ = sandboxTemplate
-				_ = shellTemplate
-				_ = localToolTemplate
-				_ = ingestionTemplate
-			} else {
-				report.StarterTemplatesError = firstNonEmpty(errorString(sandboxErr), errorString(shellErr), errorString(localToolErr), errorString(ingestionErr))
-			}
+		sandboxTemplate, sandboxErr := resolver.ResolveWorkspaceSecurityTemplate("sandbox")
+		shellTemplate, shellErr := resolver.ResolveWorkspaceSecurityTemplate("shell")
+		localToolTemplate, localToolErr := resolver.ResolveWorkspaceSecurityTemplate("localtool")
+		ingestionTemplate, ingestionErr := resolver.ResolveWorkspaceSecurityTemplate("workspaceingestion")
+		if sandboxErr == nil && shellErr == nil && localToolErr == nil && ingestionErr == nil {
+			report.StarterTemplatesReady = true
+			_ = starterConfig
+			_ = sandboxTemplate
+			_ = shellTemplate
+			_ = localToolTemplate
+			_ = ingestionTemplate
 		} else {
-			report.StarterTemplatesError = err.Error()
+			report.StarterTemplatesError = firstNonEmpty(errorString(sandboxErr), errorString(shellErr), errorString(localToolErr), errorString(ingestionErr))
 		}
 	} else {
 		// Check embedded templates as fallback.
@@ -229,7 +209,6 @@ func BuildDoctorReport(ctx context.Context, cfg Config, secrets config.Secrets) 
 	// Some fields may be missing in Config; use zero values.
 	ayenitdCfg := ayenitd.WorkspaceConfig{
 		Workspace:                  cfg.Workspace,
-		ManifestPath:               cfg.ManifestPath,
 		InferenceProvider:          cfg.InferenceProvider,
 		InferenceEndpoint:          cfg.InferenceEndpoint,
 		InferenceModel:             cfg.InferenceModel,
@@ -330,7 +309,8 @@ func checkEmbeddedTemplates() bool {
 	// Verify the key template files exist in the embed.
 	for _, path := range []string{
 		"workspace/workspace.yaml",
-		"workspace/agent.yaml",
+		"workspace/model/profiles/default.llm.yaml",
+		"workspace/model/provider/ollama.provider.yaml",
 		"workspace/security/sandbox.policy.yaml",
 		"workspace/security/shell.policy.yaml",
 		"workspace/security/localtool.policy.yaml",
@@ -374,10 +354,9 @@ func InitializeWorkspaceFromTemplates(cfg Config, overwrite bool) error {
 	if err != nil {
 		return fmt.Errorf("resolve ingestion security template: %w", err)
 	}
-	agentTemplate, agentTplErr := resolver.ResolveWorkspaceAgentTemplate()
 	workspaceConfigPath := cfg.ConfigPath
 	if workspaceConfigPath == "" {
-		workspaceConfigPath = config.DefaultWorkspaceStateConfigPath(cfg.Workspace)
+		workspaceConfigPath = config.DefaultWorkspaceConfigPath(cfg.Workspace)
 	}
 	if err := copyTemplateFile(configTemplate, workspaceConfigPath, cfg.Workspace, overwrite); err != nil {
 		return err
@@ -400,38 +379,8 @@ func InitializeWorkspaceFromTemplates(cfg Config, overwrite bool) error {
 	if err := copyTemplateFile(ingestionTemplate, filepath.Join(securityDir, "workspaceingestion.policy.yaml"), cfg.Workspace, overwrite); err != nil {
 		return err
 	}
-	// Write the agent manifest template if available.
-	agentsDir := paths.AgentsDir()
-	if agentTplErr == nil {
-		if err := os.MkdirAll(agentsDir, 	platformfs.PublicDirMode); err != nil { // public: agents dir
-			return err
-		}
-		agentName := strings.TrimSpace(cfg.AgentName)
-		if agentName == "" {
-			agentName = "euclo"
-		}
-		if err := copyTemplateFile(agentTemplate, filepath.Join(agentsDir, agentName+".yaml"), cfg.Workspace, overwrite); err != nil {
-			return err
-		}
-	} else {
-		// Fall back to embedded agent template when disk resolver fails.
-		embedAgent, embedErr := fs.ReadFile(templatesembed.DefaultFS(), "workspace/agent.yaml")
-		if embedErr == nil {
-			if err := os.MkdirAll(agentsDir, 	platformfs.PublicDirMode); err != nil { // public: agents dir
-				return err
-			}
-			agentName := strings.TrimSpace(cfg.AgentName)
-			if agentName == "" {
-				agentName = "euclo"
-			}
-			if err := copyTemplateContent(embedAgent, filepath.Join(agentsDir, agentName+".yaml"), cfg.Workspace, overwrite); err != nil {
-				return err
-			}
-		}
-	}
 	stateDir := config.DefaultWorkspaceStateDir(cfg.Workspace)
 	for _, dir := range []string{
-		paths.AgentsDir(),
 		stateDir,
 		filepath.Join(stateDir, "logs"),
 		filepath.Join(stateDir, "telemetry"),
@@ -520,31 +469,6 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
-}
-
-func summarizeManifestPolicy(doc *config.Document) string {
-	if doc == nil {
-		return ""
-	}
-	var parts []string
-	permNode, ok := doc.Section("permissions")
-	if ok {
-		var permSpec permissions.PermissionSet
-		if err := permNode.Decode(&permSpec); err == nil {
-			permCount := len(permSpec.FileSystem) + len(permSpec.Executables) + len(permSpec.Network)
-			if permCount > 0 {
-				parts = append(parts, fmt.Sprintf("permissions=%d", permCount))
-			}
-		}
-	}
-	agentNode, ok := doc.Section("agent")
-	if ok {
-		var agentSpec agentspec.AgentRuntimeSpec
-		if err := agentNode.Decode(&agentSpec); err == nil {
-			parts = append(parts, fmt.Sprintf("tool-calling=%s", agentSpec.ResolveToolCallingIntent()))
-		}
-	}
-	return strings.Join(parts, ", ")
 }
 
 func errorString(err error) string {

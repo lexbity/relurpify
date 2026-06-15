@@ -15,7 +15,6 @@ type Config struct {
 	AgentSpec         *agentspec.AgentRuntimeSpec `json:"agent_spec,omitempty"`
 	Workspace         string                      `json:"workspace,omitempty"`
 	AgentsDir         string                      `json:"agents_dir,omitempty"`
-	ManifestPath      string                      `json:"manifest_path,omitempty"`
 	ConfigPath        string                      `json:"config_path,omitempty"`
 	InferenceModel    string                      `json:"inference_model,omitempty"`
 	InferenceProvider string                      `json:"inference_provider,omitempty"`

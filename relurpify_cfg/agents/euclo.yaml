@@ -1,7 +1,0 @@
-apiVersion: relurpify.io/v1
-kind: AgentManifest
-metadata:
-  name: euclo
-  version: 1.0.0
-  description: Default euclo agent manifest
-spec: {}

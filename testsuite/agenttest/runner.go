@@ -13,7 +13,6 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/platform/fs"
 	"codeburg.org/lexbit/relurpify/telemetry/perfstats"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
@@ -353,20 +352,6 @@ func (r *Runner) runPreparedCase(ctx context.Context, suite *Suite, c CaseSpec, 
 }
 
 func (r *Runner) preflightSuite(ctx context.Context, suite *Suite, opts RunOptions, targetWorkspace string, models []ModelSpec) error {
-	manifestModel := ""
-	if suite != nil {
-		suiteManifestAbs := suite.ResolvePath(suite.Spec.Manifest)
-		suiteManifestAbs = resolveAgainstWorkspace(targetWorkspace, suiteManifestAbs, suite.Spec.Manifest)
-		suiteManifestAbs = fallbackManifestPath(suiteManifestAbs, targetWorkspace)
-		if docSnapshot, err := config.LoadDocument(suiteManifestAbs); err == nil {
-			if node, ok := docSnapshot.Document.Section("agent"); ok {
-				var agentSpec agentspec.AgentRuntimeSpec
-				if err := node.Decode(&agentSpec); err == nil {
-					manifestModel = agentSpec.Model.Name
-				}
-			}
-		}
-	}
 	checked := map[string]struct{}{}
 	layout := newRunCaseLayout(filepath.Join(targetWorkspace, "relurpify_cfg", "test_run", "preflight"), "preflight", "preflight")
 	matrixModels := expandSuiteModelMatrix(models, suite.Spec.Providers, suite.Spec.Execution.MatrixOrder)
@@ -376,7 +361,7 @@ func (r *Runner) preflightSuite(ctx context.Context, suite *Suite, opts RunOptio
 			caseModels = expandSuiteModelMatrix([]ModelSpec{*c.Overrides.Model}, suite.Spec.Providers, suite.Spec.Execution.MatrixOrder)
 		}
 		for _, model := range caseModels {
-			exec, err := resolveCaseExecution(suite, c, model, manifestModel, opts, layout, targetWorkspace, targetWorkspace)
+			exec, err := resolveCaseExecution(suite, c, model, "", opts, layout, targetWorkspace, targetWorkspace)
 			if err != nil {
 				return err
 			}

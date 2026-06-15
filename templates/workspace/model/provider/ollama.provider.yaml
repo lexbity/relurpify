@@ -1,0 +1,11 @@
+schema: relurpify/model/provider/v1
+name: ollama
+endpoint: http://localhost:11434
+kind: ollama
+request_timeout_seconds: 120
+available_models:
+  - gemma4:e4b
+  - qwen2.5-coder:14b
+  - codellama:13b
+native_tool_calling: true
+max_concurrent: 2

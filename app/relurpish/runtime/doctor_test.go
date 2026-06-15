@@ -29,10 +29,8 @@ func TestBuildDoctorReport_ReportsBuiltinContractSource(t *testing.T) {
 		t.Fatalf("write sandbox: %v", err)
 	}
 
-	// Set ManifestPath to non-existent file.
 	cfg := Config{
-		Workspace:    workspace,
-		ManifestPath: filepath.Join(workspace, "relurpify_cfg", "agents", "euclo.yaml"),
+		Workspace: workspace,
 	}
 
 	report := BuildDoctorReport(context.Background(), cfg, config.Secrets{})

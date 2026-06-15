@@ -20,7 +20,6 @@ const AgentLabelEuclo = "euclo"
 // tests or future headless workflows.
 type Config struct {
 	Workspace                  string
-	ManifestPath               string
 	AgentsDir                  string
 	SharedRoot                 string
 	MemoryPath                 string
@@ -62,7 +61,6 @@ func DefaultConfig() Config {
 	}
 	return Config{
 		Workspace:      cwd,
-		ManifestPath:   "relurpify_cfg/agents/euclo.yaml",
 		AgentsDir:      "relurpify_cfg/agents",
 		MemoryPath:     ".relurpify_state/memory",
 		LogPath:        ".relurpify_state/logs/relurpish.log",
@@ -99,12 +97,6 @@ func (c *Config) Normalize() error {
 	if c.AgentName == "" {
 		c.AgentName = AgentLabelEuclo
 	}
-	if c.ManifestPath == "" {
-		c.ManifestPath = filepath.Join(paths.AgentsDir(), c.AgentName+".yaml")
-	}
-	if !filepath.IsAbs(c.ManifestPath) {
-		c.ManifestPath = filepath.Join(c.Workspace, c.ManifestPath)
-	}
 	if c.AgentsDir == "" {
 		c.AgentsDir = paths.AgentsDir()
 	}
@@ -136,7 +128,7 @@ func (c *Config) Normalize() error {
 		c.EventsPath = filepath.Join(c.Workspace, c.EventsPath)
 	}
 	if c.ConfigPath == "" {
-		c.ConfigPath = config.DefaultWorkspaceStateConfigPath(c.Workspace)
+		c.ConfigPath = config.DefaultWorkspaceConfigPath(c.Workspace)
 	}
 	if !filepath.IsAbs(c.ConfigPath) {
 		c.ConfigPath = filepath.Join(c.Workspace, c.ConfigPath)

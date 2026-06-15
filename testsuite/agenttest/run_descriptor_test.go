@@ -90,7 +90,7 @@ spec:
 	if desc.BackendSelection != PreparedRunSelectionSingle {
 		t.Fatalf("unexpected backend selection: %q", desc.BackendSelection)
 	}
-	if desc.SandboxBackend != "gvisor" {
+	if desc.SandboxBackend != "" {
 		t.Fatalf("unexpected sandbox backend: %q", desc.SandboxBackend)
 	}
 	if desc.SetupDir != filepath.Join(runRoot, "setup") {

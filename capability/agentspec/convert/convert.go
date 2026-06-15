@@ -1,4 +1,6 @@
-package session
+// Package convert provides shared conversion functions between userconfig DTOs
+// and capability-layer runtime types.
+package convert
 
 import (
 	"strings"
@@ -9,15 +11,16 @@ import (
 	cfgmodel "codeburg.org/lexbit/relurpify/userconfig/config/model"
 )
 
-func convertProfileConfig(cfg *cfgmodel.ModelProfileConfig) *model.ModelProfile {
-	if cfg == nil {
+// ConvertProfileConfig converts a ModelProfileConfig to a ModelProfile.
+func ConvertProfileConfig(c *cfgmodel.ModelProfileConfig) *model.ModelProfile {
+	if c == nil {
 		return nil
 	}
 	profile := &model.ModelProfile{
-		Pattern:    cfg.Pattern,
-		SourcePath: cfg.SourcePath,
+		Pattern:    c.Pattern,
+		SourcePath: c.SourcePath,
 	}
-	switch strings.ToLower(strings.TrimSpace(cfg.ToolCalling.Intent)) {
+	switch strings.ToLower(strings.TrimSpace(c.ToolCalling.Intent)) {
 	case "native":
 		profile.ToolCalling.NativeAPI = true
 	case "prompt_based":
@@ -25,16 +28,19 @@ func convertProfileConfig(cfg *cfgmodel.ModelProfileConfig) *model.ModelProfile 
 	case "auto":
 		profile.ToolCalling.NativeAPI = false
 	}
-	profile.ToolCalling.DoubleEncodedArgs = cfg.ToolCalling.DoubleEncodeArgs
-	profile.ToolCalling.MaxToolsPerCall = cfg.ToolCalling.MaxConcurrentTools
-	if cfg.Context.MaxTokens > 0 {
-		profile.ContextSize = cfg.Context.MaxTokens
+	profile.ToolCalling.DoubleEncodedArgs = c.ToolCalling.DoubleEncodeArgs
+	profile.ToolCalling.MaxToolsPerCall = c.ToolCalling.MaxConcurrentTools
+	if c.Context.MaxTokens > 0 {
+		profile.ContextSize = c.Context.MaxTokens
 	}
 	profile.Normalize()
 	return profile
 }
 
-func convertAgentSpec(in *cfg.AgentSpec) *agentspec.AgentRuntimeSpec {
+// ConvertAgentSpec converts a config.AgentSpec (decode-only DTO) to an
+// agentspec.AgentRuntimeSpec. config.AgentSpec carries no Context field, so this
+// function populates a safe built-in default for Context.
+func ConvertAgentSpec(in *cfg.AgentSpec) *agentspec.AgentRuntimeSpec {
 	if in == nil {
 		return nil
 	}
@@ -47,6 +53,11 @@ func convertAgentSpec(in *cfg.AgentSpec) *agentspec.AgentRuntimeSpec {
 		ToolExecutionPolicy: make(map[string]agentspec.ToolPolicy, len(in.ToolExecutionPolicy)),
 		ProviderPolicies:    make(map[string]agentspec.ProviderPolicy, len(in.ProviderPolicies)),
 		NativeToolCalling:   in.NativeToolCalling,
+		Context: &agentspec.ContextPolicySpec{
+			MaxTokens:         100000,
+			CompilationMode:   "balanced",
+			DefaultTrustClass: agentspec.TrustClassBuiltinTrusted,
+		},
 	}
 	for k, v := range in.ToolExecutionPolicy {
 		out.ToolExecutionPolicy[k] = agentspec.ToolPolicy{Execute: agentspec.AgentPermissionLevel(v.Execute)}

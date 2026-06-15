@@ -62,10 +62,9 @@ func TestProbeEnvironmentLoadsProfilesViaDiagnostic(t *testing.T) {
 
 	cfg := Config{
 		Workspace:         workspace,
-		ManifestPath:      filepath.Join(workspace, "relurpify_cfg", "agents", "euclo.yaml"),
 		InferenceProvider: "ollama",
 		InferenceModel:    "gemma4:e4b",
-		ConfigPath:        config.DefaultWorkspaceStateConfigPath(workspace),
+		ConfigPath:        config.DefaultWorkspaceConfigPath(workspace),
 	}
 
 	backend := &fakeProbeBackend{}
@@ -97,10 +96,9 @@ func TestProbeEnvironmentReportsToolCallingMode(t *testing.T) {
 
 	cfg := Config{
 		Workspace:         workspace,
-		ManifestPath:      filepath.Join(workspace, "relurpify_cfg", "agents", "euclo.yaml"),
 		InferenceProvider: "ollama",
 		InferenceModel:    "gemma4:e4b",
-		ConfigPath:        config.DefaultWorkspaceStateConfigPath(workspace),
+		ConfigPath:        config.DefaultWorkspaceConfigPath(workspace),
 	}
 
 	backend := &fakeProbeBackend{model: probeToolModel{native: false}}

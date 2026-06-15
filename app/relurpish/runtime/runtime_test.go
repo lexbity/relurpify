@@ -48,7 +48,6 @@ func TestConfigForWorkspaceRebindsPaths(t *testing.T) {
 		InferenceModel:    "codex",
 		SandboxBackend:    runtimeTestSandboxDocker,
 		RecordingMode:     "on",
-		ManifestPath:      runtimeTestWorkspaceOld + "/manifest.yaml",
 		AgentsDir:         runtimeTestWorkspaceOld + "/relurpify_cfg/agents",
 		MemoryPath:        runtimeTestWorkspaceOld + "/.relurpify_state/memory",
 		LogPath:           runtimeTestWorkspaceOld + "/.relurpify_state/logs/relurpish.log",
@@ -68,14 +67,11 @@ func TestConfigForWorkspaceRebindsPaths(t *testing.T) {
 	if cfg.InferenceModel != current.InferenceModel || cfg.SandboxBackend != current.SandboxBackend {
 		t.Fatalf("config fields were not preserved: %#v", cfg)
 	}
-	if cfg.ConfigPath == current.ConfigPath || cfg.ManifestPath == current.ManifestPath {
+	if cfg.ConfigPath == current.ConfigPath {
 		t.Fatalf("workspace paths were not rebound: %#v", cfg)
 	}
-	if want := runtimeTestWorkspaceNew + "/.relurpify_state/workspace.yaml"; cfg.ConfigPath != want {
+	if want := runtimeTestWorkspaceNew + "/relurpify_cfg/workspace.yaml"; cfg.ConfigPath != want {
 		t.Fatalf("config path = %q, want %q", cfg.ConfigPath, want)
-	}
-	if want := runtimeTestWorkspaceNew + "/relurpify_cfg/agents/euclo.yaml"; cfg.ManifestPath != want {
-		t.Fatalf("manifest path = %q, want %q", cfg.ManifestPath, want)
 	}
 	if want := runtimeTestWorkspaceNew + "/.relurpify_state/logs/relurpish.log"; cfg.LogPath != want {
 		t.Fatalf("log path = %q, want %q", cfg.LogPath, want)

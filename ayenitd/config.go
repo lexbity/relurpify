@@ -12,7 +12,6 @@ import (
 type WorkspaceConfig struct {
 	// Required
 	Workspace                  string // absolute path to workspace root
-	ManifestPath               string // agent manifest YAML
 	InferenceProvider          string
 	InferenceEndpoint          string
 	InferenceModel             string // overrides manifest if non-empty

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -207,17 +208,27 @@ func (p Paths) ModelProfilesDir() string {
 // be protected from agent writes and executable mutation, including the
 // relurpify_cfg root itself.
 func (p Paths) GovernanceRoots(extra ...string) []string {
-	roots := []string{
+	candidates := []string{
 		p.ConfigRoot(),
 		p.WorkspaceFile(),
 		p.AgentsDir(),
 		p.ModelProfilesDir(),
 	}
+	roots := make([]string, 0, len(candidates)+len(extra))
+	for _, path := range candidates {
+		if path != "" {
+			if _, err := os.Stat(path); err == nil {
+				roots = append(roots, path)
+			}
+		}
+	}
 	for _, path := range extra {
 		if strings.TrimSpace(path) == "" {
 			continue
 		}
-		roots = append(roots, path)
+		if _, err := os.Stat(path); err == nil {
+			roots = append(roots, path)
+		}
 	}
 	return roots
 }

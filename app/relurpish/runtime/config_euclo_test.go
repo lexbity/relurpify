@@ -1,7 +1,6 @@
 package runtime
 
 import (
-	"path/filepath"
 	"testing"
 )
 
@@ -21,9 +20,6 @@ func TestDefaultConfigEucloNames(t *testing.T) {
 	cfg := DefaultConfig()
 	if cfg.AgentName != AgentLabelEuclo {
 		t.Fatalf("DefaultConfig AgentName = %q, want %q", cfg.AgentName, AgentLabelEuclo)
-	}
-	if filepath.Base(cfg.ManifestPath) != "euclo.yaml" {
-		t.Fatalf("DefaultConfig ManifestPath basename = %q, want euclo.yaml", filepath.Base(cfg.ManifestPath))
 	}
 	if got := cfg.AgentLabel(); got != AgentLabelEuclo {
 		t.Fatalf("DefaultConfig AgentLabel() = %q, want %q", got, AgentLabelEuclo)

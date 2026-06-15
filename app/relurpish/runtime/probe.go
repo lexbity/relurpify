@@ -4,15 +4,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/governance/authorization"
 	"codeburg.org/lexbit/relurpify/platform/llm"
@@ -97,9 +94,10 @@ type StatusSnapshot struct {
 // ProbeEnvironment inspects sandbox binaries, inference backend availability,
 // and the active manifest for status/reporting surfaces.
 func ProbeEnvironment(ctx context.Context, cfg Config, secrets config.Secrets, backend llm.ManagedBackend) EnvironmentReport {
+	cfg = diagnosticConfig(cfg)
 	sandbox := detectSandbox(ctx, cfg)
 	inference := detectInferenceBackend(ctx, cfg, secrets, backend)
-	manifest := summarizeManifest(cfg.ManifestPath)
+	manifest := summarizeManifest(cfg)
 	var workspaceCfg config.RuntimeWorkspaceConfig
 	if wcfg, err := config.LoadRuntimeWorkspaceConfig(cfg.ConfigPath); err == nil {
 		workspaceCfg = wcfg
@@ -242,6 +240,19 @@ func detectInferenceBackend(ctx context.Context, cfg Config, secrets config.Secr
 	return report
 }
 
+// diagnosticConfig returns a copy of cfg suitable for non-interactive
+// environment probing. Diagnostics run a fixed, app-owned, read-only command
+// set (e.g. `runsc --version`, `docker info`) and MUST NOT route through the
+// agent's HITL-gated command policy: there is no human approver during a
+// status/doctor probe, so a gated policy would block indefinitely on the HITL
+// broker (and, with a live approver, would spam approval prompts for benign
+// version checks). Clearing CommandPolicy makes the probe non-interactive,
+// matching the standalone `doctor` CLI which already runs ungated.
+func diagnosticConfig(cfg Config) Config {
+	cfg.CommandPolicy = nil
+	return cfg
+}
+
 // runCommand executes a short-lived command and returns stdout or a formatted
 // error that includes stderr output.
 func runCommand(ctx context.Context, policy sandbox.CommandPolicy, name string, args ...string) (string, error) {
@@ -370,31 +381,10 @@ func dockerSupportsRunsc(payload string) bool {
 	return false
 }
 
-func summarizeManifest(path string) ManifestSummary {
-	summary := ManifestSummary{Path: path}
-	info, err := os.Stat(path)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			summary.Error = ""
-		} else {
-			summary.Error = err.Error()
-		}
-		return summary
-	}
-	summary.Exists = true
-	summary.UpdatedAt = info.ModTime()
-	docSnapshot, err := config.LoadDocument(path)
-	if err != nil {
-		summary.Error = err.Error()
-		return summary
-	}
-	summary.AgentName = docSnapshot.Document.Metadata.Name
-	summary.Runtime = ""
-	if node, ok := docSnapshot.Document.Section("agent"); ok {
-		var agentSpec agentspec.AgentRuntimeSpec
-		if err := node.Decode(&agentSpec); err == nil {
-			_ = agentSpec
-		}
+func summarizeManifest(cfg Config) ManifestSummary {
+	summary := ManifestSummary{
+		Path:      "",
+		AgentName: cfg.AgentLabel(),
 	}
 	return summary
 }
@@ -408,10 +398,7 @@ func (r *Runtime) Status(ctx context.Context) StatusSnapshot {
 		ServerActive: r.ServerRunning(),
 	}
 	if env.Workspace != "" {
-		snapshot.ProtectedPaths = config.New(env.Workspace).GovernanceRoots(
-			r.Config.ManifestPath,
-			r.Config.ConfigPath,
-		)
+		snapshot.ProtectedPaths = config.New(env.Workspace).GovernanceRoots()
 	}
 	if r.registration != nil {
 		if ds, ok := r.registration.DocumentSnapshot.(*config.DocumentSnapshot); ok && ds != nil {

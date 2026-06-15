@@ -42,7 +42,10 @@ type AgentModelConfig struct {
 	MaxTokens   int     `yaml:"max_tokens" json:"max_tokens"`
 }
 
-// AgentSpec describes the runtime-facing agent configuration loaded from relurpify_cfg.
+// AgentSpec is a decode-only DTO for YAML sections; NOT the runtime spec.
+// The agent baseline lives in euclocontract.DefaultContract.
+// The runtime type is agentspec.AgentRuntimeSpec; use agentspec.ConvertAgentSpec
+// to convert this DTO to the runtime type.
 type AgentSpec struct {
 	Implementation      string                    `yaml:"implementation,omitempty" json:"implementation,omitempty"`
 	Version             string                    `yaml:"version,omitempty" json:"version,omitempty"`

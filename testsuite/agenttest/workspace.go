@@ -207,25 +207,8 @@ func MaterializeDerivedWorkspace(targetWorkspace, derivedWorkspace, sharedRoot, 
 	return nil
 }
 
-func ensureDerivedManifest(resolver templates.Resolver, targetWorkspace, derivedWorkspace, manifestRef string) error {
-	manifestRef = filepath.ToSlash(strings.TrimSpace(manifestRef))
-	if manifestRef == "" || filepath.IsAbs(manifestRef) || !strings.HasPrefix(manifestRef, config.DirName+"/") {
-		return nil
-	}
-	dst := filepath.Join(derivedWorkspace, filepath.FromSlash(manifestRef))
-
-	var src string
-	candidate := filepath.Join(targetWorkspace, filepath.FromSlash(manifestRef))
-	if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
-		src = candidate
-	} else if strings.HasPrefix(manifestRef, filepath.ToSlash(filepath.Join(config.DirName, "agents"))+"/") {
-		name := strings.TrimSuffix(filepath.Base(manifestRef), filepath.Ext(manifestRef))
-		src, _ = resolver.ResolveStarterAgent(name)
-	}
-	if src == "" {
-		return nil
-	}
-	return copyRenderedFile(src, dst, derivedWorkspace, targetWorkspace)
+func ensureDerivedManifest(_ templates.Resolver, _, _, _ string) error {
+	return nil
 }
 
 func copyRenderedTree(srcRoot, dstRoot, workspace, sourceWorkspace string) error {
@@ -301,46 +284,7 @@ func applyWorkspaceFiles(workspace, targetWorkspace string, files []SetupFileSpe
 	return nil
 }
 
-func ensureDerivedSkills(targetWorkspace, derivedWorkspace, manifestRef string) error {
-	manifestRef = filepath.ToSlash(strings.TrimSpace(manifestRef))
-	if manifestRef == "" {
-		return nil
-	}
-
-	manifestPath := manifestRef
-	if !filepath.IsAbs(manifestPath) {
-		manifestPath = filepath.Join(derivedWorkspace, filepath.FromSlash(manifestRef))
-	}
-	docSnapshot, err := config.LoadDocument(manifestPath)
-	if err != nil {
-		return err
-	}
-
-	var skills []string
-	if node, ok := docSnapshot.Document.Section("skills"); ok {
-		var raw []string
-		if err := node.Decode(&raw); err == nil {
-			skills = raw
-		}
-	}
-
-	for _, name := range skills {
-		name = strings.TrimSpace(name)
-		if name == "" {
-			continue
-		}
-		dst := filepath.Join(derivedWorkspace, config.DirName, "skills", name)
-		if _, err := os.Stat(filepath.Join(dst, "skill.yaml")); err == nil {
-			continue
-		}
-		src := filepath.Join(targetWorkspace, config.DirName, "skills", name)
-		if _, err := os.Stat(filepath.Join(src, "skill.yaml")); err != nil {
-			continue
-		}
-		if err := CopyWorkspace(src, dst, nil); err != nil {
-			return err
-		}
-	}
+func ensureDerivedSkills(_, _, _ string) error {
 	return nil
 }
 

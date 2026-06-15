@@ -5,8 +5,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-
-	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
 func resolveAgainstWorkspace(workspace, resolvedBySuite, original string) string {
@@ -25,27 +23,6 @@ func resolveAgainstWorkspace(workspace, resolvedBySuite, original string) string
 		return candidate
 	}
 	return resolvedBySuite
-}
-
-func fallbackManifestPath(manifestPath, workspace string) string {
-	if manifestPath != "" {
-		if _, err := os.Stat(manifestPath); err == nil {
-			return manifestPath
-		}
-	}
-	if workspace == "" {
-		return manifestPath
-	}
-	paths := config.New(workspace)
-	candidates := []string{
-		filepath.Join(paths.ConfigRoot(), "agent.yaml"),
-	}
-	for _, candidate := range candidates {
-		if _, err := os.Stat(candidate); err == nil {
-			return candidate
-		}
-	}
-	return manifestPath
 }
 
 func uniqueStrings(in []string) []string {

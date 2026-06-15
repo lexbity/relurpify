@@ -1,0 +1,9 @@
+schema: relurpify/model/provider/v1
+name: offline
+endpoint: http://localhost:0
+kind: offline
+available_models:
+  - gemma4:e4b
+  - offline-synthetic
+native_tool_calling: true
+max_concurrent: 1

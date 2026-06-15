@@ -1,7 +1,9 @@
 package config
 
 import (
+	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -29,7 +31,10 @@ func LoadPlatformConfig(workspace string) (*PlatformConfig, error) {
 	}
 	policy, err := security.LoadLocalToolPolicy("", workspace, StrictDecode)
 	if err != nil {
-		return nil, err
+		if !errors.Is(err, os.ErrNotExist) {
+			return nil, err
+		}
+		policy = map[string]security.ToolPolicy{}
 	}
 	registry, err := BuildRegistry(manifests, policy, nil, nil)
 	if err != nil {

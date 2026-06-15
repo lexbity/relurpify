@@ -26,13 +26,6 @@ func (r Resolver) SearchRoots() []string {
 	return append([]string(nil), r.roots...)
 }
 
-// ResolveWorkspaceAgentTemplate resolves the generic starter workspace agent template.
-func (r Resolver) ResolveWorkspaceAgentTemplate() (string, error) {
-	return r.resolve(
-		filepath.Join("templates", "workspace", "agent.yaml"),
-	)
-}
-
 // ResolveWorkspaceConfigTemplate resolves the starter workspace root config.
 func (r Resolver) ResolveWorkspaceConfigTemplate() (string, error) {
 	return r.resolve(

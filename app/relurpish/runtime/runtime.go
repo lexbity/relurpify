@@ -14,6 +14,7 @@ import (
 	"codeburg.org/lexbit/relurpify/app/envcomposition"
 	"codeburg.org/lexbit/relurpify/ayenitd"
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	aconvert "codeburg.org/lexbit/relurpify/capability/agentspec/convert"
 	registry "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/cognitionzoo/paradigm"
@@ -225,7 +226,7 @@ func buildRuntime(ctx context.Context, cfg Config, secrets config.Secrets) (*Run
 		return nil, fmt.Errorf("overlay security bundle: %w", err)
 	}
 	docSnapshot := builtinDocumentSnapshot(contract, cfg.Workspace)
-	agentSpec := convertAgentSpec(contract.AgentSpec)
+	agentSpec := aconvert.ConvertAgentSpec(contract.AgentSpec)
 	contractPerms := contract.Permissions
 	securityBundle := loadedConfig.Security
 	profileRegistry, err := modelselect.BuildProfileRegistry(loadedConfig.Model.Profiles)
@@ -233,7 +234,7 @@ func buildRuntime(ctx context.Context, cfg Config, secrets config.Secrets) (*Run
 		return nil, fmt.Errorf("load model profiles: %w", err)
 	}
 	profileResolution := profileRegistry.Resolve(cfg.InferenceProvider, cfg.InferenceModel)
-	backendProfile := convertProfileConfig(profileResolution.Profile)
+	backendProfile := aconvert.ConvertProfileConfig(profileResolution.Profile)
 	registration, err := fauthorization.RegisterAgent(ctx, fauthorization.RuntimeConfig{
 		DocumentSnapshot: docSnapshot,
 		AgentSpec:        contract.AgentSpec,
@@ -339,7 +340,6 @@ func buildRuntime(ctx context.Context, cfg Config, secrets config.Secrets) (*Run
 	}
 	ws, err := session.OpenWorkspace(ctx, session.WorkspaceConfig{
 		Workspace:                  cfg.Workspace,
-		ManifestPath:               cfg.ManifestPath,
 		InferenceProvider:          cfg.InferenceProvider,
 		InferenceEndpoint:          cfg.InferenceEndpoint,
 		InferenceModel:             cfg.InferenceModel,
@@ -676,7 +676,7 @@ func (r *Runtime) applyResolvedAgentState(name string, effectiveContract *config
 	if effectiveContract.AgentSpec != nil && effectiveContract.AgentSpec.Model.Name != "" && effectiveContract.AgentSpec.Model.Name != cfg.InferenceModel {
 		return fmt.Errorf("agent %s requires model %s; restart to switch models", name, effectiveContract.AgentSpec.Model.Name)
 	}
-	agentSpecCap := convertAgentSpec(effectiveContract.AgentSpec)
+	agentSpecCap := aconvert.ConvertAgentSpec(effectiveContract.AgentSpec)
 	if agentSpecCap == nil {
 		return fmt.Errorf("agent spec required")
 	}
@@ -816,7 +816,7 @@ func (r *Runtime) resolveEffectiveContractForAgent(name string) (*config.Effecti
 	if effectiveContract.AgentID == "" {
 		return nil, nil, fmt.Errorf("agent id required for agent %q", name)
 	}
-	agentSpecCap := convertAgentSpec(effectiveContract.AgentSpec)
+	agentSpecCap := aconvert.ConvertAgentSpec(effectiveContract.AgentSpec)
 	if agentSpecCap == nil {
 		return nil, nil, fmt.Errorf("agent spec required for agent %q", name)
 	}

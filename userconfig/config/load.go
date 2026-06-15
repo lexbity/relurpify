@@ -252,25 +252,45 @@ func loadWorkspaceConfigSection(absWorkspace string, strictMode bool) (*Workspac
 }
 
 func loadSecurityBundle(absWorkspace string) (*security.Bundle, []ConfigDiagnostic, error) {
-	bundle := &security.Bundle{}
+	bundle := &security.Bundle{
+		Sandbox:   &security.SandboxPolicy{},
+		Shell:     &security.ShellBlacklist{},
+		LocalTool: map[string]security.ToolPolicy{},
+	}
 	var diags []ConfigDiagnostic
 	if sandboxPolicy, err := security.LoadSandboxPolicy("", absWorkspace, StrictDecode); err != nil {
-		diags = append(diags, ConfigDiagnostic{Path: security.SandboxPolicyPath(absWorkspace), Section: "security", Severity: "blocking", Message: err.Error()})
+		severity := "blocking"
+		if errors.Is(err, os.ErrNotExist) {
+			severity = "warning"
+		}
+		diags = append(diags, ConfigDiagnostic{Path: security.SandboxPolicyPath(absWorkspace), Section: "security", Severity: severity, Message: err.Error()})
 	} else {
 		bundle.Sandbox = sandboxPolicy
 	}
 	if shellPolicy, err := security.LoadShellPolicy("", absWorkspace, StrictDecode); err != nil {
-		diags = append(diags, ConfigDiagnostic{Path: security.ShellPolicyPath(absWorkspace), Section: "security", Severity: "blocking", Message: err.Error()})
+		severity := "blocking"
+		if errors.Is(err, os.ErrNotExist) {
+			severity = "warning"
+		}
+		diags = append(diags, ConfigDiagnostic{Path: security.ShellPolicyPath(absWorkspace), Section: "security", Severity: severity, Message: err.Error()})
 	} else {
 		bundle.Shell = shellPolicy
 	}
 	if localToolPolicy, err := security.LoadLocalToolPolicy("", absWorkspace, StrictDecode); err != nil {
-		diags = append(diags, ConfigDiagnostic{Path: security.LocalToolPolicyPath(absWorkspace), Section: "security", Severity: "blocking", Message: err.Error()})
+		severity := "blocking"
+		if errors.Is(err, os.ErrNotExist) {
+			severity = "warning"
+		}
+		diags = append(diags, ConfigDiagnostic{Path: security.LocalToolPolicyPath(absWorkspace), Section: "security", Severity: severity, Message: err.Error()})
 	} else {
 		bundle.LocalTool = localToolPolicy
 	}
 	if ingestionRules, err := security.LoadWorkspaceIngestionPolicy("", absWorkspace, StrictDecode); err != nil {
-		diags = append(diags, ConfigDiagnostic{Path: security.WorkspaceIngestionPolicyPath(absWorkspace), Section: "security", Severity: "blocking", Message: err.Error()})
+		severity := "blocking"
+		if errors.Is(err, os.ErrNotExist) {
+			severity = "warning"
+		}
+		diags = append(diags, ConfigDiagnostic{Path: security.WorkspaceIngestionPolicyPath(absWorkspace), Section: "security", Severity: severity, Message: err.Error()})
 	} else {
 		bundle.Ingestion = ingestionRules
 	}
