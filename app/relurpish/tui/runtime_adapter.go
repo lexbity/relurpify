@@ -209,12 +209,18 @@ func (r *runtimeAdapter) SessionInfo() SessionInfo {
 	info.Provider = cfg.InferenceProvider
 	info.Model = cfg.InferenceModel
 	info.Agent = cfg.AgentLabel()
-	if r.rt.AgentWorkspace().ProfileResolution.Profile != nil {
-		info.Profile = strings.TrimSpace(r.rt.AgentWorkspace().ProfileResolution.Profile.Pattern)
+
+	ws := r.rt.AgentWorkspace()
+	if ws == nil {
+		return info
 	}
-	info.ProfileReason = r.rt.AgentWorkspace().ProfileResolution.Reason
-	info.ProfileSource = r.rt.AgentWorkspace().ProfileResolution.SourcePath
-	if be := r.rt.AgentWorkspace().Backend; be != nil {
+
+	if ws.ProfileResolution.Profile != nil {
+		info.Profile = strings.TrimSpace(ws.ProfileResolution.Profile.Pattern)
+	}
+	info.ProfileReason = ws.ProfileResolution.Reason
+	info.ProfileSource = ws.ProfileResolution.SourcePath
+	if be := ws.Backend; be != nil {
 		if mb, ok := be.(llm.ManagedBackend); ok {
 			if health, err := mb.Health(context.Background()); err == nil && health != nil {
 				info.BackendState = string(health.State)
@@ -222,7 +228,7 @@ func (r *runtimeAdapter) SessionInfo() SessionInfo {
 		}
 	}
 
-	if spec := r.rt.AgentWorkspace().AgentSpec; spec != nil {
+	if spec := ws.AgentSpec; spec != nil {
 		if spec.Model.Provider != "" {
 			info.Provider = spec.Model.Provider
 		}
@@ -242,28 +248,32 @@ func (r *runtimeAdapter) SessionInfo() SessionInfo {
 }
 
 func (r *runtimeAdapter) ContractSummary() *ContractSummary {
-	if r == nil || r.rt == nil || r.rt.AgentWorkspace().EffectiveContract == nil {
+	if r == nil || r.rt == nil {
+		return nil
+	}
+	ws := r.rt.AgentWorkspace()
+	if ws == nil || ws.EffectiveContract == nil {
 		return nil
 	}
 	summary := &ContractSummary{
-		AgentID:         r.rt.AgentWorkspace().EffectiveContract.AgentID,
-		ManifestName:    r.rt.AgentWorkspace().EffectiveContract.Sources.ManifestName,
-		ManifestVersion: r.rt.AgentWorkspace().EffectiveContract.Sources.ManifestVersion,
-		Workspace:       r.rt.AgentWorkspace().EffectiveContract.Sources.Workspace,
+		AgentID:         ws.EffectiveContract.AgentID,
+		ManifestName:    ws.EffectiveContract.Sources.ManifestName,
+		ManifestVersion: ws.EffectiveContract.Sources.ManifestVersion,
+		Workspace:       ws.EffectiveContract.Sources.Workspace,
 		AppliedSkills:   nil,
 		FailedSkills:    nil,
-		AdmissionCount:  len(r.rt.AgentWorkspace().CapabilityAdmissions),
+		AdmissionCount:  len(ws.CapabilityAdmissions),
 	}
 	if r.rt.Tools != nil {
 		summary.CapabilityCount = len(r.rt.Tools.AllCapabilities())
 	}
-	for _, admission := range r.rt.AgentWorkspace().CapabilityAdmissions {
+	for _, admission := range ws.CapabilityAdmissions {
 		if !admission.Admitted {
 			summary.RejectedCount++
 		}
 	}
-	if r.rt.AgentWorkspace().CompiledPolicy != nil {
-		summary.PolicyRuleCount = len(r.rt.AgentWorkspace().CompiledPolicy.Rules)
+	if ws.CompiledPolicy != nil {
+		summary.PolicyRuleCount = len(ws.CompiledPolicy.Rules)
 	}
 	return summary
 }
@@ -272,8 +282,12 @@ func (r *runtimeAdapter) CapabilityAdmissions() []CapabilityAdmissionInfo {
 	if r == nil || r.rt == nil {
 		return nil
 	}
-	out := make([]CapabilityAdmissionInfo, 0, len(r.rt.AgentWorkspace().CapabilityAdmissions))
-	for _, admission := range r.rt.AgentWorkspace().CapabilityAdmissions {
+	ws := r.rt.AgentWorkspace()
+	if ws == nil {
+		return nil
+	}
+	out := make([]CapabilityAdmissionInfo, 0, len(ws.CapabilityAdmissions))
+	for _, admission := range ws.CapabilityAdmissions {
 		out = append(out, CapabilityAdmissionInfo{
 			CapabilityID:   admission.CapabilityID,
 			CapabilityName: admission.CapabilityName,
@@ -308,7 +322,11 @@ func (r *runtimeAdapter) ResolveContextFiles(ctx context.Context, files []string
 		return res
 	}
 	workspace := r.rt.Config.Workspace
-	perm := r.rt.AgentWorkspace().Registration.Permissions
+	ws := r.rt.AgentWorkspace()
+	var perm permissions.PermissionManager
+	if ws != nil && ws.Registration != nil {
+		perm = ws.Registration.Permissions
+	}
 
 	for _, path := range paths {
 		abs := path
@@ -318,7 +336,7 @@ func (r *runtimeAdapter) ResolveContextFiles(ctx context.Context, files []string
 		abs = filepath.Clean(abs)
 
 		if perm != nil {
-			if err := perm.CheckFileAccess(ctx, r.rt.AgentWorkspace().Registration.ID, permissions.FileSystemRead, abs); err != nil {
+			if err := perm.CheckFileAccess(ctx, ws.Registration.ID, permissions.FileSystemRead, abs); err != nil {
 				res.Denied[path] = err.Error()
 				continue
 			}
@@ -379,8 +397,9 @@ func (r *runtimeAdapter) InferenceModels(ctx context.Context) ([]string, error) 
 		return nil, fmt.Errorf("runtime unavailable")
 	}
 	var models []string
-	if be := r.rt.AgentWorkspace().Backend; be != nil {
-		if mb, ok := be.(llm.ManagedBackend); ok {
+	ws := r.rt.AgentWorkspace()
+	if ws != nil && ws.Backend != nil {
+		if mb, ok := ws.Backend.(llm.ManagedBackend); ok {
 			backendModels, err := mb.ListModels(ctx)
 			if err != nil {
 				return nil, err
@@ -1044,7 +1063,9 @@ func (r *runtimeAdapter) Diagnostics() DiagnosticsInfo {
 		)
 	}
 	d.DeprecationNotices = r.rt.ManifestDeprecationNotices()
-	d.ManifestPolicy = agentSpecPolicySummary(r.rt.AgentWorkspace().AgentSpec)
+	if ws := r.rt.AgentWorkspace(); ws != nil {
+		d.ManifestPolicy = agentSpecPolicySummary(ws.AgentSpec)
+	}
 
 	return d
 }

@@ -64,8 +64,11 @@ func runEditTurn(t *testing.T, native bool) editRun {
 		llmModel = llm.NewFallbackToolModel(offline.NewModel())
 	}
 
+	editTool := &fs.EditFileTool{BasePath: workspace}
+	editTool.SetSandboxScope(fs.NewFileScopePolicy(workspace, nil))
+
 	tools := []model.LLMToolSpec{
-		capports.LLMToolSpecFromTool(&fs.EditFileTool{BasePath: workspace}),
+		capports.LLMToolSpecFromTool(editTool),
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -121,6 +124,7 @@ func executeEditTool(t *testing.T, workspace string, call model.ToolCall) string
 
 	require.Equal(t, "file_edit", strings.TrimSpace(call.Name))
 	tool := &fs.EditFileTool{BasePath: workspace}
+	tool.SetSandboxScope(fs.NewFileScopePolicy(workspace, nil))
 	result, err := tool.Execute(context.Background(), call.Args)
 	require.NoError(t, err)
 	require.NotNil(t, result)

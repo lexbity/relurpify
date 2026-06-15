@@ -85,6 +85,7 @@ func NewRegistry() *CapabilityRegistry {
 		capabilityNameIndex: make(map[string][]string),
 		localToolNameIndex:  make(map[string]string),
 		toolPolicies:        make(map[string]agentspec.ToolPolicy),
+		sandboxScope:        permissions.NewDenyAllFileScopePolicy(),
 		safety:              runtime.NewRuntimeSafetyController(),
 		rollbackTokens:      make(map[string]ports.RollbackToken),
 	}
@@ -142,6 +143,7 @@ func (r *CapabilityRegistry) WithAllowlist(allowedIDs []string) *CapabilityRegis
 	return &CapabilityRegistry{
 		delegate:        r,
 		toolIDAllowlist: allowlist,
+		sandboxScope:    r.sandboxScope,
 	}
 }
 
@@ -251,7 +253,7 @@ func (r *CapabilityRegistry) syncAgentSpecAwareEntriesLocked(spec *agentspec.Age
 }
 
 func (r *CapabilityRegistry) syncSandboxScopeAwareEntriesLocked() {
-	if r == nil || r.sandboxScope == nil {
+	if r == nil {
 		return
 	}
 	for _, entry := range r.entries {
@@ -317,12 +319,12 @@ func (r *CapabilityRegistry) registerEntryLocked(desc descriptor.CapabilityDescr
 	if r == nil || entry == nil {
 		return
 	}
-	if entry.legacyTool != nil && r.sandboxScope != nil {
+	if entry.legacyTool != nil {
 		if aware, ok := unwrapTool(entry.legacyTool).(SandboxScopeAware); ok {
 			aware.SetSandboxScope(r.sandboxScope)
 		}
 	}
-	if entry.handler != nil && r.sandboxScope != nil {
+	if entry.handler != nil {
 		if aware, ok := unwrapCapabilityHandler(entry.handler).(SandboxScopeAware); ok {
 			aware.SetSandboxScope(r.sandboxScope)
 		}
@@ -759,6 +761,7 @@ func (r *CapabilityRegistry) CloneFiltered(keep func(ports.Tool) bool) *Capabili
 		permissionManager:   r.permissionManager,
 		registeredAgentID:   r.registeredAgentID,
 		agentSpec:           r.agentSpec,
+		sandboxScope:        r.sandboxScope,
 		runtimePolicy:       r.currentRuntimePolicyLocked(),
 		allowedCapabilities: CloneCapabilitySelectors(r.allowedCapabilities),
 		allowedMatchers:     append([]compiledSelector{}, r.allowedMatchers...),

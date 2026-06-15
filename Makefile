@@ -15,6 +15,30 @@ lint-arch:
 	$(GO_OFFLINE_ENV) go run ./tooling/arch/cmd/domaincheck -mode=enforce -check=context-ports; \
 	exit $$EXIT_CODE
 
+# check-template-drift materialises the embedded default template bundle and
+# diffs the key workspace files against the checked-in relurpify_cfg/.
+# Returns non-zero when drift is detected (AC-8).
+check-template-drift:
+	@tmpdir=$$(mktemp -d); \
+	trap "rm -rf $$tmpdir" EXIT; \
+	go run ./tooling/driftcheck $$tmpdir; \
+	exitcode=0; \
+	echo "[check-template-drift] verifying workspace.yaml..."; \
+	if ! diff -q "$$tmpdir/workspace/workspace.yaml" "relurpify_cfg/workspace.yaml"; then \
+		echo "[FAIL] workspace.yaml drifts from embedded template"; \
+		exitcode=1; \
+	fi; \
+	echo "[check-template-drift] verifying agent manifest..."; \
+	if ! diff -q "$$tmpdir/workspace/agent.yaml" "relurpify_cfg/agents/euclo.yaml"; then \
+		echo "[FAIL] agents/euclo.yaml drifts from embedded template"; \
+		exitcode=1; \
+	fi; \
+	if [ "$$exitcode" -eq 0 ]; then \
+		echo "[PASS] embedded templates match relurpify_cfg/"; \
+	else \
+		exit 1; \
+	fi
+
 # Domain DAG direction checker (§2.1). Warn-mode: reports violations, exits 0.
 # Enforce-mode available as a separate target (15 pre-existing non-P-phase
 # violations remain; domain acyclicity program scope is complete).

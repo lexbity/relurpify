@@ -69,9 +69,15 @@ func runTraversalTurn(t *testing.T, native bool) traversalRun {
 		llmModel = llm.NewFallbackToolModel(offline.NewModel())
 	}
 
+	scope := fs.NewFileScopePolicy(workspace, nil)
+	listTool := &fs.ListFilesTool{BasePath: workspace}
+	listTool.SetSandboxScope(scope)
+	readTool := &fs.ReadFileTool{BasePath: workspace}
+	readTool.SetSandboxScope(scope)
+
 	tools := []model.LLMToolSpec{
-		capports.LLMToolSpecFromTool(&fs.ListFilesTool{BasePath: workspace}),
-		capports.LLMToolSpecFromTool(&fs.ReadFileTool{BasePath: workspace}),
+		capports.LLMToolSpecFromTool(listTool),
+		capports.LLMToolSpecFromTool(readTool),
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -122,9 +128,11 @@ func runTraversalTurn(t *testing.T, native bool) traversalRun {
 func executeTraversalTool(t *testing.T, workspace string, call model.ToolCall) string {
 	t.Helper()
 
+	scope := fs.NewFileScopePolicy(workspace, nil)
 	switch strings.TrimSpace(call.Name) {
 	case "file_list":
 		tool := &fs.ListFilesTool{BasePath: workspace}
+		tool.SetSandboxScope(scope)
 		result, err := tool.Execute(context.Background(), call.Args)
 		require.NoError(t, err)
 		require.NotNil(t, result)
@@ -133,6 +141,7 @@ func executeTraversalTool(t *testing.T, workspace string, call model.ToolCall) s
 		return fmt.Sprintf("success=true Listed files: [%s]", strings.Join(files, " "))
 	case "file_read":
 		tool := &fs.ReadFileTool{BasePath: workspace}
+		tool.SetSandboxScope(scope)
 		result, err := tool.Execute(context.Background(), call.Args)
 		require.NoError(t, err)
 		require.NotNil(t, result)

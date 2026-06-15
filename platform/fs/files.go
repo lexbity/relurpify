@@ -4,9 +4,12 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io/fs"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -28,6 +31,33 @@ func NewFileScopePolicy(workspace string, protectedPaths []string) *permissions.
 	return permissions.NewFileScopePolicy(workspace, protectedPaths)
 }
 
+type scopedFileTool struct {
+	scope    *permissions.FileScopePolicy
+	toolName string
+}
+
+func (s *scopedFileTool) SetSandboxScope(scope *permissions.FileScopePolicy) {
+	s.scope = scope
+}
+
+func (s *scopedFileTool) SetToolName(name string) {
+	s.toolName = name
+}
+
+func (s *scopedFileTool) enforceSandboxScope(action permissions.FileSystemAction, path string) error {
+	err := permissions.CheckOrDeny(s.scope, action, path)
+	if err != nil {
+		pathHash := sha256.Sum256([]byte(path))
+		log.Printf("sandbox.denied{tool=%q action=%q path_hash=%s reason=%q}",
+			s.toolName, action, hex.EncodeToString(pathHash[:8]), err.Error())
+	}
+	return err
+}
+
+func (s *scopedFileTool) sandboxScope() *permissions.FileScopePolicy {
+	return s.scope
+}
+
 // FilePermissionChecker is re-exported from contracts
 type FilePermissionChecker = permissions.FilePermissionChecker
 
@@ -46,19 +76,15 @@ func shouldSkipGeneratedDir(name string) bool {
 
 // ReadFileTool reads files from disk.
 type ReadFileTool struct {
+	scopedFileTool
 	BasePath string
 	manager  FilePermissionChecker
 	agentID  string
-	scope    *permissions.FileScopePolicy
 }
 
 func (t *ReadFileTool) SetPermissionManager(manager FilePermissionChecker, agentID string) {
 	t.manager = manager
 	t.agentID = agentID
-}
-
-func (t *ReadFileTool) SetSandboxScope(scope *permissions.FileScopePolicy) {
-	t.scope = scope
 }
 
 func (t *ReadFileTool) Name() string        { return "file_read" }
@@ -125,12 +151,12 @@ func (t *ReadFileTool) Tags() []string {
 
 // WriteFileTool writes content to disk.
 type WriteFileTool struct {
+	scopedFileTool
 	BasePath string
 	Backup   bool
 	spec     *agentspec.AgentRuntimeSpec
 	manager  FilePermissionChecker
 	agentID  string
-	scope    *permissions.FileScopePolicy
 }
 
 func (t *WriteFileTool) SetPermissionManager(manager FilePermissionChecker, agentID string) {
@@ -141,10 +167,6 @@ func (t *WriteFileTool) SetPermissionManager(manager FilePermissionChecker, agen
 func (t *WriteFileTool) SetAgentSpec(spec *agentspec.AgentRuntimeSpec, agentID string) {
 	t.spec = spec
 	t.agentID = agentID
-}
-
-func (t *WriteFileTool) SetSandboxScope(scope *permissions.FileScopePolicy) {
-	t.scope = scope
 }
 
 func (t *WriteFileTool) Name() string        { return "file_write" }
@@ -229,11 +251,11 @@ func (t *WriteFileTool) Tags() []string {
 
 // EditFileTool performs exact string replacement inside an existing file.
 type EditFileTool struct {
+	scopedFileTool
 	BasePath string
 	spec     *agentspec.AgentRuntimeSpec
 	manager  FilePermissionChecker
 	agentID  string
-	scope    *permissions.FileScopePolicy
 }
 
 func (t *EditFileTool) SetPermissionManager(manager FilePermissionChecker, agentID string) {
@@ -244,10 +266,6 @@ func (t *EditFileTool) SetPermissionManager(manager FilePermissionChecker, agent
 func (t *EditFileTool) SetAgentSpec(spec *agentspec.AgentRuntimeSpec, agentID string) {
 	t.spec = spec
 	t.agentID = agentID
-}
-
-func (t *EditFileTool) SetSandboxScope(scope *permissions.FileScopePolicy) {
-	t.scope = scope
 }
 
 func (t *EditFileTool) Name() string        { return "file_edit" }
@@ -368,13 +386,6 @@ func (t *EditFileTool) enforceFileMatrix(ctx context.Context, action string, abs
 	return enforceFileMatrix(ctx, t.manager, t.agentID, t.BasePath, action, absPath, t.spec.Files)
 }
 
-func (t *EditFileTool) enforceSandboxScope(action permissions.FileSystemAction, path string) error {
-	if t == nil || t.scope == nil {
-		return nil
-	}
-	return t.scope.Check(action, path)
-}
-
 func (t *EditFileTool) Rollback(ctx context.Context, token ports.RollbackToken) error {
 	if token.Result == nil || token.Result.Data == nil {
 		return fmt.Errorf("rollback token missing edit result data")
@@ -425,19 +436,15 @@ func (t *EditFileTool) Rollback(ctx context.Context, token ports.RollbackToken) 
 
 // ListFilesTool lists files filtered by pattern.
 type ListFilesTool struct {
+	scopedFileTool
 	BasePath string
 	manager  FilePermissionChecker
 	agentID  string
-	scope    *permissions.FileScopePolicy
 }
 
 func (t *ListFilesTool) SetPermissionManager(manager FilePermissionChecker, agentID string) {
 	t.manager = manager
 	t.agentID = agentID
-}
-
-func (t *ListFilesTool) SetSandboxScope(scope *permissions.FileScopePolicy) {
-	t.scope = scope
 }
 
 func (t *ListFilesTool) Name() string        { return "file_list" }
@@ -532,19 +539,15 @@ func (t *ListFilesTool) Tags() []string {
 
 // SearchInFilesTool greps for a pattern.
 type SearchInFilesTool struct {
+	scopedFileTool
 	BasePath string
 	manager  FilePermissionChecker
 	agentID  string
-	scope    *permissions.FileScopePolicy
 }
 
 func (t *SearchInFilesTool) SetPermissionManager(manager FilePermissionChecker, agentID string) {
 	t.manager = manager
 	t.agentID = agentID
-}
-
-func (t *SearchInFilesTool) SetSandboxScope(scope *permissions.FileScopePolicy) {
-	t.scope = scope
 }
 
 func (t *SearchInFilesTool) Name() string        { return "file_search" }
@@ -662,11 +665,11 @@ func (t *SearchInFilesTool) Tags() []string {
 
 // CreateFileTool creates a file from a template string.
 type CreateFileTool struct {
+	scopedFileTool
 	BasePath string
 	spec     *agentspec.AgentRuntimeSpec
 	manager  FilePermissionChecker
 	agentID  string
-	scope    *permissions.FileScopePolicy
 }
 
 func (t *CreateFileTool) SetPermissionManager(manager FilePermissionChecker, agentID string) {
@@ -677,10 +680,6 @@ func (t *CreateFileTool) SetPermissionManager(manager FilePermissionChecker, age
 func (t *CreateFileTool) SetAgentSpec(spec *agentspec.AgentRuntimeSpec, agentID string) {
 	t.spec = spec
 	t.agentID = agentID
-}
-
-func (t *CreateFileTool) SetSandboxScope(scope *permissions.FileScopePolicy) {
-	t.scope = scope
 }
 
 func (t *CreateFileTool) Name() string        { return "file_create" }
@@ -737,12 +736,12 @@ func (t *CreateFileTool) Tags() []string {
 
 // DeleteFileTool moves a file to .trash folder instead of deleting permanently.
 type DeleteFileTool struct {
+	scopedFileTool
 	BasePath string
 	TrashDir string
 	spec     *agentspec.AgentRuntimeSpec
 	manager  FilePermissionChecker
 	agentID  string
-	scope    *permissions.FileScopePolicy
 }
 
 func (t *DeleteFileTool) SetPermissionManager(manager FilePermissionChecker, agentID string) {
@@ -753,10 +752,6 @@ func (t *DeleteFileTool) SetPermissionManager(manager FilePermissionChecker, age
 func (t *DeleteFileTool) SetAgentSpec(spec *agentspec.AgentRuntimeSpec, agentID string) {
 	t.spec = spec
 	t.agentID = agentID
-}
-
-func (t *DeleteFileTool) SetSandboxScope(scope *permissions.FileScopePolicy) {
-	t.scope = scope
 }
 
 func (t *DeleteFileTool) Name() string        { return "file_delete" }
@@ -846,48 +841,6 @@ func (t *DeleteFileTool) enforceFileMatrix(ctx context.Context, action string, a
 		return nil
 	}
 	return enforceFileMatrix(ctx, t.manager, t.agentID, t.BasePath, action, absPath, t.spec.Files)
-}
-
-func (t *ReadFileTool) enforceSandboxScope(action permissions.FileSystemAction, path string) error {
-	if t == nil || t.scope == nil {
-		return nil
-	}
-	return t.scope.Check(action, path)
-}
-
-func (t *WriteFileTool) enforceSandboxScope(action permissions.FileSystemAction, path string) error {
-	if t == nil || t.scope == nil {
-		return nil
-	}
-	return t.scope.Check(action, path)
-}
-
-func (t *ListFilesTool) enforceSandboxScope(action permissions.FileSystemAction, path string) error {
-	if t == nil || t.scope == nil {
-		return nil
-	}
-	return t.scope.Check(action, path)
-}
-
-func (t *SearchInFilesTool) enforceSandboxScope(action permissions.FileSystemAction, path string) error {
-	if t == nil || t.scope == nil {
-		return nil
-	}
-	return t.scope.Check(action, path)
-}
-
-func (t *CreateFileTool) enforceSandboxScope(action permissions.FileSystemAction, path string) error {
-	if t == nil || t.scope == nil {
-		return nil
-	}
-	return t.scope.Check(action, path)
-}
-
-func (t *DeleteFileTool) enforceSandboxScope(action permissions.FileSystemAction, path string) error {
-	if t == nil || t.scope == nil {
-		return nil
-	}
-	return t.scope.Check(action, path)
 }
 
 func sandboxProtectedPath(err error) bool {
@@ -1050,12 +1003,12 @@ func scanLinesOrChunks(maxChunk int) bufio.SplitFunc {
 // FileOperations registers default file tools into a registry.
 func FileOperations(basePath string) []ports.Tool {
 	return []ports.Tool{
-		&ReadFileTool{BasePath: basePath},
-		&WriteFileTool{BasePath: basePath, Backup: true},
-		&EditFileTool{BasePath: basePath},
-		&ListFilesTool{BasePath: basePath},
-		&SearchInFilesTool{BasePath: basePath},
-		&CreateFileTool{BasePath: basePath},
-		&DeleteFileTool{BasePath: basePath},
+		func() *ReadFileTool { t := &ReadFileTool{BasePath: basePath}; t.SetToolName("file_read"); return t }(),
+		func() *WriteFileTool { t := &WriteFileTool{BasePath: basePath, Backup: true}; t.SetToolName("file_write"); return t }(),
+		func() *EditFileTool { t := &EditFileTool{BasePath: basePath}; t.SetToolName("file_edit"); return t }(),
+		func() *ListFilesTool { t := &ListFilesTool{BasePath: basePath}; t.SetToolName("file_list"); return t }(),
+		func() *SearchInFilesTool { t := &SearchInFilesTool{BasePath: basePath}; t.SetToolName("file_search"); return t }(),
+		func() *CreateFileTool { t := &CreateFileTool{BasePath: basePath}; t.SetToolName("file_create"); return t }(),
+		func() *DeleteFileTool { t := &DeleteFileTool{BasePath: basePath}; t.SetToolName("file_delete"); return t }(),
 	}
 }

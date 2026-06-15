@@ -30,6 +30,32 @@ import (
 	"codeburg.org/lexbit/relurpify/userconfig/modelselect"
 )
 
+// Readiness captures whether a workspace session is fully operational.
+type Readiness struct {
+	SandboxReady bool
+	ModelReady   bool
+	Degraded     bool
+	Reason       string
+}
+
+// Ready returns true when the workspace has both sandbox and model ready
+// and is not in a degraded state.
+func (r Readiness) Ready() bool {
+	return r.SandboxReady && r.ModelReady && !r.Degraded
+}
+
+// DegradedWorkspace returns a fully-formed Workspace in a degraded state.
+// The workspace has no backend, deny-all scope is handled by the registry layer.
+// The caller is expected to set a minimum Registration with an ID.
+func DegradedWorkspace(reason string) *Workspace {
+	ws := &Workspace{}
+	ws.Readiness = Readiness{
+		Degraded: true,
+		Reason:   reason,
+	}
+	return ws
+}
+
 // Workspace is a live, initialized workspace session. It holds all open
 // resources. Close() must be called when the session ends. Restart() may
 // be used to cleanly stop and re-start services without rebuilding stores.
@@ -56,6 +82,9 @@ type Workspace struct {
 
 	// Service management (new for dynamic lifecycle)
 	ServiceManager ServiceManager
+
+	// Readiness tracks whether the workspace is fully operational.
+	Readiness Readiness
 }
 
 // Close releases all resources held by the Workspace. This includes:

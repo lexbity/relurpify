@@ -11,6 +11,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"codeburg.org/lexbit/relurpify/platform/fs"
+	"codeburg.org/lexbit/relurpify/userconfig/config/secretscan"
 )
 
 // ExecutionMode expresses the persisted workspace execution posture.
@@ -54,6 +55,9 @@ type RuntimeCapabilitySelector struct {
 }
 
 // RuntimeWorkspaceConfig captures persisted workspace preferences under relurpify_cfg.
+// This type uses a flat schema for read/write convenience; the canonical nested
+// format is WorkspaceConfigV1 (relurpify/workspace/v1). Machine-owned state
+// fields have been moved to RuntimeStateDocument.
 type RuntimeWorkspaceConfig struct {
 	Model               string                        `yaml:"model"`
 	Provider            string                        `yaml:"provider,omitempty"`
@@ -105,6 +109,17 @@ type runtimeNodeRegistrationConfig struct {
 	Platform  string            `yaml:"platform,omitempty"`
 	Tags      map[string]string `yaml:"tags,omitempty"`
 	LocalOnly bool              `yaml:"local_only,omitempty"`
+}
+
+// RuntimeStateDocument holds machine-owned runtime state that is persisted
+// under .relurpify_state/ rather than the user-editable relurpify_cfg/.
+// This split prevents accidental user edits of runtime internals and
+// ensures WorkspaceConfigV1 only contains user-facing settings.
+type RuntimeStateDocument struct {
+	AllowedCapabilities []RuntimeCapabilitySelector   `yaml:"allowed_capabilities,omitempty"`
+	Nexus               runtimeNexusConfig            `yaml:"nexus,omitempty"`
+	NodeRegistration    runtimeNodeRegistrationConfig `yaml:"node_registration,omitempty"`
+	LastUpdated         int64                         `yaml:"last_updated"`
 }
 
 // LoadRuntimeWorkspaceConfig loads workspace preferences from disk.
@@ -171,6 +186,47 @@ func LoadRuntimeKeybindingConfig(path string) (RuntimeKeybindingConfig, error) {
 		return RuntimeKeybindingConfig{}, err
 	}
 	return cfg, nil
+}
+
+// DefaultRuntimeStateFile returns the default path for the runtime state document.
+func DefaultRuntimeStateFile(workspace string) string {
+	return filepath.Join(workspace, secretscan.RuntimeStateDirName, "runtime_state.yaml")
+}
+
+// LoadRuntimeStateDocument loads machine-owned runtime state from disk.
+func LoadRuntimeStateDocument(path string) (RuntimeStateDocument, error) {
+	if path == "" {
+		return RuntimeStateDocument{}, fmt.Errorf("runtime state path required")
+	}
+	data, err := os.ReadFile(filepath.Clean(path))
+	if err != nil {
+		return RuntimeStateDocument{}, err
+	}
+	if err := RejectForbiddenSecretFields(path, data); err != nil {
+		return RuntimeStateDocument{}, err
+	}
+	var doc RuntimeStateDocument
+	dec := yaml.NewDecoder(strings.NewReader(string(data)))
+	dec.KnownFields(true)
+	if err := dec.Decode(&doc); err != nil {
+		return RuntimeStateDocument{}, fmt.Errorf("decode runtime state: %w", err)
+	}
+	return doc, nil
+}
+
+// SaveRuntimeStateDocument persists machine-owned runtime state.
+func SaveRuntimeStateDocument(path string, doc RuntimeStateDocument) error {
+	if path == "" {
+		return fmt.Errorf("runtime state path required")
+	}
+	if err := fs.MkdirAllSecure(filepath.Dir(path)); err != nil {
+		return err
+	}
+	data, err := yaml.Marshal(doc)
+	if err != nil {
+		return err
+	}
+	return fs.WriteFileSecure(path, data)
 }
 
 // SaveRuntimeWorkspaceConfig persists selections for future sessions.

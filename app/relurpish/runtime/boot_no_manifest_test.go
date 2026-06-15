@@ -2,7 +2,6 @@ package runtime
 
 import (
 	"context"
-	"os"
 	"path/filepath"
 	"testing"
 
@@ -14,16 +13,6 @@ import (
 func TestBootNoManifest_EucloAgent(t *testing.T) {
 	workspace := t.TempDir()
 	copyTree(t, filepath.Join("..", "..", "..", "relurpify_cfg"), filepath.Join(workspace, "relurpify_cfg"))
-
-	// Verify agents/ directory exists and is empty.
-	agentsDir := filepath.Join(workspace, "relurpify_cfg", "agents")
-	dirents, err := os.ReadDir(agentsDir)
-	if err != nil {
-		t.Fatalf("read agents dir: %v", err)
-	}
-	if len(dirents) > 0 {
-		t.Fatalf("agents/ dir has %d entries; expected empty", len(dirents))
-	}
 
 	cfg := ConfigForWorkspace(Config{AgentName: AgentLabelEuclo}, workspace)
 	cfg.InferenceProvider = "offline"

@@ -445,6 +445,7 @@ func TestDeleteFileTool_SetAgentSpec(t *testing.T) {
 func TestCreateFileTool_CreatesNewFile(t *testing.T) {
 	dir := t.TempDir()
 	tool := &CreateFileTool{BasePath: dir}
+	tool.SetSandboxScope(NewFileScopePolicy(dir, nil))
 	ctx := context.Background()
 
 	res, err := tool.Execute(ctx, map[string]any{
@@ -463,6 +464,7 @@ func TestCreateFileTool_CreatesNewFile(t *testing.T) {
 func TestCreateFileTool_CreatesNestedFile(t *testing.T) {
 	dir := t.TempDir()
 	tool := &CreateFileTool{BasePath: dir}
+	tool.SetSandboxScope(NewFileScopePolicy(dir, nil))
 
 	res, err := tool.Execute(context.Background(), map[string]any{
 		path:    "subdir/nested/file.txt",
@@ -483,6 +485,7 @@ func TestCreateFileTool_ExistingFile(t *testing.T) {
 		existingFile, []byte("original"))
 
 	tool := &CreateFileTool{BasePath: dir}
+	tool.SetSandboxScope(NewFileScopePolicy(dir, nil))
 	_, err := tool.Execute(context.Background(), map[string]any{
 		path:    "exists.txt",
 		content: new_content,
@@ -494,6 +497,7 @@ func TestCreateFileTool_ExistingFile(t *testing.T) {
 func TestCreateFileTool_NoContent(t *testing.T) {
 	dir := t.TempDir()
 	tool := &CreateFileTool{BasePath: dir}
+	tool.SetSandboxScope(NewFileScopePolicy(dir, nil))
 
 	res, err := tool.Execute(context.Background(), map[string]any{
 		path: empty_txt,
@@ -510,6 +514,7 @@ func TestCreateFileTool_NoContent(t *testing.T) {
 func TestCreateFileTool_EmptyContent(t *testing.T) {
 	dir := t.TempDir()
 	tool := &CreateFileTool{BasePath: dir}
+	tool.SetSandboxScope(NewFileScopePolicy(dir, nil))
 
 	res, err := tool.Execute(context.Background(), map[string]any{
 		path:    empty_txt,
@@ -532,6 +537,7 @@ func TestDeleteFileTool_MovesToTrash(t *testing.T) {
 		file, []byte(delete_me))
 
 	tool := &DeleteFileTool{BasePath: dir}
+	tool.SetSandboxScope(NewFileScopePolicy(dir, nil))
 	res, err := tool.Execute(context.Background(), map[string]any{
 		path: todelete_txt,
 	})
@@ -557,6 +563,7 @@ func TestDeleteFileTool_CustomTrashDir(t *testing.T) {
 		file, []byte(delete_me))
 
 	tool := &DeleteFileTool{BasePath: dir, TrashDir: customTrash}
+	tool.SetSandboxScope(NewFileScopePolicy(dir, nil))
 	res, err := tool.Execute(context.Background(), map[string]any{
 		path: todelete_txt,
 	})
@@ -573,6 +580,7 @@ func TestDeleteFileTool_CustomTrashDir(t *testing.T) {
 func TestDeleteFileTool_NonExistent(t *testing.T) {
 	dir := t.TempDir()
 	tool := &DeleteFileTool{BasePath: dir}
+	tool.SetSandboxScope(NewFileScopePolicy(dir, nil))
 	_, err := tool.Execute(context.Background(), map[string]any{
 		path: nonexistent_txt,
 	})
@@ -605,6 +613,7 @@ func TestFileOperations(t *testing.T) {
 func TestReadFileTool_Directory(t *testing.T) {
 	dir := t.TempDir()
 	tool := &ReadFileTool{BasePath: dir}
+	tool.SetSandboxScope(NewFileScopePolicy(dir, nil))
 
 	res, err := tool.Execute(context.Background(), map[string]any{
 		path: ".",
@@ -617,6 +626,7 @@ func TestReadFileTool_Directory(t *testing.T) {
 func TestReadFileTool_NonExistent(t *testing.T) {
 	dir := t.TempDir()
 	tool := &ReadFileTool{BasePath: dir}
+	tool.SetSandboxScope(NewFileScopePolicy(dir, nil))
 
 	_, err := tool.Execute(context.Background(), map[string]any{
 		path: nonexistent_txt,
@@ -631,6 +641,7 @@ func TestReadFileTool_BinaryFile(t *testing.T) {
 		file, []byte{0x00, 0x01, 0x02, 0x03})
 
 	tool := &ReadFileTool{BasePath: dir}
+	tool.SetSandboxScope(NewFileScopePolicy(dir, nil))
 	res, err := tool.Execute(context.Background(), map[string]any{
 		path: "binary.bin",
 	})
@@ -648,6 +659,7 @@ func TestWriteFileTool_Backup(t *testing.T) {
 		file, []byte("original content"))
 
 	tool := &WriteFileTool{BasePath: dir, Backup: true}
+	tool.SetSandboxScope(NewFileScopePolicy(dir, nil))
 	res, err := tool.Execute(context.Background(), map[string]any{
 		path:    "existing.txt",
 		content: "updated content",
@@ -783,25 +795,26 @@ func TestListFilesTool_NonExistentDirectory(t *testing.T) {
 
 func TestCreateFileTool_NilSandboxScope(t *testing.T) {
 	dir := t.TempDir()
-	tool := &CreateFileTool{BasePath: dir, scope: nil}
+	tool := &CreateFileTool{BasePath: dir}
 
-	// Should not panic when scope is nil
 	err := tool.enforceSandboxScope(permissions.FileSystemWrite, filepath.Join(dir, test_txt))
-	require.NoError(t, err)
+	require.Error(t, err)
+	require.ErrorIs(t, err, permissions.ErrSandboxScopeUnset)
 }
 
 func TestDeleteFileTool_NilSandboxScope(t *testing.T) {
 	dir := t.TempDir()
-	tool := &DeleteFileTool{BasePath: dir, scope: nil}
+	tool := &DeleteFileTool{BasePath: dir}
 
-	// Should not panic when scope is nil
 	err := tool.enforceSandboxScope(permissions.FileSystemDelete, filepath.Join(dir, test_txt))
-	require.NoError(t, err)
+	require.Error(t, err)
+	require.ErrorIs(t, err, permissions.ErrSandboxScopeUnset)
 }
 
 func TestDeleteFileTool_NilSpec(t *testing.T) {
 	dir := t.TempDir()
 	tool := &DeleteFileTool{BasePath: dir, spec: nil}
+	tool.SetSandboxScope(NewFileScopePolicy(dir, nil))
 
 	// Should not panic when spec is nil
 	err := tool.enforceFileMatrix(context.Background(), "delete", filepath.Join(dir, test_txt))
@@ -811,6 +824,7 @@ func TestDeleteFileTool_NilSpec(t *testing.T) {
 func TestCreateFileTool_NilSpec(t *testing.T) {
 	dir := t.TempDir()
 	tool := &CreateFileTool{BasePath: dir, spec: nil}
+	tool.SetSandboxScope(NewFileScopePolicy(dir, nil))
 
 	// Should not panic when spec is nil
 	err := tool.enforceFileMatrix(context.Background(), write, filepath.Join(dir, test_txt))
@@ -877,6 +891,7 @@ func TestEnforceFileMatrix_DefaultDeny(t *testing.T) {
 func TestWriteFileTool_NilSpec(t *testing.T) {
 	dir := t.TempDir()
 	tool := &WriteFileTool{BasePath: dir, spec: nil}
+	tool.SetSandboxScope(NewFileScopePolicy(dir, nil))
 
 	// Should not panic when spec is nil
 	err := tool.enforceFileMatrix(context.Background(), write, filepath.Join(dir, test_txt))
@@ -886,27 +901,27 @@ func TestWriteFileTool_NilSpec(t *testing.T) {
 // ============== Nil Tool Tests ==============
 
 func TestWriteFileTool_NilEnforceSandboxScope(t *testing.T) {
-	var tool *WriteFileTool
+	tool := &WriteFileTool{BasePath: tmp}
 
-	// Should not panic when tool is nil
 	err := tool.enforceSandboxScope(permissions.FileSystemWrite, tmp_test_txt)
-	require.NoError(t, err)
+	require.Error(t, err)
+	require.ErrorIs(t, err, permissions.ErrSandboxScopeUnset)
 }
 
 func TestCreateFileTool_NilEnforceSandboxScope(t *testing.T) {
-	var tool *CreateFileTool
+	tool := &CreateFileTool{BasePath: tmp}
 
-	// Should not panic when tool is nil
 	err := tool.enforceSandboxScope(permissions.FileSystemWrite, tmp_test_txt)
-	require.NoError(t, err)
+	require.Error(t, err)
+	require.ErrorIs(t, err, permissions.ErrSandboxScopeUnset)
 }
 
 func TestDeleteFileTool_NilEnforceSandboxScope(t *testing.T) {
-	var tool *DeleteFileTool
+	tool := &DeleteFileTool{BasePath: tmp}
 
-	// Should not panic when tool is nil
 	err := tool.enforceSandboxScope(permissions.FileSystemDelete, tmp_test_txt)
-	require.NoError(t, err)
+	require.Error(t, err)
+	require.ErrorIs(t, err, permissions.ErrSandboxScopeUnset)
 }
 
 func TestWriteFileTool_NilEnforceFileMatrix(t *testing.T) {
@@ -922,6 +937,7 @@ func TestWriteFileTool_NilEnforceFileMatrix(t *testing.T) {
 func TestCreateFileTool_WithPermissionManager(t *testing.T) {
 	dir := t.TempDir()
 	tool := &CreateFileTool{BasePath: dir}
+	tool.SetSandboxScope(NewFileScopePolicy(dir, nil))
 
 	// Test that Execute works when manager is nil (no permission check)
 	res, err := tool.Execute(context.Background(), map[string]any{
@@ -939,6 +955,7 @@ func TestDeleteFileTool_WithPermissionManager(t *testing.T) {
 		file, []byte(delete_me))
 
 	tool := &DeleteFileTool{BasePath: dir}
+	tool.SetSandboxScope(NewFileScopePolicy(dir, nil))
 
 	// Test that Execute works when manager is nil (no permission check)
 	res, err := tool.Execute(context.Background(), map[string]any{
@@ -951,6 +968,7 @@ func TestDeleteFileTool_WithPermissionManager(t *testing.T) {
 func TestWriteFileTool_WithPermissionManager_Denied(t *testing.T) {
 	dir := t.TempDir()
 	tool := &WriteFileTool{BasePath: dir, Backup: true}
+	tool.SetSandboxScope(NewFileScopePolicy(dir, nil))
 
 	// The WriteFileTool uses enforceFileMatrix which requires a spec
 	// Test without spec to ensure the permission manager nil path is exercised
@@ -969,6 +987,7 @@ func TestReadFileTool_WithNilManager(t *testing.T) {
 		file, []byte(content))
 
 	tool := &ReadFileTool{BasePath: dir}
+	tool.SetSandboxScope(NewFileScopePolicy(dir, nil))
 
 	// Test that Execute works when manager is nil
 	res, err := tool.Execute(context.Background(), map[string]any{
@@ -986,6 +1005,7 @@ func TestListFilesTool_WithNilManager(t *testing.T) {
 		file, []byte(content))
 
 	tool := &ListFilesTool{BasePath: dir}
+	tool.SetSandboxScope(NewFileScopePolicy(dir, nil))
 
 	// Test that Execute works when manager is nil
 	res, err := tool.Execute(context.Background(), map[string]any{
@@ -1003,6 +1023,7 @@ func TestSearchInFilesTool_WithNilManager(t *testing.T) {
 		file, []byte("search content"))
 
 	tool := &SearchInFilesTool{BasePath: dir}
+	tool.SetSandboxScope(NewFileScopePolicy(dir, nil))
 
 	// Test that Execute works when manager is nil
 	res, err := tool.Execute(context.Background(), map[string]any{
@@ -1092,6 +1113,7 @@ func TestReadFileTool_PermissionManagerIntegration(t *testing.T) {
 		file, []byte(secret))
 
 	tool := &ReadFileTool{BasePath: dir}
+	tool.SetSandboxScope(NewFileScopePolicy(dir, nil))
 	// manager is nil - should still work as no permission check is done
 	tool.manager = nil
 	tool.agentID = "test-agent"
@@ -1113,6 +1135,7 @@ func TestListFilesTool_WhitespaceDirectory(t *testing.T) {
 		file, []byte(content))
 
 	tool := &ListFilesTool{BasePath: dir}
+	tool.SetSandboxScope(NewFileScopePolicy(dir, nil))
 
 	// Test with whitespace-only directory (should default to ".")
 	res, err := tool.Execute(context.Background(), map[string]any{
@@ -1132,6 +1155,7 @@ func TestSearchInFilesTool_WhitespaceDirectory(t *testing.T) {
 		file, []byte(search_term))
 
 	tool := &SearchInFilesTool{BasePath: dir}
+	tool.SetSandboxScope(NewFileScopePolicy(dir, nil))
 
 	// Test with whitespace-only directory (should default to ".")
 	res, err := tool.Execute(context.Background(), map[string]any{
@@ -1251,6 +1275,7 @@ func TestListFilesTool_WithPermissionManagerNil(t *testing.T) {
 		file, []byte(content))
 
 	tool := &ListFilesTool{BasePath: dir}
+	tool.SetSandboxScope(NewFileScopePolicy(dir, nil))
 	// Explicitly set manager to nil (though it's already nil by default)
 	tool.manager = nil
 
@@ -1271,6 +1296,7 @@ func TestSearchInFilesTool_WithPermissionManagerNil(t *testing.T) {
 		file, []byte(search_term))
 
 	tool := &SearchInFilesTool{BasePath: dir}
+	tool.SetSandboxScope(NewFileScopePolicy(dir, nil))
 	// Explicitly set manager to nil
 	tool.manager = nil
 
@@ -1287,6 +1313,7 @@ func TestSearchInFilesTool_WithPermissionManagerNil(t *testing.T) {
 func TestWriteFileTool_ExecuteWithManagerNil(t *testing.T) {
 	dir := t.TempDir()
 	tool := &WriteFileTool{BasePath: dir, Backup: false}
+	tool.SetSandboxScope(NewFileScopePolicy(dir, nil))
 	// manager is nil, so the permission check at line 145-148 should be skipped
 
 	res, err := tool.Execute(context.Background(), map[string]any{
@@ -1302,6 +1329,7 @@ func TestWriteFileTool_ExecuteWithManagerNil(t *testing.T) {
 func TestCreateFileTool_ExecuteWithManagerNil(t *testing.T) {
 	dir := t.TempDir()
 	tool := &CreateFileTool{BasePath: dir}
+	tool.SetSandboxScope(NewFileScopePolicy(dir, nil))
 	// manager is nil, so the permission check should be skipped
 
 	res, err := tool.Execute(context.Background(), map[string]any{
@@ -1321,6 +1349,7 @@ func TestDeleteFileTool_ExecuteWithManagerNil(t *testing.T) {
 		file, []byte(delete_me))
 
 	tool := &DeleteFileTool{BasePath: dir}
+	tool.SetSandboxScope(NewFileScopePolicy(dir, nil))
 	// manager is nil, so the permission check should be skipped
 
 	res, err := tool.Execute(context.Background(), map[string]any{
@@ -1376,6 +1405,7 @@ func TestWriteFileTool_FileMatrixDeniesWrite(t *testing.T) {
 			},
 		},
 	}
+	tool.SetSandboxScope(NewFileScopePolicy(dir, nil))
 
 	_, err := tool.Execute(context.Background(), map[string]any{
 		path:    test_secret,
@@ -1400,6 +1430,7 @@ func TestCreateFileTool_FileMatrixDeniesWrite(t *testing.T) {
 			},
 		},
 	}
+	tool.SetSandboxScope(NewFileScopePolicy(dir, nil))
 
 	_, err := tool.Execute(context.Background(), map[string]any{
 		path:    test_secret,
@@ -1428,6 +1459,7 @@ func TestDeleteFileTool_FileMatrixDeniesWrite(t *testing.T) {
 			},
 		},
 	}
+	tool.SetSandboxScope(NewFileScopePolicy(dir, nil))
 
 	_, err := tool.Execute(context.Background(), map[string]any{
 		path: test_secret,
@@ -1540,6 +1572,7 @@ func TestDeleteFileTool_DeleteDirectory(t *testing.T) {
 	_ = MkdirAllSecure(subdir)
 
 	tool := &DeleteFileTool{BasePath: dir}
+	tool.SetSandboxScope(NewFileScopePolicy(dir, nil))
 
 	// os.Stat on directory will succeed, then Rename will move it to trash
 	res, err := tool.Execute(context.Background(), map[string]any{
@@ -1636,16 +1669,31 @@ func TestReadFileTool_ExecutePathCoverage(t *testing.T) {
 		file, []byte(content))
 
 	tool := &ReadFileTool{BasePath: dir}
-	// Explicitly set all fields to ensure all paths are exercised
+	tool.SetSandboxScope(NewFileScopePolicy(dir, nil))
 	tool.manager = nil
 	tool.agentID = ""
-	tool.scope = nil
 
 	res, err := tool.Execute(context.Background(), map[string]any{
 		path: test_txt,
 	})
 	require.NoError(t, err)
 	assert.True(t, res.Success)
+}
+
+func TestReadFileTool_NilScopeDenies(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, test_txt)
+	_ = WriteFileSecure(file, []byte(content))
+
+	tool := &ReadFileTool{BasePath: dir}
+	tool.SetSandboxScope(NewFileScopePolicy(dir, nil))
+	tool.scope = nil
+
+	_, err := tool.Execute(context.Background(), map[string]any{
+		path: test_txt,
+	})
+	require.Error(t, err)
+	require.ErrorIs(t, err, permissions.ErrSandboxScopeUnset)
 }
 
 // ============== ListFilesTool Directory Nil Value ==============
@@ -1657,6 +1705,7 @@ func TestListFilesTool_NilDirectory(t *testing.T) {
 		file, []byte(content))
 
 	tool := &ListFilesTool{BasePath: dir}
+	tool.SetSandboxScope(NewFileScopePolicy(dir, nil))
 
 	// Test with explicit nil for directory
 	res, err := tool.Execute(context.Background(), map[string]any{
@@ -1678,6 +1727,7 @@ func TestSearchInFilesTool_NilDirectory(t *testing.T) {
 		file, []byte("search me"))
 
 	tool := &SearchInFilesTool{BasePath: dir}
+	tool.SetSandboxScope(NewFileScopePolicy(dir, nil))
 
 	// Test with explicit nil for directory
 	res, err := tool.Execute(context.Background(), map[string]any{
@@ -1712,6 +1762,7 @@ func TestCopyFile_ExercisePath(t *testing.T) {
 func TestCreateFileTool_DeepNesting(t *testing.T) {
 	dir := t.TempDir()
 	tool := &CreateFileTool{BasePath: dir}
+	tool.SetSandboxScope(NewFileScopePolicy(dir, nil))
 
 	res, err := tool.Execute(context.Background(), map[string]any{
 		path:    a_b_c_d_e_deep_txt,
@@ -1730,6 +1781,7 @@ func TestCreateFileTool_DeepNesting(t *testing.T) {
 func TestWriteFileTool_DeepNesting(t *testing.T) {
 	dir := t.TempDir()
 	tool := &WriteFileTool{BasePath: dir, Backup: false}
+	tool.SetSandboxScope(NewFileScopePolicy(dir, nil))
 
 	res, err := tool.Execute(context.Background(), map[string]any{
 		path:    a_b_c_d_e_deep_txt,

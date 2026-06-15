@@ -50,6 +50,8 @@ func TestDoctorStartupPromotesToGuestWhenReportIsReady(t *testing.T) {
 		ManifestExists:        true,
 		ModelProfilesExists:   true,
 		StarterTemplatesReady: true,
+		SandboxReady:          true,
+		ModelReady:            true,
 		Dependencies: []runtimesvc.DependencyStatus{
 			{Name: "starter-templates", Available: true},
 			{Name: "model-profile", Available: true},

@@ -8,7 +8,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-func TestWriteCleanWorkspace_NoAgentsDirCreated(t *testing.T) {
+func TestWriteCleanWorkspace_AgentsDirCreatedWithManifest(t *testing.T) {
 	workspace := t.TempDir()
 	WriteCleanWorkspace(t, workspace, WorkspaceOpts{
 		Provider:   "offline",
@@ -20,8 +20,12 @@ func TestWriteCleanWorkspace_NoAgentsDirCreated(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read agents dir: %v", err)
 	}
-	if len(entries) > 0 {
-		t.Fatalf("agents/ dir has %d entries; expected empty", len(entries))
+	if len(entries) == 0 {
+		t.Fatal("agents/ dir must have at least one entry (euclo.yaml)")
+	}
+	manifestPath := filepath.Join(agentsDir, "euclo.yaml")
+	if _, err := os.Stat(manifestPath); os.IsNotExist(err) {
+		t.Fatalf("expected euclo.yaml manifest in agents/ dir")
 	}
 }
 

@@ -22,6 +22,7 @@ func TestReadWriteListFileTools(t *testing.T) {
 	ctx := context.Background()
 
 	writeTool := &WriteFileTool{BasePath: dir, Backup: true}
+	writeTool.SetSandboxScope(NewFileScopePolicy(dir, nil))
 	_, err := writeTool.Execute(ctx, map[string]any{
 		path:    hello_txt,
 		content: "hi relurpify",
@@ -29,11 +30,13 @@ func TestReadWriteListFileTools(t *testing.T) {
 	require.NoError(t, err)
 
 	readTool := &ReadFileTool{BasePath: dir}
+	readTool.SetSandboxScope(NewFileScopePolicy(dir, nil))
 	readRes, err := readTool.Execute(ctx, map[string]any{path: hello_txt})
 	require.NoError(t, err)
 	assert.Equal(t, "hi relurpify", readRes.Data[content])
 
 	listTool := &ListFilesTool{BasePath: dir}
+	listTool.SetSandboxScope(NewFileScopePolicy(dir, nil))
 	listRes, err := listTool.Execute(ctx, map[string]any{
 		directory: ".",
 		pattern:   txt,
@@ -74,6 +77,7 @@ func TestSearchInFilesTool(t *testing.T) {
 	require.NoError(t, WriteFileSecure(file, []byte("package main\n// TODO: fix bug\n")))
 
 	tool := &SearchInFilesTool{BasePath: dir}
+	tool.SetSandboxScope(NewFileScopePolicy(dir, nil))
 	res, err := tool.Execute(context.Background(), map[string]any{
 		directory: ".",
 		pattern:   "TODO",
@@ -93,6 +97,7 @@ func TestSearchInFilesToolDefaultsDirectory(t *testing.T) {
 	require.NoError(t, WriteFileSecure(file, []byte("#include <stdio.h>\n")))
 
 	tool := &SearchInFilesTool{BasePath: dir}
+	tool.SetSandboxScope(NewFileScopePolicy(dir, nil))
 	res, err := tool.Execute(context.Background(), map[string]any{
 		pattern: "#include",
 	})
@@ -111,6 +116,7 @@ func TestListFilesToolMatchesRecursiveRelativePatterns(t *testing.T) {
 	require.NoError(t, WriteFileSecure(target, []byte("pub fn demo() {}\n")))
 
 	tool := &ListFilesTool{BasePath: dir}
+	tool.SetSandboxScope(NewFileScopePolicy(dir, nil))
 	res, err := tool.Execute(context.Background(), map[string]any{
 		directory: ".",
 		pattern:   "**/*.rs",
@@ -126,6 +132,7 @@ func TestListFilesToolDefaultsDirectory(t *testing.T) {
 	require.NoError(t, WriteFileSecure(target, []byte("# docs\n")))
 
 	tool := &ListFilesTool{BasePath: dir}
+	tool.SetSandboxScope(NewFileScopePolicy(dir, nil))
 	res, err := tool.Execute(context.Background(), map[string]any{
 		pattern: "*.md",
 	})
@@ -144,6 +151,7 @@ func TestListFilesToolSkipsGeneratedDirectories(t *testing.T) {
 	require.NoError(t, WriteFileSecure(generated, []byte("fn generated() {}\n")))
 
 	tool := &ListFilesTool{BasePath: dir}
+	tool.SetSandboxScope(NewFileScopePolicy(dir, nil))
 	res, err := tool.Execute(context.Background(), map[string]any{
 		directory: ".",
 		pattern:   "**/*.rs",
@@ -164,6 +172,7 @@ func TestSearchInFilesToolSkipsGeneratedDirectories(t *testing.T) {
 	require.NoError(t, WriteFileSecure(generated, []byte("// TODO: generated\n")))
 
 	tool := &SearchInFilesTool{BasePath: dir}
+	tool.SetSandboxScope(NewFileScopePolicy(dir, nil))
 	res, err := tool.Execute(context.Background(), map[string]any{
 		directory: ".",
 		pattern:   "TODO",
@@ -183,6 +192,7 @@ func TestSearchInFilesToolDefaultsToCaseInsensitiveMatching(t *testing.T) {
 	require.NoError(t, WriteFileSecure(file, []byte("TODO: fix bug\n")))
 
 	tool := &SearchInFilesTool{BasePath: dir}
+	tool.SetSandboxScope(NewFileScopePolicy(dir, nil))
 	res, err := tool.Execute(context.Background(), map[string]any{
 		directory: ".",
 		pattern:   "todo",
@@ -202,6 +212,7 @@ func TestSearchInFilesToolSupportsCaseSensitiveMatching(t *testing.T) {
 	require.NoError(t, WriteFileSecure(file, []byte("TODO: fix bug\n")))
 
 	tool := &SearchInFilesTool{BasePath: dir}
+	tool.SetSandboxScope(NewFileScopePolicy(dir, nil))
 	res, err := tool.Execute(context.Background(), map[string]any{
 		directory:        ".",
 		pattern:          "todo",

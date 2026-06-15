@@ -116,7 +116,16 @@ func (p *DoctorPane) Update(msg tea.Msg) (*DoctorPane, tea.Cmd) {
 			p.status = msg.Message
 		}
 		p.report = msg.Report
-		return p, nil
+		// Bubble the exported DoctorStatusMsg up to the model so that
+		// applyDoctorReport can check readiness and unlock the gate.
+		return p, func() tea.Msg {
+			return DoctorStatusMsg{
+				Action:  string(msg.Action),
+				Report:  msg.Report,
+				Message: msg.Message,
+				Err:     msg.Err,
+			}
+		}
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "tab":
@@ -301,11 +310,21 @@ func (p *DoctorPane) runAsync(action doctorAction) tea.Cmd {
 			if err := p.runtime.InitializeWorkspaceFromTemplates(false); err != nil {
 				return doctorStatusMsg{Action: action, Err: err}
 			}
+			// Reload the workspace so the new config/templates take effect,
+			// then recompute the doctor report. The model handles the
+			// exported DoctorStatusMsg to call applyDoctorReport which
+			// may unlock the startup gate.
+			workspace := p.report.Workspace
+			if workspace != "" {
+				if reloadErr := p.runtime.ReloadWorkspace(ctx, workspace); reloadErr != nil {
+					return doctorStatusMsg{Action: action, Err: reloadErr}
+				}
+			}
 			report := p.runtime.BuildDoctorReport(ctx)
 			return doctorStatusMsg{
 				Action:  action,
 				Report:  report,
-				Message: "starter templates copied",
+				Message: "workspace reloaded after template materialization",
 			}
 		case doctorActionPull:
 			models, err := p.runtime.InferenceModels(ctx)

@@ -93,9 +93,12 @@ generation:
 		t.Fatal("expected doctor report to have blocking issues on broken default profile")
 	}
 
-	_, err := New(context.Background(), cfg, secrets)
-	if err == nil {
-		t.Fatal("expected runtime.New to fail on broken default profile")
+	rt, err := New(context.Background(), cfg, secrets)
+	if err != nil {
+		t.Fatalf("expected total construction, got error: %v", err)
+	}
+	if rt == nil || rt.AgentWorkspace() == nil {
+		t.Fatal("expected non-nil degraded runtime on broken default profile")
 	}
 }
 

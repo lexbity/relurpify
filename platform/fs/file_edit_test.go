@@ -64,6 +64,7 @@ func TestEditFileTool_ExactReplacement(t *testing.T) {
 	require.NoError(t, WriteFileSecure(filepath.Join(dir, "docs", "target.txt"), []byte("alpha and alpha\n")))
 
 	tool := &EditFileTool{BasePath: dir}
+	tool.SetSandboxScope(NewFileScopePolicy(dir, nil))
 	result, err := tool.Execute(context.Background(), map[string]any{
 		"path":           "docs/target.txt",
 		"old_string":     "alpha",
@@ -86,6 +87,7 @@ func TestEditFileTool_CountMismatch_NoWrite(t *testing.T) {
 	require.NoError(t, WriteFileSecure(filepath.Join(dir, "docs", "target.txt"), []byte("alpha and alpha\n")))
 
 	tool := &EditFileTool{BasePath: dir}
+	tool.SetSandboxScope(NewFileScopePolicy(dir, nil))
 	result, err := tool.Execute(context.Background(), map[string]any{
 		"path":       "docs/target.txt",
 		"old_string": "alpha",
@@ -125,6 +127,7 @@ func TestEditFileTool_RollbackViaRegistry(t *testing.T) {
 	reg := capregistry.NewRegistry()
 	tool := &EditFileTool{BasePath: dir}
 	require.NoError(t, reg.RegisterLegacyTool(context.Background(), tool))
+	reg.UseSandboxScope(NewFileScopePolicy(dir, nil))
 
 	result, err := reg.InvokeCapability(context.Background(), &editTestState{taskID: "task", sessID: "sess"}, "file_edit", map[string]any{
 		"path":       "docs/target.txt",

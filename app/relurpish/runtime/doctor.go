@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,12 +14,13 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
-	"codeburg.org/lexbit/relurpify/platform/fs"
+	platformfs "codeburg.org/lexbit/relurpify/platform/fs"
 	"codeburg.org/lexbit/relurpify/platform/llm"
 	"codeburg.org/lexbit/relurpify/named/euclo/euclocontract"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 	"codeburg.org/lexbit/relurpify/userconfig/modelselect"
-	"codeburg.org/lexbit/relurpify/userconfig/templates"
+	te "codeburg.org/lexbit/relurpify/userconfig/templates"
+	templatesembed "codeburg.org/lexbit/relurpify/templates"
 )
 
 // DependencyStatus captures one local dependency check.
@@ -52,6 +54,15 @@ type DoctorReport struct {
 	Inference             InferenceBackendReport
 	Dependencies          []DependencyStatus
 	CheckedAt             time.Time
+
+	// SandboxReady is true when the sandbox backend is verified,
+	// policy is loaded, and a filesystem scope is constructed.
+	// When false, tools are hard-denied regardless of model status.
+	SandboxReady bool
+	// ModelReady is true when the inference backend reports healthy.
+	// When false, guest chat is blocked but tools may still run
+	// if SandboxReady is true (e.g. tape/offline sessions).
+	ModelReady bool
 }
 
 func (r DoctorReport) HasBlockingIssues() bool {
@@ -73,9 +84,10 @@ func (r DoctorReport) NeedsInitialization() bool {
 	return !r.WorkspacePresent || !r.ConfigExists
 }
 
-// Ready reports whether the workspace can start without landing in the Doctor tab.
+// Ready reports whether the workspace is fully operational:
+// both sandbox and model are verified, and no blocking issues exist.
 func (r DoctorReport) Ready() bool {
-	return !r.HasBlockingIssues()
+	return r.SandboxReady && r.ModelReady && !r.HasBlockingIssues()
 }
 
 // BuildDoctorReport checks workspace state and local runtime dependencies
@@ -92,9 +104,22 @@ func BuildDoctorReport(ctx context.Context, cfg Config, secrets config.Secrets) 
 	}
 	if _, err := os.Stat(cfg.ConfigPath); err == nil {
 		report.ConfigExists = true
-		if loaded, err := config.LoadRuntimeWorkspaceConfig(cfg.ConfigPath); err != nil {
-			report.ConfigError = err.Error()
-		} else {
+		// Try V1 nested format first (relurpify/workspace/v1).
+		// If that fails, fall back to the flat legacy format.
+		v1Cfg, v1Err := config.LoadRuntimeWorkspaceConfigV1(cfg.ConfigPath)
+		if v1Err == nil {
+			if v1Cfg.Model.Provider != "" && (strings.TrimSpace(cfg.InferenceProvider) == "" || strings.EqualFold(strings.TrimSpace(cfg.InferenceProvider), "ollama")) {
+				cfg.InferenceProvider = v1Cfg.Model.Provider
+			}
+			if v1Cfg.Model.Name != "" {
+				report.Inference.SelectedModel = v1Cfg.Model.Name
+			}
+			if v1Cfg.Sandbox.Backend != "" && cfg.SandboxBackend == "" {
+				cfg.SandboxBackend = v1Cfg.Sandbox.Backend
+			}
+		}
+		// Also try the flat legacy loader for fields not in V1 (TapePath, Agents, etc.).
+		if loaded, err := config.LoadRuntimeWorkspaceConfig(cfg.ConfigPath); err == nil {
 			if loaded.SandboxBackend != "" && cfg.SandboxBackend == "" {
 				cfg.SandboxBackend = loaded.SandboxBackend
 			}
@@ -107,6 +132,9 @@ func BuildDoctorReport(ctx context.Context, cfg Config, secrets config.Secrets) 
 			if loaded.TapePath != "" && cfg.InferenceTapePath == "" {
 				cfg.InferenceTapePath = loaded.TapePath
 			}
+		} else if v1Err != nil {
+			// Both V1 and flat loaders failed — surface the V1 error.
+			report.ConfigError = v1Err.Error()
 		}
 	}
 	if strings.EqualFold(strings.TrimSpace(cfg.InferenceProvider), "tape") && strings.TrimSpace(cfg.InferenceTapePath) == "" {
@@ -132,7 +160,7 @@ func BuildDoctorReport(ctx context.Context, cfg Config, secrets config.Secrets) 
 	}
 	report.ProtectedPaths = config.New(cfg.Workspace).GovernanceRoots(cfg.ManifestPath, cfg.ConfigPath, config.DefaultWorkspaceConfigPath(cfg.Workspace))
 
-	resolver := templates.NewResolver(cfg.SharedRoot)
+	resolver := te.NewResolver(cfg.SharedRoot)
 	if starterConfig, err := resolver.ResolveWorkspaceConfigTemplate(); err == nil {
 		if starterManifest, err := resolver.ResolveWorkspaceAgentTemplate(); err == nil {
 			sandboxTemplate, sandboxErr := resolver.ResolveWorkspaceSecurityTemplate("sandbox")
@@ -154,7 +182,11 @@ func BuildDoctorReport(ctx context.Context, cfg Config, secrets config.Secrets) 
 			report.StarterTemplatesError = err.Error()
 		}
 	} else {
-		report.StarterTemplatesError = err.Error()
+		// Check embedded templates as fallback.
+		report.StarterTemplatesReady = checkEmbeddedTemplates()
+		if !report.StarterTemplatesReady {
+			report.StarterTemplatesError = err.Error()
+		}
 	}
 
 	var env EnvironmentReport
@@ -241,22 +273,31 @@ func BuildDoctorReport(ctx context.Context, cfg Config, secrets config.Secrets) 
 		Details:   firstNonEmpty(report.ModelProfilesError, report.Inference.SelectedProfile, "workspace profile available"),
 	})
 	// Keep existing sandbox and chromium checks
+	runscOK := env.Sandbox.Runsc.Error == ""
+	dockerOK := env.Sandbox.Docker.Error == ""
+	deps = append(deps, DependencyStatus{
+		Name:      "sandbox_backend",
+		Required:  true,
+		Available: runscOK || dockerOK,
+		Blocking:  report.ConfigError == "" && (!runscOK && !dockerOK),
+		Details:   formatSandboxDetail(firstNonEmpty(env.Sandbox.Runsc.Version, env.Sandbox.Docker.Version, env.Sandbox.Runsc.Error, env.Sandbox.Docker.Error)),
+	})
 	deps = append(deps, DependencyStatus{
 		Name:      "runsc",
 		Required:  false,
-		Available: env.Sandbox.Runsc.Error == "",
+		Available: runscOK,
 		Blocking:  false,
 		Details:   formatSandboxDetail(firstNonEmpty(env.Sandbox.Runsc.Version, env.Sandbox.Runsc.Error)),
 	})
 	deps = append(deps, DependencyStatus{
 		Name:      "docker",
 		Required:  false,
-		Available: env.Sandbox.Docker.Error == "",
+		Available: dockerOK,
 		Blocking:  false,
 		Details:   formatSandboxDetail(firstNonEmpty(env.Sandbox.Docker.Version, env.Sandbox.Docker.Error)),
 	})
 	deps = append(deps, DependencyStatus{
-		Name:      "inference",
+		Name:      "inference_backend",
 		Required:  true,
 		Available: env.Inference.State == llm.BackendHealthReady || env.Inference.State == llm.BackendHealthDegraded,
 		Blocking:  env.Inference.State == llm.BackendHealthUnhealthy,
@@ -264,7 +305,42 @@ func BuildDoctorReport(ctx context.Context, cfg Config, secrets config.Secrets) 
 	})
 	deps = append(deps, detectChromiumStatus(ctx, cfg.CommandPolicy))
 	report.Dependencies = deps
+
+	report.SandboxReady = computeSandboxReady(report)
+	report.ModelReady = computeModelReady(report)
 	return report
+}
+
+func computeSandboxReady(r DoctorReport) bool {
+	if r.ConfigError != "" || r.StarterTemplatesError != "" {
+		return false
+	}
+	if !r.ConfigExists || !r.StarterTemplatesReady {
+		return false
+	}
+	return true
+}
+
+func computeModelReady(r DoctorReport) bool {
+	return r.Inference.State == llm.BackendHealthReady || r.Inference.State == llm.BackendHealthDegraded
+}
+
+func checkEmbeddedTemplates() bool {
+	efs := templatesembed.DefaultFS()
+	// Verify the key template files exist in the embed.
+	for _, path := range []string{
+		"workspace/workspace.yaml",
+		"workspace/agent.yaml",
+		"workspace/security/sandbox.policy.yaml",
+		"workspace/security/shell.policy.yaml",
+		"workspace/security/localtool.policy.yaml",
+		"workspace/security/workspaceingestion.policy.yaml",
+	} {
+		if _, err := efs.Open(path); err != nil {
+			return false
+		}
+	}
+	return true
 }
 
 // InitializeWorkspaceFromTemplates materializes starter workspace config under
@@ -274,10 +350,10 @@ func InitializeWorkspaceFromTemplates(cfg Config, overwrite bool) error {
 		return fmt.Errorf("workspace path required")
 	}
 	paths := config.New(cfg.Workspace)
-	if err := os.MkdirAll(paths.ConfigRoot(), fs.PublicDirMode); err != nil { // public: config root
+	if err := os.MkdirAll(paths.ConfigRoot(), 	platformfs.PublicDirMode); err != nil { // public: config root
 		return err
 	}
-	resolver := templates.NewResolver(cfg.SharedRoot)
+	resolver := te.NewResolver(cfg.SharedRoot)
 	configTemplate, err := resolver.ResolveWorkspaceConfigTemplate()
 	if err != nil {
 		return fmt.Errorf("resolve workspace config template: %w", err)
@@ -298,6 +374,7 @@ func InitializeWorkspaceFromTemplates(cfg Config, overwrite bool) error {
 	if err != nil {
 		return fmt.Errorf("resolve ingestion security template: %w", err)
 	}
+	agentTemplate, agentTplErr := resolver.ResolveWorkspaceAgentTemplate()
 	workspaceConfigPath := cfg.ConfigPath
 	if workspaceConfigPath == "" {
 		workspaceConfigPath = config.DefaultWorkspaceStateConfigPath(cfg.Workspace)
@@ -307,7 +384,7 @@ func InitializeWorkspaceFromTemplates(cfg Config, overwrite bool) error {
 	}
 	securityDir := filepath.Join(paths.ConfigRoot(), "security")
 	for _, dir := range []string{securityDir} {
-		if err := os.MkdirAll(dir, fs.PublicDirMode); err != nil { // public: security policies dir
+		if err := os.MkdirAll(dir, 	platformfs.PublicDirMode); err != nil { // public: security policies dir
 			return err
 		}
 	}
@@ -323,6 +400,35 @@ func InitializeWorkspaceFromTemplates(cfg Config, overwrite bool) error {
 	if err := copyTemplateFile(ingestionTemplate, filepath.Join(securityDir, "workspaceingestion.policy.yaml"), cfg.Workspace, overwrite); err != nil {
 		return err
 	}
+	// Write the agent manifest template if available.
+	agentsDir := paths.AgentsDir()
+	if agentTplErr == nil {
+		if err := os.MkdirAll(agentsDir, 	platformfs.PublicDirMode); err != nil { // public: agents dir
+			return err
+		}
+		agentName := strings.TrimSpace(cfg.AgentName)
+		if agentName == "" {
+			agentName = "euclo"
+		}
+		if err := copyTemplateFile(agentTemplate, filepath.Join(agentsDir, agentName+".yaml"), cfg.Workspace, overwrite); err != nil {
+			return err
+		}
+	} else {
+		// Fall back to embedded agent template when disk resolver fails.
+		embedAgent, embedErr := fs.ReadFile(templatesembed.DefaultFS(), "workspace/agent.yaml")
+		if embedErr == nil {
+			if err := os.MkdirAll(agentsDir, 	platformfs.PublicDirMode); err != nil { // public: agents dir
+				return err
+			}
+			agentName := strings.TrimSpace(cfg.AgentName)
+			if agentName == "" {
+				agentName = "euclo"
+			}
+			if err := copyTemplateContent(embedAgent, filepath.Join(agentsDir, agentName+".yaml"), cfg.Workspace, overwrite); err != nil {
+				return err
+			}
+		}
+	}
 	stateDir := config.DefaultWorkspaceStateDir(cfg.Workspace)
 	for _, dir := range []string{
 		paths.AgentsDir(),
@@ -333,7 +439,7 @@ func InitializeWorkspaceFromTemplates(cfg Config, overwrite bool) error {
 		filepath.Join(stateDir, "sessions"),
 		filepath.Join(stateDir, "test_run"),
 	} {
-		if err := os.MkdirAll(dir, fs.PublicDirMode); err != nil { // public: runtime state dirs
+		if err := os.MkdirAll(dir, 	platformfs.PublicDirMode); err != nil { // public: runtime state dirs
 			return err
 		}
 	}
@@ -350,15 +456,24 @@ func copyTemplateFile(src, dst, workspace string, overwrite bool) error {
 	if err != nil {
 		return err
 	}
+	return copyTemplateContent(data, dst, workspace, overwrite)
+}
+
+func copyTemplateContent(data []byte, dst, workspace string, overwrite bool) error {
+	if !overwrite {
+		if _, err := os.Stat(dst); err == nil {
+			return nil
+		}
+	}
 	rendered := strings.ReplaceAll(string(data), "${workspace}", filepath.ToSlash(workspace))
 	cleanDst := filepath.Clean(dst)
 	if !strings.HasPrefix(cleanDst, filepath.Clean(workspace)) {
 		return fmt.Errorf("path traversal: %s", dst)
 	}
-	if err := os.MkdirAll(filepath.Dir(cleanDst), fs.PublicDirMode); err != nil { // public: template dst dir
+	if err := os.MkdirAll(filepath.Dir(cleanDst), 	platformfs.PublicDirMode); err != nil { // public: template dst dir
 		return err
 	}
-	return os.WriteFile(filepath.Clean(cleanDst), []byte(rendered), fs.PublicFileMode) //nolint:gosec // public: rendered template
+	return os.WriteFile(filepath.Clean(cleanDst), []byte(rendered), 	platformfs.PublicFileMode) //nolint:gosec // public: rendered template
 }
 
 func detectChromiumStatus(ctx context.Context, policy sandbox.CommandPolicy) DependencyStatus {

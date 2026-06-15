@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 	"sync"
 	"time"
@@ -26,6 +27,7 @@ import (
 	"codeburg.org/lexbit/relurpify/execution/agentlifecycle"
 	"codeburg.org/lexbit/relurpify/execution/compiler"
 	"codeburg.org/lexbit/relurpify/execution/session"
+	"codeburg.org/lexbit/relurpify/execution/workspace"
 	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/governance/policy"
@@ -97,8 +99,30 @@ func (r *Runtime) Secrets() config.Secrets {
 	return r.secrets
 }
 
-// New builds a fruntime for the TUI and status surfaces.
+// New builds a runtime for the TUI and status surfaces.
+// Construction is total: recoverable failures (config parse errors,
+// sandbox backend unavailable, model backend down) produce a degraded
+// runtime with deny-all scope instead of returning an error.
+// Truly fatal programmer errors (nil deref) still return an error.
 func New(ctx context.Context, cfg Config, secrets config.Secrets) (*Runtime, error) {
+	rt, err := buildRuntime(ctx, cfg, secrets)
+	if err != nil {
+		return newDegradedRuntime(ctx, cfg, secrets, err), nil
+	}
+	return rt, nil
+}
+
+// buildRuntime is the full construction path. When it fails, New() produces
+// a degraded Runtime so the TUI always launches.
+func buildRuntime(ctx context.Context, cfg Config, secrets config.Secrets) (*Runtime, error) {
+	// Save flag-provided values before env overrides and config loading for
+	// precedence: flag > env > config > default. We snapshot before
+	// Normalize fills in defaults from config files.
+	preProvider := cfg.InferenceProvider
+	preModel := cfg.InferenceModel
+	preSandboxBackend := cfg.SandboxBackend
+	preTapePath := cfg.InferenceTapePath
+
 	envOverrides, err := config.LoadEnvOverrides(cfg.EnvOverrides)
 	if err != nil {
 		return nil, fmt.Errorf("load env overrides: %w", err)
@@ -106,17 +130,20 @@ func New(ctx context.Context, cfg Config, secrets config.Secrets) (*Runtime, err
 	if envOverrides.WorkspaceRoot != "" {
 		cfg.Workspace = envOverrides.WorkspaceRoot
 	}
-	if err := cfg.Normalize(); err != nil {
-		return nil, err
-	}
 	if envOverrides.ModelProvider != "" {
 		cfg.InferenceProvider = envOverrides.ModelProvider
+		preProvider = envOverrides.ModelProvider
 	}
 	if envOverrides.ModelName != "" {
 		cfg.InferenceModel = envOverrides.ModelName
+		preModel = envOverrides.ModelName
 	}
 	if envOverrides.SandboxBackend != "" {
 		cfg.SandboxBackend = envOverrides.SandboxBackend
+		preSandboxBackend = envOverrides.SandboxBackend
+	}
+	if err := cfg.Normalize(); err != nil {
+		return nil, err
 	}
 	if envOverrides.OllamaHost != "" {
 		cfg.InferenceEndpoint = envOverrides.OllamaHost
@@ -139,9 +166,10 @@ func New(ctx context.Context, cfg Config, secrets config.Secrets) (*Runtime, err
 		return nil, fmt.Errorf("load workspace config bundle: %w", err)
 	}
 
-	// Load workspace YAML to get AllowedCapabilities and Nexus config before
-	// calling ayenitd.Open — Open will handle model/agent-name overrides
-	// internally, but AllowedCapabilities is a runtime-level concern.
+	// Load workspace YAML to get model/provider/sandbox preferences before
+	// calling ayenitd.Open. The V1 config format (relurpify/workspace/v1)
+	// is the canonical nested format. A missing file is non-blocking
+	// (uninitialized workspace); a present but invalid file is blocking.
 	var workspaceCfg config.RuntimeWorkspaceConfig
 	var allowedCapabilities []agentspec.CapabilitySelector
 	backendFactory := cfg.SandboxBackendFactory
@@ -149,27 +177,43 @@ func New(ctx context.Context, cfg Config, secrets config.Secrets) (*Runtime, err
 		backendFactory = envcomposition.NewSandboxBackendFactory()
 	}
 	if cfg.ConfigPath != "" {
+		v1Cfg, v1Err := config.LoadRuntimeWorkspaceConfigV1(cfg.ConfigPath)
+		if v1Err == nil {
+			// Apply config values only when flag/env did not set them (pre-empty).
+			if v1Cfg.Model.Provider != "" && preProvider == "" {
+				cfg.InferenceProvider = v1Cfg.Model.Provider
+			}
+			if v1Cfg.Model.Name != "" && preModel == "" {
+				cfg.InferenceModel = v1Cfg.Model.Name
+			}
+			if v1Cfg.Sandbox.Backend != "" && preSandboxBackend == "" {
+				cfg.SandboxBackend = v1Cfg.Sandbox.Backend
+			}
+		}
+		// Also try the flat legacy RuntimeWorkspaceConfig for fields not
+		// in V1 (TapePath, Agents, AllowedCapabilities, runtime state).
+		// Also applies flat provider/model/sandbox_backend as fallback
+		// when V1 parsing fails (backward compat with existing files).
 		if loaded, err := config.LoadRuntimeWorkspaceConfig(cfg.ConfigPath); err == nil {
 			workspaceCfg = loaded
-			if workspaceCfg.Provider != "" && (strings.TrimSpace(cfg.InferenceProvider) == "" || strings.EqualFold(strings.TrimSpace(cfg.InferenceProvider), "ollama")) {
-				cfg.InferenceProvider = workspaceCfg.Provider
+			if loaded.TapePath != "" && preTapePath == "" {
+				cfg.InferenceTapePath = loaded.TapePath
 			}
-			if workspaceCfg.Model != "" && cfg.InferenceModel == "" {
-				cfg.InferenceModel = workspaceCfg.Model
+			if loaded.Provider != "" && preProvider == "" {
+				cfg.InferenceProvider = loaded.Provider
 			}
-			if workspaceCfg.TapePath != "" && cfg.InferenceTapePath == "" {
-				cfg.InferenceTapePath = workspaceCfg.TapePath
+			if loaded.Model != "" && preModel == "" {
+				cfg.InferenceModel = loaded.Model
 			}
-			if workspaceCfg.SandboxBackend != "" && cfg.SandboxBackend == "" {
-				cfg.SandboxBackend = workspaceCfg.SandboxBackend
+			if loaded.SandboxBackend != "" && preSandboxBackend == "" {
+				cfg.SandboxBackend = loaded.SandboxBackend
 			}
-			if len(workspaceCfg.Agents) > 0 && cfg.AgentName == "" {
-				cfg.AgentName = workspaceCfg.Agents[0]
+			if len(loaded.Agents) > 0 && cfg.AgentName == "" {
+				cfg.AgentName = loaded.Agents[0]
 			}
-			allowedCapabilities = append(allowedCapabilities, convertRuntimeCapabilitySelectors(workspaceCfg.AllowedCapabilities)...)
+			allowedCapabilities = append(allowedCapabilities, convertRuntimeCapabilitySelectors(loaded.AllowedCapabilities)...)
 		}
-		// Missing config file is not an error — workspace may not be initialized yet.
-	}
+	} // end if cfg.ConfigPath != ""
 	if strings.EqualFold(strings.TrimSpace(cfg.InferenceProvider), "tape") && strings.TrimSpace(cfg.InferenceTapePath) == "" {
 		cfg.InferenceTapePath = config.DefaultWorkspaceStateTapeFile(cfg.Workspace)
 	}
@@ -474,7 +518,45 @@ func New(ctx context.Context, cfg Config, secrets config.Secrets) (*Runtime, err
 		_ = rt.Close(ctx)
 		return nil, fmt.Errorf("start workspace services: %w", err)
 	}
+	syncWorkspaceReadiness(rt)
 	return rt, nil
+}
+
+func syncWorkspaceReadiness(rt *Runtime) {
+	if rt == nil || rt.Workspace == nil {
+		return
+	}
+	ws := rt.Workspace
+	ws.Readiness.SandboxReady = rt.Tools != nil
+	ws.Readiness.ModelReady = rt.Model != nil
+	if ws.Readiness.Ready() {
+		ws.Readiness.Degraded = false
+	}
+}
+
+func newDegradedRuntime(ctx context.Context, cfg Config, secrets config.Secrets, reason error) *Runtime {
+	ws := session.DegradedWorkspace(reason.Error())
+	ws.Registration = &session.Registration{ID: "degraded"}
+
+	id, _ := workspace.New(cfg.Workspace)
+	sess := &session.WorkspaceSession{
+		ID:        "degraded",
+		Workspace: id,
+	}
+
+	rt := &Runtime{
+		Config:    cfg,
+		Workspace: ws,
+		Session:   sess,
+		Tools:     registry.NewRegistry(),
+	}
+
+	// Emit boot.degraded observability event (NFR-4).
+	log.Printf("boot.degraded{reason=%q sandbox_ready=false model_ready=false degraded=true}",
+		reason.Error())
+	_ = ctx
+	_ = secrets
+	return rt
 }
 
 // Close releases resources managed by fruntime.

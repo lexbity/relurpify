@@ -1,6 +1,7 @@
 package permissions
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -9,6 +10,7 @@ import (
 var (
 	ErrFileScopeOutsideWorkspace = fmt.Errorf("outside workspace")
 	ErrFileScopeProtectedPath    = fmt.Errorf("protected path")
+	ErrSandboxScopeUnset         = errors.New("sandbox scope not configured: denying by default")
 )
 
 // FileScopePolicy captures the filesystem boundary enforced by sandbox-aware
@@ -188,4 +190,17 @@ func dedupeScopePaths(paths []string) []string {
 		out = append(out, path)
 	}
 	return out
+}
+
+func NewDenyAllFileScopePolicy() *FileScopePolicy {
+	return &FileScopePolicy{
+		ProtectedPaths: []string{"/"},
+	}
+}
+
+func CheckOrDeny(scope *FileScopePolicy, action FileSystemAction, path string) error {
+	if scope == nil {
+		return ErrSandboxScopeUnset
+	}
+	return scope.Check(action, path)
 }

@@ -63,7 +63,7 @@ func (r *CapabilityRegistry) wrapCapabilityHandlerPrepared(handler handler.Capab
 	if aware, ok := handler.(AgentSpecAware); ok && r.agentSpec != nil {
 		aware.SetAgentSpec(r.agentSpec, r.registeredAgentID)
 	}
-	if aware, ok := handler.(SandboxScopeAware); ok && r.sandboxScope != nil {
+	if aware, ok := handler.(SandboxScopeAware); ok {
 		aware.SetSandboxScope(r.sandboxScope)
 	}
 	if existing, ok := handler.(instrumentCapabilityHandler); ok {
