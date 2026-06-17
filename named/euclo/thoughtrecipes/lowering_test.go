@@ -148,11 +148,11 @@ route:
 	if got, want := len(route.Branches), 3; got != want {
 		t.Fatalf("branch count = %d, want %d", got, want)
 	}
-	if route.Branches[0].Predicate == nil || route.Branches[0].Predicate.Kind != "is" {
-		t.Fatalf("branch 0 predicate = %#v, want is", route.Branches[0].Predicate)
+	if route.Branches[0].Predicate == nil || route.Branches[0].Predicate.Op != PredOpIs {
+		t.Fatalf("branch 0 predicate op = %v, want is", route.Branches[0].Predicate)
 	}
-	if route.Branches[1].Predicate == nil || route.Branches[1].Predicate.Kind != "confidence_below" {
-		t.Fatalf("branch 1 predicate = %#v, want confidence_below", route.Branches[1].Predicate)
+	if route.Branches[1].Predicate == nil || route.Branches[1].Predicate.Op != PredOpConfidenceLT {
+		t.Fatalf("branch 1 predicate op = %v, want confidence_below", route.Branches[1].Predicate)
 	}
 	if !route.Branches[2].IsElse {
 		t.Fatal("otherwise branch was not preserved as explicit fallback")
@@ -160,11 +160,11 @@ route:
 	if got, want := len(route.Branches[0].Steps), 1; got != want {
 		t.Fatalf("branch 0 body steps = %d, want %d", got, want)
 	}
-	if got := route.Branches[0].Steps[0].Type; got != "run" {
-		t.Fatalf("branch 0 step type = %q, want run", got)
+	if got := route.Branches[0].Steps[0].Kind; got != StepKindRun {
+		t.Fatalf("branch 0 step kind = %v, want run", got)
 	}
-	if got := route.Branches[1].Steps[0].Type; got != "delegate" {
-		t.Fatalf("branch 1 step type = %q, want delegate", got)
+	if got := route.Branches[1].Steps[0].Kind; got != StepKindDelegate {
+		t.Fatalf("branch 1 step kind = %v, want delegate", got)
 	}
 	if got := len(plan.Warnings); got != 0 {
 		t.Fatalf("unexpected warnings: %#v", plan.Warnings)
@@ -219,8 +219,8 @@ ask user:
 		t.Fatalf("step count = %d, want %d", got, want)
 	}
 	step := plan.Steps[0]
-	if step.Type != "ask" {
-		t.Fatalf("step type = %q, want ask", step.Type)
+	if step.Kind != StepKindAsk {
+		t.Fatalf("step kind = %v, want ask", step.Kind)
 	}
 	if step.Question != "Do you want review or refactor?" {
 		t.Fatalf("question = %q", step.Question)
@@ -268,8 +268,8 @@ ask user:
 	}
 
 	run := plan.Steps[0]
-	if run.Type != "run" {
-		t.Fatalf("run step type = %q, want run", run.Type)
+	if run.Kind != StepKindRun {
+		t.Fatalf("run step kind = %v, want run", run.Kind)
 	}
 	if run.Goal != "" {
 		t.Fatalf("run goal = %q, want empty", run.Goal)
@@ -291,8 +291,8 @@ ask user:
 	}
 
 	ask := plan.Steps[1]
-	if ask.Type != "ask" {
-		t.Fatalf("ask step type = %q, want ask", ask.Type)
+	if ask.Kind != StepKindAsk {
+		t.Fatalf("ask step kind = %v, want ask", ask.Kind)
 	}
 	if ask.Question != "" {
 		t.Fatalf("ask question = %q, want empty", ask.Question)
@@ -367,8 +367,8 @@ pipeline:
 		t.Fatalf("step count = %d, want %d", got, want)
 	}
 	step := plan.Steps[0]
-	if step.Type != "pipeline" {
-		t.Fatalf("step type = %q, want pipeline", step.Type)
+	if step.Kind != StepKindPipelineStage {
+		t.Fatalf("step kind = %v, want pipeline", step.Kind)
 	}
 	if got, want := len(step.PipelineStages), 2; got != want {
 		t.Fatalf("pipeline stage count = %d, want %d", got, want)
@@ -382,8 +382,8 @@ pipeline:
 	if got, want := len(step.PipelineStages[0].Steps), 1; got != want {
 		t.Fatalf("stage 0 step count = %d, want %d", got, want)
 	}
-	if got := step.PipelineStages[0].Steps[0].Type; got != "run" {
-		t.Fatalf("stage 0 step type = %q, want run", got)
+	if got := step.PipelineStages[0].Steps[0].Kind; got != StepKindRun {
+		t.Fatalf("stage 0 step kind = %v, want run", got)
 	}
 	if got := step.PipelineStages[1].Steps[0].Goal; got != "Summarize the findings." {
 		t.Fatalf("stage 1 goal = %q, want Summarize the findings.", got)
@@ -477,38 +477,27 @@ run writer:
 	}
 
 	first := plan.Steps[0]
-	if got, want := len(first.ToolScopes), 1; got != want {
-		t.Fatalf("first step local tool scope count = %d, want %d", got, want)
+	if got, want := first.Scope.AllowedToolNames(), []string{"file_write", "file_search"}; !equalStringSlices(got, want) {
+		t.Fatalf("first step allowed tools = %#v, want %#v", got, want)
 	}
-	if got := first.ToolScopes[0].ScopeKind; got != "run" {
-		t.Fatalf("first step scope kind = %q, want run", got)
-	}
-	if got, want := first.ToolScopes[0].ToolNames, []string{"file_search"}; !equalStringSlices(got, want) {
-		t.Fatalf("first step tool names = %#v, want %#v", got, want)
-	}
-	if got, want := first.EffectiveToolNames, []string{"file_write", "file_search"}; !equalStringSlices(got, want) {
-		t.Fatalf("first step effective tool names = %#v, want %#v", got, want)
+	if !first.Scope.IsResolved() {
+		t.Fatal("first step scope should be resolved")
 	}
 	if cfg, ok := first.Step.Config["effective_tool_names"].([]string); !ok || !equalStringSlices(cfg, []string{"file_write", "file_search"}) {
 		t.Fatalf("first step config effective_tool_names = %#v", first.Step.Config["effective_tool_names"])
 	}
-	if scopes, ok := first.Step.Config["tool_scopes"].([]map[string]any); !ok || len(scopes) != 1 {
-		t.Fatalf("first step config tool_scopes = %#v, want 1 frame", first.Step.Config["tool_scopes"])
-	}
 
 	second := plan.Steps[1]
-	if got, want := len(second.ToolScopes), 0; got != want {
-		t.Fatalf("second step local tool scope count = %d, want %d", got, want)
+	if got, want := second.Scope.AllowedToolNames(), []string{"file_write"}; !equalStringSlices(got, want) {
+		t.Fatalf("second step allowed tools = %#v, want %#v", got, want)
 	}
-	if got, want := second.EffectiveToolNames, []string{"file_write"}; !equalStringSlices(got, want) {
-		t.Fatalf("second step effective tool names = %#v, want %#v", got, want)
+	if !second.Scope.IsResolved() {
+		t.Fatal("second step scope should be resolved")
 	}
 	if cfg, ok := second.Step.Config["effective_tool_names"].([]string); !ok || !equalStringSlices(cfg, []string{"file_write"}) {
 		t.Fatalf("second step config effective_tool_names = %#v", second.Step.Config["effective_tool_names"])
 	}
-	if _, ok := second.Step.Config["tool_scopes"]; ok {
-		t.Fatal("second step should not carry a local tool_scopes entry")
-	}
+	_ = second.Step.Config // second step carries only inherited scope metadata
 }
 
 func TestLowerDocumentLowersDirectCapabilityInvocationToExecutableStep(t *testing.T) {

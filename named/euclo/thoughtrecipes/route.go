@@ -2,29 +2,68 @@ package thoughtrecipe
 
 import (
 	"fmt"
+	"math"
+	"strconv"
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/named/euclo/surface"
 )
 
-// NormalizeRoutePredicate converts a parsed predicate into the constrained
-// runtime form used by route lowering.
-func NormalizeRoutePredicate(pred PredicateExpr) (*RoutePredicate, error) {
-	kind := strings.TrimSpace(pred.Kind)
-	switch kind {
-	case "missing", "present", "is", "contains", "confidence_below":
-	default:
+// NormalizeRoutePredicate converts a parsed predicate into a typed Predicate.
+func NormalizeRoutePredicate(pred PredicateExpr) (*Predicate, error) {
+	op := predicateOpFromString(strings.TrimSpace(pred.Kind))
+	if !op.valid() {
 		return nil, fmt.Errorf("%s:%d:%d: unsupported route predicate %q", pred.GetSpan().Start.File, pred.GetSpan().Start.Line, pred.GetSpan().Start.Column, pred.Kind)
 	}
 
-	return &RoutePredicate{
-		positioned: positioned{Span: pred.GetSpan()},
-		Raw:        strings.TrimSpace(pred.Raw),
-		Kind:       kind,
-		Subject:    pred.Subject,
-		Operator:   strings.TrimSpace(pred.Operator),
-		Value:      pred.Value,
+	subject := strings.TrimSpace(pred.Subject.Raw)
+	value := PredicateValue{}
+	switch op {
+	case PredOpIs, PredOpContains:
+		value.StringVal = predicateValueString(pred.Value)
+	case PredOpConfidenceLT:
+		value.Percent = predicatePercentValue(pred.Value)
+	}
+
+	return &Predicate{
+		Subject: subject,
+		Op:      op,
+		Value:   value,
+		Label:   strings.TrimSpace(pred.Raw),
 	}, nil
+}
+
+func predicateValueString(v ValueExpr) string {
+	switch x := v.(type) {
+	case StringLiteral:
+		return strings.TrimSpace(x.Value)
+	case Identifier:
+		return strings.TrimSpace(x.Value)
+	case NumberLiteral:
+		return strings.TrimSpace(x.Value)
+	case *StringLiteral:
+		return strings.TrimSpace(x.Value)
+	case *Identifier:
+		return strings.TrimSpace(x.Value)
+	case *NumberLiteral:
+		return strings.TrimSpace(x.Value)
+	default:
+		return strings.TrimSpace(valueExprRaw(v))
+	}
+}
+
+func predicatePercentValue(v ValueExpr) int {
+	raw := strings.TrimSpace(valueExprRaw(v))
+	raw = strings.TrimSuffix(raw, "%")
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return math.MaxInt
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil {
+		return math.MaxInt
+	}
+	return n
 }
 
 func lowerRouteDecl(decl *RouteDecl, agents map[string]AgentBinding, runIndex *int, plan *ExecutionPlan, inheritedToolScopes []ToolScopeFrame) (*CompiledRouteGroup, error) {
@@ -101,13 +140,13 @@ func lowerRouteExecutionItems(items []ExecutionItem, agents map[string]AgentBind
 
 		switch node := item.(type) {
 		case *RunDecl:
-			step, err := lowerAgentExecutionDecl("run", node.Agent, node.Items, agents, runIndex, inheritedToolScopes)
+			step, err := lowerAgentExecutionDecl(StepKindRun, node.Agent, node.Items, agents, runIndex, inheritedToolScopes)
 			if err != nil {
 				return nil, err
 			}
 			steps = append(steps, step)
 		case *DelegateDecl:
-			step, err := lowerAgentExecutionDecl("delegate", node.Agent, node.Items, agents, runIndex, inheritedToolScopes)
+			step, err := lowerAgentExecutionDecl(StepKindDelegate, node.Agent, node.Items, agents, runIndex, inheritedToolScopes)
 			if err != nil {
 				return nil, err
 			}
@@ -144,7 +183,7 @@ func lowerRouteExecutionItems(items []ExecutionItem, agents map[string]AgentBind
 	return steps, nil
 }
 
-func lowerAgentExecutionDecl(kind string, agent Identifier, items []ExecutionItem, agents map[string]AgentBinding, index *int, inheritedToolScopes []ToolScopeFrame) (ExecutionStep, error) {
+func lowerAgentExecutionDecl(kind StepKind, agent Identifier, items []ExecutionItem, agents map[string]AgentBinding, index *int, inheritedToolScopes []ToolScopeFrame) (ExecutionStep, error) {
 	if index == nil {
 		return ExecutionStep{}, fmt.Errorf("execution index is nil")
 	}
@@ -157,21 +196,20 @@ func lowerAgentExecutionDecl(kind string, agent Identifier, items []ExecutionIte
 	if err != nil {
 		return ExecutionStep{}, err
 	}
-	stepID := fmt.Sprintf("%s.%d.%d.%s.%d", kind, agent.GetSpan().Start.Line, agent.GetSpan().Start.Column, sanitizeComponent(agentName), *index)
+	stepID := fmt.Sprintf("%s.%d.%d.%s.%d", kind.String(), agent.GetSpan().Start.Line, agent.GetSpan().Start.Column, sanitizeComponent(agentName), *index)
 	effectiveScopes := appendToolScopeFrames(copyToolScopeFrames(inheritedToolScopes), localToolScopes...)
 	step := ExecutionStep{
-		ID:                 stepID,
-		Type:               kind,
-		Paradigm:           binding.Paradigm,
-		ToolScopes:         append([]ToolScopeFrame(nil), localToolScopes...),
-		EffectiveToolNames: effectiveToolNames(effectiveScopes),
-		Goal:               strings.Join(goals, "\n"),
-		Sources:            sources,
-		Directives:         directives,
-		CaptureBindings:    captures,
-		PromptID:           promptID,
-		Prompt:             strings.Join(goals, "\n"),
-		Step:               surface.ThoughtRecipeStep{ID: stepID},
+		ID:              stepID,
+		Kind:            kind,
+		Paradigm:        binding.Paradigm,
+		Scope:           AllowTools(effectiveToolNames(effectiveScopes)),
+		Goal:            strings.Join(goals, "\n"),
+		Sources:         sources,
+		Directives:      directives,
+		CaptureBindings: captures,
+		PromptID:        promptID,
+		Prompt:          strings.Join(goals, "\n"),
+		Step:            surface.ThoughtRecipeStep{ID: stepID},
 	}
 	if capabilityPlan != nil {
 		step.CapabilityID = capabilityPlan.CapabilityID
@@ -180,7 +218,7 @@ func lowerAgentExecutionDecl(kind string, agent Identifier, items []ExecutionIte
 	step.Step.Parent.Context = surface.ThoughtRecipeStepContext{}
 	step.Step.Prompt = step.Prompt
 	step.Step.PromptID = promptID
-	step.Step.Type = kind
+	step.Step.Type = kind.String()
 	step.Step.Config = config
 	if capabilityPlan != nil {
 		if step.Step.Config == nil {
@@ -194,15 +232,13 @@ func lowerAgentExecutionDecl(kind string, agent Identifier, items []ExecutionIte
 		}
 		step.Step.Config["capability_id"] = capabilityPlan.CapabilityID
 	}
-	if step.Step.Config == nil && (len(step.ToolScopes) > 0 || len(step.EffectiveToolNames) > 0) {
+	toolNames := step.Scope.AllowedToolNames()
+	if step.Step.Config == nil && len(toolNames) > 0 {
 		step.Step.Config = map[string]any{}
 	}
 	if step.Step.Config != nil {
-		if len(step.ToolScopes) > 0 {
-			step.Step.Config["tool_scopes"] = summarizeToolScopeFrames(step.ToolScopes)
-		}
-		if len(step.EffectiveToolNames) > 0 {
-			step.Step.Config["effective_tool_names"] = append([]string(nil), step.EffectiveToolNames...)
+		if len(toolNames) > 0 {
+			step.Step.Config["effective_tool_names"] = append([]string(nil), toolNames...)
 		}
 	}
 	*index = *index + 1
@@ -220,7 +256,7 @@ func lowerCapabilityExecutionDecl(inv *CapabilityInvocation, index *int) (Execut
 	stepID := fmt.Sprintf("capability.%d.%d.%d", inv.GetSpan().Start.Line, inv.GetSpan().Start.Column, *index)
 	step := ExecutionStep{
 		ID:           stepID,
-		Type:         "capability",
+		Kind:         StepKindCapability,
 		Paradigm:     "euclo",
 		CapabilityID: plan.CapabilityID,
 		Prompt:       fmt.Sprintf("do relurpic:%s", strings.TrimSpace(inv.Capability.Value)),

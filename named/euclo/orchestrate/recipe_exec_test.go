@@ -47,7 +47,7 @@ func mustRegisterCompiledThoughtRecipe(t *testing.T, registry *thoughtrecipepkg.
 		ThoughtRecipe: thoughtrecipe,
 		Steps: []thoughtrecipepkg.ExecutionStep{{
 			ID:       stepID,
-			Type:     "run",
+			Kind:     thoughtrecipepkg.StepKindRun,
 			Paradigm: "goalcon",
 			Goal:     "Continue the thoughtrecipe.",
 			Prompt:   "Continue the thoughtrecipe.",
@@ -522,8 +522,8 @@ run reviewer:
 	if len(plan.Steps) != 1 {
 		t.Fatalf("plan step count = %d, want 1", len(plan.Steps))
 	}
-	if got, want := plan.Steps[0].EffectiveToolNames, []string{"scope_read"}; !equalStringSlices(got, want) {
-		t.Fatalf("effective tool names = %#v, want %#v", got, want)
+	if got, want := plan.Steps[0].Scope.AllowedToolNames(), []string{"scope_read"}; !equalStringSlices(got, want) {
+		t.Fatalf("allowed tool names = %#v, want %#v", got, want)
 	}
 }
 
@@ -558,8 +558,8 @@ run reviewer:
 	if len(plan.Steps) != 1 {
 		t.Fatalf("plan step count = %d, want 1", len(plan.Steps))
 	}
-	if got, want := plan.Steps[0].EffectiveToolNames, []string{"scope_read", "scope_write"}; !equalStringSlices(got, want) {
-		t.Fatalf("effective tool names = %#v, want %#v", got, want)
+	if got, want := plan.Steps[0].Scope.AllowedToolNames(), []string{"scope_read", "scope_write"}; !equalStringSlices(got, want) {
+		t.Fatalf("allowed tool names = %#v, want %#v", got, want)
 	}
 }
 

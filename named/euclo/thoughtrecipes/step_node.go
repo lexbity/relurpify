@@ -82,10 +82,10 @@ func (n *ThoughtRecipeStepNode) Execute(ctx context.Context, env *contextdata.En
 	if strings.TrimSpace(n.step.CapabilityID) != "" {
 		return n.executeCapability(ctx, env)
 	}
-	if strings.EqualFold(strings.TrimSpace(n.step.Type), "ask") {
+	if n.step.Kind == StepKindAsk {
 		return n.executeAsk(ctx, env)
 	}
-	if strings.EqualFold(strings.TrimSpace(n.step.Type), "delegate") {
+	if n.step.Kind == StepKindDelegate {
 		return n.executeDelegation(ctx, env)
 	}
 
@@ -450,7 +450,7 @@ func (n *ThoughtRecipeStepNode) buildTask(ctx context.Context, env *contextdata.
 	if strings.TrimSpace(n.step.Goal) != "" {
 		task.Context["euclo.run.goal"] = n.step.Goal
 	}
-	if strings.EqualFold(strings.TrimSpace(n.step.Type), "delegate") {
+	if n.step.Kind == StepKindDelegate {
 		task.Context["euclo.delegate.source_keys"] = append([]string(nil), n.step.Sources...)
 		if parentID, ok := contextdata.GetTyped[string](env, "euclo.delegate.parent_task_id"); ok {
 			task.Context["euclo.delegate.parent_task_id"] = parentID
@@ -517,7 +517,7 @@ func (n *ThoughtRecipeStepNode) ensureAskFrame(env *contextdata.Envelope) (*inte
 	choices := n.askChoices(env)
 	frame := interaction.NewAskUserFrame(env.TaskID, env.SessionID, n.step.Question, choices)
 	frame.Payload["step_id"] = n.step.ID
-	frame.Payload["step_type"] = n.step.Type
+	frame.Payload["step_type"] = n.step.Kind.String()
 	frame.Payload["choice_source"] = n.step.ChoiceSource
 	frame.Payload["frame_key"] = key
 	// envelope: intentional dynamic key — ask frames are keyed by step ID.
@@ -632,7 +632,7 @@ func (n *ThoughtRecipeStepNode) buildRuntimeContext(ctx context.Context, env *co
 func (n *ThoughtRecipeStepNode) stepMetadata() map[string]any {
 	metadata := map[string]any{
 		"execution_step_id":   n.step.ID,
-		"execution_step_type": n.step.Type,
+		"execution_step_type": n.step.Kind.String(),
 		"execution_paradigm":  n.step.Paradigm,
 		"execution_goal":      n.step.Goal,
 		"execution_question":  n.step.Question,
@@ -655,7 +655,7 @@ func (n *ThoughtRecipeStepNode) stepMetadata() map[string]any {
 		metadata[executionCapabilityIDKey] = n.step.CapabilityID
 	}
 	if cfg := cloneClarificationStepConfig(n.step.ClarificationConfig); cfg != nil {
-		metadata["execution_clarification_type"] = n.step.Type
+		metadata["execution_clarification_type"] = n.step.Kind.String()
 		metadata["execution_clarification_config"] = cfg
 	}
 	return metadata
@@ -664,7 +664,7 @@ func (n *ThoughtRecipeStepNode) stepMetadata() map[string]any {
 func (n *ThoughtRecipeStepNode) stepRuntimeState(data map[string]any) map[string]any {
 	state := map[string]any{
 		"execution_step_id":   n.step.ID,
-		"execution_step_type": n.step.Type,
+		"execution_step_type": n.step.Kind.String(),
 		"execution_paradigm":  n.step.Paradigm,
 		"execution_goal":      n.step.Goal,
 		"execution_question":  n.step.Question,
@@ -697,7 +697,7 @@ func (n *ThoughtRecipeStepNode) stepRuntimeState(data map[string]any) map[string
 		state[executionCapabilityIDKey] = n.step.CapabilityID
 	}
 	if cfg := cloneClarificationStepConfig(n.step.ClarificationConfig); cfg != nil {
-		state["execution_clarification_type"] = n.step.Type
+		state["execution_clarification_type"] = n.step.Kind.String()
 		state["execution_clarification_config"] = cfg
 		state["execution_clarification_schema_id"] = cfg.OutputSchemaID
 		state["execution_clarification_validation_mode"] = cfg.ValidationMode
@@ -750,7 +750,7 @@ func (n *ThoughtRecipeStepNode) writeStepMetadata(env *contextdata.Envelope) {
 	base := "euclo.execution.step." + n.step.ID
 	// envelope: intentional dynamic key — step metadata is namespaced by step ID.
 	contextdata.SetTyped(env, base+".id", n.step.ID)
-	contextdata.SetTyped(env, base+".type", n.step.Type)
+	contextdata.SetTyped(env, base+".type", n.step.Kind.String())
 	contextdata.SetTyped(env, base+".paradigm", n.step.Paradigm)
 	contextdata.SetTyped(env, base+".goal", n.step.Goal)
 	contextdata.SetTyped(env, base+".question", n.step.Question)
@@ -773,7 +773,7 @@ func (n *ThoughtRecipeStepNode) writeStepMetadata(env *contextdata.Envelope) {
 		contextdata.SetTyped(env, base+".capability_id", n.step.CapabilityID)
 	}
 	if cfg := cloneClarificationStepConfig(n.step.ClarificationConfig); cfg != nil {
-		contextdata.SetTyped(env, base+".clarification_type", n.step.Type)
+		contextdata.SetTyped(env, base+".clarification_type", n.step.Kind.String())
 		contextdata.SetTyped(env, base+".clarification_config", cfg)
 		contextdata.SetTyped(env, base+".clarification_schema_id", cfg.OutputSchemaID)
 		contextdata.SetTyped(env, base+".clarification_validation_mode", cfg.ValidationMode)
@@ -963,12 +963,16 @@ func (n *ThoughtRecipeStepNode) effectiveToolAllowlist() []string {
 	if n == nil || n.deps == nil || n.deps.Registry == nil {
 		return nil
 	}
-	if len(n.step.EffectiveToolNames) == 0 {
+	if n.step.Scope.IsDenyAll() {
+		return []string{"__euclo__.deny_all__"}
+	}
+	names := n.step.Scope.AllowedToolNames()
+	if len(names) == 0 {
 		return nil
 	}
-	allowed := make([]string, 0, len(n.step.EffectiveToolNames))
-	seen := make(map[string]struct{}, len(n.step.EffectiveToolNames))
-	for _, toolName := range n.step.EffectiveToolNames {
+	allowed := make([]string, 0, len(names))
+	seen := make(map[string]struct{}, len(names))
+	for _, toolName := range names {
 		name := strings.TrimSpace(toolName)
 		if name == "" {
 			continue

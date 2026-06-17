@@ -1,5 +1,5 @@
 .PHONY: test-unit test-integ test-scenario test-conformance test-all
-.PHONY: test-contract-migration test-dev-agent test-tape-fidelity check-contract-dissolution grep-architecture-gates
+.PHONY: test-contract-migration test-dev-agent test-tape-fidelity test-euclo-golden check-contract-dissolution grep-architecture-gates
 .PHONY: lint-config lint-config-boundary test-boundary generate-templates check-template-drift check-boot-root check-config-tree-drift
 .PHONY: lint-layering lint-invariants lint-all lint-arch lint-go lint-go-fix
 .PHONY: domain-check domain-cycles no-bucket no-dead exception-count
@@ -78,11 +78,11 @@ exception-count:
 
 # Dead-code gate: asserts removed symbols never reappear.
 no-dead:
-	@if grep -rn 'InvokeOnBestNode\|RegisterNodeProvider\|NodeSelectionCriteria\|RateLimiter\|GetWorkingValue' --include='*.go' . 2>/dev/null | grep -v '.gomodcache' | grep -v 'tooling/arch' | grep -v 'state.go' | grep -v 'state_test.go' | grep -v 'runner_test.go'; then echo "[FAIL] no-dead: found removed symbols" ; exit 1 ; fi
+	@if grep -rn 'InvokeOnBestNode\|RegisterNodeProvider\|NodeSelectionCriteria\|RateLimiter\|GetWorkingValue\|executionStepFromAgent\|inheritExecutionStepScope' --include='*.go' . 2>/dev/null | grep -v '.gomodcache' | grep -v 'tooling/arch' | grep -v 'state.go' | grep -v 'state_test.go' | grep -v 'runner_test.go'; then echo "[FAIL] no-dead: found removed symbols" ; exit 1 ; fi
 	@echo "[PASS] no-dead: no removed symbols found"
 
 
-lint-all: lint-layering lint-invariants lint-config-boundary
+lint-all: lint-layering lint-invariants lint-config-boundary euclo-stepkind-exhaustive
 
 # Standard Go linters (golangci-lint, config: .golangci.yaml). Use locally;
 # CI uses two-track gate (ratchet + graduated) for enforce.
@@ -148,6 +148,14 @@ test-tape-fidelity:
 	$(GO_OFFLINE_ENV) GOCACHE=/tmp/relurpify-go-cache go test ./testsuite/agenttest/tapes -run 'TestCommittedEucloTapeValidates|TestCommittedEucloLineageValidates' -count=1
 	$(GO_OFFLINE_ENV) GOCACHE=/tmp/relurpify-go-cache go test ./app/relurpish/runtime -run TestEucloTapeFidelity -count=1
 
+# test-euclo-golden runs the golden characterisation harness for euclo recipe
+# compilation (plan snapshot, graph topology, execution trace). Each slice after
+# Slice 1 MUST keep these goldens byte-identical (NFR-2).
+# Set UPDATE_GOLDEN=1 to re-baseline.
+test-euclo-golden:
+	@mkdir -p /tmp/relurpify-go-cache
+	$(GO_OFFLINE_ENV) GOCACHE=/tmp/relurpify-go-cache go test ./named/euclo/thoughtrecipes/ -run 'TestGolden' -count=1 -v
+
 grep-architecture-gates:
 	@$(MAKE) check-contract-dissolution
 	@if rg -n "ResolveCallingMode|RenderToolsToPrompt|ParseToolCallsFromText" cognitionzoo capability/registry --glob '*.go' >/dev/null; then echo "[FAIL] grep-architecture-gates: legacy tool-calling wire symbols remain in cognitionzoo or capability/registry"; exit 1; fi
@@ -155,6 +163,16 @@ grep-architecture-gates:
 	@if rg -n "os\\.(Getenv|LookupEnv|Environ)" app execution governance platform/llm testsuite --glob '*.go' >/dev/null; then echo "[FAIL] grep-architecture-gates: direct env access remains outside userconfig"; exit 1; fi
 	@if rg -n "shim|compatibility|stub|backward compatibility" app/dev-agent-cli userconfig execution/session app/relurpish testsuite/agenttest platform/llm --glob '*.go' --glob '!**/*_test.go' >/dev/null; then echo "[FAIL] grep-architecture-gates: compatibility language remains in touched production code"; exit 1; fi
 	@echo "[PASS] grep-architecture-gates: architecture fences are clean"
+
+# euclo-stepkind-exhaustive: asserts every switch on ExecutionStep.Kind is exhaustive
+# (no silent fallthrough via strings.EqualFold or missing case).
+# Slice 2: StepKind is a closed uint8 enum; control flow must use typed comparisons.
+euclo-stepkind-exhaustive:
+	@echo "[check] euclo-stepkind-exhaustive: no string-based step kind dispatch..."
+	@if rg -n 'strings\.(EqualFold|TrimSpace).*\.(step\.Kind|n\.step\.Kind)\b' --glob '*.go' named/euclo/ 2>/dev/null | grep -qv '_test.go'; then \
+		echo "[FAIL] euclo-stepkind-exhaustive: string-based step kind dispatch still present (use == StepKind* instead)"; exit 1; \
+	fi
+	@echo "[PASS] euclo-stepkind-exhaustive: all step kind dispatch is typed"
 
 # Slice 10 structural gates: enforce that dead code and forbidden patterns
 # never reappear in production code.

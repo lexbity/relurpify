@@ -3,7 +3,6 @@ package thoughtrecipe
 import (
 	"context"
 	"fmt"
-	"math"
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/cognitionzoo/paradigm"
@@ -146,7 +145,7 @@ func buildParallelSection(graph *agentgraph.Graph, deps *paradigm.Deps, group Co
 	for _, step := range group.Steps {
 		artifact, err := addExecutionStep(graph, deps, ExecutionStep{
 			ID:                  step.Step.ID,
-			Type:                step.Type,
+			Kind:                stepKindFromString(step.Type),
 			Paradigm:            executionParadigmForStep(*step.Step),
 			CapabilityID:        step.Step.CapabilityID,
 			Prompt:              step.Step.Prompt,
@@ -234,7 +233,30 @@ func buildRouteSection(graph *agentgraph.Graph, deps *paradigm.Deps, group Compi
 		return graphSection{}, err
 	}
 
-	nextEntry := joinID
+	hasElse := false
+	for _, br := range group.Branches {
+		if br.IsElse {
+			hasElse = true
+			break
+		}
+	}
+
+	// FR-8: unmatched route without otherwise must halt.
+	noMatchID := joinID
+	if !hasElse {
+		noMatchID = scopedGroupNodeID(group.Group.ID, "no-match")
+		if err := graph.AddNode(newThoughtRecipeStageNode(noMatchID, agentgraph.NodeTypeSystem, "no_match", map[string]any{
+			"group_id": group.Group.ID,
+		})); err != nil {
+			return graphSection{}, err
+		}
+		// Dead-end edge: no-match node never transitions to join.
+		if err := graph.AddEdge(noMatchID, joinID, func(_ *execution.Result, _ *contextdata.Envelope) bool { return false }, false); err != nil {
+			return graphSection{}, err
+		}
+	}
+
+	nextEntry := noMatchID
 	for i := len(group.Branches) - 1; i >= 0; i-- {
 		branch := group.Branches[i]
 		bodyEntry, err := buildExecutionSequence(graph, deps, branch.Steps, joinID)
@@ -248,11 +270,15 @@ func buildRouteSection(graph *agentgraph.Graph, deps *paradigm.Deps, group Compi
 			continue
 		}
 		branchID := scopedGroupNodeID(group.Group.ID, fmt.Sprintf("branch.%d", i))
-		if err := graph.AddNode(newThoughtRecipeStageNode(branchID, agentgraph.NodeTypeConditional, "route_condition", map[string]any{
+		condNode := newThoughtRecipeStageNode(branchID, agentgraph.NodeTypeConditional, "route_condition", map[string]any{
 			"group_id":  group.Group.ID,
 			"branch_id": branchID,
-			"predicate": branch.Predicate,
-		})); err != nil {
+		})
+		if branch.Predicate != nil {
+			condNode.condFunc = compilePredicate(*branch.Predicate)
+			condNode.data["predicate"] = branch.Predicate // envelope metadata
+		}
+		if err := graph.AddNode(condNode); err != nil {
 			return graphSection{}, err
 		}
 		if strings.TrimSpace(nextEntry) != "" {
@@ -278,7 +304,7 @@ func buildRouteSection(graph *agentgraph.Graph, deps *paradigm.Deps, group Compi
 
 	return graphSection{
 		entry: routeID,
-		tail:  joinID,
+		tail:  noMatchID,
 	}, nil
 }
 
@@ -323,7 +349,7 @@ func buildBranchSequence(graph *agentgraph.Graph, deps *paradigm.Deps, steps []C
 	for _, step := range steps {
 		execStep := ExecutionStep{
 			ID:                  step.Step.ID,
-			Type:                step.Type,
+			Kind:                stepKindFromString(step.Type),
 			Paradigm:            executionParadigmForStep(*step.Step),
 			CapabilityID:        step.Step.CapabilityID,
 			Prompt:              step.Step.Prompt,
@@ -360,50 +386,8 @@ func buildBranchSequence(graph *agentgraph.Graph, deps *paradigm.Deps, steps []C
 	return artifacts[0].entry, nil
 }
 
-func executionStepFromAgent(id string, agent *surface.ThoughtRecipeStepAgent, parent ExecutionStep) ExecutionStep {
-	if agent == nil {
-		return inheritExecutionStepScope(ExecutionStep{ID: id}, parent)
-	}
-	step := surface.ThoughtRecipeStep{
-		ID:      id,
-		Parent:  *agent,
-		Context: agent.Context,
-	}
-	return inheritExecutionStepScope(ExecutionStep{
-		ID:       id,
-		Paradigm: agent.Paradigm,
-		Prompt:   agent.Prompt,
-		Stream:   cloneStreamSpec(agent.Context.Stream),
-		Ingest:   cloneIngestSpec(agent.Context.Ingest),
-		Inherit:  append([]string(nil), agent.Context.Inherit...),
-		Capture:  append([]string(nil), agent.Context.Capture...),
-		Step:     step,
-	}, parent)
-}
-
-func inheritExecutionStepScope(step, parent ExecutionStep) ExecutionStep {
-	if len(step.ToolScopes) == 0 && len(parent.ToolScopes) > 0 {
-		step.ToolScopes = append([]ToolScopeFrame(nil), parent.ToolScopes...)
-	}
-	if len(step.EffectiveToolNames) == 0 && len(parent.EffectiveToolNames) > 0 {
-		step.EffectiveToolNames = append([]string(nil), parent.EffectiveToolNames...)
-	}
-	if step.Step.Config == nil && (len(step.ToolScopes) > 0 || len(step.EffectiveToolNames) > 0) {
-		step.Step.Config = map[string]any{}
-	}
-	if step.Step.Config != nil {
-		if len(step.ToolScopes) > 0 {
-			step.Step.Config["tool_scopes"] = summarizeToolScopeFrames(step.ToolScopes)
-		}
-		if len(step.EffectiveToolNames) > 0 {
-			step.Step.Config["effective_tool_names"] = append([]string(nil), step.EffectiveToolNames...)
-		}
-	}
-	return step
-}
-
 func addExecutionStep(graph *agentgraph.Graph, deps *paradigm.Deps, step ExecutionStep) (stepArtifacts, error) {
-	if strings.EqualFold(strings.TrimSpace(step.Type), "pipeline") {
+	if step.Kind == StepKindPipelineStage {
 		return addPipelineStep(graph, deps, step)
 	}
 
@@ -434,10 +418,10 @@ func addExecutionStep(graph *agentgraph.Graph, deps *paradigm.Deps, step Executi
 		streamNode.BudgetShortfallPolicy = "emit_partial"
 		streamNode.Metadata = map[string]any{
 			"execution_step_id":   step.ID,
-			"execution_step_type": step.Type,
+			"execution_step_type": step.Kind.String(),
 		}
 		if cfg := cloneClarificationStepConfig(step.ClarificationConfig); cfg != nil {
-			streamNode.Metadata["execution_clarification_type"] = step.Type
+			streamNode.Metadata["execution_clarification_type"] = step.Kind.String()
 			streamNode.Metadata["execution_clarification_schema_id"] = cfg.OutputSchemaID
 		}
 		if err := graph.AddNode(streamNode); err != nil {
@@ -455,10 +439,10 @@ func addExecutionStep(graph *agentgraph.Graph, deps *paradigm.Deps, step Executi
 		nodeID := step.ID + ".gate"
 		if err := graph.AddNode(newThoughtRecipeStageNode(nodeID, agentgraph.NodeTypeSystem, "gate", map[string]any{
 			"step_id":            step.ID,
-			"step_type":          step.Type,
+			"step_type":          step.Kind.String(),
 			"mutation":           step.Mutation,
 			"hitl":               step.HITL,
-			"clarification_type": step.Type,
+			"clarification_type": step.Kind.String(),
 			"clarification_schema_id": func() string {
 				if step.ClarificationConfig != nil {
 					return step.ClarificationConfig.OutputSchemaID
@@ -490,7 +474,19 @@ func addExecutionStep(graph *agentgraph.Graph, deps *paradigm.Deps, step Executi
 	var fallbackID string
 	if step.Fallback != nil {
 		fallbackID = step.ID + ".fallback"
-		fallbackStep := executionStepFromAgent(fallbackID, step.Fallback, step)
+		agent := step.Fallback
+		fallbackStep := ExecutionStep{
+			ID:       fallbackID,
+			Kind:     step.Kind,
+			Scope:    step.Scope,
+			Paradigm: agent.Paradigm,
+			Prompt:   agent.Prompt,
+			Stream:   cloneStreamSpec(agent.Context.Stream),
+			Ingest:   cloneIngestSpec(agent.Context.Ingest),
+			Inherit:  append([]string(nil), agent.Context.Inherit...),
+			Capture:  append([]string(nil), agent.Context.Capture...),
+			Step:     surface.ThoughtRecipeStep{ID: fallbackID, Parent: *agent, Context: agent.Context},
+		}
 		if err := graph.AddNode(NewThoughtRecipeStepNode(fallbackID, deps, fallbackStep)); err != nil {
 			return stepArtifacts{}, err
 		}
@@ -651,10 +647,11 @@ func truthy(value any) bool {
 }
 
 type thoughtrecipeStageNode struct {
-	id   string
-	kind string
-	op   string
-	data map[string]any
+	id       string
+	kind     string
+	op       string
+	data     map[string]any
+	condFunc agentgraph.ConditionFunc // for route_condition nodes (compiled predicate)
 }
 
 func newThoughtRecipeStageNode(id string, nodeType agentgraph.NodeType, op string, data map[string]any) *thoughtrecipeStageNode {
@@ -691,8 +688,15 @@ func (n *thoughtrecipeStageNode) Execute(ctx context.Context, env *contextdata.E
 		case "route":
 			// envelope: intentional dynamic key — route state is scoped by group ID.
 			contextdata.SetTyped(env, "euclo.execution.route."+sanitizeComponent(fmt.Sprint(n.data["group_id"])), true)
+		case "no_match":
+			return &execution.Result{
+				NodeID:  n.id,
+				Success: false,
+				Error:   "no-route: no matching branch and no otherwise",
+				Data:    execution.NewToolResultPayload(n.data),
+			}, nil
 		case "route_condition":
-			matched := evaluateRoutePredicate(env, n.data["predicate"])
+			matched := n.condFunc(nil, env)
 			branchID := fmt.Sprint(n.data["branch_id"])
 			// envelope: intentional dynamic key — route condition results are scoped by group and branch.
 			contextdata.SetTyped(env, routeConditionResultKey(fmt.Sprint(n.data["group_id"]), branchID), matched)
@@ -727,116 +731,6 @@ func evaluateThoughtRecipeCondition(env *contextdata.Envelope, expr string) bool
 		return strings.TrimSpace(fmt.Sprint(lookupThoughtRecipeConditionValue(env, key))) != strings.TrimSpace(want)
 	}
 	return truthy(lookupThoughtRecipeConditionValue(env, expr))
-}
-
-func evaluateRoutePredicate(env *contextdata.Envelope, value any) bool {
-	pred, ok := value.(*RoutePredicate)
-	if !ok || pred == nil {
-		if predValue, ok := value.(RoutePredicate); ok {
-			pred = &predValue
-		} else {
-			return false
-		}
-	}
-	subject := valueExprRaw(pred.Subject)
-	switch pred.Kind {
-	case "missing":
-		return !truthy(lookupThoughtRecipeConditionValue(env, subject))
-	case "present":
-		return truthy(lookupThoughtRecipeConditionValue(env, subject))
-	case "is":
-		return strings.TrimSpace(fmt.Sprint(lookupThoughtRecipeConditionValue(env, subject))) == strings.TrimSpace(valueExprRaw(pred.Value))
-	case "contains":
-		have := lookupThoughtRecipeConditionValue(env, subject)
-		want := strings.TrimSpace(valueExprRaw(pred.Value))
-		switch v := have.(type) {
-		case string:
-			return strings.Contains(v, want)
-		case []string:
-			for _, entry := range v {
-				if strings.TrimSpace(entry) == want {
-					return true
-				}
-			}
-		case []any:
-			for _, entry := range v {
-				if strings.TrimSpace(fmt.Sprint(entry)) == want {
-					return true
-				}
-			}
-		default:
-			return strings.Contains(strings.TrimSpace(fmt.Sprint(have)), want)
-		}
-		return false
-	case "confidence_below":
-		have := lookupThoughtRecipeConditionValue(env, subject)
-		threshold := routeConfidenceThreshold(pred.Value)
-		if threshold < 0 {
-			return false
-		}
-		if confidence, ok := routeConfidenceValue(have); ok {
-			return confidence < threshold
-		}
-		confidence, ok := routeConfidenceValue(lookupThoughtRecipeConditionValue(env, subject+"_confidence"))
-		if ok {
-			return confidence < threshold
-		}
-		confidence, ok = routeConfidenceValue(lookupThoughtRecipeConditionValue(env, subject+".confidence"))
-		return ok && confidence < threshold
-	default:
-		return false
-	}
-}
-
-func routeConfidenceThreshold(value ValueExpr) int {
-	raw := strings.TrimSpace(valueExprRaw(value))
-	raw = strings.TrimSuffix(raw, "%")
-	if raw == "" {
-		return -1
-	}
-	var threshold int
-	if _, err := fmt.Sscanf(raw, "%d", &threshold); err != nil {
-		return -1
-	}
-	return threshold
-}
-
-func routeConfidenceValue(value any) (int, bool) {
-	switch v := value.(type) {
-	case int:
-		return v, true
-	case int8:
-		return int(v), true
-	case int16:
-		return int(v), true
-	case int32:
-		return int(v), true
-	case int64:
-		return int(v), true
-	case uint:
-		return int(v), true
-	case uint8:
-		return int(v), true
-	case uint16:
-		return int(v), true
-	case uint32:
-		return int(v), true
-	case uint64:
-		if v > uint64(math.MaxInt) {
-			return 0, false
-		}
-		return int(v), true
-	case float32:
-		return int(v), true
-	case float64:
-		return int(v), true
-	case string:
-		var parsed int
-		if _, err := fmt.Sscanf(strings.TrimSuffix(strings.TrimSpace(v), "%"), "%d", &parsed); err == nil {
-			return parsed, true
-		}
-	}
-	return 0, false
 }
 
 func routeConditionResultKey(groupID, branchID string) string {

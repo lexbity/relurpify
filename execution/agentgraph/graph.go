@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 
@@ -166,6 +167,29 @@ func (g *Graph) HasNode(id string) bool {
 	defer g.mu.RUnlock()
 	_, ok := g.nodes[id]
 	return ok
+}
+
+// NodeIDs returns a sorted copy of all registered node IDs.
+func (g *Graph) NodeIDs() []string {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+	ids := make([]string, 0, len(g.nodes))
+	for id := range g.nodes {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	return ids
+}
+
+// NodeType returns the type of a registered node.
+func (g *Graph) NodeType(id string) (NodeType, bool) {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+	node, ok := g.nodes[id]
+	if !ok {
+		return "", false
+	}
+	return node.Type(), true
 }
 
 // StartNodeID returns the configured start node ID.

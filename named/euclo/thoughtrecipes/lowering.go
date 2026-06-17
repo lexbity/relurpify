@@ -185,7 +185,7 @@ func lowerAskDecl(decl *AskDecl, runIndex *int) (ExecutionStep, error) {
 	stepID := fmt.Sprintf("ask.%d.%d.%d", decl.GetSpan().Start.Line, decl.GetSpan().Start.Column, *runIndex)
 	step := ExecutionStep{
 		ID:              stepID,
-		Type:            "ask",
+		Kind:            StepKindAsk,
 		Paradigm:        "euclo",
 		Question:        question,
 		Choices:         choices,
@@ -323,7 +323,7 @@ func lowerPipelineDecl(decl *PipelineDecl, agents map[string]AgentBinding, runIn
 	}
 	step := ExecutionStep{
 		ID:             pipelineID,
-		Type:           "pipeline",
+		Kind:           StepKindPipelineStage,
 		Paradigm:       "euclo",
 		PipelineStages: append([]PipelineStageSpec(nil), stages...),
 		Step:           surface.ThoughtRecipeStep{ID: pipelineID, Type: "pipeline"},
@@ -352,13 +352,13 @@ func lowerPipelineExecutionItems(items []ExecutionItem, agents map[string]AgentB
 	for _, item := range items {
 		switch node := item.(type) {
 		case *RunDecl:
-			step, err := lowerAgentExecutionDecl("run", node.Agent, node.Items, agents, runIndex, plan.ToolScopes)
+			step, err := lowerAgentExecutionDecl(StepKindRun, node.Agent, node.Items, agents, runIndex, plan.ToolScopes)
 			if err != nil {
 				return nil, err
 			}
 			steps = append(steps, step)
 		case *DelegateDecl:
-			step, err := lowerAgentExecutionDecl("delegate", node.Agent, node.Items, agents, runIndex, plan.ToolScopes)
+			step, err := lowerAgentExecutionDecl(StepKindDelegate, node.Agent, node.Items, agents, runIndex, plan.ToolScopes)
 			if err != nil {
 				return nil, err
 			}
@@ -441,13 +441,13 @@ func pipelineGroupID(decl *PipelineDecl) string {
 func gatherLoweredFromDeclaration(node Declaration, plan *ExecutionPlan, runIndex *int) error {
 	switch v := node.(type) {
 	case *RunDecl:
-		step, err := lowerAgentExecutionDecl("run", v.Agent, v.Items, plan.Agents, runIndex, plan.ToolScopes)
+		step, err := lowerAgentExecutionDecl(StepKindRun, v.Agent, v.Items, plan.Agents, runIndex, plan.ToolScopes)
 		if err != nil {
 			return err
 		}
 		plan.Steps = append(plan.Steps, step)
 	case *DelegateDecl:
-		step, err := lowerAgentExecutionDecl("delegate", v.Agent, v.Items, plan.Agents, runIndex, plan.ToolScopes)
+		step, err := lowerAgentExecutionDecl(StepKindDelegate, v.Agent, v.Items, plan.Agents, runIndex, plan.ToolScopes)
 		if err != nil {
 			return err
 		}

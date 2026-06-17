@@ -423,7 +423,7 @@ func ensureClarificationThoughtRecipe(reg *thoughtrecipepkg.ThoughtRecipeRegistr
 		ThoughtRecipe: thoughtrecipe,
 		Steps: []thoughtrecipepkg.ExecutionStep{{
 			ID:           clarificationThoughtRecipeID + ".step0",
-			Type:         "run",
+			Kind:         thoughtrecipepkg.StepKindRun,
 			Paradigm:     "goalcon",
 			CapabilityID: clarificationCapabilityID,
 			Prompt:       "Clarify the user's request.",

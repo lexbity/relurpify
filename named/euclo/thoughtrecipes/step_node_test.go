@@ -69,6 +69,7 @@ func TestThoughtRecipeStepNodeExecuteCapability(t *testing.T) {
 	step := ExecutionStep{
 		ID:           "step1",
 		CapabilityID: "euclo:cap.ast_query",
+		Scope:        AllowTools(nil), // unrestricted for test
 		Step: surface.ThoughtRecipeStep{
 			ID:           "step1",
 			CapabilityID: "euclo:cap.ast_query",
@@ -293,6 +294,7 @@ func TestThoughtRecipeStepNodeUsesRegistryPromptID(t *testing.T) {
 	env := contextdata.NewEnvelope("task-1", "session-1")
 	step := ExecutionStep{
 		ID:       "clarify.step",
+		Kind:     StepKindRun,
 		Paradigm: "euclo",
 		PromptID: "euclo.intent.clarify.question.v1",
 		Prompt:   "inline fallback should not be used",
@@ -314,11 +316,11 @@ func TestThoughtRecipeStepNodeUsesRegistryPromptID(t *testing.T) {
 	if got := task.Context["prompt_id"]; got != "euclo.intent.clarify.question.v1" {
 		t.Fatalf("expected prompt_id in task context, got %#v", got)
 	}
-	if got := task.Metadata["execution_step_type"]; got != "" {
-		t.Fatalf("expected step type metadata to be empty for ad hoc step, got %#v", got)
+	if got := task.Metadata["execution_step_type"]; got != "run" {
+		t.Fatalf("expected step type metadata \"run\", got %#v", got)
 	}
-	if got, ok := contextdata.GetTyped[string](env, "euclo.execution.step.clarify.step.type"); !ok || got != "" {
-		t.Fatalf("expected step type metadata in envelope, got %#v (ok=%v)", got, ok)
+	if got, ok := contextdata.GetTyped[string](env, "euclo.execution.step.clarify.step.type"); !ok || got != "run" {
+		t.Fatalf("expected step type metadata \"run\" in envelope, got %#v (ok=%v)", got, ok)
 	}
 	if got, ok := contextdata.GetTyped[string](env, "euclo.execution.step.clarify.step.prompt_id"); !ok || got != "euclo.intent.clarify.question.v1" {
 		t.Fatalf("expected prompt_id metadata in envelope, got %#v (ok=%v)", got, ok)
@@ -337,9 +339,9 @@ func TestThoughtRecipeStepNodeScopesRuntimeToolsFromEffectiveToolNames(t *testin
 	deps := &paradigm.Deps{Registry: reg}
 	baseEnv := contextdata.NewEnvelope("task-scope", "session-scope")
 	scopedStep := ExecutionStep{
-		ID:                 "scope.step",
-		Paradigm:           "react",
-		EffectiveToolNames: []string{"file_write"},
+		ID:       "scope.step",
+		Paradigm: "react",
+		Scope:    AllowTools([]string{"file_write"}),
 		Step: surface.ThoughtRecipeStep{
 			ID: "scope.step",
 		},
@@ -371,6 +373,7 @@ func TestThoughtRecipeStepNodeScopesRuntimeToolsFromEffectiveToolNames(t *testin
 	nextStep := ExecutionStep{
 		ID:       "scope.next",
 		Paradigm: "react",
+		Scope:    AllowTools(nil), // unrestricted
 		Step: surface.ThoughtRecipeStep{
 			ID: "scope.next",
 		},
@@ -440,7 +443,7 @@ func TestThoughtRecipeStepNodeWritesClarificationMetadata(t *testing.T) {
 	env := contextdata.NewEnvelope("task-meta", "session-meta")
 	step := ExecutionStep{
 		ID:   "extract.step",
-		Type: string(ClarificationStepTypeExtract),
+		Kind: StepKindRun,
 		ClarificationConfig: &ClarificationStepConfig{
 			OutputSchemaID:   "clarification.answer.v1",
 			ValidationMode:   "strict",
@@ -463,11 +466,11 @@ func TestThoughtRecipeStepNodeWritesClarificationMetadata(t *testing.T) {
 	if err != nil {
 		t.Fatalf("buildTask failed: %v", err)
 	}
-	if got := task.Metadata["execution_step_type"]; got != string(ClarificationStepTypeExtract) {
-		t.Fatalf("expected step type metadata, got %#v", got)
+	if got := task.Metadata["execution_step_type"]; got != "run" {
+		t.Fatalf("expected step type metadata \"run\", got %#v", got)
 	}
-	if got := task.Metadata["execution_clarification_type"]; got != string(ClarificationStepTypeExtract) {
-		t.Fatalf("expected clarification type metadata, got %#v", got)
+	if got := task.Metadata["execution_clarification_type"]; got != "run" {
+		t.Fatalf("expected clarification type metadata \"run\", got %#v", got)
 	}
 	if got, ok := contextdata.GetTyped[string](env, "euclo.execution.step.extract.step.clarification_schema_id"); !ok || got != "clarification.answer.v1" {
 		t.Fatalf("expected clarification schema metadata in envelope, got %#v (ok=%v)", got, ok)
@@ -479,8 +482,8 @@ func TestThoughtRecipeStepNodeWritesClarificationMetadata(t *testing.T) {
 		t.Fatalf("expected allowed statuses in envelope, got %#v (ok=%v)", got, ok)
 	}
 	rctx := node.buildRuntimeContext(context.Background(), env)
-	if got := rctx.State["execution_step_type"]; got != string(ClarificationStepTypeExtract) {
-		t.Fatalf("expected runtime step type metadata, got %#v", got)
+	if got := rctx.State["execution_step_type"]; got != "run" {
+		t.Fatalf("expected runtime step type metadata \"run\", got %#v", got)
 	}
 	if got := rctx.State["execution_clarification_schema_id"]; got != "clarification.answer.v1" {
 		t.Fatalf("expected runtime clarification schema id, got %#v", got)
@@ -503,7 +506,7 @@ func TestThoughtRecipeStepNodeDelegationFiltersChildEnvelopeAndReturnsCaptures(t
 
 	step := ExecutionStep{
 		ID:       "delegate.step",
-		Type:     "delegate",
+		Kind:     StepKindDelegate,
 		Paradigm: "react",
 		Sources:  []string{"input.findings"},
 		CaptureBindings: []CaptureBinding{
@@ -578,7 +581,7 @@ func TestThoughtRecipeStepNodeAskPausesAndResumesWithCapture(t *testing.T) {
 	env := contextdata.NewEnvelope("task-ask", "session-ask")
 	step := ExecutionStep{
 		ID:       "ask.step",
-		Type:     "ask",
+		Kind:     StepKindAsk,
 		Paradigm: "euclo",
 		Question: "Choose a mode.",
 		Choices:  []string{"review", "refactor"},
