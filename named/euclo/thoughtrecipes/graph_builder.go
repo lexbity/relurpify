@@ -13,7 +13,6 @@ import (
 	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/execution/agentgraph"
 	eucloingestion "codeburg.org/lexbit/relurpify/named/euclo/ingestion"
-	"codeburg.org/lexbit/relurpify/named/euclo/surface"
 )
 
 // BuildThoughtRecipeGraph builds an agentgraph.Graph for a compiled execution plan.
@@ -28,26 +27,10 @@ func BuildThoughtRecipeGraph(plan *ExecutionPlan, deps *paradigm.Deps, ingestion
 	}
 
 	graph := agentgraph.NewGraph()
-	sections := make([]graphSection, 0, 1+len(plan.Parallel)+len(plan.Conditional))
+	sections := make([]graphSection, 0, 1+len(plan.Routes))
 
 	if len(plan.Steps) > 0 {
 		section, err := buildLinearSection(graph, deps, plan.Steps)
-		if err != nil {
-			return nil, err
-		}
-		sections = append(sections, section)
-	}
-
-	for _, group := range plan.Parallel {
-		section, err := buildParallelSection(graph, deps, group)
-		if err != nil {
-			return nil, err
-		}
-		sections = append(sections, section)
-	}
-
-	for _, group := range plan.Conditional {
-		section, err := buildConditionalSection(graph, deps, group)
 		if err != nil {
 			return nil, err
 		}
@@ -130,91 +113,6 @@ func buildLinearSection(graph *agentgraph.Graph, deps *paradigm.Deps, steps []Ex
 		entry:    artifacts[0].entry,
 		tail:     artifacts[len(artifacts)-1].tail,
 		fallback: artifacts[len(artifacts)-1].fallback,
-	}, nil
-}
-
-func buildParallelSection(graph *agentgraph.Graph, deps *paradigm.Deps, group CompiledParallelGroup) (graphSection, error) {
-	groupID := scopedGroupNodeID(group.Group.ID, "parallel")
-	if err := graph.AddNode(newThoughtRecipeStageNode(groupID, agentgraph.NodeTypeSystem, "parallel", map[string]any{
-		"group_id": group.Group.ID,
-		"merge":    group.Merge,
-	})); err != nil {
-		return graphSection{}, err
-	}
-
-	for _, step := range group.Steps {
-		artifact, err := addExecutionStep(graph, deps, ExecutionStep{
-			ID:                  step.Step.ID,
-			Kind:                stepKindFromString(step.Type),
-			Paradigm:            executionParadigmForStep(*step.Step),
-			CapabilityID:        step.Step.CapabilityID,
-			Prompt:              step.Step.Prompt,
-			PromptID:            step.Step.PromptID,
-			Mutation:            step.Step.Mutation,
-			HITL:                step.Step.HITL,
-			Stream:              cloneStreamSpec(step.Step.Parent.Context.Stream),
-			Ingest:              cloneIngestSpec(step.Step.Parent.Context.Ingest),
-			Fallback:            cloneStepAgent(step.Step.Fallback),
-			Inherit:             append([]string(nil), step.Step.Parent.Context.Inherit...),
-			Capture:             append([]string(nil), step.Step.Parent.Context.Capture...),
-			Dependencies:        append([]string(nil), step.Step.Dependencies...),
-			ClarificationConfig: cloneClarificationStepConfig(step.ClarificationConfig),
-			Step:                *step.Step,
-		})
-		if err != nil {
-			return graphSection{}, err
-		}
-		if err := graph.AddEdge(groupID, artifact.entry, nil, true); err != nil {
-			return graphSection{}, err
-		}
-	}
-
-	return graphSection{
-		entry: groupID,
-		tail:  groupID,
-	}, nil
-}
-
-func buildConditionalSection(graph *agentgraph.Graph, deps *paradigm.Deps, group CompiledConditionalGroup) (graphSection, error) {
-	condID := scopedGroupNodeID(group.Group.ID, "conditional")
-	joinID := scopedGroupNodeID(group.Group.ID, "join")
-
-	if err := graph.AddNode(newThoughtRecipeStageNode(condID, agentgraph.NodeTypeConditional, "condition", map[string]any{
-		"group_id":  group.Group.ID,
-		"condition": group.Condition,
-	})); err != nil {
-		return graphSection{}, err
-	}
-	if err := graph.AddNode(newThoughtRecipeStageNode(joinID, agentgraph.NodeTypeSystem, "join", map[string]any{
-		"group_id": group.Group.ID,
-	})); err != nil {
-		return graphSection{}, err
-	}
-
-	ifEntry, err := buildBranchSequence(graph, deps, group.IfSteps, joinID)
-	if err != nil {
-		return graphSection{}, err
-	}
-	elseEntry, err := buildBranchSequence(graph, deps, group.ElseSteps, joinID)
-	if err != nil {
-		return graphSection{}, err
-	}
-
-	if ifEntry != "" {
-		if err := graph.AddEdge(condID, ifEntry, conditionTrue(group.Group.ID), false); err != nil {
-			return graphSection{}, err
-		}
-	}
-	if elseEntry != "" {
-		if err := graph.AddEdge(condID, elseEntry, conditionFalse(group.Group.ID), false); err != nil {
-			return graphSection{}, err
-		}
-	}
-
-	return graphSection{
-		entry:    condID,
-		tail:     joinID,
-		fallback: "",
 	}, nil
 }
 
@@ -337,55 +235,6 @@ func buildExecutionSequence(graph *agentgraph.Graph, deps *paradigm.Deps, steps 
 	return artifacts[0].entry, nil
 }
 
-func buildBranchSequence(graph *agentgraph.Graph, deps *paradigm.Deps, steps []CompiledStep, continuation string) (string, error) {
-	if len(steps) == 0 {
-		if strings.TrimSpace(continuation) != "" {
-			return continuation, nil
-		}
-		return "", nil
-	}
-
-	artifacts := make([]stepArtifacts, 0, len(steps))
-	for _, step := range steps {
-		execStep := ExecutionStep{
-			ID:                  step.Step.ID,
-			Kind:                stepKindFromString(step.Type),
-			Paradigm:            executionParadigmForStep(*step.Step),
-			CapabilityID:        step.Step.CapabilityID,
-			Prompt:              step.Step.Prompt,
-			PromptID:            step.Step.PromptID,
-			Mutation:            step.Step.Mutation,
-			HITL:                step.Step.HITL,
-			Stream:              cloneStreamSpec(step.Step.Parent.Context.Stream),
-			Ingest:              cloneIngestSpec(step.Step.Parent.Context.Ingest),
-			Fallback:            cloneStepAgent(step.Step.Fallback),
-			Inherit:             append([]string(nil), step.Step.Parent.Context.Inherit...),
-			Capture:             append([]string(nil), step.Step.Parent.Context.Capture...),
-			Dependencies:        append([]string(nil), step.Step.Dependencies...),
-			ClarificationConfig: cloneClarificationStepConfig(step.ClarificationConfig),
-			Step:                *step.Step,
-		}
-		artifact, err := addExecutionStep(graph, deps, execStep)
-		if err != nil {
-			return "", err
-		}
-		artifacts = append(artifacts, artifact)
-	}
-
-	for i := 0; i < len(artifacts)-1; i++ {
-		if err := wireStepTransitions(graph, artifacts[i], artifacts[i+1].entry); err != nil {
-			return "", err
-		}
-	}
-	if strings.TrimSpace(continuation) != "" {
-		if err := wireStepTransitions(graph, artifacts[len(artifacts)-1], continuation); err != nil {
-			return "", err
-		}
-	}
-
-	return artifacts[0].entry, nil
-}
-
 func addExecutionStep(graph *agentgraph.Graph, deps *paradigm.Deps, step ExecutionStep) (stepArtifacts, error) {
 	if step.Kind == StepKindPipelineStage {
 		return addPipelineStep(graph, deps, step)
@@ -461,7 +310,8 @@ func addExecutionStep(graph *agentgraph.Graph, deps *paradigm.Deps, step Executi
 	}
 
 	execNodeID := step.ID + ".execute"
-	if err := graph.AddNode(NewThoughtRecipeStepNode(execNodeID, deps, step)); err != nil {
+	execNode := newNodeForStep(execNodeID, deps, step)
+	if err := graph.AddNode(execNode); err != nil {
 		return stepArtifacts{}, err
 	}
 	if entry == "" {
@@ -485,9 +335,8 @@ func addExecutionStep(graph *agentgraph.Graph, deps *paradigm.Deps, step Executi
 			Ingest:   cloneIngestSpec(agent.Context.Ingest),
 			Inherit:  append([]string(nil), agent.Context.Inherit...),
 			Capture:  append([]string(nil), agent.Context.Capture...),
-			Step:     surface.ThoughtRecipeStep{ID: fallbackID, Parent: *agent, Context: agent.Context},
 		}
-		if err := graph.AddNode(NewThoughtRecipeStepNode(fallbackID, deps, fallbackStep)); err != nil {
+		if err := graph.AddNode(newNodeForStep(fallbackID, deps, fallbackStep)); err != nil {
 			return stepArtifacts{}, err
 		}
 		if err := graph.AddEdge(execNodeID, fallbackID, func(result *execution.Result, env *contextdata.Envelope) bool {
@@ -582,26 +431,6 @@ func successCondition(result *execution.Result, env *contextdata.Envelope) bool 
 	return result == nil || result.Success
 }
 
-func conditionTrue(groupID string) agentgraph.ConditionFunc {
-	key := conditionResultKey(groupID)
-	return func(result *execution.Result, env *contextdata.Envelope) bool {
-		_ = result
-		return envBool(env, key)
-	}
-}
-
-func conditionFalse(groupID string) agentgraph.ConditionFunc {
-	key := conditionResultKey(groupID)
-	return func(result *execution.Result, env *contextdata.Envelope) bool {
-		_ = result
-		return !envBool(env, key)
-	}
-}
-
-func conditionResultKey(groupID string) string {
-	return "euclo.execution.group." + sanitizeComponent(groupID) + ".condition_met"
-}
-
 func scopedGroupNodeID(groupID, kind string) string {
 	base := sanitizeComponent(groupID)
 	if strings.TrimSpace(base) == "" {
@@ -680,11 +509,6 @@ func (n *thoughtrecipeStageNode) Execute(ctx context.Context, env *contextdata.E
 			contextdata.SetTyped(env, "euclo.policy.mutation_permitted", mutationPermitted)
 			contextdata.SetTyped(env, "euclo.policy.hitl_required", hitlRequired)
 			contextdata.SetTyped(env, "euclo.policy.verification_required", !mutationPermitted || hitlRequired)
-		case "condition":
-			matched := evaluateThoughtRecipeCondition(env, fmt.Sprint(n.data["condition"]))
-			// envelope: intentional dynamic key — condition result is scoped by group ID.
-			contextdata.SetTyped(env, conditionResultKey(fmt.Sprint(n.data["group_id"])), matched)
-			n.data["condition_met"] = matched
 		case "route":
 			// envelope: intentional dynamic key — route state is scoped by group ID.
 			contextdata.SetTyped(env, "euclo.execution.route."+sanitizeComponent(fmt.Sprint(n.data["group_id"])), true)
@@ -710,29 +534,6 @@ func (n *thoughtrecipeStageNode) Execute(ctx context.Context, env *contextdata.E
 	}, nil
 }
 
-func evaluateThoughtRecipeCondition(env *contextdata.Envelope, expr string) bool {
-	expr = strings.TrimSpace(expr)
-	if expr == "" {
-		return false
-	}
-	switch strings.ToLower(expr) {
-	case "true", "yes", "on", "1":
-		return true
-	case "false", "no", "off", "0":
-		return false
-	}
-	if strings.HasPrefix(expr, "!") {
-		return !evaluateThoughtRecipeCondition(env, strings.TrimSpace(expr[1:]))
-	}
-	if key, want, ok := strings.Cut(expr, "=="); ok {
-		return strings.TrimSpace(fmt.Sprint(lookupThoughtRecipeConditionValue(env, key))) == strings.TrimSpace(want)
-	}
-	if key, want, ok := strings.Cut(expr, "!="); ok {
-		return strings.TrimSpace(fmt.Sprint(lookupThoughtRecipeConditionValue(env, key))) != strings.TrimSpace(want)
-	}
-	return truthy(lookupThoughtRecipeConditionValue(env, expr))
-}
-
 func routeConditionResultKey(groupID, branchID string) string {
 	return "euclo.execution.group." + sanitizeComponent(groupID) + ".branch." + sanitizeComponent(branchID) + ".condition_met"
 }
@@ -753,13 +554,3 @@ func routeConditionFalse(groupID, branchID string) agentgraph.ConditionFunc {
 	}
 }
 
-func lookupThoughtRecipeConditionValue(env *contextdata.Envelope, key string) any {
-	key = strings.TrimSpace(key)
-	if key == "" {
-		return nil
-	}
-	if value, ok := contextdata.GetTyped[any](env, key); ok {
-		return value
-	}
-	return nil
-}

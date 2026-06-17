@@ -70,17 +70,13 @@ func TestThoughtRecipeStepNodeExecuteCapability(t *testing.T) {
 		ID:           "step1",
 		CapabilityID: "euclo:cap.ast_query",
 		Scope:        AllowTools(nil), // unrestricted for test
-		Step: surface.ThoughtRecipeStep{
-			ID:           "step1",
-			CapabilityID: "euclo:cap.ast_query",
-			Config: map[string]any{
-				"query": "find symbols",
-				"limit": 5,
-			},
+		Config: map[string]any{
+			"query": "find symbols",
+			"limit": 5,
 		},
 	}
 
-	node := NewThoughtRecipeStepNode("step1.execute", &paradigm.Deps{Registry: reg}, step)
+	node := NewCapabilityNode("step1.execute", &paradigm.Deps{Registry: reg}, step)
 	result, err := node.Execute(context.Background(), env)
 	if err != nil {
 		t.Fatalf("Execute failed: %v", err)
@@ -129,20 +125,16 @@ func TestThoughtRecipeStepNodeExecuteCapabilityDeniedByAllowlistSkipsWithoutEsca
 	step := ExecutionStep{
 		ID:           "step-denied",
 		CapabilityID: "euclo:cap.blocked",
-		Step: surface.ThoughtRecipeStep{
-			ID:           "step-denied",
-			CapabilityID: "euclo:cap.blocked",
-			OnError: &surface.StepErrorPolicy{
-				Action:   "skip",
-				RetryMax: 0,
-				Fallback: "recovery-step",
-			},
-			Config: map[string]any{},
+		OnError: &surface.StepErrorPolicy{
+			Action:   "skip",
+			RetryMax: 0,
+			Fallback: "recovery-step",
 		},
+		Config: map[string]any{},
 	}
 
 	scoped := reg.WithAllowlist([]string{"euclo:cap.allowed"})
-	node := NewThoughtRecipeStepNode("step-denied.execute", &paradigm.Deps{Registry: scoped}, step)
+	node := NewCapabilityNode("step-denied.execute", &paradigm.Deps{Registry: scoped}, step)
 	result, err := node.Execute(context.Background(), env)
 	if err != nil {
 		t.Fatalf("Execute returned error: %v", err)
@@ -190,12 +182,8 @@ func TestThoughtRecipeStepNodeBuildRuntimeContextClarificationState(t *testing.T
 		ID:       "clarify.step",
 		Paradigm: "euclo",
 		Prompt:   "Which module should be updated?",
-		Step: surface.ThoughtRecipeStep{
-			ID:     "clarify.step",
-			Prompt: "Which module should be updated?",
-		},
 	}
-	node := NewThoughtRecipeStepNode("clarify.step", &paradigm.Deps{}, step)
+	node := NewRunNode("clarify.step", &paradigm.Deps{}, step)
 
 	rctx := node.buildRuntimeContext(context.Background(), env)
 	clarState, ok := rctx.State[intentcontext.ClarificationStateKey].(*intentcontext.ClarificationState)
@@ -234,30 +222,21 @@ func TestThoughtRecipeStepNodeBuildRuntimeContextIncludesStepContext(t *testing.
 		ID:       "context.step",
 		Paradigm: "react",
 		Goal:     "Resolve the step context.",
-		Step: surface.ThoughtRecipeStep{
-			ID:   "context.step",
-			Type: "run",
-			Parent: surface.ThoughtRecipeStepAgent{
-				Paradigm: "react",
-			},
-			Context: surface.ThoughtRecipeStepContext{
-				Stream: &surface.ThoughtRecipeStreamSpec{
-					QueryTemplate: "find relevant symbols",
-					MaxTokens:     128,
-					Mode:          "latest",
-				},
-				Ingest: &surface.ThoughtRecipeIngestSpec{
-					Mode:          "files_only",
-					IncludeGlobs:  []string{"**/*.go"},
-					ExcludeGlobs:  []string{"**/vendor/**"},
-					WorkspaceRoot: "/workspace",
-				},
-				Inherit: []string{"state.findings"},
-				Capture: []string{"output.result"},
-			},
+		Stream: &surface.ThoughtRecipeStreamSpec{
+			QueryTemplate: "find relevant symbols",
+			MaxTokens:     128,
+			Mode:          "latest",
 		},
+		Ingest: &surface.ThoughtRecipeIngestSpec{
+			Mode:          "files_only",
+			IncludeGlobs:  []string{"**/*.go"},
+			ExcludeGlobs:  []string{"**/vendor/**"},
+			WorkspaceRoot: "/workspace",
+		},
+		Inherit: []string{"state.findings"},
+		Capture: []string{"output.result"},
 	}
-	node := NewThoughtRecipeStepNode("context.step", &paradigm.Deps{}, step)
+	node := NewRunNode("context.step", &paradigm.Deps{}, step)
 	rctx := node.buildRuntimeContext(context.Background(), env)
 
 	if got, ok := rctx.State["execution_step_context_stream_query"]; !ok || got != "find relevant symbols" {
@@ -298,13 +277,8 @@ func TestThoughtRecipeStepNodeUsesRegistryPromptID(t *testing.T) {
 		Paradigm: "euclo",
 		PromptID: "euclo.intent.clarify.question.v1",
 		Prompt:   "inline fallback should not be used",
-		Step: surface.ThoughtRecipeStep{
-			ID:       "clarify.step",
-			PromptID: "euclo.intent.clarify.question.v1",
-			Prompt:   "inline fallback should not be used",
-		},
 	}
-	node := NewThoughtRecipeStepNode("clarify.step", &paradigm.Deps{PromptRegistry: registry}, step)
+	node := NewRunNode("clarify.step", &paradigm.Deps{PromptRegistry: registry}, step)
 
 	task, err := node.buildTask(context.Background(), env)
 	if err != nil {
@@ -342,11 +316,8 @@ func TestThoughtRecipeStepNodeScopesRuntimeToolsFromEffectiveToolNames(t *testin
 		ID:       "scope.step",
 		Paradigm: "react",
 		Scope:    AllowTools([]string{"file_write"}),
-		Step: surface.ThoughtRecipeStep{
-			ID: "scope.step",
-		},
 	}
-	scopedNode := NewThoughtRecipeStepNode("scope.step", deps, scopedStep)
+	scopedNode := NewRunNode("scope.step", deps, scopedStep)
 	rctx := scopedNode.buildRuntimeContext(context.Background(), baseEnv)
 
 	if got, want := runtimeToolNames(rctx.Tools), []string{"file_write"}; !equalStringSlices(got, want) {
@@ -374,11 +345,8 @@ func TestThoughtRecipeStepNodeScopesRuntimeToolsFromEffectiveToolNames(t *testin
 		ID:       "scope.next",
 		Paradigm: "react",
 		Scope:    AllowTools(nil), // unrestricted
-		Step: surface.ThoughtRecipeStep{
-			ID: "scope.next",
-		},
 	}
-	nextNode := NewThoughtRecipeStepNode("scope.next", deps, nextStep)
+	nextNode := NewRunNode("scope.next", deps, nextStep)
 	nextRctx := nextNode.buildRuntimeContext(context.Background(), baseEnv)
 	if got, want := runtimeToolNames(nextRctx.Tools), []string{"file_read", "file_write"}; !equalStringSlices(got, want) {
 		t.Fatalf("unscoped runtime tools = %#v, want %#v", got, want)
@@ -394,12 +362,8 @@ func TestThoughtRecipeStepNodePromptIDRequiresRegistry(t *testing.T) {
 		ID:       "clarify.step",
 		Paradigm: "euclo",
 		PromptID: "euclo.intent.clarify.question.v1",
-		Step: surface.ThoughtRecipeStep{
-			ID:       "clarify.step",
-			PromptID: "euclo.intent.clarify.question.v1",
-		},
 	}
-	node := NewThoughtRecipeStepNode("clarify.step", &paradigm.Deps{}, step)
+	node := NewRunNode("clarify.step", &paradigm.Deps{}, step)
 
 	if _, err := node.buildTask(context.Background(), env); err == nil {
 		t.Fatal("expected buildTask to fail without a prompt registry")
@@ -452,16 +416,12 @@ func TestThoughtRecipeStepNodeWritesClarificationMetadata(t *testing.T) {
 			StateWriteKeys:   []string{"euclo.intent.clarification.confirmed_entities"},
 			ProjectionPolicy: "apply",
 		},
-		Step: surface.ThoughtRecipeStep{
-			ID:   "extract.step",
-			Type: string(ClarificationStepTypeExtract),
-			Config: map[string]any{
-				"output_schema_id": "clarification.answer.v1",
-			},
+		Config: map[string]any{
+			"output_schema_id": "clarification.answer.v1",
 		},
 	}
 
-	node := NewThoughtRecipeStepNode("extract.step", &paradigm.Deps{}, step)
+	node := NewRunNode("extract.step", &paradigm.Deps{}, step)
 	task, err := node.buildTask(context.Background(), env)
 	if err != nil {
 		t.Fatalf("buildTask failed: %v", err)
@@ -484,9 +444,6 @@ func TestThoughtRecipeStepNodeWritesClarificationMetadata(t *testing.T) {
 	rctx := node.buildRuntimeContext(context.Background(), env)
 	if got := rctx.State["execution_step_type"]; got != "run" {
 		t.Fatalf("expected runtime step type metadata \"run\", got %#v", got)
-	}
-	if got := rctx.State["execution_clarification_schema_id"]; got != "clarification.answer.v1" {
-		t.Fatalf("expected runtime clarification schema id, got %#v", got)
 	}
 }
 
@@ -515,12 +472,8 @@ func TestThoughtRecipeStepNodeDelegationFiltersChildEnvelopeAndReturnsCaptures(t
 				Destination: PathExpr{positioned: positioned{Span: NewSpan("delegate.euclo", 4, 15, 4, 26)}, Raw: "state.plan", Parts: []Identifier{{Value: "state"}, {Value: "plan"}}},
 			},
 		},
-		Step: surface.ThoughtRecipeStep{
-			ID:   "delegate.step",
-			Type: "delegate",
-		},
 	}
-	node := NewThoughtRecipeStepNode("delegate.step.execute", &paradigm.Deps{}, step)
+	node := NewDelegateNode("delegate.step.execute", &paradigm.Deps{}, step)
 
 	child := node.buildDelegationEnvelope(parent)
 	if child == nil {
@@ -591,13 +544,8 @@ func TestThoughtRecipeStepNodeAskPausesAndResumesWithCapture(t *testing.T) {
 				Destination: PathExpr{positioned: positioned{Span: NewSpan("ask.euclo", 4, 15, 4, 26)}, Raw: "state.intent", Parts: []Identifier{{Value: "state"}, {Value: "intent"}}},
 			},
 		},
-		Step: surface.ThoughtRecipeStep{
-			ID:     "ask.step",
-			Type:   "ask",
-			Prompt: "Choose a mode.",
-		},
 	}
-	node := NewThoughtRecipeStepNode("ask.step.execute", &paradigm.Deps{}, step)
+	node := NewAskNode("ask.step.execute", &paradigm.Deps{}, step)
 
 	first, err := node.Execute(context.Background(), env)
 	if err != nil {

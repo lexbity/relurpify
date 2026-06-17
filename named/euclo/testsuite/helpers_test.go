@@ -143,14 +143,7 @@ func newThoughtRecipeRegistry(t *testing.T, thoughtrecipe *surface.ThoughtRecipe
 			Paradigm: "goalcon",
 			Goal:     "Continue the thoughtrecipe.",
 			Prompt:   "Continue the thoughtrecipe.",
-			Step: surface.ThoughtRecipeStep{
-				ID:      stepID,
-				Type:    "run",
-				Prompt:  "Continue the thoughtrecipe.",
-				Parent:  surface.ThoughtRecipeStepAgent{Paradigm: "goalcon"},
-				Config:  map[string]any{},
-				Context: surface.ThoughtRecipeStepContext{},
-			},
+			Config:   map[string]any{},
 		}},
 	}
 	if err := reg.RegisterCompiled(thoughtrecipe, plan, "test"); err != nil {

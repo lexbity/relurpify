@@ -88,7 +88,7 @@ ask user:
 	}
 
 	deps := &paradigm.Deps{PromptRegistry: promptRegistry}
-	runNode := NewThoughtRecipeStepNode("review_flow.run", deps, plan.Steps[0])
+	runNode := NewRunNode("review_flow.run", deps, plan.Steps[0])
 	runEnv := contextdata.NewEnvelope("task-review-flow", "")
 	runTask, err := runNode.buildTask(context.Background(), runEnv)
 	if err != nil {
@@ -101,7 +101,7 @@ ask user:
 		t.Fatalf("run prompt_id = %#v, want named.euclo.code.explore", got)
 	}
 
-	askNode := NewThoughtRecipeStepNode("review_flow.ask", deps, plan.Steps[1])
+	askNode := NewAskNode("review_flow.ask", deps, plan.Steps[1])
 	askTask, err := askNode.buildTask(context.Background(), contextdata.NewEnvelope("task-review-flow", ""))
 	if err != nil {
 		t.Fatalf("buildTask(ask): %v", err)

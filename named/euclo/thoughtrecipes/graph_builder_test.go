@@ -9,92 +9,6 @@ import (
 	"codeburg.org/lexbit/relurpify/named/euclo/surface"
 )
 
-func TestBuildThoughtRecipeGraphWiresLinearParallelAndConditionalSections(t *testing.T) {
-	thoughtrecipe := &surface.ThoughtRecipe{
-		ID:   "graph-thoughtrecipe",
-		Name: "Graph ThoughtRecipe",
-		Metadata: surface.ThoughtRecipeMetadata{
-			Name: "Graph ThoughtRecipe",
-		},
-	}
-
-	plan := &ExecutionPlan{
-		ThoughtRecipe: thoughtrecipe,
-		Steps: []ExecutionStep{{
-			ID:       "intro",
-			Kind:     StepKindRun,
-			Paradigm: "goalcon",
-			Goal:     "Introduce the thoughtrecipe and continue.",
-			Prompt:   "Introduce the thoughtrecipe and continue.",
-			Step: surface.ThoughtRecipeStep{
-				ID:      "intro",
-				Type:    "run",
-				Prompt:  "Introduce the thoughtrecipe and continue.",
-				Parent:  surface.ThoughtRecipeStepAgent{Paradigm: "goalcon"},
-				Config:  map[string]any{},
-				Context: surface.ThoughtRecipeStepContext{},
-			},
-		}},
-		Parallel: []CompiledParallelGroup{{
-			Group: &surface.ParallelGroup{ID: "fanout", Merge: surface.MergePolicyAll},
-			Steps: []CompiledStep{
-				{
-					Step: &surface.ThoughtRecipeStep{ID: "fanout.parallel.0.left", Type: "run", Prompt: "Process the left branch.", Parent: surface.ThoughtRecipeStepAgent{Paradigm: "goalcon"}, Context: surface.ThoughtRecipeStepContext{}},
-					Type: "run",
-				},
-				{
-					Step: &surface.ThoughtRecipeStep{ID: "fanout.parallel.1.right", Type: "run", Prompt: "Process the right branch.", Parent: surface.ThoughtRecipeStepAgent{Paradigm: "goalcon"}, Context: surface.ThoughtRecipeStepContext{}},
-					Type: "run",
-				},
-			},
-			Merge: string(surface.MergePolicyAll),
-		}},
-		Conditional: []CompiledConditionalGroup{{
-			Group:     &surface.ConditionalGroup{ID: "branch", Condition: "thoughtrecipe.branch"},
-			Condition: "thoughtrecipe.branch",
-			IfSteps: []CompiledStep{{
-				Step: &surface.ThoughtRecipeStep{ID: "branch.if.0.if_step", Type: "run", Prompt: "Handle the primary branch.", Parent: surface.ThoughtRecipeStepAgent{Paradigm: "goalcon"}, Context: surface.ThoughtRecipeStepContext{}},
-				Type: "run",
-			}},
-			ElseSteps: []CompiledStep{{
-				Step: &surface.ThoughtRecipeStep{ID: "branch.else.0.else_step", Type: "run", Prompt: "Handle the fallback branch.", Parent: surface.ThoughtRecipeStepAgent{Paradigm: "goalcon"}, Context: surface.ThoughtRecipeStepContext{}},
-				Type: "run",
-			}},
-		}},
-	}
-
-	graph, err := BuildThoughtRecipeGraph(plan, &paradigm.Deps{}, nil)
-	if err != nil {
-		t.Fatalf("BuildThoughtRecipeGraph failed: %v", err)
-	}
-	if err := graph.Validate(); err != nil {
-		t.Fatalf("graph validation failed: %v", err)
-	}
-
-	if got := graph.StartNodeID(); got != "intro.execute" {
-		t.Fatalf("unexpected start node: %s", got)
-	}
-	if !graph.HasNode("euclo.execution.group.fanout.parallel") {
-		t.Fatal("expected parallel group node to exist")
-	}
-	if !graph.HasNode("euclo.execution.group.branch.conditional") {
-		t.Fatal("expected conditional group node to exist")
-	}
-	if !graph.HasNode("euclo.execution.group.branch.join") {
-		t.Fatal("expected conditional join node to exist")
-	}
-
-	if got := edgeTargets(graph.OutgoingEdges("intro.execute")); len(got) != 1 || got[0] != "euclo.execution.group.fanout.parallel" {
-		t.Fatalf("unexpected intro outgoing edges: %v", got)
-	}
-	if got := edgeTargets(graph.OutgoingEdges("euclo.execution.group.fanout.parallel")); !containsAll(got, []string{"fanout.parallel.0.left.execute", "fanout.parallel.1.right.execute", "euclo.execution.group.branch.conditional"}) {
-		t.Fatalf("unexpected parallel targets: %v", got)
-	}
-	if got := edgeTargets(graph.OutgoingEdges("euclo.execution.group.branch.conditional")); !containsAll(got, []string{"branch.if.0.if_step.execute", "branch.else.0.else_step.execute"}) {
-		t.Fatalf("unexpected conditional targets: %v", got)
-	}
-}
-
 func TestBuildThoughtRecipeGraphWiresRouteBranchesWithFirstMatchFallback(t *testing.T) {
 	doc := mustParseDoc(t, `thoughtrecipe route_graph
 "Route graph."
@@ -240,7 +154,6 @@ func TestFallbackStepInheritsParentScope(t *testing.T) {
 		Ingest:   cloneIngestSpec(agent.Context.Ingest),
 		Inherit:  append([]string(nil), agent.Context.Inherit...),
 		Capture:  append([]string(nil), agent.Context.Capture...),
-		Step:     surface.ThoughtRecipeStep{ID: "fallback.step", Parent: *agent, Context: agent.Context},
 	}
 
 	if !fallback.Scope.IsResolved() {

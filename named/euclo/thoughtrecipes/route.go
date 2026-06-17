@@ -6,7 +6,6 @@ import (
 	"strconv"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/named/euclo/surface"
 )
 
 // NormalizeRoutePredicate converts a parsed predicate into a typed Predicate.
@@ -192,7 +191,7 @@ func lowerAgentExecutionDecl(kind StepKind, agent Identifier, items []ExecutionI
 	if !ok {
 		return ExecutionStep{}, fmt.Errorf("%s:%d:%d: unknown agent %q", agent.GetSpan().Start.File, agent.GetSpan().Start.Line, agent.GetSpan().Start.Column, agentName)
 	}
-	sources, goals, directives, captures, localToolScopes, promptID, capabilityPlan, config, err := lowerRunItems(items)
+	sources, goals, directives, captures, localToolScopes, promptID, capabilityPlan, streamSpec, ingestSpec, config, err := lowerRunItems(items)
 	if err != nil {
 		return ExecutionStep{}, err
 	}
@@ -209,36 +208,32 @@ func lowerAgentExecutionDecl(kind StepKind, agent Identifier, items []ExecutionI
 		CaptureBindings: captures,
 		PromptID:        promptID,
 		Prompt:          strings.Join(goals, "\n"),
-		Step:            surface.ThoughtRecipeStep{ID: stepID},
+		Config:          config,
+		Stream:          streamSpec,
+		Ingest:          ingestSpec,
 	}
 	if capabilityPlan != nil {
 		step.CapabilityID = capabilityPlan.CapabilityID
 	}
-	step.Step.Parent.Paradigm = binding.Paradigm
-	step.Step.Parent.Context = surface.ThoughtRecipeStepContext{}
-	step.Step.Prompt = step.Prompt
-	step.Step.PromptID = promptID
-	step.Step.Type = kind.String()
-	step.Step.Config = config
 	if capabilityPlan != nil {
-		if step.Step.Config == nil {
-			step.Step.Config = map[string]any{}
+		if step.Config == nil {
+			step.Config = map[string]any{}
 		}
 		if capabilityPlan.Target != "" {
-			step.Step.Config["target"] = capabilityPlan.Target
+			step.Config["target"] = capabilityPlan.Target
 		}
 		if capabilityPlan.Input != "" {
-			step.Step.Config["input"] = capabilityPlan.Input
+			step.Config["input"] = capabilityPlan.Input
 		}
-		step.Step.Config["capability_id"] = capabilityPlan.CapabilityID
+		step.Config["capability_id"] = capabilityPlan.CapabilityID
 	}
 	toolNames := step.Scope.AllowedToolNames()
-	if step.Step.Config == nil && len(toolNames) > 0 {
-		step.Step.Config = map[string]any{}
+	if step.Config == nil && len(toolNames) > 0 {
+		step.Config = map[string]any{}
 	}
-	if step.Step.Config != nil {
+	if step.Config != nil {
 		if len(toolNames) > 0 {
-			step.Step.Config["effective_tool_names"] = append([]string(nil), toolNames...)
+			step.Config["effective_tool_names"] = append([]string(nil), toolNames...)
 		}
 	}
 	*index = *index + 1
@@ -260,22 +255,14 @@ func lowerCapabilityExecutionDecl(inv *CapabilityInvocation, index *int) (Execut
 		Paradigm:     "euclo",
 		CapabilityID: plan.CapabilityID,
 		Prompt:       fmt.Sprintf("do relurpic:%s", strings.TrimSpace(inv.Capability.Value)),
-		Step: surface.ThoughtRecipeStep{
-			ID:   stepID,
-			Type: "capability",
-			Parent: surface.ThoughtRecipeStepAgent{
-				Paradigm: "euclo",
-			},
-			Config: map[string]any{},
-		},
+		Config:       map[string]any{},
 	}
-	step.Step.Prompt = step.Prompt
-	step.Step.Config["capability_id"] = plan.CapabilityID
+	step.Config["capability_id"] = plan.CapabilityID
 	if plan.Target != "" {
-		step.Step.Config["target"] = plan.Target
+		step.Config["target"] = plan.Target
 	}
 	if plan.Input != "" {
-		step.Step.Config["input"] = plan.Input
+		step.Config["input"] = plan.Input
 	}
 	*index = *index + 1
 	return step, nil

@@ -3,8 +3,6 @@ package thoughtrecipe
 import (
 	"encoding/json"
 
-	"codeburg.org/lexbit/relurpify/context/contextdata"
-	"codeburg.org/lexbit/relurpify/execution/agentgraph"
 	"codeburg.org/lexbit/relurpify/named/euclo/surface"
 )
 
@@ -71,46 +69,6 @@ func stepKindFromString(s string) StepKind {
 	}
 }
 
-// CompiledThoughtRecipe is a compiled version of ThoughtRecipe with resolved bindings.
-type CompiledThoughtRecipe struct {
-	ThoughtRecipe *surface.ThoughtRecipe
-	Steps         []CompiledStep
-	Parallel      []CompiledParallelGroup
-	Conditional   []CompiledConditionalGroup
-}
-
-// CompiledStep is a compiled thoughtrecipe step with resolved configuration.
-type CompiledStep struct {
-	Step                *surface.ThoughtRecipeStep
-	Node                agentgraph.Node
-	Type                string
-	ClarificationConfig *ClarificationStepConfig
-	Config              map[string]any
-}
-
-// CompiledParallelGroup is a compiled parallel execution group.
-type CompiledParallelGroup struct {
-	Group *surface.ParallelGroup
-	Steps []CompiledStep
-	Merge string
-}
-
-// CompiledConditionalGroup is a compiled conditional execution group.
-type CompiledConditionalGroup struct {
-	Group     *surface.ConditionalGroup
-	Condition string
-	IfSteps   []CompiledStep
-	ElseSteps []CompiledStep
-}
-
-// ThoughtRecipeExecutionContext provides context for thoughtrecipe execution.
-type ThoughtRecipeExecutionContext struct {
-	Env             *contextdata.Envelope
-	Captured        map[string]any
-	CurrentStep     *CompiledStep
-	ThoughtRecipeID string
-}
-
 // ExecutionPlan is the spec-shaped compilation result for a DSL thoughtrecipe.
 type ExecutionPlan struct {
 	ThoughtRecipe *surface.ThoughtRecipe
@@ -121,9 +79,6 @@ type ExecutionPlan struct {
 	Pipelines     []CompiledPipelineGroup
 	Warnings      []SemanticWarning
 	RouteKind     surface.TriggerRouteKind
-
-	Parallel    []CompiledParallelGroup
-	Conditional []CompiledConditionalGroup
 }
 
 // AgentBinding captures a thoughtrecipe-local agent declaration lowered to a runtime paradigm.
@@ -243,7 +198,26 @@ type ExecutionStep struct {
 	Capture             []string
 	Dependencies        []string
 	ClarificationConfig *ClarificationStepConfig
-	Step                surface.ThoughtRecipeStep
+	OnError             *surface.StepErrorPolicy
+	Config              map[string]any
+}
+
+// ToSurfaceStep projects the typed ExecutionStep back to the surface
+// ThoughtRecipeStep shape consumed by recipe projections and telemetry.
+func (s ExecutionStep) ToSurfaceStep() surface.ThoughtRecipeStep {
+	return surface.ThoughtRecipeStep{
+		ID:           s.ID,
+		Type:         s.Kind.String(),
+		CapabilityID: s.CapabilityID,
+		Prompt:       s.Prompt,
+		PromptID:     s.PromptID,
+		Mutation:     s.Mutation,
+		HITL:         s.HITL,
+		Parent:       surface.ThoughtRecipeStepAgent{Paradigm: s.Paradigm},
+		Dependencies: append([]string(nil), s.Dependencies...),
+		Config:       s.Config,
+		OnError:      s.OnError,
+	}
 }
 
 // ToolScopeFrame captures one lexical tool allowlist contribution.

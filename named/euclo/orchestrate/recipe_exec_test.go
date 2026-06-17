@@ -51,14 +51,7 @@ func mustRegisterCompiledThoughtRecipe(t *testing.T, registry *thoughtrecipepkg.
 			Paradigm: "goalcon",
 			Goal:     "Continue the thoughtrecipe.",
 			Prompt:   "Continue the thoughtrecipe.",
-			Step: surface.ThoughtRecipeStep{
-				ID:      stepID,
-				Type:    "run",
-				Prompt:  "Continue the thoughtrecipe.",
-				Parent:  surface.ThoughtRecipeStepAgent{Paradigm: "goalcon"},
-				Config:  map[string]any{},
-				Context: surface.ThoughtRecipeStepContext{},
-			},
+			Config:   map[string]any{},
 		}},
 	}
 	if err := registry.RegisterCompiled(thoughtrecipe, plan, "test"); err != nil {

@@ -10,6 +10,19 @@ import (
 	"codeburg.org/lexbit/relurpify/execution/agentgraph"
 )
 
+// lookupConditionValue reads a value from the envelope by key.
+func lookupConditionValue(env *contextdata.Envelope, key string) any {
+	key = strings.TrimSpace(key)
+	if key == "" {
+		return nil
+	}
+	v, ok := contextdata.GetTyped[any](env, key)
+	if !ok {
+		return nil
+	}
+	return v
+}
+
 // compilePredicate compiles a typed Predicate into a pure ConditionFunc closure.
 // Unknown PredicateOp produces a build error (panic at compile time).
 func compilePredicate(p Predicate) agentgraph.ConditionFunc {
@@ -61,18 +74,6 @@ func compilePredicate(p Predicate) agentgraph.ConditionFunc {
 		// Unknown ops fail at compile time (never a silent false).
 		panic(fmt.Sprintf("compilePredicate: unknown predicate op %v", p.Op))
 	}
-}
-
-func lookupConditionValue(env *contextdata.Envelope, key string) any {
-	key = strings.TrimSpace(key)
-	if key == "" {
-		return nil
-	}
-	v, ok := contextdata.GetTyped[any](env, key)
-	if !ok {
-		return nil
-	}
-	return v
 }
 
 func confidenceValue(env *contextdata.Envelope, subject string) int {

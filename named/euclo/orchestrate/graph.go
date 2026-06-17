@@ -423,19 +423,16 @@ func ensureClarificationThoughtRecipe(reg *thoughtrecipepkg.ThoughtRecipeRegistr
 		ThoughtRecipe: thoughtrecipe,
 		Steps: []thoughtrecipepkg.ExecutionStep{{
 			ID:           clarificationThoughtRecipeID + ".step0",
-			Kind:         thoughtrecipepkg.StepKindRun,
+			Kind:         thoughtrecipepkg.StepKindCapability,
 			Paradigm:     "goalcon",
 			CapabilityID: clarificationCapabilityID,
+			// Directly-constructed steps must set an explicit scope: the zero
+			// value is deny-all (fail-closed, A-6), which would deny this
+			// step's own capability. Scope it to exactly what it invokes.
+			Scope:        thoughtrecipepkg.AllowTools([]string{clarificationCapabilityID}),
 			Prompt:       "Clarify the user's request.",
 			Goal:         "Clarify the user's request.",
-			Step: surface.ThoughtRecipeStep{
-				ID:      clarificationThoughtRecipeID + ".step0",
-				Type:    "run",
-				Prompt:  "Clarify the user's request.",
-				Parent:  surface.ThoughtRecipeStepAgent{Paradigm: "goalcon"},
-				Config:  map[string]any{},
-				Context: surface.ThoughtRecipeStepContext{},
-			},
+			Config:       map[string]any{},
 		}},
 	}
 	_, _ = reg.RegisterCompiledFirstWins(thoughtrecipe, plan, "built-in clarification route")

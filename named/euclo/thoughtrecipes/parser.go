@@ -568,6 +568,10 @@ func (p *Parser) parseExecutionItem() (ExecutionItem, error) {
 		return p.parseFromClause()
 	case "goal":
 		return p.parseGoalClause()
+	case "stream":
+		return p.parseStreamClause()
+	case "ingest":
+		return p.parseIngestClause()
 	case "do":
 		return p.parseCapabilityInvocation()
 	case "capture":
@@ -605,6 +609,99 @@ func (p *Parser) parseFromClause() (*FromClause, error) {
 		return nil, err
 	}
 	return &FromClause{positioned: positioned{Span: spanFromTokens(start, endToken(source))}, Source: source}, nil
+}
+
+func (p *Parser) parseStreamClause() (*StreamClause, error) {
+	start := p.next() // "stream"
+	query, err := p.expectStringLiteral("stream query")
+	if err != nil {
+		return nil, err
+	}
+	clause := &StreamClause{positioned: positioned{Span: spanFromTokens(start, tokenFromSpan(query.Span))}, Query: query}
+	end := tokenFromSpan(query.Span)
+	for {
+		if p.peekLexeme("max") {
+			p.next()
+			num, err := p.expectNumber("stream max tokens")
+			if err != nil {
+				return nil, err
+			}
+			clause.MaxTokens = &NumberLiteral{positioned: positioned{Span: spanFromToken(num)}, Raw: num.Lexeme, Value: num.Lexeme}
+			end = num
+			continue
+		}
+		if p.peekLexeme("mode") {
+			p.next()
+			modeTok, err := p.expectName("stream mode")
+			if err != nil {
+				return nil, err
+			}
+			clause.Mode = modeTok.Lexeme
+			end = modeTok
+			continue
+		}
+		break
+	}
+	clause.Span = spanFromTokens(start, end)
+	clause.Raw = strings.TrimSpace("stream " + query.Value)
+	return clause, nil
+}
+
+func (p *Parser) parseIngestClause() (*IngestClause, error) {
+	start := p.next() // "ingest"
+	clause := &IngestClause{positioned: positioned{Span: spanFromToken(start)}}
+	end := start
+	sawFiles := false
+	for {
+		if p.peekLexeme("files") {
+			p.next()
+			list, err := p.parseToolNameList()
+			if err != nil {
+				return nil, err
+			}
+			clause.IncludeGlobs = list
+			sawFiles = true
+			end = tokenFromSpan(list.Span)
+			continue
+		}
+		if p.peekLexeme("except") {
+			p.next()
+			list, err := p.parseToolNameList()
+			if err != nil {
+				return nil, err
+			}
+			clause.ExcludeGlobs = list
+			end = tokenFromSpan(list.Span)
+			continue
+		}
+		if p.peekLexeme("root") {
+			p.next()
+			str, err := p.expectStringLiteral("ingest root")
+			if err != nil {
+				return nil, err
+			}
+			clause.WorkspaceRoot = str
+			end = tokenFromSpan(str.Span)
+			continue
+		}
+		if p.peekLexeme("mode") {
+			p.next()
+			modeTok, err := p.expectName("ingest mode")
+			if err != nil {
+				return nil, err
+			}
+			clause.Mode = modeTok.Lexeme
+			end = modeTok
+			continue
+		}
+		break
+	}
+	if !sawFiles {
+		return nil, p.unexpectedToken(p.peek(), `ingest requires a files ["glob", ...] list`)
+	}
+	clause.Span = spanFromTokens(start, end)
+	clause.Raw = "ingest"
+	return clause, nil
 }
 
 func (p *Parser) parseGoalClause() (*GoalClause, error) {

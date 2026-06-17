@@ -87,13 +87,13 @@ run reviewer:
 	if got := strings.Join(first.Sources, ","); got != "input.workspace,input.prompt" {
 		t.Fatalf("first step sources = %q, want %q", got, "input.workspace,input.prompt")
 	}
-	if got, ok := first.Step.Config["from_sources"].([]string); !ok || len(got) != 2 {
-		t.Fatalf("first step config from_sources = %#v, want 2 entries", first.Step.Config["from_sources"])
+	if got, ok := first.Config["from_sources"].([]string); !ok || len(got) != 2 {
+		t.Fatalf("first step config from_sources = %#v, want 2 entries", first.Config["from_sources"])
 	}
-	if got, ok := first.Step.Config["goals"].([]string); !ok || len(got) != 1 || got[0] != "Review the codebase." {
-		t.Fatalf("first step config goals = %#v, want [Review the codebase.]", first.Step.Config["goals"])
+	if got, ok := first.Config["goals"].([]string); !ok || len(got) != 1 || got[0] != "Review the codebase." {
+		t.Fatalf("first step config goals = %#v, want [Review the codebase.]", first.Config["goals"])
 	}
-	if got, ok := first.Step.Config["execution_items"].([]map[string]any); ok && len(got) == 0 {
+	if got, ok := first.Config["execution_items"].([]map[string]any); ok && len(got) == 0 {
 		t.Fatalf("first step execution_items unexpectedly empty")
 	}
 
@@ -280,13 +280,13 @@ ask user:
 	if run.Prompt != "" {
 		t.Fatalf("run prompt text = %q, want empty", run.Prompt)
 	}
-	if run.Step.PromptID != "explore" {
-		t.Fatalf("run step prompt ID = %q, want explore", run.Step.PromptID)
+	if run.PromptID != "explore" {
+		t.Fatalf("run step prompt ID = %q, want explore", run.PromptID)
 	}
-	if run.Step.Prompt != "" {
-		t.Fatalf("run step prompt text = %q, want empty", run.Step.Prompt)
+	if run.Prompt != "" {
+		t.Fatalf("run step prompt text = %q, want empty", run.Prompt)
 	}
-	if got := run.Step.Config["prompt_id"]; got != "explore" {
+	if got := run.Config["prompt_id"]; got != "explore" {
 		t.Fatalf("run config prompt_id = %#v, want explore", got)
 	}
 
@@ -303,13 +303,13 @@ ask user:
 	if ask.Prompt != "" {
 		t.Fatalf("ask prompt text = %q, want empty", ask.Prompt)
 	}
-	if ask.Step.PromptID != "clarify_question" {
-		t.Fatalf("ask step prompt ID = %q, want clarify_question", ask.Step.PromptID)
+	if ask.PromptID != "clarify_question" {
+		t.Fatalf("ask step prompt ID = %q, want clarify_question", ask.PromptID)
 	}
-	if ask.Step.Prompt != "" {
-		t.Fatalf("ask step prompt text = %q, want empty", ask.Step.Prompt)
+	if ask.Prompt != "" {
+		t.Fatalf("ask step prompt text = %q, want empty", ask.Prompt)
 	}
-	if got := ask.Step.Config["prompt_id"]; got != "clarify_question" {
+	if got := ask.Config["prompt_id"]; got != "clarify_question" {
 		t.Fatalf("ask config prompt_id = %#v, want clarify_question", got)
 	}
 }
@@ -483,8 +483,8 @@ run writer:
 	if !first.Scope.IsResolved() {
 		t.Fatal("first step scope should be resolved")
 	}
-	if cfg, ok := first.Step.Config["effective_tool_names"].([]string); !ok || !equalStringSlices(cfg, []string{"file_write", "file_search"}) {
-		t.Fatalf("first step config effective_tool_names = %#v", first.Step.Config["effective_tool_names"])
+	if cfg, ok := first.Config["effective_tool_names"].([]string); !ok || !equalStringSlices(cfg, []string{"file_write", "file_search"}) {
+		t.Fatalf("first step config effective_tool_names = %#v", first.Config["effective_tool_names"])
 	}
 
 	second := plan.Steps[1]
@@ -494,10 +494,10 @@ run writer:
 	if !second.Scope.IsResolved() {
 		t.Fatal("second step scope should be resolved")
 	}
-	if cfg, ok := second.Step.Config["effective_tool_names"].([]string); !ok || !equalStringSlices(cfg, []string{"file_write"}) {
-		t.Fatalf("second step config effective_tool_names = %#v", second.Step.Config["effective_tool_names"])
+	if cfg, ok := second.Config["effective_tool_names"].([]string); !ok || !equalStringSlices(cfg, []string{"file_write"}) {
+		t.Fatalf("second step config effective_tool_names = %#v", second.Config["effective_tool_names"])
 	}
-	_ = second.Step.Config // second step carries only inherited scope metadata
+	_ = second.Config // second step carries only inherited scope metadata
 }
 
 func TestLowerDocumentLowersDirectCapabilityInvocationToExecutableStep(t *testing.T) {
@@ -524,10 +524,10 @@ run reviewer:
 	if got, want := step.CapabilityID, "euclo:cap.code_review"; got != want {
 		t.Fatalf("step capability id = %q, want %q", got, want)
 	}
-	if got, want := step.Step.Config["target"], "input.workspace"; got != want {
+	if got, want := step.Config["target"], "input.workspace"; got != want {
 		t.Fatalf("step target = %#v, want %q", got, want)
 	}
-	if got, want := step.Step.Config["capability_id"], "euclo:cap.code_review"; got != want {
+	if got, want := step.Config["capability_id"], "euclo:cap.code_review"; got != want {
 		t.Fatalf("step config capability id = %#v, want %q", got, want)
 	}
 }
@@ -603,6 +603,89 @@ agent reviewer uses not_a_real_paradigm
 	err := NewSymbolTable(doc).Resolve()
 	if err == nil || !strings.Contains(err.Error(), "unsupported agent paradigm") {
 		t.Fatalf("expected unsupported agent paradigm error, got %v", err)
+	}
+}
+
+func TestLowerDocumentPopulatesStepContextStreamAndIngest(t *testing.T) {
+	doc := mustParseDoc(t, `thoughtrecipe context_demo
+"Stream and ingest on run + delegate."
+
+trigger as capability:
+  may read workspace
+
+agent explorer uses react
+agent reviewer uses goalcon
+
+run explorer:
+  from input.workspace
+  stream "symbols for {{.Goal}}" max 256 mode blocking
+  ingest files ["**/*.go"] except ["**/vendor/**"] mode files_only
+  goal "Explore."
+
+delegate to reviewer:
+  from state.findings
+  stream "prior notes" mode background
+  goal "Review."
+`)
+
+	plan, err := LowerDocument(doc)
+	if err != nil {
+		t.Fatalf("LowerDocument failed: %v", err)
+	}
+	if len(plan.Steps) != 2 {
+		t.Fatalf("step count = %d, want 2", len(plan.Steps))
+	}
+
+	run := plan.Steps[0]
+	if run.Stream == nil {
+		t.Fatal("run step stream spec was not populated")
+	}
+	if got := run.Stream.QueryTemplate; got != "symbols for {{.Goal}}" {
+		t.Fatalf("run stream query = %q", got)
+	}
+	if got := run.Stream.MaxTokens; got != 256 {
+		t.Fatalf("run stream max tokens = %d, want 256", got)
+	}
+	if got := run.Stream.Mode; got != "blocking" {
+		t.Fatalf("run stream mode = %q, want blocking", got)
+	}
+	if run.Ingest == nil {
+		t.Fatal("run step ingest spec was not populated")
+	}
+	if got := run.Ingest.Mode; got != "files_only" {
+		t.Fatalf("run ingest mode = %q, want files_only", got)
+	}
+	if !equalStringSlices(run.Ingest.IncludeGlobs, []string{"**/*.go"}) {
+		t.Fatalf("run ingest include globs = %#v", run.Ingest.IncludeGlobs)
+	}
+	if !equalStringSlices(run.Ingest.ExcludeGlobs, []string{"**/vendor/**"}) {
+		t.Fatalf("run ingest exclude globs = %#v", run.Ingest.ExcludeGlobs)
+	}
+
+	del := plan.Steps[1]
+	if del.Stream == nil || del.Stream.Mode != "background" || del.Stream.QueryTemplate != "prior notes" {
+		t.Fatalf("delegate stream spec = %#v, want background/prior notes", del.Stream)
+	}
+	if del.Stream.MaxTokens != 0 {
+		t.Fatalf("delegate stream max tokens = %d, want 0 (unset)", del.Stream.MaxTokens)
+	}
+}
+
+func TestLowerDocumentRejectsInvalidStreamMode(t *testing.T) {
+	doc := mustParseDoc(t, `thoughtrecipe bad_stream
+"Invalid stream mode."
+
+trigger as capability:
+  may read workspace
+
+agent explorer uses react
+
+run explorer:
+  stream "q" mode sideways
+  goal "Go."
+`)
+	if err := NewSymbolTable(doc).Resolve(); err == nil || !strings.Contains(err.Error(), "unsupported stream mode") {
+		t.Fatalf("expected unsupported stream mode error, got %v", err)
 	}
 }
 

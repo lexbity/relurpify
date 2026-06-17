@@ -78,11 +78,11 @@ exception-count:
 
 # Dead-code gate: asserts removed symbols never reappear.
 no-dead:
-	@if grep -rn 'InvokeOnBestNode\|RegisterNodeProvider\|NodeSelectionCriteria\|RateLimiter\|GetWorkingValue\|executionStepFromAgent\|inheritExecutionStepScope' --include='*.go' . 2>/dev/null | grep -v '.gomodcache' | grep -v 'tooling/arch' | grep -v 'state.go' | grep -v 'state_test.go' | grep -v 'runner_test.go'; then echo "[FAIL] no-dead: found removed symbols" ; exit 1 ; fi
+	@if grep -rn 'InvokeOnBestNode\|RegisterNodeProvider\|NodeSelectionCriteria\|RateLimiter\|GetWorkingValue\|executionStepFromAgent\|inheritExecutionStepScope\|summarizeCaptureBindings\|summarizeToolScopeFrames\|CompiledThoughtRecipe\|CompiledStep\b\|CompiledParallelGroup\|CompiledConditionalGroup\|buildParallelSection\|buildConditionalSection\|buildBranchSequence\|evaluateThoughtRecipeCondition\|emitParallelFanouts' --include='*.go' . 2>/dev/null | grep -v '.gomodcache' | grep -v 'tooling/arch' | grep -v 'state.go' | grep -v 'state_test.go' | grep -v 'runner_test.go'; then echo "[FAIL] no-dead: found removed symbols" ; exit 1 ; fi
 	@echo "[PASS] no-dead: no removed symbols found"
 
 
-lint-all: lint-layering lint-invariants lint-config-boundary euclo-stepkind-exhaustive
+lint-all: lint-layering lint-invariants lint-config-boundary euclo-stepkind-exhaustive euclo-no-control-keys euclo-no-dead-flatteners
 
 # Standard Go linters (golangci-lint, config: .golangci.yaml). Use locally;
 # CI uses two-track gate (ratchet + graduated) for enforce.
@@ -164,15 +164,42 @@ grep-architecture-gates:
 	@if rg -n "shim|compatibility|stub|backward compatibility" app/dev-agent-cli userconfig execution/session app/relurpish testsuite/agenttest platform/llm --glob '*.go' --glob '!**/*_test.go' >/dev/null; then echo "[FAIL] grep-architecture-gates: compatibility language remains in touched production code"; exit 1; fi
 	@echo "[PASS] grep-architecture-gates: architecture fences are clean"
 
-# euclo-stepkind-exhaustive: asserts every switch on ExecutionStep.Kind is exhaustive
-# (no silent fallthrough via strings.EqualFold or missing case).
-# Slice 2: StepKind is a closed uint8 enum; control flow must use typed comparisons.
+# euclo-stepkind-exhaustive: asserts no string-based dispatch on ExecutionStep.Kind
+# (not parser keywords, not paradigm strings — those are separate concerns).
 euclo-stepkind-exhaustive:
-	@echo "[check] euclo-stepkind-exhaustive: no string-based step kind dispatch..."
+	@echo "[check] euclo-stepkind-exhaustive: no string-based ExecutionStep.Kind dispatch..."
+	@m=$$(rg -n '(n\.step\.Kind|step\.Kind)\s*==\s*"' --glob '*.go' --glob '!*_test.go' named/euclo/ 2>/dev/null); \
+	if [ -n "$$m" ]; then echo "[FAIL] string-based ExecutionStep.Kind dispatch (use == StepKind*):"; echo "$$m"; exit 1; fi
 	@if rg -n 'strings\.(EqualFold|TrimSpace).*\.(step\.Kind|n\.step\.Kind)\b' --glob '*.go' named/euclo/ 2>/dev/null | grep -qv '_test.go'; then \
-		echo "[FAIL] euclo-stepkind-exhaustive: string-based step kind dispatch still present (use == StepKind* instead)"; exit 1; \
+		echo "[FAIL] strings.EqualFold/TrimSpace on ExecutionStep.Kind (use == StepKind* instead)"; exit 1; \
 	fi
+	@# R4: ExecutionStep must not carry a nested surface.ThoughtRecipeStep
+	@# (dual representation). Control/runtime data lives in typed top-level fields;
+	@# the inner stringly .Step.Type / .Step.Config is the leak this forbids.
+	@if rg -n '^\s*Step\s+surface\.ThoughtRecipeStep\b' --glob '*.go' named/euclo/thoughtrecipes/ 2>/dev/null; then \
+		echo "[FAIL] ExecutionStep carries a nested surface.ThoughtRecipeStep (use typed top-level fields + ToSurfaceStep)"; exit 1; \
+	fi
+	@if rg -n '\.Step\.(Type|Config|OnError|Context|Parent)\b' --glob '*.go' --glob '!*_test.go' named/euclo/ 2>/dev/null; then \
+		echo "[FAIL] read of nested ExecutionStep.Step.* (use typed top-level fields)"; exit 1; fi
 	@echo "[PASS] euclo-stepkind-exhaustive: all step kind dispatch is typed"
+
+# euclo-no-control-keys: asserts the envelope carries only state + results,
+# not control flow (Q5, A-5, FR-6). Control data must live in typed step fields.
+euclo-no-control-keys:
+	@echo "[check] euclo-no-control-keys: control data must travel in typed plan fields, not the envelope/task.Context/state maps..."
+	@m=$$(rg -n '(task\.Context|state)\["(euclo\.(run|ask|delegate)\.|execution_)' --glob '*.go' --glob '!*_test.go' named/euclo/ 2>/dev/null); \
+	if [ -n "$$m" ]; then echo "[FAIL] control-flow key written to task.Context/state map (use typed step fields / PlanState):"; echo "$$m"; exit 1; fi
+	@m=$$(rg -n 'SetTyped\(env,\s*"(euclo\.(run|ask|delegate)\.|.*execution_(goal|question|sources|directives|choices|choice_source|instruction|paradigm|step_id|step_type|prompt_id))' --glob '*.go' --glob '!*_test.go' named/euclo/ 2>/dev/null); \
+	if [ -n "$$m" ]; then echo "[FAIL] control-flow key written via SetTyped (use typed step fields / PlanState):"; echo "$$m"; exit 1; fi
+	@echo "[PASS] euclo-no-control-keys: envelope carries state + results only"
+
+# euclo-no-dead-flatteners: asserts the flatteners/round-trip/dead-parallel paths
+# the spec deletes in Slice 3/7 never reappear (AC-3, Slice 7).
+euclo-no-dead-flatteners:
+	@echo "[check] euclo-no-dead-flatteners: no flattener/round-trip/dead-parallel symbols..."
+	@m=$$(rg -n '\b(summarizeCaptureBindings|summarizeToolScopeFrames|summarizeExecutionItems|rawValueExprList|predicateRaw|buildParallelSection|CompiledParallelGroup)\b' --glob '*.go' --glob '!*_test.go' named/euclo/ 2>/dev/null); \
+	if [ -n "$$m" ]; then echo "[FAIL] removed flattener/round-trip/dead-parallel symbol still present:"; echo "$$m"; exit 1; fi
+	@echo "[PASS] euclo-no-dead-flatteners: no dead flattener/round-trip symbols"
 
 # Slice 10 structural gates: enforce that dead code and forbidden patterns
 # never reappear in production code.

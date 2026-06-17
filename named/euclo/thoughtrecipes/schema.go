@@ -119,17 +119,6 @@ func truthyValue(value any) bool {
 	}
 }
 
-func validateStepParadigm(value string) error {
-	trimmed := strings.TrimSpace(value)
-	if trimmed == "" {
-		return nil
-	}
-	if !surface.IsSupported(surface.Paradigm(trimmed)) && surface.Paradigm(trimmed) != surface.ParadigmEuclo {
-		return fmt.Errorf("invalid paradigm value: %s", value)
-	}
-	return nil
-}
-
 func cloneClarificationStepConfig(cfg *ClarificationStepConfig) *ClarificationStepConfig {
 	if cfg == nil {
 		return nil
