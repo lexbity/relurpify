@@ -2,6 +2,7 @@ package envcomposition
 
 import (
 	"fmt"
+	"time"
 
 	"codeburg.org/lexbit/relurpify/model"
 	"codeburg.org/lexbit/relurpify/platform/llm"
@@ -19,10 +20,12 @@ type ModelRuntime struct {
 // ModelRuntimeInput carries parameters for BuildModelRuntime.
 type ModelRuntimeInput struct {
 	Provider          string
+	Kind              string
 	Endpoint          string
 	ModelName         string
 	TapePath          string
 	NativeToolCalling bool
+	Timeout           time.Duration
 	Secrets           llm.ProviderSecrets
 	Profile           *model.ModelProfile
 }
@@ -34,9 +37,11 @@ func BuildModelRuntime(input ModelRuntimeInput) (*ModelRuntime, error) {
 	}
 	providerCfg := llm.ProviderConfig{
 		Provider:          input.Provider,
+		Kind:              input.Kind,
 		Endpoint:          input.Endpoint,
 		Model:             input.ModelName,
 		TapePath:          input.TapePath,
+		Timeout:           input.Timeout,
 		NativeToolCalling: input.NativeToolCalling,
 	}
 	backend, err := llm.New(providerCfg, input.Secrets)

@@ -2,7 +2,7 @@
 
 Agent-level integration tests for Relurpify. Each test runs a real agent against a real (or replayed) LLM and asserts on outputs, file mutations, state, and agent-internal metrics.
 
-Unit tests (`go test ./...`) require no external services. Agent tests require Ollama running with `qwen2.5-coder:14b` loaded.
+Unit tests (`go test ./...`) require no external services. Agent tests require Ollama running with `gemma4:12b` loaded.
 
 ---
 
@@ -277,7 +277,7 @@ spec:
       - relurpify_cfg/test_runs/**
 
   models:
-    - name: qwen2.5-coder:14b    # model identifier
+    - name: gemma4:12b    # model identifier
       endpoint: http://localhost:11434  # Ollama endpoint
 
   providers:                     # optional explicit provider matrix
@@ -770,13 +770,13 @@ testsuite/agenttests/tapes/{suite_name}/{case_name}__{sanitized_model}.baseline.
 ```
 
 Name sanitization: all non-alphanumeric characters become `_`, leading/trailing `_` stripped.
-Example: `qwen2.5-coder:14b` → `qwen2_5_coder_14b`
+Example: `gemma4:12b` → `qwen2_5_coder_14b`
 
 ### Baseline format
 
 ```json
 {
-  "model": "qwen2.5-coder:14b",
+  "model": "gemma4:12b",
   "recorded_at": "2026-03-31",
   "llm_calls": 4,
   "total_tokens": 3500,
@@ -904,7 +904,7 @@ Time is distributed across suites using a budgeted allocation:
 Ollama is not running. Start it: `ollama serve` or `systemctl start ollama`.
 
 ### "no such model" / model load error
-Model is not pulled: `ollama pull qwen2.5-coder:14b`.
+Model is not pulled: `ollama pull gemma4:12b`.
 Model profile selection is automatic once the model is loaded. Profiles are
 resolved from `relurpify_cfg/model/profiles/` using the selected provider and
 model name.
@@ -974,7 +974,7 @@ run artifacts to see what keys were actually set.
 Non-alphanumeric characters → `_`, then leading/trailing `_` stripped.
 
 ```
-qwen2.5-coder:14b  →  qwen2_5_coder_14b
+gemma4:12b  →  qwen2_5_coder_14b
 my_case_name       →  my_case_name
 my.case.name       →  my_case_name
 ```

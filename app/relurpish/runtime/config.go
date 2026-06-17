@@ -66,7 +66,7 @@ func DefaultConfig() Config {
 		LogPath:        ".relurpify_state/logs/relurpish.log",
 		TelemetryPath:  ".relurpify_state/telemetry/telemetry.jsonl",
 		EventsPath:     ".relurpify_state/events.db",
-		ConfigPath:     ".relurpify_state/workspace.yaml",
+		ConfigPath:     "relurpify_cfg/workspace.yaml",
 		AgentName:      AgentLabelEuclo,
 		ServerAddr:     ":8080",
 		AuditLimit:     512,

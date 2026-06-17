@@ -5,7 +5,7 @@ import (
 )
 
 func init() {
-	RegisterProvider("ollama", func(cfg ProviderConfig, secrets ProviderSecrets) (ManagedBackend, error) {
+	RegisterKind("ollama", func(cfg ProviderConfig, secrets ProviderSecrets) (ManagedBackend, error) {
 		if err := cfg.Validate(); err != nil {
 			return nil, err
 		}

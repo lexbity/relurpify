@@ -10,7 +10,7 @@ import (
 const tapeProviderName = "tape"
 
 func init() {
-	RegisterProvider(tapeProviderName, func(cfg ProviderConfig, secrets ProviderSecrets) (ManagedBackend, error) {
+	RegisterKind(tapeProviderName, func(cfg ProviderConfig, secrets ProviderSecrets) (ManagedBackend, error) {
 		_ = secrets
 		if err := cfg.Validate(); err != nil {
 			return nil, err

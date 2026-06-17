@@ -99,7 +99,7 @@ func testSandboxDocument(t *testing.T) *config.Document {
 		Mode:           agentspec.AgentModePrimary,
 		Model: agentspec.AgentModelConfig{
 			Provider: RuntimeOllama,
-			Name:     "qwen2.5-coder:14b",
+			Name:     "gemma4:12b",
 		},
 		Bash: agentspec.AgentBashPermissions{
 			AllowPatterns: []string{"git status"},

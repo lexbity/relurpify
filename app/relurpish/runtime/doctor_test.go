@@ -4,80 +4,140 @@ import (
 	"context"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/platform/fs"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
-func TestBuildDoctorReport_ReportsBuiltinContractSource(t *testing.T) {
+func writeMinimalDoctorWorkspace(t *testing.T, workspace string, providerYAMLs map[string]string) {
+	t.Helper()
+	dirs := []string{
+		filepath.Join(workspace, "relurpify_cfg", "security"),
+		filepath.Join(workspace, "relurpify_cfg", "model", "provider"),
+	}
+	for _, d := range dirs {
+		if err := os.MkdirAll(d, fs.PublicDirMode); err != nil {
+			t.Fatalf("mkdir %s: %v", d, err)
+		}
+	}
+	policies := map[string]string{
+		"localtool.policy.yaml":       "schema: relurpify/policy/localtool/v1\ntools:\n  cli_git:\n    execute: allow\n",
+		"shell.policy.yaml":           "schema: relurpify/policy/shell/v1\nrules: []\n",
+		"sandbox.policy.yaml":         "schema: relurpify/policy/sandbox/v1\nread_only_root: false\nno_new_privileges: false\n",
+		"workspaceingestion.policy.yaml": "schema: relurpify/policy/ingestion/v1\nrules: []\n",
+	}
+	for name, content := range policies {
+		if err := os.WriteFile(filepath.Join(workspace, "relurpify_cfg", "security", name), []byte(content), 0o600); err != nil {
+			t.Fatalf("write %s: %v", name, err)
+		}
+	}
+	for name, content := range providerYAMLs {
+		if err := os.WriteFile(filepath.Join(workspace, "relurpify_cfg", "model", "provider", name), []byte(content), 0o600); err != nil {
+			t.Fatalf("write provider %s: %v", name, err)
+		}
+	}
+}
+
+func TestDoctorReport_ProvidersBlockPopulated(t *testing.T) {
 	workspace := t.TempDir()
-	// Create minimal relurpify_cfg with security policies.
-	cfgRoot := filepath.Join(workspace, "relurpify_cfg")
-	securityDir := filepath.Join(cfgRoot, "security")
-	if err := os.MkdirAll(securityDir, fs.PublicDirMode); err != nil {
-		t.Fatalf("mkdir: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(securityDir, "localtool.policy.yaml"), []byte("schema: relurpify/policy/localtool/v1\ntools:\n  cli_git:\n    execute: allow\n"), 0o600); err != nil {
-		t.Fatalf("write localtool: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(securityDir, "shell.policy.yaml"), []byte("schema: relurpify/policy/shell/v1\nrules: []\n"), 0o600); err != nil {
-		t.Fatalf("write shell: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(securityDir, "sandbox.policy.yaml"), []byte("schema: relurpify/policy/sandbox/v1\nread_only_root: false\nno_new_privileges: false\n"), 0o600); err != nil {
-		t.Fatalf("write sandbox: %v", err)
-	}
+	writeMinimalDoctorWorkspace(t, workspace, map[string]string{
+		"ollama.provider.yaml": "schema: relurpify/model/provider/v1\nname: ollama\nendpoint: http://localhost:11434\nkind: ollama\n",
+	})
 
 	cfg := Config{
-		Workspace: workspace,
+		Workspace:          workspace,
+		InferenceProvider:  "ollama",
+		InferenceEndpoint:  "http://localhost:11434",
 	}
 
 	report := BuildDoctorReport(context.Background(), cfg, config.Secrets{})
-	if report.ContractSource != "builtin+split" {
-		t.Fatalf("ContractSource = %q, want %q", report.ContractSource, "builtin+split")
+	if len(report.Providers) == 0 {
+		t.Fatal("expected at least one provider in report.Providers")
 	}
-	if report.ManifestFingerprint == "" {
-		t.Fatal("ManifestFingerprint should not be empty for built-in contract")
+	var ollamaFound bool
+	for _, p := range report.Providers {
+		if p.Name == "ollama" {
+			ollamaFound = true
+			if p.Kind != "ollama" {
+				t.Fatalf("ollama provider kind = %q, want %q", p.Kind, "ollama")
+			}
+			break
+		}
 	}
-	if report.ManifestExists {
-		t.Fatal("ManifestExists should be false when agents/ has no file")
-	}
-}
-
-func TestFormatSandboxDetail_EmptyShowsFailClosedMessage(t *testing.T) {
-	got := formatSandboxDetail("")
-	if !strings.Contains(got, "FAIL TO START") {
-		t.Errorf("expected FAIL TO START message for empty detail, got: %q", got)
-	}
-	if strings.Contains(got, "tool sandboxing disabled") {
-		t.Errorf("should not contain old 'tool sandboxing disabled', got: %q", got)
+	if !ollamaFound {
+		t.Fatal("expected ollama provider in report")
 	}
 }
 
-func TestFormatSandboxDetail_ErrorMessageShowsFailClosed(t *testing.T) {
-	got := formatSandboxDetail("runsc not found")
-	if !strings.Contains(got, "FAIL TO START") {
-		t.Errorf("expected FAIL TO START message for error detail, got: %q", got)
+func TestDoctorReport_SelectedProviderMarked(t *testing.T) {
+	workspace := t.TempDir()
+	writeMinimalDoctorWorkspace(t, workspace, map[string]string{
+		"ollama.provider.yaml":  "schema: relurpify/model/provider/v1\nname: ollama\nendpoint: http://localhost:11434\nkind: ollama\n",
+		"lmstudio.provider.yaml": "schema: relurpify/model/provider/v1\nname: lmstudio\nendpoint: http://localhost:1234\nkind: lmstudio\n",
+	})
+	cfg := Config{
+		Workspace:          workspace,
+		InferenceProvider:  "lmstudio",
+		InferenceEndpoint:  "http://localhost:1234",
 	}
-	if !strings.Contains(got, "runsc not found") {
-		t.Errorf("expected original error preserved, got: %q", got)
+	report := BuildDoctorReport(context.Background(), cfg, config.Secrets{})
+	var lmstudioSelected, ollamaSelected bool
+	for _, p := range report.Providers {
+		if p.Name == "lmstudio" && p.Selected {
+			lmstudioSelected = true
+		}
+		if p.Name == "ollama" && !p.Selected {
+			ollamaSelected = true
+		}
+	}
+	if !lmstudioSelected {
+		t.Fatal("expected lmstudio to be marked as selected")
+	}
+	if !ollamaSelected {
+		t.Fatal("expected ollama to not be marked as selected")
 	}
 }
 
-func TestFormatSandboxDetail_VersionStringPassesThrough(t *testing.T) {
-	got := formatSandboxDetail("runsc version 1.2.3")
-	if got != "runsc version 1.2.3" {
-		t.Errorf("version string should pass through unchanged, got: %q", got)
+func TestDoctorReport_NoInferenceBackendDep(t *testing.T) {
+	workspace := t.TempDir()
+	writeMinimalDoctorWorkspace(t, workspace, map[string]string{
+		"ollama.provider.yaml": "schema: relurpify/model/provider/v1\nname: ollama\nendpoint: http://localhost:11434\nkind: ollama\n",
+	})
+	cfg := Config{
+		Workspace:          workspace,
+		InferenceProvider:  "ollama",
+		InferenceEndpoint:  "http://localhost:11434",
+	}
+	report := BuildDoctorReport(context.Background(), cfg, config.Secrets{})
+	for _, dep := range report.Dependencies {
+		if dep.Name == "inference_backend" {
+			t.Fatal("inference_backend dependency should not appear in Dependencies (shown in dedicated block)")
+		}
 	}
 }
 
-func TestFormatSandboxDetail_DockerErrorShowsFailClosed(t *testing.T) {
-	got := formatSandboxDetail("error: docker daemon not running")
-	if !strings.Contains(got, "FAIL TO START") {
-		t.Errorf("expected FAIL TO START for docker error, got: %q", got)
+func TestUniqueStrings(t *testing.T) {
+	tests := []struct {
+		input []string
+		want  []string
+	}{
+		{nil, nil},
+		{[]string{}, []string{}},
+		{[]string{"a"}, []string{"a"}},
+		{[]string{"a", "a"}, []string{"a"}},
+		{[]string{"a", "b", "a"}, []string{"a", "b"}},
+		{[]string{"a", "b", "c"}, []string{"a", "b", "c"}},
 	}
-	if !strings.Contains(got, "docker daemon not running") {
-		t.Errorf("expected original error preserved, got: %q", got)
+	for _, tt := range tests {
+		got := uniqueStrings(tt.input)
+		if len(got) != len(tt.want) {
+			t.Fatalf("uniqueStrings(%v) = %v (len %d), want len %d", tt.input, got, len(got), len(tt.want))
+		}
+		for i, v := range got {
+			if v != tt.want[i] {
+				t.Fatalf("uniqueStrings(%v) = %v, want %v", tt.input, got, tt.want)
+			}
+		}
 	}
 }

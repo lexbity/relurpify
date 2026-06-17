@@ -107,7 +107,7 @@ For a quick live-model Euclo bug-hunting pass, the canonical rapid suite family
 now runs as three focused passes on a single local Ollama instance:
 
 ```
-curl -s http://localhost:11434/api/generate -d '{"model":"qwen2.5-coder:14b","prompt":"ping","stream":false,"keep_alive":"10m"}'
+curl -s http://localhost:11434/api/generate -d '{"model":"gemma4:12b","prompt":"ping","stream":false,"keep_alive":"10m"}'
 ./dev-agent agenttest run --suite testsuite/agenttests/euclo.rapid.chat.testsuite.yaml --timeout 75s
 ./dev-agent agenttest run --suite testsuite/agenttests/euclo.rapid.debug.testsuite.yaml --timeout 75s
 ./dev-agent agenttest run --suite testsuite/agenttests/euclo.rapid.archaeology.testsuite.yaml --timeout 90s

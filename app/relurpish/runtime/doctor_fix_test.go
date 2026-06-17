@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/userconfig/config"
+	"codeburg.org/lexbit/relurpify/userconfig/config/model"
 	"gopkg.in/yaml.v3"
 )
 
@@ -53,6 +55,35 @@ func TestInitializeWorkspaceFromTemplatesWritesValidConfig(t *testing.T) {
 	}
 	if wsCfg.Model.Name != "gemma4:e4b" {
 		t.Fatalf("model.name = %q after --fix, want gemma4:e4b", wsCfg.Model.Name)
+	}
+
+	// The full default tree must be materialized, not just workspace.yaml:
+	// model profiles, the provider catalog, and security policies are all
+	// essential for a usable workspace (OOBE: #1).
+	configRoot := config.New(dir).ConfigRoot()
+	for _, rel := range []string{
+		"model/profiles/default.llm.yaml",
+		"model/provider/ollama.provider.yaml",
+		"model/provider/lmstudio.provider.yaml",
+		"model/provider/openai_compatible.provider.yaml",
+		"security/sandbox.policy.yaml",
+		"security/shell.policy.yaml",
+		"security/localtool.policy.yaml",
+		"security/workspaceingestion.policy.yaml",
+	} {
+		if _, err := os.Stat(filepath.Join(configRoot, rel)); err != nil {
+			t.Fatalf("essential template %s not materialized: %v", rel, err)
+		}
+	}
+
+	// The materialized provider catalog must load and resolve through the same
+	// path the runtime uses (provider catalog drives behavior end-to-end).
+	providers, err := model.LoadProviderDir(filepath.Join(configRoot, "model", "provider"), config.StrictDecode)
+	if err != nil {
+		t.Fatalf("load materialized provider catalog: %v", err)
+	}
+	if len(providers) < 3 {
+		t.Fatalf("materialized provider catalog has %d providers, want >= 3", len(providers))
 	}
 }
 

@@ -3,6 +3,7 @@ package runtime
 import (
 	"context"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -24,8 +25,21 @@ type DependencyStatus struct {
 	Name      string
 	Required  bool
 	Available bool
+	Degraded  bool
 	Blocking  bool
 	Details   string
+}
+
+// ProviderHealth captures the health and metadata of a single catalog provider.
+type ProviderHealth struct {
+	Name      string
+	Kind      string
+	Endpoint  string
+	Models    []string
+	State     string
+	SetupHint string
+	Selected  bool
+	Error     string
 }
 
 // DoctorReport summarizes workspace readiness and local dependency state.
@@ -48,6 +62,7 @@ type DoctorReport struct {
 	ManifestFingerprint   string
 	ManifestPolicySummary string
 	Inference             InferenceBackendReport
+	Providers             []ProviderHealth
 	Dependencies          []DependencyStatus
 	CheckedAt             time.Time
 
@@ -143,7 +158,9 @@ func BuildDoctorReport(ctx context.Context, cfg Config, secrets config.Secrets) 
 	report.ContractSource = "builtin+split"
 	fp := config.ContractFingerprint(euclocontract.DefaultContract(), cfg.Workspace)
 	report.ManifestFingerprint = fmt.Sprintf("%x", fp)
-	report.ProtectedPaths = config.New(cfg.Workspace).GovernanceRoots(config.DefaultWorkspaceConfigPath(cfg.Workspace))
+	// Deduplicate sandbox roots (FR-8)
+	rawPaths := config.New(cfg.Workspace).GovernanceRoots(config.DefaultWorkspaceConfigPath(cfg.Workspace))
+	report.ProtectedPaths = uniqueStrings(rawPaths)
 
 	resolver := te.NewResolver(cfg.SharedRoot)
 	if starterConfig, err := resolver.ResolveWorkspaceConfigTemplate(); err == nil {
@@ -184,25 +201,64 @@ func BuildDoctorReport(ctx context.Context, cfg Config, secrets config.Secrets) 
 		env = ProbeEnvironment(ctx, cfg, secrets, backend)
 	}
 	report.Inference = env.Inference
-	if strings.EqualFold(strings.TrimSpace(cfg.InferenceProvider), "tape") {
-		report.ModelProfilesExists = true
-	} else {
-		bundle, diags, err := config.LoadDiagnostic(config.LoadOptions{WorkspaceRoot: cfg.Workspace})
-		if err != nil {
-			report.ModelProfilesError = err.Error()
-		} else if bundle.Config != nil {
-			reg := modelselect.NewProfileRegistryFromProfiles(bundle.Config.Model.Profiles)
-			resolution := reg.Resolve(cfg.InferenceProvider, report.Inference.SelectedModel)
-			if resolution.SourcePath != "" {
-				report.ModelProfilesExists = true
-			} else if diag := firstConfigDiagnostic(diags, "profile"); diag != nil && strings.EqualFold(strings.TrimSpace(diag.Severity), "blocking") {
-				report.ModelProfilesError = diag.Message
-			} else {
-				report.ModelProfilesError = "no workspace model profile matched the selected model"
+	// Build provider catalog health list.
+	bundle, diags, err := config.LoadDiagnostic(config.LoadOptions{WorkspaceRoot: cfg.Workspace})
+	if err == nil && bundle.Config != nil {
+		reg, _ := buildProviderRegistry(bundle.Config.Model.Providers)
+		if reg != nil {
+			var providerHealthList []ProviderHealth
+			for _, def := range bundle.Config.Model.Providers {
+				ph := ProviderHealth{
+					Name:      def.Name,
+					Kind:      def.Kind,
+					Endpoint:  def.Endpoint,
+					SetupHint: def.SetupHint,
+				}
+				// Check if this is the currently selected provider
+				if strings.EqualFold(def.Name, cfg.InferenceProvider) {
+					ph.Selected = true
+				}
+				// Probe the provider's health
+				pcfg := llm.ProviderConfig{
+					Provider: def.Name,
+					Kind:     def.Kind,
+					Endpoint: def.Endpoint,
+				}
+				if pbe, pberr := llm.New(pcfg, llm.ProviderSecrets{APIKey: secrets.LLMAPIKey}); pberr == nil {
+					if phState, phErr := pbe.Health(ctx); phState != nil {
+						ph.State = string(phState.State)
+					} else if phErr != nil {
+						ph.State = "unhealthy"
+						ph.Error = phErr.Error()
+					}
+					if models, modErr := pbe.ListModels(ctx); modErr == nil {
+						for _, m := range models {
+							ph.Models = append(ph.Models, m.Name)
+						}
+					}
+					_ = pbe.Close()
+				} else {
+					ph.State = "unhealthy"
+					ph.Error = pberr.Error()
+				}
+				providerHealthList = append(providerHealthList, ph)
 			}
-		} else {
-			report.ModelProfilesError = "workspace config bundle unavailable"
+			report.Providers = providerHealthList
 		}
+		// Model profile check using the same bundle.
+		regProfiles := modelselect.NewProfileRegistryFromProfiles(bundle.Config.Model.Profiles)
+		resolution := regProfiles.Resolve(cfg.InferenceProvider, report.Inference.SelectedModel)
+		if resolution.SourcePath != "" {
+			report.ModelProfilesExists = true
+		} else if diag := firstConfigDiagnostic(diags, "profile"); diag != nil && strings.EqualFold(strings.TrimSpace(diag.Severity), "blocking") {
+			report.ModelProfilesError = diag.Message
+		} else {
+			report.ModelProfilesError = "no workspace model profile matched the selected model"
+		}
+	} else if err != nil {
+		report.ModelProfilesError = err.Error()
+	} else {
+		report.ModelProfilesError = "workspace config bundle unavailable"
 	}
 	// Convert ayenitd probe results
 	// Map available Config fields to ayenitd.WorkspaceConfig.
@@ -229,6 +285,9 @@ func BuildDoctorReport(ctx context.Context, cfg Config, secrets config.Secrets) 
 	ayenitdResults := ayenitd.ProbeWorkspace(ctx, ayenitdCfg, llm.ProviderSecrets{APIKey: secrets.LLMAPIKey}, nil)
 	var deps []DependencyStatus
 	for _, r := range ayenitdResults {
+		if r.Name == "inference_backend" {
+			continue // shown in dedicated Inference backend block (FR-8)
+		}
 		deps = append(deps, DependencyStatus{
 			Name:      r.Name,
 			Required:  r.Required,
@@ -254,6 +313,7 @@ func BuildDoctorReport(ctx context.Context, cfg Config, secrets config.Secrets) 
 	// Keep existing sandbox and chromium checks
 	runscOK := env.Sandbox.Runsc.Error == ""
 	dockerOK := env.Sandbox.Docker.Error == ""
+	dockerDegraded := env.Sandbox.Docker.Path != "" && !dockerOK
 	deps = append(deps, DependencyStatus{
 		Name:      "sandbox_backend",
 		Required:  true,
@@ -268,26 +328,41 @@ func BuildDoctorReport(ctx context.Context, cfg Config, secrets config.Secrets) 
 		Blocking:  false,
 		Details:   formatSandboxDetail(firstNonEmpty(env.Sandbox.Runsc.Version, env.Sandbox.Runsc.Error)),
 	})
+	dockerDetail := formatSandboxDetail(firstNonEmpty(env.Sandbox.Docker.Version, env.Sandbox.Docker.Error))
+	if dockerDegraded {
+		dockerDetail = "degraded: docker installed but unreachable"
+	}
 	deps = append(deps, DependencyStatus{
 		Name:      "docker",
 		Required:  false,
 		Available: dockerOK,
+		Degraded:  dockerDegraded,
 		Blocking:  false,
-		Details:   formatSandboxDetail(firstNonEmpty(env.Sandbox.Docker.Version, env.Sandbox.Docker.Error)),
+		Details:   dockerDetail,
 	})
-	deps = append(deps, DependencyStatus{
-		Name:      "inference_backend",
-		Required:  true,
-		Available: env.Inference.State == llm.BackendHealthReady || env.Inference.State == llm.BackendHealthDegraded,
-		Blocking:  env.Inference.State == llm.BackendHealthUnhealthy,
-		Details:   firstNonEmpty(env.Inference.SelectedModel, env.Inference.Error),
-	})
+	// inference_backend is shown in the dedicated "Inference backend:" block,
+	// not duplicated here as a dependency entry (FR-8).
 	deps = append(deps, detectChromiumStatus(ctx, cfg.CommandPolicy))
 	report.Dependencies = deps
 
 	report.SandboxReady = computeSandboxReady(report)
 	report.ModelReady = computeModelReady(report)
 	return report
+}
+
+func uniqueStrings(s []string) []string {
+	if len(s) < 2 {
+		return s
+	}
+	seen := map[string]bool{}
+	out := make([]string, 0, len(s))
+	for _, v := range s {
+		if !seen[v] {
+			seen[v] = true
+			out = append(out, v)
+		}
+	}
+	return out
 }
 
 func computeSandboxReady(r DoctorReport) bool {
@@ -323,61 +398,46 @@ func checkEmbeddedTemplates() bool {
 	return true
 }
 
-// InitializeWorkspaceFromTemplates materializes starter workspace config under
-// relurpify_cfg using the shared template resolver.
+// InitializeWorkspaceFromTemplates materializes the full default workspace
+// configuration tree under <workspace>/relurpify_cfg from the embedded template
+// bundle: workspace.yaml, model profiles + provider catalog, security policies,
+// and tool definitions. When overwrite is false, existing files are preserved
+// (idempotent re-run).
 func InitializeWorkspaceFromTemplates(cfg Config, overwrite bool) error {
 	if cfg.Workspace == "" {
 		return fmt.Errorf("workspace path required")
 	}
-	paths := config.New(cfg.Workspace)
-	if err := os.MkdirAll(paths.ConfigRoot(), 	platformfs.PublicDirMode); err != nil { // public: config root
+	configRoot := config.New(cfg.Workspace).ConfigRoot()
+	if err := os.MkdirAll(configRoot, 	platformfs.PublicDirMode); err != nil { // public: config root
 		return err
 	}
-	resolver := te.NewResolver(cfg.SharedRoot)
-	configTemplate, err := resolver.ResolveWorkspaceConfigTemplate()
-	if err != nil {
-		return fmt.Errorf("resolve workspace config template: %w", err)
-	}
-	sandboxTemplate, err := resolver.ResolveWorkspaceSecurityTemplate("sandbox")
-	if err != nil {
-		return fmt.Errorf("resolve sandbox security template: %w", err)
-	}
-	shellTemplate, err := resolver.ResolveWorkspaceSecurityTemplate("shell")
-	if err != nil {
-		return fmt.Errorf("resolve shell security template: %w", err)
-	}
-	localToolTemplate, err := resolver.ResolveWorkspaceSecurityTemplate("localtool")
-	if err != nil {
-		return fmt.Errorf("resolve localtool security template: %w", err)
-	}
-	ingestionTemplate, err := resolver.ResolveWorkspaceSecurityTemplate("workspaceingestion")
-	if err != nil {
-		return fmt.Errorf("resolve ingestion security template: %w", err)
-	}
-	workspaceConfigPath := cfg.ConfigPath
-	if workspaceConfigPath == "" {
-		workspaceConfigPath = config.DefaultWorkspaceConfigPath(cfg.Workspace)
-	}
-	if err := copyTemplateFile(configTemplate, workspaceConfigPath, cfg.Workspace, overwrite); err != nil {
-		return err
-	}
-	securityDir := filepath.Join(paths.ConfigRoot(), "security")
-	for _, dir := range []string{securityDir} {
-		if err := os.MkdirAll(dir, 	platformfs.PublicDirMode); err != nil { // public: security policies dir
-			return err
+	// The embedded template bundle is the canonical, distribution-safe source:
+	// it is compiled into the binary, so initialization materializes the full
+	// default tree (workspace.yaml, model profiles + provider catalog, security
+	// policies, and tool definitions) even for an installed binary with no
+	// source checkout on disk. The embedded "workspace/" subtree maps 1:1 onto
+	// <workspace>/relurpify_cfg/.
+	efs := templatesembed.DefaultFS()
+	const templateRoot = "workspace"
+	walkErr := fs.WalkDir(efs, templateRoot, func(p string, d fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
 		}
-	}
-	if err := copyTemplateFile(sandboxTemplate, filepath.Join(securityDir, "sandbox.policy.yaml"), cfg.Workspace, overwrite); err != nil {
-		return err
-	}
-	if err := copyTemplateFile(shellTemplate, filepath.Join(securityDir, "shell.policy.yaml"), cfg.Workspace, overwrite); err != nil {
-		return err
-	}
-	if err := copyTemplateFile(localToolTemplate, filepath.Join(securityDir, "localtool.policy.yaml"), cfg.Workspace, overwrite); err != nil {
-		return err
-	}
-	if err := copyTemplateFile(ingestionTemplate, filepath.Join(securityDir, "workspaceingestion.policy.yaml"), cfg.Workspace, overwrite); err != nil {
-		return err
+		if d.IsDir() {
+			return nil
+		}
+		rel, relErr := filepath.Rel(templateRoot, filepath.FromSlash(p))
+		if relErr != nil {
+			return relErr
+		}
+		data, readErr := fs.ReadFile(efs, p)
+		if readErr != nil {
+			return fmt.Errorf("read embedded template %s: %w", p, readErr)
+		}
+		return copyTemplateContent(data, filepath.Join(configRoot, rel), cfg.Workspace, overwrite)
+	})
+	if walkErr != nil {
+		return fmt.Errorf("materialize workspace templates: %w", walkErr)
 	}
 	stateDir := config.DefaultWorkspaceStateDir(cfg.Workspace)
 	for _, dir := range []string{
@@ -393,19 +453,6 @@ func InitializeWorkspaceFromTemplates(cfg Config, overwrite bool) error {
 		}
 	}
 	return nil
-}
-
-func copyTemplateFile(src, dst, workspace string, overwrite bool) error {
-	if !overwrite {
-		if _, err := os.Stat(dst); err == nil {
-			return nil
-		}
-	}
-	data, err := os.ReadFile(filepath.Clean(src))
-	if err != nil {
-		return err
-	}
-	return copyTemplateContent(data, dst, workspace, overwrite)
 }
 
 func copyTemplateContent(data []byte, dst, workspace string, overwrite bool) error {

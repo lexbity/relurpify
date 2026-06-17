@@ -41,7 +41,7 @@ spec:
     mode: primary
     model:
       provider: ollama
-      name: qwen2.5-coder:14b
+      name: gemma4:12b
 `), fs.PublicFileMode); err != nil { // public: test manifest
 		t.Fatal(err)
 	}

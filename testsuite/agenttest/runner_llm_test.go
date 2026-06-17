@@ -14,7 +14,7 @@ import (
 const (
 	http_localhost_11434 = "http://localhost:11434"
 	lmstudio             = "lmstudio"
-	qwen2_5_coder_14b    = "qwen2.5-coder:14b"
+	qwen2_5_coder_14b    = "gemma4:12b"
 )
 
 func TestBuildCaseBackend(t *testing.T) {

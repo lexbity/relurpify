@@ -269,7 +269,7 @@ func TestFactoryWrapsFallbackModels(t *testing.T) {
 		model: inner,
 		caps:  BackendCapabilities{NativeToolCalling: false},
 	}
-	RegisterProvider(providerName, func(ProviderConfig, ProviderSecrets) (ManagedBackend, error) {
+	RegisterKind(providerName, func(ProviderConfig, ProviderSecrets) (ManagedBackend, error) {
 		return backend, nil
 	})
 
@@ -296,7 +296,7 @@ func TestFactoryLeavesNativeModelsUnwrapped(t *testing.T) {
 		model: inner,
 		caps:  BackendCapabilities{NativeToolCalling: true},
 	}
-	RegisterProvider(providerName, func(ProviderConfig, ProviderSecrets) (ManagedBackend, error) {
+	RegisterKind(providerName, func(ProviderConfig, ProviderSecrets) (ManagedBackend, error) {
 		return backend, nil
 	})
 

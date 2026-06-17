@@ -46,7 +46,7 @@ spec:
     mode: primary
     model:
       provider: ollama
-      name: qwen2.5-coder:14b
+      name: gemma4:12b
     browser:
       enabled: true
 `

@@ -172,3 +172,33 @@ check-gates-slice10:
 	@! grep -q 'platform/llm/offline' platform/llm/providers_ollama.go platform/llm/providers_lmstudio.go 2>/dev/null || { echo "[FAIL] AC-10: ollama/lmstudio imports offline scenario"; exit 1; }
 	@echo "[PASS] AC-10: real backends do not import offline scenario"
 	@echo "[PASS] All Slice 10 gates passed"
+
+# check-docs asserts doc honesty: no dead docs/ pointer, no nexus/rex,
+# offline framed as CI/plumbing, and first-run ollama flow present.
+check-docs:
+	@echo "[check] AC-9: no dead docs/ pointer..."
+	@! grep -q 'docs/' README.md 2>/dev/null || { echo "[FAIL] AC-9: README still references docs/"; exit 1; }
+	@echo "[PASS] AC-9: no dead docs/ pointer"
+	@echo "[check] AC-9: no nexus/rex references..."
+	@! grep -qiE '\bnexus\b|rex' README.md 2>/dev/null || { echo "[FAIL] AC-9: README still references nexus/rex"; exit 1; }
+	@echo "[PASS] AC-9: no nexus/rex references"
+	@echo "[check] AC-9: offline framed as CI/plumbing..."
+	@! grep -qi 'zero-dep demo' README.md 2>/dev/null || { echo "[FAIL] AC-9: offline still framed as demo"; exit 1; }
+	@! grep -qi 'quick start.*no external' README.md 2>/dev/null || { echo "[FAIL] AC-9: offline still in quick-start section"; exit 1; }
+	@echo "[PASS] AC-9: offline correctly framed"
+	@echo "[check] AC-9: first-run ollama flow present..."
+	@if ! grep -q "ollama serve" README.md 2>/dev/null || ! grep -q "ollama pull" README.md 2>/dev/null || ! grep -q "doctor" README.md 2>/dev/null; then echo "[FAIL] AC-9: missing first-run ollama flow (ollama serve/pull/doctor)"; exit 1; fi
+	@echo "[PASS] AC-9: first-run ollama flow documented"
+	@echo "[PASS] All AC-9 doc honesty gates passed"
+
+# check-no-ghost-providers asserts that the ghost provider strings
+# (vllm, tgi, llama-server, and non-canonical openai-compat/openai_compat)
+# do not appear in production code. Test files are exempt.
+check-no-ghost-providers:
+	@echo "[check] AC-4: no ghost provider strings in platform/llm..."
+	@! grep -rnE '"vllm"|"tgi"|"llama-server"|"openai-compat"|"openai_compat"' --include='*.go' platform/llm/ | grep -v '_test.go' >/dev/null 2>&1 || { echo "[FAIL] AC-4: ghost provider string found in platform/llm"; exit 1; }
+	@echo "[PASS] AC-4: platform/llm clean"
+	@echo "[check] AC-4: no ghost provider strings in app/relurpish/tui..."
+	@! grep -rnE '"vllm"|"tgi"|"llama-server"|"openai-compat"|"openai_compat"' --include='*.go' app/relurpish/tui/ | grep -v '_test.go' >/dev/null 2>&1 || { echo "[FAIL] AC-4: ghost provider string found in app/relurpish/tui"; exit 1; }
+	@echo "[PASS] AC-4: app/relurpish/tui clean"
+	@echo "[PASS] All AC-4 ghost provider gates passed"

@@ -35,7 +35,7 @@ spec:
     mode: primary
     model:
       provider: ollama
-      name: qwen2.5-coder:14b
+      name: gemma4:12b
 `)); err != nil {
 		t.Fatal(err)
 	}
@@ -47,7 +47,7 @@ spec:
 			AgentName: "euclo",
 			Manifest:  filepath.ToSlash(filepath.Join(config.DirName, "agent.yaml")),
 			Models: []ModelSpec{{
-				Name:     "qwen2.5-coder:14b",
+				Name:     "gemma4:12b",
 				Provider: "ollama",
 				Endpoint: "http://127.0.0.1:11434",
 			}},

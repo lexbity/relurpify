@@ -8,42 +8,52 @@ import (
 	"testing"
 )
 
-type providerFactory func(ProviderConfig, ProviderSecrets) (ManagedBackend, error)
+type kindFactory func(ProviderConfig, ProviderSecrets) (ManagedBackend, error)
 
 var (
-	providerFactoriesMu sync.RWMutex
-	providerFactories   = map[string]providerFactory{}
+	kindFactoriesMu sync.RWMutex
+	kindFactories   = map[string]kindFactory{}
 )
 
-// RegisterProvider makes a backend provider available to the managed factory.
+// RegisterKind makes a backend kind available to the managed factory.
 // Provider subpackages call this from init without creating an import cycle.
-func RegisterProvider(name string, factory providerFactory) {
-	name = strings.ToLower(strings.TrimSpace(name))
-	if name == "" || factory == nil {
+func RegisterKind(kind string, factory kindFactory) {
+	kind = strings.ToLower(strings.TrimSpace(kind))
+	if kind == "" || factory == nil {
 		return
 	}
-	providerFactoriesMu.Lock()
-	defer providerFactoriesMu.Unlock()
-	if _, exists := providerFactories[name]; exists {
+	kindFactoriesMu.Lock()
+	defer kindFactoriesMu.Unlock()
+	if _, exists := kindFactories[kind]; exists {
 		if testing.Testing() {
-			panic(fmt.Sprintf("provider %q already registered", name))
+			panic(fmt.Sprintf("provider kind %q already registered", kind))
 		}
 	}
-	providerFactories[name] = factory
+	kindFactories[kind] = factory
 }
 
 // New builds a managed backend from the provided transport configuration.
+// Dispatch is on cfg.Kind; when Kind is empty, cfg.Provider is used as the kind
+// (name-as-kind fallback for back-compat and CLI fakes).
 func New(cfg ProviderConfig, secrets ProviderSecrets) (ManagedBackend, error) {
-	if strings.TrimSpace(cfg.Provider) == "" {
-		cfg.Provider = "ollama"
+	kind := strings.ToLower(strings.TrimSpace(cfg.Kind))
+	if kind == "" {
+		kind = strings.ToLower(strings.TrimSpace(cfg.Provider))
 	}
-	applyProviderDefaults(&cfg)
-	provider := strings.ToLower(strings.TrimSpace(cfg.Provider))
-	providerFactoriesMu.RLock()
-	factory, ok := providerFactories[provider]
-	providerFactoriesMu.RUnlock()
+	if kind == "" {
+		kind = "ollama"
+	}
+	// Ensure Provider is set for downstream Validate() calls
+	// that still check the Provider field (transitional — Slice 2
+	// rewrites Validate to check Kind instead).
+	if strings.TrimSpace(cfg.Provider) == "" {
+		cfg.Provider = kind
+	}
+	kindFactoriesMu.RLock()
+	factory, ok := kindFactories[kind]
+	kindFactoriesMu.RUnlock()
 	if !ok {
-		return nil, fmt.Errorf("unknown provider %q", cfg.Provider)
+		return nil, fmt.Errorf("unknown provider kind %q", kind)
 	}
 	backend, err := factory(cfg, secrets)
 	if err != nil {
@@ -52,48 +62,39 @@ func New(cfg ProviderConfig, secrets ProviderSecrets) (ManagedBackend, error) {
 	return newCallingModeManagedBackend(backend), nil
 }
 
-// RegisteredProviders returns the list of provider names that have been
-// registered (via init() or explicit RegisterProvider calls).
-func RegisteredProviders() []string {
-	providerFactoriesMu.RLock()
-	defer providerFactoriesMu.RUnlock()
-	out := make([]string, 0, len(providerFactories))
-	for name := range providerFactories {
-		out = append(out, name)
+// RegisteredKinds returns the list of provider kinds that have been
+// registered (via init() or explicit RegisterKind calls).
+func RegisteredKinds() []string {
+	kindFactoriesMu.RLock()
+	defer kindFactoriesMu.RUnlock()
+	out := make([]string, 0, len(kindFactories))
+	for kind := range kindFactories {
+		out = append(out, kind)
 	}
 	sort.Strings(out)
 	return out
 }
 
-// DefaultProviders returns a copy of the currently registered provider
-// factories as an explicit map. Callers can select from the map and pass
-// the selected entries to New or any other construction path.
-func DefaultProviders() map[string]providerFactory {
-	providerFactoriesMu.RLock()
-	defer providerFactoriesMu.RUnlock()
-	out := make(map[string]providerFactory, len(providerFactories))
-	for name, factory := range providerFactories {
-		out[name] = factory
+// IsRegisteredKind reports whether the given kind has been registered.
+func IsRegisteredKind(kind string) bool {
+	kind = strings.ToLower(strings.TrimSpace(kind))
+	if kind == "" {
+		return false
 	}
-	return out
+	kindFactoriesMu.RLock()
+	defer kindFactoriesMu.RUnlock()
+	_, ok := kindFactories[kind]
+	return ok
 }
 
-func applyProviderDefaults(cfg *ProviderConfig) {
-	if cfg == nil {
-		return
+// DefaultKindFactories returns a copy of the currently registered provider
+// kind factories as an explicit map.
+func DefaultKindFactories() map[string]kindFactory {
+	kindFactoriesMu.RLock()
+	defer kindFactoriesMu.RUnlock()
+	out := make(map[string]kindFactory, len(kindFactories))
+	for kind, factory := range kindFactories {
+		out[kind] = factory
 	}
-	switch strings.ToLower(strings.TrimSpace(cfg.Provider)) {
-	case "ollama":
-		if strings.TrimSpace(cfg.Endpoint) == "" {
-			cfg.Endpoint = "http://localhost:11434"
-		}
-	case "lmstudio":
-		if strings.TrimSpace(cfg.Endpoint) == "" {
-			cfg.Endpoint = "http://localhost:1234"
-		}
-	case "offline":
-		if strings.TrimSpace(cfg.Model) == "" {
-			cfg.Model = "offline-synthetic"
-		}
-	}
+	return out
 }

@@ -131,7 +131,7 @@ workflow:
 dev-agent agenttest run --suite testsuite/agenttests/coding.testsuite.yaml
 
 # Run with specific model
-dev-agent agenttest run --suite coding.testsuite.yaml --model qwen2.5-coder:14b
+dev-agent agenttest run --suite coding.testsuite.yaml --model gemma4:12b
 
 # Run specific case
 dev-agent agenttest run --suite coding.testsuite.yaml --case simple_file_edit

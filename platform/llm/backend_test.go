@@ -165,10 +165,16 @@ func TestBackendCapabilities_Defaults(t *testing.T) {
 }
 
 func TestProviderConfig_Validate(t *testing.T) {
-	t.Run("missing provider", func(t *testing.T) {
+	t.Run("missing provider kind", func(t *testing.T) {
 		err := (ProviderConfig{}).Validate()
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "provider required")
+		require.Contains(t, err.Error(), "provider kind required")
+	})
+
+	t.Run("unknown provider kind", func(t *testing.T) {
+		err := (ProviderConfig{Provider: "native"}).Validate()
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "unknown provider kind")
 	})
 
 	t.Run("transport endpoint required", func(t *testing.T) {
@@ -178,7 +184,11 @@ func TestProviderConfig_Validate(t *testing.T) {
 	})
 
 	t.Run("negative timeout rejected", func(t *testing.T) {
-		err := (ProviderConfig{Provider: "native", Timeout: -time.Second}).Validate()
+		err := (ProviderConfig{
+			Provider: backendTestProviderOllama,
+			Endpoint: backendTestEndpoint,
+			Timeout:  -time.Second,
+		}).Validate()
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "timeout must be >= 0")
 	})

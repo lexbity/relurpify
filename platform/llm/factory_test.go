@@ -24,74 +24,137 @@ const (
 	factoryTestTapeResponse     = "hello from tape"
 )
 
-func TestRegisteredProvidersIncludesBuiltinsAndOffline(t *testing.T) {
-	registered := RegisteredProviders()
-	require.ElementsMatch(t, []string{"ollama", "lmstudio", "offline", "tape"}, registered)
+func TestRegisteredKindsIncludesBuiltinsAndOffline(t *testing.T) {
+	registered := RegisteredKinds()
+	require.ElementsMatch(t, []string{"ollama", "lmstudio", "offline", "tape", "openai_compatible"}, registered)
 }
 
-func TestRegisteredProvidersExactSet(t *testing.T) {
-	registered := RegisteredProviders()
-	require.Len(t, registered, 4, "expected exactly 4 registered providers")
-	require.ElementsMatch(t, []string{"ollama", "lmstudio", "offline", "tape"}, registered)
+func TestRegisteredKindsExactSet(t *testing.T) {
+	registered := RegisteredKinds()
+	require.Len(t, registered, 5, "expected exactly 5 registered kinds")
+	require.ElementsMatch(t, []string{"ollama", "lmstudio", "offline", "tape", "openai_compatible"}, registered)
 }
 
-func TestRegisteredProvidersDoesNotContainEmptyOrUnknown(t *testing.T) {
-	registered := RegisteredProviders()
-	for _, name := range registered {
-		require.NotEmpty(t, name, "provider name should not be empty")
-		require.NotEqual(t, "unknown", name)
+func TestRegisteredKindsDoesNotContainEmptyOrUnknown(t *testing.T) {
+	registered := RegisteredKinds()
+	for _, kind := range registered {
+		require.NotEmpty(t, kind, "provider kind should not be empty")
+		require.NotEqual(t, "unknown", kind)
 	}
 }
 
-func TestRegisterProviderPanicsOnDuplicateInTests(t *testing.T) {
+func TestRegisterKindPanicsOnDuplicateInTests(t *testing.T) {
 	require.Panics(t, func() {
-		RegisterProvider(factoryTestProviderOffline, func(ProviderConfig, ProviderSecrets) (ManagedBackend, error) {
+		RegisterKind(factoryTestProviderOffline, func(ProviderConfig, ProviderSecrets) (ManagedBackend, error) {
 			return offlineBackend{}, nil
 		})
 	})
 }
 
-func TestFactory_OllamaDefault(t *testing.T) {
+func TestNewDispatchesOnKind(t *testing.T) {
 	backend, err := New(ProviderConfig{
-		Model: factoryTestModel,
+		Kind:     "ollama",
+		Endpoint: factoryTestEndpoint,
+		Model:    factoryTestModel,
 	}, ProviderSecrets{})
 	require.NoError(t, err)
 	require.NotNil(t, backend)
 }
 
-func TestFactory_DefaultProvider_Ollama(t *testing.T) {
-	backend, err := New(ProviderConfig{
-		Model: factoryTestModel,
-	}, ProviderSecrets{})
-	require.NoError(t, err)
-	require.NotNil(t, backend)
-}
-
-func TestDefaultConfig_ResolvesToOllama(t *testing.T) {
-	backend, err := New(ProviderConfig{}, ProviderSecrets{})
-	require.NoError(t, err)
-	require.NotNil(t, backend)
-}
-
-func TestFactory_OllamaExplicit(t *testing.T) {
+func TestNewDispatchesOnProviderWhenKindEmpty(t *testing.T) {
 	backend, err := New(ProviderConfig{
 		Provider: factoryTestProviderOllama,
+		Endpoint: factoryTestEndpoint,
 		Model:    factoryTestModel,
 	}, ProviderSecrets{})
 	require.NoError(t, err)
 	require.NotNil(t, backend)
 }
 
-func TestFactory_LMStudio(t *testing.T) {
+func TestNewDefaultsToOllamaWhenBothEmpty(t *testing.T) {
 	backend, err := New(ProviderConfig{
-		Provider: factoryTestProviderLMStudio,
+		Endpoint: factoryTestEndpoint,
 		Model:    factoryTestModel,
 	}, ProviderSecrets{})
 	require.NoError(t, err)
 	require.NotNil(t, backend)
 }
 
-func TestFactory_TapeProvider(t *testing.T) {
+func TestNew_OllamaExplicit(t *testing.T) {
+	backend, err := New(ProviderConfig{
+		Kind:     factoryTestProviderOllama,
+		Endpoint: factoryTestEndpoint,
+		Model:    factoryTestModel,
+	}, ProviderSecrets{})
+	require.NoError(t, err)
+	require.NotNil(t, backend)
+}
+
+func TestNew_LMStudio(t *testing.T) {
+	backend, err := New(ProviderConfig{
+		Kind:     factoryTestProviderLMStudio,
+		Endpoint: "http://localhost:1234",
+		Model:    factoryTestModel,
+	}, ProviderSecrets{})
+	require.NoError(t, err)
+	require.NotNil(t, backend)
+}
+
+func TestNew_OllamaFromProviderField(t *testing.T) {
+	backend, err := New(ProviderConfig{
+		Provider: factoryTestProviderOllama,
+		Endpoint: factoryTestEndpoint,
+		Model:    factoryTestModel,
+	}, ProviderSecrets{})
+	require.NoError(t, err)
+	require.NotNil(t, backend)
+}
+
+func TestNew_TapeProvider(t *testing.T) {
+	dir := t.TempDir()
+	tapePath := filepath.Join(dir, "tape.jsonl")
+	writeTapeFixtureFile(t, tapePath, []tapeEntry{
+		{
+			Kind: factoryTestTapeHeaderKind,
+			Request: tapeRequest{Header: &TapeHeader{
+				Kind:       factoryTestTapeHeaderKind,
+				ProviderID: factoryTestProviderOllama,
+				ModelName:  factoryTestTapeModel,
+				SuiteName:  "suite",
+				CaseName:   "case",
+			}},
+		},
+		{
+			Kind:        factoryTestTapeGenerateKind,
+			Fingerprint: fingerprint(factoryTestTapeGenerateKind, tapeRequest{Prompt: factoryTestTapePrompt, Options: &LLMOptions{Model: factoryTestTapeModel}}),
+			Response:    &LLMResponse{Text: factoryTestTapeResponse},
+		},
+	})
+
+	backend, err := New(ProviderConfig{
+		Kind:     factoryTestProviderTape,
+		Model:    factoryTestTapeModel,
+		TapePath: tapePath,
+	}, ProviderSecrets{})
+	require.NoError(t, err)
+	require.NotNil(t, backend)
+
+	health, err := backend.Health(context.Background())
+	require.NoError(t, err)
+	require.NotNil(t, health)
+	require.Equal(t, BackendHealthReady, health.State)
+
+	resp, err := backend.Model().Generate(context.Background(), factoryTestTapePrompt, &LLMOptions{Model: factoryTestTapeModel})
+	require.NoError(t, err)
+	require.Equal(t, factoryTestTapeResponse, resp.Text)
+
+	models, err := backend.ListModels(context.Background())
+	require.NoError(t, err)
+	require.Len(t, models, 1)
+	require.Equal(t, factoryTestTapeModel, models[0].Name)
+}
+
+func TestNew_TapeProviderFromProviderField(t *testing.T) {
 	dir := t.TempDir()
 	tapePath := filepath.Join(dir, "tape.jsonl")
 	writeTapeFixtureFile(t, tapePath, []tapeEntry{
@@ -124,28 +187,30 @@ func TestFactory_TapeProvider(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, health)
 	require.Equal(t, BackendHealthReady, health.State)
-
-	resp, err := backend.Model().Generate(context.Background(), factoryTestTapePrompt, &LLMOptions{Model: factoryTestTapeModel})
-	require.NoError(t, err)
-	require.Equal(t, factoryTestTapeResponse, resp.Text)
-
-	models, err := backend.ListModels(context.Background())
-	require.NoError(t, err)
-	require.Len(t, models, 1)
-	require.Equal(t, factoryTestTapeModel, models[0].Name)
 }
 
-func TestFactory_TapeProviderRequiresTapePath(t *testing.T) {
+func TestNew_TapeProviderRequiresTapePath(t *testing.T) {
 	backend, err := New(ProviderConfig{
-		Provider: factoryTestProviderTape,
-		Model:    factoryTestTapeModel,
+		Kind:  factoryTestProviderTape,
+		Model: factoryTestTapeModel,
 	}, ProviderSecrets{})
 	require.Error(t, err)
 	require.Nil(t, backend)
 	require.Contains(t, err.Error(), "tape_path required")
 }
 
-func TestFactory_UnknownProvider(t *testing.T) {
+func TestNew_UnknownKind(t *testing.T) {
+	backend, err := New(ProviderConfig{
+		Kind:     "vllm",
+		Endpoint: factoryTestEndpoint,
+		Model:    factoryTestModel,
+	}, ProviderSecrets{})
+	require.Error(t, err)
+	require.Nil(t, backend)
+	require.Contains(t, err.Error(), "unknown provider kind")
+}
+
+func TestNew_UnknownProvider(t *testing.T) {
 	backend, err := New(ProviderConfig{
 		Provider: "mystery",
 		Endpoint: factoryTestEndpoint,
@@ -153,7 +218,18 @@ func TestFactory_UnknownProvider(t *testing.T) {
 	}, ProviderSecrets{})
 	require.Error(t, err)
 	require.Nil(t, backend)
-	require.Contains(t, err.Error(), "mystery")
+	require.Contains(t, err.Error(), "unknown provider kind")
+}
+
+func TestIsRegisteredKind(t *testing.T) {
+	require.True(t, IsRegisteredKind("ollama"))
+	require.True(t, IsRegisteredKind("OLLAMA"))
+	require.True(t, IsRegisteredKind("lmstudio"))
+	require.True(t, IsRegisteredKind("offline"))
+	require.True(t, IsRegisteredKind("tape"))
+	require.True(t, IsRegisteredKind("openai_compatible"))
+	require.False(t, IsRegisteredKind("vllm"))
+	require.False(t, IsRegisteredKind(""))
 }
 
 func writeTapeFixtureFile(t *testing.T, path string, entries []tapeEntry) {

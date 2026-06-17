@@ -7,3 +7,5 @@ available_models:
   - offline-synthetic
 native_tool_calling: true
 max_concurrent: 1
+description: "Offline/synthetic provider for testing"
+setup_hint: "Used automatically by `--offline` and testing fixtures; no setup needed"

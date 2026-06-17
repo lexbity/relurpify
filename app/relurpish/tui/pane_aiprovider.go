@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 	"codeburg.org/lexbit/relurpify/platform/llm"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
+	"codeburg.org/lexbit/relurpify/userconfig/config/model"
 )
 
 type aiProviderRuntime interface {
@@ -30,6 +32,15 @@ const (
 	providerFieldNativeToolCalling
 )
 
+// catalogProviderInfo holds data for one provider from the catalog YAML.
+type catalogProviderInfo struct {
+	Name              string
+	Kind              string
+	Endpoint          string
+	NativeToolCalling bool
+	SetupHint         string
+}
+
 type AIProviderPane struct {
 	runtime aiProviderRuntime
 
@@ -37,12 +48,16 @@ type AIProviderPane struct {
 	models  []llm.ModelInfo
 	status  string
 
+	catalog   []catalogProviderInfo
+	catalogIdx int // index into catalog for the currently selected provider
+
 	kindFocus int
 	sel       int
 	fieldSel  providerField
 	editing   bool
 	editBuf   string
 	editLabel string
+	setupHint string
 
 	width  int
 	height int
@@ -66,7 +81,9 @@ func (p *AIProviderPane) SetFilter(filter string) {
 }
 
 func (p *AIProviderPane) Refresh() {
+	p.loadCatalog()
 	p.loadProfile()
+	p.syncCatalogSelection()
 	p.refreshModels()
 }
 
@@ -103,9 +120,13 @@ func (p *AIProviderPane) Update(msg tea.Msg) (*AIProviderPane, tea.Cmd) {
 		case "shift+tab":
 			p.kindFocus = (p.kindFocus + 1) % 2
 		case "left", "h":
-			p.toggleInfrastructure(-1)
+			if len(p.catalog) > 1 {
+				p.cycleProvider(-1)
+			}
 		case "right", "l":
-			p.toggleInfrastructure(1)
+			if len(p.catalog) > 1 {
+				p.cycleProvider(1)
+			}
 		case "up", "k":
 			if p.kindFocus == 0 {
 				if p.sel > 0 {
@@ -155,10 +176,56 @@ func (p *AIProviderPane) View() string {
 	if p.status != "" {
 		footer = p.th.Dim().Render(p.status) + "\n" + footer
 	}
+	if p.setupHint != "" {
+		hint := p.th.Dim().Render("hint: " + p.setupHint)
+		footer = hint + "\n" + footer
+	}
 	return strings.Join([]string{
 		lipgloss.JoinHorizontal(lipgloss.Top, left, right),
 		footer,
 	}, "\n\n")
+}
+
+// loadCatalog loads provider definitions from the workspace's catalog YAMLs.
+func (p *AIProviderPane) loadCatalog() {
+	workspace := ""
+	if p.runtime != nil {
+		workspace = p.runtime.SessionInfo().Workspace
+	}
+	if workspace == "" {
+		p.catalog = nil
+		p.catalogIdx = 0
+		return
+	}
+	providerDir := filepath.Join(config.New(workspace).ConfigRoot(), "model", "provider")
+	providers, err := model.LoadProviderDir(providerDir, config.StrictDecode)
+	if err != nil {
+		p.catalog = nil
+		p.catalogIdx = 0
+		return
+	}
+	out := make([]catalogProviderInfo, 0, len(providers))
+	for _, rp := range providers {
+		out = append(out, catalogProviderInfo{
+			Name:              rp.Name,
+			Kind:              rp.Kind,
+			Endpoint:          rp.Endpoint,
+			NativeToolCalling: rp.NativeToolCalling,
+			SetupHint:         rp.SetupHint,
+		})
+	}
+	p.catalog = out
+}
+
+// syncCatalogSelection aligns catalogIdx with the current profile.Provider.
+func (p *AIProviderPane) syncCatalogSelection() {
+	p.catalogIdx = 0
+	for i, cp := range p.catalog {
+		if strings.EqualFold(cp.Name, p.profile.Provider) {
+			p.catalogIdx = i
+			return
+		}
+	}
 }
 
 func (p *AIProviderPane) loadProfile() {
@@ -205,26 +272,21 @@ func (p *AIProviderPane) refreshModels() {
 	p.status = fmt.Sprintf("loaded %d models", len(models))
 }
 
-func (p *AIProviderPane) toggleInfrastructure(delta int) {
-	switch delta {
-	case -1:
-		if p.profile.Provider == "openai-compat" {
-			p.profile.Provider = "ollama"
-		}
-	case 1:
-		if p.profile.Provider == "ollama" {
-			p.profile.Provider = "openai-compat"
-		}
+// cycleProvider switches to the next or previous catalog provider.
+// Always fills endpoint and native_tool_calling from the catalog definition.
+func (p *AIProviderPane) cycleProvider(delta int) {
+	if len(p.catalog) == 0 {
+		return
 	}
-	if p.profile.Provider == "" {
-		p.profile.Provider = "ollama"
+	p.catalogIdx = (p.catalogIdx + delta) % len(p.catalog)
+	if p.catalogIdx < 0 {
+		p.catalogIdx += len(p.catalog)
 	}
-	if p.profile.Provider == "openai-compat" && p.profile.Endpoint == "" {
-		p.profile.Endpoint = "http://localhost:11434/v1"
-	}
-	if p.profile.Provider == "ollama" && p.profile.Endpoint == "" {
-		p.profile.Endpoint = "http://localhost:11434"
-	}
+	cp := &p.catalog[p.catalogIdx]
+	p.profile.Provider = cp.Name
+	p.profile.Endpoint = cp.Endpoint
+	p.profile.NativeToolCalling = cp.NativeToolCalling
+	p.setupHint = cp.SetupHint
 	p.refreshModels()
 }
 
@@ -257,6 +319,7 @@ func (p *AIProviderPane) commitEdit() {
 			value = "ollama"
 		}
 		p.profile.Provider = strings.ToLower(value)
+		p.syncCatalogSelection()
 	case providerFieldEndpoint:
 		p.profile.Endpoint = value
 	case providerFieldModel:
@@ -349,9 +412,13 @@ func (p *AIProviderPane) llmConfig() llm.ProviderConfig {
 }
 
 func (p *AIProviderPane) renderModelList() string {
+	marker := " "
+	if len(p.catalog) > 1 && p.kindFocus == 0 {
+		marker = "< >"
+	}
 	lines := []string{
 		p.th.Subhead().Render("AI Provider"),
-		fmt.Sprintf("Infrastructure: %s", p.profile.Provider),
+		fmt.Sprintf("Provider: %s  %s", p.profile.Provider, marker),
 		fmt.Sprintf("Endpoint: %s", p.profile.Endpoint),
 		"",
 		p.th.Subhead().Render("Models"),

@@ -55,7 +55,7 @@ func probeCfg(workspace string) ayenitd.WorkspaceConfig {
 		Workspace:         workspace,
 		InferenceProvider: "ollama",
 		InferenceEndpoint: "http://127.0.0.1:11435",
-		InferenceModel:    "qwen2.5-coder:14b",
+		InferenceModel:    "gemma4:12b",
 	}
 }
 
@@ -65,7 +65,7 @@ func TestProbeWorkspace_WorkspaceNotFound(t *testing.T) {
 		t.Fatal(err)
 	}
 	results := ayenitd.ProbeWorkspace(context.Background(), probeCfg(absent), llm.ProviderSecrets{}, fakeBackend{
-		models: []llm.ModelInfo{{Name: "qwen2.5-coder:14b"}},
+		models: []llm.ModelInfo{{Name: "gemma4:12b"}},
 	})
 	r := findResult(t, results, "workspace_directory")
 	if r.OK {
@@ -85,7 +85,7 @@ func TestProbeWorkspace_WorkspaceIsFile(t *testing.T) {
 	defer func() { _ = os.Remove(f.Name()) }()
 
 	results := ayenitd.ProbeWorkspace(context.Background(), probeCfg(f.Name()), llm.ProviderSecrets{}, fakeBackend{
-		models: []llm.ModelInfo{{Name: "qwen2.5-coder:14b"}},
+		models: []llm.ModelInfo{{Name: "gemma4:12b"}},
 	})
 	r := findResult(t, results, "workspace_directory")
 	if r.OK {
@@ -95,7 +95,7 @@ func TestProbeWorkspace_WorkspaceIsFile(t *testing.T) {
 
 func TestProbeWorkspace_WorkspaceExists(t *testing.T) {
 	results := ayenitd.ProbeWorkspace(context.Background(), probeCfg(t.TempDir()), llm.ProviderSecrets{}, fakeBackend{
-		models: []llm.ModelInfo{{Name: "qwen2.5-coder:14b"}},
+		models: []llm.ModelInfo{{Name: "gemma4:12b"}},
 	})
 	r := findResult(t, results, "workspace_directory")
 	if !r.OK {
@@ -117,7 +117,7 @@ func TestProbeWorkspace_InferenceUnhealthy(t *testing.T) {
 }
 
 func TestProbeWorkspace_InferenceModelPresent(t *testing.T) {
-	const model = "qwen2.5-coder:14b"
+	const model = "gemma4:12b"
 	results := ayenitd.ProbeWorkspace(context.Background(), func() ayenitd.WorkspaceConfig {
 		cfg := probeCfg(t.TempDir())
 		cfg.InferenceModel = model
@@ -134,7 +134,7 @@ func TestProbeWorkspace_InferenceModelPresent(t *testing.T) {
 func TestProbeWorkspace_InferenceModelMissing(t *testing.T) {
 	results := ayenitd.ProbeWorkspace(context.Background(), func() ayenitd.WorkspaceConfig {
 		cfg := probeCfg(t.TempDir())
-		cfg.InferenceModel = "qwen2.5-coder:14b"
+		cfg.InferenceModel = "gemma4:12b"
 		return cfg
 	}(), llm.ProviderSecrets{}, fakeBackend{
 		models: []llm.ModelInfo{{Name: "other-model:7b"}},
@@ -147,7 +147,7 @@ func TestProbeWorkspace_InferenceModelMissing(t *testing.T) {
 
 func TestProbeWorkspace_DiskSpaceIsNonRequired(t *testing.T) {
 	results := ayenitd.ProbeWorkspace(context.Background(), probeCfg(t.TempDir()), llm.ProviderSecrets{}, fakeBackend{
-		models: []llm.ModelInfo{{Name: "qwen2.5-coder:14b"}},
+		models: []llm.ModelInfo{{Name: "gemma4:12b"}},
 	})
 	r := findResult(t, results, "disk_space")
 	if r.Required {
@@ -174,7 +174,7 @@ func TestProbeWorkspace_OfflineProviderReady(t *testing.T) {
 
 func TestProbeWorkspace_AllResultNamesPresent(t *testing.T) {
 	results := ayenitd.ProbeWorkspace(context.Background(), probeCfg(t.TempDir()), llm.ProviderSecrets{}, fakeBackend{
-		models: []llm.ModelInfo{{Name: "qwen2.5-coder:14b"}},
+		models: []llm.ModelInfo{{Name: "gemma4:12b"}},
 	})
 	want := []string{"workspace_directory", "inference_backend", "disk_space"}
 	got := make(map[string]bool, len(results))

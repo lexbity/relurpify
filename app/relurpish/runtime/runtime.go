@@ -123,6 +123,7 @@ func buildRuntime(ctx context.Context, cfg Config, secrets config.Secrets) (*Run
 	preModel := cfg.InferenceModel
 	preSandboxBackend := cfg.SandboxBackend
 	preTapePath := cfg.InferenceTapePath
+	preEndpoint := cfg.InferenceEndpoint
 
 	envOverrides, err := config.LoadEnvOverrides(cfg.EnvOverrides)
 	if err != nil {
@@ -149,6 +150,9 @@ func buildRuntime(ctx context.Context, cfg Config, secrets config.Secrets) (*Run
 	if envOverrides.OllamaHost != "" {
 		cfg.InferenceEndpoint = envOverrides.OllamaHost
 	}
+	// Track whether the endpoint was explicitly set by flag or env override;
+	// catalog default only applies when this is false.
+	endpointExplicit := preEndpoint != "" || envOverrides.OllamaHost != ""
 	if envOverrides.LogLevel != "" {
 		cfg.RecordingMode = envOverrides.LogLevel
 	}
@@ -217,6 +221,29 @@ func buildRuntime(ctx context.Context, cfg Config, secrets config.Secrets) (*Run
 	} // end if cfg.ConfigPath != ""
 	if strings.EqualFold(strings.TrimSpace(cfg.InferenceProvider), "tape") && strings.TrimSpace(cfg.InferenceTapePath) == "" {
 		cfg.InferenceTapePath = config.DefaultWorkspaceStateTapeFile(cfg.Workspace)
+	}
+
+	// Build provider registry from the catalog and resolve the selected provider.
+	// Defaults for Kind, Endpoint, Timeout, and NativeToolCalling come from the
+	// catalog definition; explicit flag/env values take precedence.
+	providerReg, _ := buildProviderRegistry(loadedConfig.Model.Providers)
+
+	inferenceKind := cfg.InferenceProvider // name-as-kind fallback
+	inferenceEndpoint := cfg.InferenceEndpoint
+	inferenceTimeout := time.Duration(0)
+	inferenceNativeToolCalling := cfg.InferenceNativeToolCalling
+
+	if providerReg != nil {
+		if def, found := providerReg.Resolve(cfg.InferenceProvider); found {
+			inferenceKind = def.Kind
+			if !endpointExplicit {
+				inferenceEndpoint = def.Endpoint
+			}
+			if def.RequestTimeoutSeconds > 0 {
+				inferenceTimeout = time.Duration(def.RequestTimeoutSeconds) * time.Second
+			}
+			inferenceNativeToolCalling = def.NativeToolCalling
+		}
 	}
 
 	// App-level environment composition starts here. agentenv consumes the
@@ -317,10 +344,12 @@ func buildRuntime(ctx context.Context, cfg Config, secrets config.Secrets) (*Run
 	}
 	modelProduct, err = envcomposition.BuildModelRuntime(envcomposition.ModelRuntimeInput{
 		Provider:          cfg.InferenceProvider,
-		Endpoint:          cfg.InferenceEndpoint,
+		Kind:              inferenceKind,
+		Endpoint:          inferenceEndpoint,
 		ModelName:         cfg.InferenceModel,
 		TapePath:          cfg.InferenceTapePath,
-		NativeToolCalling: cfg.InferenceNativeToolCalling,
+		NativeToolCalling: inferenceNativeToolCalling,
+		Timeout:           inferenceTimeout,
 		Secrets:           llm.ProviderSecrets{APIKey: secrets.LLMAPIKey},
 		Profile:           backendProfile,
 	})
@@ -341,9 +370,9 @@ func buildRuntime(ctx context.Context, cfg Config, secrets config.Secrets) (*Run
 	ws, err := session.OpenWorkspace(ctx, session.WorkspaceConfig{
 		Workspace:                  cfg.Workspace,
 		InferenceProvider:          cfg.InferenceProvider,
-		InferenceEndpoint:          cfg.InferenceEndpoint,
+		InferenceEndpoint:          inferenceEndpoint,
 		InferenceModel:             cfg.InferenceModel,
-		InferenceNativeToolCalling: cfg.InferenceNativeToolCalling,
+		InferenceNativeToolCalling: inferenceNativeToolCalling,
 		ConfigPath:                 cfg.ConfigPath,
 		AgentsDir:                  cfg.AgentsDir,
 		AgentName:                  cfg.AgentName,

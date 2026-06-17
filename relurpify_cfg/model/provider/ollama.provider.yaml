@@ -5,7 +5,9 @@ kind: ollama
 request_timeout_seconds: 120
 available_models:
   - gemma4:e4b
-  - qwen2.5-coder:14b
+  - gemma4:12b
   - codellama:13b
 native_tool_calling: true
 max_concurrent: 2
+description: "Local Ollama daemon"
+setup_hint: "Start it: `ollama serve` then `ollama pull gemma4:e4b`"

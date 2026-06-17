@@ -174,7 +174,12 @@ func BootstrapStartupState(ctx context.Context, cfg Config, secrets config.Secre
 		report = BuildDoctorReport(ctx, cfg, secrets)
 	}
 	state.Report = report
-	if report.HasBlockingIssues() {
+	// Start locked in Doctor mode whenever the workspace is not fully ready —
+	// blocking issues, an unverified sandbox, or an unreachable inference
+	// backend. Chat with euclo is only auto-promoted once the workspace can
+	// actually serve a turn; otherwise the user lands on Doctor (with provider
+	// setup hints) rather than a broken chat.
+	if !report.Ready() {
 		state.Locked = true
 		state.ActiveAgent = "none"
 		state.ActiveTab = "doctor"

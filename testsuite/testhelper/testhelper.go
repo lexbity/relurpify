@@ -42,7 +42,7 @@ func WriteValidWorkspace(t *testing.T, workspace string) {
 	MustWrite(t, filepath.Join(cfgRoot, "workspace.yaml"), `schema: relurpify/workspace/v1
 model:
   provider: ollama
-  name: qwen2.5-coder:14b
+  name: gemma4:12b
 `)
 	MustWrite(t, filepath.Join(cfgRoot, "security", "sandbox.policy.yaml"), `schema: relurpify/policy/sandbox/v1
 
@@ -70,9 +70,19 @@ name: ollama
 endpoint: http://localhost:11434
 kind: ollama
 available_models:
-  - qwen2.5-coder:14b
+  - gemma4:12b
 native_tool_calling: true
 max_concurrent: 2
+description: "Local Ollama daemon"
+setup_hint: "Start ollama serve then pull gemma4:12b"
+`)
+	MustWrite(t, filepath.Join(cfgRoot, "model", "provider", "openai_compatible.provider.yaml"), `schema: relurpify/model/provider/v1
+name: openai_compatible
+endpoint: http://localhost:8080/v1
+kind: openai_compatible
+native_tool_calling: true
+description: "Generic OpenAI-compatible API server"
+setup_hint: "Point to any OpenAI-compatible endpoint"
 `)
 	MustWrite(t, filepath.Join(cfgRoot, "model", "profiles", "default.llm.yaml"), `schema: relurpify/model/profile/v1
 pattern: "*"

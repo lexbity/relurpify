@@ -61,7 +61,7 @@ func TestResolveModelRef_ModelNotInAvailableList(t *testing.T) {
 	providers := []*ResolvedProvider{
 		{Name: "ollama", Kind: "ollama", Endpoint: "http://localhost:11434", AvailableModels: []string{"gemma4:e4b"}},
 	}
-	_, err := ResolveModelRef(ModelRef{Provider: "ollama", Name: "qwen2.5-coder:14b"}, ModelRef{}, providers)
+	_, err := ResolveModelRef(ModelRef{Provider: "ollama", Name: "gemma4:12b"}, ModelRef{}, providers)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "not listed in provider \"ollama\".available_models")
 	require.Contains(t, err.Error(), "gemma4:e4b")

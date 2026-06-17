@@ -42,7 +42,7 @@ spec:
     mode: primary
     model:
       provider: ollama
-      name: qwen2.5-coder:14b
+      name: gemma4:12b
 `), fs.PublicFileMode); err != nil { // public: test manifest
 		t.Fatal(err)
 	}
@@ -53,7 +53,7 @@ spec:
 			AgentName: "euclo",
 			Manifest:  filepath.ToSlash(filepath.Join(config.DirName, "agent.yaml")),
 			Models: []ModelSpec{{
-				Name:     "qwen2.5-coder:14b",
+				Name:     "gemma4:12b",
 				Provider: ollama,
 				Endpoint: "http://127.0.0.1:11434",
 			}},
@@ -65,7 +65,7 @@ spec:
 	if err != nil {
 		t.Fatal(err)
 	}
-	report := CaseReport{Name: smoke, Model: "qwen2.5-coder:14b", Success: true, Output: "ok", ArtifactsDir: prepared.Descriptor.ExecutionArtifactsDir}
+	report := CaseReport{Name: smoke, Model: "gemma4:12b", Success: true, Output: "ok", ArtifactsDir: prepared.Descriptor.ExecutionArtifactsDir}
 	data, err := json.MarshalIndent(report, "", "  ")
 	if err != nil {
 		t.Fatal(err)

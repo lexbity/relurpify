@@ -16,7 +16,7 @@ import (
 // a workspace session end-to-end: stores, registration, capability bundle,
 // scheduler, and environment assembly.
 //
-// Requirements: Ollama running at localhost:11434 with qwen2.5-coder:14b loaded.
+// Requirements: Ollama running at localhost:11434 with gemma4:12b loaded.
 func TestOpenWorkspace(t *testing.T) {
 	workspace := t.TempDir()
 
@@ -34,7 +34,7 @@ func main() {}
 		Workspace:         workspace,
 		ManifestPath:      manifestPath,
 		InferenceEndpoint: "http://localhost:11434",
-		InferenceModel:    "qwen2.5-coder:14b",
+		InferenceModel:    "gemma4:12b",
 		MemoryPath:        filepath.Join(workspace, "memory"),
 		SkipASTIndex:      true, // don't block on full indexing in tests
 	}
@@ -97,7 +97,7 @@ func TestOpenWorkspace_ClosesCleanly(t *testing.T) {
 		Workspace:         workspace,
 		ManifestPath:      manifestPath,
 		InferenceEndpoint: "http://localhost:11434",
-		InferenceModel:    "qwen2.5-coder:14b",
+		InferenceModel:    "gemma4:12b",
 		MemoryPath:        filepath.Join(workspace, "memory"),
 		SkipASTIndex:      true,
 	}
@@ -124,7 +124,7 @@ func TestOpenWorkspace_ProbeBlocksOnBadEndpoint(t *testing.T) {
 		Workspace:         workspace,
 		ManifestPath:      manifestPath,
 		InferenceEndpoint: "http://127.0.0.1:19999", // deliberately wrong port
-		InferenceModel:    "qwen2.5-coder:14b",
+		InferenceModel:    "gemma4:12b",
 		MemoryPath:        filepath.Join(workspace, "memory"),
 	}
 

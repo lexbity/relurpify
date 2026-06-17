@@ -33,21 +33,21 @@ func TestAgentTestPromoteCommandPromotesRun(t *testing.T) {
 	t.Cleanup(func() { workspace = prevWorkspace })
 
 	ws := t.TempDir()
-	suitePath := writeTapeSuiteFixture(t, ws, "smoke-suite", "capability", []string{smokeCaseName}, []string{"qwen2.5-coder:14b"})
+	suitePath := writeTapeSuiteFixture(t, ws, "smoke-suite", "capability", []string{smokeCaseName}, []string{"gemma4:12b"})
 	runDir := filepath.Join(ws, "runs", "run-1")
-	artifactsDir := filepath.Join(runDir, "artifacts", sanitizeName("smoke")+"__"+sanitizeName("qwen2.5-coder:14b"))
+	artifactsDir := filepath.Join(runDir, "artifacts", sanitizeName("smoke")+"__"+sanitizeName("gemma4:12b"))
 	if err := fs.MkdirAllSecure(artifactsDir); err != nil {
 		t.Fatal(err)
 	}
 	recordedAt := time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC)
-	writeTapeJSONL(t, filepath.Join(artifactsDir, "tape.jsonl"), "smoke-suite", "smoke", "qwen2.5-coder:14b", recordedAt)
+	writeTapeJSONL(t, filepath.Join(artifactsDir, "tape.jsonl"), "smoke-suite", "smoke", "gemma4:12b", recordedAt)
 	if err := os.WriteFile(filepath.Join(artifactsDir, "interaction.tape.jsonl"), []byte("interaction"), fs.PublicFileMode); err != nil {
 		t.Fatal(err)
 	}
 	writeSuiteReportJSON(t, filepath.Join(runDir, "report.json"), agenttest.SuiteReport{
 		Cases: []agenttest.CaseReport{{
 			Name:         smokeCaseName,
-			Model:        "qwen2.5-coder:14b",
+			Model:        "gemma4:12b",
 			Provider:     "ollama",
 			Success:      true,
 			FinishedAt:   recordedAt,
@@ -67,7 +67,7 @@ func TestAgentTestPromoteCommandPromotesRun(t *testing.T) {
 	if !strings.Contains(out, "promoted ") || !strings.Contains(out, "wrote lineage") {
 		t.Fatalf("unexpected promote output:\n%s", out)
 	}
-	if _, err := os.Stat(agenttest.GoldenTapePath(suitePath, "smoke-suite", smokeCaseName, "qwen2.5-coder:14b")); err != nil {
+	if _, err := os.Stat(agenttest.GoldenTapePath(suitePath, "smoke-suite", smokeCaseName, "gemma4:12b")); err != nil {
 		t.Fatalf("promoted tape missing: %v", err)
 	}
 }

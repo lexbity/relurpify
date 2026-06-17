@@ -14,6 +14,8 @@ type ProviderDefinition struct {
 	AvailableModels       []string
 	NativeToolCalling     bool
 	MaxConcurrent         int
+	Description           string
+	SetupHint             string
 	SourcePath            string
 }
 

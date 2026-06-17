@@ -8,7 +8,7 @@ import (
 )
 
 func init() {
-	RegisterProvider("lmstudio", func(cfg ProviderConfig, secrets ProviderSecrets) (ManagedBackend, error) {
+	RegisterKind("lmstudio", func(cfg ProviderConfig, secrets ProviderSecrets) (ManagedBackend, error) {
 		if err := cfg.Validate(); err != nil {
 			return nil, err
 		}

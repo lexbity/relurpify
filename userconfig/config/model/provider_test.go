@@ -33,6 +33,24 @@ kind: lmstudio
 	require.ElementsMatch(t, []string{"ollama", "lmstudio"}, names)
 }
 
+func TestLoadProviderDir_HintFields(t *testing.T) {
+	dir := t.TempDir()
+	writeModelTestFile(t, filepath.Join(dir, "relurpify_cfg", "model", "provider", "ollama.provider.yaml"), `schema: relurpify/model/provider/v1
+name: ollama
+endpoint: http://localhost:11434
+kind: ollama
+description: "Local Ollama daemon"
+setup_hint: "Start ollama serve and pull a model"
+native_tool_calling: true
+`)
+
+	providers, err := LoadProviderDir(filepath.Join(dir, "relurpify_cfg", "model", "provider"), testDecode)
+	require.NoError(t, err)
+	require.Len(t, providers, 1)
+	require.Equal(t, "Local Ollama daemon", providers[0].Description)
+	require.Equal(t, "Start ollama serve and pull a model", providers[0].SetupHint)
+}
+
 func TestLoadProviderDir_ForbiddenField(t *testing.T) {
 	dir := t.TempDir()
 	writeModelTestFile(t, filepath.Join(dir, "relurpify_cfg", "model", "provider", "openai.provider.yaml"), `schema: relurpify/model/provider/v1

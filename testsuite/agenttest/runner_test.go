@@ -514,7 +514,7 @@ spec:
     mode: primary
     model:
       provider: ollama
-      name: qwen2.5-coder:14b
+      name: gemma4:12b
 `
 	if err := fs.WriteFileSecure(manifestPath, []byte(manifestData)); err != nil {
 		t.Fatalf("write manifest: %v", err)
@@ -578,7 +578,7 @@ spec:
     mode: primary
     model:
       provider: ollama
-      name: qwen2.5-coder:14b
+      name: gemma4:12b
 `
 	if err := fs.WriteFileSecure(manifestPath, []byte(manifestData)); err != nil {
 		t.Fatalf("write manifest: %v", err)

@@ -22,6 +22,8 @@ type ResolvedProvider struct {
 	AvailableModels       []string `yaml:"available_models,omitempty"`
 	NativeToolCalling     bool     `yaml:"native_tool_calling,omitempty"`
 	MaxConcurrent         int      `yaml:"max_concurrent,omitempty"`
+	Description           string   `yaml:"description,omitempty"`
+	SetupHint             string   `yaml:"setup_hint,omitempty"`
 	SourcePath            string   `yaml:"-"`
 }
 

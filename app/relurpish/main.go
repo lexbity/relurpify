@@ -9,6 +9,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 
@@ -89,15 +90,20 @@ func newRootCmd() *cobra.Command {
 func newDoctorCmd() *cobra.Command {
 	var fix bool
 	var yes bool
+	var setProvider string
 	cmd := &cobra.Command{
 		Use:   "doctor",
 		Short: "Check local runtime dependencies and workspace configuration",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if setProvider != "" {
+				return runDoctorSetProvider(cmd, setProvider)
+			}
 			return runDoctor(cmd, fix, yes)
 		},
 	}
 	cmd.Flags().BoolVar(&fix, "fix", false, "Overwrite or materialize starter workspace configuration from templates")
 	cmd.Flags().BoolVar(&yes, "yes", false, "Apply doctor initialization/fix actions without prompting")
+	cmd.Flags().StringVar(&setProvider, "set-provider", "", "Switch inference provider and re-run diagnosis")
 	return cmd
 }
 
@@ -191,8 +197,71 @@ func runDoctor(cmd *cobra.Command, fix, yes bool) error {
 		if report.HasBlockingIssues() {
 			return fmt.Errorf("doctor found blocking issues")
 		}
+		if !report.Ready() {
+			return fmt.Errorf("doctor: workspace degraded — not fully ready")
+		}
 		return nil
 	})
+}
+
+func runDoctorSetProvider(cmd *cobra.Command, provider string) error {
+	ctx := cmd.Context()
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	provider = strings.TrimSpace(provider)
+	if provider == "" {
+		return fmt.Errorf("provider name required")
+	}
+	// Validate the provider exists by loading config and checking the registry.
+	bundle, _, err := config.LoadDiagnostic(config.LoadOptions{WorkspaceRoot: cfg.Workspace})
+	if err != nil {
+		return fmt.Errorf("load workspace config: %w", err)
+	}
+	found := false
+	for _, p := range bundle.Config.Model.Providers {
+		if strings.EqualFold(p.Name, provider) {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return fmt.Errorf("provider %q not found in catalog", provider)
+	}
+	// Persist the selection to the runtime providers file.
+	providerPath := config.New(cfg.Workspace).RuntimeProvidersFile()
+	dir := filepath.Dir(providerPath)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("create state dir: %w", err)
+	}
+	providerCfg := fmt.Sprintf("provider: %s\n", provider)
+	if err := os.WriteFile(providerPath, []byte(providerCfg), 0o600); err != nil {
+		return fmt.Errorf("write provider config: %w", err)
+	}
+	// Build the new report and re-render.
+	cfg.InferenceProvider = provider
+	state, err := runtimesvc.BootstrapStartupState(ctx, cfg, secrets)
+	if err != nil {
+		return err
+	}
+	renderDoctorReport(cmd.OutOrStdout(), state.Report)
+	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Switched to provider %q — re-run doctor to verify.\n", provider)
+	return nil
+}
+
+func uniqueStrings(s []string) []string {
+	if len(s) < 2 {
+		return s
+	}
+	seen := map[string]bool{}
+	out := make([]string, 0, len(s))
+	for _, v := range s {
+		if !seen[v] {
+			seen[v] = true
+			out = append(out, v)
+		}
+	}
+	return out
 }
 
 func renderDoctorReport(w io.Writer, report runtimesvc.DoctorReport) {
@@ -204,23 +273,6 @@ func renderDoctorReport(w io.Writer, report runtimesvc.DoctorReport) {
 		_, _ = fmt.Fprintf(w, " (%s)", report.ConfigError)
 	}
 	_, _ = fmt.Fprintln(w)
-	_, _ = fmt.Fprintf(w, "Manifest file: %s", yesNo(report.ManifestExists))
-	if report.ManifestError != "" {
-		_, _ = fmt.Fprintf(w, " (%s)", report.ManifestError)
-	}
-	_, _ = fmt.Fprintln(w)
-	if len(report.ManifestWarnings) > 0 {
-		_, _ = fmt.Fprintln(w, "Manifest warnings:")
-		for _, warning := range report.ManifestWarnings {
-			_, _ = fmt.Fprintf(w, "  - %s\n", warning)
-		}
-	}
-	if len(report.DeprecationNotices) > 0 {
-		_, _ = fmt.Fprintln(w, "Deprecation notices:")
-		for _, notice := range report.DeprecationNotices {
-			_, _ = fmt.Fprintf(w, "  - %s\n", notice)
-		}
-	}
 	if report.ManifestFingerprint != "" {
 		_, _ = fmt.Fprintf(w, "Manifest fingerprint: %s\n", report.ManifestFingerprint)
 	}
@@ -228,16 +280,7 @@ func renderDoctorReport(w io.Writer, report runtimesvc.DoctorReport) {
 		_, _ = fmt.Fprintf(w, "Manifest policy: %s\n", report.ManifestPolicySummary)
 	}
 	if len(report.ProtectedPaths) > 0 {
-		_, _ = fmt.Fprintf(w, "Sandbox roots: %s\n", strings.Join(report.ProtectedPaths, ", "))
-	}
-	if report.Inference.SelectedProfile != "" {
-		_, _ = fmt.Fprintf(w, "  profile: %s\n", report.Inference.SelectedProfile)
-	}
-	if report.Inference.ProfileReason != "" {
-		_, _ = fmt.Fprintf(w, "  profile_reason: %s\n", report.Inference.ProfileReason)
-	}
-	if report.Inference.ProfileSource != "" {
-		_, _ = fmt.Fprintf(w, "  profile_source: %s\n", report.Inference.ProfileSource)
+		_, _ = fmt.Fprintf(w, "Sandbox roots: %s\n", strings.Join(uniqueStrings(report.ProtectedPaths), ", "))
 	}
 	_, _ = fmt.Fprintln(w, "Inference backend:")
 	_, _ = fmt.Fprintf(w, "  provider: %s\n", cmp.Or(report.Inference.Provider, "unknown"))
@@ -255,10 +298,44 @@ func renderDoctorReport(w io.Writer, report runtimesvc.DoctorReport) {
 	if report.Inference.Error != "" {
 		_, _ = fmt.Fprintf(w, "  error: %s\n", report.Inference.Error)
 	}
+	if report.Inference.SelectedProfile != "" {
+		_, _ = fmt.Fprintf(w, "  profile: %s\n", report.Inference.SelectedProfile)
+	}
+	if report.Inference.ProfileReason != "" {
+		_, _ = fmt.Fprintf(w, "  profile_reason: %s\n", report.Inference.ProfileReason)
+	}
+	if report.Inference.ProfileSource != "" {
+		_, _ = fmt.Fprintf(w, "  profile_source: %s\n", report.Inference.ProfileSource)
+	}
+	if len(report.Providers) > 0 {
+		_, _ = fmt.Fprintln(w, "Providers:")
+		for _, p := range report.Providers {
+			marker := " "
+			if p.Selected {
+				marker = "*"
+			}
+			state := cmp.Or(p.State, "unknown")
+			models := "-"
+			if len(p.Models) > 0 {
+				models = strings.Join(p.Models, ", ")
+			}
+			_, _ = fmt.Fprintf(w, "  %s %s [%s]\n", marker, p.Name, state)
+			_, _ = fmt.Fprintf(w, "    endpoint: %s\n", p.Endpoint)
+			_, _ = fmt.Fprintf(w, "    models: %s\n", models)
+			if p.SetupHint != "" {
+				_, _ = fmt.Fprintf(w, "    hint: %s\n", p.SetupHint)
+			}
+			if p.Error != "" {
+				_, _ = fmt.Fprintf(w, "    error: %s\n", p.Error)
+			}
+		}
+	}
 	_, _ = fmt.Fprintln(w, "Dependencies:")
 	for _, dep := range report.Dependencies {
 		status := "ok"
-		if !dep.Available {
+		if dep.Degraded {
+			status = "degraded"
+		} else if !dep.Available {
 			status = "missing"
 		}
 		severity := "warning"
@@ -274,9 +351,19 @@ func renderDoctorReport(w io.Writer, report runtimesvc.DoctorReport) {
 			_, _ = fmt.Fprintf(w, "  - %s: %s [%s]\n", dep.Name, status, severity)
 		}
 	}
-	if report.HasBlockingIssues() {
+	switch {
+	case report.HasBlockingIssues():
 		_, _ = fmt.Fprintln(w, "Result: blocking issues detected")
-	} else {
+	case !report.Ready():
+		var notReady []string
+		if !report.SandboxReady {
+			notReady = append(notReady, "sandbox")
+		}
+		if !report.ModelReady {
+			notReady = append(notReady, "inference backend")
+		}
+		_, _ = fmt.Fprintf(w, "Result: degraded — %s not ready (see Providers above for setup hints)\n", strings.Join(notReady, ", "))
+	default:
 		_, _ = fmt.Fprintln(w, "Result: ready")
 	}
 }

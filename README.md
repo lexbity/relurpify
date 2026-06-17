@@ -10,8 +10,6 @@
 
 ## What Is Relurpify?
 
- 
-
 Relurpify is a fullstack Agent framework 
 - generic execution Agent library 
 - LLM oriented memory/context/graph/sandbox management framework 
@@ -19,7 +17,6 @@ Relurpify is a fullstack Agent framework
 - extensive testsuite
 - (Euclo) coding agent 
 - TUI interfaces 
-
 
 ## Currently Available
 
@@ -33,17 +30,17 @@ Relurpify is a fullstack Agent framework
 - Go `1.25+`
 - Docker or another supported container runtime
 - gVisor `runsc`
-- Ollama (or use `--offline` for a zero-dep demo/CI path)
+- Ollama (default inference provider)
 
-> **Quick start with no external dependencies:**
+> **Running without Ollama (CI/plumbing only):**
 > ```bash
 > go build ./app/relurpish
 > ./relurpish doctor --offline --fix
-> ./relurpish chat --offline
 > ```
 > The built-in `offline` backend is a deterministic scripted model that
-> exercises the full agent plumbing (tool dispatch, streaming, BKC compile)
-> without requiring Ollama, Docker, or network access.
+> exercises the agent plumbing (tool dispatch, streaming, compilation)
+> without requiring Ollama, Docker, or network access. It is intended
+> for testing and CI — not for end-user demo or production use.
 
 In sandboxed environments you may also want repo-local Go caches:
 
@@ -66,15 +63,24 @@ go build ./app/relurpish
 go build ./...
 ```
 
-## Setup
+## First-run (Ollama)
 
-Run the doctor command before starting Relurpify:
+Before starting a chat session, ensure Ollama is running and has a model pulled:
 
 ```bash
-go run ./app/relurpish doctor
+# Start the Ollama daemon (in a separate terminal)
+ollama serve
+
+# Pull a model that the default catalog references
+ollama pull gemma4:e4b
 ```
 
-`doctor` checks the local environment, verifies required dependencies, and initializes `relurpify_cfg/` for the current workspace when needed.
+Then run doctor to verify the workspace is ready:
+
+```bash
+go build ./app/relurpish
+./relurpish doctor
+```
 
 ## Run Euclo in Relurpish
 
@@ -94,15 +100,6 @@ go run ./app/relurpish doctor
 go run ./app/relurpish chat
 ```
 
-## Broader Platform Surface
-
-The repository already contains broader platform work beyond the primary local
-coding flow, including:
-
-- `nexus`, the distributed coordination layer
-- `nexusish`, the administration interface for Nexus
-- `Rex`, the distributed runtime / agent path
-
 ## Additional Tools
 
 Relurpify also includes developer tooling for internal workflows and testing:
@@ -120,7 +117,3 @@ go run ./app/dev-agent-cli skill init my-skill --description "My focused workflo
 # Validate a skill
 go run ./app/dev-agent-cli skill validate my-skill
 ```
-
-## Documentation
-
-Project documentation lives under `docs/`.

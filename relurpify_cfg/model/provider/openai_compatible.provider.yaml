@@ -1,0 +1,8 @@
+schema: relurpify/model/provider/v1
+name: openai_compatible
+endpoint: http://localhost:8080/v1
+kind: openai_compatible
+request_timeout_seconds: 120
+native_tool_calling: true
+description: "Generic OpenAI-compatible API server"
+setup_hint: "Point to any OpenAI-compatible endpoint (vLLM, TGI, etc.)"

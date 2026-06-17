@@ -88,9 +88,10 @@ func loadBundle(opts LoadOptions, strict bool) (PartialBundle, []ConfigDiagnosti
 		return PartialBundle{}, nil, fmt.Errorf("load env overrides: %w", err)
 	}
 	secrets := LoadSecrets(opts.EnvOverrides)
-	if strings.TrimSpace(secrets.LLMAPIKey) == "" {
-		log.Printf("WARN config: RELURPIFY_LLM_API_KEY is not set; provider auth may fail")
-	}
+	// A missing API key is only a problem for providers whose kind requires
+	// auth; that case is reported as a precise blocking diagnostic once the
+	// workspace provider is resolved (see ProviderRequiresAuth below). Local
+	// kinds (ollama, lmstudio, offline, tape) need no key, so no warning here.
 
 	wsRoot := opts.WorkspaceRoot
 	if wsRoot == "" {

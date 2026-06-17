@@ -51,7 +51,7 @@ func (b *mockOllamaBackend) Health(ctx context.Context) (*llm.HealthReport, erro
 }
 func (b *mockOllamaBackend) ListModels(ctx context.Context) ([]llm.ModelInfo, error) {
 	return []llm.ModelInfo{
-		{Name: "qwen2.5-coder:14b", Family: "qwen"},
+		{Name: "gemma4:12b", Family: "qwen"},
 		{Name: "llama3:latest", Family: "llama"},
 	}, nil
 }
@@ -62,7 +62,7 @@ func (b *mockOllamaBackend) SetProfile(profile *model.ModelProfile)           {}
 func (b *mockOllamaBackend) Reset(ctx context.Context, strategy string) error { return nil }
 
 func init() {
-	llm.RegisterProvider("mock-ollama", func(cfg llm.ProviderConfig, secrets llm.ProviderSecrets) (llm.ManagedBackend, error) {
+	llm.RegisterKind("mock-ollama", func(cfg llm.ProviderConfig, secrets llm.ProviderSecrets) (llm.ManagedBackend, error) {
 		_ = cfg
 		_ = secrets
 		return &mockOllamaBackend{}, nil
@@ -196,7 +196,7 @@ func testDocument() *config.Document {
 		Mode:           agentspec.AgentModePrimary,
 		Model: agentspec.AgentModelConfig{
 			Provider: "mock-ollama",
-			Name:     "qwen2.5-coder:14b",
+			Name:     "gemma4:12b",
 		},
 		Bash: agentspec.AgentBashPermissions{
 			AllowPatterns: []string{"git status"},
@@ -289,7 +289,7 @@ func TestPanelGoldenViews(t *testing.T) {
 	}
 	aiProvider.Refresh()
 	tui.SetAIProviderModelsForTest(aiProvider, []llm.ModelInfo{
-		{Name: "qwen2.5-coder:14b", Family: "qwen"},
+		{Name: "gemma4:12b", Family: "qwen"},
 		{Name: "llama3:latest", Family: "llama"},
 	})
 	tui.SetAIProviderStatusForTest(aiProvider, "loaded 2 models")

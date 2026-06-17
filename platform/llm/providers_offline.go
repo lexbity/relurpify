@@ -9,12 +9,14 @@ import (
 )
 
 func init() {
-	RegisterProvider("offline", func(cfg ProviderConfig, secrets ProviderSecrets) (ManagedBackend, error) {
+	RegisterKind("offline", func(cfg ProviderConfig, secrets ProviderSecrets) (ManagedBackend, error) {
 		_ = secrets
 		if err := cfg.Validate(); err != nil {
 			return nil, err
 		}
-		applyProviderDefaults(&cfg)
+		if strings.TrimSpace(cfg.Model) == "" {
+			cfg.Model = "offline-synthetic"
+		}
 		return offlineBackend{
 			model:     offline.NewModel(),
 			modelName: strings.TrimSpace(cfg.Model),

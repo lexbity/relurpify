@@ -25,19 +25,19 @@ func TestPromoteRunCopiesArtifactsAndWritesLineage(t *testing.T) {
 	workspace := t.TempDir()
 	suitePath := writeSuiteFixture(t, workspace, "smoke-suite", "capability")
 	runDir := filepath.Join(workspace, "runs", "run-1")
-	artifactsDir := filepath.Join(runDir, "artifacts", caseKey(smokeCaseName, "qwen2.5-coder:14b"))
+	artifactsDir := filepath.Join(runDir, "artifacts", caseKey(smokeCaseName, "gemma4:12b"))
 	if err := fs.MkdirAllSecure(artifactsDir); err != nil {
 		t.Fatal(err)
 	}
 	recordedAt := time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC)
-	writeTapeFixture(t, filepath.Join(artifactsDir, "tape.jsonl"), "smoke-suite", smokeCaseName, "qwen2.5-coder:14b", recordedAt)
+	writeTapeFixture(t, filepath.Join(artifactsDir, "tape.jsonl"), "smoke-suite", smokeCaseName, "gemma4:12b", recordedAt)
 	if err := os.WriteFile(filepath.Join(artifactsDir, "interaction.tape.jsonl"), []byte("interaction"), fs.PublicFileMode); err != nil {
 		t.Fatal(err)
 	}
 	report := agenttest.SuiteReport{
 		Cases: []agenttest.CaseReport{{
 			Name:         smokeCaseName,
-			Model:        "qwen2.5-coder:14b",
+			Model:        "gemma4:12b",
 			Provider:     "ollama",
 			Success:      true,
 			FinishedAt:   recordedAt,
@@ -54,21 +54,21 @@ func TestPromoteRunCopiesArtifactsAndWritesLineage(t *testing.T) {
 		t.Fatalf("unexpected promote report: %+v", promoted)
 	}
 	caseReport := promoted.Cases[0]
-	wantTape := agenttest.GoldenTapePath(suitePath, "smoke-suite", smokeCaseName, "qwen2.5-coder:14b")
+	wantTape := agenttest.GoldenTapePath(suitePath, "smoke-suite", smokeCaseName, "gemma4:12b")
 	if caseReport.DestinationTapePath != wantTape {
 		t.Fatalf("destination tape path = %q, want %q", caseReport.DestinationTapePath, wantTape)
 	}
 	if _, err := os.Stat(wantTape); err != nil {
 		t.Fatalf("promoted tape missing: %v", err)
 	}
-	wantLineage := filepath.Join(filepath.Dir(wantTape), PromotionLineageFilename("smoke", "qwen2.5-coder:14b"))
+	wantLineage := filepath.Join(filepath.Dir(wantTape), PromotionLineageFilename("smoke", "gemma4:12b"))
 	if caseReport.LineagePath != wantLineage {
 		t.Fatalf("lineage path = %q, want %q", caseReport.LineagePath, wantLineage)
 	}
 	if _, err := os.Stat(wantLineage); err != nil {
 		t.Fatalf("lineage file missing: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(filepath.Dir(wantTape), agenttest.GoldenBaselineFilename(smokeCaseName, "qwen2.5-coder:14b"))); err != nil {
+	if _, err := os.Stat(filepath.Join(filepath.Dir(wantTape), agenttest.GoldenBaselineFilename(smokeCaseName, "gemma4:12b"))); err != nil {
 		t.Fatalf("baseline missing: %v", err)
 	}
 	if caseReport.DestinationInteractionTapePath == "" {
@@ -83,12 +83,12 @@ func TestPromoteRunCopiesBenchmarkArtifacts(t *testing.T) {
 	workspace := t.TempDir()
 	suitePath := writeSuiteFixture(t, workspace, "benchmark-suite", "benchmark")
 	runDir := filepath.Join(workspace, "runs", "run-1")
-	artifactsDir := filepath.Join(runDir, "artifacts", caseKey(smokeCaseName, "qwen2.5-coder:14b"))
+	artifactsDir := filepath.Join(runDir, "artifacts", caseKey(smokeCaseName, "gemma4:12b"))
 	if err := fs.MkdirAllSecure(artifactsDir); err != nil {
 		t.Fatal(err)
 	}
 	recordedAt := time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC)
-	writeTapeFixture(t, filepath.Join(artifactsDir, "tape.jsonl"), "benchmark-suite", smokeCaseName, "qwen2.5-coder:14b", recordedAt)
+	writeTapeFixture(t, filepath.Join(artifactsDir, "tape.jsonl"), "benchmark-suite", smokeCaseName, "gemma4:12b", recordedAt)
 	for _, name := range []string{benchmarkReportFilename, benchmarkScoreFilename, benchmarkComparisonFilename} {
 		if err := os.WriteFile(filepath.Join(artifactsDir, name), []byte(name), fs.PublicFileMode); err != nil {
 			t.Fatal(err)
@@ -97,7 +97,7 @@ func TestPromoteRunCopiesBenchmarkArtifacts(t *testing.T) {
 	writeSuiteReport(t, filepath.Join(runDir, "report.json"), agenttest.SuiteReport{
 		Cases: []agenttest.CaseReport{{
 			Name:         smokeCaseName,
-			Model:        "qwen2.5-coder:14b",
+			Model:        "gemma4:12b",
 			Provider:     "ollama",
 			Success:      true,
 			FinishedAt:   recordedAt,
@@ -109,7 +109,7 @@ func TestPromoteRunCopiesBenchmarkArtifacts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	goldenDir := filepath.Dir(agenttest.GoldenTapePath(suitePath, "benchmark-suite", "smoke", "qwen2.5-coder:14b"))
+	goldenDir := filepath.Dir(agenttest.GoldenTapePath(suitePath, "benchmark-suite", "smoke", "gemma4:12b"))
 	for _, name := range []string{benchmarkReportFilename, benchmarkScoreFilename, benchmarkComparisonFilename} {
 		if _, err := os.Stat(filepath.Join(goldenDir, name)); err != nil {
 			t.Fatalf("%s missing: %v", name, err)
@@ -189,7 +189,7 @@ spec:
   agent_name: euclo
   manifest: relurpify_cfg/agents/euclo.yaml
   models:
-    - name: qwen2.5-coder:14b
+    - name: gemma4:12b
   cases:
     - name: smoke
       prompt: hello
