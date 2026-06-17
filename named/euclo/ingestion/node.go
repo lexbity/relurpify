@@ -40,11 +40,9 @@ func (n *IngestionNode) ID() string {
 	return n.id
 }
 
-// Type returns the node type. Ingestion is an internal workspace/knowledge
-// side-effect operation, not a model-callable tool, so it is a system node
-// (a tool node would be required to declare RequiredCapabilities).
+// Type returns the node type.
 func (n *IngestionNode) Type() agentgraph.NodeType {
-	return agentgraph.NodeTypeSystem
+	return agentgraph.NodeTypeTool
 }
 
 // Contract returns the node contract.

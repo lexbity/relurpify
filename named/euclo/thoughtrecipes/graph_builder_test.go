@@ -151,7 +151,6 @@ func TestFallbackStepInheritsParentScope(t *testing.T) {
 		Paradigm: agent.Paradigm,
 		Prompt:   agent.Prompt,
 		Stream:   cloneStreamSpec(agent.Context.Stream),
-		Ingest:   cloneIngestSpec(agent.Context.Ingest),
 		Inherit:  append([]string(nil), agent.Context.Inherit...),
 		Capture:  append([]string(nil), agent.Context.Capture...),
 	}

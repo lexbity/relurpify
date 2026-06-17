@@ -12,11 +12,3 @@ func cloneStreamSpec(spec *surface.ThoughtRecipeStreamSpec) *surface.ThoughtReci
 	return &cp
 }
 
-func cloneIngestSpec(spec *surface.ThoughtRecipeIngestSpec) *surface.ThoughtRecipeIngestSpec {
-	if spec == nil {
-		return nil
-	}
-	cp := *spec
-	return &cp
-}
-

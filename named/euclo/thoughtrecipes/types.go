@@ -192,7 +192,6 @@ type ExecutionStep struct {
 	Mutation            string
 	HITL                string
 	Stream              *surface.ThoughtRecipeStreamSpec
-	Ingest              *surface.ThoughtRecipeIngestSpec
 	Fallback            *surface.ThoughtRecipeStepAgent
 	Inherit             []string
 	Capture             []string

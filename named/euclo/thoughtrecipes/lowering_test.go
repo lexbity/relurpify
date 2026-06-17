@@ -606,9 +606,9 @@ agent reviewer uses not_a_real_paradigm
 	}
 }
 
-func TestLowerDocumentPopulatesStepContextStreamAndIngest(t *testing.T) {
+func TestLowerDocumentPopulatesStepContextStream(t *testing.T) {
 	doc := mustParseDoc(t, `thoughtrecipe context_demo
-"Stream and ingest on run + delegate."
+"Stream on run + delegate."
 
 trigger as capability:
   may read workspace
@@ -619,7 +619,6 @@ agent reviewer uses goalcon
 run explorer:
   from input.workspace
   stream "symbols for {{.Goal}}" max 256 mode blocking
-  ingest files ["**/*.go"] except ["**/vendor/**"] mode files_only
   goal "Explore."
 
 delegate to reviewer:
@@ -648,18 +647,6 @@ delegate to reviewer:
 	}
 	if got := run.Stream.Mode; got != "blocking" {
 		t.Fatalf("run stream mode = %q, want blocking", got)
-	}
-	if run.Ingest == nil {
-		t.Fatal("run step ingest spec was not populated")
-	}
-	if got := run.Ingest.Mode; got != "files_only" {
-		t.Fatalf("run ingest mode = %q, want files_only", got)
-	}
-	if !equalStringSlices(run.Ingest.IncludeGlobs, []string{"**/*.go"}) {
-		t.Fatalf("run ingest include globs = %#v", run.Ingest.IncludeGlobs)
-	}
-	if !equalStringSlices(run.Ingest.ExcludeGlobs, []string{"**/vendor/**"}) {
-		t.Fatalf("run ingest exclude globs = %#v", run.Ingest.ExcludeGlobs)
 	}
 
 	del := plan.Steps[1]

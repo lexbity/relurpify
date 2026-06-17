@@ -227,12 +227,6 @@ func TestThoughtRecipeStepNodeBuildRuntimeContextIncludesStepContext(t *testing.
 			MaxTokens:     128,
 			Mode:          "latest",
 		},
-		Ingest: &surface.ThoughtRecipeIngestSpec{
-			Mode:          "files_only",
-			IncludeGlobs:  []string{"**/*.go"},
-			ExcludeGlobs:  []string{"**/vendor/**"},
-			WorkspaceRoot: "/workspace",
-		},
 		Inherit: []string{"state.findings"},
 		Capture: []string{"output.result"},
 	}
@@ -247,18 +241,6 @@ func TestThoughtRecipeStepNodeBuildRuntimeContextIncludesStepContext(t *testing.
 	}
 	if got, ok := rctx.State["execution_step_context_stream_mode"]; !ok || got != "latest" {
 		t.Fatalf("stream mode = %#v (ok=%v), want latest", got, ok)
-	}
-	if got, ok := rctx.State["execution_step_context_ingest_mode"]; !ok || got != "files_only" {
-		t.Fatalf("ingest mode = %#v (ok=%v), want files_only", got, ok)
-	}
-	if got, ok := rctx.State["execution_step_context_ingest_workspace_root"]; !ok || got != "/workspace" {
-		t.Fatalf("workspace root = %#v (ok=%v), want /workspace", got, ok)
-	}
-	if got, ok := rctx.State["execution_step_context_ingest_include_globs"]; !ok || !equalStringSlices(got.([]string), []string{"**/*.go"}) {
-		t.Fatalf("include globs = %#v (ok=%v), want [**/*.go]", got, ok)
-	}
-	if got, ok := rctx.State["execution_step_context_ingest_exclude_globs"]; !ok || !equalStringSlices(got.([]string), []string{"**/vendor/**"}) {
-		t.Fatalf("exclude globs = %#v (ok=%v), want [**/vendor/**]", got, ok)
 	}
 	if got, ok := rctx.State["execution_step_context_inherit"]; !ok || !equalStringSlices(got.([]string), []string{"state.findings"}) {
 		t.Fatalf("inherit = %#v (ok=%v), want [state.findings]", got, ok)

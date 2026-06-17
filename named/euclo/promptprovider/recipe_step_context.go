@@ -62,18 +62,6 @@ func (p *thoughtrecipeStepContextProvider) Provide(ctx prompt.RuntimeContext) pr
 	if mode := runtimeString(ctx, "execution_step_context_stream_mode"); mode != "" {
 		sv.ClarificationRuntimeLines = append(sv.ClarificationRuntimeLines, fmt.Sprintf("Step Context Stream Mode: %s", mode))
 	}
-	if mode := runtimeString(ctx, "execution_step_context_ingest_mode"); mode != "" {
-		sv.ClarificationRuntimeLines = append(sv.ClarificationRuntimeLines, fmt.Sprintf("Step Context Ingest Mode: %s", mode))
-	}
-	if root := runtimeString(ctx, "execution_step_context_ingest_workspace_root"); root != "" {
-		sv.ClarificationRuntimeLines = append(sv.ClarificationRuntimeLines, fmt.Sprintf("Step Context Ingest Workspace Root: %s", root))
-	}
-	if values := runtimeStrings(ctx, "execution_step_context_ingest_include_globs"); len(values) > 0 {
-		sv.ClarificationRuntimeLines = append(sv.ClarificationRuntimeLines, "Step Context Ingest Include Globs: "+strings.Join(values, ", "))
-	}
-	if values := runtimeStrings(ctx, "execution_step_context_ingest_exclude_globs"); len(values) > 0 {
-		sv.ClarificationRuntimeLines = append(sv.ClarificationRuntimeLines, "Step Context Ingest Exclude Globs: "+strings.Join(values, ", "))
-	}
 	if values := runtimeStrings(ctx, "execution_step_context_inherit"); len(values) > 0 {
 		sv.ClarificationRuntimeLines = append(sv.ClarificationRuntimeLines, "Step Context Inherit: "+strings.Join(values, ", "))
 	}

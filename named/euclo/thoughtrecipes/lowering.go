@@ -85,7 +85,7 @@ func firstTriggerDecl(doc *ThoughtRecipeDocument) *TriggerDecl {
 	return nil
 }
 
-func lowerRunItems(items []ExecutionItem) (sources []string, goals []string, directives []string, captures []CaptureBinding, toolScopes []ToolScopeFrame, promptID string, capabilityPlan *CapabilityInvocationPlan, streamSpec *surface.ThoughtRecipeStreamSpec, ingestSpec *surface.ThoughtRecipeIngestSpec, config map[string]any, err error) {
+func lowerRunItems(items []ExecutionItem) (sources []string, goals []string, directives []string, captures []CaptureBinding, toolScopes []ToolScopeFrame, promptID string, capabilityPlan *CapabilityInvocationPlan, streamSpec *surface.ThoughtRecipeStreamSpec, config map[string]any, err error) {
 	var directiveConfigs []map[string]any
 	for _, item := range items {
 		switch node := item.(type) {
@@ -129,10 +129,10 @@ func lowerRunItems(items []ExecutionItem) (sources []string, goals []string, dir
 		case *CapabilityInvocation:
 			plan, err := LowerCapabilityInvocation(node)
 			if err != nil {
-				return nil, nil, nil, nil, nil, "", nil, nil, nil, nil, err
+				return nil, nil, nil, nil, nil, "", nil, nil, nil, err
 			}
 			if capabilityPlan != nil {
-				return nil, nil, nil, nil, nil, "", nil, nil, nil, nil, fmt.Errorf("%s:%d:%d: multiple direct capability invocations in one run block are not supported", node.GetSpan().Start.File, node.GetSpan().Start.Line, node.GetSpan().Start.Column)
+				return nil, nil, nil, nil, nil, "", nil, nil, nil, fmt.Errorf("%s:%d:%d: multiple direct capability invocations in one run block are not supported", node.GetSpan().Start.File, node.GetSpan().Start.Line, node.GetSpan().Start.Column)
 			}
 			capabilityPlan = plan
 		case *ToolInvokePolicyDecl:
@@ -148,15 +148,6 @@ func lowerRunItems(items []ExecutionItem) (sources []string, goals []string, dir
 				}
 			}
 			streamSpec = spec
-		case *IngestClause:
-			ingestSpec = &surface.ThoughtRecipeIngestSpec{
-				Mode:         strings.TrimSpace(node.Mode),
-				IncludeGlobs: listLiteralStrings(node.IncludeGlobs),
-				ExcludeGlobs: listLiteralStrings(node.ExcludeGlobs),
-			}
-			if node.WorkspaceRoot != nil {
-				ingestSpec.WorkspaceRoot = node.WorkspaceRoot.Value
-			}
 		}
 	}
 	if len(sources) > 0 || len(goals) > 0 || len(directives) > 0 || len(captures) > 0 || len(directiveConfigs) > 0 || len(toolScopes) > 0 || strings.TrimSpace(promptID) != "" {
@@ -183,32 +174,9 @@ func lowerRunItems(items []ExecutionItem) (sources []string, goals []string, dir
 	if len(config) == 0 {
 		config = nil
 	}
-	return sources, goals, directives, captures, toolScopes, promptID, capabilityPlan, streamSpec, ingestSpec, config, nil
+	return sources, goals, directives, captures, toolScopes, promptID, capabilityPlan, streamSpec, config, nil
 }
 
-// listLiteralStrings extracts the trimmed string values from a bracketed list literal.
-func listLiteralStrings(list *ListLiteral) []string {
-	if list == nil {
-		return nil
-	}
-	out := make([]string, 0, len(list.Entries))
-	for _, entry := range list.Entries {
-		switch v := entry.(type) {
-		case *StringLiteral:
-			if s := strings.TrimSpace(v.Value); s != "" {
-				out = append(out, s)
-			}
-		case StringLiteral:
-			if s := strings.TrimSpace(v.Value); s != "" {
-				out = append(out, s)
-			}
-		}
-	}
-	if len(out) == 0 {
-		return nil
-	}
-	return out
-}
 
 func lowerAskDecl(decl *AskDecl, runIndex *int) (ExecutionStep, error) {
 	if decl == nil {

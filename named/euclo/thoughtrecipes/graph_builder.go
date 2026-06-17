@@ -12,7 +12,6 @@ import (
 	"codeburg.org/lexbit/relurpify/context/knowledge/retrieval"
 	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/execution/agentgraph"
-	eucloingestion "codeburg.org/lexbit/relurpify/named/euclo/ingestion"
 )
 
 // BuildThoughtRecipeGraph builds an agentgraph.Graph for a compiled execution plan.
@@ -243,23 +242,6 @@ func addExecutionStep(graph *agentgraph.Graph, deps *paradigm.Deps, step Executi
 	entry := ""
 	tail := ""
 
-	if step.Ingest != nil {
-		nodeID := step.ID + ".ingest"
-		node := eucloingestion.NewIngestionNode(nodeID, eucloingestion.IngestionSpec{
-			Mode:          eucloingestion.IngestionMode(step.Ingest.Mode),
-			ExplicitFiles: append([]string(nil), step.Ingest.IncludeGlobs...),
-			WorkspaceRoot: step.Ingest.WorkspaceRoot,
-			IncludeGlobs:  append([]string(nil), step.Ingest.IncludeGlobs...),
-			ExcludeGlobs:  append([]string(nil), step.Ingest.ExcludeGlobs...),
-			SinceRef:      "",
-		})
-		if err := graph.AddNode(node); err != nil {
-			return stepArtifacts{}, err
-		}
-		entry = nodeID
-		tail = nodeID
-	}
-
 	if step.CapabilityID == "" && step.Stream != nil {
 		nodeID := step.ID + ".stream"
 		streamNode := agentgraph.NewContextStreamNode(nodeID, retrieval.RetrievalQuery{Text: step.Stream.QueryTemplate}, step.Stream.MaxTokens)
@@ -332,7 +314,6 @@ func addExecutionStep(graph *agentgraph.Graph, deps *paradigm.Deps, step Executi
 			Paradigm: agent.Paradigm,
 			Prompt:   agent.Prompt,
 			Stream:   cloneStreamSpec(agent.Context.Stream),
-			Ingest:   cloneIngestSpec(agent.Context.Ingest),
 			Inherit:  append([]string(nil), agent.Context.Inherit...),
 			Capture:  append([]string(nil), agent.Context.Capture...),
 		}

@@ -191,7 +191,7 @@ func lowerAgentExecutionDecl(kind StepKind, agent Identifier, items []ExecutionI
 	if !ok {
 		return ExecutionStep{}, fmt.Errorf("%s:%d:%d: unknown agent %q", agent.GetSpan().Start.File, agent.GetSpan().Start.Line, agent.GetSpan().Start.Column, agentName)
 	}
-	sources, goals, directives, captures, localToolScopes, promptID, capabilityPlan, streamSpec, ingestSpec, config, err := lowerRunItems(items)
+	sources, goals, directives, captures, localToolScopes, promptID, capabilityPlan, streamSpec, config, err := lowerRunItems(items)
 	if err != nil {
 		return ExecutionStep{}, err
 	}
@@ -210,7 +210,6 @@ func lowerAgentExecutionDecl(kind StepKind, agent Identifier, items []ExecutionI
 		Prompt:          strings.Join(goals, "\n"),
 		Config:          config,
 		Stream:          streamSpec,
-		Ingest:          ingestSpec,
 	}
 	if capabilityPlan != nil {
 		step.CapabilityID = capabilityPlan.CapabilityID

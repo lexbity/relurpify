@@ -370,18 +370,6 @@ type StreamClause struct {
 
 func (StreamClause) executionItemNode() {}
 
-// IngestClause declares per-step workspace ingestion into the knowledge store.
-type IngestClause struct {
-	positioned
-	Mode          string
-	IncludeGlobs  *ListLiteral
-	ExcludeGlobs  *ListLiteral
-	WorkspaceRoot *StringLiteral
-	Raw           string
-}
-
-func (IngestClause) executionItemNode() {}
-
 // DirectiveClause preserves an agent-specific directive line.
 type DirectiveClause struct {
 	positioned

@@ -441,8 +441,6 @@ func (s *SymbolTable) resolveExecutionItem(item ExecutionItem) error {
 		return s.resolveToolInvokePolicyDecl(node)
 	case *StreamClause:
 		return s.resolveStreamClause(node)
-	case *IngestClause:
-		return s.resolveIngestClause(node)
 	case *CaptureBlock:
 		return s.resolveCaptureBlock(node)
 	case *RunDecl:
@@ -462,8 +460,6 @@ func (s *SymbolTable) resolveExecutionItem(item ExecutionItem) error {
 
 var validStreamModes = map[string]struct{}{"blocking": {}, "background": {}}
 
-var validIngestModes = map[string]struct{}{"files_only": {}, "incremental": {}, "full": {}}
-
 func (s *SymbolTable) resolveStreamClause(decl *StreamClause) error {
 	if decl.Query == nil || strings.TrimSpace(decl.Query.Value) == "" {
 		return fmt.Errorf("%s:%d:%d: stream requires a non-empty query string", decl.GetSpan().Start.File, decl.GetSpan().Start.Line, decl.GetSpan().Start.Column)
@@ -477,18 +473,6 @@ func (s *SymbolTable) resolveStreamClause(decl *StreamClause) error {
 		n, err := strconv.Atoi(strings.TrimSpace(decl.MaxTokens.Value))
 		if err != nil || n < 0 {
 			return fmt.Errorf("%s:%d:%d: stream max must be a non-negative integer, got %q", decl.GetSpan().Start.File, decl.GetSpan().Start.Line, decl.GetSpan().Start.Column, decl.MaxTokens.Value)
-		}
-	}
-	return nil
-}
-
-func (s *SymbolTable) resolveIngestClause(decl *IngestClause) error {
-	if decl.IncludeGlobs == nil || len(decl.IncludeGlobs.Entries) == 0 {
-		return fmt.Errorf("%s:%d:%d: ingest requires a non-empty files list", decl.GetSpan().Start.File, decl.GetSpan().Start.Line, decl.GetSpan().Start.Column)
-	}
-	if mode := strings.TrimSpace(decl.Mode); mode != "" {
-		if _, ok := validIngestModes[mode]; !ok {
-			return fmt.Errorf("%s:%d:%d: unsupported ingest mode %q (want files_only, incremental, or full)", decl.GetSpan().Start.File, decl.GetSpan().Start.Line, decl.GetSpan().Start.Column, mode)
 		}
 	}
 	return nil

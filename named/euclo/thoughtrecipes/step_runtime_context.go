@@ -94,20 +94,6 @@ func stepContextRuntimeState(step ExecutionStep) map[string]any {
 			out["execution_step_context_stream_mode"] = mode
 		}
 	}
-	if ingest := step.Ingest; ingest != nil {
-		if mode := strings.TrimSpace(ingest.Mode); mode != "" {
-			out["execution_step_context_ingest_mode"] = mode
-		}
-		if len(ingest.IncludeGlobs) > 0 {
-			out["execution_step_context_ingest_include_globs"] = append([]string(nil), ingest.IncludeGlobs...)
-		}
-		if len(ingest.ExcludeGlobs) > 0 {
-			out["execution_step_context_ingest_exclude_globs"] = append([]string(nil), ingest.ExcludeGlobs...)
-		}
-		if root := strings.TrimSpace(ingest.WorkspaceRoot); root != "" {
-			out["execution_step_context_ingest_workspace_root"] = root
-		}
-	}
 	if len(step.Inherit) > 0 {
 		out["execution_step_context_inherit"] = append([]string(nil), step.Inherit...)
 	}
