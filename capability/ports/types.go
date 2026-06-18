@@ -8,32 +8,6 @@ import (
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 )
 
-// ToolParameterType enumerates the allowed parameter types.
-type ToolParameterType string
-
-const (
-	ToolParamString  ToolParameterType = "string"
-	ToolParamInteger ToolParameterType = "integer"
-	ToolParamNumber  ToolParameterType = "number"
-	ToolParamBoolean ToolParameterType = "boolean"
-	ToolParamArray   ToolParameterType = "array"
-	ToolParamObject  ToolParameterType = "object"
-)
-
-// Flag expansion styles for tool manifest flags.
-const (
-	FlagStyleEquals   = "equals"
-	FlagStyleSeparate = "separate"
-)
-
-// ToolTags are well-known capability tags.
-const (
-	TagReadOnly    = "read-only"
-	TagExecute     = "execute"
-	TagDestructive = "destructive"
-	TagNetwork     = "network"
-)
-
 // Tool is the primary capability interface. Every tool, whether native,
 // subprocess, or composite, implements this interface.
 type Tool interface {
@@ -65,15 +39,6 @@ type RollbackToken struct {
 	ToolName     string
 	Args         map[string]any
 	Result       *ToolResult
-}
-
-// ToolParameter describes a single parameter accepted by a tool.
-type ToolParameter struct {
-	Name        string            `json:"name" yaml:"name"`
-	Type        ToolParameterType `json:"type" yaml:"type"`
-	Description string            `json:"description,omitempty" yaml:"description,omitempty"`
-	Required    bool              `json:"required,omitempty" yaml:"required,omitempty"`
-	Default     any               `json:"default,omitempty" yaml:"default,omitempty"`
 }
 
 // ToolResult is the result of executing a tool.

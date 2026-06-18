@@ -96,17 +96,14 @@ func runRecipeGrantMatrixRow(t *testing.T) {
 	env := contextdata.NewEnvelope("task-grant", "session-grant")
 	step := thoughtrecipepkg.ExecutionStep{
 		ID:           "grant.step",
+		Kind:         thoughtrecipepkg.StepKindCapability,
 		CapabilityID: "euclo:cap.restricted",
-		Step: surface.ThoughtRecipeStep{
-			ID:           "grant.step",
-			CapabilityID: "euclo:cap.restricted",
-			OnError: &surface.StepErrorPolicy{
-				Action:   "skip",
-				RetryMax: 0,
-				Fallback: "grant.step.recover",
-			},
-			Config: map[string]any{},
+		OnError: &surface.StepErrorPolicy{
+			Action:   "skip",
+			RetryMax: 0,
+			Fallback: "grant.step.recover",
 		},
+		Config: map[string]any{},
 	}
 
 	node := thoughtrecipepkg.NewThoughtRecipeStepNode("grant.step.execute", &paradigm.Deps{Registry: scoped}, step)
@@ -145,11 +142,11 @@ func runContextControlMatrixRow(t *testing.T) {
 	riched := provider.Provide(prompt.NewRuntimeContext(env, "react", "thoughtrecipe").
 		WithStateValue("execution_step_context_stream_query", "find relevant symbols").
 		WithStateValue("execution_step_context_stream_max_tokens", 128).
-		WithStateValue("execution_step_context_ingest_mode", "files_only"))
+		WithStateValue("execution_step_context_stream_mode", "summary"))
 
 	require.NotEmpty(t, base.Content)
 	require.Contains(t, riched.Content, "Step Context Stream Query: find relevant symbols")
 	require.Contains(t, riched.Content, "Step Context Stream Max Tokens: 128")
-	require.Contains(t, riched.Content, "Step Context Ingest Mode: files_only")
+	require.Contains(t, riched.Content, "Step Context Stream Mode: summary")
 	require.NotEqual(t, base.Content, riched.Content)
 }

@@ -17,7 +17,7 @@ import (
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 	"codeburg.org/lexbit/relurpify/userconfig/modelselect"
 	te "codeburg.org/lexbit/relurpify/userconfig/templates"
-	templatesembed "codeburg.org/lexbit/relurpify/templates"
+	templatesembed "codeburg.org/lexbit/relurpify/userconfig/templates/embedfs"
 )
 
 // DependencyStatus captures one local dependency check.

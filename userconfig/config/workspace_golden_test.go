@@ -29,7 +29,7 @@ func TestCheckedInWorkspaceConfigDecodesCleanly(t *testing.T) {
 
 func TestTemplateWorkspaceConfigDecodesCleanly(t *testing.T) {
 	repoRoot := repoRootForTest(t)
-	tmplPath := filepath.Join(repoRoot, "templates", "workspace", "workspace.yaml")
+	tmplPath := filepath.Join(repoRoot, "userconfig", "templates", "embedfs", "workspace", "workspace.yaml")
 
 	cfg, err := LoadWorkspaceConfig(tmplPath, repoRoot, WorkspaceLoadOptions{Strict: true})
 	if err != nil {
@@ -48,7 +48,7 @@ func TestTemplateWorkspaceConfigDecodesCleanly(t *testing.T) {
 
 func TestTemplateRoundTripIsStable(t *testing.T) {
 	repoRoot := repoRootForTest(t)
-	tmplPath := filepath.Join(repoRoot, "templates", "workspace", "workspace.yaml")
+	tmplPath := filepath.Join(repoRoot, "userconfig", "templates", "embedfs", "workspace", "workspace.yaml")
 
 	cfg, err := LoadWorkspaceConfig(tmplPath, repoRoot, WorkspaceLoadOptions{Strict: true})
 	if err != nil {
@@ -92,7 +92,7 @@ func TestCheckedInConfigRoundTripIsStable(t *testing.T) {
 
 func TestTemplateHasNoInlineAgents(t *testing.T) {
 	repoRoot := repoRootForTest(t)
-	tmplPath := filepath.Join(repoRoot, "templates", "workspace", "workspace.yaml")
+	tmplPath := filepath.Join(repoRoot, "userconfig", "templates", "embedfs", "workspace", "workspace.yaml")
 
 	data, err := ReadFileRaw(tmplPath)
 	if err != nil {

@@ -1,6 +1,9 @@
 // Package telemetry provides audit logging and execution tracing for agent runs.
 // It collects structured records of node executions, tool calls, and LLM interactions,
 // supporting retention-based audit policies defined in the agent manifest.
+//
+// BroadcastSink (broadcast.go) provides an in-memory subscribable sink for live
+// event observers — used by the TUI to receive execution events in real time.
 package telemetry
 
 import (

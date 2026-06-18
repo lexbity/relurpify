@@ -1,13 +1,10 @@
-package templatesembed
+package embedfs
 
 import (
 	"io/fs"
 	"testing"
 )
 
-// TestWorkspaceEmbed_DecomposedPaths verifies the embedded workspace templates
-// contain the expected decomposed file layout and do NOT include the old
-// agent.yaml manifest template.
 func TestWorkspaceEmbed_DecomposedPaths(t *testing.T) {
 	efs := DefaultFS()
 
@@ -27,8 +24,6 @@ func TestWorkspaceEmbed_DecomposedPaths(t *testing.T) {
 	}
 }
 
-// TestWorkspaceEmbed_NoAgentYAML verifies the old monolithic agent.yaml is NOT
-// present in the embedded templates.
 func TestWorkspaceEmbed_NoAgentYAML(t *testing.T) {
 	efs := DefaultFS()
 	if _, err := fs.Stat(efs, "workspace/agent.yaml"); err == nil {
@@ -36,7 +31,6 @@ func TestWorkspaceEmbed_NoAgentYAML(t *testing.T) {
 	}
 }
 
-// TestWorkspaceEmbed_NoAgentsDir verifies there is no agents/ directory.
 func TestWorkspaceEmbed_NoAgentsDir(t *testing.T) {
 	efs := DefaultFS()
 	if _, err := fs.Stat(efs, "workspace/agents"); err == nil {
@@ -44,7 +38,6 @@ func TestWorkspaceEmbed_NoAgentsDir(t *testing.T) {
 	}
 }
 
-// TestWorkspaceEmbed_HasTools verifies tool templates are present.
 func TestWorkspaceEmbed_HasTools(t *testing.T) {
 	efs := DefaultFS()
 	toolPath := "workspace/tools/file/file_read.tool.yaml"
@@ -53,7 +46,6 @@ func TestWorkspaceEmbed_HasTools(t *testing.T) {
 	}
 }
 
-// TestWorkspaceEmbed_HasSecurityPolicies verifies all four security policies exist.
 func TestWorkspaceEmbed_HasSecurityPolicies(t *testing.T) {
 	efs := DefaultFS()
 	for _, name := range []string{"sandbox", "shell", "localtool", "workspaceingestion"} {
@@ -64,7 +56,6 @@ func TestWorkspaceEmbed_HasSecurityPolicies(t *testing.T) {
 	}
 }
 
-// TestWorkspaceEmbed_ModelDirNotEmpty verifies at least one profile and provider.
 func TestWorkspaceEmbed_ModelDirNotEmpty(t *testing.T) {
 	efs := DefaultFS()
 	profiles, err := fs.ReadDir(efs, "workspace/model/profiles")
@@ -83,7 +74,6 @@ func TestWorkspaceEmbed_ModelDirNotEmpty(t *testing.T) {
 	}
 }
 
-// TestWorkspaceEmbed_PromptPaths verifies prompt template paths still exist.
 func TestWorkspaceEmbed_PromptPaths(t *testing.T) {
 	efs := DefaultFS()
 	prompts := []string{

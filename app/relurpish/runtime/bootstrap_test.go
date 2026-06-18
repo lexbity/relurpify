@@ -12,6 +12,10 @@ func TestBootstrapStartupStateInitializesWorkspaceTemplates(t *testing.T) {
 	dir := t.TempDir()
 	cfg := DefaultConfig()
 	cfg.Workspace = dir
+	// Pin the inference endpoint to a guaranteed-unreachable address so the
+	// doctor probe deterministically reports an unhealthy backend, regardless
+	// of whether a local ollama happens to be running on the dev machine.
+	cfg.InferenceEndpoint = "http://127.0.0.1:1"
 	if err := cfg.Normalize(); err != nil {
 		t.Fatalf("normalize config: %v", err)
 	}

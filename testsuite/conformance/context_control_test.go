@@ -43,12 +43,12 @@ func TestContextControl_RecipeStepContextChangesRenderedPrompt(t *testing.T) {
 	riched := provider.Provide(prompt.NewRuntimeContext(env, "react", "thoughtrecipe").
 		WithStateValue("execution_step_context_stream_query", "find relevant symbols").
 		WithStateValue("execution_step_context_stream_max_tokens", 128).
-		WithStateValue("execution_step_context_ingest_mode", "files_only"))
+		WithStateValue("execution_step_context_stream_mode", "summary"))
 
 	require.NotEmpty(t, base.Content)
 	require.Contains(t, riched.Content, "Step Context Stream Query: find relevant symbols")
 	require.Contains(t, riched.Content, "Step Context Stream Max Tokens: 128")
-	require.Contains(t, riched.Content, "Step Context Ingest Mode: files_only")
+	require.Contains(t, riched.Content, "Step Context Stream Mode: summary")
 	require.NotEqual(t, base.Content, riched.Content)
 }
 

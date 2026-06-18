@@ -1,8 +1,4 @@
-# All domain-direction violations have been retired.
-# P7/P8/P10/P11/P12/P13/P15 are all dead (zero non-test imports).
-# Remaining direction violations (model→telemetry, platform→telemetry,
-# telemetry→governance, userconfig→capability, etc.) are outside this
-# program's scope and are tracked in future programs.
+# Domain-direction violation exceptions.
+# All direction violations are resolved structurally — no suppressions.
 version: 1
 direction_violations: []
-

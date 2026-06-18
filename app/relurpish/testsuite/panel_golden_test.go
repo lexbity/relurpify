@@ -348,6 +348,19 @@ func TestRootTUIViews(t *testing.T) {
 		t.Fatalf("mkdir config: %v", err)
 	}
 
+	// Pin the AI provider to the in-process mock-ollama backend so the AI
+	// provider tab renders a deterministic model list instead of probing a
+	// real ollama on localhost:11434 (which makes the golden non-hermetic:
+	// it passes only when no ollama is running on the dev machine).
+	providerPath := config.New(workdir).RuntimeProvidersFile()
+	if err := fs.MkdirAllSecure(filepath.Dir(providerPath)); err != nil {
+		t.Fatalf("mkdir provider state dir: %v", err)
+	}
+	providerYAML := "provider: mock-ollama\nendpoint: http://mock-ollama\nmodel: gemma4:12b\ntimeout: 30s\nnative_tool_calling: true\n"
+	if err := fs.WriteFileSecure(providerPath, []byte(providerYAML)); err != nil {
+		t.Fatalf("write provider config: %v", err)
+	}
+
 	// 1. Integrated Welcome TUI Screen (no-agent welcome tab)
 	m := tui.NewTestRootModel(nil, euclotui.NewSurfaceFactory())
 	m.SetWidthHeightForTest(120, 40)

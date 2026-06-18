@@ -58,17 +58,14 @@ func TestRecipeGrant_ExcludedCapabilityDeniedByPolicyWithoutEscalation(t *testin
 	env := contextdata.NewEnvelope("task-grant", "session-grant")
 	step := thoughtrecipepkg.ExecutionStep{
 		ID:           "grant.step",
+		Kind:         thoughtrecipepkg.StepKindCapability,
 		CapabilityID: "euclo:cap.restricted",
-		Step: surface.ThoughtRecipeStep{
-			ID:           "grant.step",
-			CapabilityID: "euclo:cap.restricted",
-			OnError: &surface.StepErrorPolicy{
-				Action:   "skip",
-				RetryMax: 0,
-				Fallback: "grant.step.recover",
-			},
-			Config: map[string]any{},
+		OnError: &surface.StepErrorPolicy{
+			Action:   "skip",
+			RetryMax: 0,
+			Fallback: "grant.step.recover",
 		},
+		Config: map[string]any{},
 	}
 
 	node := thoughtrecipepkg.NewThoughtRecipeStepNode("grant.step.execute", &paradigm.Deps{Registry: scoped}, step)

@@ -71,6 +71,8 @@ type Runtime struct {
 
 	hitlCancel func()
 
+	execSink *telemetry.BroadcastSink
+
 	providersMu          sync.Mutex
 	providers            []runtimeProviderRecord
 	interactionMu        sync.Mutex
@@ -476,6 +478,11 @@ func buildRuntime(ctx context.Context, cfg Config, secrets config.Secrets) (*Run
 		}
 	}
 
+	execSink := telemetry.NewBroadcastSink()
+	ws.Telemetry = telemetry.MultiplexTelemetry{
+		Sinks: []telemetry.Telemetry{baseTelemetry, execSink},
+	}
+
 	// Register relurpic capabilities (subagent-backed; cannot be done in ayenitd).
 
 	// Use WorkflowStore interface directly
@@ -498,6 +505,7 @@ func buildRuntime(ctx context.Context, cfg Config, secrets config.Secrets) (*Run
 		secrets:              secrets,
 		registration:         registration,
 		modelBackend:         modelProduct.Backend,
+		execSink:             execSink,
 	}
 	if eventTelemetry.Log != nil && registration.HITL != nil {
 		ch, cancel := registration.HITL.Subscribe(32)
@@ -605,6 +613,11 @@ func (r *Runtime) Close(ctx context.Context) error {
 	if r.hitlCancel != nil {
 		r.hitlCancel()
 		r.hitlCancel = nil
+	}
+
+	if r.execSink != nil {
+		r.execSink.Close()
+		r.execSink = nil
 	}
 
 	// Close workspace (handles backend, services, logs, etc.)
@@ -1133,6 +1146,19 @@ func (r *Runtime) SubscribeHITL() (<-chan fauthorization.HITLEvent, func()) {
 		return ch, func() {}
 	}
 	return r.registration.HITL.Subscribe(32)
+}
+
+// SubscribeExecutionEvents streams execution lifecycle events (euclo step
+// started/completed, recipe selected, branch resolved, tool edits, etc.)
+// from the telemetry broadcast sink. Returns a receive channel and a cancel
+// function. After Close, Subscribe returns an already-closed channel.
+func (r *Runtime) SubscribeExecutionEvents() (<-chan telemetry.Event, func()) {
+	if r == nil || r.execSink == nil {
+		ch := make(chan telemetry.Event)
+		close(ch)
+		return ch, func() {}
+	}
+	return r.execSink.Subscribe(256)
 }
 
 // ApproveHITL approves a pending request with the supplied scope.

@@ -3,6 +3,7 @@ package permissions
 import (
 	"fmt"
 
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
 	"gopkg.in/yaml.v3"
 )
 
@@ -106,7 +107,7 @@ func ValidateSection(ps *PermissionSet) error {
 	if ps == nil {
 		return nil
 	}
-	return ValidatePermissionSet(ps)
+	return ucperms.ValidatePermissionSet(ps)
 }
 
 func joinArgsEnv(p ExecutablePermission) string {

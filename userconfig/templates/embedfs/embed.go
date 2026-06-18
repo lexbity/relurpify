@@ -1,8 +1,8 @@
-// Package templatesembed exposes the embedded default template bundle.
+// Package embedfs exposes the embedded default template bundle.
 // The embed FS is the canonical source for workspace config, manifest,
 // security policies, tool definitions, and prompts. An installed binary
 // carries these defaults and can self-provision without a source tree.
-package templatesembed
+package embedfs
 
 import (
 	"embed"

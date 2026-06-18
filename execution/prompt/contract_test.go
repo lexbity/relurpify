@@ -9,7 +9,7 @@ import (
 
 func TestPhase8_V2PromptAssetsOnly(t *testing.T) {
 	var assets []string
-	err := filepath.WalkDir(repoPath("templates", "prompts"), func(path string, d fs.DirEntry, err error) error {
+	err := filepath.WalkDir(repoPath("userconfig", "templates", "embedfs", "prompts"), func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -32,10 +32,10 @@ func TestPhase8_V2PromptAssetsOnly(t *testing.T) {
 		return nil
 	})
 	if err != nil {
-		t.Fatalf("walk templates/prompts: %v", err)
+		t.Fatalf("walk userconfig/templates/embedfs/prompts: %v", err)
 	}
 	if len(assets) == 0 {
-		t.Fatal("no prompt assets found under templates/prompts")
+		t.Fatal("no prompt assets found under userconfig/templates/embedfs/prompts")
 	}
 }
 

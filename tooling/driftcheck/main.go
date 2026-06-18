@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/templates"
+	templatesembed "codeburg.org/lexbit/relurpify/userconfig/templates/embedfs"
 )
 
 func main() {

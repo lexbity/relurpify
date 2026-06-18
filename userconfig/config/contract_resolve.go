@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	configpermissions "codeburg.org/lexbit/relurpify/governance/permissions"
+	configpermissions "codeburg.org/lexbit/relurpify/userconfig/permissions"
 )
 
 // EffectiveAgentContract captures the resolved runtime-facing contract derived
