@@ -22,6 +22,7 @@ import (
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
 	"codeburg.org/lexbit/relurpify/platform/llm"
+	"codeburg.org/lexbit/relurpify/telemetry"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 	"codeburg.org/lexbit/relurpify/userconfig/config/security"
 )
@@ -157,6 +158,12 @@ type RuntimeAdapter interface {
 	// ResolveInteractionFrame writes a resolved interaction response back into
 	// the live runtime envelope for the given task.
 	ResolveInteractionFrame(ctx context.Context, taskID, frameID, choice, freetext string) error
+
+	// SubscribeExecutionEvents streams execution lifecycle events (euclo step
+	// started/completed, recipe selected, branch resolved, tool edits, etc.)
+	// from the telemetry broadcast sink. Returns a receive channel and a cancel
+	// function. After Close, returns an already-closed channel.
+	SubscribeExecutionEvents() (<-chan telemetry.Event, func())
 }
 
 type runtimeAdapter struct {
@@ -1055,6 +1062,15 @@ func (r *runtimeAdapter) SubscribeHITL() (<-chan fauthorization.HITLEvent, func(
 		return nil, func() {}
 	}
 	return r.rt.SubscribeHITL()
+}
+
+func (r *runtimeAdapter) SubscribeExecutionEvents() (<-chan telemetry.Event, func()) {
+	if r == nil || r.rt == nil {
+		ch := make(chan telemetry.Event)
+		close(ch)
+		return ch, func() {}
+	}
+	return r.rt.SubscribeExecutionEvents()
 }
 
 func (r *runtimeAdapter) Diagnostics() DiagnosticsInfo {

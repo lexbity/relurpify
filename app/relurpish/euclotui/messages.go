@@ -42,16 +42,6 @@ type ExecutionEvent struct {
 	Payload     map[string]any
 }
 
-// RecipeRunMsg groups execution events under one recipe run identifier.
-type RecipeRunMsg struct {
-	RunID    string
-	RecipeID string
-	TaskID   string
-	Events   []ExecutionEvent
-	Complete bool
-	Outcome  string
-}
-
 // NewFrameMsg packages an interaction frame into the generic surface message
 // format used by the relurpish host.
 func NewFrameMsg(th *theme.Theme, frame interaction.InteractionFrame) tui.SurfaceFrameMsg {

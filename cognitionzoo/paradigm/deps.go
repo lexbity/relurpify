@@ -14,6 +14,7 @@ import (
 	"codeburg.org/lexbit/relurpify/execution/agentlifecycle"
 	"codeburg.org/lexbit/relurpify/execution/prompt"
 	"codeburg.org/lexbit/relurpify/model"
+	"codeburg.org/lexbit/relurpify/telemetry"
 )
 
 // Deps is the runtime surface used by generic cognitionzoo paradigms.
@@ -32,4 +33,5 @@ type Deps struct {
 	IngestOutputs  bool
 	PromptRegistry prompt.Registry
 	AgentLifecycle agentlifecycle.Repository
+	Telemetry      telemetry.Telemetry
 }

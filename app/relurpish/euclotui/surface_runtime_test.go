@@ -14,6 +14,7 @@ import (
 	"codeburg.org/lexbit/relurpify/execution"
 	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
+	"codeburg.org/lexbit/relurpify/telemetry"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
@@ -93,6 +94,12 @@ func (s *stubRuntimeAdapter) ApproveHITL(string, string, policy.GrantScope, time
 func (s *stubRuntimeAdapter) DenyHITL(string, string) error { return nil }
 func (s *stubRuntimeAdapter) SubscribeHITL() (<-chan fauthorization.HITLEvent, func()) {
 	ch := make(chan fauthorization.HITLEvent)
+	close(ch)
+	return ch, func() {}
+}
+
+func (s *stubRuntimeAdapter) SubscribeExecutionEvents() (<-chan telemetry.Event, func()) {
+	ch := make(chan telemetry.Event)
 	close(ch)
 	return ch, func() {}
 }

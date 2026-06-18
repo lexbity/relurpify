@@ -787,6 +787,7 @@ func (r *Runtime) paradigmDeps() *paradigm.Deps {
 		IngestOutputs:  r.Workspace.Environment.IngestOutputs,
 		PromptRegistry: r.Workspace.Environment.PromptRegistry,
 		AgentLifecycle: r.AgentLifecycle,
+		Telemetry:      r.Workspace.Telemetry,
 	}
 }
 

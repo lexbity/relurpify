@@ -187,6 +187,34 @@ func (h instrumentCapabilityHandler) Invoke(ctx context.Context, env ports.State
 		}
 		result.Metadata["insertion_decision"] = capresult.DefaultInsertionDecision(desc, capresult.ContentDispositionRaw)
 	}
+	if err == nil && stateSnapshot.telemetry != nil && isWriteClass(desc) {
+		if rec, ok := editRecordFromInvocation(desc, args, result); ok {
+			meta := map[string]any{
+				"path":          rec.Path,
+				"origin":        rec.Origin,
+				"lines_added":   rec.LinesAdded,
+				"lines_removed": rec.LinesRemoved,
+				"preview":       rec.UnifiedPreview,
+				"truncated":     rec.Truncated,
+			}
+			// Attribute the edit to the executing step when the host has stamped
+			// a generic "step_id" into working state. This stays euclo-agnostic:
+			// the capability layer never imports named/euclo, it only reads a
+			// conventional key if present. When absent (e.g. tool calls inside a
+			// react loop that don't stamp it), the diff projection aggregates the
+			// hunk under "unscoped-step" — see the euclo bridge.
+			if stepID := stepIDFromState(env); stepID != "" {
+				meta["step_id"] = stepID
+			}
+			stateSnapshot.telemetry.Emit(fwtelemetry.Event{
+				Type:      fwtelemetry.EventToolEdited,
+				TaskID:    taskIDFromState(env, stateSnapshot.agentID),
+				Timestamp: time.Now().UTC(),
+				Message:   fmt.Sprintf("tool %s edited %s", desc.ID, rec.Path),
+				Metadata:  redactTelemetryMetadata(stateSnapshot.safety, meta),
+			})
+		}
+	}
 	emitCapabilityResultTelemetry(stateSnapshot.telemetry, desc, stateSnapshot.agentID, result, err, time.Since(startedAt))
 	return result, err
 }

@@ -17,6 +17,7 @@ import (
 	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
+	"codeburg.org/lexbit/relurpify/telemetry"
 )
 
 var reduceMotionPreference bool
@@ -110,6 +111,10 @@ type RootModel struct {
 	// HITL subscription
 	hitlCh    <-chan fauthorization.HITLEvent
 	hitlUnsub func()
+
+	// Execution event subscription
+	execEventCh    <-chan telemetry.Event
+	execEventUnsub func()
 
 	// Interaction frames keyed by notification ID and frame ID so the host can
 	// resolve slot selections and freetext answers back into the pending frame.
@@ -515,6 +520,17 @@ type hitlSubscribedMsg struct {
 	unsub func()
 }
 
+// execEventsSubscribedMsg carries the execution event subscription info.
+type execEventsSubscribedMsg struct {
+	ch    <-chan telemetry.Event
+	unsub func()
+}
+
+// ExecEventBatchMsg delivers a batch of telemetry events for live projection.
+type ExecEventBatchMsg struct {
+	Events []telemetry.Event
+}
+
 // Init starts the HITL listener, spinner, text-input blink, and animation tick.
 func (m RootModel) Init() tea.Cmd {
 	cmds := []tea.Cmd{
@@ -522,6 +538,7 @@ func (m RootModel) Init() tea.Cmd {
 		m.session.Init(),
 		m.restorePromptCmd(),
 		m.subscribeHITLCmd(),
+		m.subscribeExecEventsCmd(),
 	}
 	if m.chat != nil {
 		cmds = append(cmds, m.chat.Init())
@@ -578,6 +595,18 @@ func (m RootModel) subscribeHITLCmd() tea.Cmd {
 		}
 		ch, unsub := rt.SubscribeHITL()
 		return hitlSubscribedMsg{ch: ch, unsub: unsub}
+	}
+}
+
+// subscribeExecEventsCmd subscribes to execution telemetry events.
+func (m RootModel) subscribeExecEventsCmd() tea.Cmd {
+	rt := m.runtime
+	return func() tea.Msg {
+		if rt == nil {
+			return nil
+		}
+		ch, unsub := rt.SubscribeExecutionEvents()
+		return execEventsSubscribedMsg{ch: ch, unsub: unsub}
 	}
 }
 
@@ -803,6 +832,17 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, listenHITLEvents(m.hitlCh)
 		}
 		return m, nil
+
+	case execEventsSubscribedMsg:
+		m.execEventCh = msg.ch
+		m.execEventUnsub = msg.unsub
+		if m.execEventCh != nil {
+			return m, listenExecEvents(m.execEventCh)
+		}
+		return m, nil
+
+	case ExecEventBatchMsg:
+		return m.handleExecEventBatch(msg)
 
 	// Diagnostics snapshot — route to session pane regardless of active tab.
 	case DiagnosticsUpdatedMsg:
@@ -1571,6 +1611,9 @@ func (m RootModel) autoSave() {
 func (m RootModel) cleanup() {
 	if m.hitlUnsub != nil {
 		m.hitlUnsub()
+	}
+	if m.execEventUnsub != nil {
+		m.execEventUnsub()
 	}
 	if m.chat != nil {
 		m.chat.Cleanup()

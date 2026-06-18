@@ -174,7 +174,10 @@ func NewEucloEventRouter() *EucloEventRouter {
 	}
 }
 
-// ApplyExecutionEvent applies a normalized execution event to all projections.
+// ApplyExecutionEvent applies a normalized execution event to all projections
+// (chat, diff, recipe stepper, step runtime, macro phase). Callers include
+// ApplyInteractionFrame and the telemetry bridge (ExecEventApplier). This
+// is the single entrypoint for all event-driven projection updates.
 func (r *EucloEventRouter) ApplyExecutionEvent(ev ExecutionEvent) EucloProjectionSnapshot {
 	if r == nil {
 		return EucloProjectionSnapshot{}
@@ -302,8 +305,9 @@ func (r *EucloEventRouter) applyRecipeEvent(ev ExecutionEvent) {
 		r.stepRuntime[ev.StepID] = rt
 	case reporting.EventTypeBranchResolved:
 		// Branch resolution may skip some steps — mark them.
+		// Uses asStringSlice to handle both native []string and JSON-decoded []any.
 		if ev.Payload != nil {
-			if skipped, ok := ev.Payload["skipped_step_ids"].([]string); ok {
+			if skipped := asStringSlice(ev.Payload["skipped_step_ids"]); len(skipped) > 0 {
 				for _, id := range skipped {
 					if existing, ok := r.stepRuntime[id]; ok {
 						existing.Status = surface.StepSkipped

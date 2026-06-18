@@ -11,22 +11,26 @@ import (
 	"codeburg.org/lexbit/relurpify/app/relurpish/tui"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	"codeburg.org/lexbit/relurpify/named/euclo/surface"
+	"codeburg.org/lexbit/relurpify/telemetry"
 )
 
 // EucloSurface is the default Euclo interaction surface.
 type EucloSurface struct {
 	base         tui.AgentSurface
 	router       *EucloEventRouter
+	applier      *ExecEventApplier
 	th           *theme.Theme
 	recipeLookup surface.RecipeRegistryLookup
 }
 
 // NewSurface returns the Euclo interaction surface.
 func NewSurface() tui.AgentSurface {
+	router := NewEucloEventRouter()
 	return &EucloSurface{
-		base:   tui.NewDefaultSurfaceFactory().Resolve("none"),
-		router: NewEucloEventRouter(),
-		th:     theme.Default().WithAccent(lipgloss.AdaptiveColor{Light: "#005f87", Dark: "#7fd7ff"}),
+		base:    tui.NewDefaultSurfaceFactory().Resolve("none"),
+		router:  router,
+		applier: NewExecEventApplier(router),
+		th:      theme.Default().WithAccent(lipgloss.AdaptiveColor{Light: "#005f87", Dark: "#7fd7ff"}),
 	}
 }
 
@@ -83,6 +87,22 @@ func (s *EucloSurface) InitialSubTab(tab tui.TabID) tui.SubTabID {
 
 func (s *EucloSurface) RenderNotification(item tui.NotificationItem) string {
 	return RenderInteractionNotification(s.th, item)
+}
+
+// ApplyExecEvent implements tui.ExecEventSink. It translates a telemetry.Event
+// into an ExecutionEvent and applies it to the router for live projection.
+func (s *EucloSurface) ApplyExecEvent(ev any) {
+	if s == nil || s.applier == nil {
+		return
+	}
+	telEv, ok := ev.(telemetry.Event)
+	if !ok {
+		return
+	}
+	// The applier is long-lived (created in NewSurface) so its per-(Type,StepID)
+	// sequence high-water survives across events — recreating it here would
+	// reset the dedup state on every call and defeat the seq guard (D-3).
+	s.applier.Apply(telEv)
 }
 
 func (s *EucloSurface) HandleFrame(ctx context.Context, m *tui.RootModel, msg tui.SurfaceFrameMsg) {

@@ -381,7 +381,14 @@ func looksSensitiveValue(value string) bool {
 	if lower == "" {
 		return false
 	}
-	for _, needle := range []string{"bearer ", "ghp_", "github_pat_", "sk-", "authorization:", "session="} {
+	for _, needle := range []string{
+		"bearer ", "authorization:", "session=",
+		"sk-", "pk-", // OpenAI-style secret/publishable keys
+		"ghp_", "github_pat_", "ghu_", "gho_", "ghb_", // GitHub tokens
+		"akia", // AWS access key id
+		"eyj",  // JWT header ("eyJ..." base64); lowercased here
+		"api_key", "apikey", "api-key",
+	} {
 		if strings.Contains(lower, needle) {
 			return true
 		}

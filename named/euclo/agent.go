@@ -166,6 +166,7 @@ func (a *Agent) BuildGraph(ctx context.Context, task *execution.Task) (*agentgra
 		DefaultStreamMode:    a.config.DefaultStreamMode,
 		Checkpoints:          a.config.CheckpointRepository,
 		Persistence:          a.config.PersistenceWriter,
+		Telemetry:            a.deps.Telemetry,
 	}
 	rootGraph, err := orchestrate.NewRootGraph(ctx, deps)
 	if err != nil {

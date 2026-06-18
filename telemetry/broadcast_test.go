@@ -332,6 +332,43 @@ func TestBroadcastConcurrentClose(t *testing.T) {
 	}
 }
 
+// TestBroadcastBurstNoDrop asserts that 1,000 events emitted in <1 ms to a
+// large-buffer subscriber with an active consumer are delivered with zero drops.
+func TestBroadcastBurstNoDrop(t *testing.T) {
+	if testing.Short() {
+		t.Skip("burst test")
+	}
+	b := NewBroadcastSink()
+	ch, cancel := b.Subscribe(4096)
+	defer cancel()
+
+	// Active consumer draining into a channel.
+	received := make(chan struct{}, 4096)
+	go func() {
+		for range ch {
+			received <- struct{}{}
+		}
+	}()
+
+	const n = 1000
+	for i := 0; i < n; i++ {
+		b.Emit(Event{Type: EventGraphStart, TaskID: "burst", Seq: uint64(i + 1)})
+	}
+
+	// Collect all receipts with a generous timeout.
+	for i := 0; i < n; i++ {
+		select {
+		case <-received:
+		case <-time.After(time.Second):
+			t.Fatalf("timed out waiting for event %d/%d", i+1, n)
+		}
+	}
+
+	if d := b.DroppedTotal(); d != 0 {
+		t.Fatalf("expected zero dropped events in burst, got %d", d)
+	}
+}
+
 func BenchmarkBroadcastEmit(b *testing.B) {
 	sink := NewBroadcastSink()
 	ch, cancel := sink.Subscribe(256)

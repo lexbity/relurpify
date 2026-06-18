@@ -22,6 +22,7 @@ import (
 	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
 	"codeburg.org/lexbit/relurpify/named/euclo/surface"
 	thoughtrecipepkg "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
+	"codeburg.org/lexbit/relurpify/telemetry"
 )
 
 // RootGraphDeps is the explicit dependency contract for graph execution.
@@ -39,6 +40,7 @@ type RootGraphDeps struct {
 	HITLBroker           policy.HITLBroker
 	Checkpoints          agentlifecycle.Repository
 	Persistence          *persistence.Writer
+	Telemetry            telemetry.Telemetry
 }
 
 // RootGraph wires together orchestration nodes using the agentgraph runtime.
@@ -93,6 +95,9 @@ func NewRootGraph(ctx context.Context, deps RootGraphDeps) (*RootGraph, error) {
 		if err := g.AddNode(node); err != nil {
 			return nil, err
 		}
+	}
+	if deps.Telemetry != nil {
+		g.SetTelemetry(deps.Telemetry)
 	}
 	if err := wireEdges(g); err != nil {
 		return nil, err
@@ -429,10 +434,10 @@ func ensureClarificationThoughtRecipe(reg *thoughtrecipepkg.ThoughtRecipeRegistr
 			// Directly-constructed steps must set an explicit scope: the zero
 			// value is deny-all (fail-closed, A-6), which would deny this
 			// step's own capability. Scope it to exactly what it invokes.
-			Scope:        thoughtrecipepkg.AllowTools([]string{clarificationCapabilityID}),
-			Prompt:       "Clarify the user's request.",
-			Goal:         "Clarify the user's request.",
-			Config:       map[string]any{},
+			Scope:  thoughtrecipepkg.AllowTools([]string{clarificationCapabilityID}),
+			Prompt: "Clarify the user's request.",
+			Goal:   "Clarify the user's request.",
+			Config: map[string]any{},
 		}},
 	}
 	_, _ = reg.RegisterCompiledFirstWins(thoughtrecipe, plan, "built-in clarification route")
