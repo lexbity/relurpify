@@ -44,12 +44,8 @@ const (
 	contextKeyAuditTrail                 = "blackboard.audit"
 	contextKeyExecutionSummary           = "blackboard.execution_summary"
 	contextKeyCheckpointRef              = "blackboard.checkpoint_ref"
-	contextKnowledgeSummary              = "blackboard.summary"
-	contextKnowledgeTermination          = "blackboard.termination_reason"
 	contextKnowledgeLastSource           = "blackboard.last_source"
 	contextKnowledgeLastSourcePriority   = "blackboard.last_source_priority"
-	contextKnowledgeGoalSatisfied        = "blackboard.goal_satisfied"
-	contextKnowledgeCounts               = "blackboard.counts"
 )
 
 // LoadFromContext hydrates a blackboard from namespaced envelope keys.
@@ -132,12 +128,9 @@ func PublishToContext(state *contextdata.Envelope, bb *Blackboard, controller Co
 	mirrorBlackboardToWorkingMemoryStore(state)
 	publishPersistenceCandidates(state, snapshot, controller, metrics)
 
-	// SetKnowledge is not available in the envelope paradigm; it requires streaming context assembly.
-	// state.SetKnowledge(contextKnowledgeSummary, summaryText(snapshot, metrics))
-	// state.SetKnowledge(contextKnowledgeTermination, controller.Termination)
-	// state.SetKnowledge(contextKnowledgeLastSource, controller.LastSource)
-	// state.SetKnowledge(contextKnowledgeGoalSatisfied, controller.GoalSatisfied)
-	// state.SetKnowledge(contextKnowledgeCounts, map[string]any{...})
+	// Blackboard control-state lands in working data, not the knowledge store:
+	// it is ephemeral and not retrievable content. See
+	// devdocs/ref/architecture/blackboard-context-boundary.md.
 }
 
 func mirrorBlackboardToWorkingMemoryStore(state *contextdata.Envelope) {
