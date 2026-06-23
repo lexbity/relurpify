@@ -11,9 +11,9 @@ import (
 
 	"codeburg.org/lexbit/relurpify/ayenitd"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclocontract"
 	platformfs "codeburg.org/lexbit/relurpify/platform/fs"
 	"codeburg.org/lexbit/relurpify/platform/llm"
-	"codeburg.org/lexbit/relurpify/named/euclo/euclocontract"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 	"codeburg.org/lexbit/relurpify/userconfig/modelselect"
 	te "codeburg.org/lexbit/relurpify/userconfig/templates"
@@ -120,7 +120,7 @@ func BuildDoctorReport(ctx context.Context, cfg Config, secrets config.Secrets) 
 	if _, err := os.Stat(cfg.ConfigPath); err == nil {
 		report.ConfigExists = true
 		// Try V1 nested format first (relurpify/workspace/v1).
-		// If that fails, fall back to the flat legacy format.
+		// If V1 is unavailable, also inspect the flat workspace config.
 		v1Cfg, v1Err := config.LoadRuntimeWorkspaceConfigV1(cfg.ConfigPath)
 		if v1Err == nil {
 			if v1Cfg.Model.Provider != "" && (strings.TrimSpace(cfg.InferenceProvider) == "" || strings.EqualFold(strings.TrimSpace(cfg.InferenceProvider), "ollama")) {
@@ -133,7 +133,8 @@ func BuildDoctorReport(ctx context.Context, cfg Config, secrets config.Secrets) 
 				cfg.SandboxBackend = v1Cfg.Sandbox.Backend
 			}
 		}
-		// Also try the flat legacy loader for fields not in V1 (TapePath, Agents, etc.).
+		// Also inspect the flat loader for fields not present in V1
+		// (TapePath, Agents, etc.).
 		if loaded, err := config.LoadRuntimeWorkspaceConfig(cfg.ConfigPath); err == nil {
 			if loaded.SandboxBackend != "" && cfg.SandboxBackend == "" {
 				cfg.SandboxBackend = loaded.SandboxBackend
@@ -148,7 +149,7 @@ func BuildDoctorReport(ctx context.Context, cfg Config, secrets config.Secrets) 
 				cfg.InferenceTapePath = loaded.TapePath
 			}
 		} else if v1Err != nil {
-			// Both V1 and flat loaders failed — surface the V1 error.
+			// Both loaders failed — surface the V1 error.
 			report.ConfigError = v1Err.Error()
 		}
 	}
@@ -408,7 +409,7 @@ func InitializeWorkspaceFromTemplates(cfg Config, overwrite bool) error {
 		return fmt.Errorf("workspace path required")
 	}
 	configRoot := config.New(cfg.Workspace).ConfigRoot()
-	if err := os.MkdirAll(configRoot, 	platformfs.PublicDirMode); err != nil { // public: config root
+	if err := os.MkdirAll(configRoot, platformfs.PublicDirMode); err != nil { // public: config root
 		return err
 	}
 	// The embedded template bundle is the canonical, distribution-safe source:
@@ -448,7 +449,7 @@ func InitializeWorkspaceFromTemplates(cfg Config, overwrite bool) error {
 		filepath.Join(stateDir, "sessions"),
 		filepath.Join(stateDir, "test_run"),
 	} {
-		if err := os.MkdirAll(dir, 	platformfs.PublicDirMode); err != nil { // public: runtime state dirs
+		if err := os.MkdirAll(dir, platformfs.PublicDirMode); err != nil { // public: runtime state dirs
 			return err
 		}
 	}
@@ -466,10 +467,10 @@ func copyTemplateContent(data []byte, dst, workspace string, overwrite bool) err
 	if !strings.HasPrefix(cleanDst, filepath.Clean(workspace)) {
 		return fmt.Errorf("path traversal: %s", dst)
 	}
-	if err := os.MkdirAll(filepath.Dir(cleanDst), 	platformfs.PublicDirMode); err != nil { // public: template dst dir
+	if err := os.MkdirAll(filepath.Dir(cleanDst), platformfs.PublicDirMode); err != nil { // public: template dst dir
 		return err
 	}
-	return os.WriteFile(filepath.Clean(cleanDst), []byte(rendered), 	platformfs.PublicFileMode) //nolint:gosec // workspace-scoped template output after prefix check
+	return os.WriteFile(filepath.Clean(cleanDst), []byte(rendered), platformfs.PublicFileMode) //nolint:gosec // workspace-scoped template output after prefix check
 }
 
 func detectChromiumStatus(ctx context.Context, policy sandbox.CommandPolicy) DependencyStatus {

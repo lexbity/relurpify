@@ -277,8 +277,8 @@ func (s *ExecutionCapabilityCatalogSnapshot) filteredByAllowlist(allowed map[str
 		}
 	}
 
-	// Also filter the standalone modelCallableTools list (tools registered via legacy path)
-	// that may not have a matching entry. Use reg for ID resolution.
+	// Also filter the standalone modelCallableTools list for tools that may
+	// not have a matching registry entry. Use reg for ID resolution.
 	seen := make(map[string]struct{}, len(out.modelCallableTools))
 	for _, t := range out.modelCallableTools {
 		if t != nil {

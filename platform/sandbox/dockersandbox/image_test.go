@@ -36,7 +36,7 @@ func TestDockerImageDigestPinning(t *testing.T) {
 }
 
 func TestDockerSandboxValidatesImageDigest(t *testing.T) {
-	// Config with no digest should work (backward compat)
+	// Config with no digest should still be accepted.
 	c1 := Config{DockerPath: "docker", Image: "test:latest", Workspace: "/ws"}
 	b1 := NewBackend(c1)
 	if b1.config.ImageDigest != "" {

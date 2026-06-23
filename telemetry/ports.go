@@ -138,5 +138,5 @@ func (s *PerfStats) SuccessRate() float64 {
 	return float64(s.TotalInvocations-s.ErrorCount) / float64(s.TotalInvocations)
 }
 
-// TokenUsageReport is an alias for backward compatibility.
+// TokenUsageReport aliases TokenUsage for callers using the older type name.
 type TokenUsageReport = TokenUsage

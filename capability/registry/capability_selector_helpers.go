@@ -152,8 +152,8 @@ func enabledStateKey(value agentspec.EnabledState) string {
 	return strconv.Itoa(int(value))
 }
 
-// ValidateCapabilitySelector checks the legacy selector for obvious structural
-// issues. The broader matching rules are handled elsewhere in the framework.
+// ValidateCapabilitySelector checks the selector for obvious structural issues.
+// The broader matching rules are handled elsewhere in the framework.
 func ValidateCapabilitySelector(selector agentspec.CapabilitySelector) error {
 	if strings.TrimSpace(selector.ID) == "" &&
 		strings.TrimSpace(selector.Name) == "" &&

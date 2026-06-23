@@ -72,7 +72,7 @@ func TestNoEnvcompositionImportsInSession(t *testing.T) {
 }
 
 // TestBuildBuiltinCapabilityBundleIsDeprecated verifies production files no
-// longer reference the legacy in-agentenv capability bundle builder.
+// longer reference the in-agentenv capability bundle builder.
 func TestBuildBuiltinCapabilityBundleIsDeprecated(t *testing.T) {
 	root := filepath.Join("..", "..")
 	_ = filepath.Walk(root, func(path string, info os.FileInfo, err error) error {

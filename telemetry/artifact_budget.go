@@ -70,7 +70,7 @@ type BudgetPolicies struct {
 	AutoPrune            bool
 }
 
-// BudgetState mirrors the historical budget state enumeration.
+// BudgetState describes the current artifact-budget state transitions.
 type BudgetState int
 
 const (

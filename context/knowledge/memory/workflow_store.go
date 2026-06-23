@@ -32,7 +32,7 @@ type WorkflowStateStore interface {
 	Close() error
 }
 
-// WorkflowRecord represents a workflow entity (legacy type for non-archaeo code).
+// WorkflowRecord represents a workflow entity.
 type WorkflowRecord struct {
 	WorkflowID  string
 	TaskID      string
@@ -44,7 +44,7 @@ type WorkflowRecord struct {
 	Metadata    map[string]any
 }
 
-// WorkflowRunRecord represents a single execution run of a workflow (legacy type for non-archaeo code).
+// WorkflowRunRecord represents a single execution run of a workflow.
 type WorkflowRunRecord struct {
 	RunID          string
 	WorkflowID     string

@@ -400,7 +400,7 @@ func buildCompiledPolicy(contract *config.EffectiveAgentContract, engine regpkg.
 // Feature assembly is governed by cfg.Scope. Security and capability
 // assembly are unconditional; LLM backend, knowledge, services, and
 // telemetry-sink construction are gated behind their respective scope
-// flags. A zero-value scope defaults to ScopeFull for legacy behavior.
+// flags. A zero-value scope defaults to ScopeFull for existing callers.
 //
 // Builder taxonomy (design decision 8):
 //

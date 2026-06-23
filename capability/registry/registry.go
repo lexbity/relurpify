@@ -112,7 +112,7 @@ func (r *CapabilityRegistry) SetPolicyEngine(engine PolicyEngine) {
 	r.policyEngine = engine
 }
 
-// UseToolAdmission configures manifest-driven tool gating for legacy tool registration.
+// UseToolAdmission configures manifest-driven tool gating.
 func (r *CapabilityRegistry) UseToolAdmission(policy *ToolAdmissionPolicy) {
 	if r == nil {
 		return
@@ -405,7 +405,7 @@ func (r *CapabilityRegistry) Register(ctx context.Context, tool ports.Tool) erro
 	return r.RegisterLegacyTool(ctx, tool)
 }
 
-// RegisterLegacyTool adds a legacy ports.Tool implementation to the registry by
+// RegisterLegacyTool adds a ports.Tool implementation to the registry by
 // adapting it into a tool-kind capability entry.
 func (r *CapabilityRegistry) RegisterLegacyTool(ctx context.Context, tool ports.Tool) error {
 	return r.RegisterBatch(ctx, []RegistrationBatchItem{{LegacyTool: tool}})

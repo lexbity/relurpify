@@ -94,8 +94,8 @@ func (a *AgentRuntimeSpec) NativeToolCallingEnabled() bool {
 	}
 }
 
-// ResolveToolCallingIntent returns the effective intent after compatibility
-// fallbacks are applied.
+// ResolveToolCallingIntent returns the effective intent after fallback values
+// are applied.
 func (a *AgentRuntimeSpec) ResolveToolCallingIntent() ToolCallingIntent {
 	if a == nil {
 		return ToolCallingIntentAuto
@@ -236,8 +236,8 @@ type AgentInvocationSpec struct {
 }
 
 // AgentCoordinationSpec is the canonical configuration surface for delegation,
-// handoff, and tiered projection policy. Invocation remains as a compatibility
-// input for older manifests.
+// handoff, and tiered projection policy. Invocation remains as an input for
+// older manifests.
 type AgentCoordinationSpec struct {
 	Enabled                   bool                  `yaml:"enabled,omitempty" json:"enabled,omitempty"`
 	DelegationTargetSelectors []CapabilitySelector  `yaml:"delegation_target_selectors,omitempty" json:"delegation_target_selectors,omitempty"`

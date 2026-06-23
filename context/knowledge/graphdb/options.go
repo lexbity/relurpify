@@ -19,9 +19,8 @@ type Options struct {
 	// DataDir is the top-level state directory.
 	DataDir string
 
-	// AOFFileName and SnapshotFileName are retained only for reading
-	// legacy AOF stores during migration. They are not used by the
-	// Badger backend.
+	// AOFFileName and SnapshotFileName are read when loading older AOF-based
+	// stores. They are not used by the Badger backend.
 	AOFFileName              string
 	SnapshotFileName         string
 	SnapshotOnClose          bool
@@ -34,9 +33,8 @@ type Options struct {
 
 	// LRUCapacity controls the maximum number of nodes kept in the
 	// in-memory working set. When 0 (default), all nodes are loaded into
-	// RAM (legacy behaviour). When > 0, the engine serves reads via an
-	// LRU over Badger (NFR-9). The capacity should be derived from the
-	// sandbox RAM budget.
+	// RAM. When > 0, the engine serves reads via an LRU over Badger
+	// (NFR-9). The capacity should be derived from the sandbox RAM budget.
 	LRUCapacity int
 
 	// Observer receives structured events emitted by the engine. When nil

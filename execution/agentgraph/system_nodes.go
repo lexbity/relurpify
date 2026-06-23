@@ -73,7 +73,7 @@ type StateHydrator interface {
 }
 
 // BuildMemoryRetrievalPublication derives the richer graph publication shape
-// from legacy envelope results.
+// from envelope results.
 func BuildMemoryRetrievalPublication(query string, results []relurpctx.MemoryRecordEnvelope, expectedClass relurpctx.MemoryClass) *MemoryRetrievalPublication {
 	if len(results) == 0 {
 		return &MemoryRetrievalPublication{

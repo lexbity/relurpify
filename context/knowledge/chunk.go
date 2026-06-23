@@ -189,7 +189,7 @@ type KnowledgeChunk struct {
 	SuspicionScore float64          `json:"suspicion_score,omitempty"`
 	SuspicionFlags []SuspicionFlags `json:"suspicion_flags,omitempty"`
 
-	// Legacy fields (kept for backward compatibility)
+	// Core persisted fields
 	Provenance ChunkProvenance `json:"provenance"`
 	Freshness  FreshnessState  `json:"freshness"`
 	Body       ChunkBody       `json:"body"`

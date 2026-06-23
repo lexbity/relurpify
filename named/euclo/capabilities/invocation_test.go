@@ -65,7 +65,7 @@ func TestInvokeCapability_NilTask(t *testing.T) {
 		t.Fatalf("expected success=true, got %v", result.Success)
 	}
 
-	// Verify empty args were passed (backward compatibility)
+	// Verify empty args were passed for the nil-task path.
 	if len(registry.args) != 0 {
 		t.Fatalf("expected 0 args for nil task, got %d", len(registry.args))
 	}

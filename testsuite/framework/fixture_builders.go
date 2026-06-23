@@ -147,7 +147,8 @@ func NewDocumentBuilder() *DocumentBuilder {
 	return builder
 }
 
-// WithName is retained for compatibility but no longer stored.
+// WithName is preserved for fixture-builder API stability; metadata is no
+// longer serialized into the runtime document.
 func (b *DocumentBuilder) WithName(name string) *DocumentBuilder {
 	if b != nil && b.document != nil {
 		b.document.Metadata.Name = name
@@ -155,7 +156,8 @@ func (b *DocumentBuilder) WithName(name string) *DocumentBuilder {
 	return b
 }
 
-// WithVersion is retained for compatibility but no longer stored.
+// WithVersion is preserved for fixture-builder API stability; metadata is no
+// longer serialized into the runtime document.
 func (b *DocumentBuilder) WithVersion(version string) *DocumentBuilder {
 	if b != nil && b.document != nil {
 		b.document.Metadata.Version = version

@@ -13,8 +13,7 @@ import (
 	"codeburg.org/lexbit/relurpify/context/knowledge/graphdb"
 )
 
-// ChunkNodeKind keeps the legacy persisted node kind during the transition so
-// new framework-native readers can work against existing graph data.
+// ChunkNodeKind is the persisted node kind used by the chunk store.
 const ChunkNodeKind graphdb.NodeKind = "bkc_chunk"
 
 type edgeEnvelope struct {

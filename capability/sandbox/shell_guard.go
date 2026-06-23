@@ -17,8 +17,8 @@ type CommandApprover interface {
 }
 
 // ShellGuard acts as a command policy wrapper for shell blacklist and HITL
-// escalation. It still implements CommandRunner for compatibility, but the
-// policy check is now a separate step that can be composed around any runner.
+// escalation. It implements CommandRunner so policy checks can be composed
+// around any runner.
 type ShellGuard struct {
 	inner     CommandRunner
 	blacklist *ShellBlacklist

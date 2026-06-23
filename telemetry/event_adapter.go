@@ -9,7 +9,7 @@ import (
 	evt "codeburg.org/lexbit/relurpify/telemetry/event"
 )
 
-// EventTelemetry mirrors legacy telemetry events into the framework event log.
+// EventTelemetry mirrors telemetry events into the framework event log.
 type EventTelemetry struct {
 	Log       evt.Log
 	Partition string

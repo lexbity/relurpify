@@ -45,9 +45,9 @@ services and bootstrap indexing. If you are looking for a launch command, use
 
 ## Nexus
 
-The runtime code says Nexus gateway and node-provider registration were
-removed/shelved in `app/relurpish/runtime/runtime.go`. Treat `nexus` names in
-older comments and docs as stale until a concrete implementation reappears.
+See [docs/known-limitations.md](known-limitations.md) for the current Nexus
+status. Treat `nexus` names in older comments and docs as historical unless a
+verified implementation reappears.
 
 ## Workspace indexing
 

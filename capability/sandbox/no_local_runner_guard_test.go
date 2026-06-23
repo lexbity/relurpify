@@ -8,7 +8,7 @@
 //   framework/sandbox/local_command_runner_processgroup_test.go
 //   framework/sandbox/enforcement_env.go
 //   framework/sandbox/enforcement_env_test.go
-//   the legacy subprocess-env guard file
+//   the subprocess-env guard file
 //
 // The test-harness fallback in testsuite/agenttest/verification_driver.go
 // was switched to error-on-nil-runner.

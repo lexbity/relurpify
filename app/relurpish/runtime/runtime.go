@@ -103,10 +103,10 @@ func (r *Runtime) Secrets() config.Secrets {
 }
 
 // New builds a runtime for the TUI and status surfaces.
-// Construction is total: recoverable failures (config parse errors,
-// sandbox backend unavailable, model backend down) produce a degraded
-// runtime with deny-all scope instead of returning an error.
-// Truly fatal programmer errors (nil deref) still return an error.
+// Recoverable failures (config parse errors, sandbox backend unavailable,
+// model backend down) produce a degraded runtime with deny-all scope
+// instead of failing startup.
+// Programming errors may still panic or return an error from lower layers.
 func New(ctx context.Context, cfg Config, secrets config.Secrets) (*Runtime, error) {
 	rt, err := buildRuntime(ctx, cfg, secrets)
 	if err != nil {
@@ -197,10 +197,11 @@ func buildRuntime(ctx context.Context, cfg Config, secrets config.Secrets) (*Run
 				cfg.SandboxBackend = v1Cfg.Sandbox.Backend
 			}
 		}
-		// Also try the flat legacy RuntimeWorkspaceConfig for fields not
-		// in V1 (TapePath, Agents, AllowedCapabilities, runtime state).
-		// Also applies flat provider/model/sandbox_backend as fallback
-		// when V1 parsing fails (backward compat with existing files).
+		// Also inspect the flat RuntimeWorkspaceConfig for fields still
+		// honored from older workspace files (TapePath, Agents,
+		// AllowedCapabilities, runtime state).
+		// Provider/model/sandbox_backend are also taken from the flat file
+		// when the V1 parse does not supply them.
 		if loaded, err := config.LoadRuntimeWorkspaceConfig(cfg.ConfigPath); err == nil {
 			workspaceCfg = loaded
 			if loaded.TapePath != "" && preTapePath == "" {
@@ -522,7 +523,7 @@ func buildRuntime(ctx context.Context, cfg Config, secrets config.Secrets) (*Run
 		_ = rt.Close(ctx)
 		return nil, fmt.Errorf("register builtin providers: %w", err)
 	}
-	// Nexus gateway and node provider registration removed (app/nexus shelved)
+	// Nexus gateway/node-provider registration is not wired in this runtime.
 
 	if ws != nil && ws.Telemetry != nil {
 		ws.Telemetry.Emit(telemetry.Event{

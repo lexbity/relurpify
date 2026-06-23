@@ -252,7 +252,7 @@ func ValidateBranchMerge(envelopes []*Envelope) error {
 
 	// Additional validation rules can be added here:
 	// - Check for conflicting checkpoint requests
-	// - Validate streamed context compatibility
+	// - Validate streamed context shape
 	// - Ensure retrieval references don't have circular dependencies
 
 	return nil
