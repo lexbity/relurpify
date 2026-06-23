@@ -1,6 +1,7 @@
 // Package subprocess provides manifest-driven subprocess tool execution.
-// It is the relocated home of the generic subprocess executor (from
-// framework/cfgload) and the typed flag-expansion engine (C3).
+// It is the relocated home of the generic subprocess executor (from the
+// config-loading boundary in userconfig/config) and the typed flag-expansion
+// engine (C3).
 package subprocess
 
 import (
@@ -22,7 +23,7 @@ import (
 // Expansion order:
 //  1. command.base
 //  2. typed/boolean flags (deterministic flag-key sort)
-//  3. command.args (placeholder tokens)
+//  3. command.args (token markers)
 //  4. default_args
 //  5. raw args["args"] (flagged only if sandbox.allow_flags)
 func ExpandCommand(manifest ports.ToolManifest, args map[string]any) ([]string, error) {
@@ -54,7 +55,7 @@ func ExpandCommand(manifest ports.ToolManifest, args map[string]any) ([]string, 
 	}
 	cmd = append(cmd, flags...)
 
-	// 3. Command.Args (positional placeholders)
+	// 3. Command.Args (positional tokens)
 	for _, token := range commandSpec.Args {
 		expanded, err := expandToken(token, args)
 		if err != nil {
@@ -201,14 +202,14 @@ func expandTypedFlag(key string, flag ports.ToolManifestFlag, args map[string]an
 	}
 }
 
-// --- token expansion helpers (moved from framework/cfgload) ---
+// --- token expansion helpers (moved from the config-loading boundary) ---
 
 func expandToken(token string, args map[string]any) ([]string, error) {
 	token = strings.TrimSpace(token)
 	if token == "" {
 		return nil, nil
 	}
-	if name, ok := placeholderName(token); ok {
+	if name, ok := tokenName(token); ok {
 		value, exists := lookupArg(args, name)
 		if !exists {
 			return nil, fmt.Errorf("missing parameter %q", name)
@@ -231,12 +232,12 @@ func expandToken(token string, args map[string]any) ([]string, error) {
 		}
 	}
 	if strings.Contains(token, "${") || strings.Contains(token, "{{") {
-		return nil, fmt.Errorf("token %q must be a single placeholder token", token)
+		return nil, fmt.Errorf("token %q must be a single expansion token", token)
 	}
 	return []string{token}, nil
 }
 
-func placeholderName(token string) (string, bool) {
+func tokenName(token string) (string, bool) {
 	switch {
 	case strings.HasPrefix(token, "${") && strings.HasSuffix(token, "}"):
 		return strings.TrimSpace(token[2 : len(token)-1]), true

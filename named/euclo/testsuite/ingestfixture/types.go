@@ -1,4 +1,4 @@
-package ingestion
+package ingestfixture
 
 // IngestionMode controls the scope of file ingestion.
 type IngestionMode string

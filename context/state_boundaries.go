@@ -58,7 +58,7 @@ type MemoryReference struct {
 }
 
 // StateBoundaryPolicy declares what a node may read and write in graph state.
-// Phase 3 uses this as a vocabulary and lint surface; later phases may enforce it.
+// This file defines a vocabulary and lint surface; future gates may enforce it.
 type StateBoundaryPolicy struct {
 	ReadKeys                 []string         `json:"read_keys,omitempty"`
 	WriteKeys                []string         `json:"write_keys,omitempty"`

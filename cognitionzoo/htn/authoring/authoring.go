@@ -10,7 +10,7 @@ type SubtaskSpec = runtime.SubtaskSpec
 type OperatorSpec = runtime.OperatorSpec
 type MethodSpec = runtime.MethodSpec
 
-// Phase 8: Extended method authoring model supporting richer runtime hints
+// Extended method authoring model supporting richer runtime hints.
 // without changing HTN internals. These types enrich SubtaskSpec, MethodSpec,
 // and OperatorSpec with metadata for verification, file focus, cost class,
 // branch safety, retry strategy, and expected outputs.
@@ -60,7 +60,7 @@ const (
 	RetryClassUnknown    RetryClass = "unknown"    // Unknown retry semantics
 )
 
-// EnhancedSubtaskSpec extends SubtaskSpec with Phase 8 runtime hints.
+// EnhancedSubtaskSpec extends SubtaskSpec with richer runtime hints.
 // This type is used internally; SubtaskSpec remains the primary user-facing type.
 type EnhancedSubtaskSpec struct {
 	runtime.SubtaskSpec
@@ -78,7 +78,7 @@ type EnhancedSubtaskSpec struct {
 	ExpectedOutput map[string]any `json:"expected_output,omitempty"`
 }
 
-// EnhancedOperatorSpec extends OperatorSpec with Phase 8 runtime hints.
+// EnhancedOperatorSpec extends OperatorSpec with richer runtime hints.
 type EnhancedOperatorSpec struct {
 	runtime.OperatorSpec
 	// VerificationHint guides verification of operator completion.
@@ -95,7 +95,7 @@ type EnhancedOperatorSpec struct {
 	ExpectedOutput map[string]any `json:"expected_output,omitempty"`
 }
 
-// EnhancedMethodSpec extends MethodSpec with Phase 8 runtime hints.
+// EnhancedMethodSpec extends MethodSpec with richer runtime hints.
 type EnhancedMethodSpec struct {
 	runtime.MethodSpec
 	// VerificationHint guides verification of method completion.
@@ -189,7 +189,7 @@ func GetExpectedOutput(subtask SubtaskSpec) map[string]any {
 	return nil
 }
 
-// OperatorMetadata captures Phase 8 metadata for an operator.
+// OperatorMetadata captures extended metadata for an operator.
 type OperatorMetadata struct {
 	VerificationHint *VerificationHint
 	FileFocus        *FileFocus
@@ -199,7 +199,7 @@ type OperatorMetadata struct {
 	ExpectedOutput   map[string]any
 }
 
-// ExtractOperatorMetadata extracts Phase 8 metadata from an operator spec.
+// ExtractOperatorMetadata extracts extended metadata from an operator spec.
 func ExtractOperatorMetadata(operator OperatorSpec) OperatorMetadata {
 	metadata := OperatorMetadata{
 		CostClass:  CostClassUnknown,
@@ -219,7 +219,7 @@ func ExtractOperatorMetadata(operator OperatorSpec) OperatorMetadata {
 	return metadata
 }
 
-// MethodMetadata captures Phase 8 metadata for a method.
+// MethodMetadata captures extended metadata for a method.
 type MethodMetadata struct {
 	VerificationHint *VerificationHint
 	FileFocus        *FileFocus
@@ -228,7 +228,7 @@ type MethodMetadata struct {
 	ExpectedOutput   map[string]any
 }
 
-// ExtractMethodMetadata extracts Phase 8 metadata from a method spec.
+// ExtractMethodMetadata extracts extended metadata from a method spec.
 func ExtractMethodMetadata(spec MethodSpec) MethodMetadata {
 	metadata := MethodMetadata{
 		CostClass: CostClassUnknown,

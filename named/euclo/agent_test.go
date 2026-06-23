@@ -186,7 +186,7 @@ func TestInitializeStoresConfig(t *testing.T) {
 }
 
 func TestExecuteStashesResumeClassification(t *testing.T) {
-	t.Skip("Phase 1: Resume state handling is stubbed; will be fully implemented in Phase 14")
+	t.Skip("Resume state handling is stubbed; will be fully implemented later.")
 
 	deps := &paradigm.Deps{
 		Registry: registry.NewRegistry(),

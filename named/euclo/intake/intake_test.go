@@ -12,7 +12,7 @@ import (
 	"codeburg.org/lexbit/relurpify/named/euclo/families"
 )
 
-// === Phase 3 Unit Tests ===
+// Unit tests.
 
 func TestHintParserParse(t *testing.T) {
 	parser := NewHintParser()

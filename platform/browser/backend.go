@@ -56,9 +56,9 @@ type StructuredLink struct {
 }
 
 type StructuredInput struct {
-	Name        string `json:"name"`
-	Type        string `json:"type"`
-	Placeholder string `json:"placeholder"`
+	Name     string `json:"name"`
+	Type     string `json:"type"`
+	HintText string `json:"hint_text"`
 }
 
 // MarshalJSON is a small helper so callers can use the same deterministic

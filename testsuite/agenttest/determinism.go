@@ -226,10 +226,10 @@ func LoadGoldenFingerprint(tapePath string) (*ToolSequenceFingerprint, error) {
 	return ComputeFingerprint(transcript)
 }
 
-// LoadTape loads a tape file (placeholder - integrate with existing tape system)
+// LoadTape loads a tape file through the existing tape system integration point.
 func LoadTape(path string) ([]map[string]any, error) {
-	// This should integrate with the existing tape loading mechanism
-	// For now, return empty as the tape system is in platform/llm
+	// This should integrate with the existing tape loading mechanism.
+	// The current implementation still returns a not-implemented error.
 	return nil, fmt.Errorf("tape loading not yet implemented")
 }
 

@@ -121,7 +121,7 @@ func (a *PipelineAgent) Capabilities() []string {
 // BuildGraph returns a visualization graph of the pipeline stage sequence.
 // The returned graph is not executable; stage nodes are stubs that record
 // inspection metadata but do not invoke stage logic. Use Execute for actual
-// pipeline execution. A fully executable graph integration is planned for Phase 8.
+// pipeline execution. A fully executable graph integration can be added later.
 func (a *PipelineAgent) BuildGraph(ctx context.Context, task *execution.Task) (*graph.Graph, error) {
 	stages, err := a.stagesForTask(task)
 	if err != nil {

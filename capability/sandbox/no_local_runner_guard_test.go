@@ -1,19 +1,19 @@
 // Guard test — runs in normal CI to prevent reintroduction of the host-exec
 // path. Asserts that NewLocalCommandRunner is absent from the entire module.
 //
-// NewLocalCommandRunner was removed in Phase 5 of the sandbox-centrality
+// NewLocalCommandRunner was removed during the sandbox-centrality
 // rework (2026-05-28). The following were deleted:
 //   framework/sandbox/local_command_runner.go
 //   framework/sandbox/local_command_runner_env_test.go
 //   framework/sandbox/local_command_runner_processgroup_test.go
 //   framework/sandbox/enforcement_env.go
 //   framework/sandbox/enforcement_env_test.go
-//   framework/cfgload/security/subprocess_env.go
+//   the legacy subprocess-env guard file
 //
 // The test-harness fallback in testsuite/agenttest/verification_driver.go
-// was switched to error-on-nil-runner in Phase 5.
+// was switched to error-on-nil-runner.
 //
-// All eight phases of the sandbox-centrality rework are complete.
+// The sandbox-centrality rework is complete.
 // See devdocs/plans/sandbox-central-rework.md for the full plan.
 
 package sandbox

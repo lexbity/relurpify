@@ -362,7 +362,7 @@ func TestSuiteValidateRejectsInvalidBootstrapTimeoutOverride(t *testing.T) {
 	}
 }
 
-// Phase 8: Test removed - EucloExpectSpec no longer exists, migrated to Benchmark.Euclo
+// Test removed; EucloExpectSpec no longer exists and was migrated to Benchmark.Euclo.
 
 func TestSuiteValidateRejectsInvalidSetupFileMode(t *testing.T) {
 	suite := &Suite{

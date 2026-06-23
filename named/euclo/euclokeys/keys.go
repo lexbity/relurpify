@@ -55,7 +55,7 @@ const (
 
 	// Stream
 	KeyStreamResult     = "euclo.stream_result"
-	KeyStreamTokenUsage = "euclo.stream_token_usage" //nolint:gosec
+	KeyStreamTokenUsage = "euclo.stream_token_usage" //nolint:gosec // fixed key name; false positive from literal value
 
 	// Interaction Frames
 	KeyFrameHistory = "euclo.frame_history"

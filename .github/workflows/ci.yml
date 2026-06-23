@@ -5,6 +5,38 @@ on:
   pull_request:
 
 jobs:
+  dco:
+    name: DCO sign-off
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify Signed-off-by on every PR commit
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          missing=0
+          # Each commit introduced by this PR must carry a DCO sign-off trailer.
+          for sha in $(git rev-list "$BASE_SHA..$HEAD_SHA"); do
+            # Merge commits (more than one parent) are exempt.
+            if [ "$(git rev-list --parents -n 1 "$sha" | wc -w)" -gt 2 ]; then
+              continue
+            fi
+            if ! git log -1 --format='%(trailers:key=Signed-off-by,valueonly)' "$sha" | grep -q '[^[:space:]]'; then
+              echo "::error::commit $sha is missing a 'Signed-off-by' line (DCO). Run: git commit -s --amend"
+              git log -1 --format='  %h %s' "$sha"
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            echo "DCO check failed. See CONTRIBUTING for how to sign off your commits."
+            exit 1
+          fi
+          echo "All PR commits are signed off."
+
   test:
     runs-on: ubuntu-latest
     steps:

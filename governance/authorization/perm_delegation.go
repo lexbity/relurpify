@@ -249,7 +249,7 @@ func redactSensitivePath(path string) string {
 	lower := strings.ToLower(path)
 	for _, pattern := range sensitivePathPatterns {
 		if strings.Contains(lower, pattern) {
-			// Return a placeholder instead of the full path to avoid
+			// Return a redacted sentinel instead of the full path to avoid
 			// leaking the sensitive location or its context.
 			return "[REDACTED_PATH]"
 		}

@@ -338,7 +338,7 @@ func (r *MetricsRecorder) RecordPlanExecution(plan *plan.Plan, result *execution
 	// Record success/failure for plan as a whole
 	for _, step := range plan.Steps {
 		// Approximate: if plan succeeded, assume all steps succeeded
-		// In Phase 6, this will be more granular
+		// This can become more granular when step-level timings are recorded.
 		success := result.Success
 		stepDuration := duration / time.Duration(len(plan.Steps))
 		if err := r.RecordOperatorExecution(step.Tool, success, stepDuration); err != nil {

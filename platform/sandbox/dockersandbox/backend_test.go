@@ -103,7 +103,7 @@ func TestBackendVerifyUsesDockerBinary(t *testing.T) {
 func writeDockerScript(t *testing.T, dir, name, body string) string {
 	t.Helper()
 	path := filepath.Join(dir, name)
-	if err := os.WriteFile(path, []byte(body), 0o700); err != nil { //nolint:gosec
+	if err := os.WriteFile(path, []byte(body), 0o700); err != nil { //nolint:gosec // test fixture writes an executable script into a temp workspace
 		t.Fatalf("write script: %v", err)
 	}
 	return path

@@ -472,8 +472,7 @@ func resolveDelegationResourceRefs(request policy.DelegationRequest, target gove
 	if len(request.ResourceRefs) > 0 {
 		return dedupeStringSlice(request.ResourceRefs)
 	}
-	// TODO: Implement resource projection via lifecycle repository in Phase 4
-	// For now, return nil if no explicit refs provided
+	// Only explicit resource refs are available at this layer.
 	return nil
 }
 
@@ -487,8 +486,7 @@ func buildDelegationInvocationArgs(ctx context.Context, request policy.Delegatio
 	for key, value := range request.Metadata {
 		args[key] = value
 	}
-	// TODO: Implement resource projection via lifecycle repository in Phase 4
-	// For now, skip resource summaries
+	// Resource summaries are left empty unless the caller provides them.
 	role := target.CoordinationRole()
 	switch role {
 	case "architect":

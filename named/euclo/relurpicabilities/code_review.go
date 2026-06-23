@@ -330,7 +330,7 @@ func heuristicReviewFindings(contextText, focus string) []map[string]any {
 	}
 
 	if strings.Contains(lower, "todo") || strings.Contains(lower, "fixme") || strings.Contains(lower, "stub") {
-		addFinding("warning", focusCategory(focus), "workspace context contains placeholder or unfinished implementation markers", "replace placeholders with the production implementation before merging")
+		addFinding("warning", focusCategory(focus), "workspace context contains stub or unfinished implementation markers", "replace stubs with the production implementation before merging")
 	}
 	if strings.Contains(lower, "panic(") || strings.Contains(lower, "panic ") {
 		addFinding("error", "correctness", "workspace context references a panic path", "guard the failure path or return a typed error instead of panicking")

@@ -1,4 +1,4 @@
-package ingestion
+package ingestfixture
 
 // IngestionSpec defines what to ingest and how.
 type IngestionSpec struct {

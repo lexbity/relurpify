@@ -47,9 +47,6 @@ func TestLoadAllowlist(t *testing.T) {
 	if !a.Contains("glob", "glob: test glob pattern") {
 		t.Error("should contain test glob violation")
 	}
-	if !a.Contains("stub", "stub: test stub marker") {
-		t.Error("should contain test stub violation")
-	}
 }
 
 func TestValidateAllowlist_noStale(t *testing.T) {

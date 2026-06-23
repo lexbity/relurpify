@@ -159,7 +159,7 @@ func writeRetrievalReferences(env *contextdata.Envelope, query string, nodes []*
 	// Create chunk IDs for the nodes (in a real implementation, these would be actual chunk IDs)
 	chunkIDs := make([]contextdata.ChunkID, 0, len(nodes))
 	for _, node := range nodes {
-		// Use node ID as a chunk ID for now
+		// Use the node ID as a chunk ID.
 		chunkIDs = append(chunkIDs, contextdata.ChunkID(node.ID))
 	}
 

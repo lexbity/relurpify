@@ -18,10 +18,8 @@
 //     registered directly from the platform packages.
 //   - Provider client: connects to external capability providers declared
 //     in the workspace configuration and imports their capabilities.
-//   - Nexus node (nexus_provider.go, nexus_node.go): connects to the Nexus
-//     gateway and exposes capabilities from registered remote nodes.
 //   - Background delegation (background_delegation_provider.go): routes tasks
-//     marked for background execution to Nexus-managed agent instances.
+//     marked for background execution to background agent instances.
 //   - Browser capabilities are exposed by the workspace service in
 //     ayenitd/service/browser and consumed through the shared registry.
 //
@@ -29,6 +27,5 @@
 //
 // delegations.go manages the lifecycle of capability delegations — bounded
 // grants that allow the agent to forward specific capability calls to a remote
-// node or background instance. nexus_session_dispatcher.go routes delegated
-// calls through the Nexus session layer.
+// node or background instance.
 package runtime

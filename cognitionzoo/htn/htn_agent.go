@@ -318,7 +318,7 @@ func (a *HTNAgent) buildPlanStepTask(parentTask *execution.Task, compiledPlan *p
 		Context:     map[string]any{},
 		Metadata:    parentTask.Metadata,
 	}
-	// NEW: Pass parent state to step task for shared context access
+	// Pass parent state to the step task for shared context access.
 	// This prevents React from re-discovering workspace for each step
 	if env != nil {
 		stepTask.Context["parent_state"] = env

@@ -67,7 +67,7 @@ func (t *subprocessTool) Tags() []string {
 
 // Execute runs the tool with the given arguments. It expands the command
 // template via ExpandCommand (which enforces flag-injection, typed flags,
-// platform variants, and placeholder substitution), then delegates to the
+// platform variants, and token substitution), then delegates to the
 // shared Run function which applies all guards (egress, cargo isolation,
 // sandbox constraints) and returns a structured envelope.
 func (t *subprocessTool) Execute(ctx context.Context, args map[string]any) (res *ports.ToolResult, err error) {

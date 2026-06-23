@@ -31,7 +31,7 @@ type CheckpointMetadata struct {
 
 // RewooCheckpointStore persists execution state for recovery.
 // It implements checkpoint persistence for workflow pause/resume and error recovery.
-// Phase 7: Currently stores checkpoints in-memory; future phases can wire to persistent storage.
+// Currently stores checkpoints in memory; persistence can be added later.
 type RewooCheckpointStore struct {
 	lifecycleRepo agentlifecycle.Repository
 	checkpoints   map[string]*CheckpointMetadata // In-memory checkpoint storage
@@ -40,7 +40,7 @@ type RewooCheckpointStore struct {
 }
 
 // NewRewooCheckpointStore creates a new checkpoint store.
-// Phase 7: Currently in-memory; can be extended to persistent storage in future phases.
+// Currently in memory; persistence can be added later.
 func NewRewooCheckpointStore(lifecycleRepo agentlifecycle.Repository, debugf func(string, ...any)) *RewooCheckpointStore {
 	if debugf == nil {
 		debugf = func(string, ...any) {}
@@ -54,7 +54,7 @@ func NewRewooCheckpointStore(lifecycleRepo agentlifecycle.Repository, debugf fun
 
 // SaveCheckpoint persists execution state at a checkpoint.
 // The checkpoint key is typically "rewoo.<phase>.<attempt>".
-// Phase 7: Currently stores in-memory; can be persisted to workflow store in future phases.
+// Currently stores data in memory; it can be persisted to the workflow store later.
 func (s *RewooCheckpointStore) SaveCheckpoint(ctx context.Context, checkpointID string, phase string, attempt int, env *contextdata.Envelope) error {
 	s.ensureCheckpointArtifactRefs(ctx, checkpointID, env)
 	workflowID := envGetString(env, "rewoo.workflow_id")
@@ -139,7 +139,7 @@ func (s *RewooCheckpointStore) SaveCheckpoint(ctx context.Context, checkpointID 
 }
 
 // LoadCheckpoint restores execution state from a checkpoint.
-// Phase 7: Currently loads from in-memory storage.
+// Currently loads from in-memory storage.
 func (s *RewooCheckpointStore) LoadCheckpoint(ctx context.Context, checkpointID string) (*CheckpointMetadata, error) {
 	s.mu.RLock()
 	metadata, ok := s.checkpoints[checkpointID]

@@ -40,7 +40,7 @@ type Fact struct {
 	Source     string // which KS produced this
 	CreatedAt  time.Time
 	Derivation *relurpctx.DerivationChain `json:"derivation,omitempty"`
-	Origin     *FactOrigin                `json:"origin,omitempty"` // NEW: provenance tracking
+	Origin     *FactOrigin                `json:"origin,omitempty"` // provenance tracking
 }
 
 // Hypothesis represents a candidate partial solution under consideration.
@@ -51,7 +51,7 @@ type Hypothesis struct {
 	Source      string
 	CreatedAt   time.Time
 	Derivation  *relurpctx.DerivationChain `json:"derivation,omitempty"`
-	Origin      *FactOrigin                `json:"origin,omitempty"` // NEW: provenance tracking
+	Origin      *FactOrigin                `json:"origin,omitempty"` // provenance tracking
 }
 
 // ActionRequest is a queued tool or agent invocation.
@@ -81,7 +81,7 @@ type Issue struct {
 	Source      string
 	CreatedAt   time.Time
 	Derivation  *relurpctx.DerivationChain `json:"derivation,omitempty"`
-	Origin      *FactOrigin                `json:"origin,omitempty"` // NEW: provenance tracking
+	Origin      *FactOrigin                `json:"origin,omitempty"` // provenance tracking
 }
 
 // Artifact is a produced output such as a patch, summary, or document.

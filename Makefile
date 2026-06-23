@@ -125,7 +125,7 @@ test-scenario:
 
 test-all: test-unit test-integ test-scenario
 
-# Phase 0 baseline gates for the contract-dissolution / dev-agent-revival track.
+# Baseline gates for the contract-dissolution / dev-agent-revival track.
 # These are intentionally explicit package subsets so the baseline is readable.
 check-contract-dissolution:
 	@rg -n "\\bManifestSpec\\b|\\bManifestSnapshot\\b|\\bManifestPolicySpec\\b|\\bManifestDefaults\\b" --glob '*.go' . >/dev/null && { echo "[FAIL] check-contract-dissolution: manifest spine still present"; exit 1; } || true

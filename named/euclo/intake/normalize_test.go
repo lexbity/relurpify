@@ -6,7 +6,7 @@ import (
 	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
-// === Phase 3 Unit Tests (exact spec requirements) ===
+// Unit tests (exact spec requirements).
 
 func TestNormalizeNilTask(t *testing.T) {
 	_, err := NormalizeTaskEnvelope(nil, nil)

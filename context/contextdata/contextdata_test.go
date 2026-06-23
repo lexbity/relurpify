@@ -693,7 +693,7 @@ func TestWorkingMemoryKeys(t *testing.T) {
 	// Nil envelope
 }
 
-// Phase 1 edge-case tests per migration spec
+// Edge-case tests per migration spec
 
 func TestSetWorkingValueUpdatesReferenceNotDuplicate(t *testing.T) {
 	env := NewEnvelope("task-1", "session-1")

@@ -3,7 +3,7 @@
 //
 // # Two-tier stepper
 //
-// Progress is rendered in two tiers (Phase 9):
+// Progress is rendered in two tiers:
 //
 //	Tier 1 — Macro lifecycle rail: rendered by Stepper.Render using the
 //	         surface.MacroPhase from the router snapshot.
@@ -30,7 +30,7 @@
 // panes consume for rendering. Deep-copy semantics are maintained in the
 // clone paths of all nested projections.
 //
-// Resume / durability (Phase 12)
+// Resume / durability
 //
 // RecipeResumeData persists only the recipe ID, per-step statuses, and macro
 // phase (never the full recipe structure — see DEC-6). On session resume,

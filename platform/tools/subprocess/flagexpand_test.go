@@ -57,7 +57,7 @@ func TestExpandCommandBaseWithArgs(t *testing.T) {
 	require.Equal(t, []string{echo, hello, world}, cmd)
 }
 
-func TestExpandCommandWithPlaceholders(t *testing.T) {
+func TestExpandCommandWithTokens(t *testing.T) {
 	cmd, err := ExpandCommand(ports.ToolManifest{
 		Execution: ports.ToolManifestExecution{
 			Backend: ports.ToolBackendSubprocess,
@@ -127,7 +127,7 @@ func TestExpandCommandRawArgsFlagAllowed(t *testing.T) {
 	require.Equal(t, []string{echo, verbose_2}, cmd)
 }
 
-func TestExpandCommandMissingPlaceholder(t *testing.T) {
+func TestExpandCommandMissingToken(t *testing.T) {
 	_, err := ExpandCommand(ports.ToolManifest{
 		Execution: ports.ToolManifestExecution{
 			Backend: ports.ToolBackendSubprocess,
@@ -439,7 +439,7 @@ func TestExpandCommandAllComponents(t *testing.T) {
 
 // --- Error cases ---
 
-func TestMissingRequiredParamViaPlaceholder(t *testing.T) {
+func TestMissingRequiredParamViaToken(t *testing.T) {
 	_, err := ExpandCommand(ports.ToolManifest{
 		Execution: ports.ToolManifestExecution{
 			Backend: ports.ToolBackendSubprocess,
@@ -453,7 +453,7 @@ func TestMissingRequiredParamViaPlaceholder(t *testing.T) {
 	require.Contains(t, err.Error(), `missing parameter "required_param"`)
 }
 
-func TestPartialPlaceholderTokenRejected(t *testing.T) {
+func TestPartialTokenMarkerRejected(t *testing.T) {
 	_, err := ExpandCommand(ports.ToolManifest{
 		Execution: ports.ToolManifestExecution{
 			Backend: ports.ToolBackendSubprocess,
@@ -464,7 +464,7 @@ func TestPartialPlaceholderTokenRejected(t *testing.T) {
 		},
 	}, nil)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "must be a single placeholder token")
+	require.Contains(t, err.Error(), "must be a single expansion token")
 }
 
 func TestNoCommandBase(t *testing.T) {

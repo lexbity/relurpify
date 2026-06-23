@@ -2,6 +2,10 @@
 
 End-user Bubble Tea shell for Relurpify.
 
+The command examples below are documented invocation shapes. The `go build`
+step has been verified in this workspace; the runtime examples are not all
+re-run here.
+
 ## Quick start (zero external deps)
 
 ```bash

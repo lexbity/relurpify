@@ -104,7 +104,7 @@ type CaseSpec struct {
 	Expect            ExpectSpec                    `yaml:"expect,omitempty"`
 	Overrides         CaseOverrideSpec              `yaml:"overrides,omitempty"`
 	Tags              []string                      `yaml:"tags,omitempty"`
-	// Phase 4: CapabilityDirectRun bypasses full agent loop for direct capability testing
+	// CapabilityDirectRun bypasses the full agent loop for direct capability testing.
 	CapabilityDirectRun *CapabilityDirectRunSpec `yaml:"capability_direct_run,omitempty"`
 }
 
@@ -127,11 +127,11 @@ type BrowserFixtureSpec struct {
 type RequiresSpec struct {
 	Executables []string `yaml:"executables,omitempty"`
 	Tools       []string `yaml:"tools,omitempty"`
-	// NEW: ToolsAvailable checks if tools exist in registry before running (fails fast)
+	// ToolsAvailable checks whether tools exist in the registry before running.
 	ToolsAvailable []string `yaml:"tools_available,omitempty"`
-	// NEW: ToolsRequired ensures tools are actually invoked during test
+	// ToolsRequired ensures tools are actually invoked during the test.
 	ToolsRequired []string `yaml:"tools_required,omitempty"`
-	// NEW: ToolsDisable removes tools from the registry so agent cannot use them
+	// ToolsDisable removes tools from the registry so the agent cannot use them.
 	ToolsDisable []string `yaml:"tools_disable,omitempty"`
 }
 
@@ -141,7 +141,7 @@ type SetupSpec struct {
 	Memory        MemorySeedSpec         `yaml:"memory,omitempty"`
 	Workflows     []WorkflowSeedSpec     `yaml:"workflows,omitempty"`
 	ToolOverrides []ToolResponseOverride `yaml:"tool_overrides,omitempty"`
-	// Phase 4: StateKeys injects values into core.Context before agent execution
+	// StateKeys injects values into core.Context before agent execution.
 	StateKeys map[string]any `yaml:"state_keys,omitempty"`
 }
 
@@ -171,7 +171,7 @@ type ExpectSpec struct {
 	StateKeysNotEmpty    []string `yaml:"state_key_not_empty,omitempty"`
 	WorkflowHasTensions  []string `yaml:"workflow_has_tensions,omitempty"`
 
-	// OSB Model: Outcome, Security, Benchmark blocks (Phase 1)
+	// OSB model: outcome, security, and benchmark blocks.
 	Outcome   *OutcomeSpec   `yaml:"outcome,omitempty"`
 	Security  *SecuritySpec  `yaml:"security,omitempty"`
 	Benchmark *BenchmarkSpec `yaml:"benchmark,omitempty"`

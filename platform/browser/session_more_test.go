@@ -204,7 +204,7 @@ func TestStructuredPageDataMarshalJSON(t *testing.T) {
 		Title:    "Example",
 		Headings: []string{"Intro"},
 		Links:    []StructuredLink{{Text: "Docs", Href: "https://example.com/docs"}},
-		Inputs:   []StructuredInput{{Name: "q", Type: "search", Placeholder: "Search"}},
+		Inputs:   []StructuredInput{{Name: "q", Type: "search", HintText: "Search"}},
 		Buttons:  []string{"Submit"},
 		Code:     []string{"fmt.Println(\"ok\")"},
 	}
@@ -336,7 +336,7 @@ func TestSessionCapturePageStateAndStructuredExtraction(t *testing.T) {
 					"title":    "Example Title",
 					"headings": []string{"Intro"},
 					"links":    []map[string]any{{"text": "Docs", "href": "https://example.com/docs"}},
-					"inputs":   []map[string]any{{"name": "q", "type": "search", "placeholder": "Search"}},
+					"inputs":   []map[string]any{{"name": "q", "type": "search", "hint_text": "Search"}},
 					"buttons":  []string{"Submit"},
 					"code":     []string{"fmt.Println(\"ok\")"},
 				}, nil
@@ -378,7 +378,7 @@ func TestSessionCapturePageStateAndStructuredExtraction(t *testing.T) {
 	require.Equal(t, "https://example.com/docs", data.Links[0].Href)
 	require.Equal(t, "q", data.Inputs[0].Name)
 	require.Equal(t, "search", data.Inputs[0].Type)
-	require.Equal(t, "Search", data.Inputs[0].Placeholder)
+	require.Equal(t, "Search", data.Inputs[0].HintText)
 	require.Equal(t, []string{"Submit"}, data.Buttons)
 	require.Equal(t, []string{"fmt.Println(\"ok\")"}, data.Code)
 	require.Contains(t, extraction.Content, `"title":"Example Title"`)

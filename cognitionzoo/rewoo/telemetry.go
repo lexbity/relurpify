@@ -6,7 +6,7 @@ import (
 )
 
 // RewooTelemetry wraps telemetry client and emits ReWOO-specific events.
-// Phase 8: Observability integration for all workflow phases.
+// Observability integration for all workflow phases.
 // Emits structured telemetry events for monitoring and debugging.
 type RewooTelemetry struct {
 	client any // core.Telemetry (avoiding import cycle)

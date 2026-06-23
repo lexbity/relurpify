@@ -269,7 +269,7 @@ func TestDomainCycleReport_liveTreeHasLessThan5Cycles(t *testing.T) {
 	}
 	forward, _ := ImportGraph(pkgs)
 	cycles := DomainCycleReport(pkgs, forward)
-	// Phase 3 retired capability↔model, so 9 remain.
+	// capability↔model was retired, so 9 remain.
 	if len(cycles) > 9 {
 		t.Errorf("there is more than 5 cycles, got %d", len(cycles))
 	}

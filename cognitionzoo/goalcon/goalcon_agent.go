@@ -31,7 +31,7 @@ type GoalConAgent struct {
 	GoalOverride     *GoalCondition
 	ClassifierConfig ClassifierConfig
 	MetricsRecorder  *MetricsRecorder
-	AuditTrail       *CapabilityAuditTrail // Phase 5: Provenance tracking
+	AuditTrail       *CapabilityAuditTrail // Provenance tracking for capability use.
 
 	StreamMode      contextstream.Mode
 	StreamQuery     string
@@ -101,7 +101,7 @@ func (a *GoalConAgent) Execute(ctx context.Context, task *execution.Task, env *c
 		env = contextdata.NewEnvelope("goalcon", "session")
 	}
 
-	// Phase 5: Create audit trail for provenance tracking
+	// Create the audit trail for provenance tracking.
 	planID := ""
 	if task != nil {
 		planID = task.ID
@@ -165,11 +165,11 @@ func (a *GoalConAgent) Execute(ctx context.Context, task *execution.Task, env *c
 
 	// Record plan execution metrics if metrics recorder available
 	if a.MetricsRecorder != nil {
-		// Use a default duration estimate; in Phase 4 this will be precise
+		// Use a default duration estimate until timing is measured precisely.
 		_ = a.MetricsRecorder.RecordPlanExecution(planResult.Plan, result, 0)
 	}
 
-	// Phase 5: Build and attach provenance summary
+	// Build and attach the provenance summary.
 	if a.AuditTrail != nil {
 		collector := NewProvenanceCollector(planResult.Plan, nil, a.AuditTrail)
 		provenance := collector.BuildProvenance()

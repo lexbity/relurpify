@@ -1017,7 +1017,7 @@ func (p *DiffPane) applyHunks(filePath string, hunks []DiffHunkProjection) error
 	if _, err := config.CreateTimestampedBackup(cleanAbs); err != nil && !os.IsNotExist(err) {
 		return err
 	}
-	return os.WriteFile(filepath.Clean(cleanAbs), updated, fs.PublicFileMode) //nolint:gosec // public: patched file
+	return os.WriteFile(filepath.Clean(cleanAbs), updated, fs.PublicFileMode) //nolint:gosec // workspace-scoped write after prefix check and backup capture
 }
 
 func (p *DiffPane) revertFile(filePath string) error {

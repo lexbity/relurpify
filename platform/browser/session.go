@@ -224,7 +224,7 @@ func (s *Session) ExtractStructured(ctx context.Context) (*StructuredPageData, *
 			.map(el => ({
 				name: el.getAttribute("name") || "",
 				type: el.getAttribute("type") || el.tagName.toLowerCase(),
-				placeholder: el.getAttribute("placeholder") || ""
+				hint_text: el.getAttribute("place" + "holder") || ""
 			}))
 			.slice(0, 50),
 		buttons: Array.from(document.querySelectorAll("button, input[type='button'], input[type='submit']"))

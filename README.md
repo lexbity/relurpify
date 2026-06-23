@@ -32,6 +32,23 @@ Relurpify is a fullstack Agent framework
 - gVisor `runsc`
 - Ollama (default inference provider)
 
+## Docs
+
+The canonical documentation now lives in `docs/`:
+
+- [Configuration](docs/configuration.md)
+- [Architecture](docs/architecture.md)
+- [Testing](docs/testing.md)
+- [CLI](docs/cli.md)
+- [Persistence](docs/persistence.md)
+- [Jobs](docs/jobs.md)
+- [Troubleshooting](docs/troubleshooting.md)
+- [Glossary](docs/glossary.md)
+- [Known Limitations](docs/known-limitations.md)
+
+The `go build` examples in this README were verified in this workspace. The
+runtime examples are documented invocation shapes, not all re-run here.
+
 > **Running without Ollama (CI/plumbing only):**
 > ```bash
 > go build ./app/relurpish
@@ -99,6 +116,18 @@ go build ./app/relurpish
 go run ./app/relurpish doctor
 go run ./app/relurpish chat
 ```
+
+## Testing
+
+The main local checks are:
+
+```bash
+make test-unit
+make test-dev-agent
+make test-tape-fidelity
+```
+
+See [docs/testing.md](docs/testing.md) for the full matrix and agent-test workflow.
 
 ## Additional Tools
 

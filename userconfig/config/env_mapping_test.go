@@ -1,4 +1,4 @@
-// Phase 8 — Config discipline hardening: parseBoolEnv fails closed.
+// Config discipline hardening: parseBoolEnv fails closed.
 
 package config
 

@@ -1,4 +1,4 @@
-// Phase 8 — Config discipline hardening: single source of truth for secret
+// Config discipline hardening: single source of truth for secret
 // field names.
 
 package secretscan

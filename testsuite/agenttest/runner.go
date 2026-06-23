@@ -104,11 +104,11 @@ type CaseReport struct {
 	BaselinePath        string               `json:"baseline_path,omitempty"`
 	BaselineFound       bool                 `json:"baseline_found,omitempty"`
 	PerformanceWarnings []PerformanceWarning `json:"performance_warnings,omitempty"`
-	// NEW: Latency tracking (Phase 5)
+	// Latency tracking for tool execution.
 	ToolLatencies   map[string]LatencyStats `json:"tool_latencies,omitempty"`
 	TotalToolTimeMs int64                   `json:"total_tool_time_ms,omitempty"`
 
-	// OSB Model: New report fields (Phase 1)
+	// OSB model report fields.
 	SecurityObservations  []SecurityObservation  `json:"security_observations,omitempty"`
 	BenchmarkObservations []BenchmarkObservation `json:"benchmark_observations,omitempty"`
 	AssertionResults      []AssertionResult      `json:"assertion_results,omitempty"`
@@ -282,7 +282,7 @@ func (r *Runner) RunSuite(ctx context.Context, suite *Suite, opts RunOptions) (*
 	}
 	report.Performance = SummarizePerformance(report.Cases)
 
-	// OSB Model: Populate benchmark summary (Phase 5)
+	// Populate the OSB benchmark summary.
 	report.OSBBenchmark = aggregateBenchmarkSummary(report.Cases)
 
 	if strings.EqualFold(strings.TrimSpace(suite.Metadata.Classification), "benchmark") || suite.Metadata.Benchmark.ScoreFamily != "" || len(suite.Metadata.Benchmark.ScoreDimensions) > 0 || strings.TrimSpace(suite.Metadata.Benchmark.ComparisonWindow) != "" || suite.Metadata.Benchmark.VarianceThreshold > 0 {
@@ -294,7 +294,7 @@ func (r *Runner) RunSuite(ctx context.Context, suite *Suite, opts RunOptions) (*
 		}
 	}
 
-	// OSB Model: Write benchmark_summary.json (Phase 5)
+	// Write benchmark_summary.json.
 	if report.OSBBenchmark != nil {
 		if data, err := json.MarshalIndent(report.OSBBenchmark, "", "  "); err == nil {
 			_ = fs.WriteFileSecure(filepath.Join(outDir, "benchmark_summary.json"), data)
@@ -469,7 +469,7 @@ func newRunCaseLayout(outDir, caseName, modelName string) runCaseLayout {
 }
 
 // aggregateBenchmarkSummary aggregates benchmark observations across all cases.
-// Phase 4: OSB Model benchmark summary aggregation.
+// OSB Model benchmark summary aggregation.
 func aggregateBenchmarkSummary(cases []CaseReport) *OSBBenchmarkSummary {
 	if len(cases) == 0 {
 		return nil
@@ -551,7 +551,7 @@ func aggregateBenchmarkSummary(cases []CaseReport) *OSBBenchmarkSummary {
 	return summary
 }
 
-// === Phase 8: Types from deleted latency.go ===
+// Types from the deleted latency.go file.
 
 // latencyAccumulator tracks intermediate state for computing proper running averages
 type latencyAccumulator struct {
@@ -618,7 +618,7 @@ type ToolLatencyReport struct {
 }
 
 // BuildLatencyReport builds a latency report from tool transcript
-// Phase 8: Simplified implementation after latency.go removal
+// Simplified implementation after latency.go removal.
 func BuildLatencyReport(transcript *ToolTranscriptArtifact) *ToolLatencyReport {
 	if transcript == nil || len(transcript.Entries) == 0 {
 		return nil

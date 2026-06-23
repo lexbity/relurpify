@@ -157,8 +157,8 @@ func buildRunnerImpl(in SecurityRuntimeInput) (sandbox.CommandRunner, *sandbox.C
 }
 
 // defaultDenyPolicy returns a CommandPolicy that denies all tool execution.
-// Used when no PermissionManager is supplied (e.g. the nexus path until
-// Phase 6 supplies a real one).
+// Used when no PermissionManager is supplied, for example during bootstrap
+// before the runtime installs a concrete policy manager.
 func defaultDenyPolicy() sandbox.CommandPolicy {
 	return sandbox.CommandPolicyFunc(func(_ context.Context, req sandbox.CommandRequest) error {
 		return &sandbox.ExecutionDeniedError{

@@ -137,7 +137,7 @@ func TestBuildStreamRequestIncludesEnvelopeAnchors(t *testing.T) {
 
 func TestBuildStreamRequestBackgroundModeEnforcement(t *testing.T) {
 	// This test requires BuildStreamRequest with classification source
-	// For Phase 5, we'll test the mode enforcement logic separately
+	// The mode enforcement logic is tested separately.
 	// The actual enforcement will be in the pipeline node
 	templateStr := "context for: {{.Instruction}}"
 	instruction := "fix the bug"
@@ -216,21 +216,18 @@ func TestIntakePipelineNodeExecute(t *testing.T) {
 }
 
 func TestIntakePipelineNodeWritesToTelemetry(t *testing.T) {
-	// For Phase 5, telemetry emission is not yet implemented
-	// This test will be added in Phase 13 when telemetry is implemented
-	t.Skip("Telemetry emission will be implemented in Phase 13")
+	// Telemetry emission is not yet implemented.
+	t.Skip("Telemetry emission will be implemented later.")
 }
 
 func TestRootGraphContainsStreamNode(t *testing.T) {
-	// Root graph wiring will be implemented in Phase 14
-	// This test will be added then
-	t.Skip("Root graph wiring will be implemented in Phase 14")
+	// Root graph wiring will be implemented later.
+	t.Skip("Root graph wiring will be implemented later.")
 }
 
 func TestRootGraphSkipsStreamNodeWhenNoTemplate(t *testing.T) {
-	// Root graph wiring will be implemented in Phase 14
-	// This test will be added then
-	t.Skip("Root graph wiring will be implemented in Phase 14")
+	// Root graph wiring will be implemented later.
+	t.Skip("Root graph wiring will be implemented later.")
 }
 
 type UniqueMockStreamTrigger struct{}

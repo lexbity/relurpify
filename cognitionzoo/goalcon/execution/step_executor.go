@@ -52,7 +52,7 @@ type StepExecutor struct {
 	registry   *capability.CapabilityRegistry
 	timeout    time.Duration
 	metrics    *audit.MetricsRecorder      // Optional metrics recording
-	auditTrail *audit.CapabilityAuditTrail // Optional audit trail (Phase 5)
+	auditTrail *audit.CapabilityAuditTrail // Optional audit trail.
 }
 
 // NewStepExecutor creates a new step executor.
@@ -153,7 +153,7 @@ func (e *StepExecutor) Execute(ctx context.Context, req StepExecutionRequest) *S
 		e.updateWorldState(req.Context, req.Step)
 	}
 
-	// Record audit trail if enabled (Phase 5)
+	// Record the audit trail if enabled.
 	e.recordAudit(result, req.Step, cap, toolResult)
 
 	e.recordMetrics(result)
@@ -222,7 +222,7 @@ func (e *StepExecutor) updateWorldState(ctx *contextdata.Envelope, step plan.Pla
 	}, contextdata.MemoryClassTask)
 }
 
-// recordAudit records the capability invocation to the audit trail (Phase 5).
+// recordAudit records the capability invocation to the audit trail.
 func (e *StepExecutor) recordAudit(result *StepExecutionResult, step plan.PlanStep, cap *descriptor.CapabilityDescriptor, toolResult *execution.Result) {
 	if e == nil || e.auditTrail == nil || cap == nil {
 		return
@@ -313,7 +313,7 @@ func (ec *ExecutorChain) ExecuteSteps(
 				// Log and continue
 				continue
 			case FailureModeRetry:
-				// Retry logic would go here (Phase 6)
+				// Retry logic would go here if retry support is added.
 				continue
 			}
 		}

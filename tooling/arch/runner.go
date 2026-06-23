@@ -109,7 +109,7 @@ func runGlobGate(root string) ([]string, error) {
 		if strings.HasPrefix(rel, "tooling/arch") {
 			return nil
 		}
-		data, err := os.ReadFile(filepath.Clean(path)) //nolint:gosec
+		data, err := os.ReadFile(filepath.Clean(path)) //nolint:gosec // path was discovered by a workspace walk and cleaned before read
 		if err != nil {
 			return err
 		}
@@ -155,7 +155,7 @@ func runStubGate(root string) ([]string, error) {
 		if strings.HasPrefix(rel, "tooling/arch") {
 			return nil
 		}
-		data, err := os.ReadFile(filepath.Clean(path)) //nolint:gosec
+		data, err := os.ReadFile(filepath.Clean(path)) //nolint:gosec // path was discovered by a workspace walk and cleaned before read
 		if err != nil {
 			return err
 		}

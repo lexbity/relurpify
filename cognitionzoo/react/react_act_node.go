@@ -358,36 +358,10 @@ func (n *reactActNode) recordObservation(ctx context.Context, env *contextdata.E
 	env.SetWorkingValueWithClass("react.tool_observations", history, contextdata.MemoryClassTask)
 	if n != nil && n.agent != nil && n.agent.outputIngestionEnabled() {
 		summary := strings.TrimSpace(observation.Summary)
+		// Observations are surfaced through the knowledge ingester instead of
+		// a framework ContextManager hook in this tree.
 		knowledge.IngestObservationAsync(contextdata.WithEnvelope(ctx, env), n.agent.OutputIngester, summary)
 	}
-	// ToDo: ContextManager integration requires framework-level fixes for missing types
-	// (core.ToolResultContextItem, core.FileContextItem)
-	// if visible && n.agent.contextPolicy != nil && n.agent.contextPolicy.ContextManager != nil {
-	// 	summaryEnvelope := capresult.SummarizeCapabilityResultEnvelope(envelope, observation.Summary)
-	// 	item := &core.ToolResultContextItem{
-	// 		ToolName:     call.Name,
-	// 		Result:       &ports.ToolResult{Success: res.Success, Data: map[string]interface{}{"summary": observation.Summary}, Error: res.Error},
-	// 		Envelope:     summaryEnvelope,
-	// 		LastAccessed: time.Now().UTC(),
-	// 		Relevance:    0.9,
-	// 		PriorityVal:  1,
-	// 	}
-	// 	_ = n.agent.contextPolicy.ContextManager.AddItem(item)
-	// 	if call.Name == "file_read" {
-	// 		path := fmt.Sprint(call.Args["path"])
-	// 		snippet := observation.Data["snippet"]
-	// 		if path != "" && fmt.Sprint(snippet) != "" {
-	// 			_ = n.agent.contextPolicy.ContextManager.UpsertFileItem(&core.FileContextItem{
-	// 				Path:         path,
-	// 				Content:      fmt.Sprint(snippet),
-	// 				Summary:      fmt.Sprint(snippet),
-	// 				LastAccessed: time.Now().UTC(),
-	// 				Relevance:    1.0,
-	// 				PriorityVal:  0,
-	// 			})
-	// 		}
-	// 	}
-	// }
 }
 
 func (n *reactActNode) refreshIndexesAfterMutation(ctx context.Context, call model.ToolCall, res *ports.ToolResult) {

@@ -18,7 +18,7 @@ type Solver struct {
 	Operators       *types.OperatorRegistry
 	MaxDepth        int
 	Recorder        *audit.MetricsRecorder // Optional metrics recorder for quality-based operator ranking
-	FailedOperators map[string]int         // Phase 6: Track failed operators and their failure counts
+	FailedOperators map[string]int         // Track failed operators and their failure counts.
 }
 
 // Solve resolves the goal against the world state.
@@ -60,7 +60,7 @@ func (s *Solver) Solve(goal types.GoalCondition, ws *types.WorldState) PlanningR
 			return false
 		}
 
-		// Phase 6: Skip failed operators during re-planning
+		// Skip failed operators during re-planning.
 		candidates = s.filterFailedOperators(candidates)
 		if len(candidates) == 0 {
 			unsatSet[pred] = true
@@ -122,7 +122,7 @@ func containsOperator(ops []*types.Operator, candidate *types.Operator) bool {
 	return false
 }
 
-// filterFailedOperators removes operators that failed in previous planning attempts (Phase 6).
+// filterFailedOperators removes operators that failed in previous planning attempts.
 func (s *Solver) filterFailedOperators(candidates []*types.Operator) []*types.Operator {
 	if s == nil || len(s.FailedOperators) == 0 {
 		return candidates

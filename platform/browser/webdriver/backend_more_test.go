@@ -436,6 +436,6 @@ func writeSleepScript(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
 	path := dir + "/sleep.sh"
-	require.NoError(t, os.WriteFile(path, []byte("#!/bin/sh\nsleep 60\n"), 0o700)) //nolint:gosec
+	require.NoError(t, os.WriteFile(path, []byte("#!/bin/sh\nsleep 60\n"), 0o700)) //nolint:gosec // test fixture creates a temp executable for browser lifecycle checks
 	return path
 }

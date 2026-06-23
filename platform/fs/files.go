@@ -620,7 +620,7 @@ func (t *SearchInFilesTool) Execute(ctx context.Context, args map[string]any) (*
 			return err
 		}
 
-		file, err := os.Open(filepath.Clean(path)) //nolint:gosec
+		file, err := os.Open(filepath.Clean(path)) //nolint:gosec // path is resolved within the configured base path and sandbox-checked above
 		if err != nil {
 			return nil // skip unreadable files
 		}

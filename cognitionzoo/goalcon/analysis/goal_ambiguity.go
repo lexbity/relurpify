@@ -65,7 +65,7 @@ func (aa *AmbiguityAnalyzer) AnalyzeAmbiguities(goal types.GoalCondition, respon
 		Indicators: make([]*AmbiguityIndicator, 0),
 	}
 
-	// Phase 1: Use ambiguities from ClassificationResponse (already computed by LLM!)
+	// Use ambiguities from ClassificationResponse (already computed by the LLM).
 	if response != nil && len(response.Ambiguities) > 0 {
 		for i, amb := range response.Ambiguities {
 			if i >= aa.maxIndicators {
@@ -83,7 +83,7 @@ func (aa *AmbiguityAnalyzer) AnalyzeAmbiguities(goal types.GoalCondition, respon
 		}
 	}
 
-	// Phase 2: Pattern-based detection (fallback if no LLM response)
+	// Pattern-based detection is the fallback when no LLM response is available.
 	if len(score.Indicators) == 0 {
 		indicators := aa.detectVagueLanguage(goal)
 		for i, indicator := range indicators {

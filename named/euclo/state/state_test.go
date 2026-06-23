@@ -9,7 +9,7 @@ import (
 	"codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
 )
 
-// === Phase 2 Unit Tests ===
+// Unit tests.
 
 func TestAllKeysUnique(t *testing.T) {
 	keys := []string{

@@ -111,7 +111,7 @@ go test ./testsuite/agenttest/...
 
 ### Run Specific Test Patterns
 ```bash
-# Cleanup validation tests (Phase 8)
+# Cleanup validation tests
 go test ./testsuite/agenttest/... -run "TestNoLegacy|TestOSB|TestReportSchema"
 
 # Load and validation tests

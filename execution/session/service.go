@@ -569,9 +569,8 @@ func (s *ServiceScheduler) runJobs(ctx context.Context) {
 // shouldRun determines if a job should run at the given time.
 func (s *ServiceScheduler) shouldRun(job ScheduledJob, now time.Time) bool {
 	if job.Interval > 0 {
-		// For interval-based jobs, we rely on the scheduler to run them
-		// every interval. The last-run tracking would be needed for true
-		// interval enforcement, but for now we run on every tick.
+		// Interval-based jobs are evaluated on every scheduler tick.
+		// Last-run tracking would be needed for strict interval enforcement.
 		return true
 	}
 	if job.CronExpr != "" {

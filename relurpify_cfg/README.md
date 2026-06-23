@@ -1,14 +1,12 @@
 # Central Data-only Relurpify Configuration directory
 
-## Guiding Principles
-
 ## 1. Guiding Principles
 
 These principles ground every decision in this spec. When implementation details conflict, refer back here.
 
 ### 1.1 One Load Boundary
 
-All configuration is read at process startup by a single loader in a single package (`framework/cfgload`). After that boundary, no code anywhere calls `os.Getenv`, reads a file, or resolves a path. Config either entered `AppConfig` at load time or it does not exist.
+All configuration is read at process startup by a single loader in a single package (`userconfig/config`). After that boundary, application and runtime packages consume the resolved `AppConfig`, `WorkspaceConfig`, `ModelConfig`, `Security` bundle, and `Secrets` values instead of reading process env directly.
 
 ### 1.2 Fail Fast, Fail Loudly
 
@@ -46,40 +44,24 @@ Config files declare *what* — tool parameters, agent capability lists, policy 
 
 
 
-## Directory Layout:
+## Directory Layout
 
-relurpify_cfg/
-│
-├── workspace.yaml                      # Global workspace config. Required.
-│
-├── security/
-│   ├── sandbox.policy.yaml             # Sandbox execution constraints
-│   ├── shell.policy.yaml               # Shell command allowlist/denylist
-│   ├── localtool.policy.yaml           # Per-tool allow/ask/deny allowlist
-│   └── workspaceingestion.policy.yaml  # Pre-ingestion prompt injection filter
-│
-├── model/
-│   ├── provider/
-│   │   ├── ollama.provider.yaml        # LLM provider config (no secrets)
-│   │   └── lmstudio.provider.yaml
-│   └── profiles/
-│       ├── default.llm.yaml            # Baseline model adapter quirks
-│       └── gemma4.llm.yaml
-│
-├── tools/**/*.tool.yaml                 # Local tool schemas
-│
-└── agents/
-    ├── _base.agent.yaml                # Shared defaults. Merged into all agents.
-    ├── euclo.agent.yaml
-    ├── rex.agent.yaml
-    ├── testfu.agent.yaml
-    └── factory.agent.yaml
-    
-### What Is Not Here
+The checked-in configuration tree currently contains:
 
-The following are explicitly excluded from `relurpify_cfg/` and belong in `.relurpify_state/` (gitignored at project root):
+- `workspace.yaml` for workspace-level settings.
+- `security/` for sandbox, shell, local tool, and workspace-ingestion policy files.
+- `model/provider/` for provider manifests.
+- `model/profiles/` for model profile manifests.
+- `tools/` for capability/tool manifests.
+- `tooltests/` for checked-in tooltest fixtures.
 
-- `logs/`, `telemetry/`, any runtime output
-- Test run artifacts, temp directories
-- Any file with a path containing `/tmp/`
-- Skills — see Section 6 for the reworked skills model
+What is not here belongs in `.relurpify_state/` or is generated at build/test time:
+
+- Runtime logs and telemetry.
+- Session artifacts and test-run outputs.
+- Temporary working directories.
+
+### Notes
+
+- The historical loader path name is stale and should not be used in new documentation.
+- The checked-in tree uses the `userconfig/config` package as the loading boundary.

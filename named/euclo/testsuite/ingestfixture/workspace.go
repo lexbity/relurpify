@@ -1,4 +1,4 @@
-package ingestion
+package ingestfixture
 
 // WorkspaceIngestionPolicy controls workspace scanning behavior.
 type WorkspaceIngestionPolicy struct {

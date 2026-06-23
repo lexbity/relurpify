@@ -26,7 +26,6 @@ func envelopeGet(state *contextdata.Envelope, key string) (any, bool) {
 	if val, ok := contextdata.GetTyped[any](state, key); ok {
 		return val, true
 	}
-	// ToDo: Check streamed context references if needed
 	return nil, false
 }
 
@@ -249,7 +248,7 @@ func trimToBudget(value string, max int) string {
 	return strings.TrimSpace(value[:max]) + "..."
 }
 
-// truncateForPrompt is removed in Phase 7. Use trimToBudget for caller-side budget
+// truncateForPrompt was removed. Use trimToBudget for caller-side budget
 // limits, or let the InsertionDecision gate what the model sees.
 
 func toolNames(tools []ports.Tool) []string {

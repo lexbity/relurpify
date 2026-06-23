@@ -14,7 +14,7 @@ const (
 	EffectClassFilesystemMutation EffectClass = "filesystem-mutation"
 	EffectClassProcessSpawn       EffectClass = "process-spawn"
 	EffectClassNetworkEgress      EffectClass = "network-egress"
-	EffectClassCredentialUse      EffectClass = "credential-use" //nolint:gosec
+	EffectClassCredentialUse      EffectClass = "credential-use" //nolint:gosec // fixed vocabulary constant; false positive from literal value
 	EffectClassExternalState      EffectClass = "external-state-change"
 	EffectClassSessionCreation    EffectClass = "long-lived-session-creation"
 	EffectClassContextInsertion   EffectClass = "model-context-insertion"

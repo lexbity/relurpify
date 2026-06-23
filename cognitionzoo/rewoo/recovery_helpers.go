@@ -29,7 +29,7 @@ type DiagnosisResult struct {
 }
 
 // DiagnoseStepFailure analyzes step execution results and recommends recovery strategy.
-// Phase 8: Helper for recovery workflows.
+// Helper for recovery workflows.
 func DiagnoseStepFailure(ctx context.Context, env *contextdata.Envelope, results []RewooStepResult, plan *RewooPlan) *DiagnosisResult {
 	diagnosis := &DiagnosisResult{
 		IsRecoverable: true,
@@ -131,7 +131,7 @@ func DiagnoseStepFailure(ctx context.Context, env *contextdata.Envelope, results
 }
 
 // RecoverStepFailure executes recovery based on diagnosis.
-// Phase 8: Helper for implementing recovery workflows.
+// Helper for implementing recovery workflows.
 func RecoverStepFailure(ctx context.Context, env *contextdata.Envelope, diagnosis *DiagnosisResult, store *RewooCheckpointStore) error {
 	if !diagnosis.IsRecoverable || diagnosis.RecommendedID == "" {
 		return fmt.Errorf("recovery: scenario not recoverable")

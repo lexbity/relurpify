@@ -1,6 +1,6 @@
 // Package secretscan provides the canonical definitions for secret-bearing
 // field names and other shared config constants. It exists as a leaf package
-// so that both framework/cfgload and framework/cfgload/model can import it
+// so that both userconfig/config and userconfig/config/model can import it
 // without creating a circular dependency.
 package secretscan
 

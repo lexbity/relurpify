@@ -218,7 +218,7 @@ func TestLatencyTracking_MeasuresToolExecution(t *testing.T) {
 		t.Errorf("file_read stats incorrect: min=%d, max=%d", fileReadStats.MinMs, fileReadStats.MaxMs)
 	}
 
-	// Phase 8: Legacy latency evaluation removed - now handled by BenchmarkSpec
+	// Legacy latency evaluation removed; BenchmarkSpec now handles it.
 }
 
 // TestConsistencyReport_AggregatesMultipleRuns verifies consistency reporting
@@ -380,7 +380,7 @@ func TestFullIntegration_AllFeaturesWorkTogether(t *testing.T) {
 	}
 }
 
-// === Phase 5: OSB Model Integration Tests ===
+// OSB Model Integration Tests.
 
 // TestFailureClassification_SecurityKind verifies [security] prefix produces FailureKind security
 func TestFailureClassification_SecurityKind(t *testing.T) {

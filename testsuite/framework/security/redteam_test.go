@@ -255,7 +255,7 @@ func TestDuplicateToolNamesRejected(t *testing.T) {
 // ---------- REL-3: resource limit defaults ----------
 
 func TestResourceLimitDefaultsEnforced(t *testing.T) {
-	// Verify the default helpers return the expected values from Phase 3.
+	// Verify the default helpers return the expected values.
 	if mem := sandbox.MemoryBytesOrDefault(0); mem != 512*1024*1024 {
 		t.Fatalf("MemoryBytesOrDefault(0) = %d, want 512 MiB", mem)
 	}
@@ -294,7 +294,7 @@ func TestValidateAndCoerceIntegerString(t *testing.T) {
 // ---------- OutputCeiling is distinct from the old prompt cap ----------
 
 func TestOutputCeilingDefault(t *testing.T) {
-	// Phase 6 removed MaxOutputBytes and introduced OutputCeiling.
+	// MaxOutputBytes was removed and OutputCeiling was introduced.
 	// Verify the field exists and the default is 32 MiB.
 	req := ports.CommandRequest{Args: []string{"echo"}}
 	if req.OutputCeiling != 0 {
@@ -308,7 +308,7 @@ func TestOutputCeilingDefault(t *testing.T) {
 // ---------- REL-7: No orphaned timeout goroutine (structural check) ----------
 
 func TestRunnerUsesContainerHandleNotPgidKill(t *testing.T) {
-	// Phase 2 replaced the pgid-kill goroutine with ContainerHandle teardown.
+	// The pgid-kill goroutine was replaced with ContainerHandle teardown.
 	// Verify ContainerHandle is constructible and has a Teardown method.
 	h := sandbox.NewContainerHandle("test", "docker", "docker")
 	if h == nil {

@@ -31,7 +31,7 @@ func (r *ReduceMotion) Collapse(fn func() AnimationFrame) string {
 		return ""
 	}
 	if r == nil || !r.reduced {
-		// Not reducing — return the first frame as a static placeholder.
+		// Not reducing; return the first frame as a static frame.
 		fr := fn()
 		return fr.Text
 	}

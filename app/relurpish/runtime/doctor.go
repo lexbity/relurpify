@@ -469,7 +469,7 @@ func copyTemplateContent(data []byte, dst, workspace string, overwrite bool) err
 	if err := os.MkdirAll(filepath.Dir(cleanDst), 	platformfs.PublicDirMode); err != nil { // public: template dst dir
 		return err
 	}
-	return os.WriteFile(filepath.Clean(cleanDst), []byte(rendered), 	platformfs.PublicFileMode) //nolint:gosec // public: rendered template
+	return os.WriteFile(filepath.Clean(cleanDst), []byte(rendered), 	platformfs.PublicFileMode) //nolint:gosec // workspace-scoped template output after prefix check
 }
 
 func detectChromiumStatus(ctx context.Context, policy sandbox.CommandPolicy) DependencyStatus {

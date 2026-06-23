@@ -142,7 +142,7 @@ func CopyWorkspace(src, dst string, exclude []string) error {
 		if err := fs.MkdirAllSecure(filepath.Dir(target)); err != nil {
 			return err
 		}
-		in, err := os.Open(filepath.Clean(path)) //nolint:gosec
+		in, err := os.Open(filepath.Clean(path)) //nolint:gosec // test helper only opens a cleaned workspace path
 		if err != nil {
 			return err
 		}

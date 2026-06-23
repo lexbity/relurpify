@@ -25,7 +25,7 @@ func (m *PermissionManager) SetFilesystemGuardRoots(protectedRoots, excludedRoot
 	m.fsPermCache = make(map[string]*permissions.FileSystemPermission)
 }
 
-// inflateScopes rewrites any workspace placeholders inside the declared
+// inflateScopes rewrites any workspace markers inside the declared
 // filesystem permissions so later matching can operate on concrete paths.
 func (m *PermissionManager) inflateScopes() {
 	if m == nil || m.declared == nil {
@@ -33,13 +33,13 @@ func (m *PermissionManager) inflateScopes() {
 	}
 	ws := filepath.ToSlash(filepath.Clean(m.basePath))
 	for i := range m.declared.FileSystem {
-		m.declared.FileSystem[i].Path = expandWorkspacePlaceholder(ws, m.declared.FileSystem[i].Path)
+		m.declared.FileSystem[i].Path = expandWorkspaceMarker(ws, m.declared.FileSystem[i].Path)
 	}
 }
 
-// expandWorkspacePlaceholder replaces instances of ${workspace} markers with
+// expandWorkspaceMarker replaces instances of ${workspace} markers with
 // the actual base path, keeping relative globs compatible with matchers.
-func expandWorkspacePlaceholder(workspace, pattern string) string {
+func expandWorkspaceMarker(workspace, pattern string) string {
 	if pattern == "" {
 		return pattern
 	}

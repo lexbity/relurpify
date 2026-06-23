@@ -1,4 +1,4 @@
-// Phase 1 — Backend vocabulary: single source of truth.
+// Backend vocabulary: single source of truth.
 //
 // Asserts that cfgload validation defers to sandbox.IsSupportedSandboxBackend
 // for the sandbox-backend vocabulary, rejects "local" at load time, and stays
@@ -17,7 +17,7 @@ import (
 
 // TestSandboxBackendLocalRejected asserts that sandbox.backend: "local" is
 // rejected at config-validation time with a clear message naming the supported
-// backends. Before Phase 1, "local" was silently accepted here and failed
+// backends. Before the backend vocabulary was centralized, "local" was silently accepted here and failed
 // later at runtime in SelectSandboxRuntime — a fail-late condition.
 func TestSandboxBackendLocalRejected(t *testing.T) {
 	tests := []struct {

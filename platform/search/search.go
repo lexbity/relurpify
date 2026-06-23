@@ -64,7 +64,7 @@ func (t *GrepTool) Execute(ctx context.Context, args map[string]any) (*ports.Too
 		if err != nil {
 			return err
 		}
-		file, err := os.Open(filepath.Clean(path)) //nolint:gosec
+		file, err := os.Open(filepath.Clean(path)) //nolint:gosec // path is resolved within the configured base path during the walk
 		if err != nil {
 			return nil // skip unreadable files
 		}
@@ -146,7 +146,7 @@ func (t *SimilarityTool) Execute(ctx context.Context, args map[string]any) (*por
 		if err != nil {
 			return err
 		}
-		data, err := os.ReadFile(filepath.Clean(path)) //nolint:gosec
+		data, err := os.ReadFile(filepath.Clean(path)) //nolint:gosec // path is resolved within the configured base path during the walk
 		if err != nil {
 			return err
 		}
@@ -219,7 +219,7 @@ func (t *SemanticSearchTool) Execute(ctx context.Context, args map[string]any) (
 		if err != nil {
 			return err
 		}
-		data, err := os.ReadFile(filepath.Clean(path)) //nolint:gosec
+		data, err := os.ReadFile(filepath.Clean(path)) //nolint:gosec // path is resolved within the configured base path during the walk
 		if err != nil {
 			return err
 		}

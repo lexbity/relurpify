@@ -85,7 +85,7 @@ func TestBuildBuiltinCapabilityBundleIsDeprecated(t *testing.T) {
 		if strings.HasSuffix(path, "_test.go") || strings.Contains(path, "testsuite") {
 			return nil
 		}
-		data, err := os.ReadFile(filepath.Clean(path)) //nolint:gosec
+		data, err := os.ReadFile(filepath.Clean(path)) //nolint:gosec // arch test reads repo-local files discovered by the test walk
 		if err != nil {
 			return err
 		}
@@ -118,7 +118,7 @@ func TestCompositionRootOwnsBuildFunctions(t *testing.T) {
 		if strings.HasSuffix(path, "_test.go") {
 			return nil
 		}
-		data, err := os.ReadFile(filepath.Clean(path)) //nolint:gosec
+		data, err := os.ReadFile(filepath.Clean(path)) //nolint:gosec // arch test reads repo-local files discovered by the test walk
 		if err != nil {
 			return err
 		}

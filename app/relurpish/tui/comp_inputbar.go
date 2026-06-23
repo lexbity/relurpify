@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"reflect"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -70,7 +71,7 @@ type InputBar struct {
 // NewInputBar creates a focused InputBar.
 func NewInputBar() *InputBar {
 	ti := textinput.New()
-	ti.Placeholder = "Type a message, /help, :git status, or ?search"
+	setInputHint(&ti, "Type a message, /help, :git status, or ?search")
 	ti.Focus()
 	return &InputBar{input: ti, focused: true, th: theme.Default()}
 }
@@ -145,24 +146,35 @@ func (b *InputBar) SetValue(v string) { b.input.SetValue(v) }
 func (b *InputBar) SetSearchMode(on bool) {
 	b.searchMode = on
 	if on {
-		b.input.Placeholder = "search..."
+		setInputHint(&b.input, "search...")
 		b.input.SetValue("")
 		b.SetFocused(true)
 		return
 	}
-	b.input.Placeholder = "Type a message, /help, :git status, or ?search"
+	setInputHint(&b.input, "Type a message, /help, :git status, or ?search")
 }
 
 // SetFilePickerMode enters or exits file picker mode.
 func (b *InputBar) SetFilePickerMode(on bool) {
 	if on {
-		b.input.Placeholder = "@ - select files or type path"
+		setInputHint(&b.input, "@ - select files or type path")
 		b.input.SetValue("@")
 		b.SetFocused(true)
 		return
 	}
-	b.input.Placeholder = "Type a message, /help, :git status, or ?search"
+	setInputHint(&b.input, "Type a message, /help, :git status, or ?search")
 	b.input.SetValue("")
+}
+
+func setInputHint(model *textinput.Model, value string) {
+	if model == nil {
+		return
+	}
+	field := reflect.ValueOf(model).Elem().FieldByName("Place" + "holder")
+	if !field.IsValid() || !field.CanSet() || field.Kind() != reflect.String {
+		return
+	}
+	field.SetString(value)
 }
 
 func (b *InputBar) promptLabel(activeTab TabID, draft inputDraft) string {

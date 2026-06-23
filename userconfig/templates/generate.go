@@ -41,7 +41,7 @@ func GenerateWorkspaceTemplates(output string) error {
 		if d.IsDir() {
 			return relurpifyfs.MkdirAllSecure(target)
 		}
-		data, err := os.ReadFile(filepath.Clean(path)) //nolint:gosec
+		data, err := os.ReadFile(filepath.Clean(path)) //nolint:gosec // source is the checked-in template tree under repo control
 		if err != nil {
 			return err
 		}

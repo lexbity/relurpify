@@ -132,7 +132,7 @@ func PublishToContext(state *contextdata.Envelope, bb *Blackboard, controller Co
 	mirrorBlackboardToWorkingMemoryStore(state)
 	publishPersistenceCandidates(state, snapshot, controller, metrics)
 
-	// ToDo: SetKnowledge is not available in envelope paradigm - requires streaming context assembly
+	// SetKnowledge is not available in the envelope paradigm; it requires streaming context assembly.
 	// state.SetKnowledge(contextKnowledgeSummary, summaryText(snapshot, metrics))
 	// state.SetKnowledge(contextKnowledgeTermination, controller.Termination)
 	// state.SetKnowledge(contextKnowledgeLastSource, controller.LastSource)

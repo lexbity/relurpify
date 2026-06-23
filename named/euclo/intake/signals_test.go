@@ -6,7 +6,7 @@ import (
 	"codeburg.org/lexbit/relurpify/named/euclo/families"
 )
 
-// === Phase 4 Unit Tests (exact spec requirements) ===
+// Unit tests (exact spec requirements).
 
 func TestCollectSignalsKeyword(t *testing.T) {
 	envelope := &TaskEnvelope{

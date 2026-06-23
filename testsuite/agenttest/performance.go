@@ -42,7 +42,7 @@ type PerformanceBaseline struct {
 	DurationMS  int64                    `json:"duration_ms"`
 	Phases      map[string]PhaseBaseline `json:"phases,omitempty"`
 	Framework   perfstats.Snapshot       `json:"framework,omitempty"`
-	// NEW: Latency tracking (Phase 5)
+	// Latency tracking for tool execution.
 	ToolLatencies   map[string]LatencyStats `json:"tool_latencies,omitempty"`
 	TotalToolTimeMs int64                   `json:"total_tool_time_ms,omitempty"`
 }
@@ -77,7 +77,7 @@ func BuildPerformanceBaseline(cr CaseReport, recordedAt time.Time) *PerformanceB
 		TotalTokens: cr.TokenUsage.TotalTokens,
 		DurationMS:  cr.DurationMS,
 		Framework:   cr.FrameworkPerf,
-		// NEW: Latency tracking (Phase 5)
+		// Latency tracking for tool execution.
 		ToolLatencies:   cr.ToolLatencies,
 		TotalToolTimeMs: cr.TotalToolTimeMs,
 	}
@@ -190,7 +190,7 @@ func ComparePerformanceBaseline(actual CaseReport, baseline *PerformanceBaseline
 			Detail:   fmt.Sprintf("%s: %dms vs baseline %dms", actual.Name, actual.DurationMS, baseline.DurationMS),
 		})
 	}
-	// NEW: Latency comparison (Phase 5)
+	// Latency comparison for performance baselines.
 	warnings = append(warnings, compareLatencyPerformance(actual.Name, actual.ToolLatencies, baseline.ToolLatencies)...)
 	warnings = append(warnings, compareFrameworkPerformance(actual.Name, actual.FrameworkPerf, baseline.Framework)...)
 	return warnings

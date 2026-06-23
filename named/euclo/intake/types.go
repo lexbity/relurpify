@@ -6,7 +6,8 @@ import (
 )
 
 // IntentClassification holds the result of tier-1 and tier-2 classification.
-// To be fully implemented in Phase 4 and 6.
+// The structure is intentionally broad so the intake pipeline can fill in
+// additional evidence and risk metadata as the classification flow evolves.
 type IntentClassification struct {
 	WinningFamily        string
 	FamilyCandidates     []families.FamilyCandidate

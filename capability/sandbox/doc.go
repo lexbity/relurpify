@@ -14,8 +14,8 @@
 // command_runner.go selects the appropriate implementation based on the
 // workspace configuration.
 //
-// Historical note: LocalCommandRunner (bare host exec) was removed in Phase 5
-// of the sandbox-centrality rework. All command execution now goes through a
-// verified sandbox backend (gVisor or Docker). See devdocs/toolcall-audit.md
-// for the full audit.
+// Historical note: LocalCommandRunner (bare host exec) was removed during the
+// sandbox-centrality rework. All command execution now goes through a verified
+// sandbox backend (gVisor or Docker). See devdocs/toolcall-audit.md for the
+// full audit.
 package sandbox

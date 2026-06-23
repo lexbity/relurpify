@@ -52,7 +52,7 @@ func TestCodeReviewHandlerStructuredModelResponse(t *testing.T) {
 		reply: func(prompt string) string {
 			switch {
 			case strings.Contains(prompt, "Review the following result"):
-				return `{"issues":[{"severity":"warning","description":"placeholder remains","suggestion":"remove the stub"}],"approve":false}`
+				return `{"issues":[{"severity":"warning","description":"stub remains","suggestion":"remove the stub"}],"approve":false}`
 			case strings.Contains(prompt, "Perform a code review"):
 				return `{"thought":"reviewed workspace","complete":true,"summary":"delegate complete"}`
 			default:

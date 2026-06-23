@@ -20,7 +20,7 @@ type Job struct {
 	done   chan struct{}
 }
 
-// NewJob creates a job placeholder for the given request.
+// NewJob creates a job record for the given request.
 func NewJob(req Request) *Job {
 	return &Job{
 		ID:      req.ID,

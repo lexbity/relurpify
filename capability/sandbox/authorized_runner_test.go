@@ -1,4 +1,4 @@
-// Phase 2 — AuthorizedRunner type seam (compile-edge enforcement).
+// AuthorizedRunner type seam (compile-edge enforcement).
 //
 // Asserts that NewAuthorizedRunner rejects nil policy, and that the
 // AuthorizedRunner correctly delegates to the inner enforced runner.

@@ -93,7 +93,7 @@ var redactGoldenVectors = []struct {
 	{
 		name: "sensitive value patterns",
 		input: func() map[string]any {
-			return map[string]any{ //nolint:gosec
+			return map[string]any{ //nolint:gosec // test fixture intentionally carries a secret-shaped key for redaction coverage
 				"header":       "bearer xyz",
 				"gh_token":     "ghp_abcdef123456",
 				"github_token": "github_pat_abc123",

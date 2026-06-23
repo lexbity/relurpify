@@ -2,7 +2,10 @@
 
 Agent-level integration tests for Relurpify. Each test runs a real agent against a real (or replayed) LLM and asserts on outputs, file mutations, state, and agent-internal metrics.
 
-Unit tests (`go test ./...`) require no external services. Agent tests require Ollama running with `gemma4:12b` loaded.
+Unit tests (`go test ./...`) require no external services. Agent tests require Ollama running with the model specified by the suite loaded.
+
+The command examples below are documented invocation shapes. The suite YAML is
+authoritative for the exact model name and execution profile for each run.
 
 ---
 

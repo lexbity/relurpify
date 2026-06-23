@@ -185,7 +185,7 @@ func TestEditEmit_WriteClassPreviewRedacted(t *testing.T) {
 	)
 
 	ih := handler.(instrumentCapabilityHandler)
-	secret := "SECRET_API_KEY=sk-1234567890abcdef" //nolint:gosec
+	secret := "SECRET_API_KEY=sk-1234567890abcdef" //nolint:gosec // test fixture intentionally contains secret-shaped text for emit/redact coverage
 	args := map[string]any{
 		"path":    "config.txt",
 		"content": secret,
