@@ -6,7 +6,7 @@
 //
 // Capability families:
 // - command: test_run, diff_summary, bisect, api_compat, coverage_check, blame_trace
-// - index read: ast_query, symbol_trace, call_graph, layer_check, boundary_report
+// - index read: ast_query, symbol_trace, call_graph
 // - workspace mutation: targeted_refactor, rename_symbol
 // - model synthesis: code_review
 package relurpicabilities

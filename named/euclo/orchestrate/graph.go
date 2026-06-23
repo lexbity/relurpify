@@ -26,7 +26,7 @@ import (
 )
 
 // RootGraphDeps is the explicit dependency contract for graph execution.
-// It replaces agentenv.AgentContext as the construction input to RootGraph.
+// It is the construction input to RootGraph.
 type RootGraphDeps struct {
 	Workspace            string
 	DispatchCapabilities *registry.CapabilityRegistry

@@ -19,7 +19,7 @@ type stubSessionHandler struct {
 }
 
 func (h *stubSessionHandler) Descriptor(_ context.Context, _ ports.State) descriptor.CapabilityDescriptor {
-	return descriptor.CapabilityDescriptor{ID: h.id}
+	return descriptor.CapabilityDescriptor{ID: h.id, Availability: descriptor.AvailabilitySpec{Available: true}}
 }
 
 func (h *stubSessionHandler) Invoke(_ context.Context, _ ports.State, _ map[string]any) (*ports.ToolResult, error) {

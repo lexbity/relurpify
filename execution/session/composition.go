@@ -135,8 +135,8 @@ type WorkspaceConfig struct {
 
 // RuntimeSecurity is the security product consumed by OpenWorkspace.
 //
-// The app composition root owns construction of this product. execution/agentenv
-// only consumes it while the environment object is being dissolved.
+// The app composition root owns construction of this product; session code
+// only consumes it.
 type RuntimeSecurity struct {
 	Runner        *sandbox.AuthorizedRunner
 	PolicyEngine  registry.PolicyEngine

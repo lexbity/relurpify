@@ -243,8 +243,6 @@ func defaultFamilyFallback(familyID string, family CapabilityFamily) string {
 		return "euclo:cap.api_compat"
 	case FamilyReviewSynthesis:
 		return "euclo:cap.code_review"
-	case FamilyArchitecture:
-		return "euclo:cap.layer_check"
 	default:
 		return ""
 	}

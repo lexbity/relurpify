@@ -20,11 +20,9 @@ var declaredRelurpicIDs = []string{
 	"euclo:cap.bisect",
 	"euclo:cap.code_review",
 	"euclo:cap.diff_summary",
-	"euclo:cap.layer_check",
 	"euclo:cap.targeted_refactor",
 	"euclo:cap.rename_symbol",
 	"euclo:cap.api_compat",
-	"euclo:cap.boundary_report",
 	"euclo:cap.coverage_check",
 }
 
@@ -161,11 +159,9 @@ func TestRegisterAllEmptyToolRegistryMarksAllUnavailable(t *testing.T) {
 		"euclo:cap.bisect",
 		"euclo:cap.code_review",
 		"euclo:cap.diff_summary",
-		"euclo:cap.layer_check",
 		"euclo:cap.targeted_refactor",
 		"euclo:cap.rename_symbol",
 		"euclo:cap.api_compat",
-		"euclo:cap.boundary_report",
 		"euclo:cap.coverage_check",
 	} {
 		desc, ok := reg.GetCapability(id)
@@ -202,11 +198,9 @@ func TestRegisterAllAvailabilityDependsOnRequiredTools(t *testing.T) {
 		"euclo:cap.bisect",
 		"euclo:cap.code_review",
 		"euclo:cap.diff_summary",
-		"euclo:cap.layer_check",
 		"euclo:cap.targeted_refactor",
 		"euclo:cap.rename_symbol",
 		"euclo:cap.api_compat",
-		"euclo:cap.boundary_report",
 		"euclo:cap.coverage_check",
 	} {
 		desc, ok := reg.GetCapability(id)

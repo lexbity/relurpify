@@ -8,7 +8,6 @@ const (
 	FamilyRegressionLocalization = "regression_localization"
 	FamilyMigrationCompat        = "migration_compat"
 	FamilyReviewSynthesis        = "review_synthesis"
-	FamilyArchitecture           = "architecture"
 )
 
 // GetBuiltinFamilies returns the built-in capability families.
@@ -75,16 +74,6 @@ func GetBuiltinFamilies() []CapabilityFamily {
 			CapabilityIDs: []string{
 				"euclo:cap.code_review",
 				"euclo:cap.diff_summary",
-			},
-		},
-		{
-			ID:                 FamilyArchitecture,
-			Name:               "Architecture",
-			Description:        "Capabilities for architecture analysis",
-			FallbackCapability: "euclo:cap.layer_check",
-			CapabilityIDs: []string{
-				"euclo:cap.layer_check",
-				"euclo:cap.boundary_report",
 			},
 		},
 	}

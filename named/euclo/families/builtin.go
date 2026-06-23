@@ -56,7 +56,7 @@ func RegisterBuiltins(registry *KeywordFamilyRegistry) error {
 			DefaultHITLPolicy:   HITLPolicyAsk,
 			DefaultVerification: VerificationNotRequired,
 			RetrievalTemplate:   "project context for: {{.Instruction}}",
-			FallbackCapability:  "euclo:cap.layer_check",
+			FallbackCapability:  "",
 		},
 		{
 			ID:                  FamilyImplementation,
@@ -106,7 +106,7 @@ func RegisterBuiltins(registry *KeywordFamilyRegistry) error {
 			DefaultHITLPolicy:   HITLPolicyAsk,
 			DefaultVerification: VerificationNotRequired,
 			RetrievalTemplate:   "architecture context for: {{.Instruction}}",
-			FallbackCapability:  "euclo:cap.boundary_report",
+			FallbackCapability:  "",
 		},
 	}
 

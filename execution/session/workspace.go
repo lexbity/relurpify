@@ -217,7 +217,7 @@ type AgentBootstrapOptions struct {
 	CompiledPolicy       *CompiledPolicy
 	PolicyEngine         regpkg.PolicyEngine
 	// Pre-built capability product. App composition is responsible for building
-	// the capability runtime; agentenv only consumes it.
+	// the capability runtime; session code only consumes it.
 	CapabilityRegistry     *regpkg.CapabilityRegistry
 	CapabilityIndexManager *ast.IndexManager
 	CapabilitySearchEngine *search.SearchEngine

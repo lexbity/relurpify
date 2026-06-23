@@ -16,13 +16,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type phase12RecordingRunner struct {
+type tier2RecordingRunner struct {
 	stdout string
 	stderr string
 	err    error
 }
 
-func (r *phase12RecordingRunner) Run(ctx context.Context, req sandbox.CommandRequest) (*ports.CommandResult, error) {
+func (r *tier2RecordingRunner) Run(ctx context.Context, req sandbox.CommandRequest) (*ports.CommandResult, error) {
 	if r.err != nil {
 		return nil, r.err
 	}
@@ -34,7 +34,7 @@ func (r *phase12RecordingRunner) Run(ctx context.Context, req sandbox.CommandReq
 	}, nil
 }
 
-func TestPhase12Descriptors(t *testing.T) {
+func TestTier2Descriptors(t *testing.T) {
 	tests := []struct {
 		name string
 		desc descriptor.CapabilityDescriptor
@@ -42,7 +42,6 @@ func TestPhase12Descriptors(t *testing.T) {
 		{"targeted_refactor", NewTargetedRefactorHandler(nil, nil, nil, nil, nil).Descriptor(context.Background(), nil)},
 		{"rename_symbol", NewRenameSymbolHandler(nil, nil, nil, nil).Descriptor(context.Background(), nil)},
 		{"api_compat", NewAPICompatHandler(CommandDeps{}).Descriptor(context.Background(), nil)},
-		{"boundary_report", NewBoundaryReportHandler(IndexDeps{}).Descriptor(context.Background(), nil)},
 		{"coverage_check", NewCoverageCheckHandler(CommandDeps{}).Descriptor(context.Background(), nil)},
 	}
 
@@ -62,7 +61,6 @@ func TestRegisterAllIncludesTier2Handlers(t *testing.T) {
 			"euclo:cap.targeted_refactor",
 			"euclo:cap.rename_symbol",
 			"euclo:cap.api_compat",
-			"euclo:cap.boundary_report",
 			"euclo:cap.coverage_check",
 		},
 	}))
@@ -70,7 +68,6 @@ func TestRegisterAllIncludesTier2Handlers(t *testing.T) {
 		"euclo:cap.targeted_refactor",
 		"euclo:cap.rename_symbol",
 		"euclo:cap.api_compat",
-		"euclo:cap.boundary_report",
 		"euclo:cap.coverage_check",
 	} {
 		require.Truef(t, reg.HasCapability(id), "expected %s to be registered", id)
@@ -161,7 +158,7 @@ func TestRenameSymbolFindsAllOccurrences(t *testing.T) {
 
 func TestCoverageCheckParsesOutput(t *testing.T) {
 	handler := NewCoverageCheckHandler(CommandDeps{
-		Runner: &phase12RecordingRunner{
+		Runner: &tier2RecordingRunner{
 			stdout: "ok   github.com/example/foo  0.013s  coverage: 82.5% of statements\nok   github.com/example/bar  0.011s  coverage: 61.0% of statements\n",
 		},
 		Policy: sandbox.CommandPolicyFunc(func(ctx context.Context, req sandbox.CommandRequest) error { return nil }),

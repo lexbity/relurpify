@@ -153,7 +153,7 @@ type captureSessionCapability struct {
 var _ handler.InvocableCapabilityHandler = (*captureSessionCapability)(nil)
 
 func (h *captureSessionCapability) Descriptor(context.Context, capports.State) descriptor.CapabilityDescriptor {
-	return descriptor.CapabilityDescriptor{ID: "rewoo:test.capture"}
+	return descriptor.CapabilityDescriptor{ID: "rewoo:test.capture", Availability: descriptor.AvailabilitySpec{Available: true}}
 }
 
 func (h *captureSessionCapability) Invoke(_ context.Context, env capports.State, _ map[string]any) (*capports.ToolResult, error) {

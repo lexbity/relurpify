@@ -810,8 +810,6 @@ func familyMatchBonus(desc descriptor.CapabilityDescriptor, family string) bool 
 		return strings.Contains(strings.ToLower(desc.ID), "targeted_refactor") || strings.Contains(strings.ToLower(desc.ID), "rename_symbol")
 	case "test":
 		return strings.Contains(strings.ToLower(desc.ID), "test_run") || strings.Contains(strings.ToLower(desc.ID), "coverage_check")
-	case "architecture":
-		return strings.Contains(strings.ToLower(desc.ID), "layer_check") || strings.Contains(strings.ToLower(desc.ID), "boundary_report")
 	case "migration":
 		return strings.Contains(strings.ToLower(desc.ID), "api_compat")
 	case "debug":

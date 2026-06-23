@@ -67,9 +67,9 @@ type BootstrappedAgentRuntime struct {
 }
 
 // BootstrapAgentRuntime delegates to session.BootstrapAgentRuntime and then
-// registers relurpic and agent capabilities on top. agentenv intentionally omits
-// relurpic capabilities because named agents register their own. app/relurpish
-// registers them here.
+// registers relurpic and agent capabilities on top. The session bootstrap
+// intentionally omits relurpic capabilities because named agents register their
+// own. app/relurpish registers them here.
 func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*BootstrappedAgentRuntime, error) {
 	boot, err := session.BootstrapAgentRuntime(opts.Context, workspace, session.AgentBootstrapOptions{
 		Context:             opts.Context,

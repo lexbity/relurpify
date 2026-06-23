@@ -248,8 +248,8 @@ func buildRuntime(ctx context.Context, cfg Config, secrets config.Secrets) (*Run
 		}
 	}
 
-	// App-level environment composition starts here. agentenv consumes the
-	// resulting products while the old environment object is being dissolved.
+	// App-level environment composition starts here. The runtime consumes the
+	// resulting products directly.
 	contract, err := config.OverlaySecurityBundle(euclocontract.DefaultContract(), &loadedConfig.Security)
 	if err != nil {
 		return nil, fmt.Errorf("overlay security bundle: %w", err)
@@ -426,9 +426,9 @@ func buildRuntime(ctx context.Context, cfg Config, secrets config.Secrets) (*Run
 		})
 	}
 
-	// Extend telemetry with an event log sink. The event log is now created
-	// by execution/agentenv via EventLogFactory, so we just need to wire it into
-	// the telemetry chain.
+	// Extend telemetry with an event log sink. The event log is created via
+	// EventLogFactory during composition, so we just need to wire it into the
+	// telemetry chain.
 	var eventTelemetry telemetry.EventTelemetry
 	if cfg.EventsPath != "" && registration != nil {
 		// The event log is now owned by Workspace and will be closed by Workspace.Close()

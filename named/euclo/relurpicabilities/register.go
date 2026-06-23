@@ -144,9 +144,6 @@ var eucloRelurpicCapabilityBlueprints = []relurpicCapabilityBlueprint{
 	{ID: "euclo:cap.diff_summary", RequiredTools: []string{"file_read"}, NewHandler: func(deps RegistrationDeps) handler.InvocableCapabilityHandler {
 		return NewDiffSummaryHandler(commandDepsFromRegistration(deps), deps.Model)
 	}},
-	{ID: "euclo:cap.layer_check", RequiredTools: []string{"file_read"}, NewHandler: func(deps RegistrationDeps) handler.InvocableCapabilityHandler {
-		return NewLayerCheckHandler(indexDepsFromRegistration(deps))
-	}},
 	{ID: "euclo:cap.targeted_refactor", RequiredTools: []string{"file_read", "file_write"}, NewHandler: func(deps RegistrationDeps) handler.InvocableCapabilityHandler {
 		idx := indexDepsFromRegistration(deps)
 		// IndexManager implements both SymbolQuerier (QuerySymbol) and IndexRefresher (RefreshFiles).
@@ -159,9 +156,6 @@ var eucloRelurpicCapabilityBlueprints = []relurpicCapabilityBlueprint{
 	}},
 	{ID: "euclo:cap.api_compat", RequiredTools: []string{"file_read"}, NewHandler: func(deps RegistrationDeps) handler.InvocableCapabilityHandler {
 		return NewAPICompatHandler(commandDepsFromRegistration(deps))
-	}},
-	{ID: "euclo:cap.boundary_report", RequiredTools: []string{"file_read"}, NewHandler: func(deps RegistrationDeps) handler.InvocableCapabilityHandler {
-		return NewBoundaryReportHandler(indexDepsFromRegistration(deps))
 	}},
 	{ID: "euclo:cap.coverage_check", RequiredTools: []string{"file_read"}, NewHandler: func(deps RegistrationDeps) handler.InvocableCapabilityHandler {
 		return NewCoverageCheckHandler(commandDepsFromRegistration(deps))
