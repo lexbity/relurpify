@@ -1,0 +1,23 @@
+schema: relurpify/tool/v1
+name: cli_locate
+version: "1"
+family: fileops
+intent:
+  - locate
+description: Queries the file database via locate.
+execution:
+  backend: subprocess
+  command:
+    base:
+      - locate
+  sandbox:
+    allowed_root: ${workspace}
+    timeout_seconds: 30
+  allow_stdin: true
+  supports_workdir: true
+capability:
+  trust_class: builtin_trusted
+  risk_class:
+    - execute
+  effect_class:
+    - filesystem_read

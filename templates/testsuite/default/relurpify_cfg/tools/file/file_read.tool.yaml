@@ -1,0 +1,26 @@
+schema: relurpify/tool/v1
+name: file_read
+version: "1"
+family: file
+intent:
+  - file
+description: Reads a UTF-8 file from disk.
+parameters:
+  - name: path
+    type: string
+    description: ""
+    required: true
+    default: null
+execution:
+  backend: go_native
+  implementation: file_read
+  sandbox:
+    allowed_root: ${workspace}
+    timeout_seconds: 30
+  supports_workdir: true
+capability:
+  trust_class: builtin_trusted
+  risk_class:
+    - read_only
+  effect_class:
+    - filesystem_read

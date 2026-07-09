@@ -1,0 +1,24 @@
+schema: relurpify/tool/v1
+name: cli_python
+version: "1"
+family: build
+intent:
+  - build
+  - python
+description: Executes Python commands using python3 inside the workspace.
+execution:
+  backend: subprocess
+  command:
+    base:
+      - python3
+  sandbox:
+    allowed_root: ${workspace}
+    timeout_seconds: 30
+  allow_stdin: true
+  supports_workdir: true
+capability:
+  trust_class: builtin_trusted
+  risk_class:
+    - execute
+  effect_class:
+    - process_spawn

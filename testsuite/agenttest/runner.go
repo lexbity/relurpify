@@ -193,9 +193,13 @@ type Runner struct {
 }
 
 // PreparedRunExecutorFn executes a prepared run descriptor through the CLI
-// handoff path. App entrypoints install the real implementation.
-var PreparedRunExecutorFn = func(context.Context, string, string, string, io.Writer) error {
-	return fmt.Errorf("prepared run executor not configured")
+// handoff path.
+var PreparedRunExecutorFn = func(ctx context.Context, descriptorPath, runRoot, extra string, out io.Writer) error {
+	desc, err := LoadPreparedRunDescriptor(descriptorPath)
+	if err != nil {
+		return fmt.Errorf("load descriptor: %w", err)
+	}
+	return (&PreparedRunExecutor{}).Execute(ctx, desc, out)
 }
 
 // PreparedRunVerifierFn validates the prepared run artifacts after execution.

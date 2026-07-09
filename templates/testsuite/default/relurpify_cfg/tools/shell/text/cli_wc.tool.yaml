@@ -1,0 +1,24 @@
+schema: relurpify/tool/v1
+name: cli_wc
+version: "1"
+family: text
+intent:
+  - inspect
+  - measure
+description: Counts lines, words, and bytes via wc.
+execution:
+  backend: subprocess
+  command:
+    base:
+      - wc
+  sandbox:
+    allowed_root: ${workspace}
+    timeout_seconds: 30
+  allow_stdin: true
+  supports_workdir: true
+capability:
+  trust_class: builtin_trusted
+  risk_class:
+    - execute
+  effect_class:
+    - filesystem_read

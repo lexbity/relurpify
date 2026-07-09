@@ -1,0 +1,11 @@
+schema: relurpify/model/provider/v1
+name: offline
+endpoint: http://localhost:0
+kind: offline
+available_models:
+  - gemma4:e4b
+  - offline-synthetic
+native_tool_calling: true
+max_concurrent: 1
+description: "Offline/synthetic provider for testing"
+setup_hint: "Used automatically by `--offline` and testing fixtures; no setup needed"

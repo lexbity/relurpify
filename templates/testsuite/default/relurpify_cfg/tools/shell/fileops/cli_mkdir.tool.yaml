@@ -1,0 +1,27 @@
+schema: relurpify/tool/v1
+name: cli_mkdir
+version: "1"
+family: fileops
+intent:
+  - create
+description: Creates directories via mkdir (defaults to -p).
+execution:
+  backend: subprocess
+  command:
+    base:
+      - mkdir
+    args:
+      - -p
+  sandbox:
+    allowed_root: ${workspace}
+    timeout_seconds: 30
+  default_args:
+    - -p
+  allow_stdin: true
+  supports_workdir: true
+capability:
+  trust_class: builtin_trusted
+  risk_class:
+    - execute
+  effect_class:
+    - filesystem_read

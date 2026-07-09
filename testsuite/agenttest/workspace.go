@@ -12,6 +12,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/platform/fs"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
+	"codeburg.org/lexbit/relurpify/userconfig/config/secretscan"
 	"codeburg.org/lexbit/relurpify/userconfig/templates"
 )
 
@@ -168,7 +169,16 @@ func MaterializeDerivedWorkspace(targetWorkspace, derivedWorkspace, sharedRoot, 
 	if err := fs.MkdirAllSecure(derivedWorkspace); err != nil {
 		return err
 	}
-	if err := CopyWorkspace(targetWorkspace, derivedWorkspace, append([]string{config.DirName + "/**"}, exclude...)); err != nil {
+	// Always exclude the config and runtime-state trees from the copy: the
+	// config dir is re-materialized below from templates, and the runtime-state
+	// dir holds the test-run output (including this derived workspace itself).
+	// Without excluding it, CopyWorkspace re-enters its own output and recurses
+	// until the path overflows.
+	alwaysExclude := []string{
+		config.DirName + "/**",
+		secretscan.RuntimeStateDirName + "/**",
+	}
+	if err := CopyWorkspace(targetWorkspace, derivedWorkspace, append(alwaysExclude, exclude...)); err != nil {
 		return err
 	}
 

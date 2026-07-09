@@ -52,6 +52,8 @@ type PreparedRunDescriptor struct {
 	BackendResetStrategy  string                       `json:"backend_reset_strategy,omitempty"`
 	BackendMatrix         []PreparedBackendTarget      `json:"backend_matrix,omitempty"`
 	ModelName             string                       `json:"model_name,omitempty"`
+	RecordingMode         string                       `json:"recording_mode,omitempty"`
+	TapePath              string                       `json:"tape_path,omitempty"`
 	SkipASTIndex          bool                         `json:"skip_ast_index"`
 	StrictMode            bool                         `json:"strict_mode"`
 	MaxIterations         int                          `json:"max_iterations"`
@@ -140,6 +142,15 @@ func BuildPreparedRunDescriptor(suite *Suite, c CaseSpec, model ModelSpec, opts 
 	seededState := cloneContextMap(c.Setup.StateKeys)
 	expectedArtifacts := UniqueStrings(append(append([]string{}, verification.ExpectedArtifacts...), expectedArtifactsForCase(c)...))
 
+	layout := runCaseLayout{
+		TapePath:     filepath.Join(artifacts.ExecutionArtifactsDir, "tape.jsonl"),
+		WorkspaceDir: artifacts.SetupWorkspaceDir,
+	}
+	exec, err := resolveCaseExecution(suite, c, model, "", opts, layout, targetWorkspace, targetWorkspace)
+	if err != nil {
+		return nil, fmt.Errorf("resolve case execution: %w", err)
+	}
+
 	desc := &PreparedRunDescriptor{
 		RunID:                 strings.TrimSpace(runID),
 		SuitePath:             suitePath,
@@ -173,7 +184,9 @@ func BuildPreparedRunDescriptor(suite *Suite, c CaseSpec, model ModelSpec, opts 
 		BackendService:        selected.Service,
 		BackendResetStrategy:  selected.ResetStrategy,
 		BackendMatrix:         backendTargets,
-		ModelName:             firstNonEmpty(model.Name, selected.Provider),
+		ModelName:             firstNonEmpty(exec.Model, model.Name, selected.Provider),
+		RecordingMode:         exec.RecordingMode,
+		TapePath:              exec.TapePath,
 		SkipASTIndex:          opts.SkipASTIndex,
 		StrictMode:            suite.IsStrictRun(opts.Profile, opts.Strict),
 		MaxIterations:         resolveCaseMaxIterations(opts, c),
@@ -221,6 +234,8 @@ func (d *PreparedRunDescriptor) Normalize() error {
 	d.BackendResetStrategy = strings.TrimSpace(d.BackendResetStrategy)
 	d.ServiceResetStrategy = strings.TrimSpace(d.ServiceResetStrategy)
 	d.ModelName = strings.TrimSpace(d.ModelName)
+	d.RecordingMode = strings.TrimSpace(d.RecordingMode)
+	d.TapePath = strings.TrimSpace(d.TapePath)
 	d.SandboxBackend = strings.TrimSpace(d.SandboxBackend)
 	d.SetupOverlays = normalizePreparedRunOverlays(d.SetupOverlays)
 	d.ExpectedArtifacts = UniqueStrings(d.ExpectedArtifacts)

@@ -4,6 +4,5 @@ no aliases
 no stubs 
 
 # Configuration
-no os.Getenv outside userconfig
-no direct file loading outside userconfig
+no env access outside userconfig; workspace boot config loads only through userconfig/config
 

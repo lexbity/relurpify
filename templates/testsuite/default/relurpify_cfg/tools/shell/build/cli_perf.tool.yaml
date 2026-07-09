@@ -1,0 +1,24 @@
+schema: relurpify/tool/v1
+name: cli_perf
+version: "1"
+family: build
+intent:
+  - profile
+description: Performance analysis tools for Linux.
+execution:
+  backend: subprocess
+  command:
+    base:
+      - perf
+  sandbox:
+    allowed_root: ${workspace}
+    timeout_seconds: 30
+  allow_stdin: true
+  supports_workdir: true
+capability:
+  trust_class: builtin_trusted
+  risk_class:
+    - execute
+    - destructive
+  effect_class:
+    - process_spawn

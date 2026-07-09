@@ -1,0 +1,25 @@
+schema: relurpify/tool/v1
+name: cli_tar
+version: "1"
+family: archive
+intent:
+  - compress
+  - decompress
+  - inspect
+description: Creates or extracts tar archives.
+execution:
+  backend: subprocess
+  command:
+    base:
+      - tar
+  sandbox:
+    allowed_root: ${workspace}
+    timeout_seconds: 30
+  allow_stdin: true
+  supports_workdir: true
+capability:
+  trust_class: builtin_trusted
+  risk_class:
+    - execute
+  effect_class:
+    - process_spawn
