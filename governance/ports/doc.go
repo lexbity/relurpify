@@ -12,7 +12,6 @@
 //	SandboxRuntime  — sandbox selection without importing platform (P8)
 //	StateView       — read-only context state without importing context (P13)
 //	SearchScope     — context search without importing context (P13)
-//	LifecycleView   — agent lifecycle without importing execution (P14)
 //	DelegationSink  — delegation transitions without importing execution (P14)
 //	Config          — governance receives config via injection, not import (P15)
 package ports

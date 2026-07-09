@@ -106,7 +106,7 @@ func BuildCapabilityRuntime(ctx context.Context, workspace string, runner *fsand
 	if len(cfg.ProtectedPaths) > 0 {
 		registry.UseSandboxScope(fsandbox.NewFileScopePolicy(workspace, cfg.ProtectedPaths))
 	}
-	manifestTools := toolcapabilities.Build(workspace, commandRunnerAdapter{runner: runner}, toolManifests,
+	manifestTools := toolcapabilities.Build(workspace, fsandbox.CommandRunnerAdapter{Runner: runner}, toolManifests,
 		toolcapabilities.StrictMode(),
 		toolcapabilities.WithBackendBuilder("subprocess", subprocess.BackendBuilder()),
 		toolcapabilities.WithBackendBuilder("composite", composite.BackendBuilder()),
@@ -114,7 +114,7 @@ func BuildCapabilityRuntime(ctx context.Context, workspace string, runner *fsand
 
 	for _, tool := range manifestTools {
 		if setter, ok := tool.(interface{ SetCommandRunner(ports.CommandRunner) }); ok {
-			setter.SetCommandRunner(commandRunnerAdapter{runner: runner})
+			setter.SetCommandRunner(fsandbox.CommandRunnerAdapter{Runner: runner})
 		}
 	}
 
@@ -211,7 +211,7 @@ func BuildMinimalToolRegistry(ctx context.Context, workspace string, runner fsan
 	if err != nil {
 		return nil, fmt.Errorf("load tool manifests: %w", err)
 	}
-	tools := toolcapabilities.Build(workspace, commandRunnerAdapter{runner: runner}, manifests,
+	tools := toolcapabilities.Build(workspace, fsandbox.CommandRunnerAdapter{Runner: runner}, manifests,
 		toolcapabilities.StrictMode(),
 		toolcapabilities.WithBackendBuilder("subprocess", subprocess.BackendBuilder()),
 		toolcapabilities.WithBackendBuilder("composite", composite.BackendBuilder()),
@@ -219,7 +219,7 @@ func BuildMinimalToolRegistry(ctx context.Context, workspace string, runner fsan
 
 	for _, tool := range tools {
 		if setter, ok := tool.(interface{ SetCommandRunner(ports.CommandRunner) }); ok {
-			setter.SetCommandRunner(commandRunnerAdapter{runner: runner})
+			setter.SetCommandRunner(fsandbox.CommandRunnerAdapter{Runner: runner})
 		}
 	}
 
@@ -229,23 +229,6 @@ func BuildMinimalToolRegistry(ctx context.Context, workspace string, runner fsan
 		}
 	}
 	return capReg, nil
-}
-
-type commandRunnerAdapter struct {
-	runner fsandbox.CommandRunner
-}
-
-func (a commandRunnerAdapter) Run(ctx context.Context, req ports.CommandRequest) (*ports.CommandResult, error) {
-	if a.runner == nil {
-		return nil, fmt.Errorf("command runner missing")
-	}
-	return a.runner.Run(ctx, fsandbox.CommandRequest{
-		Workdir: req.Workdir,
-		Args:    append([]string(nil), req.Args...),
-		Env:     append([]string(nil), req.Env...),
-		Input:   req.Input,
-		Timeout: req.Timeout,
-	})
 }
 
 func shouldIgnoreBootstrapIndexError(err error) bool {

@@ -37,13 +37,14 @@ func VerifyPreparedRun(ctx context.Context, prepared *PreparedRun, caseReport Ca
 	if err := preparedRunEnsure(desc); err != nil {
 		return nil, err
 	}
+	ap := desc.ArtifactPaths()
 	report := &PreparedRunVerificationReport{
 		DescriptorPath:         prepared.Artifacts.DescriptorPath(),
-		ExecutionReportPath:    preparedRunReportPath(desc),
-		SetupLogPath:           filepath.Join(desc.SetupLogsDir, "agenttest.log"),
-		SetupTelemetryPath:     filepath.Join(desc.SetupTelemetryDir, "agenttest.jsonl"),
-		ExecutionLogPath:       filepath.Join(desc.ExecutionLogsDir, "agenttest.log"),
-		ExecutionTelemetryPath: filepath.Join(desc.ExecutionTelemetryDir, "agenttest.jsonl"),
+		ExecutionReportPath:    ap.Report,
+		SetupLogPath:           ap.SetupLog,
+		SetupTelemetryPath:     ap.SetupTelemetry,
+		ExecutionLogPath:       ap.ExecutionLog,
+		ExecutionTelemetryPath: ap.ExecutionTelemetry,
 		Success:                caseReport.Success,
 	}
 

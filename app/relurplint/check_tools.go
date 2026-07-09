@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"path/filepath"
 
 	"codeburg.org/lexbit/relurpify/capability/toolcapabilities"
@@ -48,25 +47,7 @@ func runSEC2Check(workspace string) []Diagnostic {
 		return nil
 	}
 
-	convertedManifests := make([]*toolcapabilities.ToolManifest, 0, len(manifests))
-	for _, m := range manifests {
-		if m == nil {
-			continue
-		}
-		var converted toolcapabilities.ToolManifest
-		data, err := json.Marshal(m)
-		if err != nil {
-			return nil
-		}
-		if err := json.Unmarshal(data, &converted); err != nil {
-			return nil
-		}
-		converted.SourcePath = m.SourcePath
-		converted.CanonicalName = m.CanonicalName
-		convertedManifests = append(convertedManifests, &converted)
-	}
-
-	results := configcheck.CheckAllManifests(convertedManifests)
+	results := configcheck.CheckAllManifests(manifests)
 	if len(results) == 0 {
 		return nil
 	}
@@ -78,7 +59,7 @@ func runSEC2Check(workspace string) []Diagnostic {
 				Check:    "tools",
 				Code:     "tool.underdeclared",
 				Severity: SeverityError,
-				Loc:      SourceLoc{File: manifestSourcePath(convertedManifests, name)},
+				Loc:      SourceLoc{File: manifestSourcePath(manifests, name)},
 				Message:  name + ": " + issue,
 			})
 		}

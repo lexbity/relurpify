@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -476,7 +477,7 @@ func copyTemplateContent(data []byte, dst, workspace string, overwrite bool) err
 func detectChromiumStatus(ctx context.Context, policy sandbox.CommandPolicy) DependencyStatus {
 	binaries := []string{"chromium", "chromium-browser", "google-chrome", "google-chrome-stable"}
 	for _, name := range binaries {
-		path, err := execLookPath(name)
+		path, err := exec.LookPath(name)
 		if err != nil {
 			continue
 		}
@@ -526,6 +527,4 @@ func errorString(err error) string {
 	return err.Error()
 }
 
-var execLookPath = func(file string) (string, error) {
-	return execLookPathImpl(file)
-}
+

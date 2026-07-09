@@ -69,10 +69,4 @@ const (
 	ArtifactStorageExternal ArtifactStorageKind = "external"
 )
 
-// LifecycleView is the governance-owned interface for persisting
-// delegation lifecycle data. execution/agentlifecycle implements it.
-type LifecycleView interface {
-	PersistDelegation(entry DelegationEntry) error
-	PersistDelegationTransition(transition DelegationTransitionEntry) error
-	StoreArtifact(record WorkflowArtifactRecord) error
-}
+

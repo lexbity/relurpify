@@ -26,10 +26,15 @@ import (
 type ReplayMode string
 
 const (
-	// StrictReplay reconstructs knowledge graph state at original EventLogSeq.
+	// StrictReplay re-runs compilation against the same query.
 	StrictReplay ReplayMode = "strict"
 	// CurrentReplay re-runs compilation against current state.
 	CurrentReplay ReplayMode = "current"
+)
+
+const (
+	BudgetShortfallPolicyFail        = "fail"
+	BudgetShortfallPolicyEmitPartial = "emit_partial"
 )
 
 // CompilationRequest represents a request to compile context.
@@ -39,7 +44,7 @@ type CompilationRequest struct {
 	PolicyBundleID        string
 	EventLogSeq           uint64
 	MaxTokens             int
-	BudgetShortfallPolicy string // "fail" or "emit_partial"
+	BudgetShortfallPolicy string
 	Metadata              map[string]any
 }
 

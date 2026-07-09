@@ -46,8 +46,8 @@ func PrepareRun(suite *Suite, c CaseSpec, model ModelSpec, opts RunOptions, targ
 }
 
 func preparedRunCaseID(runID, caseName, modelName string) string {
-	parts := []string{strings.TrimSpace(runID), sanitizeName(caseName), sanitizeName(modelName)}
-	return sanitizeName(strings.Join(parts, "__"))
+	parts := []string{strings.TrimSpace(runID), SanitizeName(caseName), SanitizeName(modelName)}
+	return SanitizeName(strings.Join(parts, "__"))
 }
 
 func preparedRunReportPath(desc *PreparedRunDescriptor) string {
@@ -75,13 +75,14 @@ func touchPreparedRunArtifactFiles(desc *PreparedRunDescriptor) error {
 	if desc == nil {
 		return fmt.Errorf("descriptor required")
 	}
+	ap := desc.ArtifactPaths()
 	paths := []string{
-		filepath.Join(desc.SetupLogsDir, "agenttest.log"),
-		filepath.Join(desc.SetupTelemetryDir, "agenttest.jsonl"),
-		filepath.Join(desc.ExecutionLogsDir, "agenttest.log"),
-		filepath.Join(desc.ExecutionTelemetryDir, "agenttest.jsonl"),
-		filepath.Join(desc.ExecutionDir, "report.json"),
-		filepath.Join(desc.VerificationDir, "verification.json"),
+		ap.SetupLog,
+		ap.SetupTelemetry,
+		ap.ExecutionLog,
+		ap.ExecutionTelemetry,
+		ap.Report,
+		ap.Verification,
 	}
 	for _, path := range paths {
 		if err := fs.MkdirAllSecure(filepath.Dir(path)); err != nil {

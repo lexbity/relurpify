@@ -5,14 +5,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/platform/fs"
 	"codeburg.org/lexbit/relurpify/telemetry/perfstats"
-	euclosubject "codeburg.org/lexbit/relurpify/testsuite/subjects/euclo"
 )
 
 const (
@@ -62,7 +59,7 @@ type PerformanceSummary struct {
 }
 
 func GoldenBaselineFilename(caseName, modelName string) string {
-	return sanitizeName(caseName) + "__" + sanitizeName(modelName) + ".baseline.json"
+	return SanitizeName(caseName) + "__" + SanitizeName(modelName) + ".baseline.json"
 }
 
 func BaselineFilePath(workspace, suiteName, caseName, modelName string) string {
@@ -120,160 +117,6 @@ func LoadPerformanceBaseline(path string) (*PerformanceBaseline, error) {
 	return &baseline, nil
 }
 
-func BuildPhaseMetrics(snapshot *contextdata.Envelope, total TokenUsageReport) []PhaseMetric {
-	phases := euclosubject.CollectPerformancePhases(snapshot)
-	if len(phases) == 0 {
-		return nil
-	}
-
-	metrics := make([]PhaseMetric, 0, len(phases))
-	durationWeights := make([]int64, 0, len(phases))
-	var totalDuration int64
-	for _, phase := range phases {
-		durationMS := euclosubject.PhaseDurationMS(snapshot, phase)
-		metrics = append(metrics, PhaseMetric{
-			Phase:      phase,
-			DurationMS: durationMS,
-		})
-		durationWeights = append(durationWeights, durationMS)
-		totalDuration += durationMS
-	}
-
-	if len(metrics) == 1 {
-		metrics[0].LLMCalls = total.LLMCalls
-		metrics[0].TokensUsed = total.TotalTokens
-		return metrics
-	}
-	if totalDuration > 0 {
-		llmAlloc := allocateIntAcrossPhases(durationWeights, total.LLMCalls)
-		tokenAlloc := allocateIntAcrossPhases(durationWeights, total.TotalTokens)
-		for i := range metrics {
-			metrics[i].LLMCalls = llmAlloc[i]
-			metrics[i].TokensUsed = tokenAlloc[i]
-		}
-		return metrics
-	}
-
-	if len(metrics) > 0 {
-		metrics[len(metrics)-1].LLMCalls = total.LLMCalls
-		metrics[len(metrics)-1].TokensUsed = total.TotalTokens
-	}
-	return metrics
-}
-
-func ComparePerformanceBaseline(actual CaseReport, baseline *PerformanceBaseline) []PerformanceWarning {
-	if baseline == nil {
-		return nil
-	}
-	var warnings []PerformanceWarning
-	if exceededThreshold(actual.TokenUsage.LLMCalls, baseline.LLMCalls, performanceLLMCallThreshold) {
-		warnings = append(warnings, PerformanceWarning{
-			Metric:   "llm_calls",
-			Actual:   int64(actual.TokenUsage.LLMCalls),
-			Baseline: int64(baseline.LLMCalls),
-			Detail:   fmt.Sprintf("%s: %d vs baseline %d", actual.Name, actual.TokenUsage.LLMCalls, baseline.LLMCalls),
-		})
-	}
-	if exceededThreshold(actual.TokenUsage.TotalTokens, baseline.TotalTokens, performanceTokenThreshold) {
-		warnings = append(warnings, PerformanceWarning{
-			Metric:   "total_tokens",
-			Actual:   int64(actual.TokenUsage.TotalTokens),
-			Baseline: int64(baseline.TotalTokens),
-			Detail:   fmt.Sprintf("%s: %d vs baseline %d", actual.Name, actual.TokenUsage.TotalTokens, baseline.TotalTokens),
-		})
-	}
-	if exceededThreshold64(actual.DurationMS, baseline.DurationMS, performanceDurationThreshold) {
-		warnings = append(warnings, PerformanceWarning{
-			Metric:   "duration_ms",
-			Actual:   actual.DurationMS,
-			Baseline: baseline.DurationMS,
-			Detail:   fmt.Sprintf("%s: %dms vs baseline %dms", actual.Name, actual.DurationMS, baseline.DurationMS),
-		})
-	}
-	// Latency comparison for performance baselines.
-	warnings = append(warnings, compareLatencyPerformance(actual.Name, actual.ToolLatencies, baseline.ToolLatencies)...)
-	warnings = append(warnings, compareFrameworkPerformance(actual.Name, actual.FrameworkPerf, baseline.Framework)...)
-	return warnings
-}
-
-// compareLatencyPerformance compares tool latency against baseline
-// Triggers warning when current latency exceeds 2x baseline (default threshold)
-func compareLatencyPerformance(caseName string, actual, baseline map[string]LatencyStats) []PerformanceWarning {
-	if baseline == nil {
-		return nil
-	}
-
-	var warnings []PerformanceWarning
-	const latencyThreshold = 2.0 // Warn when latency exceeds 2x baseline
-
-	for tool, baselineStats := range baseline {
-		if baselineStats.MaxMs <= 0 {
-			continue
-		}
-
-		actualStats, ok := actual[tool]
-		if !ok {
-			continue // Tool not used in current run
-		}
-
-		if exceededThreshold64(actualStats.MaxMs, baselineStats.MaxMs, latencyThreshold) {
-			warnings = append(warnings, PerformanceWarning{
-				Metric:   fmt.Sprintf("tool_latency.%s.max_ms", tool),
-				Actual:   actualStats.MaxMs,
-				Baseline: baselineStats.MaxMs,
-				Detail:   fmt.Sprintf("%s: %s max latency %dms exceeds %.0fx baseline (%dms)", caseName, tool, actualStats.MaxMs, latencyThreshold, baselineStats.MaxMs),
-			})
-		}
-	}
-
-	return warnings
-}
-
-func compareFrameworkPerformance(caseName string, actual, baseline perfstats.Snapshot) []PerformanceWarning {
-	type metric struct {
-		name     string
-		actual   int64
-		baseline int64
-	}
-	metrics := []metric{
-		{name: "framework_perf.branch_clones", actual: actual.BranchClones, baseline: baseline.BranchClones},
-		{name: "framework_perf.branch_merge_count", actual: actual.BranchMergeCount, baseline: baseline.BranchMergeCount},
-		{name: "framework_perf.branch_merge_duration_ns", actual: actual.BranchMergeDurationNanos, baseline: baseline.BranchMergeDurationNanos},
-		{name: "framework_perf.artifact_budget_rescan_count", actual: actual.ArtifactBudgetRescanCount, baseline: baseline.ArtifactBudgetRescanCount},
-		{name: "framework_perf.artifact_budget_rescan_items", actual: actual.ArtifactBudgetRescanItems, baseline: baseline.ArtifactBudgetRescanItems},
-		{name: "framework_perf.progressive_file_read_count", actual: actual.ProgressiveFileReadCount, baseline: baseline.ProgressiveFileReadCount},
-		{name: "framework_perf.progressive_file_reread_count", actual: actual.ProgressiveFileRereadCount, baseline: baseline.ProgressiveFileRereadCount},
-		{name: "framework_perf.progressive_demotion_read_count", actual: actual.ProgressiveDemotionReadCount, baseline: baseline.ProgressiveDemotionReadCount},
-		{name: "framework_perf.retrieval_schema_check_count", actual: actual.RetrievalSchemaCheckCount, baseline: baseline.RetrievalSchemaCheckCount},
-		{name: "framework_perf.retrieval_corpus_stamp_count", actual: actual.RetrievalCorpusStampCount, baseline: baseline.RetrievalCorpusStampCount},
-		{name: "framework_perf.runtime_memory_search_count", actual: actual.RuntimeMemorySearchCount, baseline: baseline.RuntimeMemorySearchCount},
-		{name: "framework_perf.runtime_memory_search_duration_ns", actual: actual.RuntimeMemorySearchDurationNanos, baseline: baseline.RuntimeMemorySearchDurationNanos},
-		{name: "framework_perf.capability_registry_rebuild_count", actual: actual.CapabilityRegistryRebuildCount, baseline: baseline.CapabilityRegistryRebuildCount},
-	}
-	warnings := make([]PerformanceWarning, 0, len(metrics))
-	for _, metric := range metrics {
-		switch {
-		case metric.actual == 0 && metric.baseline == 0:
-			continue
-		case metric.baseline == 0 && metric.actual > 0:
-			warnings = append(warnings, PerformanceWarning{
-				Metric:   metric.name,
-				Actual:   metric.actual,
-				Baseline: metric.baseline,
-				Detail:   fmt.Sprintf("%s: %s introduced (%d vs baseline %d)", caseName, metric.name, metric.actual, metric.baseline),
-			})
-		case exceededThreshold64(metric.actual, metric.baseline, performanceDurationThreshold):
-			warnings = append(warnings, PerformanceWarning{
-				Metric:   metric.name,
-				Actual:   metric.actual,
-				Baseline: metric.baseline,
-				Detail:   fmt.Sprintf("%s: %s=%d vs baseline %d", caseName, metric.name, metric.actual, metric.baseline),
-			})
-		}
-	}
-	return warnings
-}
-
 func SummarizePerformance(cases []CaseReport) PerformanceSummary {
 	var summary PerformanceSummary
 	for _, cr := range cases {
@@ -291,56 +134,4 @@ func SummarizePerformance(cases []CaseReport) PerformanceSummary {
 	return summary
 }
 
-func allocateIntAcrossPhases(weights []int64, total int) []int {
-	out := make([]int, len(weights))
-	if len(weights) == 0 || total <= 0 {
-		return out
-	}
-	var weightSum int64
-	for _, weight := range weights {
-		weightSum += weight
-	}
-	if weightSum <= 0 {
-		out[len(out)-1] = total
-		return out
-	}
 
-	type remainder struct {
-		index     int
-		remainder int64
-	}
-	remainders := make([]remainder, 0, len(weights))
-	assigned := 0
-	for i, weight := range weights {
-		scaled := int64(total) * weight
-		value := int(scaled / weightSum)
-		out[i] = value
-		assigned += value
-		remainders = append(remainders, remainder{index: i, remainder: scaled % weightSum})
-	}
-	sort.Slice(remainders, func(i, j int) bool {
-		if remainders[i].remainder == remainders[j].remainder {
-			return remainders[i].index < remainders[j].index
-		}
-		return remainders[i].remainder > remainders[j].remainder
-	})
-	for remaining := total - assigned; remaining > 0 && len(remainders) > 0; remaining-- {
-		out[remainders[0].index]++
-		remainders = append(remainders[1:], remainders[0])
-	}
-	return out
-}
-
-func exceededThreshold(actual, baseline int, multiplier float64) bool {
-	if baseline <= 0 || actual <= baseline {
-		return false
-	}
-	return float64(actual) > float64(baseline)*multiplier
-}
-
-func exceededThreshold64(actual, baseline int64, multiplier float64) bool {
-	if baseline <= 0 || actual <= baseline {
-		return false
-	}
-	return float64(actual) > float64(baseline)*multiplier
-}

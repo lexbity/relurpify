@@ -55,10 +55,6 @@ type SecurityRuntime struct {
 //  5. NewAuthorizedRunner(verified, policy)
 //  6. Compile PolicyEngine from agent spec
 //
-// buildRunner is a variable so tests can inject a fake runner
-// without requiring a real sandbox backend (runsc/docker) on the host.
-var buildRunner = buildRunnerImpl
-
 func BuildSecurityRuntime(ctx context.Context, in SecurityRuntimeInput) (*SecurityRuntime, error) {
 	if in.Context == nil {
 		in.Context = context.Background()
@@ -77,7 +73,7 @@ func BuildSecurityRuntime(ctx context.Context, in SecurityRuntimeInput) (*Securi
 	if in.ExistingRunner != nil {
 		runner = in.ExistingRunner
 	} else {
-		runner, runnerConfig, err = buildRunner(in)
+		runner, runnerConfig, err = buildRunnerImpl(in)
 		if err != nil {
 			return nil, err
 		}
@@ -143,7 +139,7 @@ func buildRunnerImpl(in SecurityRuntimeInput) (sandbox.CommandRunner, *sandbox.C
 	if in.SecurityBundle == nil {
 		return nil, nil, fmt.Errorf("security bundle required to build sandbox runner")
 	}
-	sboxRuntime, err := newSandboxRuntime(in.SandboxBackend, sandbox.SandboxConfig{}, "", in.Workspace)
+	sboxRuntime, err := sandbox.NewSandboxRuntimeForBackend(in.SandboxBackend, sandbox.SandboxConfig{}, "", in.Workspace)
 	if err != nil {
 		return nil, nil, fmt.Errorf("select sandbox runtime: %w", err)
 	}
@@ -167,24 +163,6 @@ func defaultDenyPolicy() sandbox.CommandPolicy {
 			Policy:  "default-deny",
 		}
 	})
-}
-
-// newSandboxRuntime creates a sandbox runtime for the given backend.
-func newSandboxRuntime(backend string, sandboxCfg sandbox.SandboxConfig, image, workspace string) (sandbox.SandboxRuntime, error) {
-	b := strings.ToLower(strings.TrimSpace(backend))
-	if b == "" {
-		b = "gvisor"
-	}
-	if !sandbox.IsSupportedSandboxBackend(b) {
-		supported := strings.Join(sandbox.SupportedSandboxBackends(), ", ")
-		return nil, fmt.Errorf("unsupported sandbox backend %q (supported: %s)", backend, supported)
-	}
-	switch b {
-	case "gvisor":
-		return sandbox.NewSandboxRuntime(sandboxCfg), nil
-	default:
-		return nil, fmt.Errorf("unreachable: unsupported sandbox backend %q", b)
-	}
 }
 
 // newSandboxPolicy constructs a sandbox policy from a manifest spec.

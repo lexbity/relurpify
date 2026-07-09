@@ -7,8 +7,6 @@ import (
 )
 
 // buildCaseManagedBackend constructs a ManagedBackend using the provider-agnostic factory.
-// Unlike buildCaseBackend, this returns the backend itself rather than extracting the LanguageModel.
-// This is useful for operations that need the full backend interface (e.g., preflight, reset).
 func buildCaseManagedBackend(execution resolvedCaseExecution, profile *llm.ModelProfile, debug bool) (llm.ManagedBackend, error) {
 	cfg := llm.ProviderConfig{
 		Provider: execution.Provider,

@@ -244,7 +244,7 @@ func (r *Runner) RunSuite(ctx context.Context, suite *Suite, opts RunOptions) (*
 	if len(models) == 0 {
 		models = []ModelSpec{{Name: "", Endpoint: ""}}
 	}
-	matrixModels := expandSuiteModelMatrix(models, suite.Spec.Providers, suite.Spec.Execution.MatrixOrder)
+	matrixModels := ExpandSuiteModelMatrix(models, suite.Spec.Providers, suite.Spec.Execution.MatrixOrder)
 	if err := r.preflightSuite(ctx, suite, opts, targetWorkspace, models); err != nil {
 		return nil, err
 	}
@@ -252,7 +252,7 @@ func (r *Runner) RunSuite(ctx context.Context, suite *Suite, opts RunOptions) (*
 	for _, c := range suite.Spec.Cases {
 		caseModels := matrixModels
 		if c.Overrides.Model != nil {
-			caseModels = expandSuiteModelMatrix([]ModelSpec{*c.Overrides.Model}, suite.Spec.Providers, suite.Spec.Execution.MatrixOrder)
+			caseModels = ExpandSuiteModelMatrix([]ModelSpec{*c.Overrides.Model}, suite.Spec.Providers, suite.Spec.Execution.MatrixOrder)
 		}
 		for _, model := range caseModels {
 			cr := r.runPreparedCase(ctx, suite, c, model, opts, targetWorkspace, outDir, report.RunID)
@@ -354,11 +354,11 @@ func (r *Runner) runPreparedCase(ctx context.Context, suite *Suite, c CaseSpec, 
 func (r *Runner) preflightSuite(ctx context.Context, suite *Suite, opts RunOptions, targetWorkspace string, models []ModelSpec) error {
 	checked := map[string]struct{}{}
 	layout := newRunCaseLayout(filepath.Join(targetWorkspace, "relurpify_cfg", "test_run", "preflight"), "preflight", "preflight")
-	matrixModels := expandSuiteModelMatrix(models, suite.Spec.Providers, suite.Spec.Execution.MatrixOrder)
+	matrixModels := ExpandSuiteModelMatrix(models, suite.Spec.Providers, suite.Spec.Execution.MatrixOrder)
 	for _, c := range suite.Spec.Cases {
 		caseModels := matrixModels
 		if c.Overrides.Model != nil {
-			caseModels = expandSuiteModelMatrix([]ModelSpec{*c.Overrides.Model}, suite.Spec.Providers, suite.Spec.Execution.MatrixOrder)
+			caseModels = ExpandSuiteModelMatrix([]ModelSpec{*c.Overrides.Model}, suite.Spec.Providers, suite.Spec.Execution.MatrixOrder)
 		}
 		for _, model := range caseModels {
 			exec, err := resolveCaseExecution(suite, c, model, "", opts, layout, targetWorkspace, targetWorkspace)
@@ -403,7 +403,7 @@ func (r *Runner) preflightSuite(ctx context.Context, suite *Suite, opts RunOptio
 	return nil
 }
 
-func expandSuiteModelMatrix(models []ModelSpec, providers []ProviderSpec, order string) []ModelSpec {
+func ExpandSuiteModelMatrix(models []ModelSpec, providers []ProviderSpec, order string) []ModelSpec {
 	if len(models) == 0 {
 		models = []ModelSpec{{Name: "", Endpoint: ""}}
 	}
@@ -411,32 +411,32 @@ func expandSuiteModelMatrix(models []ModelSpec, providers []ProviderSpec, order 
 		return append([]ModelSpec(nil), models...)
 	}
 	if strings.TrimSpace(order) == "model-first" {
-		return expandSuiteModelMatrixModelFirst(models, providers)
+		return ExpandSuiteModelMatrixModelFirst(models, providers)
 	}
-	return expandSuiteModelMatrixProviderFirst(models, providers)
+	return ExpandSuiteModelMatrixProviderFirst(models, providers)
 }
 
-func expandSuiteModelMatrixProviderFirst(models []ModelSpec, providers []ProviderSpec) []ModelSpec {
+func ExpandSuiteModelMatrixProviderFirst(models []ModelSpec, providers []ProviderSpec) []ModelSpec {
 	rows := make([]ModelSpec, 0, len(models)*len(providers))
 	for _, provider := range providers {
 		for _, model := range models {
-			rows = append(rows, modelForProvider(model, provider))
+			rows = append(rows, ModelForProvider(model, provider))
 		}
 	}
 	return rows
 }
 
-func expandSuiteModelMatrixModelFirst(models []ModelSpec, providers []ProviderSpec) []ModelSpec {
+func ExpandSuiteModelMatrixModelFirst(models []ModelSpec, providers []ProviderSpec) []ModelSpec {
 	rows := make([]ModelSpec, 0, len(models)*len(providers))
 	for _, model := range models {
 		for _, provider := range providers {
-			rows = append(rows, modelForProvider(model, provider))
+			rows = append(rows, ModelForProvider(model, provider))
 		}
 	}
 	return rows
 }
 
-func modelForProvider(model ModelSpec, provider ProviderSpec) ModelSpec {
+func ModelForProvider(model ModelSpec, provider ProviderSpec) ModelSpec {
 	out := model
 	if strings.TrimSpace(provider.Name) != "" {
 		out.Provider = provider.Name
@@ -454,7 +454,7 @@ func modelForProvider(model ModelSpec, provider ProviderSpec) ModelSpec {
 }
 
 func newRunCaseLayout(outDir, caseName, modelName string) runCaseLayout {
-	caseKey := sanitizeName(caseName) + "__" + sanitizeName(modelName)
+	caseKey := SanitizeName(caseName) + "__" + SanitizeName(modelName)
 	artifactsDir := filepath.Join(outDir, "artifacts", caseKey)
 	tmpDir := filepath.Join(outDir, "tmp", caseKey)
 	return runCaseLayout{
@@ -551,8 +551,6 @@ func aggregateBenchmarkSummary(cases []CaseReport) *OSBBenchmarkSummary {
 	return summary
 }
 
-// Types from the deleted latency.go file.
-
 // latencyAccumulator tracks intermediate state for computing proper running averages
 type latencyAccumulator struct {
 	minMs  int64
@@ -617,8 +615,7 @@ type ToolLatencyReport struct {
 	TotalToolTimeMs int64                   `json:"total_tool_time_ms"`
 }
 
-// BuildLatencyReport builds a latency report from tool transcript
-// Simplified implementation after latency.go removal.
+// BuildLatencyReport builds a latency report from tool transcript.
 func BuildLatencyReport(transcript *ToolTranscriptArtifact) *ToolLatencyReport {
 	if transcript == nil || len(transcript.Entries) == 0 {
 		return nil

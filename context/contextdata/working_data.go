@@ -1,7 +1,6 @@
 package contextdata
 
 import (
-	"fmt"
 	"time"
 )
 
@@ -138,33 +137,4 @@ func (e *Envelope) StringSliceFromContext(key string) []string {
 	return nil
 }
 
-// SetHandleScoped stores a value with a scope identifier.
-//
-// Deprecated: use TypedOverlay with an explicit scoped key instead.
-func (e *Envelope) SetHandleScoped(key string, value any, scope string) {
-	scopedKey := fmt.Sprintf("%s:%s", scope, key)
-	e.SetWorkingValueWithClass(scopedKey, value, MemoryClassTask)
-}
 
-// GetHandle retrieves a scoped value.
-//
-// Deprecated: use TypedOverlay with an explicit scoped key instead.
-func (e *Envelope) GetHandle(key string) (any, bool) {
-	e.mu.RLock()
-	defer e.mu.RUnlock()
-	if e.WorkingData == nil {
-		return nil, false
-	}
-	if val, ok := e.WorkingData[key]; ok {
-		return val, ok
-	}
-	for i := len(e.References.WorkingMemory) - 1; i >= 0; i-- {
-		ref := e.References.WorkingMemory[i]
-		if ref.Key == key && ref.TaskID == e.TaskID {
-			if val, ok := e.WorkingData[key]; ok {
-				return val, ok
-			}
-		}
-	}
-	return nil, false
-}

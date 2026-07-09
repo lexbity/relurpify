@@ -299,7 +299,7 @@ func writeSuiteReport(t *testing.T, path string, report agenttest.SuiteReport) {
 }
 
 func caseKey(caseName, modelName string) string {
-	return sanitizeName(caseName) + "__" + sanitizeName(modelName)
+	return agenttest.SanitizeName(caseName) + "__" + agenttest.SanitizeName(modelName)
 }
 
 func findCoverageEntry(t *testing.T, report *CoverageReport, caseName string) CoverageEntry {

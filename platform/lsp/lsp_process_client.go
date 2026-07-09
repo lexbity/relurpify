@@ -389,7 +389,7 @@ func (c *processLSPClient) GetDiagnostics(ctx context.Context, file string) ([]D
 	}
 }
 
-var diagnosticsWait = 3 * time.Second
+const diagnosticsWait = 3 * time.Second
 
 func (c *processLSPClient) SearchSymbols(ctx context.Context, query string) ([]SymbolInformation, error) {
 	params := protocol.WorkspaceSymbolParams{Query: query}

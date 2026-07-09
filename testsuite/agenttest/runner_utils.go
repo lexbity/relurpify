@@ -25,7 +25,7 @@ func resolveAgainstWorkspace(workspace, resolvedBySuite, original string) string
 	return resolvedBySuite
 }
 
-func uniqueStrings(in []string) []string {
+func UniqueStrings(in []string) []string {
 	seen := map[string]struct{}{}
 	out := make([]string, 0, len(in))
 	for _, s := range in {
@@ -63,7 +63,7 @@ func firstNonEmpty(values ...string) string {
 	return ""
 }
 
-func sanitizeName(s string) string {
+func SanitizeName(s string) string {
 	s = strings.TrimSpace(s)
 	if s == "" {
 		return "unnamed"

@@ -125,7 +125,7 @@ func GoldenTapePath(suitePath, suiteName, caseName, modelName string) string {
 		suiteKey = strings.TrimSuffix(filepathBase(suitePath), ".testsuite.yaml")
 	}
 	goldenDir := filepathJoin(filepathDir(suitePath), "tapes", suiteKey)
-	return filepathJoin(goldenDir, sanitizeName(caseName)+"__"+sanitizeName(modelName)+".tape.jsonl")
+	return filepathJoin(goldenDir, SanitizeName(caseName)+"__"+SanitizeName(modelName)+".tape.jsonl")
 }
 
 var (

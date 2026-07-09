@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"time"
 
 	"codeburg.org/lexbit/relurpify/platform/fs"
 )
@@ -593,33 +592,6 @@ func LoadBenchmarkBaseline(path string) (*BenchmarkBaseline, error) {
 		return nil, err
 	}
 	return &baseline, nil
-}
-
-func WriteBenchmarkBaseline(path string, baseline *BenchmarkBaseline) error {
-	if baseline == nil {
-		return fmt.Errorf("benchmark baseline required")
-	}
-	data, err := json.MarshalIndent(baseline, "", "  ")
-	if err != nil {
-		return err
-	}
-	return fs.WriteFileSecure(path, data)
-}
-
-func BuildBenchmarkBaseline(report *BenchmarkReport) *BenchmarkBaseline {
-	if report == nil {
-		return nil
-	}
-	return &BenchmarkBaseline{
-		SuiteName:         report.SuiteName,
-		RecordedAt:        time.Now().UTC().Format(time.RFC3339),
-		ScoreFamily:       report.ScoreFamily,
-		ScoreDimensions:   append([]string(nil), report.ScoreDimensions...),
-		ComparisonWindow:  report.ComparisonWindow,
-		VarianceThreshold: report.VarianceThreshold,
-		OverallScore:      report.Summary.OverallScore,
-		DimensionScores:   copyFloatMap(report.Summary.DimensionScores),
-	}
 }
 
 func absFloat64(v float64) float64 {

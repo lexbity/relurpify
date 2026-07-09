@@ -143,7 +143,7 @@ func PromoteAllowed(classification string) bool {
 
 // PromotionLineageFilename returns the canonical lineage filename for a promoted tape.
 func PromotionLineageFilename(caseName, modelName string) string {
-	return sanitizeName(caseName) + "__" + sanitizeName(modelName) + ".lineage.json"
+	return agenttest.SanitizeName(caseName) + "__" + agenttest.SanitizeName(modelName) + ".lineage.json"
 }
 
 // PromotedArtifacts returns the canonical artifact names copied for a promoted case.
@@ -167,7 +167,7 @@ func PromotedArtifacts(classification string, cr agenttest.CaseReport) []string 
 	default:
 		artifacts = append(artifacts, agenttest.GoldenBaselineFilename(cr.Name, cr.Model))
 	}
-	return uniqueStrings(artifacts)
+	return agenttest.UniqueStrings(artifacts)
 }
 
 // PromoteRun copies the golden tape and related artifacts for one or more run cases.
@@ -361,7 +361,7 @@ func promoteCase(suite *agenttest.Suite, runDir string, cr agenttest.CaseReport)
 		return PromotionCaseReport{}, err
 	}
 	report.LineagePath = filepath.Join(filepath.Dir(destTape), PromotionLineageFilename(cr.Name, cr.Model))
-	report.PromotedArtifacts = uniqueStrings(report.PromotedArtifacts)
+	report.PromotedArtifacts = agenttest.UniqueStrings(report.PromotedArtifacts)
 	return report, nil
 }
 
@@ -517,7 +517,7 @@ func writePromotionLineage(destDir string, suite *agenttest.Suite, cr agenttest.
 		Model:             cr.Model,
 		Provider:          cr.Provider,
 		Layer:             strings.TrimSpace(suite.Metadata.Classification),
-		PromotedArtifacts: uniqueStrings(promotedArtifacts),
+		PromotedArtifacts: agenttest.UniqueStrings(promotedArtifacts),
 		SourceRunDir:      filepath.Dir(filepath.Dir(cr.ArtifactsDir)),
 		SourceArtifacts:   cr.ArtifactsDir,
 		DestinationTape:   destTape,
@@ -577,102 +577,9 @@ func selectPromotableCases(report *agenttest.SuiteReport, caseName string, all b
 
 func suiteModelsForCase(suite *agenttest.Suite, c agenttest.CaseSpec) []agenttest.ModelSpec {
 	if c.Overrides.Model != nil {
-		return expandSuiteModelMatrix([]agenttest.ModelSpec{*c.Overrides.Model}, suite.Spec.Providers, suite.Spec.Execution.MatrixOrder)
+		return agenttest.ExpandSuiteModelMatrix([]agenttest.ModelSpec{*c.Overrides.Model}, suite.Spec.Providers, suite.Spec.Execution.MatrixOrder)
 	}
-	return expandSuiteModelMatrix(suite.Spec.Models, suite.Spec.Providers, suite.Spec.Execution.MatrixOrder)
-}
-
-func expandSuiteModelMatrix(models []agenttest.ModelSpec, providers []agenttest.ProviderSpec, order string) []agenttest.ModelSpec {
-	if len(models) == 0 {
-		models = []agenttest.ModelSpec{{Name: "", Endpoint: ""}}
-	}
-	if len(providers) == 0 {
-		return append([]agenttest.ModelSpec(nil), models...)
-	}
-	if strings.TrimSpace(order) == "model-first" {
-		return expandSuiteModelMatrixModelFirst(models, providers)
-	}
-	return expandSuiteModelMatrixProviderFirst(models, providers)
-}
-
-func expandSuiteModelMatrixProviderFirst(models []agenttest.ModelSpec, providers []agenttest.ProviderSpec) []agenttest.ModelSpec {
-	rows := make([]agenttest.ModelSpec, 0, len(models)*len(providers))
-	for _, provider := range providers {
-		for _, model := range models {
-			rows = append(rows, modelForProvider(model, provider))
-		}
-	}
-	return rows
-}
-
-func expandSuiteModelMatrixModelFirst(models []agenttest.ModelSpec, providers []agenttest.ProviderSpec) []agenttest.ModelSpec {
-	rows := make([]agenttest.ModelSpec, 0, len(models)*len(providers))
-	for _, model := range models {
-		for _, provider := range providers {
-			rows = append(rows, modelForProvider(model, provider))
-		}
-	}
-	return rows
-}
-
-func modelForProvider(model agenttest.ModelSpec, provider agenttest.ProviderSpec) agenttest.ModelSpec {
-	out := model
-	if strings.TrimSpace(provider.Name) != "" {
-		out.Provider = provider.Name
-	}
-	if strings.TrimSpace(provider.Endpoint) != "" {
-		out.Endpoint = provider.Endpoint
-	}
-	if strings.TrimSpace(provider.ResetStrategy) != "" {
-		out.ResetStrategy = provider.ResetStrategy
-	}
-	if provider.ResetBetween {
-		out.ResetBetween = true
-	}
-	return out
-}
-
-func uniqueStrings(in []string) []string {
-	seen := map[string]struct{}{}
-	out := make([]string, 0, len(in))
-	for _, s := range in {
-		s = strings.TrimSpace(s)
-		if s == "" {
-			continue
-		}
-		if _, ok := seen[s]; ok {
-			continue
-		}
-		seen[s] = struct{}{}
-		out = append(out, s)
-	}
-	sort.Strings(out)
-	return out
-}
-
-func sanitizeName(s string) string {
-	s = strings.TrimSpace(s)
-	if s == "" {
-		return "unnamed"
-	}
-	var b strings.Builder
-	for _, r := range s {
-		switch {
-		case r >= 'a' && r <= 'z':
-			b.WriteRune(r)
-		case r >= 'A' && r <= 'Z':
-			b.WriteRune(r)
-		case r >= '0' && r <= '9':
-			b.WriteRune(r)
-		default:
-			b.WriteByte('_')
-		}
-	}
-	out := strings.Trim(b.String(), "_")
-	if out == "" {
-		return "unnamed"
-	}
-	return out
+	return agenttest.ExpandSuiteModelMatrix(suite.Spec.Models, suite.Spec.Providers, suite.Spec.Execution.MatrixOrder)
 }
 
 func copyFile(src, dst string) error {

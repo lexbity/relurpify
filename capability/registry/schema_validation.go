@@ -115,7 +115,6 @@ func validateArgsAgainstSchema(args map[string]any, schema *schemacoerce.Schema,
 
 // ValidateValueAgainstSchema performs lightweight runtime validation for the
 // framework-owned schema subset used by tool and capability descriptors.
-// Deprecated: use ValidateAndCoerce instead.
 func ValidateValueAgainstSchema(value any, schema *schemacoerce.Schema) error {
 	if schema == nil {
 		return nil

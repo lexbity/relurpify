@@ -20,6 +20,9 @@ import (
 	"codeburg.org/lexbit/relurpify/platform/observability"
 )
 
+// DefaultEndpoint is the default Ollama API endpoint.
+const DefaultEndpoint = "http://localhost:11434"
+
 // ErrNativeToolCallingRequired is returned when ChatWithTools is invoked on a
 // client that cannot speak native structured tool calling.
 var ErrNativeToolCallingRequired = errors.New("native tool calling is required for ChatWithTools")
@@ -84,7 +87,7 @@ func NewClientWithProfile(endpoint, model string, p *ModelProfile) *Client {
 // NewClient builds a new Ollama client.
 func NewClient(endpoint, model, apiKey string) *Client {
 	if endpoint == "" {
-		endpoint = "http://localhost:11434"
+		endpoint = DefaultEndpoint
 	}
 	return &Client{
 		Endpoint:          endpoint,
@@ -277,7 +280,7 @@ func (c *Client) applyOptions(payload map[string]any, options *LLMOptions) {
 func (c *Client) ollamaAPIEndpoint() string {
 	endpoint := strings.TrimSpace(c.Endpoint)
 	if endpoint == "" {
-		endpoint = "http://localhost:11434"
+		endpoint = DefaultEndpoint
 	}
 	parsed, err := url.Parse(endpoint)
 	if err != nil {

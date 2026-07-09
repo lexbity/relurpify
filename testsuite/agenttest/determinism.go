@@ -212,27 +212,6 @@ func DeterminismScore(distance float64) float64 {
 	return 1.0 - distance
 }
 
-// LoadGoldenFingerprint loads a fingerprint from a tape path
-func LoadGoldenFingerprint(tapePath string) (*ToolSequenceFingerprint, error) {
-	// Read the tape file to extract tool sequence
-	// This is a simplified implementation
-	tape, err := LoadTape(tapePath)
-	if err != nil {
-		return nil, err
-	}
-
-	// Build transcript from tape
-	transcript := BuildTranscriptFromTape(tape)
-	return ComputeFingerprint(transcript)
-}
-
-// LoadTape loads a tape file through the existing tape system integration point.
-func LoadTape(path string) ([]map[string]any, error) {
-	// This should integrate with the existing tape loading mechanism.
-	// The current implementation still returns a not-implemented error.
-	return nil, fmt.Errorf("tape loading not yet implemented")
-}
-
 // BuildTranscriptFromTape builds a transcript from tape data
 func BuildTranscriptFromTape(tape []map[string]any) *ToolTranscriptArtifact {
 	transcript := &ToolTranscriptArtifact{

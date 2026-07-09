@@ -27,7 +27,7 @@ func failedCaseReport(startedAt time.Time, name, model, modelSource, manifestMod
 	}
 }
 
-// getLatencyMapOrEmpty returns the ToolLatencies map or an empty map if nil
+// resolveCaseMaxRetries resolves the maximum retry count from RunOptions.
 func resolveCaseMaxRetries(opts RunOptions) int {
 	switch {
 	case opts.MaxRetries == 0:
@@ -79,11 +79,4 @@ func resolveWorkspaceFiles(suite *Suite, c CaseSpec) []SetupFileSpec {
 		files = append(files, c.Overrides.Workspace.Files...)
 	}
 	return files
-}
-
-type BackendProviderProvenance struct {
-	Provider      string `json:"provider,omitempty"`
-	Endpoint      string `json:"endpoint,omitempty"`
-	ResetStrategy string `json:"reset_strategy,omitempty"`
-	ResetBetween  bool   `json:"reset_between,omitempty"`
 }

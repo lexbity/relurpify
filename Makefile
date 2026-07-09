@@ -78,11 +78,15 @@ exception-count:
 
 # Dead-code gate: asserts removed symbols never reappear.
 no-dead:
-	@if grep -rn 'InvokeOnBestNode\|RegisterNodeProvider\|NodeSelectionCriteria\|RateLimiter\|GetWorkingValue\|executionStepFromAgent\|inheritExecutionStepScope\|summarizeCaptureBindings\|summarizeToolScopeFrames\|CompiledThoughtRecipe\|CompiledStep\b\|CompiledParallelGroup\|CompiledConditionalGroup\|buildParallelSection\|buildConditionalSection\|buildBranchSequence\|evaluateThoughtRecipeCondition\|emitParallelFanouts' --include='*.go' . 2>/dev/null | grep -v '.gomodcache' | grep -v 'tooling/arch' | grep -v 'state.go' | grep -v 'state_test.go' | grep -v 'runner_test.go'; then echo "[FAIL] no-dead: found removed symbols" ; exit 1 ; fi
+	@if grep -rn 'InvokeOnBestNode\|RegisterNodeProvider\|NodeSelectionCriteria\|RateLimiter\|GetWorkingValue\|executionStepFromAgent\|inheritExecutionStepScope\|summarizeCaptureBindings\|summarizeToolScopeFrames\|CompiledThoughtRecipe\|CompiledStep\b\|CompiledParallelGroup\|CompiledConditionalGroup\|buildParallelSection\|buildConditionalSection\|buildBranchSequence\|evaluateThoughtRecipeCondition\|emitParallelFanouts\|BackendModelProfileProvenance\|BackendProviderProvenance\|VerifyStepResult\|WriteBenchmarkBaseline\|BuildBenchmarkBaseline\|BuildPhaseMetrics\|ComparePerformanceBaseline\|WrapRegistryWithInterceptor\|ReadTelemetryJSONL\|LoadGoldenFingerprint\|LoadTape\|SetHandleScoped\|GetHandle\|LifecycleView' --include='*.go' . 2>/dev/null | grep -v '.gomodcache' | grep -v 'tooling/arch' | grep -v 'state.go' | grep -v 'state_test.go' | grep -v 'runner_test.go'; then echo "[FAIL] no-dead: found removed symbols" ; exit 1 ; fi
 	@echo "[PASS] no-dead: no removed symbols found"
 
+.PHONY: no-dead-packages
+no-dead-packages:
+	@if grep -rn 'codeburg.org/lexbit/relurpify/jobs/store\|codeburg.org/lexbit/relurpify/platform/shell/query\|codeburg.org/lexbit/relurpify/platform/sandbox/dockersandbox\|codeburg.org/lexbit/relurpify/platform/sandbox/egressproxy\|codeburg.org/lexbit/relurpify/cognitionzoo/htn/authoring\|codeburg.org/lexbit/relurpify/cognitionzoo/llm\|codeburg.org/lexbit/relurpify/cognitionzoo/pipeline/stages\|codeburg.org/lexbit/relurpify/testsuite/agenttestscenario' --include='*.go' . 2>/dev/null | grep -v '.gomodcache' | grep -v '.gocache'; then echo "[FAIL] no-dead-packages: deleted package re-imported"; exit 1; fi
+	@echo "[PASS] no-dead-packages: no deleted packages re-imported"
 
-lint-all: lint-layering lint-invariants lint-config-boundary euclo-stepkind-exhaustive euclo-no-control-keys euclo-no-dead-flatteners
+lint-all: lint-layering lint-invariants lint-config-boundary euclo-stepkind-exhaustive euclo-no-control-keys euclo-no-dead-flatteners no-dead no-dead-packages
 
 # Standard Go linters (golangci-lint, config: .golangci.yaml). Use locally;
 # CI uses two-track gate (ratchet + graduated) for enforce.

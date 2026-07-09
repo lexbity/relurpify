@@ -1,36 +1,8 @@
 package agenttest
 
 import (
-	"bufio"
-	"encoding/json"
-	"os"
-	"path/filepath"
-
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
-
-func ReadTelemetryJSONL(path string) ([]telemetry.Event, error) {
-	f, err := os.Open(filepath.Clean(path))
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = f.Close() }()
-	var events []telemetry.Event
-	sc := bufio.NewScanner(f)
-	// Allow large lines (debug prompt logging).
-	sc.Buffer(make([]byte, 64*1024), 8*1024*1024)
-	for sc.Scan() {
-		var ev telemetry.Event
-		if err := json.Unmarshal(sc.Bytes(), &ev); err != nil {
-			continue
-		}
-		events = append(events, ev)
-	}
-	if err := sc.Err(); err != nil {
-		return nil, err
-	}
-	return events, nil
-}
 
 func CountToolCalls(events []telemetry.Event) (total int, byTool map[string]int) {
 	byTool = make(map[string]int)

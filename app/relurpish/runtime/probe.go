@@ -17,12 +17,6 @@ import (
 	"codeburg.org/lexbit/relurpify/userconfig/modelselect"
 )
 
-func execLookPathImpl(file string) (string, error) {
-	return exec.LookPath(file)
-}
-
-var newManagedBackend = llm.New
-
 type SandboxBinary struct {
 	Name          string
 	Path          string
@@ -157,7 +151,7 @@ func detectInferenceBackend(ctx context.Context, cfg Config, secrets config.Secr
 	ownedBackend := false
 	if backend == nil {
 		var err error
-		backend, err = newManagedBackend(llm.ProviderConfigFromRuntimeConfig(cfg), llm.ProviderSecrets{APIKey: secrets.LLMAPIKey})
+		backend, err = llm.New(llm.ProviderConfigFromRuntimeConfig(cfg), llm.ProviderSecrets{APIKey: secrets.LLMAPIKey})
 		if err != nil {
 			report.Error = err.Error()
 			report.State = llm.BackendHealthUnhealthy

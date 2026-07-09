@@ -25,7 +25,7 @@ type Embedder struct {
 func NewEmbedder(cfg Config, model string) *Embedder {
 	baseURL := strings.TrimRight(strings.TrimSpace(cfg.Endpoint), "/")
 	if baseURL == "" {
-		baseURL = "http://localhost:11434"
+		baseURL = DefaultEndpoint
 	}
 	model = strings.TrimSpace(model)
 	if model == "" {

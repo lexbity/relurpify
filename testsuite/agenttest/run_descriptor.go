@@ -138,7 +138,7 @@ func BuildPreparedRunDescriptor(suite *Suite, c CaseSpec, model ModelSpec, opts 
 	}
 
 	seededState := cloneContextMap(c.Setup.StateKeys)
-	expectedArtifacts := uniqueStrings(append(append([]string{}, verification.ExpectedArtifacts...), expectedArtifactsForCase(c)...))
+	expectedArtifacts := UniqueStrings(append(append([]string{}, verification.ExpectedArtifacts...), expectedArtifactsForCase(c)...))
 
 	desc := &PreparedRunDescriptor{
 		RunID:                 strings.TrimSpace(runID),
@@ -223,7 +223,7 @@ func (d *PreparedRunDescriptor) Normalize() error {
 	d.ModelName = strings.TrimSpace(d.ModelName)
 	d.SandboxBackend = strings.TrimSpace(d.SandboxBackend)
 	d.SetupOverlays = normalizePreparedRunOverlays(d.SetupOverlays)
-	d.ExpectedArtifacts = uniqueStrings(d.ExpectedArtifacts)
+	d.ExpectedArtifacts = UniqueStrings(d.ExpectedArtifacts)
 	if err := d.Verification.Normalize(); err != nil {
 		return err
 	}
@@ -354,7 +354,7 @@ func (c *PreparedVerificationContract) Normalize() error {
 		return nil
 	}
 	c.Steps = normalizePreparedVerificationSteps(c.Steps)
-	c.ExpectedArtifacts = uniqueStrings(c.ExpectedArtifacts)
+	c.ExpectedArtifacts = UniqueStrings(c.ExpectedArtifacts)
 	return nil
 }
 
@@ -398,7 +398,7 @@ func buildPreparedBackendTargets(suite *Suite, c CaseSpec, model ModelSpec, opts
 	}
 
 	matrix := []PreparedBackendTarget{selected}
-	rows := expandSuiteModelMatrix(suite.Spec.Models, suite.Spec.Providers, suite.Spec.Execution.MatrixOrder)
+	rows := ExpandSuiteModelMatrix(suite.Spec.Models, suite.Spec.Providers, suite.Spec.Execution.MatrixOrder)
 	if len(rows) == 0 {
 		rows = []ModelSpec{{Name: model.Name, Provider: selected.Provider, Endpoint: selected.Endpoint, ResetStrategy: selected.ResetStrategy, ResetBetween: false}}
 	}
@@ -535,4 +535,26 @@ func uniquePreparedBackendTargets(in []PreparedBackendTarget) []PreparedBackendT
 		out = append(out, target)
 	}
 	return out
+}
+
+// ArtifactPaths captures the canonical artifact file paths for a prepared run.
+type ArtifactPaths struct {
+	SetupLog          string
+	SetupTelemetry    string
+	ExecutionLog      string
+	ExecutionTelemetry string
+	Report            string
+	Verification      string
+}
+
+// ArtifactPaths returns the canonical artifact file paths for this run.
+func (d *PreparedRunDescriptor) ArtifactPaths() ArtifactPaths {
+	return ArtifactPaths{
+		SetupLog:          filepath.Join(d.SetupLogsDir, "agenttest.log"),
+		SetupTelemetry:    filepath.Join(d.SetupTelemetryDir, "agenttest.jsonl"),
+		ExecutionLog:      filepath.Join(d.ExecutionLogsDir, "agenttest.log"),
+		ExecutionTelemetry: filepath.Join(d.ExecutionTelemetryDir, "agenttest.jsonl"),
+		Report:            filepath.Join(d.ExecutionDir, "report.json"),
+		Verification:      filepath.Join(d.VerificationDir, "verification.json"),
+	}
 }

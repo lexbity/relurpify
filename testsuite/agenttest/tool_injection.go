@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/capability/ports"
-	registry "codeburg.org/lexbit/relurpify/capability/registry"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
@@ -57,7 +56,6 @@ func (i *InjectionInterceptor) Category() string {
 	return i.base.Category()
 }
 
-// Parameters returns the wrapped tool's parameters
 func cryptoRandFloat64() float64 {
 	var buf [8]byte
 	if _, err := rand.Read(buf[:]); err != nil {
@@ -66,6 +64,7 @@ func cryptoRandFloat64() float64 {
 	return float64(binary.LittleEndian.Uint64(buf[:])&((1<<53)-1)) / float64(1<<53)
 }
 
+// Parameters returns the wrapped tool's parameters.
 func (i *InjectionInterceptor) Parameters() []ports.ToolParameter {
 	return i.base.Parameters()
 }
@@ -176,33 +175,6 @@ func filterOverridesForTool(overrides []ToolResponseOverride, toolName string) [
 		}
 	}
 	return filtered
-}
-
-// WrapRegistryWithInterceptor wraps all tools in the registry with injection support
-func WrapRegistryWithInterceptor(reg *registry.CapabilityRegistry, overrides []ToolResponseOverride) *registry.CapabilityRegistry {
-	if reg == nil || len(overrides) == 0 {
-		return reg
-	}
-
-	// Get all callable tools
-	tools := reg.CallableTools(context.Background())
-
-	// Create a new registry and register wrapped tools
-	wrappedRegistry := registry.NewRegistry()
-
-	for _, tool := range tools {
-		toolOverrides := filterOverridesForTool(overrides, tool.Name())
-		if len(toolOverrides) > 0 {
-			// Wrap with interceptor
-			wrapped := NewInjectionInterceptor(tool, overrides)
-			_ = wrappedRegistry.Register(context.Background(), wrapped)
-		} else {
-			// Register unmodified
-			_ = wrappedRegistry.Register(context.Background(), tool)
-		}
-	}
-
-	return wrappedRegistry
 }
 
 // ToolSuccessRate computes the success rate for a tool from telemetry events

@@ -24,13 +24,14 @@ func BuildVerificationContract(desc *PreparedRunDescriptor) (VerificationContrac
 	if err := preparedRunEnsure(desc); err != nil {
 		return VerificationContract{}, err
 	}
+	ap := desc.ArtifactPaths()
 	return VerificationContract{
 		DescriptorPath:         filepath.Join(desc.SetupDir, "prepared_run.json"),
-		ExecutionReportPath:    filepath.Join(desc.ExecutionDir, "report.json"),
-		SetupTelemetryPath:     filepath.Join(desc.SetupTelemetryDir, "agenttest.jsonl"),
-		ExecutionTelemetryPath: filepath.Join(desc.ExecutionTelemetryDir, "agenttest.jsonl"),
-		SetupLogPath:           filepath.Join(desc.SetupLogsDir, "agenttest.log"),
-		ExecutionLogPath:       filepath.Join(desc.ExecutionLogsDir, "agenttest.log"),
+		ExecutionReportPath:    ap.Report,
+		SetupTelemetryPath:     ap.SetupTelemetry,
+		ExecutionTelemetryPath: ap.ExecutionTelemetry,
+		SetupLogPath:           ap.SetupLog,
+		ExecutionLogPath:       ap.ExecutionLog,
 	}, nil
 }
 
