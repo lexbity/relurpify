@@ -42,4 +42,4 @@ testsuite/agenttest_fixtures/**/*.pyc
 
 # Build artifacts: test binaries must not be committed
 *.test
-driftcheck
+/driftcheck

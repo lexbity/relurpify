@@ -71,8 +71,6 @@ func secretFieldHint(name string) string {
 	switch normalizeSecretFieldName(name) {
 	case "apikey", "apisecret", "privatekey":
 		return "Use environment variable RELURPIFY_LLM_API_KEY instead."
-	case "token":
-		return "Use environment variable RELURPIFY_NEXUS_TOKEN instead."
 	default:
 		return "Use an environment variable instead."
 	}

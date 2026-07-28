@@ -14,6 +14,7 @@ execution:
   sandbox:
     allowed_root: ${workspace}
     timeout_seconds: 30
+    allow_flags: true
   allow_stdin: true
   supports_workdir: true
 capability:
@@ -22,4 +23,5 @@ capability:
     - execute
     - destructive
   effect_class:
+    - filesystem_read
     - process_spawn

@@ -995,7 +995,6 @@ func (r *runtimeAdapter) SaveSandboxBackend(backend string) (string, error) {
 		ExecutionMode:       string(r.ExecutionMode()),
 		Agents:              append([]string(nil), r.rt.WorkspaceConfig.Agents...),
 		AllowedCapabilities: append([]config.RuntimeCapabilitySelector(nil), r.rt.WorkspaceConfig.AllowedCapabilities...),
-		Nexus:               r.rt.WorkspaceConfig.Nexus,
 		NodeRegistration:    r.rt.WorkspaceConfig.NodeRegistration,
 		LastUpdated:         time.Now().Unix(),
 	})

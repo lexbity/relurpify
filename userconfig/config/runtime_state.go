@@ -66,7 +66,6 @@ type RuntimeWorkspaceConfig struct {
 	ExecutionMode       string                        `yaml:"execution_mode,omitempty"`
 	Agents              []string                      `yaml:"agents"`
 	AllowedCapabilities []RuntimeCapabilitySelector   `yaml:"allowed_capabilities,omitempty"`
-	Nexus               runtimeNexusConfig            `yaml:"nexus,omitempty"`
 	NodeRegistration    runtimeNodeRegistrationConfig `yaml:"node_registration,omitempty"`
 	LastUpdated         int64                         `yaml:"last_updated"`
 }
@@ -96,12 +95,6 @@ type RuntimeKeybindingEntry struct {
 	DefaultKeys []string `yaml:"default_keys,omitempty"`
 }
 
-type runtimeNexusConfig struct {
-	Enabled       bool   `yaml:"enabled,omitempty"`
-	Address       string `yaml:"address,omitempty"`
-	AutoReconnect bool   `yaml:"auto_reconnect,omitempty"`
-}
-
 type runtimeNodeRegistrationConfig struct {
 	Enabled   bool              `yaml:"enabled,omitempty"`
 	NodeID    string            `yaml:"node_id,omitempty"`
@@ -117,7 +110,6 @@ type runtimeNodeRegistrationConfig struct {
 // ensures WorkspaceConfigV1 only contains user-facing settings.
 type RuntimeStateDocument struct {
 	AllowedCapabilities []RuntimeCapabilitySelector   `yaml:"allowed_capabilities,omitempty"`
-	Nexus               runtimeNexusConfig            `yaml:"nexus,omitempty"`
 	NodeRegistration    runtimeNodeRegistrationConfig `yaml:"node_registration,omitempty"`
 	LastUpdated         int64                         `yaml:"last_updated"`
 }

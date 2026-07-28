@@ -184,14 +184,14 @@ func MaterializeDerivedWorkspace(targetWorkspace, derivedWorkspace, sharedRoot, 
 
 	paths := config.New(derivedWorkspace)
 	resolver := templates.NewResolver(sharedRoot)
-	profileRoot, err := resolver.ResolveTestsuiteTemplateProfile(templateProfile)
+	profileFS, err := resolver.ResolveTestsuiteTemplateProfile(templateProfile)
 	if err != nil {
 		return fmt.Errorf("resolve testsuite template profile %q: %w", firstNonEmpty(templateProfile, "default"), err)
 	}
-	if err := copyRenderedTree(profileRoot, paths.ConfigRoot(), derivedWorkspace, ""); err != nil {
+	if err := copyRenderedTreeFromFS(profileFS, ".", paths.ConfigRoot(), derivedWorkspace, ""); err != nil {
 		return err
 	}
-	if err := ensureDerivedManifest(resolver, targetWorkspace, derivedWorkspace, manifestRef); err != nil {
+	if err := ensureDerivedManifest(targetWorkspace, derivedWorkspace, manifestRef); err != nil {
 		return err
 	}
 	if err := applyWorkspaceFiles(derivedWorkspace, targetWorkspace, overlayFiles); err != nil {
@@ -217,40 +217,36 @@ func MaterializeDerivedWorkspace(targetWorkspace, derivedWorkspace, sharedRoot, 
 	return nil
 }
 
-func ensureDerivedManifest(_ templates.Resolver, _, _, _ string) error {
+func ensureDerivedManifest(_, _, _ string) error {
 	return nil
 }
 
-func copyRenderedTree(srcRoot, dstRoot, workspace, sourceWorkspace string) error {
-	return filepath.WalkDir(srcRoot, func(path string, d iofs.DirEntry, err error) error {
+func copyRenderedTreeFromFS(srcFS iofs.FS, srcRoot, dstRoot, workspace, sourceWorkspace string) error {
+	return iofs.WalkDir(srcFS, srcRoot, func(path string, d iofs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-		rel, err := filepath.Rel(srcRoot, path)
-		if err != nil {
-			return err
-		}
-		if rel == "." {
-			return fs.MkdirAllSecure(dstRoot)
+		rel := strings.TrimPrefix(path, srcRoot+"/")
+		if rel == path {
+			if path == srcRoot {
+				return fs.MkdirAllSecure(dstRoot)
+			}
+			return nil
 		}
 		target := filepath.Join(dstRoot, rel)
 		if d.IsDir() {
 			return fs.MkdirAllSecure(target)
 		}
-		return copyRenderedFile(path, target, workspace, sourceWorkspace)
+		data, err := iofs.ReadFile(srcFS, path)
+		if err != nil {
+			return err
+		}
+		rendered := renderWorkspaceContent(data, workspace, sourceWorkspace)
+		if err := fs.MkdirAllSecure(filepath.Dir(target)); err != nil {
+			return err
+		}
+		return fs.WriteFileSecure(target, rendered)
 	})
-}
-
-func copyRenderedFile(src, dst, workspace, sourceWorkspace string) error {
-	data, err := os.ReadFile(filepath.Clean(src))
-	if err != nil {
-		return err
-	}
-	rendered := renderWorkspaceContent(data, workspace, sourceWorkspace)
-	if err := fs.MkdirAllSecure(filepath.Dir(dst)); err != nil {
-		return err
-	}
-	return fs.WriteFileSecure(dst, rendered)
 }
 
 func renderWorkspaceContent(data []byte, workspace, sourceWorkspace string) []byte {

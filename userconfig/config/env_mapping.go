@@ -22,9 +22,7 @@ type EnvOverrides struct {
 
 // Secrets captures env-only secret material.
 type Secrets struct {
-	LLMAPIKey       string
-	NexusToken      string
-	NexusAdminToken string
+	LLMAPIKey string
 }
 
 // RecognizedEnvVars lists every environment variable consumed by config.
@@ -40,8 +38,6 @@ func RecognizedEnvVars() []string {
 		"EDITOR",
 		"XDG_DATA_HOME",
 		"RELURPIFY_LLM_API_KEY",
-		"RELURPIFY_NEXUS_TOKEN",
-		"RELURPIFY_NEXUS_ADMIN_TOKEN",
 	}
 }
 

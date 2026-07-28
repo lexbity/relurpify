@@ -1,24 +1,10 @@
-# Templates
+# Templates (legacy)
 
-This directory is the repo-local development fallback for Relurpify starter assets.
+This directory previously held repo-local template fallbacks. The canonical
+source of truth is now the embedded FS at `userconfig/templates/embedfs/`.
 
-The current model is:
+- workspace config/profiles/policies/tools are served from `//go:embed all:workspace`
+- prompt templates are served from `//go:embed all:prompts`
 
-- installed shared templates are the primary source for starter assets
-- repo-local templates are development fallbacks
-- workspace copies inside `relurpify_cfg/` become the runtime source of truth after initialization
-
-Current categories:
-
-- `agents/` for starter agent configs
-- `workspace/` for the canonical workspace starter set
-- `skills/` for starter skill files
-- `testsuite/` for derived testsuite workspace profiles
-
-The workspace starter set is intentionally minimal:
-
-- `workspace/workspace.yaml`
-- `workspace/agent.yaml`
-- `workspace/security/*.policy.yaml`
-
-`templates/` is the canonical repo-local development fallback tree.
+No subdirectories in `templates/` are used at runtime. The directory exists
+only for this README.

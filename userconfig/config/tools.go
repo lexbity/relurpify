@@ -52,15 +52,15 @@ func LoadToolManifest(path string) (*configmanifest.ToolManifest, error) {
 			Path:   path,
 			Line:   decl.Line,
 			Schema: decl.String(),
-			Err:    fmt.Errorf("tool manifest must use relurpify/%s/v1 or relurpify/%s/v2, got %s", schemaKindTool, schemaKindTool, decl.String()),
+			Err:    fmt.Errorf("tool manifest must use relurpify/%s/v1, got %s", schemaKindTool, decl.String()),
 		}
 	}
-	if decl.Version != 1 && decl.Version != 2 {
+	if decl.Version != 1 {
 		return nil, &SchemaError{
 			Path:   path,
 			Line:   decl.Line,
 			Schema: decl.String(),
-			Err:    fmt.Errorf("tool manifest version must be 1 or 2, got %d", decl.Version),
+			Err:    fmt.Errorf("tool manifest version must be 1, got %d", decl.Version),
 		}
 	}
 	manifest.SourcePath = path

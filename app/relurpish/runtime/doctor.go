@@ -17,7 +17,6 @@ import (
 	"codeburg.org/lexbit/relurpify/platform/llm"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 	"codeburg.org/lexbit/relurpify/userconfig/modelselect"
-	te "codeburg.org/lexbit/relurpify/userconfig/templates"
 	templatesembed "codeburg.org/lexbit/relurpify/userconfig/templates/embedfs"
 )
 
@@ -164,28 +163,9 @@ func BuildDoctorReport(ctx context.Context, cfg Config, secrets config.Secrets) 
 	rawPaths := config.New(cfg.Workspace).GovernanceRoots(config.DefaultWorkspaceConfigPath(cfg.Workspace))
 	report.ProtectedPaths = uniqueStrings(rawPaths)
 
-	resolver := te.NewResolver(cfg.SharedRoot)
-	if starterConfig, err := resolver.ResolveWorkspaceConfigTemplate(); err == nil {
-		sandboxTemplate, sandboxErr := resolver.ResolveWorkspaceSecurityTemplate("sandbox")
-		shellTemplate, shellErr := resolver.ResolveWorkspaceSecurityTemplate("shell")
-		localToolTemplate, localToolErr := resolver.ResolveWorkspaceSecurityTemplate("localtool")
-		ingestionTemplate, ingestionErr := resolver.ResolveWorkspaceSecurityTemplate("workspaceingestion")
-		if sandboxErr == nil && shellErr == nil && localToolErr == nil && ingestionErr == nil {
-			report.StarterTemplatesReady = true
-			_ = starterConfig
-			_ = sandboxTemplate
-			_ = shellTemplate
-			_ = localToolTemplate
-			_ = ingestionTemplate
-		} else {
-			report.StarterTemplatesError = firstNonEmpty(errorString(sandboxErr), errorString(shellErr), errorString(localToolErr), errorString(ingestionErr))
-		}
-	} else {
-		// Check embedded templates as fallback.
-		report.StarterTemplatesReady = checkEmbeddedTemplates()
-		if !report.StarterTemplatesReady {
-			report.StarterTemplatesError = err.Error()
-		}
+	report.StarterTemplatesReady = checkEmbeddedTemplates()
+	if !report.StarterTemplatesReady {
+		report.StarterTemplatesError = fmt.Errorf("embedded templates not found").Error()
 	}
 
 	var env EnvironmentReport

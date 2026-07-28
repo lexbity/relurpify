@@ -1,8 +1,0 @@
-schema: relurpify/model/provider/v1
-name: lmstudio
-endpoint: http://localhost:1234
-kind: lmstudio
-request_timeout_seconds: 180
-native_tool_calling: false
-description: "Local LM Studio server"
-setup_hint: "Start LM Studio, enable the local HTTP server in Settings, then verify the port"

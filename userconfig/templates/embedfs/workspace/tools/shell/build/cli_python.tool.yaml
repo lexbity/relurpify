@@ -5,7 +5,12 @@ family: build
 intent:
   - build
   - python
-description: Executes Python commands using python3 inside the workspace.
+description: |
+  Escape hatch: Executes arbitrary Python commands with python3.
+  Prefer python_pytest, python_unittest, or python_compile_check for structured output.
+guidance:
+  avoid_when:
+    - "A python_pytest, python_unittest, or python_compile_check tool handles your use case"
 execution:
   backend: subprocess
   command:
@@ -14,6 +19,7 @@ execution:
   sandbox:
     allowed_root: ${workspace}
     timeout_seconds: 30
+    allow_flags: true
   allow_stdin: true
   supports_workdir: true
 capability:

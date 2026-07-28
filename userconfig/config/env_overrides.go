@@ -33,9 +33,7 @@ func LoadEnvOverrides(env []string) (EnvOverrides, error) {
 // LoadSecrets resolves env-only secrets from the supplied env list.
 func LoadSecrets(env []string) Secrets {
 	return Secrets{
-		LLMAPIKey:       lookupEnv(env, "RELURPIFY_LLM_API_KEY"),
-		NexusToken:      lookupEnv(env, "RELURPIFY_NEXUS_TOKEN"),
-		NexusAdminToken: lookupEnv(env, "RELURPIFY_NEXUS_ADMIN_TOKEN"),
+		LLMAPIKey: lookupEnv(env, "RELURPIFY_LLM_API_KEY"),
 	}
 }
 

@@ -31,8 +31,8 @@ func TestToolsCheckUnderdeclaredManifest(t *testing.T) {
 		if d.Check != "tools" {
 			t.Fatalf("expected Check=tools, got %q", d.Check)
 		}
-		if d.Code != "tool.underdeclared" {
-			t.Fatalf("expected Code=tool.underdeclared, got %q", d.Code)
+		if d.Code != codeToolUnderdeclared {
+			t.Fatalf("expected Code=%s, got %q", codeToolUnderdeclared, d.Code)
 		}
 		if d.Severity != SeverityError {
 			t.Fatalf("expected Severity=error, got %v", d.Severity)

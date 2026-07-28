@@ -48,7 +48,6 @@ jobs:
         run: make lint-arch
       - name: Lint (layering, invariants, boundaries, host-exec)
         run: make lint-all
-        continue-on-error: true
       - name: Compile guard (defeat silent-blanking)
         run: |
           go build ./...
@@ -80,14 +79,7 @@ jobs:
             echo "$out" | grep -qE '\(typecheck\)' && { echo "::error::typecheck blanked the run"; exit 1; }
             echo "$out" | grep -qE '\([a-z]+\)$' && { echo "::error::graduated linter regressed"; exit 1; }
           fi
-      - name: Lint config boundary
-        run: make lint-config-boundary
-        continue-on-error: true
-      - name: Boundary tests
-        run: make test-boundary
-        continue-on-error: true
-      - name: Check template drift
-        run: make check-template-drift
-        continue-on-error: true
+      - name: Check config tree drift
+        run: make check-config-tree-drift
       - name: Test unit
         run: make test-unit

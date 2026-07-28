@@ -109,6 +109,9 @@ func loadBundle(opts LoadOptions, strict bool) (PartialBundle, []ConfigDiagnosti
 	var diags []ConfigDiagnostic
 	diags = append(diags, workspaceDiags...)
 	if workspaceCfg == nil {
+		if strict {
+			return PartialBundle{}, diags, diagnosticsError("workspace", workspaceDiags)
+		}
 		workspaceCfg = defaultWorkspaceConfig(absWorkspace)
 	}
 	if overrides.ModelProvider != "" {
@@ -239,12 +242,12 @@ func loadWorkspaceConfigSection(absWorkspace string, strictMode bool) (*Workspac
 			return cfg, nil
 		}
 		diag := ConfigDiagnostic{Path: path, Section: "workspace", Severity: "blocking", Message: fmt.Sprintf("stat workspace config: %v", err)}
-		return defaultWorkspaceConfig(absWorkspace), []ConfigDiagnostic{diag}
+		return nil, []ConfigDiagnostic{diag}
 	}
 	cfg, err := LoadWorkspaceConfig(path, absWorkspace, WorkspaceLoadOptions{Strict: strictMode})
 	if err != nil {
 		diag := ConfigDiagnostic{Path: path, Section: "workspace", Severity: "blocking", Message: err.Error()}
-		return defaultWorkspaceConfig(absWorkspace), []ConfigDiagnostic{diag}
+		return nil, []ConfigDiagnostic{diag}
 	}
 	for _, usage := range cfg.DefaultsUsed {
 		log.Printf("WARN config: using default value  file=%s  key=%s  default=%v", path, usage.Key, usage.Value)

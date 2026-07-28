@@ -5,7 +5,12 @@ family: build
 intent:
   - build
   - go
-description: Executes Go commands (go test/build/etc) inside the workspace.
+description: |
+  Escape hatch: Executes arbitrary Go commands (go test/build/vet/mod/...).
+  Prefer go_test, go_build, or go_module_metadata for structured output.
+guidance:
+  avoid_when:
+    - "The go_test or go_build tool handles your use case"
 execution:
   backend: subprocess
   command:
@@ -14,6 +19,7 @@ execution:
   sandbox:
     allowed_root: ${workspace}
     timeout_seconds: 30
+    allow_flags: true
   allow_stdin: true
   supports_workdir: true
 capability:

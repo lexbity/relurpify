@@ -73,9 +73,9 @@ type ToolTestJSONExpect struct {
 	Type string `yaml:"type,omitempty"`
 }
 
-// DefaultToolTestDir returns the canonical tooltest directory.
+// DefaultToolTestDir returns the canonical tooltest fixtures directory.
 func DefaultToolTestDir(workspace string) string {
-	return filepath.Join(workspace, "relurpify_cfg", "tooltests")
+	return filepath.Join(workspace, "testsuite", "tooltest", "fixtures")
 }
 
 // LoadToolTests reads all .tooltest.yaml files from a directory.

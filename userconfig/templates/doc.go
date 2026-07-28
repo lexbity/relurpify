@@ -5,4 +5,7 @@
 // TemplateResolver searches the configured template directories in priority
 // order (workspace-local overrides first, then shared defaults) and caches
 // parsed templates to avoid repeated disk reads across agent iterations.
+//
+// GenerateConfig is the single producer of the checked-in relurpify_cfg/ tree.
+// It mirrors the embedded workspace template tree 1:1 from embedfs.DefaultFS().
 package templates

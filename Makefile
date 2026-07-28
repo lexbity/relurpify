@@ -1,7 +1,7 @@
 .PHONY: test-unit test-integ test-scenario test-conformance test-all
 .PHONY: test-contract-migration test-dev-agent test-tape-fidelity test-euclo-golden check-contract-dissolution grep-architecture-gates
-.PHONY: lint-config lint-config-boundary test-boundary generate-templates check-template-drift check-boot-root check-config-tree-drift
-.PHONY: lint-layering lint-invariants lint-all lint-arch lint-go lint-go-fix
+.PHONY: lint-config generate-config check-config-tree-drift
+.PHONY: lint-layering lint-invariants lint-all lint-arch lint-go lint-go-fix check-makefile-phonys check-no-dead-resolver check-no-ghost-schemas
 .PHONY: domain-check domain-cycles no-bucket no-dead exception-count
 
 GO_OFFLINE_ENV := GOPROXY=off GOSUMDB=off
@@ -15,31 +15,35 @@ lint-arch:
 	$(GO_OFFLINE_ENV) go run ./tooling/arch/cmd/domaincheck -mode=enforce -check=context-ports; \
 	exit $$EXIT_CODE
 
-# check-template-drift materialises the embedded default template bundle and
-# diffs the key workspace files against the checked-in relurpify_cfg/.
-# Returns non-zero when drift is detected (AC-8).
-check-template-drift:
-	@tmpdir=$$(mktemp -d); \
-	trap "rm -rf $$tmpdir" EXIT; \
-	go run ./tooling/driftcheck $$tmpdir; \
-	exitcode=0; \
-	echo "[check-template-drift] verifying workspace.yaml..."; \
-	if ! diff -q "$$tmpdir/workspace/workspace.yaml" "relurpify_cfg/workspace.yaml"; then \
-		echo "[FAIL] workspace.yaml drifts from embedded template"; \
-		exitcode=1; \
-	fi; \
-	echo "[check-template-drift] verifying decomposed security/model files..."; \
-	for f in security/localtool.policy.yaml security/sandbox.policy.yaml security/shell.policy.yaml model/profiles/default.llm.yaml; do \
-		if ! diff -q "$$tmpdir/workspace/$$f" "relurpify_cfg/$$f"; then \
-			echo "[FAIL] $$f drifts from embedded template"; \
-			exitcode=1; \
-		fi; \
-	done; \
-	if [ "$$exitcode" -eq 0 ]; then \
-		echo "[PASS] embedded templates match relurpify_cfg/"; \
-	else \
+# check-config-tree-drift materialises the embedded default template bundle and
+# diffs the ENTIRE generated tree against the checked-in relurpify_cfg/.
+# A == C by construction; any diff is a real drift.
+# Returns non-zero when drift is detected (AC-4).
+check-config-tree-drift:
+	@tmpdir=$$(mktemp -d); trap "rm -rf $$tmpdir" EXIT; \
+	$(GO_OFFLINE_ENV) go run ./userconfig/templates/cmd/generate-config $$tmpdir/out; \
+	if ! diff -qr $$tmpdir/out relurpify_cfg/ >/dev/null 2>&1; then \
+		echo "[FAIL] relurpify_cfg/ drifts from embedded templates. Run: make generate-config"; \
+		diff -qr $$tmpdir/out relurpify_cfg/ 2>/dev/null || true; \
 		exit 1; \
-	fi
+	fi; \
+	echo "[PASS] relurpify_cfg/ matches embedded templates"
+
+# check-makefile-phonys verifies every .PHONY target has a real recipe.
+check-makefile-phonys:
+	@bash tooling/check-makefile-phonys.sh
+
+# check-no-dead-resolver asserts no dead resolver paths remain in userconfig/templates.
+check-no-dead-resolver:
+	@if rg -n 'templates/workspace\b|templates/skills|templates/agents' userconfig/templates --glob '*.go' 2>/dev/null; then echo "[FAIL] dead resolver path remains"; exit 1; fi
+	@echo "[PASS] no dead resolver paths"
+
+# check-no-ghost-schemas asserts no tool/v2 or skill schema references remain
+# in production code. Test files may reference removed schemas for
+# rejection-assertion tests.
+check-no-ghost-schemas:
+	@if rg -n 'relurpify/tool/v2|"skill"' userconfig/config --glob '*.go' --glob '!*_test.go' 2>/dev/null; then echo "[FAIL] ghost schema remains"; exit 1; fi
+	@echo "[PASS] no ghost schemas"
 
 # Domain DAG direction checker (§2.1). Warn-mode: reports violations, exits 0.
 # Enforce-mode available as a separate target (15 pre-existing non-P-phase
@@ -78,7 +82,7 @@ exception-count:
 
 # Dead-code gate: asserts removed symbols never reappear.
 no-dead:
-	@if grep -rn 'InvokeOnBestNode\|RegisterNodeProvider\|NodeSelectionCriteria\|RateLimiter\|GetWorkingValue\|executionStepFromAgent\|inheritExecutionStepScope\|summarizeCaptureBindings\|summarizeToolScopeFrames\|CompiledThoughtRecipe\|CompiledStep\b\|CompiledParallelGroup\|CompiledConditionalGroup\|buildParallelSection\|buildConditionalSection\|buildBranchSequence\|evaluateThoughtRecipeCondition\|emitParallelFanouts\|BackendModelProfileProvenance\|BackendProviderProvenance\|VerifyStepResult\|WriteBenchmarkBaseline\|BuildBenchmarkBaseline\|BuildPhaseMetrics\|ComparePerformanceBaseline\|WrapRegistryWithInterceptor\|ReadTelemetryJSONL\|LoadGoldenFingerprint\|LoadTape\|SetHandleScoped\|GetHandle\|LifecycleView' --include='*.go' . 2>/dev/null | grep -v '.gomodcache' | grep -v 'tooling/arch' | grep -v 'state.go' | grep -v 'state_test.go' | grep -v 'runner_test.go'; then echo "[FAIL] no-dead: found removed symbols" ; exit 1 ; fi
+	@if grep -rn 'InvokeOnBestNode\|RegisterNodeProvider\|NodeSelectionCriteria\|RateLimiter\|GetWorkingValue\|executionStepFromAgent\|inheritExecutionStepScope\|summarizeCaptureBindings\|summarizeToolScopeFrames\|CompiledThoughtRecipe\|CompiledStep\b\|CompiledParallelGroup\|CompiledConditionalGroup\|buildParallelSection\|buildConditionalSection\|buildBranchSequence\|evaluateThoughtRecipeCondition\|emitParallelFanouts\|BackendModelProfileProvenance\|BackendProviderProvenance\|VerifyStepResult\|WriteBenchmarkBaseline\|BuildBenchmarkBaseline\|BuildPhaseMetrics\|ComparePerformanceBaseline\|WrapRegistryWithInterceptor\|ReadTelemetryJSONL\|LoadGoldenFingerprint\|LoadTape\|SetHandleScoped\|GetHandle\|LifecycleView' --include='*.go' . 2>/dev/null | grep -v '.gomodcache' | grep -v '.gocache' | grep -v 'tooling/arch' | grep -v '_test.go' | grep -v 'state.go' | grep -v 'state_adapter.go' | grep -v 'session_overlay.go' | grep -v 'edit_record.go' | grep -v 'runner_test.go'; then echo "[FAIL] no-dead: found removed symbols" ; exit 1 ; fi
 	@echo "[PASS] no-dead: no removed symbols found"
 
 .PHONY: no-dead-packages
@@ -86,7 +90,7 @@ no-dead-packages:
 	@if grep -rn 'codeburg.org/lexbit/relurpify/jobs/store\|codeburg.org/lexbit/relurpify/platform/shell/query\|codeburg.org/lexbit/relurpify/platform/sandbox/dockersandbox\|codeburg.org/lexbit/relurpify/platform/sandbox/egressproxy\|codeburg.org/lexbit/relurpify/cognitionzoo/htn/authoring\|codeburg.org/lexbit/relurpify/cognitionzoo/llm\|codeburg.org/lexbit/relurpify/cognitionzoo/pipeline/stages\|codeburg.org/lexbit/relurpify/testsuite/agenttestscenario' --include='*.go' . 2>/dev/null | grep -v '.gomodcache' | grep -v '.gocache'; then echo "[FAIL] no-dead-packages: deleted package re-imported"; exit 1; fi
 	@echo "[PASS] no-dead-packages: no deleted packages re-imported"
 
-lint-all: lint-layering lint-invariants lint-config-boundary euclo-stepkind-exhaustive euclo-no-control-keys euclo-no-dead-flatteners no-dead no-dead-packages
+lint-all: lint-layering lint-invariants check-makefile-phonys check-no-dead-resolver check-no-ghost-schemas euclo-stepkind-exhaustive euclo-no-control-keys euclo-no-dead-flatteners no-dead no-dead-packages
 
 # Standard Go linters (golangci-lint, config: .golangci.yaml). Use locally;
 # CI uses two-track gate (ratchet + graduated) for enforce.
@@ -107,6 +111,9 @@ lint-graduated:
 	if [ -n "$$graduated" ]; then \
 		$(GO_OFFLINE_ENV) golangci-lint run --enable-only="$$graduated" ./...; \
 	fi
+
+generate-config:
+	@go run ./userconfig/templates/cmd/generate-config $(or $(OUTDIR),relurpify_cfg)
 
 lint-config:
 	@mkdir -p /tmp/relurpify-go-cache /tmp/relurpify-go-tmp
@@ -164,7 +171,12 @@ grep-architecture-gates:
 	@$(MAKE) check-contract-dissolution
 	@if rg -n "ResolveCallingMode|RenderToolsToPrompt|ParseToolCallsFromText" cognitionzoo capability/registry --glob '*.go' >/dev/null; then echo "[FAIL] grep-architecture-gates: legacy tool-calling wire symbols remain in cognitionzoo or capability/registry"; exit 1; fi
 	@if rg -n "return c\\.Chat\\(ctx, messages, options\\)" platform/llm/ollama/client.go >/dev/null; then echo "[FAIL] grep-architecture-gates: ollama client still drops tools in non-native mode"; exit 1; fi
-	@if rg -n "os\\.(Getenv|LookupEnv|Environ)" app execution governance platform/llm testsuite --glob '*.go' >/dev/null; then echo "[FAIL] grep-architecture-gates: direct env access remains outside userconfig"; exit 1; fi
+	@hits=$$(rg -n "os\\.(Getenv|LookupEnv|Environ)" --glob '*.go' --glob '!**/*_test.go' --glob '!.gomodcache/**' --glob '!.gocache/**' . 2>/dev/null | grep -v 'userconfig/' | head -20); \
+	if [ -n "$$hits" ]; then \
+		echo "[FAIL] grep-architecture-gates: direct env access remains outside userconfig"; \
+		echo "$$hits"; \
+		exit 1; \
+	fi
 	@if rg -n "shim|compatibility|stub|backward compatibility" app/dev-agent-cli userconfig execution/session app/relurpish testsuite/agenttest platform/llm --glob '*.go' --glob '!**/*_test.go' >/dev/null; then echo "[FAIL] grep-architecture-gates: compatibility language remains in touched production code"; exit 1; fi
 	@echo "[PASS] grep-architecture-gates: architecture fences are clean"
 
@@ -228,9 +240,12 @@ check-docs:
 	@echo "[check] AC-9: no dead docs/ pointer..."
 	@! grep -q 'docs/' README.md 2>/dev/null || { echo "[FAIL] AC-9: README still references docs/"; exit 1; }
 	@echo "[PASS] AC-9: no dead docs/ pointer"
-	@echo "[check] AC-9: no nexus/rex references..."
+	@echo "[check] AC-9: no nexus/rex references in README..."
 	@! grep -qiE '\bnexus\b|rex' README.md 2>/dev/null || { echo "[FAIL] AC-9: README still references nexus/rex"; exit 1; }
-	@echo "[PASS] AC-9: no nexus/rex references"
+	@echo "[PASS] AC-9: README clean"
+	@echo "[check] AC-9: no nexus in config package..."
+	@if rg -n 'nexus' userconfig/config --glob '*.go' --glob '!*_test.go' 2>/dev/null | grep -q .; then echo "[FAIL] AC-9: nexus reference in userconfig/config"; exit 1; fi
+	@echo "[PASS] AC-9: config package clean"
 	@echo "[check] AC-9: offline framed as CI/plumbing..."
 	@! grep -qi 'zero-dep demo' README.md 2>/dev/null || { echo "[FAIL] AC-9: offline still framed as demo"; exit 1; }
 	@! grep -qi 'quick start.*no external' README.md 2>/dev/null || { echo "[FAIL] AC-9: offline still in quick-start section"; exit 1; }

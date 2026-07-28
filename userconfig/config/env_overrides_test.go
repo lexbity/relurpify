@@ -18,8 +18,6 @@ func TestLoadEnvOverridesAndSecrets(t *testing.T) {
 		"XDG_DATA_HOME=/tmp/xdg",
 		"RELURPIFY_STRICT=true",
 		"RELURPIFY_LLM_API_KEY=llm-secret",
-		"RELURPIFY_NEXUS_TOKEN=nexus-secret",
-		"RELURPIFY_NEXUS_ADMIN_TOKEN=admin-secret",
 	}
 
 	overrides, err := LoadEnvOverrides(env)
@@ -36,6 +34,4 @@ func TestLoadEnvOverridesAndSecrets(t *testing.T) {
 
 	secrets := LoadSecrets(env)
 	require.Equal(t, "llm-secret", secrets.LLMAPIKey)
-	require.Equal(t, "nexus-secret", secrets.NexusToken)
-	require.Equal(t, "admin-secret", secrets.NexusAdminToken)
 }

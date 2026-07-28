@@ -1,109 +1,53 @@
 package templates
 
 import (
+	"io/fs"
+	"os"
 	"path/filepath"
 	"testing"
-
-	"codeburg.org/lexbit/relurpify/platform/fs"
 )
 
-func TestResolverPrefersSharedRoot(t *testing.T) {
-	shared := t.TempDir()
-	repo := t.TempDir()
-	sharedTemplate := filepath.Join(shared, "templates", "skills", "skill.yaml")
-	repoTemplate := filepath.Join(repo, "templates", "skills", "skill.yaml")
-	if err := fs.MkdirAllSecure(filepath.Dir(sharedTemplate)); err != nil {
-		t.Fatal(err)
-	}
-	if err := fs.MkdirAllSecure(filepath.Dir(repoTemplate)); err != nil {
-		t.Fatal(err)
-	}
-	if err := fs.WriteFileSecure(sharedTemplate, []byte("shared")); err != nil {
-		t.Fatal(err)
-	}
-	if err := fs.WriteFileSecure(repoTemplate, []byte("repo")); err != nil {
-		t.Fatal(err)
-	}
-	r := NewResolver(shared)
-	r.roots = []string{shared, repo}
-	got, err := r.ResolveSkillTemplate()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got != sharedTemplate {
-		t.Fatalf("ResolveSkillTemplate() = %q, want %q", got, sharedTemplate)
-	}
-}
-
-func TestResolverWorkspaceConfigTemplate(t *testing.T) {
-	root := t.TempDir()
-	configTemplate := filepath.Join(root, "templates", "workspace", "workspace.yaml")
-	if err := fs.MkdirAllSecure(filepath.Dir(configTemplate)); err != nil {
-		t.Fatal(err)
-	}
-	if err := fs.WriteFileSecure(configTemplate, []byte("model: test")); err != nil {
-		t.Fatal(err)
-	}
-	r := NewResolver(root)
-	got, err := r.ResolveWorkspaceConfigTemplate()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got != configTemplate {
-		t.Fatalf("ResolveWorkspaceConfigTemplate() = %q, want %q", got, configTemplate)
-	}
-}
-
-func TestResolverWorkspaceSecurityTemplate(t *testing.T) {
-	root := t.TempDir()
-	templatePath := filepath.Join(root, "templates", "workspace", "security", "sandbox.policy.yaml")
-	if err := fs.MkdirAllSecure(filepath.Dir(templatePath)); err != nil {
-		t.Fatal(err)
-	}
-	if err := fs.WriteFileSecure(templatePath, []byte("schema: relurpify/policy/sandbox/v1")); err != nil {
-		t.Fatal(err)
-	}
-	r := NewResolver(root)
-	got, err := r.ResolveWorkspaceSecurityTemplate("sandbox")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got != templatePath {
-		t.Fatalf("ResolveWorkspaceSecurityTemplate() = %q, want %q", got, templatePath)
-	}
-}
-
-func TestResolverStarterAgentPrefersTemplatesDir(t *testing.T) {
-	root := t.TempDir()
-	canonical := filepath.Join(root, "templates", "agents", "coding-go.yaml")
-	if err := fs.MkdirAllSecure(filepath.Dir(canonical)); err != nil {
-		t.Fatal(err)
-	}
-	if err := fs.WriteFileSecure(canonical, []byte("canonical")); err != nil {
-		t.Fatal(err)
-	}
-	r := NewResolver(root)
-	got, err := r.ResolveStarterAgent("coding-go")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got != canonical {
-		t.Fatalf("ResolveStarterAgent() = %q, want %q", got, canonical)
-	}
-}
-
 func TestResolverTestsuiteTemplateProfile(t *testing.T) {
-	root := t.TempDir()
-	profile := filepath.Join(root, "templates", "testsuite", "default", "relurpify_cfg")
-	if err := fs.MkdirAllSecure(profile); err != nil {
-		t.Fatal(err)
-	}
-	r := NewResolver(root)
+	r := NewResolver("")
 	got, err := r.ResolveTestsuiteTemplateProfile("")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got != profile {
-		t.Fatalf("ResolveTestsuiteTemplateProfile() = %q, want %q", got, profile)
+	if _, err := fs.Stat(got, "workspace.yaml"); err != nil {
+		t.Errorf("expected workspace.yaml in profile: %v", err)
+	}
+	if _, err := fs.Stat(got, "security/sandbox.policy.yaml"); err != nil {
+		t.Errorf("expected security/sandbox.policy.yaml in profile: %v", err)
+	}
+}
+
+func TestResolverTestsuiteTemplateProfileExplicitDefault(t *testing.T) {
+	r := NewResolver("")
+	got, err := r.ResolveTestsuiteTemplateProfile("default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := fs.Stat(got, "workspace.yaml"); err != nil {
+		t.Errorf("expected workspace.yaml in default profile: %v", err)
+	}
+}
+
+func TestResolverTestsuiteTemplateProfileUnknown(t *testing.T) {
+	r := NewResolver("")
+	_, err := r.ResolveTestsuiteTemplateProfile("nonexistent")
+	if err == nil {
+		t.Fatal("expected error for unknown profile")
+	}
+}
+
+func TestResolverTestsuiteTemplateProfileCleanup(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	outDir := filepath.Join(tmpDir, "generated")
+	if err := GenerateConfig(outDir); err != nil {
+		t.Fatalf("GenerateConfig: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(outDir, "tools")); err != nil {
+		t.Errorf("generated tools dir missing: %v", err)
 	}
 }

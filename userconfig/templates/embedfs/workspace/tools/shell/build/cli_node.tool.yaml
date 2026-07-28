@@ -5,7 +5,12 @@ family: build
 intent:
   - build
   - node
-description: Executes Node.js commands inside the workspace.
+description: |
+  Escape hatch: Executes arbitrary Node.js commands.
+  Prefer node_npm_test or node_syntax_check for structured output.
+guidance:
+  avoid_when:
+    - "A node_npm_test or node_syntax_check tool handles your use case"
 execution:
   backend: subprocess
   command:
@@ -14,6 +19,7 @@ execution:
   sandbox:
     allowed_root: ${workspace}
     timeout_seconds: 30
+    allow_flags: true
   allow_stdin: true
   supports_workdir: true
 capability:

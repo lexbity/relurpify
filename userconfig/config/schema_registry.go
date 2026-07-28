@@ -15,7 +15,6 @@ var defaultSchemaKinds = []string{
 	"model/provider",
 	"model/profile",
 	schemaKindTool,
-	"skill",
 }
 
 const schemaKindTool = "tool"
@@ -34,8 +33,6 @@ func NewSchemaRegistry() *SchemaRegistry {
 	for _, kind := range defaultSchemaKinds {
 		_ = reg.Register(kind, 1)
 	}
-	// Tool schema v2: typed flags, chunking, telemetry hints.
-	_ = reg.Register(schemaKindTool, 2)
 	return reg
 }
 

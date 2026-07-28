@@ -99,7 +99,7 @@ func TestRenderJSONShape(t *testing.T) {
 	diags := []Diagnostic{
 		{
 			Check:    "tools",
-			Code:     "tool.underdeclared",
+			Code:     codeToolUnderdeclared,
 			Severity: SeverityError,
 			Loc:      SourceLoc{File: "tool.yaml", Line: 10},
 			Message:  "missing risk_class",

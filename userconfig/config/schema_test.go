@@ -54,7 +54,6 @@ func TestSchemaRegistryKnownKindsAreSorted(t *testing.T) {
 		"policy/localtool",
 		"policy/sandbox",
 		"policy/shell",
-		"skill",
 		schemaKindTool,
 		"workspace",
 	}, reg.KnownKinds())
