@@ -77,7 +77,7 @@ func TestDryRunEndToEndAmbiguousInteractionAndHITL(t *testing.T) {
 	writeWorkspaceFile(t, dir, "mixed.go", "package demo\n")
 
 	caps := newCapabilityRegistry(t, "euclo:cap.targeted_refactor")
-	broker := authorization.NewHITLBroker(5 * time.Second)
+	broker := authorization.NewHITLBroker(5*time.Second, nil)
 	deps := rootGraphDepsWithModel(caps, stubLanguageModel{})
 	deps.HITLBroker = broker
 	graph, err := orchestrate.NewRootGraph(context.Background(), deps)

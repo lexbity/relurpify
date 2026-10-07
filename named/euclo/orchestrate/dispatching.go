@@ -147,7 +147,37 @@ func resolveRoute(env *contextdata.Envelope, req RouteRequest, caps *registry.Ca
 	report := &DryRunReport{Request: req}
 	report.Candidates = deterministicRouteCandidates(env, req, caps, thoughtrecipes)
 	selected, ok := selectDeterministicCandidate(req, report.Candidates)
-	return report, selected, false, ok
+	fallbackTaken := false
+	if !ok && strings.TrimSpace(req.ThoughtRecipeID) == "" && strings.TrimSpace(req.CapabilityID) == "" && thoughtrecipes != nil {
+		// No deterministic candidate is available (recipes absent, capability
+		// matches suppressed). Fall back to the built-in default execution
+		// recipe so general tasks still run through a paradigm instead of
+		// failing route resolution.
+		if candidate, okFallback := defaultExecutionRecipeCandidate(thoughtrecipes); okFallback {
+			report.Candidates = append(report.Candidates, candidate)
+			selected, ok, fallbackTaken = candidate, true, true
+		}
+	}
+	return report, selected, fallbackTaken, ok
+}
+
+// defaultExecutionRecipeCandidate offers the built-in default execution
+// thoughtrecipe when it is registered and no workspace recipe matched.
+func defaultExecutionRecipeCandidate(reg *thoughtrecipepkg.ThoughtRecipeRegistry) (CandidateRouteInfo, bool) {
+	if reg == nil {
+		return CandidateRouteInfo{}, false
+	}
+	id := defaultThoughtRecipeID
+	if _, ok := reg.Get(id); !ok {
+		return CandidateRouteInfo{}, false
+	}
+	return CandidateRouteInfo{
+		RouteID:      RouteID(id),
+		RouteKind:    euclotypes.RouteKindForThoughtRecipeID(id),
+		Availability: RouteAvailable,
+		RankScore:    0,
+		RankReasons:  []string{"no deterministic route; falling back to default execution recipe"},
+	}, true
 }
 
 func deterministicRouteCandidates(env *contextdata.Envelope, req RouteRequest, caps *registry.CapabilityRegistry, thoughtrecipes *thoughtrecipepkg.ThoughtRecipeRegistry) []CandidateRouteInfo {
@@ -309,6 +339,14 @@ func metadataCapabilityCandidates(env *contextdata.Envelope, req RouteRequest, c
 			continue
 		}
 		availability, reason := routeAvailabilityFromSnapshot(snapshot)
+		if availability == RouteAvailable && capabilityRequiresArgs(snapshot.Descriptor) {
+			// Direct capability routes carry no argument source: a keyword
+			// match on a capability with required inputs would fail schema
+			// validation at invocation time. Suppress in favor of
+			// paradigm-backed routes that synthesize arguments.
+			availability = RouteUnavailableUnsupported
+			reason = "capability requires arguments; no argument source for direct capability routes"
+		}
 		candidates = append(candidates, CandidateRouteInfo{
 			RouteID:        RouteID(snapshot.Descriptor.ID),
 			RouteKind:      euclotypes.RouteKindCapability,
@@ -320,6 +358,15 @@ func metadataCapabilityCandidates(env *contextdata.Envelope, req RouteRequest, c
 		})
 	}
 	return candidates
+}
+
+// capabilityRequiresArgs reports whether the capability declares required
+// input fields in its input schema.
+func capabilityRequiresArgs(desc descriptor.CapabilityDescriptor) bool {
+	if desc.InputSchema == nil {
+		return false
+	}
+	return len(desc.InputSchema.Required) > 0
 }
 
 func selectDeterministicCandidate(req RouteRequest, candidates []CandidateRouteInfo) (CandidateRouteInfo, bool) {

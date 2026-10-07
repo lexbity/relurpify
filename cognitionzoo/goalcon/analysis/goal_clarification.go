@@ -152,7 +152,7 @@ func (gc *GoalClarifier) requestHITLClarification(
 		TimeoutBehavior: authorization.HITLTimeoutBehaviorSkip,
 	}
 
-	requestID, err := gc.hitlBroker.SubmitAsync(req)
+	requestID, err := gc.hitlBroker.SubmitAsync(ctx, req)
 	return requestID, err
 }
 

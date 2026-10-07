@@ -16,11 +16,10 @@ type EucloTelemetry struct {
 	sink telemetry.Telemetry
 }
 
-// NewEucloTelemetry creates a new telemetry wrapper.
+// NewEucloTelemetry creates a new telemetry wrapper. A nil sink is a valid,
+// permanently silent wrapper: every emit helper nil-guards, so no stub
+// sink is needed.
 func NewEucloTelemetry(sink telemetry.Telemetry) *EucloTelemetry {
-	if sink == nil {
-		sink = noopTelemetry{}
-	}
 	return &EucloTelemetry{sink: sink}
 }
 
@@ -30,12 +29,14 @@ func (t *EucloTelemetry) emit(ctx context.Context, eventType EventType, payload 
 	}
 	meta := eventPayloadMap(payload)
 	taskID, _ := meta["task_id"].(string)
-	t.sink.Emit(telemetry.Event{
+	ev := telemetry.Event{
 		Type:      telemetry.EventType(eventType),
 		TaskID:    taskID,
 		Timestamp: time.Now().UTC(),
 		Metadata:  meta,
-	})
+	}
+	telemetry.StampCorrelation(ctx, &ev)
+	t.sink.Emit(ev)
 }
 
 func (t *EucloTelemetry) EmitIntakeComplete(ctx context.Context, ev EventIntakeComplete) {
@@ -137,10 +138,6 @@ func (t *EucloTelemetry) EmitVerifyComplete(ctx context.Context, ev EventVerifyC
 func (t *EucloTelemetry) EmitExecutionComplete(ctx context.Context, ev EventExecutionComplete) {
 	t.emit(ctx, EventTypeExecutionComplete, ev)
 }
-
-type noopTelemetry struct{}
-
-func (noopTelemetry) Emit(telemetry.Event) {}
 
 // TelemetryNode reports execution metrics and outcomes.
 type TelemetryNode struct {
@@ -414,10 +411,12 @@ func emitRouteEvent(ctx context.Context, eventType EventType, taskID, sessionID 
 	if sink == nil {
 		return
 	}
-	sink.Emit(telemetry.Event{
+	ev := telemetry.Event{
 		Type:      telemetry.EventType(string(eventType)),
 		TaskID:    taskID,
 		Timestamp: time.Now().UTC(),
 		Metadata:  data,
-	})
+	}
+	telemetry.StampCorrelation(ctx, &ev)
+	sink.Emit(ev)
 }

@@ -89,7 +89,7 @@ func (s *BrowserService) open(ctx context.Context, env *contextdata.Envelope, ar
 		env.SetWorkingValueWithClass(browserDefaultSessionKey, sessionID, contextdata.MemoryClassTask)
 	}
 	scope := browserTaskScope(env)
-	emitBrowserTelemetry(s.telemetry, telemetry.EventStateChange, s.agentID(), scope, "browser session opened", map[string]any{
+	emitBrowserTelemetry(ctx, s.telemetry, telemetry.EventStateChange, s.agentID(), scope, "browser session opened", map[string]any{
 		"browser_event":  "session_opened",
 		"browser_action": browserPermissionAction(browserActionOpen),
 		"session_id":     sessionID,
@@ -120,7 +120,7 @@ func (s *BrowserService) close(env *contextdata.Envelope, args map[string]any) (
 			}
 		}
 	}
-	emitBrowserTelemetry(s.telemetry, telemetry.EventStateChange, s.agentID(), browserTaskScope(env), "browser session closed", map[string]any{
+	emitBrowserTelemetry(context.Background(), s.telemetry, telemetry.EventStateChange, s.agentID(), browserTaskScope(env), "browser session closed", map[string]any{
 		"browser_event":  "session_closed",
 		"browser_action": browserPermissionAction(browserActionClose),
 		"session_id":     sessionID,
@@ -476,7 +476,7 @@ func (h *browserSessionHandle) recover(ctx context.Context, operation string, ca
 		h.mu.Lock()
 		h.lastErr = err.Error()
 		h.mu.Unlock()
-		emitBrowserTelemetry(h.telemetry, telemetry.EventStateChange, h.agentID, h.taskID, "browser session recovery failed", map[string]any{
+		emitBrowserTelemetry(ctx, h.telemetry, telemetry.EventStateChange, h.agentID, h.taskID, "browser session recovery failed", map[string]any{
 			"browser_event": "session_recovery_failed",
 			"session_id":    h.sessionID,
 			"backend":       h.backendName,
@@ -495,7 +495,7 @@ func (h *browserSessionHandle) recover(ctx context.Context, operation string, ca
 	recoveries := h.recoveries
 	h.mu.Unlock()
 
-	emitBrowserTelemetry(h.telemetry, telemetry.EventStateChange, h.agentID, h.taskID, "browser session recovered", map[string]any{
+	emitBrowserTelemetry(ctx, h.telemetry, telemetry.EventStateChange, h.agentID, h.taskID, "browser session recovered", map[string]any{
 		"browser_event": "session_recovered",
 		"session_id":    h.sessionID,
 		"backend":       h.backendName,
@@ -522,7 +522,7 @@ func (s *BrowserService) successWithSnapshot(ctx context.Context, env *contextda
 		data["page_state"] = pageState
 		session.notePageState(pageState)
 		recordBrowserObservation(env, pageState)
-		emitBrowserTelemetry(s.telemetry, telemetry.EventStateChange, s.agentID(), browserTaskScope(env), "browser page snapshot captured", map[string]any{
+		emitBrowserTelemetry(ctx, s.telemetry, telemetry.EventStateChange, s.agentID(), browserTaskScope(env), "browser page snapshot captured", map[string]any{
 			"browser_event": "page_snapshot",
 			"session_id":    sessionID,
 			"url":           pageState.URL,

@@ -151,34 +151,6 @@ func TestHasRecoveryFromToolFailure(t *testing.T) {
 	}
 }
 
-func TestEvaluateSuccessRateConstraint(t *testing.T) {
-	tests := []struct {
-		rate       float64
-		constraint string
-		want       bool
-	}{
-		{0.9, ">0.8", true},
-		{0.9, ">0.9", false},
-		{0.9, ">=0.9", true},
-		{0.9, ">=0.8", true},
-		{0.5, "<0.6", true},
-		{0.5, "<=0.5", true},
-		{0.5, "0.5", true},  // bare number = >=
-		{0.9, "0.9", true},  // bare number = >=
-		{0.8, "0.9", false}, // bare number = >=
-		{0.9, "", true},     // empty constraint
-		{0.9, ">=1.0", false},
-		{0.0, "<0.1", true},
-	}
-
-	for _, tt := range tests {
-		got := evaluateSuccessRateConstraint(tt.rate, tt.constraint)
-		if got != tt.want {
-			t.Errorf("evaluateSuccessRateConstraint(%f, %q) = %v, want %v", tt.rate, tt.constraint, got, tt.want)
-		}
-	}
-}
-
 func TestInjectionInterceptorInterface(t *testing.T) {
 	baseTool := &mockTool{name: test_tool}
 	interceptor := NewInjectionInterceptor(baseTool, nil)

@@ -1,6 +1,7 @@
 package session
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 
@@ -57,11 +58,11 @@ type promptTelemetryAdapter struct {
 	inner telemetry.Telemetry
 }
 
-func (a promptTelemetryAdapter) EmitPromptResolved(e prompt.ResolvedEvent) {
+func (a promptTelemetryAdapter) EmitPromptResolved(ctx context.Context, e prompt.ResolvedEvent) {
 	if a.inner == nil {
 		return
 	}
-	a.inner.Emit(telemetry.Event{
+	ev := telemetry.Event{
 		Type:    telemetry.EventType("prompt.resolved"),
 		TaskID:  e.ID,
 		Message: fmt.Sprintf("prompt %s resolved: %d chars, %d blocks", e.ID, e.OutputLength, e.BlocksIncluded),
@@ -73,14 +74,16 @@ func (a promptTelemetryAdapter) EmitPromptResolved(e prompt.ResolvedEvent) {
 			"duration_ms":     e.DurationMs,
 			"cache_hit":       e.CacheHit,
 		},
-	})
+	}
+	telemetry.StampCorrelation(ctx, &ev)
+	a.inner.Emit(ev)
 }
 
-func (a promptTelemetryAdapter) EmitPromptResolveFailed(e prompt.ResolveFailedEvent) {
+func (a promptTelemetryAdapter) EmitPromptResolveFailed(ctx context.Context, e prompt.ResolveFailedEvent) {
 	if a.inner == nil {
 		return
 	}
-	a.inner.Emit(telemetry.Event{
+	ev := telemetry.Event{
 		Type:    telemetry.EventType("prompt.resolve_failed"),
 		TaskID:  e.ID,
 		Message: fmt.Sprintf("prompt %s resolve failed: %s", e.ID, e.Error),
@@ -89,14 +92,16 @@ func (a promptTelemetryAdapter) EmitPromptResolveFailed(e prompt.ResolveFailedEv
 			"error":       e.Error,
 			"duration_ms": e.DurationMs,
 		},
-	})
+	}
+	telemetry.StampCorrelation(ctx, &ev)
+	a.inner.Emit(ev)
 }
 
-func (a promptTelemetryAdapter) EmitPromptContextMissing(e prompt.ContextMissingEvent) {
+func (a promptTelemetryAdapter) EmitPromptContextMissing(ctx context.Context, e prompt.ContextMissingEvent) {
 	if a.inner == nil {
 		return
 	}
-	a.inner.Emit(telemetry.Event{
+	ev := telemetry.Event{
 		Type:    telemetry.EventType("prompt.context_missing"),
 		TaskID:  e.PromptID,
 		Message: fmt.Sprintf("prompt %s/%s: %s", e.PromptID, e.BlockID, e.Message),
@@ -104,14 +109,16 @@ func (a promptTelemetryAdapter) EmitPromptContextMissing(e prompt.ContextMissing
 			promptBlockIDKey: e.BlockID,
 			"key":            e.Key,
 		},
-	})
+	}
+	telemetry.StampCorrelation(ctx, &ev)
+	a.inner.Emit(ev)
 }
 
-func (a promptTelemetryAdapter) EmitPromptValidationIssue(e prompt.ValidationIssueEvent) {
+func (a promptTelemetryAdapter) EmitPromptValidationIssue(ctx context.Context, e prompt.ValidationIssueEvent) {
 	if a.inner == nil {
 		return
 	}
-	a.inner.Emit(telemetry.Event{
+	ev := telemetry.Event{
 		Type:    telemetry.EventType("prompt.validation_issue"),
 		TaskID:  e.Issue.PromptID,
 		Message: e.Issue.Error(),
@@ -119,14 +126,16 @@ func (a promptTelemetryAdapter) EmitPromptValidationIssue(e prompt.ValidationIss
 			"severity":       e.Issue.Severity.String(),
 			promptBlockIDKey: e.Issue.BlockID,
 		},
-	})
+	}
+	telemetry.StampCorrelation(ctx, &ev)
+	a.inner.Emit(ev)
 }
 
-func (a promptTelemetryAdapter) EmitPromptProviderFailed(e prompt.ProviderFailedEvent) {
+func (a promptTelemetryAdapter) EmitPromptProviderFailed(ctx context.Context, e prompt.ProviderFailedEvent) {
 	if a.inner == nil {
 		return
 	}
-	a.inner.Emit(telemetry.Event{
+	ev := telemetry.Event{
 		Type:    telemetry.EventType("prompt.provider_failed"),
 		TaskID:  e.PromptID,
 		Message: fmt.Sprintf("prompt %s/%s provider %s failed: %s", e.PromptID, e.BlockID, e.ProviderName, e.Error),
@@ -135,5 +144,7 @@ func (a promptTelemetryAdapter) EmitPromptProviderFailed(e prompt.ProviderFailed
 			"provider_name":  e.ProviderName,
 			"error":          e.Error,
 		},
-	})
+	}
+	telemetry.StampCorrelation(ctx, &ev)
+	a.inner.Emit(ev)
 }

@@ -16,6 +16,7 @@ import (
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
 	governanceports "codeburg.org/lexbit/relurpify/governance/ports"
+	fwtelemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 const permissionMatchAll = "**"
@@ -71,7 +72,7 @@ type PermissionManager struct {
 	grantClock       func() time.Time
 	netPolicy        []governanceports.SandboxNetworkRule
 	defaultPolicy    string // governs undeclared tool permissions; default is Ask
-	eventLogger      func(context.Context, permissions.PermissionDescriptor, string, string, map[string]any)
+	decisions        fwtelemetry.DecisionSink
 	runtimePolicyErr error
 	taskGrants       map[string]taskGrant
 	hitlRateLimits   map[string]*hitlRateBucket
@@ -121,11 +122,12 @@ func (m *PermissionManager) SetDefaultPolicy(level string) {
 	m.defaultPolicy = level
 }
 
-// SetEventLogger configures a callback for structured policy decision events.
-func (m *PermissionManager) SetEventLogger(logger func(context.Context, permissions.PermissionDescriptor, string, string, map[string]any)) {
+// SetDecisionSink configures the port that receives structured decision
+// forensics for every policy evaluation (Decision 6, FR-5).
+func (m *PermissionManager) SetDecisionSink(sink fwtelemetry.DecisionSink) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.eventLogger = logger
+	m.decisions = sink
 }
 
 // DefaultPolicy returns the configured default policy level, falling back to Ask.

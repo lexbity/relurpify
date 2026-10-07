@@ -1,6 +1,7 @@
 package envcomposition
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -70,9 +71,14 @@ func (a modelTelemetryAdapter) Emit(event observability.Event) {
 	if a.inner == nil {
 		return
 	}
-	a.inner.Emit(telemetry.Event{
+	ev := telemetry.Event{
 		Type:      telemetry.EventType(event.Type),
+		SessionID: event.SessionID,
+		RunID:     event.RunID,
+		TraceID:   event.TraceID,
+		AgentID:   event.AgentID,
 		NodeID:    event.NodeID,
+		SpanID:    event.SpanID,
 		TaskID:    event.TaskID,
 		Message:   event.Message,
 		Timestamp: event.Timestamp,
@@ -81,7 +87,26 @@ func (a modelTelemetryAdapter) Emit(event observability.Event) {
 		Partition: event.Partition,
 		Payload:   event.Payload,
 		Actor:     actorID(event.Actor),
-	})
+	}
+	// Reconstruct correlation context from the stamped event so the
+	// downstream model telemetry can re-stamp without losing fields.
+	ctx := context.Background()
+	if ev.SessionID != "" || ev.RunID != "" || ev.TraceID != "" || ev.AgentID != "" {
+		ctx = telemetry.WithRunContext(ctx, telemetry.RunContext{
+			SessionID: ev.SessionID,
+			RunID:     ev.RunID,
+			TraceID:   ev.TraceID,
+			AgentID:   ev.AgentID,
+		})
+	}
+	if ev.TraceID != "" || ev.SpanID != "" {
+		ctx = telemetry.WithTraceContext(ctx, telemetry.TraceContext{
+			TraceID: ev.TraceID,
+			SpanID:  ev.SpanID,
+		})
+	}
+	telemetry.StampCorrelation(ctx, &ev)
+	a.inner.Emit(ctx, ev)
 }
 
 func actorID(actor observability.Actor) string {

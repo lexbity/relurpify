@@ -86,7 +86,7 @@ func (r *Runner) executeStage(ctx context.Context, task *execution.Task, taskID 
 			Kind: TransitionNext,
 		},
 	}
-	emitStageEvent(r.Options.Telemetry, pipelineEventStageStart, taskID, stage.Name(), "", map[string]any{
+	emitStageEvent(ctx, r.Options.Telemetry, pipelineEventStageStart, taskID, stage.Name(), "", map[string]any{
 		"stage_index":      index,
 		"contract_name":    contract.Name,
 		"contract_version": contract.Metadata.SchemaVersion,
@@ -117,7 +117,7 @@ func (r *Runner) executeStage(ctx context.Context, task *execution.Task, taskID 
 			err := fmt.Errorf("pipeline stage %s requires a tool call before returning output", stage.Name())
 			result.ErrorText = err.Error()
 			result.FinishedAt = time.Now().UTC()
-			emitStageEvent(r.Options.Telemetry, pipelineEventStageValidError, taskID, stage.Name(), err.Error(), map[string]any{
+			emitStageEvent(ctx, r.Options.Telemetry, pipelineEventStageValidError, taskID, stage.Name(), err.Error(), map[string]any{
 				"stage_index":   index,
 				"retry_attempt": attempt,
 			})
@@ -134,7 +134,7 @@ func (r *Runner) executeStage(ctx context.Context, task *execution.Task, taskID 
 		if err != nil {
 			result.ErrorText = err.Error()
 			result.FinishedAt = time.Now().UTC()
-			emitStageEvent(r.Options.Telemetry, pipelineEventStageDecodeError, taskID, stage.Name(), err.Error(), map[string]any{
+			emitStageEvent(ctx, r.Options.Telemetry, pipelineEventStageDecodeError, taskID, stage.Name(), err.Error(), map[string]any{
 				"stage_index":   index,
 				"retry_attempt": attempt,
 			})
@@ -151,7 +151,7 @@ func (r *Runner) executeStage(ctx context.Context, task *execution.Task, taskID 
 		if err := ValidateStageOutput(stage, output); err != nil {
 			result.ErrorText = err.Error()
 			result.FinishedAt = time.Now().UTC()
-			emitStageEvent(r.Options.Telemetry, pipelineEventStageValidError, taskID, stage.Name(), err.Error(), map[string]any{
+			emitStageEvent(ctx, r.Options.Telemetry, pipelineEventStageValidError, taskID, stage.Name(), err.Error(), map[string]any{
 				"stage_index":   index,
 				"retry_attempt": attempt,
 			})
@@ -176,7 +176,7 @@ func (r *Runner) executeStage(ctx context.Context, task *execution.Task, taskID 
 		break
 	}
 	result.FinishedAt = time.Now().UTC()
-	emitStageEvent(r.Options.Telemetry, pipelineEventStageFinish, taskID, stage.Name(), "", map[string]any{
+	emitStageEvent(ctx, r.Options.Telemetry, pipelineEventStageFinish, taskID, stage.Name(), "", map[string]any{
 		"stage_index":   index,
 		"validation_ok": true,
 		"transition":    result.Transition.Kind,

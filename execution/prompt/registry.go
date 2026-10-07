@@ -1,6 +1,7 @@
 package prompt
 
 import (
+	"context"
 	"fmt"
 	"io/fs"
 	"os"
@@ -141,7 +142,7 @@ func (r *defaultRegistry) LoadFS(fsys fs.FS, prefix string) error {
 		result, parseErr := ParseBytes(data, sourcePath)
 		if parseErr != nil {
 			issue := ValidationIssue{Severity: SeverityError, Message: parseErr.Error()}
-			r.telemetry.EmitPromptValidationIssue(ValidationIssueEvent{Issue: issue})
+			r.telemetry.EmitPromptValidationIssue(context.Background(), ValidationIssueEvent{Issue: issue})
 			return parseErr
 		}
 		if err := r.indexOne(result.Config, result.Warnings); err != nil {
@@ -156,7 +157,7 @@ func (r *defaultRegistry) loadPaths(paths []string) error {
 		result, err := ParseFile(path)
 		if err != nil {
 			issue := ValidationIssue{Severity: SeverityError, Message: fmt.Sprintf("parse %s: %v", path, err)}
-			r.telemetry.EmitPromptValidationIssue(ValidationIssueEvent{Issue: issue})
+			r.telemetry.EmitPromptValidationIssue(context.Background(), ValidationIssueEvent{Issue: issue})
 			return err
 		}
 		if err := r.indexOne(result.Config, result.Warnings); err != nil {
@@ -176,27 +177,27 @@ func (r *defaultRegistry) indexOne(cfg *PromptConfig, warnings []string) error {
 	if cfg.ID == "" {
 		iss := ValidationIssue{Severity: SeverityError, Message: "prompt file has no id: " + cfg.SourcePath}
 		r.issues[""] = append(r.issues[""], iss)
-		r.telemetry.EmitPromptValidationIssue(ValidationIssueEvent{Issue: iss})
+		r.telemetry.EmitPromptValidationIssue(context.Background(), ValidationIssueEvent{Issue: iss})
 		return &ValidationError{Issues: []ValidationIssue{iss}}
 	}
 	if existing, exists := r.prompts[cfg.ID]; exists {
 		iss := ValidationIssue{PromptID: cfg.ID, Severity: SeverityError, Message: "duplicate prompt id: " + cfg.ID + " (" + existing.SourcePath + ", " + cfg.SourcePath + ")"}
 		r.issues[cfg.ID] = append(r.issues[cfg.ID], iss)
-		r.telemetry.EmitPromptValidationIssue(ValidationIssueEvent{Issue: iss})
+		r.telemetry.EmitPromptValidationIssue(context.Background(), ValidationIssueEvent{Issue: iss})
 		return &DuplicateIDError{ID: cfg.ID, ExistingPath: existing.SourcePath, NewPath: cfg.SourcePath}
 	}
 
 	for _, w := range warnings {
 		iss := ValidationIssue{PromptID: cfg.ID, Severity: SeverityWarning, Message: w}
 		r.issues[cfg.ID] = append(r.issues[cfg.ID], iss)
-		r.telemetry.EmitPromptValidationIssue(ValidationIssueEvent{Issue: iss})
+		r.telemetry.EmitPromptValidationIssue(context.Background(), ValidationIssueEvent{Issue: iss})
 	}
 
 	structIssues := validateConfig(cfg)
 	r.issues[cfg.ID] = append(r.issues[cfg.ID], structIssues...)
 	for _, iss := range structIssues {
 		if iss.Severity == SeverityError {
-			r.telemetry.EmitPromptValidationIssue(ValidationIssueEvent{Issue: iss})
+			r.telemetry.EmitPromptValidationIssue(context.Background(), ValidationIssueEvent{Issue: iss})
 		}
 	}
 
@@ -281,13 +282,13 @@ func (r *defaultRegistry) Resolve(id string, ctx RuntimeContext) (string, error)
 	r.mu.RUnlock()
 	if !ok {
 		err := &NotFoundError{ID: id}
-		r.telemetry.EmitPromptResolveFailed(ResolveFailedEvent{ID: id, Paradigm: ctx.Paradigm, Error: err.Error()})
+		r.telemetry.EmitPromptResolveFailed(context.Background(), ResolveFailedEvent{ID: id, Paradigm: ctx.Paradigm, Error: err.Error()})
 		return "", err
 	}
 
 	result, _, err := resolvePrompt(cfg, ctx)
 	if err != nil {
-		r.telemetry.EmitPromptResolveFailed(ResolveFailedEvent{
+		r.telemetry.EmitPromptResolveFailed(context.Background(), ResolveFailedEvent{
 			ID:         id,
 			Paradigm:   ctx.Paradigm,
 			Error:      err.Error(),
@@ -296,7 +297,7 @@ func (r *defaultRegistry) Resolve(id string, ctx RuntimeContext) (string, error)
 		return "", fmt.Errorf("resolve %s: %w", id, err)
 	}
 
-	r.telemetry.EmitPromptResolved(ResolvedEvent{
+	r.telemetry.EmitPromptResolved(context.Background(), ResolvedEvent{
 		ID:           id,
 		Paradigm:     ctx.Paradigm,
 		OutputLength: len(result),

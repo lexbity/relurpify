@@ -382,28 +382,27 @@ func TestFullIntegration_AllFeaturesWorkTogether(t *testing.T) {
 
 // OSB Model Integration Tests.
 
-// TestFailureClassification_SecurityKind verifies [security] prefix produces FailureKind security
-func TestFailureClassification_SecurityKind(t *testing.T) {
+// TestFailureClassification verifies error-message classification into FailureKind values.
+func TestFailureClassification(t *testing.T) {
 	// Test cases for failure classification
 	tests := []struct {
 		name     string
 		execErr  error
-		caseErr  string
 		expected string
 	}{
-		{"empty error", nil, "", ""},
-		{"infra error", nil, "context deadline exceeded", infra},
-		{"assertion error", nil, "expected no file changes", "assertion"},
-		{"security error", nil, "[security] found 1 out-of-scope file writes", security},
-		{"agent error", nil, "agent returned unsuccessful result", "agent"},
-		{"exec error with infra", errors.New("connection refused"), "", infra},
+		{"empty error", nil, ""},
+		{"infra error", errors.New("context deadline exceeded"), infra},
+		{"assertion error", errors.New("expected no file changes"), "assertion"},
+		{"security error", errors.New("permission denied: /etc/passwd"), security},
+		{"access denied error", errors.New("access denied for tool bash"), security},
+		{"unknown error", errors.New("connection refused"), "assertion"},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			result := classifyCaseFailure(tc.execErr, tc.caseErr)
+			result := classifyFailure(tc.execErr)
 			if result != tc.expected {
-				t.Errorf("classifyCaseFailure() = %q, want %q", result, tc.expected)
+				t.Errorf("classifyFailure() = %q, want %q", result, tc.expected)
 			}
 		})
 	}

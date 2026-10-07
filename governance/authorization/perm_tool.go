@@ -8,6 +8,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
+	fwtelemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 // toolLike is the narrow tool surface needed by permission authorization.
@@ -56,7 +57,6 @@ func (m *PermissionManager) AuthorizeTool(ctx context.Context, agentID string, t
 			Resource: agentID,
 		}
 		m.log(ctx, agentID, desc, "tool_allowed_task_grant", map[string]any{"tags": t.Tags()})
-		m.emitPolicyDecision(ctx, desc, "allow", "task grant matched tool tags", map[string]any{"tags": t.Tags()})
 		return nil
 	}
 	requirements := t.Permissions()
@@ -67,19 +67,18 @@ func (m *PermissionManager) AuthorizeTool(ctx context.Context, agentID string, t
 	if len(undeclared) > 0 {
 		switch m.effectiveDefaultPolicy() {
 		case "deny":
-			m.emitPolicyDecision(ctx, permissions.PermissionDescriptor{
+			return m.deny(ctx, agentID, permissions.PermissionDescriptor{
 				Type:     permissions.PermissionTypeHITL,
 				Action:   fmt.Sprintf("tool:%s", t.Name()),
 				Resource: agentID,
-			}, "deny", "tool exceeds declared permissions", map[string]any{"undeclared": undeclared})
-			return fmt.Errorf("tool %s exceeds agent permissions: %s", t.Name(), strings.Join(undeclared, "; "))
+			}, "tool exceeds declared permissions")
 		default: // "ask"
-			m.emitPolicyDecision(ctx, permissions.PermissionDescriptor{
+			m.emitPolicyDecision(ctx, agentID, permissions.PermissionDescriptor{
 				Type:         permissions.PermissionTypeHITL,
 				Action:       fmt.Sprintf("tool:%s", t.Name()),
 				Resource:     agentID,
 				RequiresHITL: true,
-			}, "require_approval", "undeclared permissions require approval", map[string]any{"undeclared": undeclared})
+			}, fwtelemetry.PolicyEffectRequireApproval, "undeclared permissions require approval", map[string]any{"undeclared": undeclared})
 			if err := m.RequireApproval(ctx, agentID, permissions.PermissionDescriptor{
 				Type:         permissions.PermissionTypeHITL,
 				Action:       fmt.Sprintf("tool:%s", t.Name()),
@@ -97,7 +96,6 @@ func (m *PermissionManager) AuthorizeTool(ctx context.Context, agentID string, t
 		Resource: agentID,
 	}
 	m.log(ctx, agentID, desc, "tool_allowed", nil)
-	m.emitPolicyDecision(ctx, desc, "allow", "tool authorized", nil)
 	return nil
 }
 

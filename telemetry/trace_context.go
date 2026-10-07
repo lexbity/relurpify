@@ -8,11 +8,35 @@ import (
 )
 
 type traceContextKey struct{}
+type runContextKey struct{}
+type nodeContextKey struct{}
 
 // TraceContext carries the active trace and span identifiers through context.
 type TraceContext struct {
 	TraceID string
 	SpanID  string
+}
+
+// RunContext carries the turn-scoped correlation identifiers through context.
+type RunContext struct {
+	SessionID string
+	RunID     string
+	TraceID   string
+	AgentID   string
+}
+
+// Correlation is the resolved correlation field set for an emission site.
+type Correlation struct {
+	SessionID string
+	RunID     string
+	TraceID   string
+	AgentID   string
+	NodeID    string
+	SpanID    string
+	// TraceIDTurnScoped reports whether TraceID came from the turn-scoped
+	// RunContext (authoritative, overwrites) rather than the node-scoped
+	// TraceContext (fallback, never downgrades an event's TraceID).
+	TraceIDTurnScoped bool
 }
 
 // WithTraceContext stores trace context in the given context.
@@ -29,6 +53,72 @@ func TraceContextFromContext(ctx context.Context) (TraceContext, bool) {
 	return tc, ok
 }
 
+// WithRunContext stores run context in the given context.
+func WithRunContext(ctx context.Context, rc RunContext) context.Context {
+	return context.WithValue(ctx, runContextKey{}, rc)
+}
+
+// RunContextFromContext extracts run context, returning zero value when absent.
+func RunContextFromContext(ctx context.Context) (RunContext, bool) {
+	if ctx == nil {
+		return RunContext{}, false
+	}
+	rc, ok := ctx.Value(runContextKey{}).(RunContext)
+	return rc, ok
+}
+
+// WithNodeContext stores the ID of the node currently executing in the
+// given context. The graph runtime stamps the active node before invoking
+// it, so every downstream emitter — including the LLM instrumentation,
+// which cannot import the execution packages — can attribute its events
+// to the node that caused them.
+func WithNodeContext(ctx context.Context, nodeID string) context.Context {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return context.WithValue(ctx, nodeContextKey{}, nodeID)
+}
+
+// NodeIDFromContext extracts the executing node's ID, returning false
+// when no node context is present.
+func NodeIDFromContext(ctx context.Context) (string, bool) {
+	if ctx == nil {
+		return "", false
+	}
+	nodeID, ok := ctx.Value(nodeContextKey{}).(string)
+	return nodeID, ok
+}
+
+// HasTraceID reports whether a TraceID was resolved from any context carrier.
+func (c Correlation) HasTraceID() bool { return c.TraceID != "" }
+
+// CorrelationFromContext resolves all correlation identifiers carried by ctx.
+// It is the single source of truth for merge semantics; every stamper
+// (telemetry.StampCorrelation and layer-specific stamps downstream) consumes
+// it so merge rules cannot drift between event types.
+func CorrelationFromContext(ctx context.Context) Correlation {
+	var c Correlation
+	if rc, ok := RunContextFromContext(ctx); ok {
+		c.SessionID = rc.SessionID
+		c.RunID = rc.RunID
+		c.AgentID = rc.AgentID
+		if rc.TraceID != "" {
+			c.TraceID = rc.TraceID
+			c.TraceIDTurnScoped = true
+		}
+	}
+	if tc, ok := TraceContextFromContext(ctx); ok {
+		c.SpanID = tc.SpanID
+		if c.TraceID == "" {
+			c.TraceID = tc.TraceID
+		}
+	}
+	if nodeID, ok := NodeIDFromContext(ctx); ok {
+		c.NodeID = nodeID
+	}
+	return c
+}
+
 // NewTraceID generates a random trace ID.
 func NewTraceID() string {
 	return generateID(16) // 16 bytes = 32 hex chars
@@ -37,6 +127,16 @@ func NewTraceID() string {
 // NewSpanID generates a random span ID.
 func NewSpanID() string {
 	return generateID(8) // 8 bytes = 16 hex chars
+}
+
+// NewRunID generates a random run (turn) identifier.
+func NewRunID() string {
+	return generateID(12) // 12 bytes = 24 hex chars
+}
+
+// NewSessionID generates a random session identifier.
+func NewSessionID() string {
+	return generateID(12) // 12 bytes = 24 hex chars
 }
 
 func generateID(bytes int) string {

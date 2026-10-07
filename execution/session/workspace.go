@@ -561,15 +561,10 @@ func OpenWorkspace(ctx context.Context, cfg WorkspaceConfig) (_ *Workspace, err 
 		}
 	}
 
-	// Wire permission event logger if event telemetry is available.
-	if et, ok := tel.(interface {
-		EmitPermissionEvent(ctx context.Context, desc permissions.PermissionDescriptor, effect, reason string, fields map[string]any)
-	}); ok {
-		if registration.Permissions != nil {
-			registration.Permissions.SetEventLogger(func(ctx context.Context, desc permissions.PermissionDescriptor, effect, reason string, fields map[string]any) {
-				et.EmitPermissionEvent(ctx, desc, effect, reason, fields)
-			})
-		}
+	// Wire the decision sink: every policy evaluation and HITL lifecycle
+	// event flows into the operational telemetry (FR-5, FR-6).
+	if registration.Permissions != nil {
+		registration.Permissions.SetDecisionSink(telemetry.TelemetryDecisionSink{Telemetry: tel})
 	}
 
 	// Phase G: Bootstrap Agent Runtime

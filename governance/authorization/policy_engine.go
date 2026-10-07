@@ -132,7 +132,7 @@ func (e *ManifestPolicyEngine) emitDecision(ctx context.Context, req policy.Poli
 		fields["rule_id"] = decision.Rule.ID
 		fields["rule_name"] = decision.Rule.Name
 	}
-	e.manager.emitPolicyDecision(ctx, desc, decision.Effect, decision.Reason, fields)
+	e.manager.emitPolicyDecision(ctx, e.agentID, desc, decision.Effect, decision.Reason, fields)
 }
 
 func permissionActionForRequest(req policy.PolicyRequest) string {

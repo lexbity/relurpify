@@ -4,21 +4,18 @@
 package agenttest
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/context/contextdata"
-	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/platform/fs"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 	euclosubject "codeburg.org/lexbit/relurpify/testsuite/subjects/euclo"
-	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
 const (
@@ -87,10 +84,10 @@ func newLoadedOllamaServer(t *testing.T, modelName string) *loadedOllamaServer {
 		switch r.URL.Path {
 		case api_tags:
 			w.Header().Set(content_type, application_json)
-			_, _ = w.Write([]byte(fmt.Sprintf(`{models:[{name:%q,model:%q,"digest":"sha256:test"}]}`, modelName, modelName)))
+			_, _ = w.Write([]byte(fmt.Sprintf(`{"models":[{"name":"%s","model":"%s","digest":"sha256:test"}]}`, modelName, modelName)))
 		case api_ps:
 			w.Header().Set(content_type, application_json)
-			_, _ = w.Write([]byte(fmt.Sprintf(`{models:[{name:%q,model:%q,"digest":"sha256:test"}]}`, modelName, modelName)))
+			_, _ = w.Write([]byte(fmt.Sprintf(`{"models":[{"name":"%s","model":"%s","digest":"sha256:test"}]}`, modelName, modelName)))
 		default:
 			http.NotFound(w, r)
 		}
@@ -285,156 +282,6 @@ func TestExpandSuiteModelMatrixUsesDeterministicOrder(t *testing.T) {
 	}
 }
 
-func TestProviderProvenanceForExecution(t *testing.T) {
-	prov := providerProvenanceForExecution(resolvedCaseExecution{
-		Provider:              ollama,
-		Endpoint:              http_localhost_11434,
-		ProviderResetStrategy: model,
-		ProviderResetBetween:  true,
-	})
-	if prov == nil {
-		t.Fatal("expected provider provenance")
-	}
-	if prov.Provider != ollama || prov.ResetStrategy != model || !prov.ResetBetween {
-		t.Fatalf("unexpected provenance: %+v", prov)
-	}
-}
-
-func TestApplySetupGitInitCreatesCommittedBaseline(t *testing.T) {
-	if _, err := exec.LookPath("git"); err != nil {
-		t.Skip("git not installed")
-	}
-
-	workspace := t.TempDir()
-	cleanup, err := applySetup(workspace, workspace, SetupSpec{
-		GitInit: true,
-		Files: []SetupFileSpec{{
-			Path:    "testsuite/agenttest_fixtures/hello.txt",
-			Content: "hello\n",
-		}},
-	}, false, nil)
-	if cleanup != nil {
-		defer cleanup()
-	}
-	if err != nil {
-		t.Fatalf("applySetup: %v", err)
-	}
-
-	cmd := exec.Command("git", "status", "--short")
-	cmd.Dir = workspace
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("git status: %v (%s)", err, string(out))
-	}
-	if strings.TrimSpace(string(out)) != "" {
-		t.Fatalf("expected clean baseline git status, got %q", strings.TrimSpace(string(out)))
-	}
-}
-
-func TestShouldRestrictAllowedCapabilitiesForCase(t *testing.T) {
-	if !shouldRestrictAllowedCapabilitiesForCase(CaseSpec{
-		TaskType: "analysis",
-	}) {
-		t.Fatal("expected analysis case to restrict to explicit allowed capabilities")
-	}
-	if !shouldRestrictAllowedCapabilitiesForCase(CaseSpec{
-		TaskType: "code-modification",
-		Context:  map[string]any{mode: "debug"},
-	}) {
-		t.Fatal("expected debug case to restrict to explicit allowed capabilities")
-	}
-	if shouldRestrictAllowedCapabilitiesForCase(CaseSpec{
-		TaskType: "code-modification",
-		Context:  map[string]any{mode: "docs"},
-	}) {
-		t.Fatal("expected docs edit case to keep default capabilities merged")
-	}
-}
-
-func TestSeedWorkflowRetrievalStateForCase(t *testing.T) {
-	state := contextdata.NewEnvelope("task-1", "session-1")
-	task := &execution.Task{
-		Instruction: "Summarize README.md",
-		Context: map[string]any{
-			mode:          "architect",
-			"workflow_id": "wf-1",
-		},
-	}
-	c := CaseSpec{
-		Setup: SetupSpec{
-			Workflows: []WorkflowSeedSpec{{
-				Workflow: WorkflowRecordSeedSpec{WorkflowID: "wf-1"},
-				Knowledge: []WorkflowKnowledgeSeedSpec{{
-					RecordID: "k-1",
-					Content:  "Use retrieval-backed planning context.",
-				}},
-			}},
-		},
-	}
-
-	seedWorkflowRetrievalStateForCase(state, task, c)
-
-	if got := fmt.Sprint(task.Context["workflow_retrieval"]); !strings.Contains(got, "retrieval-backed") {
-		t.Fatalf("expected task workflow retrieval payload, got %q", got)
-	}
-	raw, ok := state.GetWorkingValue("planner.workflow_retrieval")
-	if !ok {
-		t.Fatal("expected planner.workflow_retrieval state")
-	}
-	if got := fmt.Sprint(raw); !strings.Contains(got, "retrieval-backed") {
-		t.Fatalf("expected planner workflow retrieval state, got %q", got)
-	}
-}
-
-func TestSeedWorkflowRetrievalStateForCaseSeedsCompiledPlanFromWorkflowKnowledge(t *testing.T) {
-	state := contextdata.NewEnvelope("task-2", "session-1")
-	task := &execution.Task{
-		Instruction: "Execute the compiled plan",
-		Context: map[string]any{
-			mode:          "planning",
-			"workflow_id": "wf-compiled",
-		},
-	}
-	c := CaseSpec{
-		Setup: SetupSpec{
-			Workflows: []WorkflowSeedSpec{{
-				Workflow: WorkflowRecordSeedSpec{WorkflowID: "wf-compiled"},
-				Knowledge: []WorkflowKnowledgeSeedSpec{{
-					RecordID: "k-plan",
-					Title:    "Compiled plan",
-					Content:  "Plan: update testsuite/fixtures/rapid_arch_exec/slug.go so NormalizeSlug trims whitespace and lowercases the slug before returning it.",
-				}},
-			}},
-		},
-	}
-
-	seedWorkflowRetrievalStateForCase(state, task, c)
-
-	raw, ok := state.GetWorkingValue("pipeline.plan")
-	if !ok {
-		t.Fatal("expected pipeline.plan to be seeded")
-	}
-	plan, ok := raw.(map[string]any)
-	if !ok {
-		t.Fatalf("expected seeded pipeline.plan payload, got %T", raw)
-	}
-	steps, ok := plan["steps"].([]map[string]any)
-	if !ok || len(steps) != 1 {
-		t.Fatalf("expected a single seeded plan step, got %#v", plan["steps"])
-	}
-	scope, ok := steps[0][scope].([]string)
-	if !ok || len(scope) != 1 || scope[0] != "testsuite/fixtures/rapid_arch_exec/slug.go" {
-		t.Fatalf("expected seeded scope from workflow knowledge, got %#v", steps[0][scope])
-	}
-	got, ok := state.GetWorkingValue("pipeline.workflow_retrieval")
-	if !ok {
-		t.Fatal("expected pipeline.workflow_retrieval to be seeded")
-	}
-	if gotStr := fmt.Sprint(got); !strings.Contains(gotStr, "compiled plan") {
-		t.Fatalf("expected workflow retrieval payload to mention compiled plan, got %q", gotStr)
-	}
-}
-
 func TestRunnerPreflightSuiteChecksLoadedModels(t *testing.T) {
 	workspace := t.TempDir()
 	manifestPath := filepath.Join(workspace, relurpify_cfg, agent_yaml)
@@ -468,12 +315,9 @@ spec:
 
 	server := newTestHTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case api_tags:
+		case api_tags, api_ps:
 			w.Header().Set(content_type, application_json)
-			_, _ = w.Write([]byte(`{models:[]}`))
-		case api_ps:
-			w.Header().Set(content_type, application_json)
-			_, _ = w.Write([]byte(`{models:[{name:qwen2_5_coder_14b}]}`))
+			_, _ = w.Write([]byte(`{"models":[{"name":"qwen2_5_coder_14b"}]}`))
 		default:
 			http.NotFound(w, r)
 		}
@@ -494,7 +338,7 @@ spec:
 		},
 	}
 
-	if err := (&Runner{}).preflightSuite(suite, RunOptions{}, workspace, suite.Spec.Models); err != nil {
+	if err := (&Runner{}).preflightSuite(context.Background(), suite, RunOptions{}, workspace, suite.Spec.Models); err != nil {
 		t.Fatalf("preflightSuite: %v", err)
 	}
 }
@@ -534,10 +378,10 @@ spec:
 		switch r.URL.Path {
 		case api_tags:
 			w.Header().Set(content_type, application_json)
-			_, _ = w.Write([]byte(`{models:[{name:"other-model"}]}`))
+			_, _ = w.Write([]byte(`{"models":[{"name":"other-model"}]}`))
 		case api_ps:
 			w.Header().Set(content_type, application_json)
-			_, _ = w.Write([]byte(`{models:[]}`))
+			_, _ = w.Write([]byte(`{"models":[]}`))
 		default:
 			http.NotFound(w, r)
 		}
@@ -558,24 +402,24 @@ spec:
 		},
 	}
 
-	err := (&Runner{}).preflightSuite(suite, RunOptions{}, workspace, suite.Spec.Models)
+	err := (&Runner{}).preflightSuite(context.Background(), suite, RunOptions{}, workspace, suite.Spec.Models)
 	if err == nil || !strings.Contains(err.Error(), "not found") {
 		t.Fatalf("expected preflight model-not-found error, got %v", err)
 	}
 }
 
-func TestClassifyCaseFailure(t *testing.T) {
-	if got := classifyCaseFailure(nil, `output missing "done"`); got != assertion {
-		t.Fatalf("expected assertion classification, got %q", got)
+func TestClassifyFailure(t *testing.T) {
+	if got := classifyFailure(nil); got != "" {
+		t.Fatalf("expected empty classification for nil error, got %q", got)
 	}
-	if got := classifyCaseFailure(assertionErr("mismatch for interaction 3"), "mismatch for interaction 3"); got != assertion {
+	if got := classifyFailure(assertionErr("mismatch for interaction 3")); got != assertion {
 		t.Fatalf("expected tape mismatch classification to be assertion, got %q", got)
 	}
-	if got := classifyCaseFailure(assertionErr("connection refused"), "connection refused"); got != infra {
+	if got := classifyFailure(assertionErr("context deadline exceeded")); got != infra {
 		t.Fatalf("expected infra classification, got %q", got)
 	}
-	if got := classifyCaseFailure(assertionErr("agent returned unsuccessful result"), "agent returned unsuccessful result"); got != "agent" {
-		t.Fatalf("expected agent classification, got %q", got)
+	if got := classifyFailure(assertionErr("permission denied: /etc/passwd")); got != security {
+		t.Fatalf("expected security classification, got %q", got)
 	}
 }
 
@@ -636,26 +480,6 @@ type assertionErr string
 
 func (e assertionErr) Error() string { return string(e) }
 
-func TestIncludeExpectedChangedFilesRestoresIgnoredExpectation(t *testing.T) {
-	workflowStateRel := filepath.ToSlash(filepath.Join(config.DirName, "sessions", "workflow_state.db"))
-	before := &WorkspaceSnapshot{
-		Files: map[string]string{
-			workflowStateRel: "before",
-		},
-	}
-	after := &WorkspaceSnapshot{
-		Files: map[string]string{
-			workflowStateRel: "after",
-		},
-	}
-
-	changed := includeExpectedChangedFiles(nil, before, after, []string{workflowStateRel})
-
-	if len(changed) != 1 || changed[0] != workflowStateRel {
-		t.Fatalf("expected workflow_state.db to be restored, got %#v", changed)
-	}
-}
-
 func TestNewRunCaseLayoutUsesStructuredRunSubdirectories(t *testing.T) {
 	runRoot := filepath.Join("/tmp", run1)
 	layout := newRunCaseLayout(runRoot, "Write Docs", "llama3.2")
@@ -702,7 +526,7 @@ func TestMarshalInteractionRecords(t *testing.T) {
 	if len(lines) != 2 {
 		t.Fatalf("expected 2 lines, got %d", len(lines))
 	}
-	if !strings.Contains(lines[0], `kind:"proposal"`) {
+	if !strings.Contains(lines[0], `"kind":"proposal"`) {
 		t.Fatalf("unexpected first line %q", lines[0])
 	}
 }

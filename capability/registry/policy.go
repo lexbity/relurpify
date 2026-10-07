@@ -7,6 +7,7 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/descriptor"
 
 	"codeburg.org/lexbit/relurpify/capability/ports"
+	fwtelemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 // AddPrecheck appends a pre-invocation guard to the registry.
@@ -37,6 +38,28 @@ func (r *CapabilityRegistry) SetGuidanceBroker(broker RecoveryGuidanceBroker) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.guidanceBroker = broker
+}
+
+// emitDoomLoopDetected forwards a precheck doom-loop hit as a structured
+// decision event (FR-7). The raw evidence keys are omitted — they are JSON
+// hashes of the raw invocation arguments, which may contain secrets that
+// telemetry must not carry (NFR-7); kind, capability, and call count are the
+// forensic join keys instead.
+func (r *CapabilityRegistry) emitDoomLoopDetected(ctx context.Context, desc descriptor.CapabilityDescriptor, doomErr DoomLoopError) {
+	if r == nil {
+		return
+	}
+	r.mu.RLock()
+	tel := r.telemetry
+	r.mu.RUnlock()
+	if tel == nil {
+		return
+	}
+	fwtelemetry.TelemetryDecisionSink{Telemetry: tel}.DoomLoopDetected(ctx, fwtelemetry.DoomLoopSignal{
+		Kind:         string(doomErr.Kind),
+		CapabilityID: desc.ID,
+		CallCount:    doomErr.CallCount,
+	})
 }
 
 func (r *CapabilityRegistry) runPrechecks(desc descriptor.CapabilityDescriptor, args map[string]any) error {

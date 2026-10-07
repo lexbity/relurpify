@@ -7,9 +7,61 @@ import (
 	"strings"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/model"
 	"codeburg.org/lexbit/relurpify/platform/observability"
+	"codeburg.org/lexbit/relurpify/telemetry"
 )
+
+// stampObservabilityCorrelation populates every correlation field on an
+// observability.Event from ctx — including TaskID. It is the single
+// sanctioned way to correlate LLM events (NFR-6): emitters must never
+// construct correlation fields by hand, and must never smuggle them
+// through Metadata.
+//
+// Merge semantics come from telemetry.CorrelationFromContext (single source
+// of truth, mirroring telemetry.StampCorrelation). The fallbacks resolved
+// here are for the fields only the envelope knows — SessionID, NodeID, and
+// TaskID — because the envelope's private context key is only reachable
+// via the contextdata accessor, which keeps the platform/llm → execution
+// import cycle broken.
+func stampObservabilityCorrelation(ctx context.Context, ev *observability.Event) {
+	if ev == nil {
+		return
+	}
+	c := telemetry.CorrelationFromContext(ctx)
+	if c.SessionID != "" {
+		ev.SessionID = c.SessionID
+	}
+	if c.RunID != "" {
+		ev.RunID = c.RunID
+	}
+	if c.TraceIDTurnScoped {
+		ev.TraceID = c.TraceID
+	} else if c.TraceID != "" && ev.TraceID == "" {
+		ev.TraceID = c.TraceID
+	}
+	if c.AgentID != "" {
+		ev.AgentID = c.AgentID
+	}
+	if c.SpanID != "" {
+		ev.SpanID = c.SpanID
+	}
+	if c.NodeID != "" && ev.NodeID == "" {
+		ev.NodeID = c.NodeID
+	}
+	if env, ok := contextdata.EnvelopeFrom(ctx); ok {
+		if ev.NodeID == "" && env.NodeID != "" {
+			ev.NodeID = env.NodeID
+		}
+		if ev.SessionID == "" && env.SessionID != "" {
+			ev.SessionID = env.SessionID
+		}
+		if ev.TaskID == "" && env.TaskID != "" {
+			ev.TaskID = env.TaskID
+		}
+	}
+}
 
 // ProfiledModel is re-exported from contracts
 type ProfiledModel = model.ProfiledModel
@@ -165,7 +217,6 @@ func (m *InstrumentedModel) emitPrompt(ctx context.Context, kind string, base ma
 	if m == nil || m.Telemetry == nil {
 		return
 	}
-	taskID, taskMeta := taskInfo(ctx)
 	metadata := map[string]any{
 		"kind": kind,
 	}
@@ -175,21 +226,19 @@ func (m *InstrumentedModel) emitPrompt(ctx context.Context, kind string, base ma
 	for k, v := range base {
 		metadata[k] = v
 	}
-	for k, v := range taskMeta {
-		metadata[k] = v
-	}
 	if debug {
 		for k, v := range debugFields {
 			metadata[k] = v
 		}
 	}
-	m.Telemetry.Emit(observability.Event{
+	ev := observability.Event{
 		Type:      observability.EventLLMPrompt,
-		TaskID:    taskID,
 		Timestamp: time.Now().UTC(),
 		Message:   fmt.Sprintf("llm %s prompt", kind),
 		Metadata:  metadata,
-	})
+	}
+	stampObservabilityCorrelation(ctx, &ev)
+	m.Telemetry.Emit(ev)
 }
 
 func (m *InstrumentedModel) emitResponse(ctx context.Context, kind string, resp *LLMResponse, err error) {
@@ -199,20 +248,17 @@ func (m *InstrumentedModel) emitResponse(ctx context.Context, kind string, resp 
 	if obs := observability.UsageObserverFromContext(ctx); obs != nil && resp != nil {
 		obs.RecordTokenUsage(observability.TokenUsage(resp.Usage))
 		if snapshot, ok := obs.ConsumeResetNotice(); ok && m.Telemetry != nil {
-			taskID, taskMeta := taskInfo(ctx)
 			metadata := map[string]any{
 				"budget_snapshot": snapshot,
 			}
-			for k, v := range taskMeta {
-				metadata[k] = v
-			}
-			m.Telemetry.Emit(observability.Event{
+			ev := observability.Event{
 				Type:      observability.EventSessionResetRequired,
-				TaskID:    taskID,
 				Timestamp: time.Now().UTC(),
 				Message:   "session reset required",
 				Metadata:  metadata,
-			})
+			}
+			stampObservabilityCorrelation(ctx, &ev)
+			m.Telemetry.Emit(ev)
 		}
 	}
 	if obs := observability.SnapshotObserverFromContext(ctx); obs != nil {
@@ -228,15 +274,11 @@ func (m *InstrumentedModel) emitResponse(ctx context.Context, kind string, resp 
 	if m.Telemetry == nil {
 		return
 	}
-	taskID, taskMeta := taskInfo(ctx)
 	metadata := map[string]any{
 		"kind": kind,
 	}
 	if m.Inner != nil {
 		metadata["tool_calling_mode"] = ToolCallingModeLabel(m.Inner)
-	}
-	for k, v := range taskMeta {
-		metadata[k] = v
 	}
 	if resp != nil {
 		metadata["finish_reason"] = resp.FinishReason
@@ -252,13 +294,14 @@ func (m *InstrumentedModel) emitResponse(ctx context.Context, kind string, resp 
 	if err != nil {
 		metadata["error"] = err.Error()
 	}
-	m.Telemetry.Emit(observability.Event{
+	ev := observability.Event{
 		Type:      observability.EventLLMResponse,
-		TaskID:    taskID,
 		Timestamp: time.Now().UTC(),
 		Message:   fmt.Sprintf("llm %s response", kind),
 		Metadata:  metadata,
-	})
+	}
+	stampObservabilityCorrelation(ctx, &ev)
+	m.Telemetry.Emit(ev)
 }
 
 func modelFromOptions(options *LLMOptions) string {
@@ -266,12 +309,6 @@ func modelFromOptions(options *LLMOptions) string {
 		return options.Model
 	}
 	return ""
-}
-
-func taskInfo(ctx context.Context) (string, map[string]any) {
-	// Task context extraction requires framework/core.TaskContextFrom
-	// For now, return empty values to break the import cycle
-	return "", nil
 }
 
 func clip(s string, max int) string {

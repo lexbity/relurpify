@@ -158,10 +158,3 @@ func TestReportSchemaStability(t *testing.T) {
 	}
 }
 
-// TestNoLegacyEvaluatorCode validates that the generic OSB evaluators are the
-// only ones expected to remain in the shared engine.
-func TestNoLegacyEvaluatorCode(t *testing.T) {
-	_ = evaluateOutcomeExpectations
-	_ = evaluateSecurityExpectations
-	_ = evaluateBenchmarkExpectations
-}

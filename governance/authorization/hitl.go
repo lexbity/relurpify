@@ -9,6 +9,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/governance/policy"
+	fwtelemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 type HITLTimeoutBehavior string
@@ -54,20 +55,35 @@ type HITLBroker struct {
 	subSeq      int
 	clock       func() time.Time
 	AutoApprove bool
+	decisions   fwtelemetry.DecisionSink
 }
 
-// NewHITLBroker builds a broker with the supplied timeout.
-func NewHITLBroker(timeout time.Duration) *HITLBroker {
+// NewHITLBroker builds a broker with the supplied timeout and the decision
+// sink that receives the structured HITL lifecycle forensics (FR-6).
+func NewHITLBroker(timeout time.Duration, decisions fwtelemetry.DecisionSink) *HITLBroker {
 	if timeout == 0 {
 		timeout = 5 * time.Minute
 	}
 	return &HITLBroker{
-		timeout:  timeout,
-		requests: make(map[string]*PermissionRequest),
-		waiters:  make(map[string]chan PermissionDecision),
-		subs:     make(map[int]chan HITLEvent),
-		clock:    time.Now,
+		timeout:   timeout,
+		requests:  make(map[string]*PermissionRequest),
+		waiters:   make(map[string]chan PermissionDecision),
+		subs:      make(map[int]chan HITLEvent),
+		clock:     time.Now,
+		decisions: decisions,
 	}
+}
+
+// SetDecisionSink re-wires decision forensics after construction so the
+// composition root can attach the full sink multiplex once telemetry is
+// assembled (the broker is built before that point).
+func (h *HITLBroker) SetDecisionSink(sink fwtelemetry.DecisionSink) {
+	if h == nil {
+		return
+	}
+	h.mu.Lock()
+	h.decisions = sink
+	h.mu.Unlock()
 }
 
 // HITLEventType describes the lifecycle stage of a HITL permission request.
@@ -129,6 +145,45 @@ func (h *HITLBroker) broadcast(event HITLEvent) {
 	}
 }
 
+// emitRequested forwards a newly registered request to the decision sink.
+func (h *HITLBroker) emitRequested(ctx context.Context, req *PermissionRequest) {
+	if h.decisions == nil || req == nil {
+		return
+	}
+	h.decisions.HITLRequested(ctx, fwtelemetry.HITLRequest{
+		RequestID:     req.ID,
+		Action:        req.Permission.Action,
+		Justification: req.Justification,
+		RequiresHITL:  true,
+	})
+}
+
+// emitResolved forwards a resolution to the decision sink. A nil decision
+// means the request expired without a human decision.
+func (h *HITLBroker) emitResolved(ctx context.Context, req *PermissionRequest, decision *PermissionDecision) {
+	if h.decisions == nil || req == nil {
+		return
+	}
+	if decision == nil {
+		h.decisions.HITLResolved(ctx, fwtelemetry.HITLResolution{
+			RequestID: req.ID,
+			Outcome:   "expired",
+		})
+		return
+	}
+	outcome := "denied"
+	approvedBy := decision.ApprovedBy
+	if decision.Approved {
+		outcome = "approved"
+	}
+	h.decisions.HITLResolved(ctx, fwtelemetry.HITLResolution{
+		RequestID:  req.ID,
+		Outcome:    outcome,
+		ApprovedBy: approvedBy,
+		Reason:     decision.Reason,
+	})
+}
+
 // RequestPermission registers a request and waits for approval when possible.
 func (h *HITLBroker) RequestPermission(ctx context.Context, req PermissionRequest) (*PermissionGrant, error) {
 	if req.Permission.Action == "" {
@@ -155,6 +210,7 @@ func (h *HITLBroker) RequestPermission(ctx context.Context, req PermissionReques
 	h.requests[req.ID] = &req
 	h.waiters[req.ID] = waitCh
 	h.mu.Unlock()
+	h.emitRequested(ctx, &req)
 	h.broadcast(HITLEvent{Type: HITLEventRequested, Request: &req})
 	timeout := h.timeout
 	if req.Timeout > 0 {
@@ -174,6 +230,7 @@ func (h *HITLBroker) RequestPermission(ctx context.Context, req PermissionReques
 			h.mu.Unlock()
 		}
 		defer deleteFn()
+		h.emitResolved(ctx, &req, &decision)
 		if !decision.Approved {
 			h.broadcast(HITLEvent{Type: HITLEventResolved, Request: &req, Decision: &decision})
 			return nil, fmt.Errorf("permission denied: %s", decision.Reason)
@@ -194,6 +251,7 @@ func (h *HITLBroker) RequestPermission(ctx context.Context, req PermissionReques
 		delete(h.requests, req.ID)
 		delete(h.waiters, req.ID)
 		h.mu.Unlock()
+		h.emitResolved(ctx, &req, nil)
 		h.broadcast(HITLEvent{Type: HITLEventExpired, Request: &req, Error: ctx.Err().Error()})
 		return nil, ctx.Err()
 	case <-time.After(timeout):
@@ -201,6 +259,7 @@ func (h *HITLBroker) RequestPermission(ctx context.Context, req PermissionReques
 		delete(h.requests, req.ID)
 		delete(h.waiters, req.ID)
 		h.mu.Unlock()
+		h.emitResolved(ctx, &req, nil)
 		h.broadcast(HITLEvent{Type: HITLEventExpired, Request: &req, Error: "timed out"})
 		if timeoutBehavior == HITLTimeoutBehaviorSkip {
 			return &PermissionGrant{
@@ -218,7 +277,7 @@ func (h *HITLBroker) RequestPermission(ctx context.Context, req PermissionReques
 }
 
 // SubmitAsync registers a request without blocking.
-func (h *HITLBroker) SubmitAsync(req PermissionRequest) (string, error) {
+func (h *HITLBroker) SubmitAsync(ctx context.Context, req PermissionRequest) (string, error) {
 	req.ID = fmt.Sprintf("hitl-%d", h.clock().UnixNano())
 	req.RequestedAt = h.clock()
 	req.State = "pending"
@@ -228,57 +287,77 @@ func (h *HITLBroker) SubmitAsync(req PermissionRequest) (string, error) {
 		return "", fmt.Errorf("request %s already registered", req.ID)
 	}
 	h.requests[req.ID] = &req
-	h.waiters[req.ID] = make(chan PermissionDecision, 1)
 	h.mu.Unlock()
+	h.emitRequested(ctx, &req)
 	h.broadcast(HITLEvent{Type: HITLEventRequested, Request: &req})
 	return req.ID, nil
 }
 
 // Approve asynchronously approves a request.
 func (h *HITLBroker) Approve(decision PermissionDecision) error {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	req, ok := h.requests[decision.RequestID]
-	if !ok {
-		return fmt.Errorf("request %s not found", decision.RequestID)
-	}
-	req.State = "approved"
-	if decision.Scope == "" {
-		decision.Scope = req.Scope
-	}
-	if decision.ExpiresAt.IsZero() && decision.Scope == policy.GrantScopeOneTime {
-		decision.ExpiresAt = h.clock().Add(time.Minute)
-	}
-	if waiter, ok := h.waiters[decision.RequestID]; ok {
-		waiter <- decision
-		close(waiter)
-	}
-	reqCopy := *req
-	decisionCopy := decision
-	go h.broadcast(HITLEvent{Type: HITLEventResolved, Request: &reqCopy, Decision: &decisionCopy})
-	return nil
+	return h.resolve(decision.RequestID, true, decision)
 }
 
 // Deny rejects a request.
 func (h *HITLBroker) Deny(requestID, reason string) error {
+	return h.resolve(requestID, false, PermissionDecision{
+		RequestID: requestID,
+		Approved:  false,
+		Reason:    reason,
+	})
+}
+
+// resolve is the single resolution path for Approve/Deny. It is the sole
+// ownershp point for a request's waiter channel: the waiter is removed from
+// the map under lock, so a duplicate resolution can never double-send (or
+// send on a closed channel, which would panic while holding the broker's
+// mutex). The decision sink is notified after the lock is released (NFR-3).
+func (h *HITLBroker) resolve(requestID string, approved bool, decision PermissionDecision) error {
 	h.mu.Lock()
-	defer h.mu.Unlock()
 	req, ok := h.requests[requestID]
 	if !ok {
+		h.mu.Unlock()
 		return fmt.Errorf("request %s not found", requestID)
 	}
-	req.State = "denied"
-	if waiter, ok := h.waiters[requestID]; ok {
-		waiter <- PermissionDecision{
-			RequestID: requestID,
-			Approved:  false,
-			Reason:    reason,
-		}
-		close(waiter)
+	if req.State != "pending" {
+		h.mu.Unlock()
+		return fmt.Errorf("request %s already %s", requestID, req.State)
 	}
+	req.State = "resolved"
+	if approved {
+		req.State = "approved"
+	} else {
+		req.State = "denied"
+	}
+	if decision.Scope == "" && approved {
+		decision.Scope = req.Scope
+	}
+	if approved && decision.ExpiresAt.IsZero() && decision.Scope == policy.GrantScopeOneTime {
+		decision.ExpiresAt = h.clock().Add(time.Minute)
+	}
+	waiter, hasWaiter := h.waiters[requestID]
+	delete(h.waiters, requestID)
 	reqCopy := *req
-	decision := PermissionDecision{RequestID: requestID, Approved: false, Reason: reason}
-	go h.broadcast(HITLEvent{Type: HITLEventResolved, Request: &reqCopy, Decision: &decision})
+	decisionCopy := decision
+	h.mu.Unlock()
+
+	if hasWaiter {
+		// The waiter was popped under lock: this goroutine is its only
+		// deliverer and the channel is never closed, so this send is safe.
+		waiter <- decisionCopy
+		// The blocking select in RequestPermission consumes the decision
+		// and emits the resolution telemetry from the request's own
+		// context; this path does not emit to avoid duplicate records.
+		return nil
+	}
+	// Async-only resolution (SubmitAsync): no blocking waiter forwards it
+	// to RequestPermission's select, so this is the sole emission point
+	// for the resolution event. The request record is consumed here.
+	h.mu.Lock()
+	delete(h.requests, requestID)
+	h.mu.Unlock()
+	h.emitResolved(context.Background(), &reqCopy, &decisionCopy)
+	go h.broadcast(HITLEvent{Type: HITLEventResolved, Request: &reqCopy, Decision: &decisionCopy})
 	return nil
 }
 

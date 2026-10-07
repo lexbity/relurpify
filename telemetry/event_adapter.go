@@ -38,32 +38,6 @@ func (e EventTelemetry) Emit(ev Event) {
 	}})
 }
 
-// EmitHITLEvent records a human-in-the-loop lifecycle event. resolved selects
-// the resolved-vs-requested framework event type; ev is marshaled as-is. The
-// concrete HITL event type is owned by the authorization domain; telemetry stays
-// decoupled from it so the dependency points one way (authorization ->
-// telemetry, never the reverse).
-func (e EventTelemetry) EmitHITLEvent(ctx context.Context, resolved bool, ev any) {
-	if e.Log == nil {
-		return
-	}
-	payload, err := json.Marshal(ev)
-	if err != nil {
-		return
-	}
-	eventType := evt.EventHITLRequested
-	if resolved {
-		eventType = evt.EventHITLResolved
-	}
-	_, _ = e.Log.Append(ctx, e.partition(), []evt.FrameworkEvent{{
-		Timestamp: e.now().UTC(),
-		Type:      eventType,
-		Payload:   payload,
-		Actor:     e.actor(),
-		Partition: e.partition(),
-	}})
-}
-
 func (e EventTelemetry) partition() string {
 	if e.Partition == "" {
 		return "local"

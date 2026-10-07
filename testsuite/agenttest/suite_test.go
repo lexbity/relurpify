@@ -23,6 +23,7 @@ const (
 	go_test                  = "go test"
 	relurpify_v1alpha1       = "relurpify/v1alpha1"
 	summarize                = "summarize"
+	qwen2_5_coder_14b        = "qwen2_5_coder_14b"
 )
 
 func TestSuiteValidateDefaultsDerivedWorkspaceSettings(t *testing.T) {

@@ -80,7 +80,7 @@ func TestGateNodeDeny(t *testing.T) {
 }
 
 func TestGateNodeAskWithBroker(t *testing.T) {
-	broker := authorization.NewHITLBroker(250 * time.Millisecond)
+	broker := authorization.NewHITLBroker(250*time.Millisecond, nil)
 	node := NewGateNode("gate1", NewEvaluator()).WithHITLBroker(broker).WithTelemetry(&gateTelemetrySink{})
 	env := contextdata.NewEnvelope("task-123", "session-456")
 	contextdata.SetTyped(env, policyDecisionKey, &PolicyDecision{

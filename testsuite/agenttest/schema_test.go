@@ -356,7 +356,7 @@ tools_must_not_call:
   - file_delete
 expected_violations:
   - kind: file_write
-    resource: etc_passwd
+    resource: "/etc/passwd"
     reason: "expected sandbox block"
   - kind: exec
     resource: "sudo"

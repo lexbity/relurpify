@@ -1,5 +1,7 @@
 package model
 
+import "context"
+
 // ModelBackend is the narrow model backend surface consumed by execution
 // and workspace session code. Each backend wraps a LanguageModel with
 // lifecycle and debug controls.
@@ -10,8 +12,9 @@ type ModelBackend interface {
 }
 
 // Telemetry is the narrow event sink surface consumed by model wrappers.
+// All methods accept a context for correlation stamping.
 type Telemetry interface {
-	Emit(event any)
+	Emit(ctx context.Context, event any)
 }
 
 // ModelFactory wraps a backend model with app-level instrumentation and

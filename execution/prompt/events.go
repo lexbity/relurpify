@@ -1,13 +1,16 @@
 package prompt
 
+import "context"
+
 // PromptTelemetry is the telemetry sink for prompt resolution events.
 // NewRegistry uses a no-op sink. NewRegistryWithTelemetry wires the real sink.
+// All methods accept a context for correlation stamping.
 type PromptTelemetry interface {
-	EmitPromptResolved(e ResolvedEvent)
-	EmitPromptResolveFailed(e ResolveFailedEvent)
-	EmitPromptContextMissing(e ContextMissingEvent)
-	EmitPromptValidationIssue(e ValidationIssueEvent)
-	EmitPromptProviderFailed(e ProviderFailedEvent)
+	EmitPromptResolved(ctx context.Context, e ResolvedEvent)
+	EmitPromptResolveFailed(ctx context.Context, e ResolveFailedEvent)
+	EmitPromptContextMissing(ctx context.Context, e ContextMissingEvent)
+	EmitPromptValidationIssue(ctx context.Context, e ValidationIssueEvent)
+	EmitPromptProviderFailed(ctx context.Context, e ProviderFailedEvent)
 }
 
 // ResolvedEvent is emitted after a successful prompt resolution.
@@ -56,8 +59,8 @@ type ProviderFailedEvent struct {
 // noopTelemetry is the default no-op sink used when no telemetry is provided.
 type noopTelemetry struct{}
 
-func (noopTelemetry) EmitPromptResolved(ResolvedEvent)               {}
-func (noopTelemetry) EmitPromptResolveFailed(ResolveFailedEvent)     {}
-func (noopTelemetry) EmitPromptContextMissing(ContextMissingEvent)   {}
-func (noopTelemetry) EmitPromptValidationIssue(ValidationIssueEvent) {}
-func (noopTelemetry) EmitPromptProviderFailed(ProviderFailedEvent)   {}
+func (noopTelemetry) EmitPromptResolved(context.Context, ResolvedEvent)               {}
+func (noopTelemetry) EmitPromptResolveFailed(context.Context, ResolveFailedEvent)     {}
+func (noopTelemetry) EmitPromptContextMissing(context.Context, ContextMissingEvent)   {}
+func (noopTelemetry) EmitPromptValidationIssue(context.Context, ValidationIssueEvent) {}
+func (noopTelemetry) EmitPromptProviderFailed(context.Context, ProviderFailedEvent)   {}

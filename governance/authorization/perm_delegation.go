@@ -10,6 +10,7 @@ import (
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
 	governanceports "codeburg.org/lexbit/relurpify/governance/ports"
+	fwtelemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 // hitlRateMax is the maximum HITL requests per key within hitlRateWindow before
@@ -175,7 +176,7 @@ func (m *PermissionManager) RequireApproval(ctx context.Context, agentID string,
 	}
 	m.mu.Unlock()
 	if err := m.checkHITLRateLimit(key); err != nil {
-		m.emitPolicyDecision(ctx, desc, "deny", err.Error(), nil)
+		m.emitPolicyDecision(ctx, agentID, desc, fwtelemetry.PolicyEffectDeny, err.Error(), nil)
 		return err
 	}
 	if m.hitl == nil {
@@ -203,30 +204,66 @@ func (m *PermissionManager) RequireApproval(ctx context.Context, agentID string,
 	return nil
 }
 
+// decisionEffectFor maps an audit result spelling onto the canonical policy
+// effect vocabulary (FR-5). Unknown result strings surface as "unknown" in
+// telemetry rather than being silently misreported as allow or deny.
+func decisionEffectFor(result string) string {
+	switch result {
+	case "denied":
+		return fwtelemetry.PolicyEffectDeny
+	case "granted", "tool_allowed", "tool_allowed_task_grant":
+		return fwtelemetry.PolicyEffectAllow
+	default:
+		return "unknown"
+	}
+}
+
 // deny records an audit event and returns a structured error describing why an
-// action was blocked.
+// action was blocked. The telemetry decision is emitted by log() with the
+// shared effect mapping.
 func (m *PermissionManager) deny(ctx context.Context, agentID string, desc permissions.PermissionDescriptor, reason string) error {
 	m.log(ctx, agentID, desc, "denied", map[string]any{
 		"reason": reason,
 	})
-	m.emitPolicyDecision(ctx, desc, "deny", reason, nil)
 	return &permissions.PermissionDeniedError{
 		Descriptor: desc,
 		Message:    reason,
 	}
 }
 
-func (m *PermissionManager) emitPolicyDecision(ctx context.Context, desc permissions.PermissionDescriptor, effect, reason string, fields map[string]any) {
+// emitPolicyDecision forwards one policy evaluation to the decision sink.
+// agentID is the acting principal and becomes both the event's Actor and the
+// sink-neutral actor.
+func (m *PermissionManager) emitPolicyDecision(ctx context.Context, agentID string, desc permissions.PermissionDescriptor, effect, reason string, fields map[string]any) {
 	if m == nil {
 		return
 	}
 	m.mu.RLock()
-	logger := m.eventLogger
+	sink := m.decisions
 	m.mu.RUnlock()
-	if logger == nil {
+	if sink == nil {
 		return
 	}
-	logger(ctx, desc, effect, reason, fields)
+	sink.PolicyEvaluated(ctx, fwtelemetry.PolicyDecision{
+		Rule:   ruleIDFromFields(fields),
+		Effect: effect,
+		Reason: reason,
+		Actor:  agentID,
+		Target: desc.Action,
+		Fields: fields,
+	})
+}
+
+// ruleIDFromFields extracts the matched rule identifier carried by engine
+// decisions (rule_id/rule_name fields).
+func ruleIDFromFields(fields map[string]any) string {
+	if fields == nil {
+		return ""
+	}
+	if id, ok := fields["rule_id"].(string); ok {
+		return id
+	}
+	return ""
 }
 
 // sensitivePathPatterns are substrings that indicate a file path may contain
@@ -260,20 +297,30 @@ func redactSensitivePath(path string) string {
 // log forwards permission decisions to the configured audit sink to provide a
 // tamper-evident trail of runtime behavior.
 func (m *PermissionManager) log(ctx context.Context, agentID string, desc permissions.PermissionDescriptor, result string, fields map[string]any) {
-	if m.audit == nil {
-		return
+	if m.audit != nil {
+		_ = m.audit.Log(ctx, policy.AuditRecord{
+			Timestamp:   time.Now().UTC(),
+			AgentID:     agentID,
+			Action:      desc.Action,
+			Type:        string(desc.Type),
+			Permission:  redactSensitivePath(desc.Resource),
+			Result:      result,
+			Metadata:    redactMetadataMap(fields),
+			Correlation: agentID,
+		})
 	}
-	record := policy.AuditRecord{
-		Timestamp:   time.Now().UTC(),
-		AgentID:     agentID,
-		Action:      desc.Action,
-		Type:        string(desc.Type),
-		Permission:  redactSensitivePath(desc.Resource),
-		Result:      result,
-		Metadata:    redactMetadataMap(fields),
-		Correlation: agentID,
+	m.emitPolicyDecision(ctx, agentID, desc, decisionEffectFor(result), reasonFor(result, fields), fields)
+}
+
+// reasonFor derives the emitted reason: an explicit reason field when the
+// caller supplied one, otherwise the audit result spelling itself.
+func reasonFor(result string, fields map[string]any) string {
+	if fields != nil {
+		if reason, ok := fields["reason"].(string); ok && reason != "" {
+			return reason
+		}
 	}
-	_ = m.audit.Log(ctx, record)
+	return result
 }
 
 // CheckCapability verifies capability usage.

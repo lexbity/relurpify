@@ -130,14 +130,17 @@ func (g *Graph) SetMaxNodeVisits(limit int) {
 }
 
 // emit sends telemetry events when a sink is configured; a no-op otherwise.
-func (g *Graph) emit(event telemetry.Event) {
+// ctx carries the turn's correlation identifiers, which are stamped onto the
+// event before it reaches the sink.
+func (g *Graph) emit(ctx context.Context, event telemetry.Event) {
 	g.mu.RLock()
-	telemetry := g.telemetry
+	sink := g.telemetry
 	g.mu.RUnlock()
-	if telemetry == nil {
+	if sink == nil {
 		return
 	}
-	telemetry.Emit(event)
+	telemetry.StampCorrelation(ctx, &event)
+	sink.Emit(event)
 }
 
 // extractTaskID fetches the current task identifier from the execution state so
@@ -253,7 +256,7 @@ func (g *Graph) Execute(ctx context.Context, env *contextdata.Envelope) (*execut
 
 	taskID := g.extractTaskID(env)
 	taskMeta := g.extractTaskMeta(env)
-	g.emit(telemetry.Event{
+	g.emit(ctx, telemetry.Event{
 		Type:      telemetry.EventGraphStart,
 		TaskID:    taskID,
 		Timestamp: time.Now().UTC(),
@@ -265,7 +268,7 @@ func (g *Graph) Execute(ctx context.Context, env *contextdata.Envelope) (*execut
 		if execErr != nil {
 			status = "error"
 		}
-		g.emit(telemetry.Event{
+		g.emit(ctx, telemetry.Event{
 			Type:      telemetry.EventGraphFinish,
 			TaskID:    taskID,
 			Timestamp: time.Now().UTC(),
@@ -315,7 +318,7 @@ func (g *Graph) run(ctx context.Context, env *contextdata.Envelope, current stri
 			return nil, fmt.Errorf("potential cycle detected at node %s", current)
 		}
 		g.executionPath = append(g.executionPath, current)
-		g.emit(telemetry.Event{
+		g.emit(ctx, telemetry.Event{
 			Type:      telemetry.EventNodeStart,
 			NodeID:    current,
 			TaskID:    taskID,
@@ -324,14 +327,20 @@ func (g *Graph) run(ctx context.Context, env *contextdata.Envelope, current stri
 
 		taskType := execution.TaskType(fmt.Sprint(taskMetaValue(env, "task.type")))
 		instruction := fmt.Sprint(taskMetaValue(env, "task.instruction"))
-		nodeCtx := execution.WithTaskContext(ctx, execution.TaskContext{ID: taskID, Type: taskType, Instruction: instruction})
+		// Attach the envelope and the active node ID to the context so
+		// downstream emitters — above all the LLM instrumentation — can
+		// attribute their events to this task and node without importing
+		// the execution packages (telemetry correlation, FR-3).
+		nodeCtx := contextdata.WithEnvelope(ctx, env)
+		nodeCtx = telemetry.WithNodeContext(nodeCtx, current)
+		nodeCtx = execution.WithTaskContext(nodeCtx, execution.TaskContext{ID: taskID, Type: taskType, Instruction: instruction})
 		if g.telemetry != nil {
 			nodeCtx = telemetry.WithTelemetry(nodeCtx, g.telemetry)
 		}
 		result, err := node.Execute(nodeCtx, env)
 		if err != nil {
 			err = fmt.Errorf("node %s execution failed: %w", current, err)
-			g.emit(telemetry.Event{
+			g.emit(ctx, telemetry.Event{
 				Type:      telemetry.EventNodeError,
 				NodeID:    current,
 				TaskID:    taskID,
@@ -348,7 +357,7 @@ func (g *Graph) run(ctx context.Context, env *contextdata.Envelope, current stri
 		for key, value := range execution.ResultFields(result.Data) {
 			env.SetWorkingValueWithClass(fmt.Sprintf("%s.%s", current, key), value, contextdata.MemoryClassTask)
 		}
-		g.emit(telemetry.Event{
+		g.emit(ctx, telemetry.Event{
 			Type:      telemetry.EventNodeFinish,
 			NodeID:    current,
 			TaskID:    taskID,

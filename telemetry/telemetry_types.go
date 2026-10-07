@@ -46,7 +46,12 @@ const (
 // Event captures structured telemetry data.
 type Event struct {
 	Type      EventType      `json:"type"`
+	SessionID string         `json:"session_id,omitempty"`
+	RunID     string         `json:"run_id,omitempty"`
+	TraceID   string         `json:"trace_id,omitempty"`
+	AgentID   string         `json:"agent_id,omitempty"`
 	NodeID    string         `json:"node_id,omitempty"`
+	SpanID    string         `json:"span_id,omitempty"`
 	TaskID    string         `json:"task_id,omitempty"`
 	Message   string         `json:"message,omitempty"`
 	Timestamp time.Time      `json:"timestamp"`

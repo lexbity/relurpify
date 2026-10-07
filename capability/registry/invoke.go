@@ -230,6 +230,7 @@ func (r *CapabilityRegistry) prepareCapabilityInvocation(ctx context.Context, st
 			if r.metrics != nil {
 				r.metrics.RecordDoomLoop()
 			}
+			r.emitDoomLoopDetected(ctx, entry.descriptor, *doomErr)
 			proceed, guideErr := r.handleDoomLoopGuidance(ctx, *doomErr)
 			if guideErr != nil {
 				// Return the original precheck error which carries the actionable
@@ -247,8 +248,7 @@ func (r *CapabilityRegistry) prepareCapabilityInvocation(ctx context.Context, st
 	return entry, nil
 }
 
-func (r *CapabilityRegistry) enforceCapabilityPolicy(ctx context.Context, entry *capabilityEntry) error {
-	desc := entry.descriptor
+func (r *CapabilityRegistry) enforceCapabilityPolicy(ctx context.Context, entry *capabilityEntry) error {	desc := entry.descriptor
 	r.mu.RLock()
 	policyEngine := r.policyEngine
 	agentID := r.registeredAgentID

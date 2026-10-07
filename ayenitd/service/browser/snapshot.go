@@ -257,23 +257,23 @@ func success(data map[string]any) *ports.ToolResult {
 	return &ports.ToolResult{Success: true, Data: data}
 }
 
-func emitBrowserTelemetry(sink telemetry.Telemetry, eventType telemetry.EventType, agentID, taskID, message string, metadata map[string]any) {
+func emitBrowserTelemetry(ctx context.Context, sink telemetry.Telemetry, eventType telemetry.EventType, agentID, taskID, message string, metadata map[string]any) {
 	if sink == nil {
 		return
 	}
 	if metadata == nil {
 		metadata = make(map[string]any)
 	}
-	if agentID != "" {
-		metadata["agent_id"] = agentID
-	}
-	sink.Emit(telemetry.Event{
+	ev := telemetry.Event{
 		Type:      eventType,
+		AgentID:   agentID,
 		TaskID:    taskID,
 		Message:   message,
 		Timestamp: time.Now().UTC(),
 		Metadata:  metadata,
-	})
+	}
+	telemetry.StampCorrelation(ctx, &ev)
+	sink.Emit(ev)
 }
 
 func browserTaskScope(env *contextdata.Envelope) string {

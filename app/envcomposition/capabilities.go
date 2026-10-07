@@ -20,6 +20,7 @@ import (
 	platformsearch "codeburg.org/lexbit/relurpify/platform/search"
 	"codeburg.org/lexbit/relurpify/platform/tools/composite"
 	"codeburg.org/lexbit/relurpify/platform/tools/subprocess"
+	"codeburg.org/lexbit/relurpify/telemetry"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
@@ -65,7 +66,7 @@ type PermissionManager interface {
 	regpkg.PermissionManagerHandle
 	CheckFileAccess(context.Context, string, permissions.FileSystemAction, string) error
 	StaticallyAllowsFileAccess(permissions.FileSystemAction, string) bool
-	SetEventLogger(func(context.Context, permissions.PermissionDescriptor, string, string, map[string]any))
+	SetDecisionSink(telemetry.DecisionSink)
 	DefaultPolicy() string
 }
 
@@ -103,9 +104,11 @@ func BuildCapabilityRuntime(ctx context.Context, workspace string, runner *fsand
 	if cfg.AgentSpec != nil {
 		registry.UseAgentSpec(cfg.AgentID, cfg.AgentSpec)
 	}
-	if len(cfg.ProtectedPaths) > 0 {
-		registry.UseSandboxScope(fsandbox.NewFileScopePolicy(workspace, cfg.ProtectedPaths))
-	}
+	// Always scope the registry to the workspace: NewFileScopePolicy
+	// auto-protects relurpify_cfg and .git on top of any declared paths.
+	// Skipping this leaves tools with no scope at all, which denies every
+	// filesystem operation (deny-by-default registry invariant).
+	registry.UseSandboxScope(fsandbox.NewFileScopePolicy(workspace, cfg.ProtectedPaths))
 	manifestTools := toolcapabilities.Build(workspace, fsandbox.CommandRunnerAdapter{Runner: runner}, toolManifests,
 		toolcapabilities.StrictMode(),
 		toolcapabilities.WithBackendBuilder("subprocess", subprocess.BackendBuilder()),

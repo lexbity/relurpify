@@ -1,6 +1,10 @@
 package permissions
 
-import "context"
+import (
+	"context"
+
+	"codeburg.org/lexbit/relurpify/telemetry"
+)
 
 // PermissionManager defines the governance-owned permission surface consumed
 // by execution and workspace session code. Governance owns policy/security
@@ -11,6 +15,6 @@ import "context"
 // and accessed via type assertion where needed (e.g., registry.UsePermissionManager).
 type PermissionManager interface {
 	CheckFileAccess(context.Context, string, FileSystemAction, string) error
-	SetEventLogger(func(context.Context, PermissionDescriptor, string, string, map[string]any))
+	SetDecisionSink(telemetry.DecisionSink)
 	DefaultPolicy() string
 }

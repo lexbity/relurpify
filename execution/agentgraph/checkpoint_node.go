@@ -216,7 +216,7 @@ func (n *CheckpointNode) Execute(ctx context.Context, env *contextdata.Envelope)
 		tel.OnCheckpointCreated(env.TaskID, ref.ArtifactID, n.id)
 	}
 	if n.telemetry != nil {
-		n.telemetry.Emit(telemetry.Event{
+		ev := telemetry.Event{
 			Type:      telemetry.EventStateChange,
 			NodeID:    n.id,
 			TaskID:    env.TaskID,
@@ -226,7 +226,9 @@ func (n *CheckpointNode) Execute(ctx context.Context, env *contextdata.Envelope)
 				"workflow_id":   snapshot.WorkflowID,
 				"run_id":        snapshot.RunID,
 			},
-		})
+		}
+		telemetry.StampCorrelation(ctx, &ev)
+		n.telemetry.Emit(ev)
 	}
 
 	return &execution.Result{

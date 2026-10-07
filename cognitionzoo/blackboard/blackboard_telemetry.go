@@ -1,6 +1,7 @@
 package blackboard
 
 import (
+	"context"
 	"strings"
 	"time"
 
@@ -10,21 +11,23 @@ import (
 
 const maxBlackboardAuditEntries = 32
 
-func emitBlackboardEvent(sink telemetry.Telemetry, state *contextdata.Envelope, eventType telemetry.EventType, nodeID, taskID, message string, metadata map[string]any) {
+func emitBlackboardEvent(ctx context.Context, sink telemetry.Telemetry, state *contextdata.Envelope, eventType telemetry.EventType, nodeID, taskID, message string, metadata map[string]any) {
 	if state != nil {
 		appendBlackboardAudit(state, strings.TrimSpace(message), metadata)
 	}
 	if sink == nil {
 		return
 	}
-	sink.Emit(telemetry.Event{
+	ev := telemetry.Event{
 		Type:      eventType,
 		NodeID:    strings.TrimSpace(nodeID),
 		TaskID:    strings.TrimSpace(taskID),
 		Message:   strings.TrimSpace(message),
 		Timestamp: time.Now().UTC(),
 		Metadata:  cloneTelemetryMetadata(metadata),
-	})
+	}
+	telemetry.StampCorrelation(ctx, &ev)
+	sink.Emit(ev)
 }
 
 func appendBlackboardAudit(state *contextdata.Envelope, message string, metadata map[string]any) {

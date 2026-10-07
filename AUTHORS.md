@@ -20,3 +20,7 @@ Prestin Liu
 - SWE 1.5/1.6 - via [Windsurf](https://windsurf.com/)
 - GPT OSS 120B - via [Windsurf](https://windsurf.com/)
 - xAI Grok 3 mini - via [Windsurf](https://windsurf.com/)
+
+- GLM 5.3 - via [Zcode](z.ai)
+- MiMo-V2.6-Flash - via [Opencode](https://opencode.ai/)
+- longcat-2.5 - via [Opencode](https://opencode.ai/)

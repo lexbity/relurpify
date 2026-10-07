@@ -160,7 +160,7 @@ func (c *Compiler) Compile(ctx context.Context, request CompilationRequest) (*Co
 	if len(pinAnchors) > MaxActivePins {
 		for _, dropped := range pinAnchors[MaxActivePins:] {
 				path := anchorFilePath(dropped)
-				c.emitWarning("pin_cap_exceeded", map[string]any{"path": path})
+				c.emitWarning(ctx, "pin_cap_exceeded", map[string]any{"path": path})
 			}
 			pinAnchors = pinAnchors[:MaxActivePins]
 		}
@@ -198,7 +198,7 @@ func (c *Compiler) Compile(ctx context.Context, request CompilationRequest) (*Co
 				for path := range pinPaths {
 					if evictedPinContent == nil || !containsString(evictedPinContent, path) {
 						evictedPinContent = append(evictedPinContent, path)
-						c.emitWarning("pin_content_evicted", map[string]any{"path": path})
+						c.emitWarning(ctx, "pin_content_evicted", map[string]any{"path": path})
 					}
 				}
 				break
@@ -280,7 +280,7 @@ func (c *Compiler) Compile(ctx context.Context, request CompilationRequest) (*Co
 
 	if !isSpeculativeCompilation(request.Metadata) {
 		if err := c.persistCompilationRecord(ctx, record); err != nil {
-			c.emitWarning("compilation persistence failed", map[string]any{
+			c.emitWarning(ctx, "compilation persistence failed", map[string]any{
 				"request_id":     record.RequestID,
 				"compilation_id": record.AssemblyMetadata.CompilationID,
 				"event_log_seq":  record.EventLogSeq,
@@ -1160,16 +1160,18 @@ func isSpeculativeCompilation(metadata map[string]any) bool {
 	return ok && flag
 }
 
-func (c *Compiler) emitWarning(message string, metadata map[string]any) {
+func (c *Compiler) emitWarning(ctx context.Context, message string, metadata map[string]any) {
 	if c == nil || c.telemetry == nil {
 		return
 	}
-	c.telemetry.Emit(telemetry.Event{
+	ev := telemetry.Event{
 		Type:      telemetry.EventCompilerWarning,
 		Message:   message,
 		Timestamp: c.now(),
 		Metadata:  metadata,
-	})
+	}
+	telemetry.StampCorrelation(ctx, &ev)
+	c.telemetry.Emit(ev)
 }
 
 // ListCompilationRecords returns all compilation records from the knowledge store.

@@ -1,6 +1,7 @@
 package registry
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -122,7 +123,7 @@ func (r *CapabilityRegistry) setExposurePolicies(policies []agentspec.Capability
 	resolved := r.snapshotResolvedExposureLocked()
 	r.mu.Unlock()
 	for _, item := range resolved {
-		emitCapabilitySecurityEvent(telemetry, "capability_exposure_resolved", item.descriptor, item.exposure, "")
+		emitCapabilitySecurityEvent(context.Background(), telemetry, "capability_exposure_resolved", item.descriptor, item.exposure, "")
 	}
 }
 
@@ -137,7 +138,7 @@ func (r *CapabilityRegistry) AddExposurePolicies(policies []agentspec.Capability
 	resolved := r.snapshotResolvedExposureLocked()
 	r.mu.Unlock()
 	for _, item := range resolved {
-		emitCapabilitySecurityEvent(telemetry, "capability_exposure_resolved", item.descriptor, item.exposure, "")
+		emitCapabilitySecurityEvent(context.Background(), telemetry, "capability_exposure_resolved", item.descriptor, item.exposure, "")
 	}
 }
 

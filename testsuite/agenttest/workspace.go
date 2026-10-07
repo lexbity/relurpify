@@ -226,12 +226,21 @@ func copyRenderedTreeFromFS(srcFS iofs.FS, srcRoot, dstRoot, workspace, sourceWo
 		if err != nil {
 			return err
 		}
-		rel := strings.TrimPrefix(path, srcRoot+"/")
-		if rel == path {
-			if path == srcRoot {
-				return fs.MkdirAllSecure(dstRoot)
+		// srcRoot "." means srcFS is already rooted at the template tree (a
+		// sub-FS), so each walked path maps 1:1 below dstRoot. Any other
+		// srcRoot walks a parent tree and must strip the "<srcRoot>/" prefix.
+		rel := path
+		if srcRoot != "." {
+			rel = strings.TrimPrefix(path, srcRoot+"/")
+			if rel == path {
+				if path == srcRoot {
+					return fs.MkdirAllSecure(dstRoot)
+				}
+				return nil
 			}
-			return nil
+		}
+		if rel == "." {
+			return fs.MkdirAllSecure(dstRoot)
 		}
 		target := filepath.Join(dstRoot, rel)
 		if d.IsDir() {
@@ -283,7 +292,12 @@ func applyWorkspaceFiles(workspace, targetWorkspace string, files []SetupFileSpe
 		if err := fs.MkdirAllSecure(filepath.Dir(target)); err != nil {
 			return err
 		}
-		if err := fs.WriteFileSecure(target, content); err != nil {
+		mode, err := parseSetupFileMode(f.Mode)
+		if err != nil {
+			return err
+		}
+		//nolint:gosec // setup fixtures are test data written with the suite-declared mode
+		if err := os.WriteFile(target, content, mode); err != nil {
 			return err
 		}
 	}

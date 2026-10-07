@@ -1,6 +1,7 @@
 package pipeline
 
 import (
+	"context"
 	"time"
 
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
@@ -14,16 +15,20 @@ const (
 )
 
 // emitStageEvent sends a structured stage event when telemetry is configured.
-func emitStageEvent(sink telemetry.Telemetry, eventType telemetry.EventType, taskID, stageName, message string, metadata map[string]any) {
+// ctx carries the turn's correlation identifiers, stamped onto the event before
+// it reaches the sink.
+func emitStageEvent(ctx context.Context, sink telemetry.Telemetry, eventType telemetry.EventType, taskID, stageName, message string, metadata map[string]any) {
 	if sink == nil {
 		return
 	}
-	sink.Emit(telemetry.Event{
+	ev := telemetry.Event{
 		Type:      eventType,
 		NodeID:    stageName,
 		TaskID:    taskID,
 		Message:   message,
 		Timestamp: time.Now().UTC(),
 		Metadata:  metadata,
-	})
+	}
+	telemetry.StampCorrelation(ctx, &ev)
+	sink.Emit(ev)
 }

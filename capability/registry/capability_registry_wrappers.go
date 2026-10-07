@@ -156,7 +156,7 @@ func (h instrumentCapabilityHandler) Invoke(ctx context.Context, env ports.State
 			return nil, err
 		}
 	}
-	emitCapabilityInvocationTelemetry(stateSnapshot.telemetry, desc, stateSnapshot.agentID, args)
+	emitCapabilityInvocationTelemetry(ctx, stateSnapshot.telemetry, desc, stateSnapshot.agentID, args)
 	startedAt := time.Now().UTC()
 	result, err := invocable.Invoke(ctx, env, args)
 	if err == nil && result != nil && desc.OutputSchema != nil {
@@ -206,16 +206,18 @@ func (h instrumentCapabilityHandler) Invoke(ctx context.Context, env ports.State
 			if stepID := stepIDFromState(env); stepID != "" {
 				meta["step_id"] = stepID
 			}
-			stateSnapshot.telemetry.Emit(fwtelemetry.Event{
+			ev := fwtelemetry.Event{
 				Type:      fwtelemetry.EventToolEdited,
 				TaskID:    taskIDFromState(env, stateSnapshot.agentID),
 				Timestamp: time.Now().UTC(),
 				Message:   fmt.Sprintf("tool %s edited %s", desc.ID, rec.Path),
 				Metadata:  redactTelemetryMetadata(stateSnapshot.safety, meta),
-			})
+			}
+			fwtelemetry.StampCorrelation(ctx, &ev)
+			stateSnapshot.telemetry.Emit(ev)
 		}
 	}
-	emitCapabilityResultTelemetry(stateSnapshot.telemetry, desc, stateSnapshot.agentID, result, err, time.Since(startedAt))
+	emitCapabilityResultTelemetry(ctx, stateSnapshot.telemetry, desc, stateSnapshot.agentID, result, err, time.Since(startedAt))
 	return result, err
 }
 
@@ -240,10 +242,10 @@ func (h instrumentCapabilityHandler) RenderPrompt(ctx context.Context, env ports
 			return nil, err
 		}
 	}
-	emitCapabilityInvocationTelemetry(stateSnapshot.telemetry, desc, stateSnapshot.agentID, args)
+	emitCapabilityInvocationTelemetry(ctx, stateSnapshot.telemetry, desc, stateSnapshot.agentID, args)
 	startedAt := time.Now().UTC()
 	result, err := promptHandler.RenderPrompt(ctx, env, args)
-	emitPromptCapabilityResultTelemetry(stateSnapshot.telemetry, desc, stateSnapshot.agentID, result, err, time.Since(startedAt))
+	emitPromptCapabilityResultTelemetry(ctx, stateSnapshot.telemetry, desc, stateSnapshot.agentID, result, err, time.Since(startedAt))
 	return result, err
 }
 
@@ -265,10 +267,10 @@ func (h instrumentCapabilityHandler) ReadResource(ctx context.Context, env ports
 			return nil, err
 		}
 	}
-	emitCapabilityInvocationTelemetry(stateSnapshot.telemetry, desc, stateSnapshot.agentID, nil)
+	emitCapabilityInvocationTelemetry(ctx, stateSnapshot.telemetry, desc, stateSnapshot.agentID, nil)
 	startedAt := time.Now().UTC()
 	result, err := resourceHandler.ReadResource(ctx, env)
-	emitResourceCapabilityResultTelemetry(stateSnapshot.telemetry, desc, stateSnapshot.agentID, result, err, time.Since(startedAt))
+	emitResourceCapabilityResultTelemetry(ctx, stateSnapshot.telemetry, desc, stateSnapshot.agentID, result, err, time.Since(startedAt))
 	return result, err
 }
 
@@ -362,7 +364,6 @@ func (t *instrumentedTool) Execute(ctx context.Context, args map[string]any) (*p
 			return nil, err
 		}
 	}
-	traceCtx, _ := fwtelemetry.TraceContextFromContext(ctx)
 	if stateSnapshot.telemetry != nil {
 		spanAttrs := buildSpanAttrs(desc, t.Tool)
 		meta := map[string]any{
@@ -371,16 +372,14 @@ func (t *instrumentedTool) Execute(ctx context.Context, args map[string]any) (*p
 			"args":                               summarizeArgs(args),
 			"span_attrs":                         spanAttrs,
 		}
-		if traceCtx.TraceID != "" {
-			meta["trace_id"] = traceCtx.TraceID
-			meta["span_id"] = traceCtx.SpanID
-		}
-		stateSnapshot.telemetry.Emit(fwtelemetry.Event{
+		ev := fwtelemetry.Event{
 			Type:      fwtelemetry.EventToolCall,
 			Timestamp: time.Now().UTC(),
 			Message:   fmt.Sprintf("tool %s invoked", t.Name()),
 			Metadata:  redactTelemetryMetadata(stateSnapshot.safety, meta),
-		})
+		}
+		fwtelemetry.StampCorrelation(ctx, &ev)
+		stateSnapshot.telemetry.Emit(ev)
 	}
 	startedAt := time.Now().UTC()
 	result, err := t.Tool.Execute(ctx, args)
@@ -425,10 +424,6 @@ func (t *instrumentedTool) Execute(ctx context.Context, args map[string]any) (*p
 			AgentId_capability_registry_wrappers: stateSnapshot.agentID,
 			"span_attrs":                         spanAttrs,
 		}
-		if traceCtx.TraceID != "" {
-			metadata["trace_id"] = traceCtx.TraceID
-			metadata["span_id"] = traceCtx.SpanID
-		}
 		if result != nil {
 			metadata["success"] = result.Success
 			metadata["exit_code"] = extractExitCode(result)
@@ -442,12 +437,14 @@ func (t *instrumentedTool) Execute(ctx context.Context, args map[string]any) (*p
 			metadata[Error_capability_registry_wrappers] = err.Error()
 		}
 		metadata[DurationMs_capability_registry_wrappers] = time.Since(startedAt).Milliseconds()
-		stateSnapshot.telemetry.Emit(fwtelemetry.Event{
+		ev := fwtelemetry.Event{
 			Type:      fwtelemetry.EventToolResult,
 			Timestamp: time.Now().UTC(),
 			Message:   fmt.Sprintf("tool %s completed", t.Name()),
 			Metadata:  redactTelemetryMetadata(stateSnapshot.safety, metadata),
-		})
+		}
+		fwtelemetry.StampCorrelation(ctx, &ev)
+		stateSnapshot.telemetry.Emit(ev)
 	}
 	return result, err
 }
@@ -480,7 +477,7 @@ func redactTelemetryMetadata(controller *runtime.RuntimeSafetyController, metada
 	return runtime.RedactMetadataMap(metadata)
 }
 
-func emitCapabilitySecurityEvent(telemetry fwtelemetry.Telemetry, event string, desc descriptor.CapabilityDescriptor, exposure agentspec.CapabilityExposure, reason string) {
+func emitCapabilitySecurityEvent(ctx context.Context, telemetry fwtelemetry.Telemetry, event string, desc descriptor.CapabilityDescriptor, exposure agentspec.CapabilityExposure, reason string) {
 	if telemetry == nil || desc.ID == "" {
 		return
 	}
@@ -502,12 +499,14 @@ func emitCapabilitySecurityEvent(telemetry fwtelemetry.Telemetry, event string, 
 	if reason != "" {
 		metadata["reason"] = reason
 	}
-	telemetry.Emit(fwtelemetry.Event{
+	ev := fwtelemetry.Event{
 		Type:      fwtelemetry.EventStateChange,
 		Timestamp: time.Now().UTC(),
 		Message:   strings.ReplaceAll(event, "_", " "),
 		Metadata:  runtime.RedactMetadataMap(metadata),
-	})
+	}
+	fwtelemetry.StampCorrelation(ctx, &ev)
+	telemetry.Emit(ev)
 }
 
 func unwrapTool(tool ports.Tool) ports.Tool {
@@ -549,11 +548,11 @@ func (h legacyToolHandler) Availability(ctx context.Context, env ports.State) de
 	return descriptor.AvailabilitySpec{Available: true}
 }
 
-func emitCapabilityInvocationTelemetry(telemetry fwtelemetry.Telemetry, desc descriptor.CapabilityDescriptor, agentID string, args map[string]any) {
+func emitCapabilityInvocationTelemetry(ctx context.Context, telemetry fwtelemetry.Telemetry, desc descriptor.CapabilityDescriptor, agentID string, args map[string]any) {
 	if telemetry == nil {
 		return
 	}
-	telemetry.Emit(fwtelemetry.Event{
+	ev := fwtelemetry.Event{
 		Type:      fwtelemetry.EventCapabilityCall,
 		Timestamp: time.Now().UTC(),
 		Message:   fmt.Sprintf("capability %s invoked", desc.Name),
@@ -565,10 +564,12 @@ func emitCapabilityInvocationTelemetry(telemetry fwtelemetry.Telemetry, desc des
 			AgentId_capability_registry_wrappers:       agentID,
 			"args":                                     summarizeArgs(args),
 		}),
-	})
+	}
+	fwtelemetry.StampCorrelation(ctx, &ev)
+	telemetry.Emit(ev)
 }
 
-func emitCapabilityResultTelemetry(telemetry fwtelemetry.Telemetry, desc descriptor.CapabilityDescriptor, agentID string, result *ports.ToolResult, err error, duration time.Duration) {
+func emitCapabilityResultTelemetry(ctx context.Context, telemetry fwtelemetry.Telemetry, desc descriptor.CapabilityDescriptor, agentID string, result *ports.ToolResult, err error, duration time.Duration) {
 	if telemetry == nil {
 		return
 	}
@@ -589,15 +590,17 @@ func emitCapabilityResultTelemetry(telemetry fwtelemetry.Telemetry, desc descrip
 		metadata[Error_capability_registry_wrappers] = err.Error()
 	}
 	metadata[DurationMs_capability_registry_wrappers] = duration.Milliseconds()
-	telemetry.Emit(fwtelemetry.Event{
+	ev := fwtelemetry.Event{
 		Type:      fwtelemetry.EventCapabilityResult,
 		Timestamp: time.Now().UTC(),
 		Message:   fmt.Sprintf(Capabilityscompleted_capability_registry_wrappers, desc.Name),
 		Metadata:  redactTelemetryMetadata(nil, metadata),
-	})
+	}
+	fwtelemetry.StampCorrelation(ctx, &ev)
+	telemetry.Emit(ev)
 }
 
-func emitPromptCapabilityResultTelemetry(telemetry fwtelemetry.Telemetry, desc descriptor.CapabilityDescriptor, agentID string, result *handler.PromptRenderResult, err error, duration time.Duration) {
+func emitPromptCapabilityResultTelemetry(ctx context.Context, telemetry fwtelemetry.Telemetry, desc descriptor.CapabilityDescriptor, agentID string, result *handler.PromptRenderResult, err error, duration time.Duration) {
 	if telemetry == nil {
 		return
 	}
@@ -615,15 +618,17 @@ func emitPromptCapabilityResultTelemetry(telemetry fwtelemetry.Telemetry, desc d
 		metadata[Error_capability_registry_wrappers] = err.Error()
 	}
 	metadata[DurationMs_capability_registry_wrappers] = duration.Milliseconds()
-	telemetry.Emit(fwtelemetry.Event{
+	ev := fwtelemetry.Event{
 		Type:      fwtelemetry.EventCapabilityResult,
 		Timestamp: time.Now().UTC(),
 		Message:   fmt.Sprintf(Capabilityscompleted_capability_registry_wrappers, desc.Name),
 		Metadata:  redactTelemetryMetadata(nil, metadata),
-	})
+	}
+	fwtelemetry.StampCorrelation(ctx, &ev)
+	telemetry.Emit(ev)
 }
 
-func emitResourceCapabilityResultTelemetry(telemetry fwtelemetry.Telemetry, desc descriptor.CapabilityDescriptor, agentID string, result *handler.ResourceReadResult, err error, duration time.Duration) {
+func emitResourceCapabilityResultTelemetry(ctx context.Context, telemetry fwtelemetry.Telemetry, desc descriptor.CapabilityDescriptor, agentID string, result *handler.ResourceReadResult, err error, duration time.Duration) {
 	if telemetry == nil {
 		return
 	}
@@ -641,12 +646,14 @@ func emitResourceCapabilityResultTelemetry(telemetry fwtelemetry.Telemetry, desc
 		metadata[Error_capability_registry_wrappers] = err.Error()
 	}
 	metadata[DurationMs_capability_registry_wrappers] = duration.Milliseconds()
-	telemetry.Emit(fwtelemetry.Event{
+	ev := fwtelemetry.Event{
 		Type:      fwtelemetry.EventCapabilityResult,
 		Timestamp: time.Now().UTC(),
 		Message:   fmt.Sprintf(Capabilityscompleted_capability_registry_wrappers, desc.Name),
 		Metadata:  redactTelemetryMetadata(nil, metadata),
-	})
+	}
+	fwtelemetry.StampCorrelation(ctx, &ev)
+	telemetry.Emit(ev)
 }
 
 func summarizeArgs(args map[string]any) any {

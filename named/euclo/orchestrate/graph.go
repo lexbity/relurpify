@@ -170,6 +170,7 @@ func buildNodes(ctx context.Context, in buildNodeInput) ([]agentgraph.Node, erro
 		thoughtrecipeReg = thoughtrecipepkg.NewThoughtRecipeRegistry()
 	}
 	ensureClarificationThoughtRecipe(thoughtrecipeReg)
+	ensureDefaultThoughtRecipe(thoughtrecipeReg)
 	var thoughtrecipeCapReg *registry.CapabilityRegistry
 	if in.paradigmDeps != nil {
 		thoughtrecipeCapReg = in.paradigmDeps.Registry
@@ -408,6 +409,51 @@ func wireEdges(g *agentgraph.Graph) error {
 		}
 	}
 	return nil
+}
+
+// defaultThoughtRecipeID is the built-in last-resort execution route. The
+// thoughtrecipe executor already falls back to this ID when the envelope
+// carries no route selection; registering it makes that fallback executable.
+// Workspace recipes register first and win over it (first-wins registry).
+const defaultThoughtRecipeID = "euclo.thoughtrecipe.default"
+
+func ensureDefaultThoughtRecipe(reg *thoughtrecipepkg.ThoughtRecipeRegistry) {
+	if reg == nil {
+		return
+	}
+	if _, ok := reg.Get(defaultThoughtRecipeID); ok {
+		return
+	}
+	thoughtrecipe := &surface.ThoughtRecipe{
+		ID:   defaultThoughtRecipeID,
+		Name: "default coding execution",
+		Metadata: surface.ThoughtRecipeMetadata{
+			Name: "default coding execution",
+		},
+	}
+	plan := &thoughtrecipepkg.ExecutionPlan{
+		ThoughtRecipe: thoughtrecipe,
+		Agents: map[string]thoughtrecipepkg.AgentBinding{
+			"coder": {Name: "coder", Paradigm: "react"},
+		},
+		Steps: []thoughtrecipepkg.ExecutionStep{{
+			ID:       defaultThoughtRecipeID + ".step0",
+			Kind:     thoughtrecipepkg.StepKindRun,
+			Paradigm: "react",
+			// Directly-constructed steps must set an explicit scope: the zero
+			// value is deny-all (fail-closed, A-6). Scope the fallback to the
+			// workspace read/edit toolset; shell tools stay excluded.
+			Scope: thoughtrecipepkg.AllowTools([]string{
+				"file_read", "file_list", "file_search", "search_grep",
+				"search_find_similar", "file_edit", "file_write", "file_create",
+			}),
+			Prompt: "{{ (index . \"" + euclostate.KeyTaskInput + "\").Instruction }}",
+			Goal:   "Complete the user's coding task in the workspace.",
+			Config: map[string]any{},
+		}},
+		Warnings: []thoughtrecipepkg.SemanticWarning{{Message: "built-in default execution recipe; workspace recipes take precedence"}},
+	}
+	_, _ = reg.RegisterCompiledFirstWins(thoughtrecipe, plan, "built-in default execution route")
 }
 
 func ensureClarificationThoughtRecipe(reg *thoughtrecipepkg.ThoughtRecipeRegistry) {

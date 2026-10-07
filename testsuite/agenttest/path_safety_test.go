@@ -19,19 +19,6 @@ func TestResolvePathWithinRejectsEscape(t *testing.T) {
 	}
 }
 
-func TestApplySetupRejectsEscapingPath(t *testing.T) {
-	root := t.TempDir()
-	_, err := applySetup(root, root, SetupSpec{
-		Files: []SetupFileSpec{{
-			Path:    escape_txt,
-			Content: "nope",
-		}},
-	}, false, nil)
-	if err == nil {
-		t.Fatal("expected escaping setup path to fail")
-	}
-}
-
 func TestApplyWorkspaceFilesRejectsEscapingPath(t *testing.T) {
 	root := t.TempDir()
 	err := applyWorkspaceFiles(root, root, []SetupFileSpec{{

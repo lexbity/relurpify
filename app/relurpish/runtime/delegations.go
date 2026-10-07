@@ -113,11 +113,11 @@ func (r *Runtime) observeDelegationSnapshot(snapshot policy.DelegationSnapshot) 
 	if r == nil {
 		return
 	}
-	r.emitDelegationTelemetry(snapshot)
+	r.emitDelegationTelemetry(context.Background(), snapshot)
 	r.logDelegationAudit(snapshot)
 }
 
-func (r *Runtime) emitDelegationTelemetry(snapshot policy.DelegationSnapshot) {
+func (r *Runtime) emitDelegationTelemetry(ctx context.Context, snapshot policy.DelegationSnapshot) {
 	if r == nil || r.AgentWorkspace().Telemetry == nil {
 		return
 	}
@@ -150,13 +150,15 @@ func (r *Runtime) emitDelegationTelemetry(snapshot policy.DelegationSnapshot) {
 			metadata["result_trust_class"] = prov.TrustClass
 		}
 	}
-	r.AgentWorkspace().Telemetry.Emit(telemetry.Event{
+	ev := telemetry.Event{
 		Type:      eventType,
 		TaskID:    firstDelegationTaskID(snapshot),
 		Message:   delegationTelemetryMessage(snapshot),
 		Timestamp: time.Now().UTC(),
 		Metadata:  metadata,
-	})
+	}
+	telemetry.StampCorrelation(ctx, &ev)
+	r.AgentWorkspace().Telemetry.Emit(ev)
 }
 
 func (r *Runtime) logDelegationAudit(snapshot policy.DelegationSnapshot) {

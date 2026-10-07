@@ -448,7 +448,7 @@ func (r *CapabilityRegistry) RegisterBatch(ctx context.Context, items []Registra
 	}
 	r.mu.Unlock()
 	for _, event := range events {
-		emitCapabilitySecurityEvent(telemetry, "capability_admitted", event.descriptor, event.exposure, "")
+		emitCapabilitySecurityEvent(ctx, telemetry, "capability_admitted", event.descriptor, event.exposure, "")
 	}
 	return nil
 }

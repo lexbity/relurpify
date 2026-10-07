@@ -307,13 +307,15 @@ func (n *reactActNode) capabilityEnvelope(ctx context.Context, env *contextdata.
 		if envelope.Descriptor.Source.SessionID != "" {
 			metadata["session_id"] = envelope.Descriptor.Source.SessionID
 		}
-		n.agent.Config.Telemetry.Emit(telemetry.Event{
+		ev := telemetry.Event{
 			Type:      telemetry.EventStateChange,
 			TaskID:    strings.TrimSpace(envGetString(env, "task.id")),
 			Message:   "insertion decision recorded",
 			Timestamp: time.Now().UTC(),
 			Metadata:  capruntime.RedactMetadataMap(metadata),
-		})
+		}
+		telemetry.StampCorrelation(ctx, &ev)
+		n.agent.Config.Telemetry.Emit(ev)
 	}
 	if res != nil {
 		if res.Metadata == nil {

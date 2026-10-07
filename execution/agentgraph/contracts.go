@@ -97,6 +97,20 @@ func ResolveNodeContract(node Node) NodeContract {
 	return defaultNodeContract(node)
 }
 
+// systemContextPolicy is the shared working-context boundary for control-flow
+// node types (terminal, conditional, observation, system): they read task and
+// plan state and write plan/react/architect state, touching working memory only.
+func systemContextPolicy() relurpctx.StateBoundaryPolicy {
+	return relurpctx.StateBoundaryPolicy{
+		ReadKeys:                 []string{"task.*", "plan.*", "react.*", "architect.*"},
+		WriteKeys:                []string{"plan.*", "react.*", "architect.*"},
+		AllowedMemoryClasses:     []relurpctx.MemoryClass{relurpctx.MemoryClassWorking},
+		AllowedDataClasses:       []relurpctx.StateDataClass{relurpctx.StateDataClassTaskMetadata, relurpctx.StateDataClassStepMetadata, relurpctx.StateDataClassRoutingFlag, relurpctx.StateDataClassStructuredState},
+		MaxStateEntryBytes:       4096,
+		MaxInlineCollectionItems: 32,
+	}
+}
+
 func defaultNodeContract(node Node) NodeContract {
 	if node == nil {
 		return NodeContract{}
@@ -120,14 +134,7 @@ func defaultNodeContract(node Node) NodeContract {
 		return NodeContract{
 			SideEffectClass: SideEffectNone,
 			Idempotency:     IdempotencyReplaySafe,
-			ContextPolicy: relurpctx.StateBoundaryPolicy{
-				ReadKeys:                 []string{"task.*", "plan.*", "react.*", "architect.*"},
-				WriteKeys:                []string{"plan.*", "react.*", "architect.*"},
-				AllowedMemoryClasses:     []relurpctx.MemoryClass{relurpctx.MemoryClassWorking},
-				AllowedDataClasses:       []relurpctx.StateDataClass{relurpctx.StateDataClassTaskMetadata, relurpctx.StateDataClassStepMetadata, relurpctx.StateDataClassRoutingFlag, relurpctx.StateDataClassStructuredState},
-				MaxStateEntryBytes:       4096,
-				MaxInlineCollectionItems: 32,
-			},
+			ContextPolicy:   systemContextPolicy(),
 		}
 	case NodeTypeStream:
 		return NodeContract{

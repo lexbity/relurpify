@@ -12,11 +12,7 @@ import (
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
-const (
-	agent_yaml    = "agent.yaml"
-	hello         = "hello"
-	relurpify_cfg = "relurpify_cfg"
-)
+// Constants agent_yaml, hello, and relurpify_cfg are declared in suite_test.go.
 
 func TestPrepareRunWritesDescriptor(t *testing.T) {
 	workspace := t.TempDir()

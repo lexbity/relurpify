@@ -14,9 +14,7 @@ import (
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
-const (
-	smoke = "smoke"
-)
+// Constant smoke is declared in suite_test.go.
 
 func TestLiveCaseDriverUsesExecutionReportArtifact(t *testing.T) {
 	workspace := t.TempDir()

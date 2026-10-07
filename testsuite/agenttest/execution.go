@@ -423,7 +423,7 @@ type modelTelemetryAdapter struct {
 	inner telemetry.Telemetry
 }
 
-func (a modelTelemetryAdapter) Emit(event any) {
+func (a modelTelemetryAdapter) Emit(ctx context.Context, event any) {
 	if a.inner == nil {
 		return
 	}

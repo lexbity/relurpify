@@ -79,7 +79,7 @@ func TestAgentTestReportCommandPrintsCoverage(t *testing.T) {
 
 	ws := t.TempDir()
 	suitePath := writeTapeSuiteFixture(t, ws, "coverage-suite", "", []string{freshCaseName, staleCaseName, missingCaseName}, []string{modelName})
-	now := time.Date(2026, 6, 13, 12, 0, 0, 0, time.UTC)
+	now := time.Now().UTC()
 	freshAt := now.Add(-24 * time.Hour)
 	staleAt := now.Add(-45 * 24 * time.Hour)
 	writeTapeJSONL(t, agenttest.GoldenTapePath(suitePath, "coverage-suite", freshCaseName, modelName), "coverage-suite", freshCaseName, modelName, freshAt)
@@ -111,7 +111,7 @@ func TestAgentTestRerecordCommandPrintsPlan(t *testing.T) {
 
 	ws := t.TempDir()
 	suitePath := writeTapeSuiteFixture(t, ws, "coverage-suite", "", []string{freshCaseName, staleCaseName, missingCaseName}, []string{modelName})
-	now := time.Date(2026, 6, 13, 12, 0, 0, 0, time.UTC)
+	now := time.Now().UTC()
 	freshAt := now.Add(-24 * time.Hour)
 	staleAt := now.Add(-45 * 24 * time.Hour)
 	writeTapeJSONL(t, agenttest.GoldenTapePath(suitePath, "coverage-suite", freshCaseName, modelName), "coverage-suite", freshCaseName, modelName, freshAt)

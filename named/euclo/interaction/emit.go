@@ -33,7 +33,7 @@ func EmitFrame(ctx context.Context, frame *InteractionFrame, env *contextdata.En
 		sink = telemetry.TelemetryFromContext(ctx)
 	}
 	if sink != nil {
-		sink.Emit(telemetry.Event{
+		ev := telemetry.Event{
 			Type:      telemetry.EventType("euclo.interaction.frame.emitted"),
 			TaskID:    env.TaskID,
 			NodeID:    frame.ID,
@@ -46,7 +46,9 @@ func EmitFrame(ctx context.Context, frame *InteractionFrame, env *contextdata.En
 				"default_slot": frame.DefaultSlot,
 				"slot_count":   len(frame.Slots),
 			},
-		})
+		}
+		telemetry.StampCorrelation(ctx, &ev)
+		sink.Emit(ev)
 	}
 
 	return nil

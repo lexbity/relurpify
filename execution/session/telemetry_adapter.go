@@ -1,6 +1,8 @@
 package session
 
 import (
+	"context"
+
 	"codeburg.org/lexbit/relurpify/model"
 	"codeburg.org/lexbit/relurpify/telemetry"
 )
@@ -16,12 +18,13 @@ func newModelTelemetryAdapter(inner telemetry.Telemetry) model.Telemetry {
 	return modelTelemetryAdapter{inner: inner}
 }
 
-func (a modelTelemetryAdapter) Emit(event any) {
+func (a modelTelemetryAdapter) Emit(ctx context.Context, event any) {
 	if a.inner == nil {
 		return
 	}
 	switch ev := event.(type) {
 	case telemetry.Event:
+		telemetry.StampCorrelation(ctx, &ev)
 		a.inner.Emit(ev)
 	}
 }

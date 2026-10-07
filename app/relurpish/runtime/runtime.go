@@ -30,7 +30,6 @@ import (
 	"codeburg.org/lexbit/relurpify/execution/session"
 	"codeburg.org/lexbit/relurpify/execution/workspace"
 	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
-	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/governance/policy"
 	"codeburg.org/lexbit/relurpify/model"
 	"codeburg.org/lexbit/relurpify/named/euclo"
@@ -69,7 +68,11 @@ type Runtime struct {
 	registration     *fauthorization.AgentRegistration
 	modelBackend     llm.ManagedBackend
 
-	hitlCancel func()
+	// sessionID is the process-scoped correlation session created with the
+	// runtime. It is stamped onto every turn's RunContext and mirrored onto the
+	// turn envelope so telemetry events group into one session (FR-1, FR-2).
+	sessionID   string
+	sessionIDMu sync.Mutex
 
 	execSink *telemetry.BroadcastSink
 
@@ -440,27 +443,25 @@ func buildRuntime(ctx context.Context, cfg Config, secrets config.Secrets) (*Run
 				Partition: "local",
 				Actor:     observability.Actor{Kind: "agent", ID: registration.ID, Label: cfg.AgentLabel()},
 			}
-			// Re-wire the permission event logger with full event log support.
-			if registration.Permissions != nil {
-				registration.Permissions.SetEventLogger(func(ctx context.Context, desc permissions.PermissionDescriptor, effect, reason string, fields map[string]any) {
-					payload := map[string]any{
-						"permission_type": desc.Type,
-						"action":          desc.Action,
-						"resource":        desc.Resource,
-						"effect":          effect,
-						"reason":          reason,
-						"metadata":        fields,
-					}
-					if data, err := json.Marshal(payload); err == nil {
-						_, _ = env.EventLog.Append(ctx, "local", []event.FrameworkEvent{{
-							Timestamp: time.Now().UTC(),
-							Type:      event.EventPolicyEvaluated,
-							Payload:   data,
-							Actor:     observability.Actor{Kind: "agent", ID: registration.ID, Label: cfg.AgentLabel()},
-							Partition: "local",
-						}})
-					}
-				})
+			// Re-wire the decision sink with full event log support: every
+			// policy evaluation and HITL lifecycle goes to both the
+			// operational telemetry (JSONL/broadcast) and the causal event
+			// log (FR-5, FR-6).
+			if registration.Permissions != nil || registration.HITL != nil {
+				decisions := telemetry.MultiplexDecisionSink{Sinks: []telemetry.DecisionSink{
+					telemetry.TelemetryDecisionSink{Telemetry: baseTelemetry},
+					eventLogDecisionSink{
+						log:       env.EventLog,
+						partition: "local",
+						actor:     observability.Actor{Kind: "agent", ID: registration.ID, Label: cfg.AgentLabel()},
+					},
+				}}
+				if registration.Permissions != nil {
+					registration.Permissions.SetDecisionSink(decisions)
+				}
+				if registration.HITL != nil {
+					registration.HITL.SetDecisionSink(decisions)
+				}
 			}
 			// S2: built-in contract has no source path; skip reload event.
 			// S8: replace with contract-fingerprint event.
@@ -474,8 +475,7 @@ func buildRuntime(ctx context.Context, cfg Config, secrets config.Secrets) (*Run
 
 	// Assemble the final telemetry (base + event log if available).
 	if eventTelemetry.Log != nil {
-		if mt, ok := baseTelemetry.(telemetry.MultiplexTelemetry); ok {
-			mt.Sinks = append(mt.Sinks, eventTelemetry)
+		if mt, ok := baseTelemetry.(telemetry.MultiplexTelemetry); ok {			mt.Sinks = append(mt.Sinks, eventTelemetry)
 		}
 	}
 
@@ -508,16 +508,6 @@ func buildRuntime(ctx context.Context, cfg Config, secrets config.Secrets) (*Run
 		modelBackend:         modelProduct.Backend,
 		execSink:             execSink,
 	}
-	if eventTelemetry.Log != nil && registration.HITL != nil {
-		ch, cancel := registration.HITL.Subscribe(32)
-		rt.hitlCancel = cancel
-		go func(ctx context.Context) {
-			for ev := range ch {
-				resolved := ev.Type == fauthorization.HITLEventResolved || ev.Type == fauthorization.HITLEventExpired
-				eventTelemetry.EmitHITLEvent(ctx, resolved, ev)
-			}
-		}(ctx)
-	}
 	rt.Delegations.SetObserver(rt.observeDelegationSnapshot)
 	if err := RegisterBuiltinProviders(ctx, rt); err != nil {
 		_ = rt.Close(ctx)
@@ -526,12 +516,14 @@ func buildRuntime(ctx context.Context, cfg Config, secrets config.Secrets) (*Run
 	// Nexus gateway/node-provider registration is not wired in this runtime.
 
 	if ws != nil && ws.Telemetry != nil {
-		ws.Telemetry.Emit(telemetry.Event{
+		ev := telemetry.Event{
 			Type:      telemetry.EventStateChange,
 			Timestamp: time.Now().UTC(),
 			Message:   "backend_selected",
 			Metadata:  map[string]any{"provider": cfg.InferenceProvider},
-		})
+		}
+		telemetry.StampCorrelation(ctx, &ev)
+		ws.Telemetry.Emit(ev)
 	}
 
 	agent, err := instantiateAgent(rt.paradigmDeps())
@@ -609,11 +601,6 @@ func (r *Runtime) Close(ctx context.Context) error {
 		if err := providers[i].Close(); err != nil {
 			errs = append(errs, err)
 		}
-	}
-
-	if r.hitlCancel != nil {
-		r.hitlCancel()
-		r.hitlCancel = nil
 	}
 
 	if r.execSink != nil {
@@ -878,7 +865,7 @@ func (r *Runtime) RunTask(ctx context.Context, task *execution.Task) (*execution
 	if task == nil {
 		return nil, errors.New("task required")
 	}
-	env := contextdata.NewEnvelope(task.ID, "")
+	env := contextdata.NewEnvelope(task.ID, r.ensureSessionID())
 	env.NodeID = "runtime"
 	if task.Context != nil {
 		for key, value := range task.Context {
@@ -894,7 +881,50 @@ func (r *Runtime) RunTask(ctx context.Context, task *execution.Task) (*execution
 	if err := r.Agent.Initialize(&execution.Config{Workspace: r.Config.Workspace}); err != nil {
 		return nil, fmt.Errorf("initialize agent: %w", err)
 	}
-	return r.Agent.Execute(ctx, task, env)
+	return r.Agent.Execute(r.beginTurn(ctx, env), task, env)
+}
+
+// ensureSessionID returns the runtime-scoped correlation session ID, generating
+// one on first use so Runtime values constructed directly (tests, degraded
+// boots) still correlate.
+func (r *Runtime) ensureSessionID() string {
+	r.sessionIDMu.Lock()
+	defer r.sessionIDMu.Unlock()
+	if r.sessionID == "" {
+		r.sessionID = telemetry.NewSessionID()
+	}
+	return r.sessionID
+}
+
+// beginTurn starts a new correlation scope for one turn: it generates a fresh
+// RunID and TraceID, attaches them to ctx for every downstream emitter to read
+// via telemetry.RunContextFromContext, and mirrors the session identity onto
+// the envelope. Called once per turn (including interaction resumes).
+func (r *Runtime) beginTurn(ctx context.Context, env *contextdata.Envelope) context.Context {
+	sessionID := r.ensureSessionID()
+	if env != nil && env.SessionID != "" {
+		sessionID = env.SessionID
+	}
+	if env != nil {
+		env.SessionID = sessionID
+	}
+	agentID := ""
+	if r.registration != nil {
+		agentID = r.registration.ID
+	}
+	// Attach the envelope to the context in addition to the run context
+	// so every emitter inside the turn — including the LLM
+	// instrumentation, which reads the envelope for task attribution —
+	// sees the same task and session identifiers.
+	if env != nil {
+		ctx = contextdata.WithEnvelope(ctx, env)
+	}
+	return telemetry.WithRunContext(ctx, telemetry.RunContext{
+		SessionID: sessionID,
+		RunID:     telemetry.NewRunID(),
+		TraceID:   telemetry.NewTraceID(),
+		AgentID:   agentID,
+	})
 }
 
 func (r *Runtime) submitTurn(ctx context.Context, instruction string, taskType execution.TaskType, metadata map[string]any, callback func(string)) (*execution.Result, error) {
@@ -1057,7 +1087,7 @@ func (r *Runtime) resumeInteractionTask(ctx context.Context, env *contextdata.En
 	if r.Agent == nil {
 		return nil, fmt.Errorf("agent unavailable for resume")
 	}
-	return r.Agent.Execute(ctx, task, env)
+	return r.Agent.Execute(r.beginTurn(ctx, env), task, env)
 }
 
 func findInteractionFrame(env *contextdata.Envelope, frameID string) (*interaction.InteractionFrame, bool) {

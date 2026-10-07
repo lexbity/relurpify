@@ -19,7 +19,6 @@ import (
 const (
 	existing_tool = "existing_tool"
 	file_read     = "file_read"
-	go_test       = "go_test"
 	tool          = "tool"
 	tool1         = "tool1"
 	tool2         = "tool2"
@@ -61,7 +60,7 @@ func TestExtractCapabilityRegistry(t *testing.T) {
 	reg := registry.NewRegistry()
 	reg.Register(context.Background(), &mockTool{name: tool1})
 	reg.Register(context.Background(), &mockTool{name: tool2})
-	reg.Register(&mockTool{name: tool3})
+	reg.Register(context.Background(), &mockTool{name: tool3})
 
 	agent := &mockCapabilityRegistryProvider{registry: reg}
 
@@ -171,7 +170,7 @@ func TestComputeCoverage_EmptyRegistry(t *testing.T) {
 
 func TestRegistryHasTool(t *testing.T) {
 	reg := registry.NewRegistry()
-	reg.Register(&mockTool{name: existing_tool})
+	reg.Register(context.Background(), &mockTool{name: existing_tool})
 
 	agent := &mockCapabilityRegistryProvider{registry: reg}
 
@@ -227,9 +226,9 @@ func TestValidateToolsRequired(t *testing.T) {
 
 func TestBuildCoverageFromEvents(t *testing.T) {
 	reg := registry.NewRegistry()
-	reg.Register(&mockTool{name: go_test})
-	reg.Register(&mockTool{name: file_read})
-	reg.Register(&mockTool{name: "file_write"})
+	reg.Register(context.Background(), &mockTool{name: go_test})
+	reg.Register(context.Background(), &mockTool{name: file_read})
+	reg.Register(context.Background(), &mockTool{name: "file_write"})
 
 	agent := &mockCapabilityRegistryProvider{registry: reg}
 

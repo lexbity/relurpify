@@ -95,7 +95,7 @@ func RegisterAgent(ctx context.Context, cfg RuntimeConfig) (*AgentRegistration, 
 	if err := runtime.Verify(ctx); err != nil {
 		return nil, fmt.Errorf("sandbox verification failed: %w", err)
 	}
-	hitl := NewHITLBroker(cfg.HITLTimeout)
+	hitl := NewHITLBroker(cfg.HITLTimeout, nil)
 	audit := policy.NewInMemoryAuditLogger(cfg.AuditLimit)
 	var permManager *PermissionManager
 	if len(effectivePerms.FileSystem) > 0 ||
