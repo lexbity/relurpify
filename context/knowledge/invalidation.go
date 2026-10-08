@@ -2,7 +2,10 @@ package knowledge
 
 import (
 	"context"
+	"fmt"
+	"log"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -19,9 +22,63 @@ type InvalidationPass struct {
 	Tensions      any
 	Reporter      StaleChunkReporter
 	WorkspaceRoot string
+
+	mu     sync.Mutex
+	cancel context.CancelFunc
+	wg     sync.WaitGroup
 }
 
+// Start launches the invalidation loop in the background and returns as soon as
+// it is running. Stop cancels the loop and waits for the goroutine to exit.
+// A second Start while running returns an error.
 func (p *InvalidationPass) Start(ctx context.Context) error {
+	if p == nil || p.Events == nil {
+		return nil
+	}
+	p.mu.Lock()
+	if p.cancel != nil {
+		p.mu.Unlock()
+		return fmt.Errorf("invalidation pass already started")
+	}
+	runCtx, cancel := context.WithCancel(ctx)
+	p.cancel = cancel
+	p.wg.Add(1)
+	p.mu.Unlock()
+
+	go func() {
+		defer p.wg.Done()
+		if err := p.run(runCtx); err != nil {
+			log.Printf("invalidation pass stopped with error: %v", err)
+		}
+	}()
+	return nil
+}
+
+// Stop cancels the invalidation loop and waits for its goroutine to exit. It is
+// safe to call before Start and multiple times. The cancel function is cleared
+// only after the goroutine has exited so a concurrent Start cannot race with
+// the WaitGroup wait.
+func (p *InvalidationPass) Stop() error {
+	if p == nil {
+		return nil
+	}
+	p.mu.Lock()
+	cancel := p.cancel
+	p.mu.Unlock()
+	if cancel == nil {
+		return nil
+	}
+	cancel()
+	p.wg.Wait()
+	p.mu.Lock()
+	p.cancel = nil
+	p.mu.Unlock()
+	return nil
+}
+
+// run is the invalidation loop body. It returns when the context is cancelled,
+// the event stream closes, or a flush fails.
+func (p *InvalidationPass) run(ctx context.Context) error {
 	if p == nil || p.Events == nil {
 		return nil
 	}
@@ -145,8 +202,6 @@ func (p *InvalidationPass) Start(ctx context.Context) error {
 		}
 	}
 }
-
-func (p *InvalidationPass) Stop() error { return nil }
 
 func (p *InvalidationPass) HandleRevisionChanged(ctx context.Context, payload CodeRevisionChangedPayload) error {
 	if p == nil || p.Store == nil {

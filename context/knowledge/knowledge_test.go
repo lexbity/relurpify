@@ -295,15 +295,18 @@ func TestInvalidationPassCoalescesChunkStaledEvents(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	done := make(chan error, 1)
-	go func() { done <- pass.Start(ctx) }()
+	require.NoError(t, pass.Start(ctx))
+	t.Cleanup(func() { _ = pass.Stop() })
 
+	// Give the background loop a moment to subscribe before emitting, then
+	// burst-emit: the debounce window must coalesce the burst into at most two
+	// propagation flushes.
+	time.Sleep(20 * time.Millisecond)
 	for i := 0; i < 20; i++ {
 		bus.EmitChunkStaled(ChunkStaledPayload{ChunkIDs: []string{fmt.Sprintf("chunk:%d", i%3)}, Reason: "burst"})
 	}
 	time.Sleep(150 * time.Millisecond)
-	cancel()
-	require.NoError(t, <-done)
+	require.NoError(t, pass.Stop())
 	require.LessOrEqual(t, atomic.LoadInt32(&propagateCalls), int32(2))
 }
 

@@ -475,6 +475,7 @@ type ScheduledJob struct {
 	ID       string
 	Interval time.Duration // fixed-period scheduling; zero means use CronExpr
 	CronExpr string        // standard 5-field cron expression
+	LastRun  time.Time     // last time the job began executing; zero means never
 	Action   func(context.Context) error
 	Source   string // "memory" | "config" | "internal"
 }
@@ -573,9 +574,8 @@ func (s *ServiceScheduler) runJobs(ctx context.Context) {
 			continue
 		}
 		if !s.tryBegin(job.ID) {
-			// The known interval-fires-every-tick bug is now observable: a job
-			// still in flight when its next tick arrives is skipped with a
-			// telemetry record instead of running concurrently (FR-13).
+			// A job still in flight when its next due time arrives is skipped
+			// with a telemetry record instead of running concurrently (FR-13).
 			s.emit(ctx, telemetry.EventSchedulerJobSkipped, "scheduler job skipped", map[string]any{
 				"job_id": job.ID,
 				"source": job.Source,
@@ -583,6 +583,7 @@ func (s *ServiceScheduler) runJobs(ctx context.Context) {
 			})
 			continue
 		}
+		s.markRun(job.ID, now)
 		s.emit(ctx, telemetry.EventSchedulerJobStarted, "scheduler job started", map[string]any{
 			"job_id": job.ID,
 			"source": job.Source,
@@ -648,14 +649,29 @@ func (s *ServiceScheduler) emit(ctx context.Context, eventType telemetry.EventTy
 // shouldRun determines if a job should run at the given time.
 func (s *ServiceScheduler) shouldRun(job ScheduledJob, now time.Time) bool {
 	if job.Interval > 0 {
-		// Interval-based jobs are evaluated on every scheduler tick.
-		// Last-run tracking would be needed for strict interval enforcement.
-		return true
+		// Strict interval enforcement: an interval job runs only once its
+		// interval has elapsed since it last began. A zero LastRun (never run)
+		// is always due, so jobs still run immediately on first evaluation.
+		return job.LastRun.Add(job.Interval).Before(now)
 	}
 	if job.CronExpr != "" {
 		return matchesCron(job.CronExpr, now)
 	}
 	return false
+}
+
+// markRun records the time a job began executing so interval scheduling can
+// enforce the gap between successive runs. The scheduler loop iterates a copy
+// of Jobs, so the stored slice entry must be updated by ID.
+func (s *ServiceScheduler) markRun(id string, at time.Time) {
+	s.Mu.Lock()
+	defer s.Mu.Unlock()
+	for i := range s.Jobs {
+		if s.Jobs[i].ID == id {
+			s.Jobs[i].LastRun = at
+			return
+		}
+	}
 }
 
 // matchesCron checks if the current time matches a cron expression.

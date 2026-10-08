@@ -8,6 +8,9 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/context/knowledge"
 	"codeburg.org/lexbit/relurpify/execution/workspace"
+	"codeburg.org/lexbit/relurpify/governance/authorization"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
+	"codeburg.org/lexbit/relurpify/governance/policy"
 )
 
 // Adapter implements WorkspaceService using OpenWorkspace
@@ -90,11 +93,43 @@ func (c *securityController) PolicySummary(_ context.Context) (PolicySummary, er
 	}, nil
 }
 
-func (c *securityController) RequestApproval(_ context.Context, _ ApprovalRequest) (ApprovalDecision, error) {
-	if c.ws.Registration == nil || c.ws.Registration.HITL == nil {
+// hitlApprover is the human-in-the-loop capability the security controller
+// needs. It is satisfied by the governance HITL broker (and by test doubles);
+// the registration carries the broker as an opaque value so execution does not
+// own the concrete broker type.
+type hitlApprover interface {
+	RequestPermission(ctx context.Context, req authorization.PermissionRequest) (*authorization.PermissionGrant, error)
+}
+
+// RequestApproval delegates the approval decision to the configured HITL
+// broker. It returns ErrSecurityUnavailable when no broker is wired, and maps a
+// broker denial/timeout to a non-approving decision (fail-closed) rather than
+// surfacing broker internals as a transport error.
+func (c *securityController) RequestApproval(ctx context.Context, req ApprovalRequest) (ApprovalDecision, error) {
+	if c == nil || c.ws == nil || c.ws.Registration == nil || c.ws.Registration.HITL == nil {
 		return ApprovalDecision{}, ErrSecurityUnavailable
 	}
-	return ApprovalDecision{}, ErrSecurityUnavailable
+	approver, ok := c.ws.Registration.HITL.(hitlApprover)
+	if !ok {
+		return ApprovalDecision{}, ErrSecurityUnavailable
+	}
+	grant, err := approver.RequestPermission(ctx, authorization.PermissionRequest{
+		Permission: permissions.PermissionDescriptor{
+			Type:         permissions.PermissionTypeHITL,
+			Action:       req.Action,
+			RequiresHITL: true,
+		},
+		Justification: req.Reason,
+		Scope:         policy.GrantScopeOneTime,
+		Timeout:       req.Timeout,
+	})
+	if err != nil {
+		return ApprovalDecision{Approved: false, Reason: err.Error()}, nil
+	}
+	if grant == nil {
+		return ApprovalDecision{Approved: false, Reason: "hitl broker returned no grant"}, nil
+	}
+	return ApprovalDecision{Approved: true, Reason: grant.ApprovedBy}, nil
 }
 
 // knowledgeController wraps the workspace environment to provide the

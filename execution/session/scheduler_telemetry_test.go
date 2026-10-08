@@ -127,6 +127,11 @@ func TestServiceSchedulerEmitsSkippedWhenRunning(t *testing.T) {
 
 	sched.runJobs(ctx)
 	<-started // first invocation is now in flight
+	// The job's interval must appear elapsed for the in-flight job to be
+	// re-evaluated; otherwise strict interval tracking skips it silently.
+	sched.Mu.Lock()
+	sched.Jobs[0].LastRun = time.Now().Add(-2 * time.Hour)
+	sched.Mu.Unlock()
 	sched.runJobs(ctx)
 
 	waitForEvent(t, sink, telemetry.EventSchedulerJobStarted, "job-skip")
