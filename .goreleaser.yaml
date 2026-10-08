@@ -1,0 +1,273 @@
+version: 2
+
+project_name: relurpify
+
+# Release build matrix.
+#
+# Decision 3 of the build spec calls for ellipsis discovery (main: ./...) so a
+# single build entry covers every main package. GoReleaser supports that since
+# v2.15, but it infers binary names from directory names (go build semantics)
+# and hard-errors when `binary` or `id` is also set while more than one main is
+# discovered (internal/builders/golang/build.go: checkBuildElipsis). Ellipsis
+# discovery therefore cannot produce a `dev-agent` binary from
+# app/dev-agent-cli, and `./...` would additionally sweep in
+# tooling/coverage/cmd/coverage, which is internal tooling and not a release
+# artifact. Binary identity is set explicitly per entry instead. Entries are
+# spelled out in full rather than YAML-merged: every entry is independently
+# reviewable, and the portability differences below are visible at a glance.
+#
+# Portability note (verified with GOOS/GOARCH cross-builds): four of the seven
+# binaries transitively import platform/fs (syscall.O_NOFOLLOW) and
+# capability/sandbox (syscall.Setpgid, syscall.Kill), which have no Windows
+# build-tag split and no Windows equivalents in the tree. Porting them is a
+# production-code change outside this phase's blast radius, so those binaries
+# are scoped to linux/darwin until the sandbox layer gains Windows support.
+# The three AST-based tooling binaries (archcheck, domaincheck, driftcheck)
+# are pure Go and ship on all three platforms.
+#
+# CGO is disabled for every target. Cross-compilation already forces this for
+# five of the six targets and the tree has no cgo imports, so making the
+# native build explicit keeps every binary static, portable, and
+# byte-identical across build machines (NFR-6).
+builds:
+  - id: relurpish
+    main: ./app/relurpish
+    binary: relurpish
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.CommitDate}}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+  - id: dev-agent
+    main: ./app/dev-agent-cli
+    binary: dev-agent
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.CommitDate}}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+  - id: relurplint
+    main: ./app/relurplint
+    binary: relurplint
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.CommitDate}}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+  - id: generate-config
+    main: ./userconfig/templates/cmd/generate-config
+    binary: generate-config
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.CommitDate}}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+  - id: archcheck
+    main: ./tooling/arch/cmd/archcheck
+    binary: archcheck
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.CommitDate}}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+  - id: domaincheck
+    main: ./tooling/arch/cmd/domaincheck
+    binary: domaincheck
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.CommitDate}}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+  - id: driftcheck
+    main: ./tooling/driftcheck
+    binary: driftcheck
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.CommitDate}}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+# One archive per binary per platform (34 archives). A single multi-binary
+# archive per platform would embed GoReleaser's parallel build-completion
+# order into the tar entry order, so archive bytes -- and therefore the
+# archive SBOMs and checksums.txt entries derived from them -- would differ
+# between builds of the same tag. Single-binary archives are deterministic by
+# construction (NFR-6). `ids` selects exactly one build's binaries per entry;
+# archive ids match build ids so the pairing is unambiguous.
+archives:
+  - id: relurpish
+    ids:
+      - relurpish
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    name_template: "{{ .Binary }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+  - id: dev-agent
+    ids:
+      - dev-agent
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    name_template: "{{ .Binary }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+  - id: relurplint
+    ids:
+      - relurplint
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    name_template: "{{ .Binary }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+  - id: generate-config
+    ids:
+      - generate-config
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    name_template: "{{ .Binary }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+  - id: archcheck
+    ids:
+      - archcheck
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    name_template: "{{ .Binary }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+  - id: domaincheck
+    ids:
+      - domaincheck
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    name_template: "{{ .Binary }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+  - id: driftcheck
+    ids:
+      - driftcheck
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    name_template: "{{ .Binary }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+checksum:
+  name_template: "checksums.txt"
+
+sboms:
+  - artifacts: archive
+    documents:
+      - "${artifact}.sbom.json"
+
+release:
+  github:
+    owner: lexbit
+    name: relurpify
+  draft: true

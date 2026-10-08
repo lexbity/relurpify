@@ -293,12 +293,24 @@ check-no-ghost-providers:
 	@echo "[PASS] AC-4: app/relurpish/tui clean"
 	@echo "[PASS] All AC-4 ghost provider gates passed"
 
+# release-snapshot runs the full GoReleaser pipeline locally without publishing:
+# binaries, archives, checksums, and SBOMs, all versioned as a snapshot.
+# `goreleaser build` alone only runs the build pipe (no archives/checksums/SBOMs),
+# so this intentionally invokes the release command with --snapshot.
+release-snapshot:
+	goreleaser release --snapshot --clean
+
+# release runs goreleaser in release mode (creates GitHub Release).
+# Requires a valid git tag and GITHUB_TOKEN.
+release:
+	goreleaser release --clean
+
 # test-coverage enforces a per-package minimum coverage threshold.
 # Packages with zero statements (e.g., main packages with only init()) are excluded.
 # The coverage tool lives at tooling/coverage/cmd/coverage.
 COVERAGE_MIN := 70
 
-.PHONY: test-coverage
+.PHONY: release-snapshot release test-coverage
 
 test-coverage:
 	@mkdir -p /tmp/relurpify-go-cache
