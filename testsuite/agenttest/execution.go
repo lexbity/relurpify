@@ -193,6 +193,8 @@ func (e *PreparedRunExecutor) buildSecurity(ctx context.Context, desc *PreparedR
 		BackendFactory: envcomposition.NewSandboxBackendFactory(),
 		BaseFS:         workspace,
 		StateDir:       config.DefaultWorkspaceStateDir(workspace),
+		WorkspaceID:    filepath.Base(workspace),
+		AgentName:      contract.AgentID,
 	})
 	if err != nil {
 		return fmt.Errorf("register agent: %w", err)

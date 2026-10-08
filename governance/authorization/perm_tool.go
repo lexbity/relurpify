@@ -51,52 +51,66 @@ func (m *PermissionManager) AuthorizeTool(ctx context.Context, agentID string, t
 		t = &toolAdapter{inner: pt}
 	}
 	if m.toolAllowedByTaskGrant(ctx, t) {
-		desc := permissions.PermissionDescriptor{
-			Type:     permissions.PermissionTypeHITL,
-			Action:   fmt.Sprintf("tool:%s", t.Name()),
-			Resource: agentID,
-		}
-		m.log(ctx, agentID, desc, "tool_allowed_task_grant", map[string]any{"tags": t.Tags()})
+		m.log(ctx, agentID, toolDescriptor(t.Name(), agentID), "tool_allowed_task_grant", map[string]any{"tags": t.Tags()})
 		return nil
 	}
 	requirements := t.Permissions()
 	if err := requirements.Validate(); err != nil {
 		return fmt.Errorf("tool %s permission invalid: %w", t.Name(), err)
 	}
-	undeclared := m.collectUndeclared(requirements.Permissions)
-	if len(undeclared) > 0 {
-		switch m.effectiveDefaultPolicy() {
-		case "deny":
-			return m.deny(ctx, agentID, permissions.PermissionDescriptor{
-				Type:     permissions.PermissionTypeHITL,
-				Action:   fmt.Sprintf("tool:%s", t.Name()),
-				Resource: agentID,
-			}, "tool exceeds declared permissions")
-		default: // "ask"
-			m.emitPolicyDecision(ctx, agentID, permissions.PermissionDescriptor{
-				Type:         permissions.PermissionTypeHITL,
-				Action:       fmt.Sprintf("tool:%s", t.Name()),
-				Resource:     agentID,
-				RequiresHITL: true,
-			}, fwtelemetry.PolicyEffectRequireApproval, "undeclared permissions require approval", map[string]any{"undeclared": undeclared})
-			if err := m.RequireApproval(ctx, agentID, permissions.PermissionDescriptor{
-				Type:         permissions.PermissionTypeHITL,
-				Action:       fmt.Sprintf("tool:%s", t.Name()),
-				Resource:     agentID,
-				RequiresHITL: true,
-			}, fmt.Sprintf("tool %s requires: %s", t.Name(), strings.Join(undeclared, ", ")),
-				policy.GrantScopeSession, policy.RiskLevelMedium, 0); err != nil {
-				return err
-			}
+	if undeclared := m.collectUndeclared(requirements.Permissions); len(undeclared) > 0 {
+		if err := m.handleUndeclaredTool(ctx, agentID, t.Name(), undeclared); err != nil {
+			return err
 		}
 	}
-	desc := permissions.PermissionDescriptor{
+	m.log(ctx, agentID, toolDescriptor(t.Name(), agentID), "tool_allowed", nil)
+	return nil
+}
+
+// AuthorizeToolByName authorizes a tool referenced only by name, without its
+// declared permission set. Because the tool's requirements are unknown, the
+// request is treated as fully undeclared and governed by the configured default
+// policy (Ask by default), so callers that cannot supply the tool fail closed.
+func (m *PermissionManager) AuthorizeToolByName(ctx context.Context, agentID, toolName string) error {
+	if m == nil {
+		return errors.New("permission manager missing")
+	}
+	name := strings.TrimSpace(toolName)
+	if name == "" {
+		return errors.New("tool name required")
+	}
+	// A task grant is tag-scoped; a name-only reference carries no tags, so it
+	// cannot match one.
+	if err := m.handleUndeclaredTool(ctx, agentID, name, []string{"tool permissions unknown"}); err != nil {
+		return err
+	}
+	m.log(ctx, agentID, toolDescriptor(name, agentID), "tool_allowed", nil)
+	return nil
+}
+
+// handleUndeclaredTool applies the configured default policy to a tool whose
+// permissions are not covered by the agent's declared set.
+func (m *PermissionManager) handleUndeclaredTool(ctx context.Context, agentID, name string, undeclared []string) error {
+	desc := toolDescriptor(name, agentID)
+	switch m.effectiveDefaultPolicy() {
+	case defaultPolicyDeny:
+		return m.deny(ctx, agentID, desc, "tool exceeds declared permissions")
+	default: // defaultPolicyAsk
+		desc.RequiresHITL = true
+		m.emitPolicyDecision(ctx, agentID, desc, fwtelemetry.PolicyEffectRequireApproval, "undeclared permissions require approval", map[string]any{"undeclared": undeclared})
+		return m.RequireApproval(ctx, agentID, desc,
+			fmt.Sprintf("tool %s requires: %s", name, strings.Join(undeclared, ", ")),
+			policy.GrantScopeSession, policy.RiskLevelMedium, 0)
+	}
+}
+
+// toolDescriptor builds the canonical permission descriptor for a tool action.
+func toolDescriptor(name, agentID string) permissions.PermissionDescriptor {
+	return permissions.PermissionDescriptor{
 		Type:     permissions.PermissionTypeHITL,
-		Action:   fmt.Sprintf("tool:%s", t.Name()),
+		Action:   fmt.Sprintf("tool:%s", name),
 		Resource: agentID,
 	}
-	m.log(ctx, agentID, desc, "tool_allowed", nil)
-	return nil
 }
 
 // collectUndeclared returns human-readable descriptions of any permissions

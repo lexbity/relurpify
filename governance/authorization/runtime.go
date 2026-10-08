@@ -13,7 +13,11 @@ import (
 	governanceports "codeburg.org/lexbit/relurpify/governance/ports"
 )
 
-const defaultToolPolicyAllow = "allow"
+const (
+	defaultToolPolicyAllow = "allow"
+	defaultPolicyAsk       = "ask"
+	defaultPolicyDeny      = "deny"
+)
 
 // runtimeStateDirName is the workspace-relative runtime state directory used as a
 // filesystem-guard root fallback when the caller does not supply StateDir. Kept
@@ -59,6 +63,10 @@ type RuntimeConfig struct {
 	BaseFS             string
 	StateDir           string
 	HITLTimeout        time.Duration
+	// WorkspaceID and AgentName identify the agent for audit attribution. The
+	// registration ID is derived deterministically from them.
+	WorkspaceID string
+	AgentName   string
 }
 
 // AgentRegistration stores runtime metadata. DocumentSnapshot and AgentSpec are
@@ -138,7 +146,7 @@ func RegisterAgent(ctx context.Context, cfg RuntimeConfig) (*AgentRegistration, 
 		return nil, fmt.Errorf("sandbox policy application failed: %w", err)
 	}
 	return &AgentRegistration{
-		ID:                "",
+		ID:                generateAgentID(cfg.WorkspaceID, cfg.AgentName),
 		DocumentSnapshot:  cfg.DocumentSnapshot,
 		AgentSpec:         cfg.AgentSpec,
 		Permissions:       permManager,
@@ -151,6 +159,36 @@ func RegisterAgent(ctx context.Context, cfg RuntimeConfig) (*AgentRegistration, 
 		Security:          cfg.Security,
 		DefaultToolPolicy: cfg.DefaultToolPolicy,
 	}, nil
+}
+
+// generateAgentID derives a stable, deterministic agent ID from the workspace
+// and agent name for audit attribution. Empty components fall back to
+// "unknown"; each component is sanitized to lowercase alphanumerics joined by
+// single hyphens.
+func generateAgentID(workspaceID, agentName string) string {
+	return "agent-" + sanitizeIDPart(workspaceID) + "-" + sanitizeIDPart(agentName)
+}
+
+func sanitizeIDPart(s string) string {
+	var b strings.Builder
+	prevDash := false
+	for _, r := range strings.ToLower(strings.TrimSpace(s)) {
+		switch {
+		case (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9'):
+			b.WriteRune(r)
+			prevDash = false
+		default:
+			if !prevDash {
+				b.WriteByte('-')
+				prevDash = true
+			}
+		}
+	}
+	out := strings.Trim(b.String(), "-")
+	if out == "" {
+		return "unknown"
+	}
+	return out
 }
 
 // selectSandboxRuntime returns a sandbox runtime using the provided factory.

@@ -290,6 +290,8 @@ func buildRuntime(ctx context.Context, cfg Config, secrets config.Secrets) (*Run
 		BaseFS:         cfg.Workspace,
 		StateDir:       config.DefaultWorkspaceStateDir(cfg.Workspace),
 		HITLTimeout:    cfg.HITLTimeout,
+		WorkspaceID:    filepath.Base(cfg.Workspace),
+		AgentName:      contract.AgentID,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("compose authorization registration: %w", err)

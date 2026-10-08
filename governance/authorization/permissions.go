@@ -140,7 +140,7 @@ func (m *PermissionManager) effectiveDefaultPolicy() string {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	if m.defaultPolicy == "" {
-		return "ask"
+		return defaultPolicyAsk
 	}
 	return m.defaultPolicy
 }

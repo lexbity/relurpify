@@ -1,8 +1,6 @@
 package euclo
 
 import (
-	"time"
-
 	"codeburg.org/lexbit/relurpify/context/contextstream"
 	"codeburg.org/lexbit/relurpify/context/persistence"
 	"codeburg.org/lexbit/relurpify/execution/agentlifecycle"
@@ -42,10 +40,6 @@ type EucloConfig struct {
 	IngestionIncludeGlobs []string
 	IngestionExcludeGlobs []string
 
-	// HITLTimeout is the maximum duration Euclo waits for a HITL decision.
-	// Zero uses the HITLBroker's default.
-	HITLTimeout time.Duration
-
 	// HITLBroker approves human-in-the-loop requests raised by the policy gate.
 	// It is required to build the execution graph; a nil broker fails closed
 	// rather than silently auto-approving.
@@ -79,7 +73,6 @@ func DefaultConfig() EucloConfig {
 		WorkspaceIngestionMode:  "files_only",
 		IngestionIncludeGlobs:   []string{},
 		IngestionExcludeGlobs:   []string{},
-		HITLTimeout:             5 * time.Minute,
 		TelemetrySink:           nil,
 		DryRun:                  false,
 		SuppressOutcomeFeedback: false,

@@ -84,7 +84,7 @@ func (e *permissionManagerEnforcer) checkNetwork(ctx context.Context, agentID, r
 }
 
 func (e *permissionManagerEnforcer) checkTool(ctx context.Context, agentID, toolName string) governanceports.Decision {
-	if err := e.pm.AuthorizeTool(ctx, agentID, nil, nil); err != nil {
+	if err := e.pm.AuthorizeToolByName(ctx, agentID, toolName); err != nil {
 		return governanceports.Decision{Allow: false, Reason: err.Error()}
 	}
 	return governanceports.Decision{Allow: true, Reason: "tool allowed"}
