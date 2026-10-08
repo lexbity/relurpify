@@ -275,6 +275,22 @@ func (m *PermissionManager) emitPolicyConflict(ctx context.Context, agentID stri
 	})
 }
 
+// emitCommandEvent forwards a command-authorization forensic signal (wrapper
+// unwrapping, parse failure, opaque constructor) to the decision sink.
+func (m *PermissionManager) emitCommandEvent(ctx context.Context, agentID string, event fwtelemetry.CommandEvent) {
+	if m == nil {
+		return
+	}
+	event.Actor = agentID
+	m.mu.RLock()
+	sink := m.decisions
+	m.mu.RUnlock()
+	if sink == nil {
+		return
+	}
+	sink.CommandEvent(ctx, event)
+}
+
 // ruleIDFromFields extracts the matched rule identifier carried by engine
 // decisions (rule_id/rule_name fields).
 func ruleIDFromFields(fields map[string]any) string {
