@@ -173,90 +173,72 @@ builds:
       - -X main.date={{.CommitDate}}
     mod_timestamp: "{{ .CommitTimestamp }}"
 
-# One archive per binary per platform (34 archives). A single multi-binary
-# archive per platform would embed GoReleaser's parallel build-completion
-# order into the tar entry order, so archive bytes -- and therefore the
-# archive SBOMs and checksums.txt entries derived from them -- would differ
-# between builds of the same tag. Single-binary archives are deterministic by
-# construction (NFR-6). `ids` selects exactly one build's binaries per entry;
-# archive ids match build ids so the pairing is unambiguous.
+# One archive per platform carrying every binary that builds for it, plus the
+# default license/README files. Binaries sit at the archive root (no wrap
+# directory) because the AUR package() function installs them from there.
+#
+# Combined per-platform archives are a Phase 4 requirement, not a preference:
+# the AUR pipe accepts exactly one archive per architecture
+# (internal/pipe/aur/aur.go: ErrMultipleArchivesSameArch), so per-binary
+# archives cannot feed it. `allow_different_binary_count` acknowledges the
+# intentional per-platform difference (see the portability note above: the
+# three AST tooling binaries also build for Windows). Binaries stay in the
+# per-target unique dist dirs (dist/<id>_<target>/).
 archives:
-  - id: relurpish
-    ids:
-      - relurpish
+  - id: relurpify
     formats:
       - tar.gz
     format_overrides:
       - goos: windows
         formats:
           - zip
-    name_template: "{{ .Binary }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    allow_different_binary_count: true
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
 
-  - id: dev-agent
-    ids:
-      - dev-agent
+# Linux packages. No contents list is needed for the binaries: the nFPM pipe
+# adds every linux binary of each platform group to bindir (/usr/bin) on its
+# own, so all seven binaries land under /usr/bin/ automatically and new
+# binaries are packaged without editing this section.
+nfpms:
+  - package_name: relurpify
     formats:
-      - tar.gz
-    format_overrides:
-      - goos: windows
-        formats:
-          - zip
-    name_template: "{{ .Binary }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+      - deb
+      - rpm
+    vendor: Relurpify Authors
+    homepage: https://github.com/lexbit/relurpify
+    maintainer: Prestin Liu <liuprestin@gmail.com>
+    description: |
+      Fullstack agent framework for LLM-driven coding agents.
+      Includes relurpish (TUI), dev-agent (test runner), relurplint (linter),
+      and internal tooling.
+    license: Apache-2.0
 
-  - id: relurplint
+# Arch Linux binary package. `ids` pairs this with the combined archive above
+# (one archive per arch: x86_64, aarch64). No runtime depends: every binary is
+# built with CGO_ENABLED=0 and has no cgo imports, so the releases are
+# statically linked and pull in no shared libraries. Publishing needs the
+# AUR_SSH_KEY secret and the relurpify-bin AUR repository; snapshot builds
+# only generate the PKGBUILD/.SRCINFO under dist/aur/ and never push.
+aurs:
+  - name: relurpify-bin
+    homepage: "https://github.com/lexbit/relurpify"
+    description: "Fullstack agent framework for LLM-driven coding agents"
+    maintainers:
+      - "Prestin Liu <liuprestin@gmail.com>"
+    license: "Apache-2.0"
+    private_key: "{{ .Env.AUR_SSH_KEY }}"
+    git_url: "ssh://aur@aur.archlinux.org/relurpify-bin.git"
     ids:
-      - relurplint
-    formats:
-      - tar.gz
-    format_overrides:
-      - goos: windows
-        formats:
-          - zip
-    name_template: "{{ .Binary }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
-
-  - id: generate-config
-    ids:
-      - generate-config
-    formats:
-      - tar.gz
-    format_overrides:
-      - goos: windows
-        formats:
-          - zip
-    name_template: "{{ .Binary }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
-
-  - id: archcheck
-    ids:
-      - archcheck
-    formats:
-      - tar.gz
-    format_overrides:
-      - goos: windows
-        formats:
-          - zip
-    name_template: "{{ .Binary }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
-
-  - id: domaincheck
-    ids:
-      - domaincheck
-    formats:
-      - tar.gz
-    format_overrides:
-      - goos: windows
-        formats:
-          - zip
-    name_template: "{{ .Binary }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
-
-  - id: driftcheck
-    ids:
-      - driftcheck
-    formats:
-      - tar.gz
-    format_overrides:
-      - goos: windows
-        formats:
-          - zip
-    name_template: "{{ .Binary }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+      - relurpify
+    package: |
+      install -Dm755 "./relurpish" "${pkgdir}/usr/bin/relurpish"
+      install -Dm755 "./dev-agent" "${pkgdir}/usr/bin/dev-agent"
+      install -Dm755 "./relurplint" "${pkgdir}/usr/bin/relurplint"
+      install -Dm755 "./generate-config" "${pkgdir}/usr/bin/generate-config"
+      install -Dm755 "./archcheck" "${pkgdir}/usr/bin/archcheck"
+      install -Dm755 "./domaincheck" "${pkgdir}/usr/bin/domaincheck"
+      install -Dm755 "./driftcheck" "${pkgdir}/usr/bin/driftcheck"
+      install -Dm644 "./LICENSE" "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
 
 checksum:
   name_template: "checksums.txt"
