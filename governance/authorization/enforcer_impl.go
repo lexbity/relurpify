@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"codeburg.org/lexbit/relurpify/governance/netpolicy"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	governanceports "codeburg.org/lexbit/relurpify/governance/ports"
 )
@@ -77,10 +78,24 @@ func (e *permissionManagerEnforcer) checkExecutable(ctx context.Context, agentID
 }
 
 func (e *permissionManagerEnforcer) checkNetwork(ctx context.Context, agentID, resource string) governanceports.Decision {
-	if err := e.pm.CheckNetwork(ctx, agentID, "egress", "tcp", resource, 0); err != nil {
-		return governanceports.Decision{Allow: false, Reason: err.Error()}
+	// INV-1: the Enforcer performs no I/O, so it never resolves. An IP literal
+	// is classified directly; anything else must have been resolved by the
+	// caller (netpolicy.ResolveTarget) into a checked target before reaching
+	// this pure path.
+	if ip, ok := netpolicy.ParseHostToken(resource); ok {
+		target := netpolicy.Target{Token: resource, Class: netpolicy.ClassifyIP(ip), Literal: true}
+		if err := e.pm.CheckNetwork(ctx, agentID, "egress", "tcp", target, 0); err != nil {
+			return governanceports.Decision{Allow: false, Reason: err.Error()}
+		}
+		return governanceports.Decision{Allow: true, Reason: "network allowed"}
 	}
-	return governanceports.Decision{Allow: true, Reason: "network allowed"}
+	const reason = "unresolved network target — resolve via netpolicy before Enforcer.Check"
+	e.pm.emitPolicyDecision(ctx, agentID, permissions.PermissionDescriptor{
+		Type:     permissions.PermissionTypeNetwork,
+		Action:   "net:egress",
+		Resource: resource,
+	}, "deny", reason, map[string]any{"event": "netpolicy/unresolved", "host": resource})
+	return governanceports.Decision{Allow: false, Reason: reason}
 }
 
 func (e *permissionManagerEnforcer) checkTool(ctx context.Context, agentID, toolName string) governanceports.Decision {

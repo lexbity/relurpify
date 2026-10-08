@@ -1,55 +1,39 @@
 package sandbox
 
-import "net"
+import (
+	"fmt"
+	"strings"
 
-// privateRanges contains IP subnets that must never be reachable by sandboxed
-// tool network calls.
-var privateRanges []*net.IPNet
+	"codeburg.org/lexbit/relurpify/governance/netpolicy"
+)
 
-func init() {
-	cidrs := []string{
-		"127.0.0.0/8",    // IPv4 loopback
-		"::1/128",        // IPv6 loopback
-		"10.0.0.0/8",     // RFC-1918 class A
-		"172.16.0.0/12",  // RFC-1918 class B
-		"192.168.0.0/16", // RFC-1918 class C
-		"169.254.0.0/16", // Link-local / cloud metadata (AWS/GCP/Azure)
-		"fc00::/7",       // IPv6 unique-local
-		"fe80::/10",      // IPv6 link-local
+// ClassifyEgressTarget reports whether an egress token must be blocked.
+//
+// IP literals are classified without I/O by the canonical netpolicy
+// classifier. Hostnames require the supplied resolver (the sandbox layer may
+// perform I/O); a nil resolver — or a resolver that returns an error — blocks
+// the target (fail closed). Any non-public class is always blocked, regardless
+// of allowlists.
+func ClassifyEgressTarget(token string, resolve func(string) (netpolicy.Target, error)) error {
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return fmt.Errorf("egress target empty")
 	}
-	privateRanges = make([]*net.IPNet, 0, len(cidrs))
-	for _, cidr := range cidrs {
-		_, subnet, err := net.ParseCIDR(cidr)
-		if err == nil {
-			privateRanges = append(privateRanges, subnet)
+	if ip, ok := netpolicy.ParseHostToken(token); ok {
+		if class := netpolicy.ClassifyIP(ip); class != netpolicy.ClassPublic {
+			return fmt.Errorf("egress target %q is %s — blocked (ssrf protection)", token, class)
 		}
+		return nil
 	}
-}
-
-// IsPrivateOrLoopbackHost reports whether the given hostname or IP address
-// resolves to a private, loopback, or link-local address range.
-func IsPrivateOrLoopbackHost(host string) bool {
-	ip := net.ParseIP(host)
-	if ip != nil {
-		return isPrivateIP(ip)
+	if resolve == nil {
+		return fmt.Errorf("egress target %q unresolved (no resolver) — blocked", token)
 	}
-	ips, err := net.LookupIP(host)
-	if err != nil || len(ips) == 0 {
-		return false
+	target, err := resolve(token)
+	if err != nil {
+		return fmt.Errorf("egress target %q unresolved: %w", token, err)
 	}
-	for _, ip := range ips {
-		if isPrivateIP(ip) {
-			return true
-		}
+	if target.Class != netpolicy.ClassPublic {
+		return fmt.Errorf("egress target %q is %s — blocked (ssrf protection)", token, target.Class)
 	}
-	return false
-}
-
-func isPrivateIP(ip net.IP) bool {
-	for _, block := range privateRanges {
-		if block.Contains(ip) {
-			return true
-		}
-	}
-	return false
+	return nil
 }

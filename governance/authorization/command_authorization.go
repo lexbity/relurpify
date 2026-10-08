@@ -69,9 +69,14 @@ func AuthorizeCommand(ctx context.Context, manager *PermissionManager, agentID s
 					return fmt.Errorf("semantic executable check denied: %w", err)
 				}
 			}
-			// Validate Network virtual permissions
+			// Validate Network virtual permissions. Resolution is I/O and
+			// happens here, at the execution layer, before the pure check.
 			for _, netPerm := range lifted.Network {
-				if err := manager.CheckNetwork(ctx, agentID, netPerm.Direction, netPerm.Protocol, netPerm.Host, netPerm.Port); err != nil {
+				target, err := manager.ResolveTarget(ctx, netPerm.Host)
+				if err != nil {
+					return fmt.Errorf("semantic network check denied: %w", err)
+				}
+				if err := manager.CheckNetwork(ctx, agentID, netPerm.Direction, netPerm.Protocol, target, netPerm.Port); err != nil {
 					return fmt.Errorf("semantic network check denied: %w", err)
 				}
 			}

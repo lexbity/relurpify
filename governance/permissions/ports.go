@@ -3,6 +3,7 @@ package permissions
 import (
 	"context"
 
+	"codeburg.org/lexbit/relurpify/governance/netpolicy"
 	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
 )
 
@@ -57,9 +58,12 @@ type FilePermissionChecker interface {
 	CheckFilePermission(ctx context.Context, agentID, basePath, action, absPath string, matrix any) error
 }
 
-// NetworkPermissionChecker checks network access.
+// NetworkPermissionChecker checks network access against an already-resolved
+// target. Callers resolve names first (ResolveTarget) so the pure decision
+// layer never performs I/O; an unresolved name is a denial, not an allow.
 type NetworkPermissionChecker interface {
-	CheckNetwork(ctx context.Context, agentID, direction, protocol, host string, port int) error
+	CheckNetwork(ctx context.Context, agentID, direction, protocol string, target netpolicy.Target, port int) error
+	ResolveTarget(ctx context.Context, token string) (netpolicy.Target, error)
 }
 
 // CapabilityChecker checks capability access.

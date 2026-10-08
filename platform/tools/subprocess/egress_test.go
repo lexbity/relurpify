@@ -273,6 +273,50 @@ func TestFirstBlockedEgressHost(t *testing.T) {
 	}
 }
 
+// TestNetworkToolBlocksInetAtonLoopback is the P-1 red-line: non-dotted IPv4
+// spellings that libc inet_aton (and the child process) dereference to
+// loopback must be classified and blocked, not treated as unresolvable names.
+func TestNetworkToolBlocksInetAtonLoopback(t *testing.T) {
+	targets := []string{
+		"http://2130706433/",
+		"http://0x7f000001/",
+		"http://0177.0.0.1/",
+		"http://127.1/",
+		"http://0.0.0.0/",
+		"http://[::]/",
+	}
+	for _, target := range targets {
+		r := &blockedEgressRunner{}
+		tool := newNetworkTool(r)
+		result, err := tool.Execute(context.Background(), map[string]any{args: []any{target}})
+		require.NoError(t, err, "%s: Execute must not return a Go error", target)
+		require.False(t, result.Success, "%s: expected egress to be denied", target)
+		require.False(t, r.called, "%s: runner must not execute for a blocked spelling", target)
+	}
+}
+
+// TestNetworkToolBlocksUnresolvableHost is the P-1 fail-closed red-line: a
+// hostname that does not resolve must be treated as unsafe, not as public.
+// The .invalid TLD is reserved (RFC 2606) and never resolves.
+func TestNetworkToolBlocksUnresolvableHost(t *testing.T) {
+	r := &blockedEgressRunner{}
+	tool := newNetworkTool(r)
+	result, err := tool.Execute(context.Background(), map[string]any{args: []any{"http://no-such-host.invalid/"}})
+	require.NoError(t, err, "Execute must not return a Go error")
+	require.False(t, result.Success, "unresolvable host must fail closed, got success")
+	require.False(t, r.called, "runner must not execute for an unresolvable host")
+}
+
+// TestFirstBlockedEgressHostInetAton proves the scanner's classifier catches
+// the inet_aton spellings directly.
+func TestFirstBlockedEgressHostInetAton(t *testing.T) {
+	for _, arg := range []string{"2130706433", "0x7f000001", "0177.0.0.1", "127.1"} {
+		if got := firstBlockedEgressHost([]string{arg}, nil); got != arg {
+			t.Errorf("firstBlockedEgressHost(%q) = %q, want %q", arg, got, arg)
+		}
+	}
+}
+
 func TestNetworkToolNoSandboxNoScreen(t *testing.T) {
 	r := &blockedEgressRunner{}
 	tool := NewTool(ports.ToolManifest{

@@ -434,7 +434,7 @@ func TestSessionExtractionBudgetHelpers(t *testing.T) {
 
 func TestSessionNavigationHelpers(t *testing.T) {
 	perms := &permissions.PermissionSet{
-		Network: []permissions.NetworkPermission{{Direction: "egress", Protocol: "tcp", Host: "allowed.example", Port: 443}},
+		Network: []permissions.NetworkPermission{{Direction: "egress", Protocol: "tcp", Host: "8.8.8.8", Port: 443}},
 	}
 	manager, err := authorization.NewPermissionManager("", perms, nil, nil)
 	require.NoError(t, err)
@@ -444,14 +444,14 @@ func TestSessionNavigationHelpers(t *testing.T) {
 		cfg.AgentID = "agent-1"
 	})
 
-	require.NoError(t, session.Navigate(context.Background(), "https://allowed.example/path"))
-	require.Equal(t, "https://allowed.example/path", session.backend.(*testBackend).currentURL)
+	require.NoError(t, session.Navigate(context.Background(), "https://8.8.8.8/path"))
+	require.Equal(t, "https://8.8.8.8/path", session.backend.(*testBackend).currentURL)
 
 	denied := newTestSession(t, &testBackend{}, func(cfg *SessionConfig) {
 		cfg.PermissionManager = manager
 		cfg.AgentID = "agent-1"
 	})
-	err = denied.Navigate(context.Background(), "https://denied.example/path")
+	err = denied.Navigate(context.Background(), "https://1.1.1.1/path")
 	require.Error(t, err)
 	require.True(t, IsErrorCode(err, ErrNavigationBlocked))
 

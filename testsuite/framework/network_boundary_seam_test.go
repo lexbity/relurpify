@@ -10,9 +10,19 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	regpkg "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/governance/authorization"
+	"codeburg.org/lexbit/relurpify/governance/netpolicy"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
 )
+
+// networkTargetFor builds a policy target for a test host without DNS. Test
+// hosts are treated as public names; literal IPs are classified canonically.
+func networkTargetFor(host string) netpolicy.Target {
+	if ip, ok := netpolicy.ParseHostToken(host); ok {
+		return netpolicy.Target{Token: host, Class: netpolicy.ClassifyIP(ip), Literal: true}
+	}
+	return netpolicy.Target{Token: host, Class: netpolicy.ClassPublic}
+}
 
 // TestNetworkBoundaryEnforcement validates that network permissions are
 // enforced correctly at the authorization seam.
@@ -31,7 +41,7 @@ func TestNetworkBoundaryEnforcement(t *testing.T) {
 		}
 
 		// Check network access to allow-listed host
-		err = manager.CheckNetwork(context.Background(), "test-agent", "egress", "tcp", "example.com", 443)
+		err = manager.CheckNetwork(context.Background(), "test-agent", "egress", "tcp", networkTargetFor("example.com"), 443)
 		if err != nil {
 			t.Errorf("network access to allow-listed host should succeed: %v", err)
 		}
@@ -74,7 +84,7 @@ func TestNetworkBoundaryEnforcement(t *testing.T) {
 		manager.SetDefaultPolicy(string(agentspec.AgentPermissionDeny))
 
 		// Check network access to non-allow-listed host
-		err = manager.CheckNetwork(context.Background(), "test-agent", "egress", "tcp", "denied.com", 443)
+		err = manager.CheckNetwork(context.Background(), "test-agent", "egress", "tcp", networkTargetFor("denied.com"), 443)
 		if err == nil {
 			t.Error("network access to denied host should fail")
 		}
@@ -130,7 +140,7 @@ func TestNetworkBoundaryEnforcement(t *testing.T) {
 		}
 
 		// Check network access with HITL requirement
-		err = manager.CheckNetwork(context.Background(), "test-agent", "egress", "tcp", "api.service.local", 443)
+		err = manager.CheckNetwork(context.Background(), "test-agent", "egress", "tcp", networkTargetFor("api.service.local"), 443)
 		if err != nil {
 			t.Errorf("network access with HITL approval should succeed: %v", err)
 		}
@@ -195,7 +205,7 @@ func TestNetworkBoundaryEnforcement(t *testing.T) {
 		}
 
 		// First network access should trigger HITL request
-		err = manager.CheckNetwork(context.Background(), "test-agent", "egress", "tcp", "api.service.local", 443)
+		err = manager.CheckNetwork(context.Background(), "test-agent", "egress", "tcp", networkTargetFor("api.service.local"), 443)
 		if err != nil {
 			t.Fatalf("first network access should succeed: %v", err)
 		}
@@ -205,7 +215,7 @@ func TestNetworkBoundaryEnforcement(t *testing.T) {
 		}
 
 		// Second network access should use cached approval
-		err = manager.CheckNetwork(context.Background(), "test-agent", "egress", "tcp", "api.service.local", 443)
+		err = manager.CheckNetwork(context.Background(), "test-agent", "egress", "tcp", networkTargetFor("api.service.local"), 443)
 		if err != nil {
 			t.Fatalf("second network access should succeed with cached approval: %v", err)
 		}
@@ -356,7 +366,7 @@ func (t *networkTestTool) Execute(ctx context.Context, args map[string]any) (*po
 	// Check network permissions before execution
 	if t.manager != nil && len(t.networkPerms) > 0 {
 		for _, netPerm := range t.networkPerms {
-			if err := t.manager.CheckNetwork(ctx, t.agent, netPerm.Direction, netPerm.Protocol, netPerm.Host, netPerm.Port); err != nil {
+			if err := t.manager.CheckNetwork(ctx, t.agent, netPerm.Direction, netPerm.Protocol, networkTargetFor(netPerm.Host), netPerm.Port); err != nil {
 				return nil, err
 			}
 		}

@@ -191,7 +191,7 @@ func TestHITLAudit(t *testing.T) {
 
 	// Perform a network access that requires HITL approval
 	ctx := context.Background()
-	err = permManager.CheckNetwork(ctx, agentID, "egress", "tcp", "api.service.local", 443)
+	err = permManager.CheckNetwork(ctx, agentID, "egress", "tcp", networkTargetFor("api.service.local"), 443)
 	if err != nil {
 		t.Fatalf("expected network access to be allowed via HITL, got error: %v", err)
 	}
@@ -447,7 +447,7 @@ func TestDenyAndHITLDistinguishability(t *testing.T) {
 
 	env.AuditSink.Clear()
 	env.PermissionManager = permManager
-	if err := permManager.CheckNetwork(ctx, agentID, "egress", "tcp", "api.service.local", 443); err != nil {
+	if err := permManager.CheckNetwork(ctx, agentID, "egress", "tcp", networkTargetFor("api.service.local"), 443); err != nil {
 		t.Fatalf("expected HITL-approved network access to succeed: %v", err)
 	}
 	hitlRecords := env.AuditSink.Records()

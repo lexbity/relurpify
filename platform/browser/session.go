@@ -320,7 +320,11 @@ func (s *Session) authorizeNavigation(ctx context.Context, rawURL string) error 
 	if host == "" {
 		return &Error{Code: ErrInvalidURL, Backend: s.backendName, Operation: "navigate", Err: fmt.Errorf("host required")}
 	}
-	if err := s.permissionManager.CheckNetwork(ctx, s.agentID, "egress", protocol, host, port); err != nil {
+	target, err := s.permissionManager.ResolveTarget(ctx, host)
+	if err != nil {
+		return &Error{Code: ErrNavigationBlocked, Backend: s.backendName, Operation: "navigate", Err: err}
+	}
+	if err := s.permissionManager.CheckNetwork(ctx, s.agentID, "egress", protocol, target, port); err != nil {
 		return &Error{Code: ErrNavigationBlocked, Backend: s.backendName, Operation: "navigate", Err: err}
 	}
 	return nil

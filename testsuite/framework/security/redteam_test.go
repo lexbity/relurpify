@@ -18,6 +18,7 @@ import (
 	registry "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/capability/toolcapabilities"
+	"codeburg.org/lexbit/relurpify/governance/netpolicy"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/platform/tools/subprocess"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
@@ -140,16 +141,19 @@ func TestEgressDeniesPrivateIPs(t *testing.T) {
 	privateIPs := []string{
 		"127.0.0.1", "10.0.0.1", "172.16.0.1",
 		"192.168.1.1", "169.254.169.254", "::1",
+		"2130706433", "0x7f000001", "0.0.0.0", "::",
 	}
 	for _, ip := range privateIPs {
-		if !sandbox.IsPrivateOrLoopbackHost(ip) {
-			t.Errorf("IsPrivateOrLoopbackHost(%q) = false, want true", ip)
+		class, literal := netpolicy.ClassifyToken(ip)
+		if !literal || class == netpolicy.ClassPublic {
+			t.Errorf("ClassifyToken(%q) = (%q, %v), want non-public literal", ip, class, literal)
 		}
 	}
 	publicIPs := []string{"8.8.8.8", "1.1.1.1", "93.184.216.34"}
 	for _, ip := range publicIPs {
-		if sandbox.IsPrivateOrLoopbackHost(ip) {
-			t.Errorf("IsPrivateOrLoopbackHost(%q) = true, want false", ip)
+		class, literal := netpolicy.ClassifyToken(ip)
+		if !literal || class != netpolicy.ClassPublic {
+			t.Errorf("ClassifyToken(%q) = (%q, %v), want public literal", ip, class, literal)
 		}
 	}
 }

@@ -1,6 +1,7 @@
 package subprocess
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"net/url"
@@ -8,12 +9,13 @@ import (
 
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
+	"codeburg.org/lexbit/relurpify/governance/netpolicy"
 )
 
 // checkEgress returns an error if the command args reference a blocked
-// network host. allowHosts is an optional per-tool allowlist; hosts in
-// this list bypass the mandatory denylist. Returns nil when no network
-// target is blocked.
+// network host. allowHosts is an optional per-tool allowlist consulted before
+// the mandatory denylist (ordering is inverted in a follow-on change); hosts
+// in this list are skipped. Returns nil when no network target is blocked.
 func checkEgress(allowHosts []string, cmd []string) error {
 	if host := firstBlockedEgressHost(cmd, allowHosts); host != "" {
 		return fmt.Errorf(
@@ -31,12 +33,13 @@ func isNetworkTool(manifest ports.ToolManifest) bool {
 }
 
 // firstBlockedEgressHost scans CLI arguments for a network target (a URL or a
-// bare host[:port]) that resolves to a private, loopback, or link-local address
-// and returns it. An empty string means no blocked host was found.
+// bare host[:port]) whose classification is non-public and returns it. An empty
+// string means no blocked host was found.
 //
-// allowHosts is an optional allowlist: hosts that match any entry here are
-// never blocked even if they would otherwise be denied by the mandatory
-// denylist (sandbox.IsPrivateOrLoopbackHost).
+// Classification is delegated to the canonical netpolicy classifier and is
+// fail-closed: a hostname that cannot be resolved is treated as blocked. The
+// allowlist is consulted first (legacy ordering, superseded by the
+// denylist-first inversion).
 func firstBlockedEgressHost(args []string, allowHosts []string) string {
 	allowSet := make(map[string]struct{}, len(allowHosts))
 	for _, h := range allowHosts {
@@ -54,15 +57,65 @@ func firstBlockedEgressHost(args []string, allowHosts []string) string {
 		if host == "" {
 			continue
 		}
-		// Check allowlist first.
 		if _, allowed := allowSet[strings.ToLower(host)]; allowed {
 			continue
 		}
-		if sandbox.IsPrivateOrLoopbackHost(host) {
+		if isBlockedEgressHost(host, strings.Contains(arg, "://")) {
 			return host
 		}
 	}
 	return ""
+}
+
+// isBlockedEgressHost reports whether a host token is blocked by the mandatory
+// denylist. IP literals are classified without I/O; hostnames are resolved with
+// the canonical resolver and a resolution failure blocks the target.
+//
+// urlContext marks a token that was unambiguously a host (scheme://host/...),
+// which is resolved even when it carries no dot; otherwise a syntactic gate
+// keeps arbitrary argv tokens from being treated as hostnames.
+func isBlockedEgressHost(host string, urlContext bool) bool {
+	if _, ok := netpolicy.ParseHostToken(host); !ok {
+		if !urlContext && !looksLikeHostname(host) {
+			return false
+		}
+	}
+	return sandbox.ClassifyEgressTarget(host, func(token string) (netpolicy.Target, error) {
+		return netpolicy.ResolveTarget(context.Background(), token, netpolicy.DefaultResolveOptions())
+	}) != nil
+}
+
+// looksLikeHostname is a syntactic gate that keeps arbitrary argv tokens (flag
+// values, header snippets) from being treated as hostnames and resolved. A
+// token must carry a DNS label separator and contain no whitespace or leftover
+// port colon to be considered a hostname candidate.
+func looksLikeHostname(host string) bool {
+	if host == "" || strings.ContainsAny(host, " \t") || strings.Contains(host, ":") {
+		return false
+	}
+	if host == "localhost" {
+		return true
+	}
+	if !strings.Contains(host, ".") {
+		return false
+	}
+	for _, label := range strings.Split(host, ".") {
+		if label == "" {
+			continue
+		}
+		for i := 0; i < len(label); i++ {
+			c := label[i]
+			switch {
+			case c >= 'a' && c <= 'z':
+			case c >= 'A' && c <= 'Z':
+			case c >= '0' && c <= '9':
+			case c == '-' || c == '_':
+			default:
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // extractHost pulls a hostname/IP out of a single CLI argument. It understands
