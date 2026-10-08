@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"go.uber.org/goleak"
 
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/context/knowledge"
@@ -259,4 +260,35 @@ func (stubUsageResponseModel) ChatWithTools(context.Context, []model.Message, []
 func hashText(text string) string {
 	sum := sha256.Sum256([]byte(text))
 	return hex.EncodeToString(sum[:16])
+}
+
+// TestInstrumentedModelStreamPassThroughCancellation: the instrumented
+// wrapper must not alter the wrapped stream's cancellation behavior — the
+// call-time ctx still terminates the stream and the channel closes within
+// the contract grace (R1-R3 pass-through).
+func TestInstrumentedModelStreamPassThroughCancellation(t *testing.T) {
+	defer goleak.VerifyNone(t)
+	inner := newBlockingStreamModel()
+	m := NewInstrumentedModel(inner, nil, false)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	stream, err := m.GenerateStream(ctx, "hello", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	inner.emit("token-1")
+	if tok := <-stream; tok != "token-1" {
+		t.Fatalf("unexpected token %q", tok)
+	}
+	cancel()
+	deadline := time.After(250 * time.Millisecond)
+	select {
+	case _, ok := <-stream:
+		if ok {
+			t.Fatal("expected channel close, got token after cancel")
+		}
+	case <-deadline:
+		t.Fatal("wrapped stream not closed within 250ms of cancellation")
+	}
 }

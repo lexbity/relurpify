@@ -122,6 +122,7 @@ type RootModel struct {
 
 	// Task queue: maps run IDs that originated from the task queue.
 	taskRunIDs map[string]bool
+	parentCtx  context.Context
 
 	// HITL notification row: renders between Region 1 and the bottom bar
 	// when the agent emits an interaction frame.
@@ -234,7 +235,10 @@ func isBaseFrameworkTab(id TabID) bool {
 	}
 }
 
-func newRootModel(rt RuntimeAdapter, factory SurfaceFactory) RootModel {
+func newRootModel(parentCtx context.Context, rt RuntimeAdapter, factory SurfaceFactory) RootModel {
+	if parentCtx == nil {
+		parentCtx = context.Background()
+	}
 	info := SessionInfo{MaxTokens: 100000}
 	if rt != nil {
 		info = rt.SessionInfo()
@@ -285,7 +289,7 @@ func newRootModel(rt RuntimeAdapter, factory SurfaceFactory) RootModel {
 	if initialAgent == "" {
 		initialAgent = "none"
 	}
-	state := buildSurfaceState(factory, initialAgent, rt, ctx, sess, store, notifQ)
+	state := buildSurfaceState(parentCtx, factory, initialAgent, rt, ctx, sess, store, notifQ)
 	inputBar.SetCommandRegistry(state.cmdReg)
 	inputBar.SetContext(state.tabs.ActiveTab().ID, state.tabs.ActiveSubTab())
 
@@ -293,6 +297,7 @@ func newRootModel(rt RuntimeAdapter, factory SurfaceFactory) RootModel {
 	tabBar.SetRegistry(state.tabs)
 
 	m := RootModel{
+		parentCtx:         parentCtx,
 		tabs:              state.tabs,
 		subTabBar:         NewSubTabBar(state.tabs.ActiveTab()),
 		hitlRow:           &HITLRow{th: theme.Default()},
@@ -348,7 +353,7 @@ func newRootModel(rt RuntimeAdapter, factory SurfaceFactory) RootModel {
 	return m
 }
 
-func buildSurfaceState(factory SurfaceFactory, agentName string, rt RuntimeAdapter, ctx *AgentContext, sess *Session, store *SessionStore, notifQ *NotificationQueue) *surfaceState {
+func buildSurfaceState(parentCtx context.Context, factory SurfaceFactory, agentName string, rt RuntimeAdapter, ctx *AgentContext, sess *Session, store *SessionStore, notifQ *NotificationQueue) *surfaceState {
 	surface := factory.Resolve(agentName)
 	if surface == nil {
 		surface = newGenericSurface()
@@ -373,7 +378,7 @@ func buildSurfaceState(factory SurfaceFactory, agentName string, rt RuntimeAdapt
 	cmdReg := NewCommandRegistry()
 	registerUniversalCommands(cmdReg)
 	surface.RegisterCommands(cmdReg)
-	chat := surface.NewChat(rt, ctx, sess, notifQ)
+	chat := surface.NewChat(parentCtx, rt, ctx, sess, notifQ)
 	if tabAware, ok := chat.(TabAwarePane); ok {
 		tabAware.SetActiveTab(initialTab)
 	}
@@ -446,7 +451,7 @@ func (m *RootModel) surfaceStateFor(agentName string) *surfaceState {
 	}
 	state, ok := m.surfaceCache[key]
 	if !ok || state == nil {
-		state = buildSurfaceState(m.surfaceFactory, key, m.runtime, m.sharedCtx, m.sharedSess, m.store, m.notifQ)
+		state = buildSurfaceState(m.parentCtx, m.surfaceFactory, key, m.runtime, m.sharedCtx, m.sharedSess, m.store, m.notifQ)
 		m.surfaceCache[key] = state
 	}
 	return state
@@ -747,16 +752,24 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	// Stream events — always routed to chat pane regardless of active tab.
-	case streamDoneMsg:
-		m.autoSave()
-		m.session.SyncChanges(m.latestChanges())
-		m.session.SyncContext(m.sharedCtx)
-		if m.taskRunIDs[msg.RunID] {
-			m.tasks.MarkComplete(msg.RunID)
-			m.session.SyncQueuedTasks(m.tasks.Items())
-			delete(m.taskRunIDs, msg.RunID)
+	// RunFinishedMsg is the single terminal of a chat run: the pane renders
+	// it, the host does its post-run bookkeeping, and the task queue
+	// advances here and only here — including after errored runs.
+	case RunFinishedMsg:
+		next, paneCmd := m.routeToActivePanes(msg)
+		m2, ok := next.(RootModel)
+		if !ok {
+			m2 = m
 		}
-		return m, m.dequeueNextTask()
+		m2.autoSave()
+		m2.session.SyncChanges(m2.latestChanges())
+		m2.session.SyncContext(m2.sharedCtx)
+		if m2.taskRunIDs[msg.RunID] {
+			m2.tasks.MarkComplete(msg.RunID)
+			m2.session.SyncQueuedTasks(m2.tasks.Items())
+			delete(m2.taskRunIDs, msg.RunID)
+		}
+		return m2, tea.Batch(paneCmd, m2.dequeueNextTask())
 
 	// Startup session restore prompt.
 	case sessionFoundMsg:
@@ -1562,8 +1575,11 @@ func (m RootModel) handleRestoreSession(id string) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	m.notifQ.Resolve(id)
-	for _, msg := range rec.Messages {
-		m.chat.AppendMessage(msg)
+	if m.chat != nil {
+		m.chat.ClearMessages()
+		for _, msg := range rec.Messages {
+			m.chat.AppendMessage(msg)
+		}
 	}
 	if rec.Context != nil {
 		m.sharedCtx.Files = rec.Context.Files

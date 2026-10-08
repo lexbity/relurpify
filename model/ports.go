@@ -8,6 +8,22 @@ import (
 // LanguageModel is the primary contract every LLM backend satisfies.
 type LanguageModel interface {
 	Generate(ctx context.Context, prompt string, options *LLMOptions) (*LLMResponse, error)
+	// GenerateStream streams tokens as they are produced.
+	//
+	// Streaming contract (normative — every implementation MUST satisfy it):
+	//
+	// R1. The call-time ctx is the only stop signal. Implementations MUST
+	//     NOT require consumer cooperation to stop; consumers MUST cancel
+	//     (directly or via a parent) when abandoning a stream.
+	// R2. On ctx cancellation, all internal goroutines exit and the returned
+	//     channel is closed within 250 ms.
+	// R3. The channel is closed exactly once, by its producer.
+	// R4. Resources owned by the pump (HTTP response bodies, files) are
+	//     closed by that pump, exactly once, including on cancellation.
+	// R5. Producer-side encode/write failures degrade (drop, count, emit
+	//     telemetry); they MUST NOT panic.
+	// R6. Send contention on the output channel resolves by selecting on
+	//     ctx.Done(); the token is dropped and counted when ctx is done.
 	GenerateStream(ctx context.Context, prompt string, options *LLMOptions) (<-chan string, error)
 	Chat(ctx context.Context, messages []Message, options *LLMOptions) (*LLMResponse, error)
 	ChatWithTools(ctx context.Context, messages []Message, tools []LLMToolSpec, options *LLMOptions) (*LLMResponse, error)

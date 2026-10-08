@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -26,6 +27,20 @@ import (
 
 const contextFileMaxBytes = 8000
 
+// chatRunTimeout bounds a single chat run's wall clock. Cancellation now
+// propagates to the model (streaming contract R1), making long generations
+// safe to bound and interrupt.
+const chatRunTimeout = 15 * time.Minute
+
+// chatRunCleanupDrain bounds how long Cleanup waits for each live run's
+// terminal message after cancelling it, so program exit leaves no pump
+// blocked on an unread channel.
+const chatRunCleanupDrain = 100 * time.Millisecond
+
+// chatRunHistory bounds the archive of finished runs awaiting their terminal
+// message handling; the oldest entry is evicted past the cap.
+const chatRunHistory = 32
+
 var spinnerFrames = []string{"⣷", "⣯", "⣟", "⡿", "⢿", "⣻", "⣽", "⣾"}
 
 var chatSubTabPolicies = map[tui.SubTabID]struct {
@@ -39,12 +54,74 @@ var chatSubTabPolicies = map[tui.SubTabID]struct {
 	tui.SubTabChatOnlineEdit: {ModeHint: "code", EditEnabled: true, OnlineToolsEnabled: true},
 }
 
+var runIDCounter atomic.Uint64
+
+// nextRunID mints a run ID unique within the process even for runs started
+// in the same clock tick.
+func nextRunID() string {
+	return fmt.Sprintf("run-%d-%d", time.Now().UnixNano(), runIDCounter.Add(1))
+}
+
+// chatRun owns the full lifecycle of one asynchronous chat run: its context,
+// its message channel, and its terminal transition. Exactly one goroutine
+// (the work owner started by startRun) drives it to finishRun; finishRun is
+// once-guarded so the terminal RunFinishedMsg is delivered exactly once.
+type chatRun struct {
+	id      string
+	prompt  string
+	started time.Time
+
+	ctx    context.Context
+	cancel context.CancelFunc
+	ch     chan tea.Msg
+
+	builder *tui.MessageBuilder
+
+	dropped  atomic.Int64
+	finished atomic.Bool
+
+	mu     sync.Mutex
+	result *execution.Result
+}
+
+// setResult stores the run's execution result for the terminal handler
+// (the terminal message itself carries no payload; the run handle does).
+func (r *chatRun) setResult(res *execution.Result) {
+	r.mu.Lock()
+	r.result = res
+	r.mu.Unlock()
+}
+
+func (r *chatRun) takeResult() *execution.Result {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.result
+}
+
+// send delivers an intermediate UI projection message. Projections are
+// best-effort: under backpressure the message is dropped and counted, and
+// the count surfaces in the run's terminal summary.
+func (r *chatRun) send(msg tea.Msg) {
+	select {
+	case r.ch <- msg:
+	default:
+		r.dropped.Add(1)
+	}
+}
+
 type ChatPane struct {
-	feed      *tui.Feed
-	spinner   spinner.Model
-	runStates map[string]*tui.RunState
-	th        *theme.Theme
-	anim      *tui.AnimationManager
+	feed    *tui.Feed
+	spinner spinner.Model
+	th      *theme.Theme
+	anim    *tui.AnimationManager
+
+	// runsMu guards runs and finishedRuns: the registry is mutated by
+	// finishRun on the work goroutine and read by every Update handler on
+	// the UI thread.
+	runsMu       sync.Mutex
+	runs         map[string]*chatRun
+	finishedRuns []*chatRun
+	parentCtx    context.Context
 
 	context *tui.AgentContext
 	session *tui.Session
@@ -84,8 +161,10 @@ type ChatPane struct {
 var _ tui.ChatPaner = (*ChatPane)(nil)
 var _ tui.ChatSidebarController = (*ChatPane)(nil)
 
-// NewChatPane constructs the Euclo chat surface.
-func NewChatPane(rt tui.RuntimeAdapter, ctx *tui.AgentContext, sess *tui.Session, notifQ *tui.NotificationQueue, router *EucloEventRouter, th *theme.Theme, anim *tui.AnimationManager) *ChatPane {
+// NewChatPane constructs the Euclo chat surface. parentCtx anchors every
+// run's cancellable context (typically the program's signal context); runs
+// die with it. A nil parentCtx is treated as context.Background().
+func NewChatPane(parentCtx context.Context, rt tui.RuntimeAdapter, ctx *tui.AgentContext, sess *tui.Session, notifQ *tui.NotificationQueue, router *EucloEventRouter, th *theme.Theme, anim *tui.AnimationManager) *ChatPane {
 	sp := spinner.New()
 	sp.Spinner = spinner.Dot
 	if router == nil {
@@ -94,12 +173,16 @@ func NewChatPane(rt tui.RuntimeAdapter, ctx *tui.AgentContext, sess *tui.Session
 	if th == nil {
 		th = theme.Default()
 	}
+	if parentCtx == nil {
+		parentCtx = context.Background()
+	}
 	pane := &ChatPane{
 		feed:             tui.NewFeed(),
 		spinner:          sp,
 		th:               th,
 		anim:             anim,
-		runStates:        make(map[string]*tui.RunState),
+		runs:             make(map[string]*chatRun),
+		parentCtx:        parentCtx,
 		context:          ctx,
 		session:          sess,
 		store:            nil,
@@ -129,12 +212,51 @@ func (p *ChatPane) Init() tea.Cmd {
 	return nil
 }
 
+// Cleanup cancels every live run and gives each a bounded window to deliver
+// its terminal message, so no pump is left blocked on program exit.
 func (p *ChatPane) Cleanup() {
-	for _, run := range p.runStates {
-		if run.Cancel != nil {
-			run.Cancel()
+	for _, run := range p.listRuns() {
+		run.cancel()
+		p.drainRunTerminal(run)
+	}
+}
+
+// drainRunTerminal reads a cancelled run's channel until its terminal
+// message arrives or the bounded deadline passes, so the work goroutine's
+// blocking terminal send can never outlive the program.
+func (p *ChatPane) drainRunTerminal(run *chatRun) {
+	deadline := time.Now().Add(chatRunCleanupDrain)
+	for time.Now().Before(deadline) {
+		select {
+		case msg, ok := <-run.ch:
+			if !ok {
+				return
+			}
+			if finished, ok := msg.(tui.RunFinishedMsg); ok && finished.RunID == run.id {
+				return
+			}
+		default:
+			time.Sleep(time.Millisecond)
 		}
 	}
+}
+
+// listRuns snapshots the run registry under lock.
+func (p *ChatPane) listRuns() []*chatRun {
+	p.runsMu.Lock()
+	defer p.runsMu.Unlock()
+	out := make([]*chatRun, 0, len(p.runs))
+	for _, run := range p.runs {
+		out = append(out, run)
+	}
+	return out
+}
+
+func (p *ChatPane) getRun(id string) (*chatRun, bool) {
+	p.runsMu.Lock()
+	defer p.runsMu.Unlock()
+	run, ok := p.runs[id]
+	return run, ok
 }
 
 func (p *ChatPane) SetSubTab(id tui.SubTabID)  { p.activeSubTab = id }
@@ -189,10 +311,8 @@ func (p *ChatPane) Update(msg tea.Msg) (tui.ChatPaner, tea.Cmd) {
 		return p, nil
 	case tui.StreamTokenMsg:
 		return p.handleStreamToken(msg)
-	case tui.StreamCompleteMsg:
-		return p.handleStreamComplete(msg)
-	case tui.StreamErrorMsg:
-		return p.handleStreamError(msg)
+	case tui.RunFinishedMsg:
+		return p.handleRunFinished(msg)
 	case tui.UpdateTaskMsg:
 		return p.handleUpdateTask(msg)
 	case tui.ChatSystemMsg:
@@ -300,24 +420,14 @@ func (p *ChatPane) StartRunSilent(prompt string) (tea.Cmd, string) {
 		p.addSystemMessage("Run already in progress.")
 		return nil, ""
 	}
-	runID := tui.GenerateID()
-	ch := make(chan tea.Msg, 256)
-	builder := tui.NewMessageBuilder(runID)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
-	run := &tui.RunState{
-		ID:      runID,
-		Prompt:  prompt,
-		Started: time.Now(),
-		Builder: builder,
-		Ch:      ch,
-		Cancel:  cancel,
+	run := p.startRun(prompt)
+	if run == nil {
+		return nil, ""
 	}
-	p.runStates[runID] = run
-	p.registerSpinnerAnim()
-	metadata := p.buildMetadata(ctx)
+	metadata := p.buildMetadata(run.ctx)
 	metadata["compact"] = true
-	go p.runStream(ctx, run, metadata)
-	return tea.Batch(listenToStream(ch), p.spinner.Tick), runID
+	p.launchWork(run, metadata)
+	return tea.Batch(listenToStream(run.ch), p.spinner.Tick), run.id
 }
 
 func (p *ChatPane) StartRunWithMetadata(prompt string, extra map[string]any) (tea.Cmd, string) {
@@ -341,33 +451,110 @@ func (p *ChatPane) StartRunWithMetadata(prompt string, extra map[string]any) (te
 	}
 	p.feed.AppendMessage(userMsg)
 
-	runID := tui.GenerateID()
-	ch := make(chan tea.Msg, 256)
-	builder := tui.NewMessageBuilder(runID)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
-	run := &tui.RunState{
-		ID:      runID,
-		Prompt:  prompt,
-		Started: time.Now(),
-		Builder: builder,
-		Ch:      ch,
-		Cancel:  cancel,
+	run := p.startRun(prompt)
+	if run == nil {
+		return nil, ""
 	}
-	p.runStates[runID] = run
 	p.lastPrompt = prompt
-	p.registerSpinnerAnim()
 
-	metadata := p.buildMetadata(ctx)
+	metadata := p.buildMetadata(run.ctx)
 	for k, v := range extra {
 		metadata[k] = v
 	}
-	go p.runStream(ctx, run, metadata)
-	return tea.Batch(listenToStream(ch), p.spinner.Tick), runID
+	p.launchWork(run, metadata)
+	return tea.Batch(listenToStream(run.ch), p.spinner.Tick), run.id
 }
 
-func (p *ChatPane) HasActiveRuns() bool { return len(p.runStates) > 0 }
-func (p *ChatPane) Undo() bool          { return p.restoreSnapshot(&p.undoStack, &p.redoStack) }
-func (p *ChatPane) Redo() bool          { return p.restoreSnapshot(&p.redoStack, &p.undoStack) }
+// startRun registers a new run in the registry with a cancellable, timeout-
+// bounded context derived from the pane's parent context.
+func (p *ChatPane) startRun(prompt string) *chatRun {
+	run := &chatRun{
+		id:      nextRunID(),
+		prompt:  prompt,
+		started: time.Now(),
+		ch:      make(chan tea.Msg, 256),
+	}
+	run.builder = tui.NewMessageBuilder(run.id)
+	run.ctx, run.cancel = context.WithTimeout(p.parentCtx, chatRunTimeout)
+	p.runsMu.Lock()
+	p.runs[run.id] = run
+	p.runsMu.Unlock()
+	p.registerSpinnerAnim()
+	return run
+}
+
+// launchWork spawns the run's single work goroutine. It is the only goroutine
+// the pane ever starts; it owns run.ch and always terminates in finishRun.
+func (p *ChatPane) launchWork(run *chatRun, metadata map[string]any) {
+	go p.work(run, metadata)
+}
+
+// work executes the run's turn and finishes it — success, failure, or
+// cancellation — through the exactly-once finishRun.
+func (p *ChatPane) work(run *chatRun, metadata map[string]any) {
+	run.send(tui.StreamTokenMsg{
+		RunID:     run.id,
+		TokenType: tui.TokenThinking,
+		Metadata: map[string]any{
+			"kind":        "start",
+			"stepType":    string(tui.StepAnalyzing),
+			"description": "Analyzing request",
+		},
+	})
+	callback := func(token string) {
+		run.send(tui.StreamTokenMsg{RunID: run.id, TokenType: tui.TokenText, Token: token})
+	}
+	result, err := p.runtime.SubmitTurn(run.ctx, run.prompt, execution.TaskTypeCodeGeneration, metadata, callback)
+	tokens := 0
+	outcome := tui.RunSucceeded
+	switch {
+	case err == nil:
+		run.setResult(result)
+		if summary := summarizeResult(result); summary != "" {
+			tokens = tui.EstimateTokens(summary)
+		}
+	case errors.Is(err, context.Canceled):
+		outcome = tui.RunCancelled
+	default:
+		outcome = tui.RunFailed
+	}
+	p.finishRun(run, outcome, err, tokens)
+}
+
+// finishRun performs the run's terminal transition, exactly once: cancel the
+// run context, deliver the single RunFinishedMsg through the Bubble Tea
+// message channel (a blocking send — the program drains this channel for
+// the process lifetime and Cleanup bounds the exit drain), and retire the
+// run from the registry.
+func (p *ChatPane) finishRun(run *chatRun, outcome tui.RunOutcome, err error, tokens int) {
+	if !run.finished.CompareAndSwap(false, true) {
+		return
+	}
+	run.cancel()
+	p.runsMu.Lock()
+	delete(p.runs, run.id)
+	p.finishedRuns = append(p.finishedRuns, run)
+	if len(p.finishedRuns) > chatRunHistory {
+		p.finishedRuns = p.finishedRuns[len(p.finishedRuns)-chatRunHistory:]
+	}
+	p.runsMu.Unlock()
+	run.ch <- tui.RunFinishedMsg{
+		RunID:          run.id,
+		Outcome:        outcome,
+		Err:            err,
+		Duration:       time.Since(run.started),
+		TokensUsed:     tokens,
+		DroppedUpdates: run.dropped.Load(),
+	}
+}
+
+func (p *ChatPane) HasActiveRuns() bool {
+	p.runsMu.Lock()
+	defer p.runsMu.Unlock()
+	return len(p.runs) > 0
+}
+func (p *ChatPane) Undo() bool { return p.restoreSnapshot(&p.undoStack, &p.redoStack) }
+func (p *ChatPane) Redo() bool { return p.restoreSnapshot(&p.redoStack, &p.undoStack) }
 func (p *ChatPane) ToggleCompact() {
 	switch p.expandTarget {
 	case "thinking":
@@ -448,20 +635,21 @@ func (p *ChatPane) SetCompactRunID(runID string, msgCount int) {
 	p.compactMsgCount = msgCount
 }
 func (p *ChatPane) StopLatestRun() tea.Cmd {
-	if len(p.runStates) == 0 {
+	runs := p.listRuns()
+	if len(runs) == 0 {
 		return func() tea.Msg { return tui.ChatSystemMsg{Text: "No active run to stop."} }
 	}
-	var latest *tui.RunState
-	for _, run := range p.runStates {
-		if latest == nil || run.Started.After(latest.Started) {
+	var latest *chatRun
+	for _, run := range runs {
+		if latest == nil || run.started.After(latest.started) {
 			latest = run
 		}
 	}
-	if latest == nil || latest.Cancel == nil {
+	if latest == nil {
 		return func() tea.Msg { return tui.ChatSystemMsg{Text: "No active run to stop."} }
 	}
-	latest.Cancel()
-	return func() tea.Msg { return tui.ChatSystemMsg{Text: fmt.Sprintf("Stopping run %s", latest.ID)} }
+	latest.cancel()
+	return func() tea.Msg { return tui.ChatSystemMsg{Text: fmt.Sprintf("Stopping run %s", latest.id)} }
 }
 func (p *ChatPane) RetryLastRun() tea.Cmd {
 	if strings.TrimSpace(p.lastPrompt) == "" {
@@ -584,71 +772,84 @@ func (p *ChatPane) handleKey(msg tea.KeyMsg) (tui.ChatPaner, tea.Cmd) {
 }
 
 func (p *ChatPane) handleStreamToken(msg tui.StreamTokenMsg) (tui.ChatPaner, tea.Cmd) {
-	run, ok := p.runStates[msg.RunID]
-	if !ok || run.Builder == nil {
+	run, ok := p.getRun(msg.RunID)
+	if !ok || run.builder == nil {
 		return p, nil
 	}
-	run.Builder.AddToken(msg)
-	partial := run.Builder.BuildPartial()
+	run.builder.AddToken(msg)
+	partial := run.builder.BuildPartial()
 	p.feed.UpdateMessage(partial)
-	return p, listenToStream(run.Ch)
+	return p, listenToStream(run.ch)
 }
 
-func (p *ChatPane) handleStreamComplete(msg tui.StreamCompleteMsg) (tui.ChatPaner, tea.Cmd) {
-	run, ok := p.runStates[msg.RunID]
-	if !ok || run.Builder == nil {
-		return p, nil
-	}
-	run.Builder.SetResult(structuredResultFromCore(msg.Result))
-	final := run.Builder.Build(msg.Duration, msg.TokensUsed)
+// handleRunFinished is the single terminal handler: completion, error, and
+// cancellation all funnel here. It renders the run's final state, retires
+// the spinner when idle, and re-arms listeners only for runs that remain.
+func (p *ChatPane) handleRunFinished(msg tui.RunFinishedMsg) (tui.ChatPaner, tea.Cmd) {
+	run, _ := p.takeFinishedRun(msg.RunID)
+
 	if p.compactRunID != "" && msg.RunID == p.compactRunID {
-		count := p.compactMsgCount
-		p.compactRunID = ""
-		p.compactMsgCount = 0
-		delete(p.runStates, msg.RunID)
-		summary := strings.TrimSpace(final.Content.Text)
-		if summary == "" {
-			summary = extractCompactSummary(msg.Result)
-		}
-		return p, func() tea.Msg {
-			if summary == "" {
-				return tui.CompactResultMsg{Err: fmt.Errorf("model returned empty summary"), OriginalCount: count}
+		return p, p.finishCompactRun(run, msg)
+	}
+
+	if run != nil && run.builder != nil {
+		switch msg.Outcome {
+		case tui.RunSucceeded:
+			run.builder.SetResult(structuredResultFromCore(run.takeResult()))
+			final := run.builder.Build(msg.Duration, msg.TokensUsed)
+			p.feed.UpdateMessage(final)
+			if p.session != nil {
+				p.session.TotalTokens += msg.TokensUsed
+				p.session.TotalDuration += msg.Duration
 			}
-			return tui.CompactResultMsg{Summary: summary, OriginalCount: count}
+		case tui.RunCancelled:
+			p.addSystemMessage(fmt.Sprintf("Run %s canceled", msg.RunID))
+		default:
+			p.addSystemMessage(fmt.Sprintf("Agent error: %v", msg.Err))
+		}
+	} else {
+		switch msg.Outcome {
+		case tui.RunCancelled:
+			p.addSystemMessage(fmt.Sprintf("Run %s canceled", msg.RunID))
+		case tui.RunFailed:
+			p.addSystemMessage(fmt.Sprintf("Agent error: %v", msg.Err))
 		}
 	}
-	p.feed.UpdateMessage(final)
-	if p.session != nil {
-		p.session.TotalTokens += msg.TokensUsed
-		p.session.TotalDuration += msg.Duration
+	if msg.DroppedUpdates > 0 {
+		p.addSystemMessage(fmt.Sprintf("Stream backpressure: dropped %d update(s)", msg.DroppedUpdates))
 	}
-	if dropped := atomic.LoadInt64(&run.Dropped); dropped > 0 {
-		p.addSystemMessage(fmt.Sprintf("Stream backpressure: dropped %d update(s)", dropped))
-	}
-	delete(p.runStates, msg.RunID)
 	if !p.HasActiveRuns() {
 		p.deregisterSpinnerAnim()
 	}
-	return p, func() tea.Msg { return tui.StreamDoneMsg{RunID: msg.RunID} }
+	var cmd tea.Cmd
+	for _, remaining := range p.listRuns() {
+		cmd = tea.Batch(cmd, listenToStream(remaining.ch))
+	}
+	return p, cmd
 }
 
-func (p *ChatPane) handleStreamError(msg tui.StreamErrorMsg) (tui.ChatPaner, tea.Cmd) {
-	delete(p.runStates, msg.RunID)
-	if !p.HasActiveRuns() {
-		p.deregisterSpinnerAnim()
+// finishCompactRun renders the terminal of a compaction run into the
+// CompactResultMsg the host consumes.
+func (p *ChatPane) finishCompactRun(run *chatRun, msg tui.RunFinishedMsg) tea.Cmd {
+	count := p.compactMsgCount
+	p.compactRunID = ""
+	p.compactMsgCount = 0
+	if msg.Err != nil {
+		return func() tea.Msg { return tui.CompactResultMsg{Err: msg.Err, OriginalCount: count} }
 	}
-	if p.compactRunID != "" && msg.RunID == p.compactRunID {
-		count := p.compactMsgCount
-		p.compactRunID = ""
-		p.compactMsgCount = 0
-		return p, func() tea.Msg { return tui.CompactResultMsg{Err: msg.Error, OriginalCount: count} }
+	summary := ""
+	if run != nil && run.builder != nil {
+		summary = strings.TrimSpace(run.builder.Build(msg.Duration, msg.TokensUsed).Content.Text)
 	}
-	if msg.Error != nil && errors.Is(msg.Error, context.Canceled) {
-		p.addSystemMessage(fmt.Sprintf("Run %s canceled", msg.RunID))
-	} else {
-		p.addSystemMessage(fmt.Sprintf("Agent error: %v", msg.Error))
+	if summary == "" && run != nil {
+		summary = extractCompactSummary(run.takeResult())
 	}
-	return p, nil
+	return func() tea.Msg {
+		if summary == "" {
+			return tui.CompactResultMsg{Err: fmt.Errorf("model returned empty summary"), OriginalCount: count}
+		}
+		return tui.CompactResultMsg{Summary: summary, OriginalCount: count}
+	}
 }
 
 func (p *ChatPane) handleUpdateTask(msg tui.UpdateTaskMsg) (tui.ChatPaner, tea.Cmd) {
@@ -672,35 +873,6 @@ func (p *ChatPane) handleUpdateTask(msg tui.UpdateTaskMsg) (tui.ChatPaner, tea.C
 		}
 	})
 	return p, nil
-}
-
-func (p *ChatPane) runStream(ctx context.Context, run *tui.RunState, metadata map[string]any) {
-	start := time.Now()
-	sendRunMsg(run, tui.StreamTokenMsg{
-		RunID:     run.ID,
-		TokenType: tui.TokenThinking,
-		Metadata: map[string]any{
-			"kind":        "start",
-			"stepType":    string(tui.StepAnalyzing),
-			"description": "Analyzing request",
-		},
-	})
-	callback := func(token string) {
-		sendRunMsg(run, tui.StreamTokenMsg{RunID: run.ID, TokenType: tui.TokenText, Token: token})
-	}
-	result, err := p.runtime.SubmitTurn(ctx, run.Prompt, execution.TaskTypeCodeGeneration, metadata, callback)
-	if err != nil {
-		sendRunFinal(run, tui.StreamErrorMsg{RunID: run.ID, Error: err})
-		sendRunFinal(run, tui.StreamCompleteMsg{RunID: run.ID, Duration: time.Since(start), TokensUsed: 0})
-		close(run.Ch)
-		return
-	}
-	tokenCount := 0
-	if summary := summarizeResult(result); summary != "" {
-		tokenCount = tui.EstimateTokens(summary)
-	}
-	sendRunFinal(run, tui.StreamCompleteMsg{RunID: run.ID, Duration: time.Since(start), TokensUsed: tokenCount, Result: result})
-	close(run.Ch)
 }
 
 func (p *ChatPane) buildMetadata(ctx context.Context) map[string]any {
@@ -1017,28 +1189,6 @@ func listenToStream(ch <-chan tea.Msg) tea.Cmd {
 	}
 }
 
-func sendRunMsg(run *tui.RunState, msg tea.Msg) {
-	if run == nil || run.Ch == nil {
-		return
-	}
-	select {
-	case run.Ch <- msg:
-	default:
-		atomic.AddInt64(&run.Dropped, 1)
-	}
-}
-
-func sendRunFinal(run *tui.RunState, msg tea.Msg) {
-	if run == nil || run.Ch == nil {
-		return
-	}
-	select {
-	case run.Ch <- msg:
-	default:
-		go func() { run.Ch <- msg }()
-	}
-}
-
 func summarizeResult(res *execution.Result) string {
 	if res == nil {
 		return ""
@@ -1298,4 +1448,18 @@ func (p *ChatPane) SetAnimManager(m *tui.AnimationManager) {
 	if p.anim != nil && p.HasActiveRuns() {
 		p.registerSpinnerAnim()
 	}
+}
+
+// takeFinishedRun removes and returns a finished run from the archive the
+// terminal handler reads its builder and result from.
+func (p *ChatPane) takeFinishedRun(id string) (*chatRun, bool) {
+	p.runsMu.Lock()
+	defer p.runsMu.Unlock()
+	for i, run := range p.finishedRuns {
+		if run.id == id {
+			p.finishedRuns = append(p.finishedRuns[:i], p.finishedRuns[i+1:]...)
+			return run, true
+		}
+	}
+	return nil, false
 }

@@ -19,7 +19,9 @@ type AgentSurface interface {
 	Name() string
 	RegisterTabs(reg *TabRegistry)
 	RegisterCommands(reg *CommandRegistry)
-	NewChat(rt RuntimeAdapter, ctx *AgentContext, sess *Session, notifQ *NotificationQueue) ChatPaner
+	// NewChat constructs the chat pane. parentCtx anchors the pane's run
+	// contexts (typically the program's signal context); runs die with it.
+	NewChat(parentCtx context.Context, rt RuntimeAdapter, ctx *AgentContext, sess *Session, notifQ *NotificationQueue) ChatPaner
 	NewRegion1(rt RuntimeAdapter, ctx *AgentContext, sess *Session, store *SessionStore, notifQ *NotificationQueue) Region1Surface
 	NewInput(rt RuntimeAdapter, ctx *AgentContext, sess *Session) InputSurface
 	NewNav(rt RuntimeAdapter, ctx *AgentContext, sess *Session) NavSurface
@@ -167,7 +169,7 @@ func (genericSurface) RegisterCommands(reg *CommandRegistry) {
 	_ = reg
 }
 
-func (genericSurface) NewChat(rt RuntimeAdapter, ctx *AgentContext, sess *Session, notifQ *NotificationQueue) ChatPaner {
+func (genericSurface) NewChat(context.Context, RuntimeAdapter, *AgentContext, *Session, *NotificationQueue) ChatPaner {
 	return nil
 }
 

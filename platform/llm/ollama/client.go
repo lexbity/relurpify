@@ -139,11 +139,15 @@ func (c *Client) GenerateStream(ctx context.Context, prompt string, options *LLM
 	}
 	ch := make(chan string)
 	go func() {
+		defer close(ch)
 		scanner := bufio.NewScanner(bytes.NewReader(bodyBytes))
 		for scanner.Scan() {
-			ch <- scanner.Text()
+			select {
+			case ch <- scanner.Text():
+			case <-ctx.Done():
+				return
+			}
 		}
-		close(ch)
 	}()
 	return ch, nil
 }

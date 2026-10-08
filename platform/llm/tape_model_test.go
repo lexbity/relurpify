@@ -8,11 +8,15 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
 
+	"go.uber.org/goleak"
+
 	"codeburg.org/lexbit/relurpify/model"
+	"codeburg.org/lexbit/relurpify/platform/observability"
 )
 
 type stubModel struct {
@@ -322,4 +326,166 @@ func writeTapeFixture(t *testing.T, entries []tapeEntry) string {
 func fileExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
+}
+
+// blockingStreamModel emits stream tokens only when poked via emit, and
+// stops (closing its channel) when its own context is cancelled. It gives
+// tests deterministic control over mid-stream state.
+type blockingStreamModel struct {
+	tokens chan string
+	done   chan struct{}
+}
+
+func newBlockingStreamModel() *blockingStreamModel {
+	return &blockingStreamModel{tokens: make(chan string), done: make(chan struct{})}
+}
+
+func (b *blockingStreamModel) emit(tok string) { b.tokens <- tok }
+
+func (b *blockingStreamModel) Generate(ctx context.Context, _ string, _ *LLMOptions) (*LLMResponse, error) {
+	return &LLMResponse{Text: "ok", FinishReason: "stop"}, nil
+}
+
+func (b *blockingStreamModel) GenerateStream(ctx context.Context, _ string, _ *LLMOptions) (<-chan string, error) {
+	out := make(chan string)
+	go func() {
+		defer close(out)
+		for {
+			select {
+			case tok := <-b.tokens:
+				select {
+				case out <- tok:
+				case <-ctx.Done():
+					return
+				}
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+	return out, nil
+}
+
+func (b *blockingStreamModel) Chat(_ context.Context, _ []Message, _ *LLMOptions) (*LLMResponse, error) {
+	return &LLMResponse{Text: "chat", FinishReason: "stop"}, nil
+}
+
+func (b *blockingStreamModel) ChatWithTools(_ context.Context, _ []Message, _ []LLMToolSpec, _ *LLMOptions) (*LLMResponse, error) {
+	return &LLMResponse{Text: "tools", FinishReason: "stop"}, nil
+}
+
+type recordingTelemetry struct {
+	events []observability.Event
+}
+
+func (r *recordingTelemetry) Emit(ev observability.Event) {
+	r.events = append(r.events, ev)
+}
+
+// TestTapeModelStreamCancelClosesChannel: cancelling the call-time ctx must
+// terminate the forwarding pump and close the output channel within the
+// contract grace period, without leaking goroutines (R1-R3, R6).
+func TestTapeModelStreamCancelClosesChannel(t *testing.T) {
+	defer goleak.VerifyNone(t)
+	inner := newBlockingStreamModel()
+	tm, err := NewTapeModel(inner, filepath.Join(t.TempDir(), "tape.jsonl"), "record")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = tm.Close() }()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	stream, err := tm.GenerateStream(ctx, "hello", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	inner.emit("token-1")
+	if tok := <-stream; tok != "token-1" {
+		t.Fatalf("unexpected token %q", tok)
+	}
+	// Stop consuming, then cancel: the pump must exit on ctx alone.
+	inner.emit("token-2")
+	cancel()
+	deadline := time.After(250 * time.Millisecond)
+	select {
+	case _, ok := <-stream:
+		if ok {
+			t.Fatal("expected channel close, got token after cancel")
+		}
+	case <-deadline:
+		t.Fatal("stream channel not closed within 250ms of cancellation")
+	}
+	// The in-flight token is dropped either by this pump or by the inner
+	// model's own ctx select; whichever receives it counts it. The tape
+	// model's counter must never exceed the tokens it was handed.
+	if got := tm.DroppedStreamTokens(); got > 1 {
+		t.Fatalf("unexpected dropped stream token count %d", got)
+	}
+}
+
+// TestTapeModelCloseIdempotent: Close is safe to call twice; the first
+// result is sticky and no double-close error surfaces.
+func TestTapeModelCloseIdempotent(t *testing.T) {
+	tm, err := NewTapeModel(stubModel{streamText: "x"}, filepath.Join(t.TempDir(), "tape.jsonl"), "record")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := tm.Close(); err != nil {
+		t.Fatalf("first close: %v", err)
+	}
+	if err := tm.Close(); err != nil {
+		t.Fatalf("second close: %v", err)
+	}
+}
+
+// TestTapeModelRecordFailureDegrades: a record write failure must degrade
+// the recorder (one tape.record_failed event, subsequent entries dropped and
+// counted) and must never panic or alter the caller-visible response (R5).
+func TestTapeModelRecordFailureDegrades(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("/dev/full fault injection is linux-only")
+	}
+	tel := &recordingTelemetry{}
+	tm, err := NewTapeModel(stubModel{streamText: "x"}, "/dev/full", "record")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = tm.Close() }()
+	tm.Telemetry = tel
+
+	resp, err := tm.Generate(context.Background(), "prompt", nil)
+	if err != nil {
+		t.Fatalf("generate must succeed despite record failure: %v", err)
+	}
+	if resp.Text != "ok" {
+		t.Fatalf("unexpected response %q", resp.Text)
+	}
+	if !tm.Degraded() {
+		t.Fatal("recorder must be degraded after write failure")
+	}
+	count := 0
+	for _, ev := range tel.events {
+		if ev.Type == observability.EventTapeRecordFailed {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Fatalf("expected exactly one tape.record_failed event, got %d", count)
+	}
+	// Further entries are dropped and counted, with no additional events.
+	if _, err := tm.Generate(context.Background(), "prompt-2", nil); err != nil {
+		t.Fatal(err)
+	}
+	if got := tm.DroppedRecords(); got != 1 {
+		t.Fatalf("expected 1 dropped record, got %d", got)
+	}
+	count = 0
+	for _, ev := range tel.events {
+		if ev.Type == observability.EventTapeRecordFailed {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Fatalf("tape.record_failed must fire once, got %d", count)
+	}
 }

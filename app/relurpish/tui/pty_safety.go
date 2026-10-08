@@ -53,7 +53,7 @@ func RunWithSurface(ctx context.Context, rt *runtimesvc.Runtime, factory Surface
 		return fmt.Errorf("runtime is required")
 	}
 	adapter := newRuntimeAdapter(rt)
-	m := newRootModel(adapter, factory)
+	m := newRootModel(ctx, adapter, factory)
 	program := tea.NewProgram(
 		m,
 		tea.WithContext(ctx),

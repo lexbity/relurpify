@@ -169,8 +169,8 @@ func (b *Backend) Reset(ctx context.Context, strategy string) error {
 type HealthState string
 
 const (
-	HealthStateReady      HealthState = "ready"
-	HealthStateUnhealthy  HealthState = "unhealthy"
+	HealthStateReady     HealthState = "ready"
+	HealthStateUnhealthy HealthState = "unhealthy"
 )
 
 // HealthReport captures the latest backend status snapshot.

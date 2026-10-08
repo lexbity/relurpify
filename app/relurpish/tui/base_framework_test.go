@@ -28,7 +28,7 @@ func (f *baseSurfaceFake) RegisterTabs(reg *TabRegistry) {
 	reg.Register(TabDefinition{ID: TabDoctor, Label: "doctor", AgentFilter: []string{"none"}})
 }
 func (f *baseSurfaceFake) RegisterCommands(*CommandRegistry) {}
-func (f *baseSurfaceFake) NewChat(RuntimeAdapter, *AgentContext, *Session, *NotificationQueue) ChatPaner {
+func (f *baseSurfaceFake) NewChat(context.Context, RuntimeAdapter, *AgentContext, *Session, *NotificationQueue) ChatPaner {
 	return nil
 }
 func (f *baseSurfaceFake) NewInput(RuntimeAdapter, *AgentContext, *Session) InputSurface {
@@ -72,7 +72,7 @@ func noneSurfaceFactory() SurfaceFactory {
 
 func newBaseFrameworkModel() RootModel {
 	reg := noneSurfaceFactory()
-	return newRootModel(nil, reg)
+	return newRootModel(context.Background(), nil, reg)
 }
 
 func TestBaseFrameworkBootsWithNoneAgent(t *testing.T) {

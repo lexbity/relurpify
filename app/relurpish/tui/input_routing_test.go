@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -22,7 +23,7 @@ func TestOverlayPrecedenceBlocksRegion1Routing(t *testing.T) {
 	chat := &recordingChatPane{}
 	surface := &fakeSurface{name: "guest", chat: chat}
 	factory := &countingFactory{shared: surface}
-	m := newRootModel(nil, factory)
+	m := newRootModel(context.Background(), nil, factory)
 	m.setFocus(FocusRegionRegion1)
 	m.openAgentPicker()
 

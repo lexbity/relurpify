@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -118,7 +119,7 @@ func TestHostRegistrySeparatesGuestCommands(t *testing.T) {
 			"guest": guest,
 		},
 	}
-	m := newRootModel(nil, factory)
+	m := newRootModel(context.Background(), nil, factory)
 	if _, ok := m.cmdReg.Lookup("workspace"); !ok {
 		t.Fatal("expected workspace to remain a host command")
 	}

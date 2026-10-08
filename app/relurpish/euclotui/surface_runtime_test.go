@@ -129,7 +129,7 @@ func TestEucloChatPaneAcceptsOfflineTurn(t *testing.T) {
 
 	ctx := &tui.AgentContext{}
 	sess := &tui.Session{}
-	chat := surface.NewChat(adapter, ctx, sess, nil)
+	chat := surface.NewChat(context.Background(), adapter, ctx, sess, nil)
 	if chat == nil {
 		t.Fatal("NewChat returned nil")
 	}
@@ -157,7 +157,7 @@ func extractChatTextFromMsgs(t *testing.T, cmd tea.Cmd, maxIter int) string {
 		switch v := msg.(type) {
 		case tui.StreamTokenMsg:
 			parts = append(parts, v.Token)
-		case tui.StreamCompleteMsg:
+		case tui.RunFinishedMsg:
 		case tui.ChatSystemMsg:
 			parts = append(parts, v.Text)
 		}

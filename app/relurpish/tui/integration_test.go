@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -17,7 +18,7 @@ func TestReservedChordsSurviveAllFocusStates(t *testing.T) {
 		nav:         &hostileNavSurface{},
 	}
 	factory := &countingFactory{shared: surface}
-	m := newRootModel(nil, factory)
+	m := newRootModel(context.Background(), nil, factory)
 
 	// Test ctrl+a opens agent picker.
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlA, Alt: false})
@@ -28,12 +29,12 @@ func TestReservedChordsSurviveAllFocusStates(t *testing.T) {
 	}
 
 	// Re-create for ctrl+c test.
-	m2 := newRootModel(nil, factory)
+	m2 := newRootModel(context.Background(), nil, factory)
 	updated2, _ := m2.Update(tea.KeyMsg{Type: tea.KeyCtrlC, Alt: false})
 	_ = updated2
 
 	// Test f1 opens help.
-	m3 := newRootModel(nil, factory)
+	m3 := newRootModel(context.Background(), nil, factory)
 	updated3, _ := m3.Update(tea.KeyMsg{Type: tea.KeyF1})
 	rm3 := updated3.(RootModel)
 	if !rm3.showHelp {
