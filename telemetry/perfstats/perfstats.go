@@ -21,7 +21,7 @@ type snapshot struct {
 	CapabilityRegistryRebuildCount   int64
 }
 
-var counters snapshot
+var counters snapshot //nolint:gochecknoglobals // process-wide atomic counters; package-level for lock-free access
 
 func Reset() {
 	atomic.StoreInt64(&counters.BranchClones, 0)

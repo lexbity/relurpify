@@ -71,7 +71,7 @@ type Lexer struct {
 	done         bool
 }
 
-var reservedKeywords = map[string]struct{}{
+var reservedKeywords = map[string]struct{}{ //nolint:gochecknoglobals // immutable lexer keyword table
 	"thoughtrecipe": {},
 	"import":        {},
 	"trigger":       {},

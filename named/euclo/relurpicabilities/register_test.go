@@ -11,7 +11,7 @@ import (
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 )
 
-var declaredRelurpicIDs = []string{
+var declaredRelurpicIDs = []string{ //nolint:gochecknoglobals // test fixture data
 	"euclo:cap.test_run",
 	"euclo:cap.ast_query",
 	"euclo:cap.symbol_trace",

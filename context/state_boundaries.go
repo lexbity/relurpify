@@ -326,8 +326,7 @@ func looksLikeMemoryReference(value any) bool {
 }
 
 func looksLikeTranscript(value any) bool {
-	switch typed := value.(type) {
-	case []map[string]any:
+	if typed, ok := value.([]map[string]any); ok {
 		if len(typed) == 0 {
 			return false
 		}
@@ -339,8 +338,7 @@ func looksLikeTranscript(value any) bool {
 }
 
 func looksLikeRetrievalDump(value any) bool {
-	switch typed := value.(type) {
-	case []map[string]any:
+	if typed, ok := value.([]map[string]any); ok {
 		if len(typed) == 0 {
 			return false
 		}

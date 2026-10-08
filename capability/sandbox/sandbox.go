@@ -91,11 +91,8 @@ func validateBackendPolicy(name string, caps Capabilities, policy SandboxPolicy)
 			return fmt.Errorf("%s backend: network rule %d targets blocked host %q (private, loopback, and link-local addresses are denied)", name, i, rule.Host)
 		}
 	}
-	switch {
-	case len(policy.AllowedEnvKeys) > 0 || len(policy.DeniedEnvKeys) > 0:
-		if !caps.EnvFiltering {
-			return fmt.Errorf("%s backend does not support environment filtering", name)
-		}
+	if (len(policy.AllowedEnvKeys) > 0 || len(policy.DeniedEnvKeys) > 0) && !caps.EnvFiltering {
+		return fmt.Errorf("%s backend does not support environment filtering", name)
 	}
 	if policy.ReadOnlyRoot && !caps.ReadOnlyRoot {
 		return fmt.Errorf("%s backend does not support read-only root", name)

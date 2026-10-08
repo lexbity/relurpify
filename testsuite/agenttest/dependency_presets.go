@@ -6,7 +6,7 @@ package agenttest
 // PresetCodeEditDependencies defines dependencies for code editing workflows.
 // This ensures safe file operations where reads precede writes,
 // and tests are run after modifications.
-var PresetCodeEditDependencies = []ToolDependency{
+var PresetCodeEditDependencies = []ToolDependency{ //nolint:gochecknoglobals // immutable dependency preset table
 	// File operations: must read before writing
 	{Tool: "file_write", Requires: []string{"file_read"}},
 	{Tool: "file_edit", Requires: []string{"file_read"}},
@@ -24,7 +24,7 @@ var PresetCodeEditDependencies = []ToolDependency{
 
 // PresetAnalysisDependencies defines dependencies for code analysis workflows.
 // This ensures files are listed/searched before detailed analysis.
-var PresetAnalysisDependencies = []ToolDependency{
+var PresetAnalysisDependencies = []ToolDependency{ //nolint:gochecknoglobals // immutable dependency preset table
 	// Search operations: list files first to understand structure
 	{Tool: "file_search", Requires: []string{"file_list"}},
 
@@ -39,7 +39,7 @@ var PresetAnalysisDependencies = []ToolDependency{
 }
 
 // PresetWorkflowDependencies defines dependencies for workflow/state management.
-var PresetWorkflowDependencies = []ToolDependency{
+var PresetWorkflowDependencies = []ToolDependency{ //nolint:gochecknoglobals // immutable dependency preset table
 	// Checkpoint operations: validate before saving state
 	{Tool: "checkpoint_save", Requires: []string{"validate_state"}},
 
@@ -52,7 +52,7 @@ var PresetWorkflowDependencies = []ToolDependency{
 
 // PresetSafetyDependencies defines dependencies for safe operation enforcement.
 // These prevent dangerous or irreversible operations without proper checks.
-var PresetSafetyDependencies = []ToolDependency{
+var PresetSafetyDependencies = []ToolDependency{ //nolint:gochecknoglobals // immutable dependency preset table
 	// Dangerous operations: require explicit confirmation
 	{Tool: "git_reset", Requires: []string{"git_status"}},
 	{Tool: "git_clean", Requires: []string{"git_status"}},
@@ -64,7 +64,7 @@ var PresetSafetyDependencies = []ToolDependency{
 }
 
 // PresetTestingDependencies defines dependencies for test execution workflows.
-var PresetTestingDependencies = []ToolDependency{
+var PresetTestingDependencies = []ToolDependency{ //nolint:gochecknoglobals // immutable dependency preset table
 	// Test discovery: build first
 	{Tool: "test_discover", Requires: []string{"go_build"}},
 
@@ -79,7 +79,7 @@ var PresetTestingDependencies = []ToolDependency{
 }
 
 // PresetShellDependencies defines dependencies for shell command execution.
-var PresetShellDependencies = []ToolDependency{
+var PresetShellDependencies = []ToolDependency{ //nolint:gochecknoglobals // immutable dependency preset table
 	// Shell commands: validate environment first
 	{Tool: "shell_exec", Requires: []string{"env_check"}},
 
@@ -89,7 +89,7 @@ var PresetShellDependencies = []ToolDependency{
 
 // AllPresets combines all preset dependency rules.
 // This can be used when comprehensive validation is needed.
-var AllPresets = combinePresets(
+var AllPresets = combinePresets( //nolint:gochecknoglobals // immutable dependency preset table
 	PresetCodeEditDependencies,
 	PresetAnalysisDependencies,
 	PresetWorkflowDependencies,

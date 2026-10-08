@@ -8,7 +8,7 @@ import (
 
 type pipelineStageOutputsProvider struct{}
 
-var pipelineStages = []string{
+var pipelineStages = []string{ //nolint:gochecknoglobals // immutable stage vocabulary
 	"pipeline.explore",
 	"pipeline.analyze",
 	"pipeline.plan",

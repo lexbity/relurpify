@@ -14,7 +14,7 @@ const (
 // SQLiteFreePackages lists module-relative package prefixes that must not
 // import "database/sql" or "github.com/mattn/go-sqlite3" in production code.
 // Migration files explicitly named "migration" are exempt.
-var SQLiteFreePackages = []string{
+var SQLiteFreePackages = []string{ //nolint:gochecknoglobals // immutable package vocabulary
 	"context/knowledge/ast",
 	"context/knowledge/graphdb",
 	"context/knowledge/search",

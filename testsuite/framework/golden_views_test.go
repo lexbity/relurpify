@@ -10,7 +10,7 @@ import (
 	"codeburg.org/lexbit/relurpify/platform/fs"
 )
 
-var update = flag.Bool("update", false, "update golden files")
+var update = flag.Bool("update", false, "update golden files") //nolint:gochecknoglobals // golden-update flag for test maintenance
 
 func goldenPath(name string) string {
 	return filepath.Join("testdata", "golden", name)

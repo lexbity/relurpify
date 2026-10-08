@@ -23,7 +23,7 @@ func drive(t *testing.T, m tui.RootModel, key tea.KeyMsg) tui.RootModel {
 }
 
 // allTabs is the user-reachable tab set.
-var allTabs = []tui.TabID{
+var allTabs = []tui.TabID{ //nolint:gochecknoglobals // test fixture data
 	tui.TabWelcome,
 	tui.TabSandbox,
 	tui.TabSecurityGuard,
@@ -35,7 +35,7 @@ var allTabs = []tui.TabID{
 }
 
 // keySoup is a barrage of navigation / editing keys that any pane might receive.
-var keySoup = []tea.KeyMsg{
+var keySoup = []tea.KeyMsg{ //nolint:gochecknoglobals // test fixture data
 	{Type: tea.KeyUp}, {Type: tea.KeyDown}, {Type: tea.KeyLeft}, {Type: tea.KeyRight},
 	{Type: tea.KeyEnter}, {Type: tea.KeyEsc}, {Type: tea.KeyTab}, {Type: tea.KeyShiftTab},
 	{Type: tea.KeyBackspace}, {Type: tea.KeyDelete}, {Type: tea.KeyHome}, {Type: tea.KeyEnd},

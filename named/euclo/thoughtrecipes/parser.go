@@ -1072,11 +1072,7 @@ func (p *Parser) parseInlineList() (*ListLiteral, error) {
 			return nil, err
 		}
 		list.Entries = append(list.Entries, value)
-		if len(list.Entries) == 1 {
-			list.Span = spanFromTokens(start, endToken(value))
-		} else {
-			list.Span = spanFromTokens(start, endToken(value))
-		}
+		list.Span = spanFromTokens(start, endToken(value))
 	}
 	return nil, p.unexpectedEOF("unterminated list literal")
 }
@@ -1130,11 +1126,7 @@ func (p *Parser) parseBlockList() (*ListLiteral, error) {
 			return nil, err
 		}
 		list.Entries = append(list.Entries, value)
-		if list.Span.Start.Line == 0 {
-			list.Span = spanFromTokens(start, endToken(value))
-		} else {
-			list.Span = spanFromTokens(start, endToken(value))
-		}
+		list.Span = spanFromTokens(start, endToken(value))
 	}
 	list.Raw = formatListRaw(list.Entries)
 	return list, nil

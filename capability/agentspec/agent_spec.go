@@ -928,7 +928,7 @@ func ValidateCapabilityInsertionPolicy(policy CapabilityInsertionPolicy) error {
 	}
 }
 
-var validBrowserActions = map[string]struct{}{
+var validBrowserActions = map[string]struct{}{ //nolint:gochecknoglobals // immutable validation vocabulary
 	"open":                   {},
 	"navigate":               {},
 	"click":                  {},
@@ -944,7 +944,7 @@ var validBrowserActions = map[string]struct{}{
 	"close":                  {},
 }
 
-var validBrowserBackends = map[string]struct{}{
+var validBrowserBackends = map[string]struct{}{ //nolint:gochecknoglobals // immutable validation vocabulary
 	"cdp":       {},
 	"webdriver": {},
 	"bidi":      {},

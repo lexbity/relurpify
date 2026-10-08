@@ -5,7 +5,6 @@ import (
 	"math"
 	"strconv"
 	"strings"
-
 )
 
 // NormalizeRoutePredicate converts a parsed predicate into a typed Predicate.
@@ -235,7 +234,7 @@ func lowerAgentExecutionDecl(kind StepKind, agent Identifier, items []ExecutionI
 			step.Config["effective_tool_names"] = append([]string(nil), toolNames...)
 		}
 	}
-	*index = *index + 1
+	*index++
 	return step, nil
 }
 
@@ -263,7 +262,7 @@ func lowerCapabilityExecutionDecl(inv *CapabilityInvocation, index *int) (Execut
 	if plan.Input != "" {
 		step.Config["input"] = plan.Input
 	}
-	*index = *index + 1
+	*index++
 	return step, nil
 }
 

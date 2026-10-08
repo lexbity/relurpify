@@ -7,7 +7,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var workspace string
+var workspace string //nolint:gochecknoglobals // persistent flag target bound via StringVar at the CLI entrypoint
 
 // Execute is the entry point for the CLI.
 func Execute() {

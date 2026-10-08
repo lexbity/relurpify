@@ -7,7 +7,7 @@ import (
 // goldenGlobVectors defines a shared set of (pattern, value, expected) cases
 // that both governance/authorization.matchGlob and the search package's MatchGlob
 // must agree on. Add vectors here when adding new glob patterns to either package.
-var goldenGlobVectors = []struct {
+var goldenGlobVectors = []struct { //nolint:gochecknoglobals // golden test vectors
 	pattern  string
 	value    string
 	expected bool

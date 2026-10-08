@@ -10,7 +10,7 @@ import (
 )
 
 // eucloCapabilityIDs is the full set of Euclo relurpic capability IDs.
-var eucloCapabilityIDs = []string{
+var eucloCapabilityIDs = []string{ //nolint:gochecknoglobals // immutable capability id vocabulary
 	"euclo:cap.test_run",
 	"euclo:cap.ast_query",
 	"euclo:cap.symbol_trace",

@@ -5,6 +5,10 @@ import tea "github.com/charmbracelet/bubbletea"
 // FocusAction describes the host-level routing decision for a key press.
 type FocusAction int
 
+// keyEsc is the escape key name, shared by the focus router so the literal is
+// not duplicated across the package.
+const keyEsc = "esc"
+
 const (
 	FocusActionIgnore FocusAction = iota
 	FocusActionFocusInput
@@ -63,8 +67,7 @@ func (r *FocusRouter) FocusRegion1() {
 // Route translates a key into a focus action.
 func (r FocusRouter) Route(msg tea.KeyMsg) FocusRoute {
 	if r.state.InRegion1() {
-		switch msg.String() {
-		case "esc":
+		if msg.String() == keyEsc {
 			return FocusRoute{Action: FocusActionFocusInput}
 		}
 		if printable, ok := printableKey(msg); ok {

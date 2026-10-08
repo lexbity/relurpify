@@ -19,7 +19,7 @@ type agentTestRunner interface {
 	RunSuite(context.Context, *agenttest.Suite, agenttest.RunOptions) (*agenttest.SuiteReport, error)
 }
 
-var newAgentTestRunnerFn = func() agentTestRunner {
+var newAgentTestRunnerFn = func() agentTestRunner { //nolint:gochecknoglobals // dependency-injection seam replaced by tests
 	return &agenttest.Runner{}
 }
 

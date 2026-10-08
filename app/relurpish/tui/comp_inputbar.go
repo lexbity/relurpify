@@ -458,17 +458,18 @@ func (b *InputBar) View(activeTab TabID, streaming bool) string {
 	}
 
 	var hint string
-	if b.gated {
+	switch {
+	case b.gated:
 		hint = b.th.Dim().Render(" running — > blocked | : and / active | ctrl+c quit")
-	} else if streaming {
+	case streaming:
 		hint = b.th.Dim().Render(" streaming…  pgup/down scroll | ctrl+c quit")
-	} else if b.pickerActive && len(b.pickerResult.Results) > 0 {
+	case b.pickerActive && len(b.pickerResult.Results) > 0:
 		hint = b.th.Dim().Render(" enter/tab select | esc cancel | ↑↓ navigate")
-	} else if b.palOpen && len(b.palette) > 0 {
+	case b.palOpen && len(b.palette) > 0:
 		hint = b.th.Dim().Render(" enter/tab complete | esc cancel | ↑↓ select")
-	} else if b.searchMode || draft.prefix == "?" {
+	case b.searchMode || draft.prefix == "?":
 		hint = b.th.Dim().Render(" esc exit search | enter apply")
-	} else {
+	default:
 		hint = ""
 	}
 

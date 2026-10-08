@@ -157,8 +157,8 @@ func (c *Compiler) Compile(ctx context.Context, request CompilationRequest) (*Co
 	var evictedPinContent []string
 	var pinPaths map[string]struct{}
 	if len(pinAnchors) > 0 {
-	if len(pinAnchors) > MaxActivePins {
-		for _, dropped := range pinAnchors[MaxActivePins:] {
+		if len(pinAnchors) > MaxActivePins {
+			for _, dropped := range pinAnchors[MaxActivePins:] {
 				path := anchorFilePath(dropped)
 				c.emitWarning(ctx, "pin_cap_exceeded", map[string]any{"path": path})
 			}
@@ -782,7 +782,8 @@ func (c *Compiler) trySummarySubstitution(ctx context.Context, chunks []retrieva
 				}
 			}
 		}
-		if summaryChunk != nil {
+		switch {
+		case summaryChunk != nil:
 			// Check if summary is stale
 			if summaryChunk.Freshness == knowledge.FreshnessStale {
 				// Try to regenerate if auto-summarize is enabled
@@ -811,7 +812,7 @@ func (c *Compiler) trySummarySubstitution(ctx context.Context, chunks []retrieva
 				Reason:          "budget_pressure",
 				TokenSavings:    savings,
 			})
-		} else if c.autoSummarize && len(c.summarizers) > 0 {
+		case c.autoSummarize && len(c.summarizers) > 0:
 			// No summary exists - generate on-demand
 			summaryChunk = c.generateAndPersistSummary(ctx, []knowledge.KnowledgeChunk{*chunk})
 			if summaryChunk != nil {
@@ -834,7 +835,7 @@ func (c *Compiler) trySummarySubstitution(ctx context.Context, chunks []retrieva
 				// Keep original chunk
 				result = append(result, rc)
 			}
-		} else {
+		default:
 			// No summary and auto-summarize disabled
 			result = append(result, rc)
 		}

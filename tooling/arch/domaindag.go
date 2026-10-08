@@ -32,7 +32,7 @@ const (
 // For each importing domain, allowedImports[domain] lists the set of domains
 // it is permitted to import from. Self-imports (same domain) are always allowed.
 // Domains not present (testsuite, tooling) are unrestricted.
-var DomainDAG = domainDAG()
+var DomainDAG = domainDAG() //nolint:gochecknoglobals // domain import graph computed once at init
 
 func domainDAG() map[string]map[string]bool {
 	d := map[string][]string{

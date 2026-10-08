@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-var updateGolden = flag.Bool("update", false, "update golden test output files")
+var updateGolden = flag.Bool("update", false, "update golden test output files") //nolint:gochecknoglobals // golden-update flag for test maintenance
 
 // goldenPath returns the path to a golden file in the testdata directory.
 func goldenPath(t *testing.T, name string) string {

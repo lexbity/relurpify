@@ -275,13 +275,14 @@ func parsePorcelainBlame(output string) []map[string]any {
 			}
 		} else if currentEntry != nil {
 			// Parse entry fields
-			if strings.HasPrefix(line, "author ") {
+			switch {
+			case strings.HasPrefix(line, "author "):
 				currentEntry["author"] = strings.TrimPrefix(line, "author ")
-			} else if strings.HasPrefix(line, "summary ") {
+			case strings.HasPrefix(line, "summary "):
 				currentEntry["summary"] = strings.TrimPrefix(line, "summary ")
-			} else if strings.HasPrefix(line, "author-time ") {
+			case strings.HasPrefix(line, "author-time "):
 				currentEntry["author_time"] = strings.TrimPrefix(line, "author-time ")
-			} else if strings.HasPrefix(line, "committer ") {
+			case strings.HasPrefix(line, "committer "):
 				currentEntry["committer"] = strings.TrimPrefix(line, "committer ")
 			}
 		}

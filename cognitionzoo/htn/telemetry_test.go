@@ -6,6 +6,7 @@ import (
 	"sync"
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/cognitionzoo/htn/runtime"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/context/contextstream"
 	contextports "codeburg.org/lexbit/relurpify/context/ports"
@@ -82,7 +83,7 @@ func TestHTNAgentEmitsParadigmTelemetry(t *testing.T) {
 	sink := &paradigmSink{}
 	agent := &HTNAgent{
 		Config:        &execution.Config{Telemetry: sink},
-		Methods:       NewMethodLibrary(),
+		Methods:       runtime.NewMethodLibrary(),
 		PrimitiveExec: &noopAgent{},
 	}
 
@@ -113,7 +114,7 @@ func TestHTNAgentEmitsStepFailed(t *testing.T) {
 	sink := &paradigmSink{}
 	agent := &HTNAgent{
 		Config:        &execution.Config{Telemetry: sink},
-		Methods:       NewMethodLibrary(),
+		Methods:       runtime.NewMethodLibrary(),
 		PrimitiveExec: &failingPrimitive{},
 	}
 	ctx := contextstream.WithTrigger(context.Background(), contextstream.NewTrigger(triggerCompiler{}))

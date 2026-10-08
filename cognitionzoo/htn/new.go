@@ -3,6 +3,7 @@ package htn
 import (
 	"fmt"
 
+	"codeburg.org/lexbit/relurpify/cognitionzoo/htn/runtime"
 	"codeburg.org/lexbit/relurpify/cognitionzoo/paradigm"
 	"codeburg.org/lexbit/relurpify/context/contextstream"
 	"codeburg.org/lexbit/relurpify/execution/agentgraph"
@@ -37,7 +38,8 @@ func WithContextStreamMaxTokens(maxTokens int) Option {
 	}
 }
 
-func New(deps *paradigm.Deps, methods *MethodLibrary, opts ...Option) *HTNAgent {
+// New builds an HTN agent with the given method library and options.
+func New(deps *paradigm.Deps, methods *runtime.MethodLibrary, opts ...Option) *HTNAgent {
 	agent := &HTNAgent{Methods: methods}
 	for _, opt := range opts {
 		if opt != nil {

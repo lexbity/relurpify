@@ -436,20 +436,21 @@ func (s *GraphIndexStore) SearchEdges(query EdgeQuery) ([]*Edge, error) {
 	}
 	var candidates []graphdb.EdgeRecord
 	egk := toEdgeKinds(query.Types)
-	if len(query.SourceIDs) > 0 {
+	switch {
+	case len(query.SourceIDs) > 0:
 		for _, sid := range query.SourceIDs {
 			candidates = append(candidates, s.g.GetOutEdges(sid, egk...)...)
 		}
-	} else if len(query.TargetIDs) > 0 {
+	case len(query.TargetIDs) > 0:
 		for _, tid := range query.TargetIDs {
 			candidates = append(candidates, s.g.GetInEdges(tid, egk...)...)
 		}
-	} else if len(query.Types) > 0 {
+	case len(query.Types) > 0:
 		nodes := s.g.ListNodes("")
 		for _, n := range nodes {
 			candidates = append(candidates, s.g.GetOutEdges(n.ID, egk...)...)
 		}
-	} else {
+	default:
 		nodes := s.g.ListNodes("")
 		for _, n := range nodes {
 			candidates = append(candidates, s.g.GetOutEdges(n.ID)...)

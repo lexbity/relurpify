@@ -39,7 +39,7 @@ const (
 )
 
 // Error text patterns
-var errorPatterns = []string{
+var errorPatterns = []string{ //nolint:gochecknoglobals // immutable error-signal pattern table
 	"panic:", "error:", "undefined:", "nil pointer", "index out of range",
 	"test failed", "compilation error", "type error", "syntax error",
 	"broken", "crash", "exception", "fatal",

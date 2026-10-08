@@ -58,7 +58,7 @@ type Tool interface {
 // globRegexCache caches compiled glob-to-regex patterns using a bounded LRU.
 // The process-global sync.Map was replaced to prevent memory exhaustion from
 // adversarial or deeply-nested glob patterns.
-var globRegexCache = newCompiledGlobCache(256)
+var globRegexCache = newCompiledGlobCache(256) //nolint:gochecknoglobals // bounded regex cache guarded by a mutex
 
 // PermissionManager enforces the declared permission set for runtime actions.
 type PermissionManager struct {

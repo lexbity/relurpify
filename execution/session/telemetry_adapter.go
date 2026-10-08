@@ -22,8 +22,7 @@ func (a modelTelemetryAdapter) Emit(ctx context.Context, event any) {
 	if a.inner == nil {
 		return
 	}
-	switch ev := event.(type) {
-	case telemetry.Event:
+	if ev, ok := event.(telemetry.Event); ok {
 		telemetry.StampCorrelation(ctx, &ev)
 		a.inner.Emit(ev)
 	}

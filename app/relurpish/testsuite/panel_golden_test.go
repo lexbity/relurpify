@@ -28,9 +28,9 @@ import (
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
-var update = flag.Bool("update", false, "update golden files")
+var update = flag.Bool("update", false, "update golden files") //nolint:gochecknoglobals // golden-update flag for test maintenance
 
-var goldenDir = func() string {
+var goldenDir = func() string { //nolint:gochecknoglobals // golden snapshot directory resolved once
 	_, file, _, ok := runtime.Caller(0)
 	if !ok {
 		return filepath.Join("testdata", "golden")

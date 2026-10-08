@@ -6,7 +6,7 @@ import (
 	"sync"
 )
 
-var defaultSchemaKinds = []string{
+var defaultSchemaKinds = []string{ //nolint:gochecknoglobals // immutable schema kind vocabulary
 	"workspace",
 	"policy/sandbox",
 	"policy/shell",

@@ -14,7 +14,7 @@ const (
 	Str17460_markdown = "```"
 )
 
-var markdownParser = goldmark.New(
+var markdownParser = goldmark.New( //nolint:gochecknoglobals // shared stateless parser instance
 	goldmark.WithParserOptions(
 		parser.WithAutoHeadingID(),
 	),

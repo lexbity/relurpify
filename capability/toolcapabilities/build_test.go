@@ -12,7 +12,7 @@ import (
 	"codeburg.org/lexbit/relurpify/governance/risk"
 )
 
-var testBackendBuilders = []BuildOption{
+var testBackendBuilders = []BuildOption{ //nolint:gochecknoglobals // test fixture builders
 	WithBackendBuilder("subprocess", &nopBackendBuilder{}),
 	WithBackendBuilder("composite", &nopBackendBuilder{}),
 }

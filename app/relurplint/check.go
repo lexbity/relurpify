@@ -10,7 +10,7 @@ type Check interface {
 	Run(workspace string) []Diagnostic
 }
 
-var registry = make(map[string]Check)
+var registry = make(map[string]Check) //nolint:gochecknoglobals // check registry populated by per-check registration
 
 func registerCheck(c Check) {
 	registry[c.Name()] = c

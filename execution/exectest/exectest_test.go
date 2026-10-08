@@ -212,7 +212,7 @@ func TestFakeWorkspaceService_CustomOpenFunc(t *testing.T) {
 	}
 }
 
-var assertAnError = &fakeError{msg: "custom error"}
+var assertAnError = &fakeError{msg: "custom error"} //nolint:gochecknoglobals // test fixture sentinel error
 
 type fakeError struct{ msg string }
 

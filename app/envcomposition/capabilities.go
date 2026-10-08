@@ -25,13 +25,13 @@ import (
 )
 
 var (
-	newCapabilityRegistryFn   = regpkg.NewRegistry
-	newASTIndexStoreFn        = func(g *graphdb.Engine) ast.IndexStore { return ast.NewGraphIndexStore(g) }
-	newGraphDBFn              = graphdb.Open
-	startIndexingFn           = func(m *ast.IndexManager, ctx context.Context) error { return m.StartIndexing(ctx) }
-	newSearchEngineFn         = search.NewSearchEngine
-	attachASTSymbolProviderFn = ast.AttachASTSymbolProvider
-	cleanupCapabilityBundleFn = func(ctx context.Context, g *graphdb.Engine, manager *ast.IndexManager) {
+	newCapabilityRegistryFn   = regpkg.NewRegistry                                                                   //nolint:gochecknoglobals // dependency-injection seam replaced by tests
+	newASTIndexStoreFn        = func(g *graphdb.Engine) ast.IndexStore { return ast.NewGraphIndexStore(g) }          //nolint:gochecknoglobals // dependency-injection seam replaced by tests
+	newGraphDBFn              = graphdb.Open                                                                         //nolint:gochecknoglobals // dependency-injection seam replaced by tests
+	startIndexingFn           = func(m *ast.IndexManager, ctx context.Context) error { return m.StartIndexing(ctx) } //nolint:gochecknoglobals // dependency-injection seam replaced by tests
+	newSearchEngineFn         = search.NewSearchEngine                                                               //nolint:gochecknoglobals // dependency-injection seam replaced by tests
+	attachASTSymbolProviderFn = ast.AttachASTSymbolProvider                                                          //nolint:gochecknoglobals // dependency-injection seam replaced by tests
+	cleanupCapabilityBundleFn = func(ctx context.Context, g *graphdb.Engine, manager *ast.IndexManager) {            //nolint:gochecknoglobals // dependency-injection seam replaced by tests
 		if manager != nil {
 			_ = manager.Close(ctx)
 		}

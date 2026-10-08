@@ -26,7 +26,7 @@ type Palette struct {
 
 // defaultPalette is the canonical relurpish palette. Light and Dark values
 // match the former tui/styles.go colour globals.
-var defaultPalette = Palette{
+var defaultPalette = Palette{ //nolint:gochecknoglobals // immutable default theme palette
 	Background: lipgloss.AdaptiveColor{Light: "#f4f4f5", Dark: "#1f1f23"},
 	Surface:    lipgloss.AdaptiveColor{Light: "#d8d8dd", Dark: "#2b2f36"},
 	Primary:    lipgloss.AdaptiveColor{Light: "#005f87", Dark: "#7fd7ff"},

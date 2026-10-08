@@ -18,7 +18,7 @@ import (
 // expectedNativeKeys lists every go_native tool key that should be registered
 // at startup. This set must be kept in sync with the go_native tool manifests
 // in relurpify_cfg/tools/ and the tool constructors in capability_bundle.go.
-var expectedNativeKeys = []string{
+var expectedNativeKeys = []string{ //nolint:gochecknoglobals // test fixture data
 	"file_create",
 	"file_delete",
 	"file_edit",

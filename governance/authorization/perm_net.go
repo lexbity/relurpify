@@ -9,6 +9,13 @@ import (
 	governanceports "codeburg.org/lexbit/relurpify/governance/ports"
 )
 
+// Network permission directions, named to keep the matcher readable.
+const (
+	directionEgress  = "egress"
+	directionIngress = "ingress"
+	directionDNS     = "dns"
+)
+
 // isPrivateOrLoopbackHost checks if the host is a private/loopback address.
 func isPrivateOrLoopbackHost(host string) bool {
 	ip := net.ParseIP(host)
@@ -110,18 +117,19 @@ func (m *PermissionManager) findNetworkPermission(direction, protocol, host stri
 		if perm.Direction != direction || perm.Protocol != protocol {
 			continue
 		}
-		if perm.Direction == "egress" {
+		switch {
+		case perm.Direction == directionEgress:
 			if perm.Port != 0 && perm.Port != port {
 				continue
 			}
 			if perm.Host == host || perm.Host == permissionMatchAll || matchGlob(perm.Host, host) {
 				return &perm
 			}
-		} else if perm.Direction == "ingress" {
+		case perm.Direction == directionIngress:
 			if perm.Port == port || perm.Port == 0 {
 				return &perm
 			}
-		} else if perm.Direction == "dns" && perm.Host == "" {
+		case perm.Direction == directionDNS && perm.Host == "":
 			return &perm
 		}
 		if perm.Host == target {

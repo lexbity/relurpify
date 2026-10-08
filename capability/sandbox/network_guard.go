@@ -4,7 +4,7 @@ import "net"
 
 // privateRanges contains IP subnets that must never be reachable by sandboxed
 // tool network calls.
-var privateRanges []*net.IPNet
+var privateRanges []*net.IPNet //nolint:gochecknoglobals // populated once in init(); read-only afterwards
 
 func init() {
 	cidrs := []string{

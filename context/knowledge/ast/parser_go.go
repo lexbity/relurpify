@@ -174,8 +174,7 @@ func (gp *GoParser) buildGenDeclNodes(decl *goast.GenDecl, fileID, parentID stri
 	nodes := make([]*Node, 0)
 	now := time.Now().UTC()
 	for _, spec := range decl.Specs {
-		switch typed := spec.(type) {
-		case *goast.TypeSpec:
+		if typed, ok := spec.(*goast.TypeSpec); ok {
 			node := &Node{
 				ID:         fmt.Sprintf("%s:type:%s", fileID, typed.Name.Name),
 				ParentID:   parentID,

@@ -21,6 +21,7 @@ type Options struct {
 
 	// SnapshotOnClose is deprecated and has no effect. Badger persists every
 	// committed mutation, so there is no separate snapshot step on close.
+	//
 	// Deprecated: retained only so existing configuration continues to compile.
 	SnapshotOnClose bool
 	SyncMode        SyncMode

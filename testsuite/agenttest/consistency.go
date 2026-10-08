@@ -93,7 +93,7 @@ func computeVariance(values []int) float64 {
 		diff := float64(v) - mean
 		variance += diff * diff
 	}
-	variance = variance / float64(len(values))
+	variance /= float64(len(values))
 
 	return variance
 }
@@ -176,13 +176,14 @@ func FormatConsistencyReport(report *ConsistencyReport) string {
 	out += fmt.Sprintf("Determinism Score: %.2f%%\n", report.DeterminismScore*100)
 
 	// Interpretation
-	if report.DeterminismScore >= 0.9 {
+	switch {
+	case report.DeterminismScore >= 0.9:
 		out += "Interpretation: Highly deterministic (>=90% consistent)\n"
-	} else if report.DeterminismScore >= 0.7 {
+	case report.DeterminismScore >= 0.7:
 		out += "Interpretation: Moderately deterministic (70-90% consistent)\n"
-	} else if report.DeterminismScore >= 0.5 {
+	case report.DeterminismScore >= 0.5:
 		out += "Interpretation: Low determinism (50-70% consistent)\n"
-	} else {
+	default:
 		out += "Interpretation: Non-deterministic (<50% consistent)\n"
 	}
 

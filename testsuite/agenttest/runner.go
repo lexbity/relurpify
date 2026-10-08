@@ -195,7 +195,7 @@ type Runner struct {
 
 // PreparedRunExecutorFn executes a prepared run descriptor through the CLI
 // handoff path.
-var PreparedRunExecutorFn = func(ctx context.Context, descriptorPath, runRoot, extra string, out io.Writer) error {
+var PreparedRunExecutorFn = func(ctx context.Context, descriptorPath, _, _ string, out io.Writer) error { //nolint:gochecknoglobals // dependency-injection seam replaced by tests
 	desc, err := LoadPreparedRunDescriptor(descriptorPath)
 	if err != nil {
 		return fmt.Errorf("load descriptor: %w", err)
@@ -204,7 +204,7 @@ var PreparedRunExecutorFn = func(ctx context.Context, descriptorPath, runRoot, e
 }
 
 // PreparedRunVerifierFn validates the prepared run artifacts after execution.
-var PreparedRunVerifierFn = VerifyPreparedRun
+var PreparedRunVerifierFn = VerifyPreparedRun //nolint:gochecknoglobals // dependency-injection seam replaced by tests
 
 type runCaseLayout struct {
 	ArtifactsDir        string

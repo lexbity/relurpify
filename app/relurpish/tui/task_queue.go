@@ -94,8 +94,7 @@ func (p *TasksPane) NextPending() (TaskItem, bool) {
 
 // Update only retains lightweight keyboard navigation for the queue list.
 func (p *TasksPane) Update(msg tea.Msg) (*TasksPane, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
+	if msg, ok := msg.(tea.KeyMsg); ok {
 		switch msg.String() {
 		case "up":
 			if p.sel > 0 {

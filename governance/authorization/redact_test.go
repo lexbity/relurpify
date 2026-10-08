@@ -18,7 +18,7 @@ var (
 // redactGoldenVectors defines a shared set of (input, expected) pairs that
 // both governance/authorization.redactAny and the original capability-level
 // redactor must agree on. Add vectors here when adding new sensitive patterns.
-var redactGoldenVectors = []struct {
+var redactGoldenVectors = []struct { //nolint:gochecknoglobals // golden test vectors
 	name     string
 	input    any
 	expected any

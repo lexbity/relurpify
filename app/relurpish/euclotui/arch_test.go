@@ -10,7 +10,7 @@ import (
 
 // bannedIdentifiers are identifiers that the euclotui package must never define
 // or import — they were removed during the stepper rewrite.
-var bannedIdentifiers = []string{
+var bannedIdentifiers = []string{ //nolint:gochecknoglobals // test fixture data
 	"\nPhaseIdle",
 	"\nPhaseIntake",
 	"\nPhasePlan",

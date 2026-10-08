@@ -31,21 +31,22 @@ func TestMacroPhaseOrdering(t *testing.T) {
 	ordered := []MacroPhase{MacroIdle, MacroIntake, MacroRoute, MacroExecute, MacroVerify, MacroDone}
 	for i, current := range ordered {
 		for j, other := range ordered {
-			if i < j {
+			switch {
+			case i < j:
 				if !current.Before(other) {
 					t.Errorf("%s.Before(%s) = false, want true", current, other)
 				}
 				if other.After(current) != true {
 					t.Errorf("%s.After(%s) = false, want true", other, current)
 				}
-			} else if i == j {
+			case i == j:
 				if current.Before(other) {
 					t.Errorf("%s.Before(%s) = true, want false (same phase)", current, other)
 				}
 				if current.After(other) {
 					t.Errorf("%s.After(%s) = true, want false (same phase)", current, other)
 				}
-			} else {
+			default:
 				if current.Before(other) {
 					t.Errorf("%s.Before(%s) = true, want false", current, other)
 				}

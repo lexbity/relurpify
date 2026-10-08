@@ -15,7 +15,7 @@ const ModulePath = "codeburg.org/lexbit/relurpify"
 
 // TopLevelDomains lists the canonical top-level domain directories.
 // Packages outside these are in "framework/", "platform/", "testsuite/", etc.
-var TopLevelDomains = []string{
+var TopLevelDomains = []string{ //nolint:gochecknoglobals // immutable top-level domain vocabulary
 	"app",
 	"ayenitd",
 	"capability",

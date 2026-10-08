@@ -31,7 +31,7 @@ func filePickerQueryCmd(rt RuntimeAdapter, workspace, prefix string) tea.Cmd {
 		if pattern == "" {
 			pattern = "*"
 		} else {
-			pattern = pattern + "*"
+			pattern += "*"
 		}
 
 		result, err := rt.InvokeCapability(context.Background(), "cli_find", map[string]any{

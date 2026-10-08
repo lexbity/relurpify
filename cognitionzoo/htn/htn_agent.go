@@ -80,7 +80,7 @@ type HTNAgent struct {
 	// Config holds runtime configuration.
 	Config *execution.Config
 	// Methods is the method library. Defaults to NewMethodLibrary() when nil.
-	Methods *MethodLibrary
+	Methods *runtime.MethodLibrary
 	// PrimitiveExec is the executor used for leaf subtasks.
 	// It must be initialised before Execute is called.
 	// When nil, HTNAgent falls back to a no-op that marks steps successful.
@@ -103,7 +103,7 @@ type HTNAgent struct {
 func (a *HTNAgent) Initialize(cfg *execution.Config) error {
 	a.Config = cfg
 	if a.Methods == nil {
-		a.Methods = NewMethodLibrary()
+		a.Methods = runtime.NewMethodLibrary()
 	}
 	// Validate method library before use.
 	for _, method := range a.Methods.All() {
@@ -163,7 +163,7 @@ func (a *HTNAgent) Execute(ctx context.Context, task *execution.Task, env *conte
 	if task != nil && task.Type == "" {
 		resolvedTask = &execution.Task{
 			ID:          task.ID,
-			Type:        string(ClassifyTask(task)),
+			Type:        string(runtime.ClassifyTask(task)),
 			Instruction: task.Instruction,
 			Context:     task.Context,
 			Metadata:    task.Metadata,
@@ -197,12 +197,12 @@ func (a *HTNAgent) Execute(ctx context.Context, task *execution.Task, env *conte
 		// runtime.PublishTerminationState(env, "completed")
 		return a.delegateToPrimitive(ctx, resolvedTask, env)
 	}
-	resolvedMethod := ResolveMethod(*method)
+	resolvedMethod := runtime.ResolveMethod(*method)
 	// Agent-specific method state publishing
 	// runtime.PublishResolvedMethodState(env, &resolvedMethod)
 
 	// Decompose into a plan using resolved method (includes operator metadata).
-	compiledPlan, err := DecomposeResolved(resolvedTask, &resolvedMethod)
+	compiledPlan, err := runtime.DecomposeResolved(resolvedTask, &resolvedMethod)
 	if err != nil {
 		a.planFailed(ctx, resolvedTask, err)
 		return nil, fmt.Errorf("htn: decomposition failed: %w", err)
@@ -237,11 +237,9 @@ func (a *HTNAgent) Execute(ctx context.Context, task *execution.Task, env *conte
 	var checkpointStore any
 	executor := &pl.PlanExecutor{
 		Options: pl.PlanExecutionOptions{
-			BuildStepTask: a.buildPlanStepTask,
-			MergeBranches: runtime.MergeHTNBranches,
-			CompletedStepIDs: func(s *contextdata.Envelope) []string {
-				return runtime.CompletedStepsFromEnvelope(s)
-			},
+			BuildStepTask:    a.buildPlanStepTask,
+			MergeBranches:    runtime.MergeHTNBranches,
+			CompletedStepIDs: runtime.CompletedStepsFromEnvelope,
 			BeforeStep: func(step pl.PlanStep, _ *execution.Task, _ *contextdata.Envelope) {
 				a.stepStarted(ctx, step)
 			},

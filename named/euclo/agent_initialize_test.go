@@ -9,7 +9,7 @@ import (
 	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
-var testRelurpicCapabilities = []string{
+var testRelurpicCapabilities = []string{ //nolint:gochecknoglobals // test fixture data
 	"euclo:cap.test_run",
 	"euclo:cap.ast_query",
 	"euclo:cap.symbol_trace",

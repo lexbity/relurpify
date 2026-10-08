@@ -515,11 +515,12 @@ func (p *DiffPane) renderTree(nodes []diffNode, selected int, width int) string 
 		}
 		indent := strings.Repeat("  ", node.Depth)
 		line := indent + p.treePrefix(node) + " " + node.Label
-		if p.rejected[node.Key] {
+		switch {
+		case p.rejected[node.Key]:
 			line = p.th.Error().Render(line + " [rejected]")
-		} else if i == selected {
+		case i == selected:
 			line = p.th.Active().Render(line)
-		} else {
+		default:
 			line = p.th.Body().Render(line)
 		}
 		lines = append(lines, line)

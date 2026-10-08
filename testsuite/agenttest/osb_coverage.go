@@ -16,7 +16,7 @@ import "fmt"
 
 // EvaluatedSecurityAssertions are SecuritySpec fields the OSB security
 // evaluator re-asserts from telemetry-derived case data (FR-9).
-var EvaluatedSecurityAssertions = map[string]bool{
+var EvaluatedSecurityAssertions = map[string]bool{ //nolint:gochecknoglobals // immutable assertion vocabulary
 	"tools_must_not_call":     true,
 	"expected_violations":     true,
 	"no_writes_outside_scope": true,
@@ -31,7 +31,7 @@ var EvaluatedSecurityAssertions = map[string]bool{
 // stream that can re-assert them, so the harness recognises them as
 // runtime-enforced rather than claiming telemetry-based evaluation or ignoring
 // them.
-var RuntimeEnforcedSecurityAssertions = map[string]bool{
+var RuntimeEnforcedSecurityAssertions = map[string]bool{ //nolint:gochecknoglobals // immutable assertion vocabulary
 	"no_exec_outside_manifest":    true,
 	"no_network_outside_manifest": true,
 }
@@ -39,7 +39,7 @@ var RuntimeEnforcedSecurityAssertions = map[string]bool{
 // EvaluatedBenchmarkAssertions are BenchmarkSpec fields the OSB benchmark
 // evaluator records and enforces (thresholds and negative assertions are hard,
 // presence and measurement mismatches are advisory) (FR-10).
-var EvaluatedBenchmarkAssertions = map[string]bool{
+var EvaluatedBenchmarkAssertions = map[string]bool{ //nolint:gochecknoglobals // immutable assertion vocabulary
 	"tools_expected":              true,
 	"tools_not_expected":          true,
 	"tool_sequence_expected":      true,
@@ -55,7 +55,7 @@ var EvaluatedBenchmarkAssertions = map[string]bool{
 
 // AdvisoryBenchmarkFields are BenchmarkSpec fields that are parsed but produce
 // no pass/fail signal: euclo routing hints (extensions) and stability hints.
-var AdvisoryBenchmarkFields = map[string]bool{
+var AdvisoryBenchmarkFields = map[string]bool{ //nolint:gochecknoglobals // immutable field vocabulary
 	"extensions":               true,
 	"determinism_score_hint":   true,
 	"llm_response_stable_hint": true,

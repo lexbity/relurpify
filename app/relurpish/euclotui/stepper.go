@@ -35,7 +35,7 @@ func NewStepper(recipe *surface.RecipeProjection, stepRuntime map[string]surface
 }
 
 // macroOrder defines the canonical lifecycle phases in order.
-var macroOrder = []surface.MacroPhase{
+var macroOrder = []surface.MacroPhase{ //nolint:gochecknoglobals // immutable macro-phase ordering table
 	surface.MacroIntake,
 	surface.MacroRoute,
 	surface.MacroExecute,
@@ -72,11 +72,12 @@ func renderMacroRail(th *theme.Theme, current surface.MacroPhase) string {
 	for _, p := range macroOrder {
 		label := macroPhaseLabel(p)
 		var style lipgloss.Style
-		if p == current {
+		switch {
+		case p == current:
 			style = th.Active()
-		} else if p.Before(current) {
+		case p.Before(current):
 			style = th.Success()
-		} else {
+		default:
 			style = th.Pending()
 		}
 		parts = append(parts, style.Render(label))

@@ -10,6 +10,7 @@ import (
 	blackboardagent "codeburg.org/lexbit/relurpify/cognitionzoo/blackboard"
 	chaineragent "codeburg.org/lexbit/relurpify/cognitionzoo/chainer"
 	htnagent "codeburg.org/lexbit/relurpify/cognitionzoo/htn"
+	htnruntime "codeburg.org/lexbit/relurpify/cognitionzoo/htn/runtime"
 	"codeburg.org/lexbit/relurpify/cognitionzoo/paradigm"
 	pipelineagent "codeburg.org/lexbit/relurpify/cognitionzoo/pipeline"
 	planneragent "codeburg.org/lexbit/relurpify/cognitionzoo/planner"
@@ -97,7 +98,7 @@ func (c *stepCore) buildAgent(task *execution.Task) (agentgraph.WorkflowExecutor
 		return planneragent.New(deps), nil
 	case "htn":
 		primitive := reactagent.New(deps, c.streamOptions()...)
-		return htnagent.New(deps, htnagent.NewMethodLibrary(), append([]htnagent.Option{
+		return htnagent.New(deps, htnruntime.NewMethodLibrary(), append([]htnagent.Option{
 			htnagent.WithPrimitiveExec(primitive),
 		}, c.streamOptionsHTN()...)...), nil
 	case "reflection":
@@ -220,6 +221,7 @@ func newNodeForStep(id string, deps *paradigm.Deps, step ExecutionStep) agentgra
 }
 
 // NewThoughtRecipeStepNode creates the appropriate node type for the step.
+//
 // Deprecated: use per-kind constructors (NewRunNode, NewDelegateNode, etc.).
 func NewThoughtRecipeStepNode(id string, deps *paradigm.Deps, step ExecutionStep) agentgraph.Node {
 	return newNodeForStep(id, deps, step)

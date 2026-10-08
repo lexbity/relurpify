@@ -48,7 +48,7 @@ type AIProviderPane struct {
 	models  []llm.ModelInfo
 	status  string
 
-	catalog   []catalogProviderInfo
+	catalog    []catalogProviderInfo
 	catalogIdx int // index into catalog for the currently selected provider
 
 	kindFocus int
@@ -88,8 +88,7 @@ func (p *AIProviderPane) Refresh() {
 }
 
 func (p *AIProviderPane) Update(msg tea.Msg) (*AIProviderPane, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
+	if msg, ok := msg.(tea.KeyMsg); ok {
 		if p.editing {
 			switch msg.String() {
 			case "enter":

@@ -10,7 +10,7 @@ type WorkspaceScope struct {
 }
 
 // ScopeFull builds every optional layer.
-var ScopeFull = WorkspaceScope{
+var ScopeFull = WorkspaceScope{ //nolint:gochecknoglobals // immutable scope sentinel
 	LLMBackend:     true,
 	Knowledge:      true,
 	Services:       true,
@@ -18,4 +18,4 @@ var ScopeFull = WorkspaceScope{
 }
 
 // ScopeEmbeddedAgent builds only security + capabilities.
-var ScopeEmbeddedAgent = WorkspaceScope{}
+var ScopeEmbeddedAgent = WorkspaceScope{} //nolint:gochecknoglobals // immutable scope sentinel

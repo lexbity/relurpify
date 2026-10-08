@@ -28,8 +28,8 @@ import (
 // values below are what a plain `go build` from source produces.
 var (
 	version = "dev"
-	commit  = "none"
-	date    = "unknown"
+	commit  = "none"    //nolint:gochecknoglobals // GoReleaser ldflags -X injection target; the linker can only set package-level vars
+	date    = "unknown" //nolint:gochecknoglobals // GoReleaser ldflags -X injection target; the linker can only set package-level vars
 )
 
 func init() {
@@ -39,10 +39,10 @@ func init() {
 }
 
 var (
-	cfg          = runtimesvc.DefaultConfig()
-	envSnapshot  []string
-	envOverrides config.EnvOverrides
-	secrets      config.Secrets
+	cfg          = runtimesvc.DefaultConfig() //nolint:gochecknoglobals // CLI-wide boot state resolved once from the environment in main
+	envSnapshot  []string                     //nolint:gochecknoglobals // CLI-wide boot state resolved once from the environment in main
+	envOverrides config.EnvOverrides          //nolint:gochecknoglobals // CLI-wide boot state resolved once from the environment in main
+	secrets      config.Secrets               //nolint:gochecknoglobals // CLI-wide boot state resolved once from the environment in main
 )
 
 // main bootstraps the relurpish CLI/TUI entrypoint.
@@ -60,9 +60,10 @@ func main() {
 	cfg.Editor = envOverrides.Editor
 	cfg.SharedRoot = config.ResolveSharedRoot(envOverrides.XDGDataHome)
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer cancel()
 	root := newRootCmd()
-	if err := root.ExecuteContext(ctx); err != nil {
+	err := root.ExecuteContext(ctx)
+	cancel()
+	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
@@ -127,9 +128,7 @@ func newStatusCmd() *cobra.Command {
 		Use:   "status",
 		Short: "Show workspace diagnostics",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runWithRuntime(cmd, func(ctx context.Context, rt *runtimesvc.Runtime) error {
-				return runTUI(ctx, rt)
-			})
+			return runWithRuntime(cmd, runTUI)
 		},
 	}
 	return cmd
@@ -141,9 +140,7 @@ func newChatCmd() *cobra.Command {
 		Use:   "chat",
 		Short: "Start the relurpish chat shell",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runWithRuntime(cmd, func(ctx context.Context, rt *runtimesvc.Runtime) error {
-				return runTUI(ctx, rt)
-			})
+			return runWithRuntime(cmd, runTUI)
 		},
 	}
 	return cmd

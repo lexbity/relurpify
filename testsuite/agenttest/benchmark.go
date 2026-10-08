@@ -90,7 +90,7 @@ type BenchmarkReport struct {
 	Success           bool                      `json:"success"`
 }
 
-var benchmarkDimensionWeights = map[string]map[string]float64{
+var benchmarkDimensionWeights = map[string]map[string]float64{ //nolint:gochecknoglobals // immutable scoring weight table
 	"capability": {
 		"completion":         0.50,
 		"artifact_integrity": 0.20,

@@ -43,7 +43,7 @@ type globalKeyMap struct {
 }
 
 // GlobalKeys is the application-wide keybinding set.
-var GlobalKeys = globalKeyMap{
+var GlobalKeys = globalKeyMap{ //nolint:gochecknoglobals // immutable keymap table
 	// Navigation
 	Quit:         key.NewBinding(key.WithKeys("ctrl+c", "ctrl+d"), key.WithHelp("ctrl+c", "quit")),
 	Help:         key.NewBinding(key.WithKeys("f1"), key.WithHelp("f1", "help")),
@@ -80,7 +80,7 @@ var GlobalKeys = globalKeyMap{
 
 // ReservedChords are consumed by the host before any surface or region can
 // handle the key event.
-var ReservedChords = []key.Binding{
+var ReservedChords = []key.Binding{ //nolint:gochecknoglobals // immutable chord table
 	GlobalKeys.Quit,
 	GlobalKeys.Help,
 	GlobalKeys.AgentPicker,

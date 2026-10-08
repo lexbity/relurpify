@@ -115,7 +115,7 @@ func (w *workspaceFileSystem) Write(candidate string, content []byte, perm os.Fi
 	return resolved, nil
 }
 
-var eucloRelurpicCapabilityBlueprints = []relurpicCapabilityBlueprint{
+var eucloRelurpicCapabilityBlueprints = []relurpicCapabilityBlueprint{ //nolint:gochecknoglobals // immutable capability blueprint table
 	{ID: "euclo:cap.test_run", RequiredTools: []string{"file_read"}, NewHandler: func(deps RegistrationDeps) handler.InvocableCapabilityHandler {
 		return NewTestRunHandler(commandDepsFromRegistration(deps))
 	}},

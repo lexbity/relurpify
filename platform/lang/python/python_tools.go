@@ -15,7 +15,7 @@ import (
 	"codeburg.org/lexbit/relurpify/platform/tools/subprocess"
 )
 
-var pythonProjectMarkers = []string{
+var pythonProjectMarkers = []string{ //nolint:gochecknoglobals // immutable project-marker table
 	"pyproject.toml",
 	"setup.py",
 	"setup.cfg",

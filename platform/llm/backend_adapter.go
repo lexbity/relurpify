@@ -12,8 +12,8 @@ import (
 )
 
 var (
-	execCommandContext = exec.CommandContext
-	sleepFn            = time.Sleep
+	execCommandContext = exec.CommandContext //nolint:gochecknoglobals // dependency-injection seam replaced by tests
+	sleepFn            = time.Sleep          //nolint:gochecknoglobals // dependency-injection seam replaced by tests
 )
 
 type managedBackendAdapter struct {

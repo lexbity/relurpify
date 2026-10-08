@@ -13,7 +13,7 @@ type nativeRegistry struct {
 	ctor map[string]NativeToolConstructor
 }
 
-var nreg = &nativeRegistry{
+var nreg = &nativeRegistry{ //nolint:gochecknoglobals // process-wide native tool registry singleton
 	ctor: make(map[string]NativeToolConstructor),
 }
 

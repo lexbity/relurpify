@@ -7,7 +7,7 @@ import (
 	"codeburg.org/lexbit/relurpify/userconfig/config/model"
 )
 
-var supportedSandboxBackends = map[string]struct{}{
+var supportedSandboxBackends = map[string]struct{}{ //nolint:gochecknoglobals // immutable validation vocabulary
 	"docker": {},
 	"gvisor": {},
 }

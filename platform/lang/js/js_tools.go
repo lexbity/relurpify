@@ -17,7 +17,7 @@ import (
 	"codeburg.org/lexbit/relurpify/platform/tools/subprocess"
 )
 
-var nodeProjectMarkers = []string{
+var nodeProjectMarkers = []string{ //nolint:gochecknoglobals // immutable project-marker table
 	"package.json",
 	"package-lock.json",
 	"pnpm-lock.yaml",

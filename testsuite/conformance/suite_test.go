@@ -106,7 +106,7 @@ func runRecipeGrantMatrixRow(t *testing.T) {
 		Config: map[string]any{},
 	}
 
-	node := thoughtrecipepkg.NewThoughtRecipeStepNode("grant.step.execute", &paradigm.Deps{Registry: scoped}, step)
+	node := thoughtrecipepkg.NewCapabilityNode("grant.step.execute", &paradigm.Deps{Registry: scoped}, step)
 	result, err := node.Execute(context.Background(), env)
 
 	require.NoError(t, err)

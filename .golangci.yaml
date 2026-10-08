@@ -43,6 +43,12 @@ linters:
     - usetesting    # Uses modern testing helpers where available
     - makezero      # Finds suspicious make([]T, n) followed by append patterns
 
+    # --- Build spec Phase 6 (§3.6) ---
+    - fatcontext     # context.Context stored in a struct is a lifecycle hazard; flags long-lived ctx fields for review
+    - gochecknoglobals # Every global needs an explicit justification; annotated per-entry, never silently
+    - gocritic       # Advanced checks: paramTypeCombine, unnamedResult, hugeParam, preferFprint, ifElseChain, ...
+    - protogetter    # Direct protobuf field access instead of getters; future-proofing (no protobuf use today)
+
   exclusions:
     # 'strict' matches files starting with standard "^// Code generated .* DO NOT EDIT.$"
     generated: strict

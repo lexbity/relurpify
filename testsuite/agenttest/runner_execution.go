@@ -129,7 +129,7 @@ func GoldenTapePath(suitePath, suiteName, caseName, modelName string) string {
 }
 
 var (
-	filepathJoin = func(elem ...string) string { return filepath.Join(elem...) }
-	filepathDir  = filepath.Dir
-	filepathBase = filepath.Base
+	filepathJoin = filepath.Join //nolint:gochecknoglobals // dependency-injection seam replaced by tests
+	filepathDir  = filepath.Dir  //nolint:gochecknoglobals // dependency-injection seam replaced by tests
+	filepathBase = filepath.Base //nolint:gochecknoglobals // dependency-injection seam replaced by tests
 )

@@ -10,12 +10,18 @@ import (
 type StepKind uint8
 
 const (
-	StepKindInvalid      StepKind = iota // zero value is invalid
-	StepKindRun                          // run agent
-	StepKindDelegate                     // delegate to sub-thoughtrecipe
-	StepKindAsk                          // ask user
-	StepKindCapability                   // direct capability invocation
-	StepKindPipelineStage                // pipeline structural step
+	// StepKindInvalid is the zero value and marks an unset kind.
+	StepKindInvalid StepKind = iota // zero value is invalid
+	// StepKindRun runs an agent.
+	StepKindRun // run agent
+	// StepKindDelegate delegates to a sub-thoughtrecipe.
+	StepKindDelegate // delegate to sub-thoughtrecipe
+	// StepKindAsk asks the user.
+	StepKindAsk // ask user
+	// StepKindCapability is a direct capability invocation.
+	StepKindCapability // direct capability invocation
+	// StepKindPipelineStage is a pipeline structural step.
+	StepKindPipelineStage // pipeline structural step
 )
 
 func (k StepKind) String() string {
@@ -156,15 +162,16 @@ func (s *ResolvedToolScope) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &names); err != nil {
 		return err
 	}
-	if names == nil {
+	switch {
+	case names == nil:
 		s.resolved = true
 		s.allowed = nil
 		s.denyAll = false
-	} else if len(names) == 1 && names[0] == "__deny_all__" {
+	case len(names) == 1 && names[0] == "__deny_all__":
 		s.resolved = true
 		s.allowed = nil
 		s.denyAll = true
-	} else {
+	default:
 		s.resolved = true
 		s.allowed = names
 		s.denyAll = false
@@ -174,11 +181,11 @@ func (s *ResolvedToolScope) UnmarshalJSON(data []byte) error {
 
 // ExecutionStep carries the graph-time data for a single compiled thoughtrecipe step.
 type ExecutionStep struct {
-	ID       string
-	Kind     StepKind
-	Paradigm string
-	Scope    ResolvedToolScope
-	Question string
+	ID                  string
+	Kind                StepKind
+	Paradigm            string
+	Scope               ResolvedToolScope
+	Question            string
 	Choices             []string
 	ChoiceSource        string
 	PipelineStages      []PipelineStageSpec
@@ -274,12 +281,18 @@ type PipelineStageSpec struct {
 type PredicateOp uint8
 
 const (
-	PredOpInvalid     PredicateOp = iota
-	PredOpIs                      // state.x is <value>
-	PredOpContains                // state.x contains <value>
-	PredOpMissing                 // missing state.x
-	PredOpPresent                 // present state.x
-	PredOpConfidenceLT            // state.x confidence below <percent>
+	// PredOpInvalid is the zero value and marks an unset operator.
+	PredOpInvalid PredicateOp = iota
+	// PredOpIs matches when state.x is <value>.
+	PredOpIs // state.x is <value>
+	// PredOpContains matches when state.x contains <value>.
+	PredOpContains // state.x contains <value>
+	// PredOpMissing matches when state.x is missing.
+	PredOpMissing // missing state.x
+	// PredOpPresent matches when state.x is present.
+	PredOpPresent // present state.x
+	// PredOpConfidenceLT matches when state.x confidence is below <percent>.
+	PredOpConfidenceLT // state.x confidence below <percent>
 )
 
 func (o PredicateOp) String() string {
@@ -346,5 +359,3 @@ type Predicate struct {
 	Value   PredicateValue `json:"Value"`
 	Label   string         `json:"Label"` // diagnostics only — never the eval source
 }
-
-

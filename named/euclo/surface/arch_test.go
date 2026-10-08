@@ -13,7 +13,7 @@ import (
 // bannedPrefixes are import path prefixes that the surface package must not
 // import. surface is a leaf package and must depend only on the standard
 // library.
-var bannedPrefixes = []string{
+var bannedPrefixes = []string{ //nolint:gochecknoglobals // test fixture data
 	"codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes",
 	"codeburg.org/lexbit/relurpify/named/euclo/reporting",
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction",

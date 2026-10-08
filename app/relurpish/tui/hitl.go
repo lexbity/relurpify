@@ -256,11 +256,12 @@ func (m RootModel) handleHITLResolved(msg hitlResolvedMsg) (RootModel, tea.Cmd) 
 	if m.notifQ != nil {
 		m.notifQ.Resolve(msg.requestID)
 	}
-	if msg.err != nil {
+	switch {
+	case msg.err != nil:
 		m.addSystemMessage(fmt.Sprintf("HITL %s failed: %v", msg.requestID, msg.err))
-	} else if msg.approved {
+	case msg.approved:
 		m.addSystemMessage(fmt.Sprintf("Approved %s", msg.requestID))
-	} else {
+	default:
 		m.addSystemMessage(fmt.Sprintf("Denied %s", msg.requestID))
 	}
 	return m, listenHITLEvents(m.hitlCh)

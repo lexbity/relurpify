@@ -716,9 +716,10 @@ func matchCronField(field string, value, lowerBound, upperBound int) bool {
 		}
 
 		var start, end int
-		if parts[0] == "*" {
+		switch {
+		case parts[0] == "*":
 			start, end = lowerBound, upperBound
-		} else if strings.Contains(parts[0], "-") {
+		case strings.Contains(parts[0], "-"):
 			rangeParts := strings.Split(parts[0], "-")
 			if len(rangeParts) != 2 {
 				return false
@@ -732,7 +733,7 @@ func matchCronField(field string, value, lowerBound, upperBound int) bool {
 			if err != nil {
 				return false
 			}
-		} else {
+		default:
 			var err error
 			start, err = strconv.Atoi(parts[0])
 			if err != nil {

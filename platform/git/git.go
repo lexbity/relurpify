@@ -15,7 +15,7 @@ import (
 // SkipAvailabilityProbe disables the shell-based availability check. Prepared
 // live runs can enable this to avoid bootstrap-time command authorization
 // probes before the workspace is fully open.
-var SkipAvailabilityProbe bool
+var SkipAvailabilityProbe bool //nolint:gochecknoglobals // probe toggle enabled by prepared live runs
 
 // GitCommandTool executes predefined git commands.
 type GitCommandTool struct {

@@ -374,14 +374,15 @@ func (s *BrowserService) authorizeNavigation(ctx context.Context, args map[strin
 	}
 	port := parsed.Port()
 	var portNum int
-	if port != "" {
+	switch {
+	case port != "":
 		portNum, err = strconv.Atoi(port)
 		if err != nil {
 			return fmt.Errorf("browser navigation url port invalid: %w", err)
 		}
-	} else if strings.EqualFold(parsed.Scheme, "https") {
+	case strings.EqualFold(parsed.Scheme, "https"):
 		portNum = 443
-	} else {
+	default:
 		portNum = 80
 	}
 	if err := s.permissionManager.CheckNetwork(ctx, s.agentID(), "egress", parsed.Scheme, host, portNum); err != nil {

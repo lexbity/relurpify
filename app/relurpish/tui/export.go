@@ -195,14 +195,15 @@ func writeMarkdownExport(path string, payload SessionExport) error {
 	} else {
 		b.WriteString("- Path: (none)\n")
 	}
-	if payload.Telemetry.Error != "" {
+	switch {
+	case payload.Telemetry.Error != "":
 		fmt.Fprintf(&b, "- Error: %s\n", payload.Telemetry.Error)
-	} else if len(payload.Telemetry.Events) > 0 {
+	case len(payload.Telemetry.Events) > 0:
 		fmt.Fprintf(&b, "- Events: %d\n", len(payload.Telemetry.Events))
 		if payload.Telemetry.Truncated {
 			b.WriteString("- Note: telemetry truncated\n")
 		}
-	} else {
+	default:
 		b.WriteString("- Events: 0\n")
 	}
 	if payload.LogPath != "" {

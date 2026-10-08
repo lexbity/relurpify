@@ -466,11 +466,9 @@ func OpenWorkspace(ctx context.Context, cfg WorkspaceConfig) (_ *Workspace, err 
 		if cfg.InferenceModel == "" {
 			cfg.InferenceModel = workspaceCfg.Model.Name
 		}
-	} else {
+	} else if cfg.StateDir == "" {
 		// Embedded scope defaults.
-		if cfg.StateDir == "" {
-			cfg.StateDir = workspace.StateDir(cfg.Workspace)
-		}
+		cfg.StateDir = workspace.StateDir(cfg.Workspace)
 	}
 
 	defaultStateDir := workspace.StateDir(cfg.Workspace)

@@ -20,8 +20,8 @@ import (
 	"codeburg.org/lexbit/relurpify/telemetry"
 )
 
-var reduceMotionPreference bool
-var terminalNamePreference string
+var reduceMotionPreference bool   //nolint:gochecknoglobals // UI preference propagated from the environment at boot
+var terminalNamePreference string //nolint:gochecknoglobals // UI preference propagated from the environment at boot
 
 // SetReduceMotionPreference configures whether new TUI models should reduce motion.
 func SetReduceMotionPreference(reduced bool) {
@@ -1447,8 +1447,7 @@ func (m RootModel) handleInputSubmitted(msg InputSubmittedMsg) (tea.Model, tea.C
 			m.addSystemMessage("Cannot submit prompt while a run is active. Use /stop to cancel or wait for completion.")
 			return m, nil
 		}
-		switch {
-		case isBaseFrameworkTab(m.activeTab):
+		if isBaseFrameworkTab(m.activeTab) {
 			return m, nil
 		}
 		if m.chat == nil {
@@ -1545,8 +1544,7 @@ func (m *RootModel) refreshActivePane() {
 	if m == nil {
 		return
 	}
-	switch {
-	case isBaseFrameworkTab(m.activeTab) && m.baseSurface != nil:
+	if isBaseFrameworkTab(m.activeTab) && m.baseSurface != nil {
 		m.baseSurface.Refresh()
 	}
 }

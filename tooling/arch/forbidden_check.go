@@ -11,7 +11,7 @@ import (
 // this gate fails the build the moment any package (including tests) reaches for
 // it, so it cannot silently return. Add a prefix here only when a package has
 // been deliberately deleted and its types rehomed into owning domains.
-var ForbiddenImportPrefixes = []string{
+var ForbiddenImportPrefixes = []string{ //nolint:gochecknoglobals // immutable forbidden-prefix table
 	"capability/types",
 	"framework/core",
 }

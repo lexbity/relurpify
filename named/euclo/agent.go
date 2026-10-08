@@ -23,10 +23,6 @@ import (
 	thoughtrecipe "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
 )
 
-// defaultRegistrar provides default registration for capabilities, prompts,
-// and thoughtrecipes.
-var defaultRegistrar = services.NewRegistration()
-
 // Agent is the Euclo coding agent. It implements agentgraph.WorkflowExecutor.
 type Agent struct {
 	resumeMu sync.Mutex

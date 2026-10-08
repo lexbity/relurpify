@@ -26,7 +26,7 @@ type EditorSupervisor struct {
 	activePath string
 }
 
-var configuredEditor = "vi"
+var configuredEditor = "vi" //nolint:gochecknoglobals // editor choice resolved from workspace config at boot
 
 // SetEditor configures the editor command used by TUI helpers.
 func SetEditor(editor string) {

@@ -8,7 +8,7 @@ package secretscan
 // names that are forbidden from appearing in config files. These fields
 // carry secret material (API keys, tokens, passwords) that must only
 // exist in environment variables.
-var ForbiddenSecretFieldNames = map[string]struct{}{
+var ForbiddenSecretFieldNames = map[string]struct{}{ //nolint:gochecknoglobals // immutable field-name vocabulary
 	"apikey":     {},
 	"apisecret":  {},
 	"credential": {},

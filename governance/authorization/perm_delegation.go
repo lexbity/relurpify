@@ -268,7 +268,7 @@ func ruleIDFromFields(fields map[string]any) string {
 
 // sensitivePathPatterns are substrings that indicate a file path may contain
 // sensitive data warranting redaction from audit records.
-var sensitivePathPatterns = []string{
+var sensitivePathPatterns = []string{ //nolint:gochecknoglobals // immutable sensitive-path pattern table
 	".env",
 	".ssh",
 	"secret",

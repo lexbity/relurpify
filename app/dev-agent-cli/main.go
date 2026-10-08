@@ -5,8 +5,8 @@ package main
 // values below are what a plain `go build` from source produces.
 var (
 	version = "dev"
-	commit  = "none"
-	date    = "unknown"
+	commit  = "none"    //nolint:gochecknoglobals // GoReleaser ldflags -X injection target; the linker can only set package-level vars
+	date    = "unknown" //nolint:gochecknoglobals // GoReleaser ldflags -X injection target; the linker can only set package-level vars
 )
 
 func main() {

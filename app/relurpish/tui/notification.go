@@ -308,7 +308,7 @@ func renderGenericNotification(th *theme.Theme, item NotificationItem) string {
 		rendered = th.Notif(theme.NotifInfo).Render(label)
 	}
 	if item.Kind == NotifKindHITL {
-		rendered = rendered + th.Dim().Render("  [y] once  [s] session  [a] always  [n] deny  [d] dismiss")
+		rendered += th.Dim().Render("  [y] once  [s] session  [a] always  [n] deny  [d] dismiss")
 	}
 	return rendered
 }

@@ -26,9 +26,9 @@ import (
 
 const contextFileMaxBytes = 8000
 
-var spinnerFrames = []string{"⣷", "⣯", "⣟", "⡿", "⢿", "⣻", "⣽", "⣾"}
+var spinnerFrames = []string{"⣷", "⣯", "⣟", "⡿", "⢿", "⣻", "⣽", "⣾"} //nolint:gochecknoglobals // immutable animation frame table
 
-var chatSubTabPolicies = map[tui.SubTabID]struct {
+var chatSubTabPolicies = map[tui.SubTabID]struct { //nolint:gochecknoglobals // immutable per-subtab policy table
 	ModeHint           string
 	EditEnabled        bool
 	OnlineToolsEnabled bool
@@ -218,11 +218,8 @@ func (p *ChatPane) Update(msg tea.Msg) (tui.ChatPaner, tea.Cmd) {
 }
 
 func (p *ChatPane) View() string {
-	switch p.activeTab {
-	case tui.TabDiff:
-		if p.diff != nil {
-			return p.diff.View()
-		}
+	if p.activeTab == tui.TabDiff && p.diff != nil {
+		return p.diff.View()
 	}
 	if p.width < 60 {
 		return lipgloss.JoinVertical(lipgloss.Left,
@@ -405,8 +402,7 @@ func (p *ChatPane) RemoveFileFromSidebar(path string) {
 	p.updateSidebarContent()
 }
 func (p *ChatPane) UpdateSidebarFromFrame(frame any) {
-	switch frame := frame.(type) {
-	case interaction.InteractionFrame:
+	if frame, ok := frame.(interaction.InteractionFrame); ok {
 		if payloadFiles, ok := frame.Payload["euclo.user_selected_files"]; ok {
 			if files, ok := payloadFiles.([]string); ok {
 				p.replaceSelectedFiles(files)

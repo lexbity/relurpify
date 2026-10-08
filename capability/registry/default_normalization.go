@@ -31,7 +31,7 @@ const (
 
 // DefaultToolNameNormalization maps common LLM tool name variations to their canonical
 // capability names in the Relurpify platform.
-var DefaultToolNameNormalization = map[string]string{
+var DefaultToolNameNormalization = map[string]string{ //nolint:gochecknoglobals // immutable normalization table
 	// File Primitives (Contracts / FS)
 	"read_file":                  FileRead_default_normalization,
 	"view_file":                  FileRead_default_normalization,

@@ -76,8 +76,7 @@ func (p *KeybindingPane) SetFilter(filter string) {
 }
 
 func (p *KeybindingPane) Update(msg tea.Msg) (*KeybindingPane, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
+	if msg, ok := msg.(tea.KeyMsg); ok {
 		if p.confirm != nil {
 			switch msg.String() {
 			case "y", "enter":

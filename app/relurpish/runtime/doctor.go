@@ -185,7 +185,8 @@ func BuildDoctorReport(ctx context.Context, cfg Config, secrets config.Secrets) 
 	report.Inference = env.Inference
 	// Build provider catalog health list.
 	bundle, diags, err := config.LoadDiagnostic(config.LoadOptions{WorkspaceRoot: cfg.Workspace})
-	if err == nil && bundle.Config != nil {
+	switch {
+	case err == nil && bundle.Config != nil:
 		reg, _ := buildProviderRegistry(bundle.Config.Model.Providers)
 		if reg != nil {
 			var providerHealthList []ProviderHealth
@@ -230,16 +231,18 @@ func BuildDoctorReport(ctx context.Context, cfg Config, secrets config.Secrets) 
 		// Model profile check using the same bundle.
 		regProfiles := modelselect.NewProfileRegistryFromProfiles(bundle.Config.Model.Profiles)
 		resolution := regProfiles.Resolve(cfg.InferenceProvider, report.Inference.SelectedModel)
-		if resolution.SourcePath != "" {
+		profileDiag := firstConfigDiagnostic(diags, "profile")
+		switch {
+		case resolution.SourcePath != "":
 			report.ModelProfilesExists = true
-		} else if diag := firstConfigDiagnostic(diags, "profile"); diag != nil && strings.EqualFold(strings.TrimSpace(diag.Severity), "blocking") {
-			report.ModelProfilesError = diag.Message
-		} else {
+		case profileDiag != nil && strings.EqualFold(strings.TrimSpace(profileDiag.Severity), "blocking"):
+			report.ModelProfilesError = profileDiag.Message
+		default:
 			report.ModelProfilesError = "no workspace model profile matched the selected model"
 		}
-	} else if err != nil {
+	case err != nil:
 		report.ModelProfilesError = err.Error()
-	} else {
+	default:
 		report.ModelProfilesError = "workspace config bundle unavailable"
 	}
 	// Convert ayenitd probe results
@@ -506,5 +509,3 @@ func errorString(err error) string {
 	}
 	return err.Error()
 }
-
-

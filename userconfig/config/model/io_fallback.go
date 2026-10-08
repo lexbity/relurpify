@@ -12,8 +12,6 @@ import (
 	"codeburg.org/lexbit/relurpify/userconfig/config/secretscan"
 )
 
-var fallbackForbiddenSecretFieldNames = secretscan.ForbiddenSecretFieldNames
-
 func readConfigFile(workspaceRoot, path string) ([]byte, error) {
 	if ReadConfigFile != nil {
 		return ReadConfigFile(workspaceRoot, path)
@@ -112,7 +110,7 @@ func collectForbiddenSecretFields(node *yaml.Node, path string, fieldPath []stri
 
 func isForbiddenSecretFieldName(name string) bool {
 	normalized := normalizeSecretFieldName(name)
-	_, ok := fallbackForbiddenSecretFieldNames[normalized]
+	_, ok := secretscan.ForbiddenSecretFieldNames[normalized]
 	return ok
 }
 

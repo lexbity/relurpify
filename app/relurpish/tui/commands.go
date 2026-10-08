@@ -106,7 +106,7 @@ func (r *CommandRegistry) All() []Command {
 	return out
 }
 
-var rootCommandRegistry *CommandRegistry
+var rootCommandRegistry *CommandRegistry //nolint:gochecknoglobals // process-wide command registry, populated once at startup
 
 func registerUniversalCommands(r *CommandRegistry) {
 	registerContextualCommands(r)
@@ -584,16 +584,17 @@ func rootHandleDiff(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 			matches = append(matches, i)
 		}
 	}
-	if len(matches) == 0 {
+	switch {
+	case len(matches) == 0:
 		m.addSystemMessage(fmt.Sprintf("No diff matched: %s", arg))
-	} else if len(matches) > 1 {
+	case len(matches) > 1:
 		var b strings.Builder
 		_, _ = b.WriteString("Multiple diffs matched:\n\n")
 		for _, i := range matches {
 			_, _ = fmt.Fprintf(&b, "  %d) %s\n", i+1, changes[i].Path)
 		}
 		m.addSystemMessage(b.String())
-	} else {
+	default:
 		idx := index
 		match := matches[0]
 		m.chat.MutateMessages(func(msgs []Message) {

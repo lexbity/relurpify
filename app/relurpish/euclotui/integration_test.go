@@ -10,7 +10,7 @@ import (
 )
 
 // recipeHelpers provides common recipe projections for integration tests.
-var recipeHelpers = struct {
+var recipeHelpers = struct { //nolint:gochecknoglobals // test fixture helper table
 	linear      *surface.RecipeProjection
 	parallel    *surface.RecipeProjection
 	conditional *surface.RecipeProjection

@@ -169,16 +169,17 @@ func (d *DoomLoopDetector) RecordResult(desc descriptor.CapabilityDescriptor, re
 		d.lastErrorStreak = 0
 	}
 
-	if record.modifiedPath != "" {
+	switch {
+	case record.modifiedPath != "":
 		if _, seen := d.modifiedPaths[record.modifiedPath]; seen {
 			d.noProgressCount++
 		} else {
 			d.modifiedPaths[record.modifiedPath] = struct{}{}
 			d.noProgressCount = 0
 		}
-	} else if successfulCoordinationProgress(desc, result) {
+	case successfulCoordinationProgress(desc, result):
 		d.noProgressCount = 0
-	} else {
+	default:
 		d.noProgressCount++
 	}
 	return nil

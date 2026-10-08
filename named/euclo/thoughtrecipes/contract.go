@@ -7,11 +7,11 @@ const ThoughtRecipeSourceRoot = "relurpify_cfg/euclo"
 const ThoughtRecipeIdentityHeader = "thoughtrecipe"
 
 // AcceptedThoughtRecipeExtensions are the only accepted thoughtrecipe source file extensions.
-var AcceptedThoughtRecipeExtensions = []string{".erpe", ".euclo", ".thoughtrecipe"}
+var AcceptedThoughtRecipeExtensions = []string{".erpe", ".euclo", ".thoughtrecipe"} //nolint:gochecknoglobals // immutable contract vocabulary
 
 // AllowedTopLevelDeclarations freezes the current top-level declaration surface
 // for the Euclo thoughtrecipe DSL.
-var AllowedTopLevelDeclarations = []string{
+var AllowedTopLevelDeclarations = []string{ //nolint:gochecknoglobals // immutable contract vocabulary
 	"thoughtrecipe",
 	"trigger",
 	"input",
@@ -25,7 +25,7 @@ var AllowedTopLevelDeclarations = []string{
 }
 
 // SupportedNamespaces freezes the state namespaces that the DSL may target.
-var SupportedNamespaces = []string{
+var SupportedNamespaces = []string{ //nolint:gochecknoglobals // immutable contract vocabulary
 	"input.*",
 	"state.*",
 	"scratch.*",
@@ -43,7 +43,7 @@ const (
 
 // SupportedTriggerAssociations lists the deterministic trigger-local association
 // keys that may appear under a trigger declaration.
-var SupportedTriggerAssociations = []string{
+var SupportedTriggerAssociations = []string{ //nolint:gochecknoglobals // immutable contract vocabulary
 	TriggerAssociationFamily,
 	TriggerAssociationKeyword,
 	TriggerAssociationHandoff,

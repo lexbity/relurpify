@@ -82,7 +82,7 @@ type AgentOrchestrationConfig struct {
 }
 
 var (
-	capabilityExposureCallable = "callable"
+	capabilityExposureCallable = "callable" //nolint:gochecknoglobals // immutable policy vocabulary constant
 )
 
 // ResolveAgentPolicy resolves the agent spec's orchestration configuration

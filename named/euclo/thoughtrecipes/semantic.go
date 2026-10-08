@@ -458,7 +458,7 @@ func (s *SymbolTable) resolveExecutionItem(item ExecutionItem) error {
 	}
 }
 
-var validStreamModes = map[string]struct{}{"blocking": {}, "background": {}}
+var validStreamModes = map[string]struct{}{"blocking": {}, "background": {}} //nolint:gochecknoglobals // immutable validation vocabulary
 
 func (s *SymbolTable) resolveStreamClause(decl *StreamClause) error {
 	if decl.Query == nil || strings.TrimSpace(decl.Query.Value) == "" {

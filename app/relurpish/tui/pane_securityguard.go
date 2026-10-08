@@ -82,8 +82,7 @@ func (p *SecurityGuardPane) Refresh() {
 }
 
 func (p *SecurityGuardPane) Update(msg tea.Msg) (*SecurityGuardPane, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
+	if msg, ok := msg.(tea.KeyMsg); ok {
 		if p.confirmDrop {
 			switch msg.String() {
 			case "y", "enter":
@@ -166,11 +165,12 @@ func (p *SecurityGuardPane) View() string {
 	shell := p.renderShellPanel()
 	ingest := p.renderIngestionPanel()
 	footer := p.th.Dim().Render("tab switch panel  arrows navigate  e edit  n new  d delete  t test  space toggle")
-	if p.testMode {
+	switch {
+	case p.testMode:
 		footer = warningText(p.th, fmt.Sprintf("Test %s: %s", p.testLabel, p.testBuffer)) + "\n" + footer
-	} else if p.editing {
+	case p.editing:
 		footer = warningText(p.th, fmt.Sprintf("Edit %s: %s", p.editLabel, p.editBuffer)) + "\n" + footer
-	} else if p.confirmDrop {
+	case p.confirmDrop:
 		footer = warningText(p.th, "Delete selected rule? press y to confirm or n to cancel") + "\n" + footer
 	}
 	if p.status != "" {
@@ -355,11 +355,12 @@ func (p *SecurityGuardPane) runTest() {
 			return
 		}
 		re, err := regexp.Compile(rule.Raw)
-		if err != nil {
+		switch {
+		case err != nil:
 			p.testResult = fmt.Sprintf("invalid regex: %v", err)
-		} else if re.MatchString(sample) {
+		case re.MatchString(sample):
 			p.testResult = fmt.Sprintf("%q matches %s", sample, rule.ID)
-		} else {
+		default:
 			p.testResult = fmt.Sprintf("%q does not match %s", sample, rule.ID)
 		}
 	case securityPanelIngestion:

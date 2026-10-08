@@ -7,7 +7,7 @@ import (
 // legacyParadigmList is the set of non-empty paradigm strings accepted by
 // thoughtrecipes.schema.validateStepParadigm. Kept here as a guard against
 // drift; the canonical list lives in this package.
-var legacyValidateStepParadigm = []string{
+var legacyValidateStepParadigm = []string{ //nolint:gochecknoglobals // legacy parity test vectors
 	"react",
 	"planner",
 	"htn",
@@ -21,7 +21,7 @@ var legacyValidateStepParadigm = []string{
 
 // legacyAgentParadigmList is the set of strings accepted by
 // thoughtrecipes.lowering.isSupportedAgentParadigm.
-var legacyAgentParadigmList = []string{
+var legacyAgentParadigmList = []string{ //nolint:gochecknoglobals // legacy parity test vectors
 	"react",
 	"planner",
 	"htn",

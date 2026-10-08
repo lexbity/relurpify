@@ -10,7 +10,7 @@ import (
 // eucloCapabilities is the full self-declared capability set for euclo.
 // It is registered unconditionally at initialization; availability of each
 // capability is computed at registration time from required tool presence.
-var eucloCapabilities = []string{
+var eucloCapabilities = []string{ //nolint:gochecknoglobals // immutable capability id vocabulary
 	"euclo:cap.test_run",
 	"euclo:cap.ast_query",
 	"euclo:cap.symbol_trace",

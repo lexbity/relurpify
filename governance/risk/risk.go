@@ -78,7 +78,7 @@ func Classify(effects []classification.EffectClass, scope classification.Capabil
 }
 
 // sortOrder ranks risk classes for deterministic output ordering.
-var sortOrder = []RiskClass{
+var sortOrder = []RiskClass{ //nolint:gochecknoglobals // immutable severity ordering table
 	RiskClassReadOnly,
 	RiskClassDestructive,
 	RiskClassExecute,

@@ -11,8 +11,8 @@ import (
 type kindFactory func(ProviderConfig, ProviderSecrets) (ManagedBackend, error)
 
 var (
-	kindFactoriesMu sync.RWMutex
-	kindFactories   = map[string]kindFactory{}
+	kindFactoriesMu sync.RWMutex               //nolint:gochecknoglobals // backend kind registry guarded by a mutex
+	kindFactories   = map[string]kindFactory{} //nolint:gochecknoglobals // backend kind registry guarded by a mutex
 )
 
 // RegisterKind makes a backend kind available to the managed factory.

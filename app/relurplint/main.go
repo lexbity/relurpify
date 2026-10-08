@@ -9,9 +9,9 @@ import (
 )
 
 var (
-	checkFlag     string
-	workspaceFlag string
-	formatFlag    string
+	checkFlag     string //nolint:gochecknoglobals // persistent flag target bound via StringVar at the CLI entrypoint
+	workspaceFlag string //nolint:gochecknoglobals // persistent flag target bound via StringVar at the CLI entrypoint
+	formatFlag    string //nolint:gochecknoglobals // persistent flag target bound via StringVar at the CLI entrypoint
 )
 
 func main() {

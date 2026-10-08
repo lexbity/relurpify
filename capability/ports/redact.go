@@ -4,7 +4,7 @@ import "strings"
 
 // secretArgPatterns contains parameter name substrings that may indicate
 // sensitive data.
-var secretArgPatterns = []string{
+var secretArgPatterns = []string{ //nolint:gochecknoglobals // immutable redaction pattern table
 	"key",
 	"secret",
 	"token",

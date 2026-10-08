@@ -12,7 +12,7 @@ import (
 )
 
 // RejectForbiddenSecretFields is injected by cfgload at init to break import cycles.
-var RejectForbiddenSecretFields func(string, []byte) error
+var RejectForbiddenSecretFields func(string, []byte) error //nolint:gochecknoglobals // overridable hook; nil unless wired by an embedder or tests
 
 // BlacklistAction defines the action to take when a rule matches.
 type BlacklistAction string

@@ -49,8 +49,7 @@ func LowerDocument(doc *ThoughtRecipeDocument) (*ExecutionPlan, error) {
 	}
 
 	for _, decl := range doc.Declarations {
-		switch node := decl.(type) {
-		case *AgentDecl:
+		if node, ok := decl.(*AgentDecl); ok {
 			paradigm := strings.TrimSpace(node.AgentType.Value)
 			if !surface.IsSupported(surface.Paradigm(paradigm)) {
 				return nil, fmt.Errorf("%s:%d:%d: unsupported agent paradigm %q", node.GetSpan().Start.File, node.GetSpan().Start.Line, node.GetSpan().Start.Column, paradigm)
@@ -177,7 +176,6 @@ func lowerRunItems(items []ExecutionItem) (sources []string, goals []string, dir
 	return sources, goals, directives, captures, toolScopes, promptID, capabilityPlan, streamSpec, config, nil
 }
 
-
 func lowerAskDecl(decl *AskDecl, runIndex *int) (ExecutionStep, error) {
 	if decl == nil {
 		return ExecutionStep{}, fmt.Errorf("ask declaration is nil")
@@ -199,7 +197,7 @@ func lowerAskDecl(decl *AskDecl, runIndex *int) (ExecutionStep, error) {
 		PromptID:        promptID,
 		Config:          config,
 	}
-	*runIndex = *runIndex + 1
+	*runIndex++
 	return step, nil
 }
 

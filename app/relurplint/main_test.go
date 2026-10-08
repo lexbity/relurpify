@@ -12,8 +12,8 @@ import (
 	"codeburg.org/lexbit/relurpify/testsuite/testhelper"
 )
 
-var relurplintBin string
-var testRepoRoot string
+var relurplintBin string //nolint:gochecknoglobals // test fixture path
+var testRepoRoot string  //nolint:gochecknoglobals // test fixture path
 
 func TestMain(m *testing.M) {
 	cwd, err := os.Getwd()
