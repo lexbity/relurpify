@@ -43,3 +43,8 @@ testsuite/agenttest_fixtures/**/*.pyc
 # Build artifacts: test binaries must not be committed
 *.test
 /driftcheck
+
+# The fake-docker CLI is a committed sandbox lifecycle test fixture (SBH-1 D-11).
+!capability/sandbox/testdata/
+!capability/sandbox/testdata/fake-docker/
+!capability/sandbox/testdata/fake-docker/docker

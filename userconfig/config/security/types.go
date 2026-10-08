@@ -1,5 +1,7 @@
 package security
 
+import "time"
+
 // NetworkRule describes a sandbox network allowance or restriction.
 type NetworkRule struct {
 	Direction string `yaml:"direction,omitempty"`
@@ -17,6 +19,12 @@ type SandboxPolicy struct {
 	AllowedEnvKeys  []string      `yaml:"allowed_env_keys,omitempty"`
 	DeniedEnvKeys   []string      `yaml:"denied_env_keys,omitempty"`
 	NetworkRules    []NetworkRule `yaml:"network_rules,omitempty"`
+	// ReapOrphans enables boot-time reaping of orphaned managed containers
+	// whose owner process is dead (crashed sessions). Default true.
+	ReapOrphans bool `yaml:"reap_orphans,omitempty"`
+	// OrphanMaxAge is the absolute age cap that reaps a managed container
+	// regardless of owner liveness (default 24h).
+	OrphanMaxAge time.Duration `yaml:"-"`
 }
 
 // ShellBlacklist stores forbidden shell patterns.

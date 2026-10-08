@@ -57,6 +57,7 @@ const (
 	EventSandboxCommandDenied       EventType = "sandbox.command_denied"
 	EventSandboxCommandExecuted     EventType = "sandbox.command_executed"
 	EventSandboxFailure             EventType = "sandbox.failure"
+	EventSandboxOrphanReaped        EventType = "sandbox.orphan_reaped"
 	EventBootDegraded               EventType = "boot.degraded"
 )
 

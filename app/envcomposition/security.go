@@ -3,7 +3,9 @@ package envcomposition
 import (
 	"context"
 	"fmt"
+	"log"
 	"strings"
+	"time"
 
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
@@ -63,6 +65,22 @@ func BuildSecurityRuntime(ctx context.Context, in SecurityRuntimeInput) (*Securi
 	// any sandbox resources are allocated.
 	if err := ValidateSecurityRuntimeInput(in); err != nil {
 		return nil, fmt.Errorf("boot invariant violation: %w", err)
+	}
+
+	// Step 0.5: Orphan sweep — reclaim containers orphaned by a crashed
+	// previous session before this session allocates any. Bounded to 5s; the
+	// sweep report is logged, never fatal (availability over purity).
+	if in.SecurityBundle != nil && in.SecurityBundle.Sandbox != nil && in.SecurityBundle.Sandbox.ReapOrphans {
+		reapCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		report, reapErr := sandbox.ReapOrphans(reapCtx, sandbox.ReapOptions{
+			MaxAge: in.SecurityBundle.Sandbox.OrphanMaxAge,
+		})
+		cancel()
+		if reapErr != nil {
+			log.Printf("sandbox: orphan sweep failed: %v", reapErr)
+		} else if report.Reaped > 0 {
+			log.Printf("sandbox: reaped %d orphaned container(s): %v", report.Reaped, report.ReapedNames)
+		}
 	}
 
 	// Steps 1–3: Select sandbox, verify, build runner.
