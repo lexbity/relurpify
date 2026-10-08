@@ -48,7 +48,7 @@ func mustRegisterCompiledThoughtRecipe(t *testing.T, registry *thoughtrecipepkg.
 		Steps: []thoughtrecipepkg.ExecutionStep{{
 			ID:       stepID,
 			Kind:     thoughtrecipepkg.StepKindRun,
-			Paradigm: "goalcon",
+			Paradigm: "react",
 			Goal:     "Continue the thoughtrecipe.",
 			Prompt:   "Continue the thoughtrecipe.",
 			Config:   map[string]any{},

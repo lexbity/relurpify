@@ -5,7 +5,6 @@ import (
 
 	blackboardagent "codeburg.org/lexbit/relurpify/cognitionzoo/blackboard"
 	chaineragent "codeburg.org/lexbit/relurpify/cognitionzoo/chainer"
-	goalconagent "codeburg.org/lexbit/relurpify/cognitionzoo/goalcon"
 	htnagent "codeburg.org/lexbit/relurpify/cognitionzoo/htn"
 	pipelineagent "codeburg.org/lexbit/relurpify/cognitionzoo/pipeline"
 	reactagent "codeburg.org/lexbit/relurpify/cognitionzoo/react"
@@ -88,22 +87,6 @@ func (c *stepCore) streamOptionsPipeline() []pipelineagent.Option {
 		}
 		if c.step.Stream.MaxTokens > 0 {
 			opts = append(opts, pipelineagent.WithContextStreamMaxTokens(c.step.Stream.MaxTokens))
-		}
-	}
-	return opts
-}
-
-func (c *stepCore) streamOptionsGoalCon() []goalconagent.Option {
-	opts := make([]goalconagent.Option, 0, 3)
-	if c.step.Stream != nil {
-		if mode := strings.TrimSpace(c.step.Stream.Mode); mode != "" {
-			opts = append(opts, goalconagent.WithContextStreamMode(contextstream.Mode(mode)))
-		}
-		if query := strings.TrimSpace(c.step.Stream.QueryTemplate); query != "" {
-			opts = append(opts, goalconagent.WithContextStreamQuery(query))
-		}
-		if c.step.Stream.MaxTokens > 0 {
-			opts = append(opts, goalconagent.WithContextStreamMaxTokens(c.step.Stream.MaxTokens))
 		}
 	}
 	return opts

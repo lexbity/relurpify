@@ -25,7 +25,7 @@ type ReviewFindings:
   summary: Markdown
   complexity: low | medium | high
 
-agent router uses goalcon
+agent router uses react
 agent reviewer uses react
 
 run router:

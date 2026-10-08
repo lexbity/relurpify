@@ -82,10 +82,10 @@ type CompilationRecord struct {
 // It holds path, content hash, and a short digest so the consumer
 // always has a usable handle to the original file regardless of budget.
 type PinReference struct {
-	Path         string `json:"path"`
-	ContentHash  string `json:"content_hash"`
-	ShortDigest  string `json:"short_digest"`
-	TokenEstimate int   `json:"token_estimate"`
+	Path          string `json:"path"`
+	ContentHash   string `json:"content_hash"`
+	ShortDigest   string `json:"short_digest"`
+	TokenEstimate int    `json:"token_estimate"`
 }
 
 // SummarySubstitution records when a chunk was replaced with its summary.
@@ -147,7 +147,7 @@ func (k CacheKey) String() string {
 
 // CacheEntry stores a compiled result with its dependencies.
 // This is deliberately specialized (dependency-eviction) and not unified with
-// the LRU caches in governance/authorization or cognitionzoo/goalcon/analysis.
+// the LRU caches in governance/authorization or the knowledge layer.
 type CacheEntry struct {
 	Key          CacheKey
 	Record       CompilationRecord

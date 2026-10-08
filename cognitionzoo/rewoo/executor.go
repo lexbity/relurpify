@@ -114,6 +114,14 @@ func (e *rewooExecutor) executeStep(ctx context.Context, env *contextdata.Envelo
 		Tool:    step.Tool,
 		Success: true,
 	}
+	// Persist the step result under its conventional key so the aggregate node
+	// can collect it. Deferred so every return path (permission denial, tool
+	// failure, skip) is recorded.
+	if env != nil {
+		defer func() {
+			env.SetWorkingValueWithClass(fmt.Sprintf("rewoo.step.%s", step.ID), result, contextdata.MemoryClassTask)
+		}()
+	}
 
 	// Check permissions before execution
 	if e.PermissionChecker != nil {

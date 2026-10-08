@@ -12,7 +12,6 @@ const (
 	ParadigmChainer    Paradigm = "chainer"
 	ParadigmPipeline   Paradigm = "pipeline"
 	ParadigmRewoo      Paradigm = "rewoo"
-	ParadigmGoalcon    Paradigm = "goalcon"
 	ParadigmEuclo      Paradigm = "euclo"
 )
 
@@ -27,7 +26,6 @@ func AllParadigms() []Paradigm {
 		ParadigmChainer,
 		ParadigmPipeline,
 		ParadigmRewoo,
-		ParadigmGoalcon,
 		ParadigmEuclo,
 	}
 }
@@ -43,7 +41,6 @@ func AgentParadigms() []Paradigm {
 		ParadigmChainer,
 		ParadigmPipeline,
 		ParadigmRewoo,
-		ParadigmGoalcon,
 	}
 }
 
@@ -83,8 +80,6 @@ func (p Paradigm) Describe() ParadigmMeta {
 		return ParadigmMeta{Label: "Pipeline", ShortGlyph: "PI", Family: "agent"}
 	case ParadigmRewoo:
 		return ParadigmMeta{Label: "Rewoo", ShortGlyph: "RW", Family: "agent"}
-	case ParadigmGoalcon:
-		return ParadigmMeta{Label: "Goalcon", ShortGlyph: "GC", Family: "agent"}
 	case ParadigmEuclo:
 		return ParadigmMeta{Label: "Euclo", ShortGlyph: "EU", Family: "meta"}
 	default:

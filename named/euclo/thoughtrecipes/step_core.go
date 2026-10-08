@@ -9,7 +9,6 @@ import (
 
 	blackboardagent "codeburg.org/lexbit/relurpify/cognitionzoo/blackboard"
 	chaineragent "codeburg.org/lexbit/relurpify/cognitionzoo/chainer"
-	goalconagent "codeburg.org/lexbit/relurpify/cognitionzoo/goalcon"
 	htnagent "codeburg.org/lexbit/relurpify/cognitionzoo/htn"
 	"codeburg.org/lexbit/relurpify/cognitionzoo/paradigm"
 	pipelineagent "codeburg.org/lexbit/relurpify/cognitionzoo/pipeline"
@@ -113,12 +112,6 @@ func (c *stepCore) buildAgent(task *execution.Task) (agentgraph.WorkflowExecutor
 	case "rewoo":
 		agent := rewooagent.New(deps)
 		agent.Options = c.rewooOptions()
-		return agent, nil
-	case "goalcon":
-		agent := goalconagent.New(deps, goalconagent.DefaultOperatorRegistry(), c.streamOptionsGoalCon()...)
-		if agent != nil && agent.PlanExecutor == nil {
-			agent.PlanExecutor = reactagent.New(deps, c.streamOptions()...)
-		}
 		return agent, nil
 	default:
 		return nil, fmt.Errorf("thoughtrecipe step %q has unsupported paradigm %q", c.step.ID, c.step.Paradigm)

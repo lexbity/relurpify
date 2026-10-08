@@ -30,7 +30,6 @@ const (
 	KeyFileWrite                            = "file_write"
 	KeyFrameID                              = "frame_id"
 	KeyGoal                                 = "goal"
-	KeyGoalcon                              = "goalcon"
 	KeyGroupID                              = "group_id"
 	KeyImportKindPrompt                     = "prompt"
 	KeyInput                                = "input"

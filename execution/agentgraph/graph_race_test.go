@@ -46,9 +46,6 @@ func TestToolNodeConcurrentExecute(t *testing.T) {
 	if node.traceIDValue() == "" {
 		t.Fatal("trace ID must be initialized after execution")
 	}
-	if got := node.spanCount.Load(); got != workers {
-		t.Fatalf("spanCount = %d, want %d", got, workers)
-	}
 }
 
 // TestGraphParallelBranchesShareToolNode exercises the real parallel-branch
@@ -74,9 +71,6 @@ func TestGraphParallelBranchesShareToolNode(t *testing.T) {
 	_, err := g.Execute(context.Background(), env)
 	require.NoError(t, err)
 
-	if got := tool.spanCount.Load(); got != 2 {
-		t.Fatalf("shared ToolNode spanCount = %d, want 2", got)
-	}
 	if tool.traceIDValue() == "" {
 		t.Fatal("shared ToolNode trace ID must be initialized")
 	}

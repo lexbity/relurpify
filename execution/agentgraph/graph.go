@@ -297,9 +297,9 @@ func (g *Graph) run(ctx context.Context, env *contextdata.Envelope, current stri
 		g.executionPath = make([]string, 0)
 	}
 	// NOTE: We intentionally do NOT hold g.mu.RLock across the entire loop.
-	// Nodes may mutate the graph during execution (e.g. MaterializePlanGraph
-	// adds step nodes/edges dynamically). Holding a read lock here would
-	// deadlock against the write lock those mutations require.
+	// Nodes may mutate the graph during execution (adding nodes/edges
+	// dynamically). Holding a read lock here would deadlock against the write
+	// lock those mutations require.
 
 	var lastResult *execution.Result
 	for current != "" {
@@ -593,12 +593,11 @@ func (g *Graph) Validate() error {
 // Pause builds a snapshot at the given node.
 // ToolNode executes a tool by name.
 type ToolNode struct {
-	id        string
-	Tool      ports.Tool
-	Args      map[string]any
-	Registry  CapabilityInvoker
-	traceID   atomic.Pointer[string] // set by SetTraceID
-	spanCount atomic.Int64           // per-execution child span counter
+	id       string
+	Tool     ports.Tool
+	Args     map[string]any
+	Registry CapabilityInvoker
+	traceID  atomic.Pointer[string] // set by SetTraceID
 }
 
 // SetTraceID assigns a trace ID for child span generation. Parallel branches
@@ -617,7 +616,6 @@ func (n *ToolNode) traceIDValue() string {
 
 // nextSpanID generates a unique child span ID for each tool call.
 func (n *ToolNode) nextSpanID() string {
-	n.spanCount.Add(1)
 	return telemetry.NewSpanID()
 }
 

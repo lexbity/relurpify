@@ -16,7 +16,6 @@ var legacyValidateStepParadigm = []string{
 	"chainer",
 	"pipeline",
 	"rewoo",
-	"goalcon",
 	"euclo",
 }
 
@@ -31,7 +30,6 @@ var legacyAgentParadigmList = []string{
 	"chainer",
 	"pipeline",
 	"rewoo",
-	"goalcon",
 }
 
 func TestAllParadigms_MatchesLegacyValidateList(t *testing.T) {
@@ -81,6 +79,13 @@ func TestIsSupported_EmptyString(t *testing.T) {
 func TestIsSupported_Unknown(t *testing.T) {
 	if IsSupported("unknown_paradigm") {
 		t.Error("IsSupported('unknown_paradigm') = true; want false")
+	}
+}
+
+// TestIsSupported_GoalconRemoved pins the removal of the goalcon paradigm.
+func TestIsSupported_GoalconRemoved(t *testing.T) {
+	if IsSupported("goalcon") {
+		t.Error("IsSupported('goalcon') = true; goalcon must no longer be a paradigm")
 	}
 }
 

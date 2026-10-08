@@ -141,7 +141,7 @@ func newThoughtRecipeRegistry(t *testing.T, thoughtrecipe *surface.ThoughtRecipe
 		Steps: []thoughtrecipepkg.ExecutionStep{{
 			ID:       stepID,
 			Kind:     thoughtrecipepkg.StepKindRun,
-			Paradigm: "goalcon",
+			Paradigm: "react",
 			Goal:     "Continue the thoughtrecipe.",
 			Prompt:   "Continue the thoughtrecipe.",
 			Config:   map[string]any{},

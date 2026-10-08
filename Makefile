@@ -114,7 +114,7 @@ no-dead:
 
 .PHONY: no-dead-packages
 no-dead-packages:
-	@if grep -rn 'codeburg.org/lexbit/relurpify/jobs/store\|codeburg.org/lexbit/relurpify/platform/shell/query\|codeburg.org/lexbit/relurpify/platform/sandbox/dockersandbox\|codeburg.org/lexbit/relurpify/platform/sandbox/egressproxy\|codeburg.org/lexbit/relurpify/cognitionzoo/htn/authoring\|codeburg.org/lexbit/relurpify/cognitionzoo/llm\|codeburg.org/lexbit/relurpify/cognitionzoo/pipeline/stages\|codeburg.org/lexbit/relurpify/testsuite/agenttestscenario' --include='*.go' . 2>/dev/null | grep -v '.gomodcache' | grep -v '.gocache'; then echo "[FAIL] no-dead-packages: deleted package re-imported"; exit 1; fi
+	@if grep -rn 'codeburg.org/lexbit/relurpify/jobs/store\|codeburg.org/lexbit/relurpify/platform/shell/query\|codeburg.org/lexbit/relurpify/platform/sandbox/dockersandbox\|codeburg.org/lexbit/relurpify/platform/sandbox/egressproxy\|codeburg.org/lexbit/relurpify/cognitionzoo/htn/authoring\|codeburg.org/lexbit/relurpify/cognitionzoo/llm\|codeburg.org/lexbit/relurpify/cognitionzoo/pipeline/stages\|codeburg.org/lexbit/relurpify/cognitionzoo/goalcon\|codeburg.org/lexbit/relurpify/testsuite/agenttestscenario' --include='*.go' . 2>/dev/null | grep -v '.gomodcache' | grep -v '.gocache'; then echo "[FAIL] no-dead-packages: deleted package re-imported"; exit 1; fi
 	@echo "[PASS] no-dead-packages: no deleted packages re-imported"
 
 lint-all: lint-layering lint-invariants check-makefile-phonys check-no-dead-resolver check-no-ghost-schemas euclo-stepkind-exhaustive euclo-no-control-keys euclo-no-dead-flatteners no-dead no-dead-packages

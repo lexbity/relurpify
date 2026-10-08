@@ -473,7 +473,7 @@ func ensureClarificationThoughtRecipe(reg *thoughtrecipepkg.ThoughtRecipeRegistr
 		Steps: []thoughtrecipepkg.ExecutionStep{{
 			ID:           clarificationThoughtRecipeID + ".step0",
 			Kind:         thoughtrecipepkg.StepKindCapability,
-			Paradigm:     "goalcon",
+			Paradigm:     "react",
 			CapabilityID: clarificationCapabilityID,
 			// Directly-constructed steps must set an explicit scope: the zero
 			// value is deny-all (fail-closed, A-6), which would deny this

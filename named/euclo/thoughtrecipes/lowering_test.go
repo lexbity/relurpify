@@ -24,7 +24,7 @@ trigger as capability:
 input workspace: "**/*"
 input prompt: user.request
 
-agent router uses goalcon
+agent router uses react
 agent reviewer uses react
 
 run router:
@@ -48,11 +48,11 @@ run reviewer:
 	if got, want := len(plan.Agents), 2; got != want {
 		t.Fatalf("agent binding count = %d, want %d", got, want)
 	}
-	if got := plan.Agents["router"].Paradigm; got != "goalcon" {
-		t.Fatalf("router paradigm = %q, want %q", got, "goalcon")
+	if got := plan.Agents["router"].Paradigm; got != string(surface.ParadigmReact) {
+		t.Fatalf("router paradigm = %q, want %q", got, string(surface.ParadigmReact))
 	}
-	if got := plan.Agents["reviewer"].Paradigm; got != "react" {
-		t.Fatalf("reviewer paradigm = %q, want %q", got, "react")
+	if got := plan.Agents["reviewer"].Paradigm; got != string(surface.ParadigmReact) {
+		t.Fatalf("reviewer paradigm = %q, want %q", got, string(surface.ParadigmReact))
 	}
 
 	if got, want := len(plan.Steps), 2; got != want {
@@ -78,8 +78,8 @@ run reviewer:
 	}
 
 	first := plan.Steps[0]
-	if got := first.Paradigm; got != "goalcon" {
-		t.Fatalf("first step paradigm = %q, want %q", got, "goalcon")
+	if got := first.Paradigm; got != string(surface.ParadigmReact) {
+		t.Fatalf("first step paradigm = %q, want %q", got, string(surface.ParadigmReact))
 	}
 	if got := first.Goal; got != "Review the codebase." {
 		t.Fatalf("first step goal = %q, want %q", got, "Review the codebase.")
@@ -98,8 +98,8 @@ run reviewer:
 	}
 
 	second := plan.Steps[1]
-	if got := second.Paradigm; got != "react" {
-		t.Fatalf("second step paradigm = %q, want %q", got, "react")
+	if got := second.Paradigm; got != string(surface.ParadigmReact) {
+		t.Fatalf("second step paradigm = %q, want %q", got, string(surface.ParadigmReact))
 	}
 	if got := second.Goal; got != "Summarize the findings." {
 		t.Fatalf("second step goal = %q, want %q", got, "Summarize the findings.")
@@ -119,7 +119,7 @@ func TestLowerDocumentLowersRouteBranchesInOrder(t *testing.T) {
 trigger as capability:
   may read workspace
 
-agent router uses goalcon
+agent router uses react
 agent reviewer uses react
 
 route:
@@ -614,7 +614,7 @@ trigger as capability:
   may read workspace
 
 agent explorer uses react
-agent reviewer uses goalcon
+agent reviewer uses react
 
 run explorer:
   from input.workspace
