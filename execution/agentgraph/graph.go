@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	capresult "codeburg.org/lexbit/relurpify/capability/result"
@@ -596,25 +597,34 @@ type ToolNode struct {
 	Tool      ports.Tool
 	Args      map[string]any
 	Registry  CapabilityInvoker
-	traceID   string // set by SetTraceID
-	spanCount int    // per-execution child span counter
+	traceID   atomic.Pointer[string] // set by SetTraceID
+	spanCount atomic.Int64           // per-execution child span counter
 }
 
-// SetTraceID assigns a trace ID for child span generation.
+// SetTraceID assigns a trace ID for child span generation. Parallel branches
+// share ToolNode instances, so the field is stored atomically.
 func (n *ToolNode) SetTraceID(traceID string) {
-	n.traceID = traceID
+	n.traceID.Store(&traceID)
+}
+
+// traceIDValue returns the current trace ID, or "" when unset.
+func (n *ToolNode) traceIDValue() string {
+	if p := n.traceID.Load(); p != nil {
+		return *p
+	}
+	return ""
 }
 
 // nextSpanID generates a unique child span ID for each tool call.
 func (n *ToolNode) nextSpanID() string {
-	n.spanCount++
+	n.spanCount.Add(1)
 	return telemetry.NewSpanID()
 }
 
 // nextTraceContext derives a child trace context for a tool invocation.
 func (n *ToolNode) nextTraceContext() telemetry.TraceContext {
 	return telemetry.TraceContext{
-		TraceID: n.traceID,
+		TraceID: n.traceIDValue(),
 		SpanID:  n.nextSpanID(),
 	}
 }
@@ -661,8 +671,9 @@ func (n *ToolNode) Execute(ctx context.Context, env *contextdata.Envelope) (*exe
 		return nil, fmt.Errorf("tool node %q missing capability registry", n.id)
 	}
 	// Attach trace context for child span generation in instrumentedTool.
-	if n.traceID == "" {
-		n.traceID = telemetry.NewTraceID()
+	if n.traceID.Load() == nil {
+		traceID := telemetry.NewTraceID()
+		n.traceID.Store(&traceID)
 	}
 	tc := n.nextTraceContext()
 	ctx = telemetry.WithTraceContext(ctx, tc)

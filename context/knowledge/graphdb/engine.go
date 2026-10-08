@@ -152,16 +152,17 @@ func (e *Engine) maybeSnapshot(ctx context.Context) {
 // failed after a successful backend commit. Mutation calls MUST check
 // this before proceeding.
 func (e *Engine) checkDirty() error {
-	if e.dirtyErr != nil {
-		return e.dirtyErr
-	}
-	return nil
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.dirtyErr
 }
 
 // markDirty stores a non-nil error, preventing further mutations until
 // Rebuild clears it.
 func (e *Engine) markDirty(err error) {
+	e.mu.Lock()
 	e.dirtyErr = err
+	e.mu.Unlock()
 	e.emitEvent(Event{
 		Kind:       EventMemoryApplyFail,
 		ErrorClass: err.Error(),
