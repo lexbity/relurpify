@@ -85,7 +85,11 @@ func (r *CapabilityRegistry) InvokeCapability(ctx context.Context, state ports.S
 	}
 	// Store rollback token for revertible tools
 	if err == nil && result != nil && result.Success {
-		if tok := r.storeRollbackTokenLocked(idOrName, args, result); tok != "" {
+		var rollbackParams []ports.ToolParameter
+		if entry.legacyTool != nil {
+			rollbackParams = entry.legacyTool.Parameters()
+		}
+		if tok := r.storeRollbackTokenLocked(idOrName, rollbackParams, args, result); tok != "" {
 			if result.Metadata == nil {
 				result.Metadata = make(map[string]any)
 			}
@@ -140,17 +144,19 @@ func newRollbackID() string {
 
 // storeRollbackTokenLocked records a rollback token for the invocation if the
 // underlying tool implements RevertibleTool. Returns the token ID or empty
-// string if rollback is not supported.
-func (r *CapabilityRegistry) storeRollbackTokenLocked(toolName string, args map[string]any, result *ports.ToolResult) string {
+// string if rollback is not supported. Arguments are stored redacted
+// (ports.RedactArgs): rollback material is retained in RAM, so it must not
+// retain raw secret values.
+func (r *CapabilityRegistry) storeRollbackTokenLocked(toolName string, params []ports.ToolParameter, args map[string]any, result *ports.ToolResult) string {
 	r.rollbackMu.Lock()
 	defer r.rollbackMu.Unlock()
 	tok := newRollbackID()
-	r.rollbackTokens[tok] = ports.RollbackToken{
+	r.rollbackTokens.Put(tok, ports.RollbackToken{
 		InvocationID: tok,
 		ToolName:     toolName,
-		Args:         cloneArgs(args),
+		Args:         ports.RedactArgs(cloneArgs(args), params),
 		Result:       result,
-	}
+	})
 	return tok
 }
 
@@ -170,13 +176,15 @@ func cloneArgs(args map[string]any) map[string]any {
 // tool does not support rollback, or the rollback itself fails.
 func (r *CapabilityRegistry) RollbackCapability(ctx context.Context, tokenID string) error {
 	r.rollbackMu.Lock()
-	token, ok := r.rollbackTokens[tokenID]
+	token, ok := r.rollbackTokens.Get(tokenID)
 	if ok {
-		delete(r.rollbackTokens, tokenID)
+		r.rollbackTokens.Delete(tokenID)
 	}
 	r.rollbackMu.Unlock()
 	if !ok {
-		return fmt.Errorf("rollback token %q not found", tokenID)
+		// The token was evicted at the cap or past its TTL: the rollback
+		// window is closed by design, and the caller sees the typed error.
+		return fmt.Errorf("%w: token %q", ErrRollbackExpired, tokenID)
 	}
 	entry, err := r.capabilityEntry(token.ToolName)
 	if err != nil {
@@ -248,7 +256,8 @@ func (r *CapabilityRegistry) prepareCapabilityInvocation(ctx context.Context, st
 	return entry, nil
 }
 
-func (r *CapabilityRegistry) enforceCapabilityPolicy(ctx context.Context, entry *capabilityEntry) error {	desc := entry.descriptor
+func (r *CapabilityRegistry) enforceCapabilityPolicy(ctx context.Context, entry *capabilityEntry) error {
+	desc := entry.descriptor
 	r.mu.RLock()
 	policyEngine := r.policyEngine
 	agentID := r.registeredAgentID

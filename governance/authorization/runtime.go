@@ -244,5 +244,5 @@ func (r *AgentRegistration) GrantPermission(desc permissions.PermissionDescripto
 	grant := GrantManual(desc, approvedBy, scope, duration)
 	r.Permissions.mu.Lock()
 	defer r.Permissions.mu.Unlock()
-	r.Permissions.grants[desc.Action+":"+desc.Resource] = grant
+	r.Permissions.putGrant(desc.Action+":"+desc.Resource, grant)
 }

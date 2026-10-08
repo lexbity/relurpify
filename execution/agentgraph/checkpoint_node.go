@@ -30,6 +30,9 @@ type CheckpointNode struct {
 	runResolver       CheckpointRunResolver
 	telemetry         telemetry.Telemetry
 	artifactKind      string
+	// memoryEvictor releases the task's working memory once its checkpoint
+	// is durably saved (working memory expires at the checkpoint boundary).
+	memoryEvictor interface{ Evict(taskID string) }
 }
 
 // CheckpointSnapshotHook can override how checkpoint payloads are built.
@@ -122,6 +125,13 @@ func (n *CheckpointNode) WithRunResolver(resolver CheckpointRunResolver) *Checkp
 	return n
 }
 
+// WithWorkingMemoryEvictor wires the working-memory release invoked after a
+// checkpoint is durably saved. Nil (the default) disables eviction.
+func (n *CheckpointNode) WithWorkingMemoryEvictor(evictor interface{ Evict(taskID string) }) *CheckpointNode {
+	n.memoryEvictor = evictor
+	return n
+}
+
 // WithTelemetry wires checkpoint lifecycle telemetry.
 func (n *CheckpointNode) WithTelemetry(t telemetry.Telemetry) *CheckpointNode {
 	if n != nil {
@@ -208,6 +218,12 @@ func (n *CheckpointNode) Execute(ctx context.Context, env *contextdata.Envelope)
 	env.SetWorkingValueWithClass("checkpoint.materialized", true, contextdata.MemoryClassTask)
 	env.SetWorkingValueWithClass("checkpoint.snapshot", snapshot, contextdata.MemoryClassTask)
 	env.ClearCheckpointRequest()
+
+	// The checkpoint is durable: the task's working memory expires here.
+	// Idempotent; a missing task is a no-op.
+	if n.memoryEvictor != nil {
+		n.memoryEvictor.Evict(env.TaskID)
+	}
 
 	if n.writer != nil {
 		n.persistMirroredCheckpoint(ctx, env, snapshot)

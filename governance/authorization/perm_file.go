@@ -22,7 +22,9 @@ func (m *PermissionManager) SetFilesystemGuardRoots(protectedRoots, excludedRoot
 	defer m.mu.Unlock()
 	m.fsProtectedRoots = normalizeFilesystemRoots(protectedRoots)
 	m.fsExcludedRoots = normalizeFilesystemRoots(excludedRoots)
-	m.fsPermCache = make(map[string]*permissions.FileSystemPermission)
+	// Guard roots change matching semantics wholesale: drop every cached
+	// verdict rather than serving pre-guard decisions.
+	m.fsPermCache.Reset()
 }
 
 // inflateScopes rewrites any workspace markers inside the declared
@@ -135,12 +137,9 @@ func (m *PermissionManager) findFilesystemPermission(action permissions.FileSyst
 		return nil
 	}
 	cacheKey := string(action) + ":" + normalized
-	m.mu.RLock()
-	if perm, ok := m.fsPermCache[cacheKey]; ok {
-		m.mu.RUnlock()
+	if perm, ok := m.fsPermCache.Get(cacheKey); ok {
 		return perm
 	}
-	m.mu.RUnlock()
 	var matched *permissions.FileSystemPermission
 	protectedRoots := m.filesystemGuardRootsSnapshot()
 	for _, perm := range m.declared.FileSystem {
@@ -156,9 +155,7 @@ func (m *PermissionManager) findFilesystemPermission(action permissions.FileSyst
 			break
 		}
 	}
-	m.mu.Lock()
-	m.fsPermCache[cacheKey] = matched
-	m.mu.Unlock()
+	m.fsPermCache.Put(cacheKey, matched)
 	return matched
 }
 

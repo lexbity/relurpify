@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"codeburg.org/lexbit/relurpify/capability/descriptor"
 	"codeburg.org/lexbit/relurpify/capability/handler"
@@ -12,6 +13,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/governance/bounded"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/governance/policy"
 	"codeburg.org/lexbit/relurpify/model"
@@ -70,7 +72,10 @@ type CapabilityRegistry struct {
 	modelProfile        *model.ModelProfile
 	toolAdmission       *ToolAdmissionPolicy
 
-	rollbackTokens  map[string]ports.RollbackToken
+	// rollbackTokens retains rollback material for revertible invocations:
+	// bounded (cap 256, TTL 30 min) and redacted at rest. Eviction beyond
+	// the cap or past the TTL is the documented end of the rollback window.
+	rollbackTokens  *bounded.Cache[string, ports.RollbackToken]
 	rollbackMu      sync.Mutex
 	metrics         *fwtelemetry.ToolCallMetrics
 	delegate        *CapabilityRegistry
@@ -79,7 +84,7 @@ type CapabilityRegistry struct {
 
 // NewRegistry builds a capability registry instance.
 func NewRegistry() *CapabilityRegistry {
-	return &CapabilityRegistry{
+	r := &CapabilityRegistry{
 		capabilities:        make(map[string]descriptor.CapabilityDescriptor),
 		entries:             make(map[string]*capabilityEntry),
 		capabilityNameIndex: make(map[string][]string),
@@ -87,8 +92,21 @@ func NewRegistry() *CapabilityRegistry {
 		toolPolicies:        make(map[string]agentspec.ToolPolicy),
 		sandboxScope:        permissions.NewDenyAllFileScopePolicy(),
 		safety:              runtime.NewRuntimeSafetyController(),
-		rollbackTokens:      make(map[string]ports.RollbackToken),
 	}
+	r.rollbackTokens = bounded.NewCache[string, ports.RollbackToken](rollbackTokenCap, rollbackTokenTTL, func(tokenID string, _ ports.RollbackToken) {
+		// The rollback window closed by eviction (cap or TTL). Observable,
+		// never silent; telemetry is attached later via UseTelemetry, so the
+		// hook reads the field at eviction time.
+		if r.telemetry != nil {
+			r.telemetry.Emit(fwtelemetry.Event{
+				Type:      "rollback.expired",
+				Timestamp: time.Now().UTC(),
+				Message:   "rollback token evicted; rollback window closed",
+				Metadata:  map[string]any{"token_id": tokenID, "site": "rollback_tokens"},
+			})
+		}
+	})
+	return r
 }
 
 // SetMetrics attaches a metrics collector to the registry. A nil value is a

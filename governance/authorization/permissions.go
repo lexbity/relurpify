@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/governance/bounded"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
 	governanceports "codeburg.org/lexbit/relurpify/governance/ports"
@@ -60,6 +61,17 @@ type Tool interface {
 // adversarial or deeply-nested glob patterns.
 var globRegexCache = newCompiledGlobCache(256)
 
+// Cache caps for the permission manager's bounded maps. Every cap has an
+// eviction counter on its cache; evictions are policy-forget events, not
+// errors — the next evaluation recomputes and re-caches.
+const (
+	grantsCacheCap   = 1024
+	hitlRateCacheCap = 4096
+	fsPermCacheCap   = 2048
+	execPermCacheCap = 2048
+	hitlRateEntryTTL = time.Hour
+)
+
 // PermissionManager enforces the declared permission set for runtime actions.
 type PermissionManager struct {
 	basePath         string
@@ -67,17 +79,19 @@ type PermissionManager struct {
 	audit            policy.AuditLogger
 	hitl             HITLProvider
 	runtime          governanceports.SandboxRuntime
-	grants           map[string]*PermissionGrant
+	grants           *bounded.Cache[string, *PermissionGrant]
 	mu               sync.RWMutex
 	grantClock       func() time.Time
 	netPolicy        []governanceports.SandboxNetworkRule
 	defaultPolicy    string // governs undeclared tool permissions; default is Ask
 	decisions        fwtelemetry.DecisionSink
 	runtimePolicyErr error
+	// taskGrants is bounded by its lifecycle: entries are deleted on
+	// RevokeTaskGrant and never outlive their run.
 	taskGrants       map[string]taskGrant
-	hitlRateLimits   map[string]*hitlRateBucket
-	fsPermCache      map[string]*permissions.FileSystemPermission
-	execPermCache    map[string]*permissions.ExecutablePermission
+	hitlRateLimits   *bounded.Cache[string, *hitlRateBucket]
+	fsPermCache      *bounded.Cache[string, *permissions.FileSystemPermission]
+	execPermCache    *bounded.Cache[string, *permissions.ExecutablePermission]
 	fsProtectedRoots []string
 	fsExcludedRoots  []string
 }
@@ -95,15 +109,60 @@ func NewPermissionManager(basePath string, declared *permissions.PermissionSet, 
 		declared:       declared,
 		audit:          audit,
 		hitl:           hitl,
-		grants:         make(map[string]*PermissionGrant),
+		grants:         bounded.NewCache[string, *PermissionGrant](grantsCacheCap, 0, nil),
 		taskGrants:     make(map[string]taskGrant),
-		hitlRateLimits: make(map[string]*hitlRateBucket),
-		fsPermCache:    make(map[string]*permissions.FileSystemPermission),
-		execPermCache:  make(map[string]*permissions.ExecutablePermission),
+		hitlRateLimits: bounded.NewCache[string, *hitlRateBucket](hitlRateCacheCap, hitlRateEntryTTL, nil),
+		fsPermCache:    bounded.NewCache[string, *permissions.FileSystemPermission](fsPermCacheCap, 0, nil),
+		execPermCache:  bounded.NewCache[string, *permissions.ExecutablePermission](execPermCacheCap, 0, nil),
 		grantClock:     time.Now,
 	}
 	pm.inflateScopes()
 	return pm, nil
+}
+
+// putGrant stores a grant, sweeping grant-level expiries once the registry
+// passes half its cap so a long-lived manager never accumulates dead grants.
+func (m *PermissionManager) putGrant(key string, grant *PermissionGrant) {
+	if m.grants.Len() >= grantsCacheCap/2 {
+		m.sweepExpiredGrants()
+	}
+	m.grants.Put(key, grant)
+}
+
+// sweepExpiredGrants deletes every grant whose own ExpiresAt has elapsed.
+func (m *PermissionManager) sweepExpiredGrants() {
+	now := m.grantClock()
+	var stale []string
+	m.grants.Range(func(key string, grant *PermissionGrant) bool {
+		if grant.Expired(now) {
+			stale = append(stale, key)
+		}
+		return true
+	})
+	for _, key := range stale {
+		m.grants.Delete(key)
+	}
+}
+
+// ReleaseSession deletes every grant issued under sessionID (typically the
+// agent registration ID carried by the approving principal). Idempotent;
+// returns the number of grants released. Session-scoped grants must not
+// survive the session's close.
+func (m *PermissionManager) ReleaseSession(sessionID string) int {
+	if m == nil {
+		return 0
+	}
+	var released []string
+	m.grants.Range(func(key string, grant *PermissionGrant) bool {
+		if grant.SessionID != "" && grant.SessionID == sessionID {
+			released = append(released, key)
+		}
+		return true
+	})
+	for _, key := range released {
+		m.grants.Delete(key)
+	}
+	return len(released)
 }
 
 // AttachRuntime allows the manager to push policy updates to the sandbox.
@@ -279,6 +338,10 @@ type PermissionGrant struct {
 	Conditions  map[string]string
 	GrantedAt   time.Time
 	Description string
+	// SessionID identifies the approving session (the principal's agent
+	// registration). Empty for grants issued outside a session context.
+	// ReleaseSession deletes grants by this key.
+	SessionID string
 }
 
 // Expired returns true when the grant is not usable anymore.
