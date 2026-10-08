@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/execution/workspace"
+	"codeburg.org/lexbit/relurpify/telemetry"
 )
 
 // OpenMode declares feature layers to include when opening a workspace session.
@@ -480,15 +481,29 @@ type ScheduledJob struct {
 
 // ServiceScheduler handles time-based and memory-triggered service invocations.
 type ServiceScheduler struct {
-	Jobs   []ScheduledJob
-	Cancel context.CancelFunc
-	Wg     sync.WaitGroup
-	Mu     sync.Mutex
+	Jobs      []ScheduledJob
+	Cancel    context.CancelFunc
+	Wg        sync.WaitGroup
+	Mu        sync.Mutex
+	telemetry telemetry.Telemetry
+	running   map[string]bool // job IDs with an in-flight invocation
 }
 
 // NewServiceScheduler creates a new scheduler.
 func NewServiceScheduler() *ServiceScheduler {
-	return &ServiceScheduler{}
+	return &ServiceScheduler{running: make(map[string]bool)}
+}
+
+// SetTelemetry attaches the framework telemetry sink so scheduler ticks are
+// observable (FR-13). A nil sink keeps the scheduler silent.
+func (s *ServiceScheduler) SetTelemetry(tel telemetry.Telemetry) *ServiceScheduler {
+	if s == nil {
+		return nil
+	}
+	s.Mu.Lock()
+	defer s.Mu.Unlock()
+	s.telemetry = tel
+	return s
 }
 
 // Register adds a job to the scheduler.
@@ -554,16 +569,80 @@ func (s *ServiceScheduler) runJobs(ctx context.Context) {
 
 	now := time.Now()
 	for _, job := range jobs {
-		if s.shouldRun(job, now) {
-			s.Wg.Add(1)
-			go func(j ScheduledJob) {
-				defer s.Wg.Done()
-				if err := j.Action(ctx); err != nil {
-					log.Printf("scheduled job %s failed: %v", j.ID, err)
-				}
-			}(job)
+		if !s.shouldRun(job, now) {
+			continue
 		}
+		if !s.tryBegin(job.ID) {
+			// The known interval-fires-every-tick bug is now observable: a job
+			// still in flight when its next tick arrives is skipped with a
+			// telemetry record instead of running concurrently (FR-13).
+			s.emit(ctx, telemetry.EventSchedulerJobSkipped, "scheduler job skipped", map[string]any{
+				"job_id": job.ID,
+				"source": job.Source,
+				"reason": "already_running",
+			})
+			continue
+		}
+		s.emit(ctx, telemetry.EventSchedulerJobStarted, "scheduler job started", map[string]any{
+			"job_id": job.ID,
+			"source": job.Source,
+		})
+		s.Wg.Add(1)
+		go func(j ScheduledJob) {
+			defer s.Wg.Done()
+			defer s.finish(j.ID)
+			if err := j.Action(ctx); err != nil {
+				s.emit(ctx, telemetry.EventSchedulerJobFailed, "scheduler job failed", map[string]any{
+					"job_id": j.ID,
+					"source": j.Source,
+					"error":  err.Error(),
+				})
+				log.Printf("scheduled job %s failed: %v", j.ID, err)
+				return
+			}
+			s.emit(ctx, telemetry.EventSchedulerJobCompleted, "scheduler job completed", map[string]any{
+				"job_id": j.ID,
+				"source": j.Source,
+			})
+		}(job)
 	}
+}
+
+// tryBegin marks a job as in-flight, reporting false when it already runs.
+func (s *ServiceScheduler) tryBegin(id string) bool {
+	s.Mu.Lock()
+	defer s.Mu.Unlock()
+	if s.running[id] {
+		return false
+	}
+	s.running[id] = true
+	return true
+}
+
+// finish clears the in-flight marker for a job.
+func (s *ServiceScheduler) finish(id string) {
+	s.Mu.Lock()
+	defer s.Mu.Unlock()
+	delete(s.running, id)
+}
+
+// emit stamps correlation from ctx and dispatches one scheduler event.
+func (s *ServiceScheduler) emit(ctx context.Context, eventType telemetry.EventType, message string, metadata map[string]any) {
+	var sink telemetry.Telemetry
+	s.Mu.Lock()
+	sink = s.telemetry
+	s.Mu.Unlock()
+	if sink == nil {
+		return
+	}
+	ev := telemetry.Event{
+		Type:      eventType,
+		Message:   message,
+		Timestamp: time.Now().UTC(),
+		Metadata:  metadata,
+	}
+	telemetry.StampCorrelation(ctx, &ev)
+	sink.Emit(ev)
 }
 
 // shouldRun determines if a job should run at the given time.

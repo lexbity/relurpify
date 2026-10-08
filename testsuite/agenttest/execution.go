@@ -48,6 +48,9 @@ type PreparedRunExecutor struct {
 	// when the descriptor has no telemetry directory.
 	recorder      *recordingTelemetrySink
 	telemetryFile *telemetry.JSONFileTelemetry
+	// knowledgeBridge forwards knowledge.EventBus chunk signals into the
+	// recorder for the duration of the run (FR-14).
+	knowledgeBridge *knowledge.EventBusTelemetryBridge
 
 	// Security inputs resolved from the derived workspace during buildSecurity,
 	// reused by buildCapability. They are populated only when the executor
@@ -79,14 +82,20 @@ func (e *PreparedRunExecutor) Execute(ctx context.Context, desc *PreparedRunDesc
 	if err := e.buildCapability(ctx, desc); err != nil {
 		return fmt.Errorf("capability: %w", err)
 	}
+	tel := e.buildTelemetry(desc)
+	e.telemetry = tel
+	// Phase 6 silent-domain bridging: attach the recording sink to the sandbox
+	// chain and the knowledge trigger so denials, executions, and compilation
+	// jobs produce real telemetry inside e2e cases (FR-12/FR-15).
+	if e.security != nil && e.security.Runner != nil {
+		e.security.Runner.SetTelemetry(tel)
+	}
 	if err := e.buildKnowledge(); err != nil {
 		return fmt.Errorf("knowledge: %w", err)
 	}
 	if err := e.buildModel(ctx, desc); err != nil {
 		return fmt.Errorf("model: %w", err)
 	}
-	tel := e.buildTelemetry(desc)
-	e.telemetry = tel
 	deps := e.assembleDeps(desc, tel)
 	if err := e.createAgent(deps); err != nil {
 		return fmt.Errorf("agent: %w", err)
@@ -235,6 +244,14 @@ func (e *PreparedRunExecutor) buildKnowledge() error {
 	})
 	if err != nil {
 		return err
+	}
+	if e.telemetry != nil {
+		if kn.StreamTrigger != nil {
+			kn.StreamTrigger.SetTelemetry(e.telemetry)
+		}
+		if kn.KnowledgeEvents != nil {
+			e.knowledgeBridge = knowledge.NewEventBusTelemetryBridge(kn.KnowledgeEvents, e.telemetry)
+		}
 	}
 	e.knowledge = kn
 	return nil
@@ -397,6 +414,10 @@ func (e *PreparedRunExecutor) resetBackend(ctx context.Context, desc *PreparedRu
 }
 
 func (e *PreparedRunExecutor) cleanup() {
+	if e.knowledgeBridge != nil {
+		e.knowledgeBridge.Close()
+		e.knowledgeBridge = nil
+	}
 	if e.telemetryFile != nil {
 		_ = e.telemetryFile.Close()
 		e.telemetryFile = nil

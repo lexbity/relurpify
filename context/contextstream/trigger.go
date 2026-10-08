@@ -7,6 +7,7 @@ import (
 	"time"
 
 	contextports "codeburg.org/lexbit/relurpify/context/ports"
+	"codeburg.org/lexbit/relurpify/telemetry"
 )
 
 type triggerContextKey struct{}
@@ -31,12 +32,23 @@ func TriggerFromContext(ctx context.Context) *Trigger {
 
 // Trigger invokes the compiler on behalf of agent execution.
 type Trigger struct {
-	Compiler CompilerInvoker
+	Compiler  CompilerInvoker
+	telemetry telemetry.Telemetry
 }
 
 // NewTrigger creates a trigger for the given compiler.
 func NewTrigger(compiler CompilerInvoker) *Trigger {
 	return &Trigger{Compiler: compiler}
+}
+
+// SetTelemetry attaches the framework telemetry sink. The trigger emits
+// compiler.* events when a sink is present and is otherwise silent.
+func (t *Trigger) SetTelemetry(tel telemetry.Telemetry) *Trigger {
+	if t == nil {
+		return nil
+	}
+	t.telemetry = tel
+	return t
 }
 
 // RequestBlocking submits the request and waits for the compiler response.
@@ -45,6 +57,7 @@ func (t *Trigger) RequestBlocking(ctx context.Context, req Request) (*Result, er
 		return nil, errors.New("contextstream: missing compiler")
 	}
 	started := time.Now().UTC()
+	t.emitCompilerStarted(ctx, req)
 	compilation, err := t.Compiler.Compile(ctx, toCompilationRequest(req))
 	res := &Result{
 		Request:     req,
@@ -56,6 +69,7 @@ func (t *Trigger) RequestBlocking(ctx context.Context, req Request) (*Result, er
 	if compilation != nil {
 		res.Trim = trimMetadataFromCompilation(req, compilation)
 	}
+	t.emitCompilerOutcome(ctx, req, res, started)
 	if err != nil {
 		return res, fmt.Errorf("contextstream: compile request %q: %w", req.ID, err)
 	}

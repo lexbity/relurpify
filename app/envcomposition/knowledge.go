@@ -66,7 +66,7 @@ func (a *compilerTriggerAdapter) Compile(ctx context.Context, req contextports.C
 		Query:     query,
 		MaxTokens: req.BudgetTokens,
 	}
-	result, _, err := a.inner.Compile(ctx, innerReq)
+	result, record, err := a.inner.Compile(ctx, innerReq)
 	if err != nil {
 		return nil, err
 	}
@@ -97,6 +97,7 @@ func (a *compilerTriggerAdapter) Compile(ctx context.Context, req contextports.C
 		Record: contextports.CompilationRecord{
 			FinalTokens:    result.TotalTokens,
 			OriginalBudget: req.BudgetTokens,
+			CacheHit:       record != nil && record.CacheHit,
 		},
 	}, nil
 }

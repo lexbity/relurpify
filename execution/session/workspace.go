@@ -13,6 +13,7 @@ import (
 	aconvert "codeburg.org/lexbit/relurpify/capability/agentspec/convert"
 	regpkg "codeburg.org/lexbit/relurpify/capability/registry"
 	fsandbox "codeburg.org/lexbit/relurpify/capability/sandbox"
+	"codeburg.org/lexbit/relurpify/context/knowledge"
 	"codeburg.org/lexbit/relurpify/context/knowledge/ast"
 	"codeburg.org/lexbit/relurpify/context/knowledge/memory"
 	"codeburg.org/lexbit/relurpify/context/knowledge/search"
@@ -546,6 +547,10 @@ func OpenWorkspace(ctx context.Context, cfg WorkspaceConfig) (_ *Workspace, err 
 	if cfg.SecurityRuntime.Runner == nil {
 		return nil, fmt.Errorf("security runtime missing runner")
 	}
+	// Phase F.1: Silent-domain bridging — the shared sandbox runner is the
+	// single enforcement point; attaching telemetry here reaches every
+	// capability and command that traverses the invariant chain (FR-15).
+	cfg.SecurityRuntime.Runner.SetTelemetry(tel)
 	if cfg.SecurityRuntime.PolicyEngine == nil {
 		return nil, fmt.Errorf("security runtime missing policy engine")
 	}
@@ -656,6 +661,7 @@ func OpenWorkspace(ctx context.Context, cfg WorkspaceConfig) (_ *Workspace, err 
 	var sm ServiceManager
 	if cfg.Scope.Services {
 		scheduler := NewServiceScheduler()
+		scheduler.SetTelemetry(tel)
 		env.Scheduler = scheduler
 		sm = NewServiceManager()
 		sm.RegisterWithInfo("scheduler", scheduler, ServiceRegistrationInfo{
@@ -676,6 +682,20 @@ func OpenWorkspace(ctx context.Context, cfg WorkspaceConfig) (_ *Workspace, err 
 		env.Retriever = cfg.KnowledgeProduct.Retriever
 		env.Compiler = cfg.KnowledgeProduct.Compiler
 		env.StreamTrigger = cfg.KnowledgeProduct.StreamTrigger
+		// Phase H.6: Silent-domain bridging — the stream trigger emits
+		// compiler.* events and the event-bus bridge surfaces chunk lifecycle
+		// signals (committed/staled/invalidated) on the durable trail (FR-12,
+		// FR-14).
+		if cfg.KnowledgeProduct.StreamTrigger != nil {
+			cfg.KnowledgeProduct.StreamTrigger.SetTelemetry(tel)
+		}
+		if cfg.KnowledgeProduct.KnowledgeEvents != nil {
+			bridge := knowledge.NewEventBusTelemetryBridge(cfg.KnowledgeProduct.KnowledgeEvents, tel)
+			cleanup.Add(func(_ context.Context) error {
+				bridge.Close()
+				return nil
+			})
+		}
 	}
 
 	ws := &Workspace{

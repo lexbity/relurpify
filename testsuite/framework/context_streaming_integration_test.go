@@ -353,7 +353,7 @@ func TestTelemetryEmission(t *testing.T) {
 		chunks:    []knowledge.ChunkID{knowledge.ChunkID("telemetry-chunk-1")},
 	}
 
-	trigger := contextstream.NewTrigger(mockComp)
+	trigger := contextstream.NewTrigger(mockComp).SetTelemetry(telemetrySink)
 
 	// Create streaming request
 	req := contextstream.Request{
@@ -386,6 +386,21 @@ func TestTelemetryEmission(t *testing.T) {
 	}
 	if !foundStreamingEvent {
 		t.Error("expected to find a streaming-related telemetry event")
+	}
+
+	// Phase 6: the contextstream trigger itself emits compiler.* events with
+	// correlation fields stamped from the caller context (FR-12).
+	foundStarted, foundCompleted := false, false
+	for _, event := range events {
+		switch event.Type {
+		case telemetry.EventCompilerStarted:
+			foundStarted = true
+		case telemetry.EventCompilerCompleted:
+			foundCompleted = true
+		}
+	}
+	if !foundStarted || !foundCompleted {
+		t.Errorf("expected compiler.started and compiler.completed in telemetry, got %v", eventTypeList(events))
 	}
 }
 
@@ -523,4 +538,12 @@ func (m *mockStreamingCompiler) Compile(ctx context.Context, req contextports.Co
 	}
 
 	return result, nil
+}
+
+func eventTypeList(events []telemetry.Event) []string {
+	var out []string
+	for _, event := range events {
+		out = append(out, string(event.Type))
+	}
+	return out
 }

@@ -96,6 +96,10 @@ func (e EventTelemetry) mapEventType(ev Event) string {
 		return evt.EventCapabilityInvoked
 	case EventCapabilityResult, EventToolResult:
 		return evt.EventCapabilityResult
+	case EventChunkCommitted:
+		return evt.EventChunkCommitted
+	case EventSummaryCommitted:
+		return evt.EventSummaryCommitted
 	// Decision forensics map onto their canonical .v1 spellings so the
 	// causal record stays queryable without a second writer (FR-5, FR-6).
 	case EventPolicyEvaluated:

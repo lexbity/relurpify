@@ -187,6 +187,18 @@ func securityObservationsFromEvents(events []telemetry.Event) []SecurityObservat
 				AgentID:    stringValue(ev.Metadata["agent_id"]),
 				PolicyRule: "capability_policy",
 			})
+		case telemetry.EventSandboxCommandDenied:
+			command := firstNonEmpty(stringValue(ev.Metadata["command"]), "command")
+			observations = append(observations, SecurityObservation{
+				Kind:       securityKindForTool(command),
+				Resource:   command,
+				Action:     "execute",
+				InScope:    false,
+				Blocked:    true,
+				Timestamp:  eventTimestamp(ev),
+				AgentID:    stringValue(ev.Metadata["agent_id"]),
+				PolicyRule: firstNonEmpty(stringValue(ev.Metadata["rule"]), stringValue(ev.Metadata["reason"])),
+			})
 		case telemetry.EventStateChange:
 			if !hasSecurityEvent(ev) {
 				continue

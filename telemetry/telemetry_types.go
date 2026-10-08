@@ -30,12 +30,33 @@ const (
 	EventBackendWarm           EventType = "backend_warm"
 	EventBackendClose          EventType = "backend_close"
 	EventBackendRestart        EventType = "backend_restart"
-	EventChunkCommitted        EventType = "chunk_committed"
-	EventSummaryCommitted      EventType = "summary_committed"
+	EventChunkCommitted        EventType = "chunk.committed"
+	EventSummaryCommitted      EventType = "summary.committed"
 	EventContextPolicyReloaded EventType = "context_policy_reloaded"
 	EventProviderSessionEnded  EventType = "provider_session_ended"
 	EventCompilerWarning       EventType = "compiler_warning"
 	EventBootstrapComplete     EventType = "bootstrap_complete"
+)
+
+// Domain event types bridged in Phase 6 (silent domain bridging). These carry
+// the same dot-qualified spelling as the decision-forensics events so the JSONL
+// namespace is consistent: compiler.*, scheduler.*, chunk.*, sandbox.*.
+const (
+	EventCompilerStarted            EventType = "compiler.started"
+	EventCompilerCompleted          EventType = "compiler.completed"
+	EventCompilerCacheHit           EventType = "compiler.cache_hit"
+	EventCompilerCacheMiss          EventType = "compiler.cache_miss"
+	EventCompilerBudgetExceeded     EventType = "compiler.budget_exceeded"
+	EventCompilerSummarySubstituted EventType = "compiler.summary_substituted"
+	EventChunkStaled                EventType = "chunk.staled"
+	EventChunkInvalidated           EventType = "chunk.invalidated"
+	EventSchedulerJobStarted        EventType = "scheduler.job_started"
+	EventSchedulerJobCompleted      EventType = "scheduler.job_completed"
+	EventSchedulerJobFailed         EventType = "scheduler.job_failed"
+	EventSchedulerJobSkipped        EventType = "scheduler.job_skipped"
+	EventSandboxCommandDenied       EventType = "sandbox.command_denied"
+	EventSandboxCommandExecuted     EventType = "sandbox.command_executed"
+	EventSandboxFailure             EventType = "sandbox.failure"
 )
 
 const (

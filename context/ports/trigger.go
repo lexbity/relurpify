@@ -31,6 +31,10 @@ type CompilationRecord struct {
 	FinalTokens     int
 	CompressionRate float64
 	Error           string
+	// CacheHit reports whether the result was served from the compiler's
+	// in-memory cache. It is the signal the contextstream layer uses to emit
+	// compiler.cache_hit / compiler.cache_miss telemetry (FR-12).
+	CacheHit bool
 }
 
 // SummarySubstitution records a text replacement made during compilation.
