@@ -330,6 +330,8 @@ func buildRuntime(ctx context.Context, cfg Config, secrets config.Secrets) (*Run
 		ProtectedPaths:    securityBundle.Sandbox.ProtectedPaths,
 		InferenceEndpoint: cfg.InferenceEndpoint,
 		InferenceModel:    cfg.InferenceModel,
+		PrivateEgress:     envcomposition.NewPrivateEgressApprover(registration.Permissions),
+		NetworkIsolation:  &cfg.Sandbox.NetworkIsolation,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("compose capability runtime: %w", err)

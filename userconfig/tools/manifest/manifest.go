@@ -96,6 +96,11 @@ type ToolManifestSandbox struct {
 	PidsLimit      int64    `yaml:"pids_limit,omitempty" json:"pids_limit,omitempty"`
 	CPUs           float64  `yaml:"cpus,omitempty" json:"cpus,omitempty"`
 	AllowHosts     []string `yaml:"allow_hosts,omitempty" json:"allow_hosts,omitempty"`
+	// AllowPrivateHosts declares non-public egress targets that a tool may
+	// reach after an explicit HITL approval. It is the only supported way to
+	// reach a private/loopback/link-local address; the mandatory denylist
+	// cannot be bypassed through AllowHosts.
+	AllowPrivateHosts []string `yaml:"allow_private_hosts,omitempty" json:"allow_private_hosts,omitempty"`
 }
 
 // ToolManifestExecution describes the backend used to run a tool.

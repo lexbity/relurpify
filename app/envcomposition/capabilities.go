@@ -59,6 +59,11 @@ type CapabilityRuntimeOptions struct {
 	InferenceEndpoint string
 	InferenceModel    string
 	SkipASTIndex      bool
+	// PrivateEgress resolves non-public egress approvals. nil denies them.
+	PrivateEgress subprocess.PrivateEgressApprover
+	// NetworkIsolation is the effective container isolation. nil means
+	// isolated; a pointer to false enables the isolation-off scanner mode.
+	NetworkIsolation *bool
 }
 
 // PermissionManager is the permission surface consumed during capability construction.
@@ -109,9 +114,10 @@ func BuildCapabilityRuntime(ctx context.Context, workspace string, runner *fsand
 	// Skipping this leaves tools with no scope at all, which denies every
 	// filesystem operation (deny-by-default registry invariant).
 	registry.UseSandboxScope(fsandbox.NewFileScopePolicy(workspace, cfg.ProtectedPaths))
+	networkIsolationDisabled := cfg.NetworkIsolation != nil && !*cfg.NetworkIsolation
 	manifestTools := toolcapabilities.Build(workspace, fsandbox.CommandRunnerAdapter{Runner: runner}, toolManifests,
 		toolcapabilities.StrictMode(),
-		toolcapabilities.WithBackendBuilder("subprocess", subprocess.BackendBuilder()),
+		toolcapabilities.WithBackendBuilder("subprocess", subprocess.BackendBuilderWithEgress(cfg.PrivateEgress, networkIsolationDisabled)),
 		toolcapabilities.WithBackendBuilder("composite", composite.BackendBuilder(registry.Get)),
 	)
 

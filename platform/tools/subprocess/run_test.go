@@ -119,7 +119,9 @@ func TestRunEgressGuardAllowsPublicHost(t *testing.T) {
 	require.True(t, result.Success)
 }
 
-func TestRunEgressGuardBypassedWithAllowHosts(t *testing.T) {
+// TestRunEgressGuardAllowHostsDoesNotBypassDenylist is the P-2 red-line: a
+// private literal in allow_hosts is not a bypass.
+func TestRunEgressGuardAllowHostsDoesNotBypassDenylist(t *testing.T) {
 	runner := &fakeRunner{result: &ports.CommandResult{Stdout: ok, StdoutBytes: 2}}
 	spec := RunSpec{
 		Command:       []string{curl, "http://127.0.0.1:8080/health"},
@@ -128,7 +130,47 @@ func TestRunEgressGuardBypassedWithAllowHosts(t *testing.T) {
 	}
 	result, err := Run(context.Background(), runner, spec)
 	require.NoError(t, err)
-	require.True(t, result.Success)
+	require.False(t, result.Success)
+	require.Contains(t, result.Error, "denied")
+}
+
+// TestRunEgressPrivateRequiresApproval proves a private target declared in
+// allow_private_hosts routes to the approval port and runs once approved.
+func TestRunEgressPrivateRequiresApproval(t *testing.T) {
+	runner := &fakeRunner{result: &ports.CommandResult{Stdout: ok, StdoutBytes: 2}}
+	spec := RunSpec{
+		Command:           []string{curl, "https://10.0.0.5/"},
+		NetworkAccess:     true,
+		AllowPrivateHosts: []string{_10_0_0_5},
+		PrivateEgress:     &recordingApprover{},
+	}
+	result, err := Run(context.Background(), runner, spec)
+	require.NoError(t, err)
+	require.True(t, result.Success, "approved private egress should run: %s", result.Error)
+}
+
+// TestRunEgressPrivateDeniedWithoutApprover proves fail-closed behavior when no
+// approver is wired.
+func TestRunEgressPrivateDeniedWithoutApprover(t *testing.T) {
+	runner := &fakeRunner{result: &ports.CommandResult{Stdout: ok, StdoutBytes: 2}}
+	spec := RunSpec{
+		Command:           []string{curl, "https://10.0.0.5/"},
+		NetworkAccess:     true,
+		AllowPrivateHosts: []string{_10_0_0_5},
+	}
+	result, err := Run(context.Background(), runner, spec)
+	require.NoError(t, err)
+	require.False(t, result.Success)
+	require.Contains(t, result.Error, "no approver")
+}
+
+type recordingApprover struct {
+	hosts []string
+}
+
+func (a *recordingApprover) ApprovePrivateEgress(_ context.Context, _ string, hosts []string) error {
+	a.hosts = append(a.hosts, hosts...)
+	return nil
 }
 
 func TestRunEgressGuardSkippedWhenNoNetworkAccess(t *testing.T) {
