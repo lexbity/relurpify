@@ -140,7 +140,6 @@ func TestMutationResultRoundTrip(t *testing.T) {
 	require.Len(t, results, 1)
 	require.Equal(t, result.StableID, results[0].StableID)
 
-	require.NoError(t, engine.Snapshot(context.Background()))
 	require.NoError(t, engine.Close(context.Background()))
 
 	reopened, err := Open(context.Background(), opts)

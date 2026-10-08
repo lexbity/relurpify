@@ -3,7 +3,6 @@ package graphdb
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -12,12 +11,7 @@ import (
 func newBadgerTestEngine(t *testing.T) (*Engine, Options) {
 	t.Helper()
 	opts := Options{
-		DataDir:                  t.TempDir(),
-		AOFFileName:              "dummy.aof",
-		SnapshotFileName:         "dummy.snap",
-		AutoSaveInterval:         0,
-		AutoSaveThreshold:        0,
-		AOFRewriteThresholdBytes: 0,
+		DataDir: t.TempDir(),
 	}
 
 	bb, err := newBadgerBackend(BadgerOptions{InMemory: true})
@@ -29,14 +23,10 @@ func newBadgerTestEngine(t *testing.T) (*Engine, Options) {
 		bk:     bb,
 		stopCh: make(chan struct{}),
 	}
-	engine.lastSave.Store(time.Now().UnixNano())
-	engine.wg.Add(1)
-	go engine.background(context.Background())
 
 	t.Cleanup(func() {
 		engine.stopOnce.Do(func() {
 			close(engine.stopCh)
-			engine.wg.Wait()
 		})
 		if engine.bk != nil {
 			_ = engine.bk.close()

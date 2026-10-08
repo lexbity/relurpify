@@ -27,7 +27,7 @@ func (r *LifecycleRepository) Close() error {
 
 // Workflow operations
 
-func (r *LifecycleRepository) CreateWorkflow(workflow contextports.WorkflowRecord) error {
+func (r *LifecycleRepository) CreateWorkflow(ctx context.Context, workflow contextports.WorkflowRecord) error {
 	if workflow.WorkflowID == "" {
 		workflow.WorkflowID = graphdb.GenerateID("wf")
 	}
@@ -46,7 +46,7 @@ func (r *LifecycleRepository) CreateWorkflow(workflow contextports.WorkflowRecor
 		Props:  props,
 		Labels: []string{"workflow"},
 	}
-	return r.db.UpsertNode(context.Background(), node)
+	return r.db.UpsertNode(ctx, node)
 }
 
 func (r *LifecycleRepository) GetWorkflow(workflowID string) (*contextports.WorkflowRecord, error) {
@@ -75,7 +75,7 @@ func (r *LifecycleRepository) ListWorkflows(agentID string) ([]contextports.Work
 
 // Run operations
 
-func (r *LifecycleRepository) CreateRun(run contextports.WorkflowRunRecord) error {
+func (r *LifecycleRepository) CreateRun(ctx context.Context, run contextports.WorkflowRunRecord) error {
 	if run.RunID == "" {
 		run.RunID = graphdb.GenerateID("run")
 	}
@@ -95,13 +95,13 @@ func (r *LifecycleRepository) CreateRun(run contextports.WorkflowRunRecord) erro
 		Labels: []string{"workflow_run"},
 	}
 
-	if err := r.db.UpsertNode(context.Background(), node); err != nil {
+	if err := r.db.UpsertNode(ctx, node); err != nil {
 		return err
 	}
 
 	// Link to workflow
 	if run.WorkflowID != "" {
-		return r.db.Link(context.Background(), run.WorkflowID, run.RunID, graphdb.EdgeKindWorkflowHasRun, "", 0, nil)
+		return r.db.Link(ctx, run.WorkflowID, run.RunID, graphdb.EdgeKindWorkflowHasRun, "", 0, nil)
 	}
 	return nil
 }
@@ -145,7 +145,7 @@ func (r *LifecycleRepository) ListRuns(workflowID string) ([]contextports.Workfl
 	return runs, nil
 }
 
-func (r *LifecycleRepository) UpdateRunStatus(runID string, status string) error {
+func (r *LifecycleRepository) UpdateRunStatus(ctx context.Context, runID string, status string) error {
 	node, ok := r.db.GetNode(runID)
 	if !ok {
 		return fmt.Errorf("run not found: %s", runID)
@@ -168,12 +168,12 @@ func (r *LifecycleRepository) UpdateRunStatus(runID string, status string) error
 	}
 
 	node.Props = props
-	return r.db.UpsertNode(context.Background(), node)
+	return r.db.UpsertNode(ctx, node)
 }
 
 // Delegation operations
 
-func (r *LifecycleRepository) UpsertDelegation(entry contextports.DelegationEntry) error {
+func (r *LifecycleRepository) UpsertDelegation(ctx context.Context, entry contextports.DelegationEntry) error {
 	if entry.DelegationID == "" {
 		entry.DelegationID = graphdb.GenerateID("del")
 	}
@@ -194,20 +194,20 @@ func (r *LifecycleRepository) UpsertDelegation(entry contextports.DelegationEntr
 		Labels: []string{"delegation"},
 	}
 
-	if err := r.db.UpsertNode(context.Background(), node); err != nil {
+	if err := r.db.UpsertNode(ctx, node); err != nil {
 		return err
 	}
 
 	// Link to workflow
 	if entry.WorkflowID != "" {
-		if err := r.db.Link(context.Background(), entry.WorkflowID, entry.DelegationID, graphdb.EdgeKindWorkflowHasDelegation, "", 0, nil); err != nil {
+		if err := r.db.Link(ctx, entry.WorkflowID, entry.DelegationID, graphdb.EdgeKindWorkflowHasDelegation, "", 0, nil); err != nil {
 			return err
 		}
 	}
 
 	// Link to run if provided
 	if entry.RunID != "" {
-		if err := r.db.Link(context.Background(), entry.RunID, entry.DelegationID, graphdb.EdgeKindWorkflowHasDelegation, "", 0, nil); err != nil {
+		if err := r.db.Link(ctx, entry.RunID, entry.DelegationID, graphdb.EdgeKindWorkflowHasDelegation, "", 0, nil); err != nil {
 			return err
 		}
 	}
@@ -270,7 +270,7 @@ func (r *LifecycleRepository) ListDelegationsByRun(runID string) ([]contextports
 	return delegations, nil
 }
 
-func (r *LifecycleRepository) AppendDelegationTransition(transition contextports.DelegationTransitionEntry) error {
+func (r *LifecycleRepository) AppendDelegationTransition(ctx context.Context, transition contextports.DelegationTransitionEntry) error {
 	transID := graphdb.GenerateID("trans")
 	if transition.Timestamp.IsZero() {
 		transition.Timestamp = time.Now().UTC()
@@ -288,12 +288,12 @@ func (r *LifecycleRepository) AppendDelegationTransition(transition contextports
 		Labels: []string{"delegation_transition"},
 	}
 
-	if err := r.db.UpsertNode(context.Background(), node); err != nil {
+	if err := r.db.UpsertNode(ctx, node); err != nil {
 		return err
 	}
 
 	if transition.DelegationID != "" {
-		return r.db.Link(context.Background(), transition.DelegationID, transID, graphdb.EdgeKindDelegationHasTransition, "", 0, nil)
+		return r.db.Link(ctx, transition.DelegationID, transID, graphdb.EdgeKindDelegationHasTransition, "", 0, nil)
 	}
 	return nil
 }
@@ -317,7 +317,7 @@ func (r *LifecycleRepository) ListDelegationTransitions(delegationID string) ([]
 
 // Event operations
 
-func (r *LifecycleRepository) AppendEvent(event contextports.WorkflowEventRecord) error {
+func (r *LifecycleRepository) AppendEvent(ctx context.Context, event contextports.WorkflowEventRecord) error {
 	if event.EventID == "" {
 		if event.Sequence < 0 {
 			return fmt.Errorf("negative sequence: %d", event.Sequence)
@@ -340,20 +340,20 @@ func (r *LifecycleRepository) AppendEvent(event contextports.WorkflowEventRecord
 		Labels: []string{"workflow_event"},
 	}
 
-	if err := r.db.UpsertNode(context.Background(), node); err != nil {
+	if err := r.db.UpsertNode(ctx, node); err != nil {
 		return err
 	}
 
 	// Link to workflow
 	if event.WorkflowID != "" {
-		if err := r.db.Link(context.Background(), event.WorkflowID, event.EventID, graphdb.EdgeKindWorkflowHasEvent, "", 0, nil); err != nil {
+		if err := r.db.Link(ctx, event.WorkflowID, event.EventID, graphdb.EdgeKindWorkflowHasEvent, "", 0, nil); err != nil {
 			return err
 		}
 	}
 
 	// Link to run if provided
 	if event.RunID != "" {
-		if err := r.db.Link(context.Background(), event.RunID, event.EventID, graphdb.EdgeKindWorkflowRunHasEvent, "", 0, nil); err != nil {
+		if err := r.db.Link(ctx, event.RunID, event.EventID, graphdb.EdgeKindWorkflowRunHasEvent, "", 0, nil); err != nil {
 			return err
 		}
 	}
@@ -390,7 +390,7 @@ func (r *LifecycleRepository) ListEventsByRun(runID string, limit int) ([]contex
 
 // Artifact operations
 
-func (r *LifecycleRepository) UpsertArtifact(artifact contextports.WorkflowArtifactRecord) error {
+func (r *LifecycleRepository) UpsertArtifact(ctx context.Context, artifact contextports.WorkflowArtifactRecord) error {
 	if artifact.ArtifactID == "" {
 		artifact.ArtifactID = graphdb.GenerateID("art")
 	}
@@ -410,20 +410,20 @@ func (r *LifecycleRepository) UpsertArtifact(artifact contextports.WorkflowArtif
 		Labels: []string{"workflow_artifact"},
 	}
 
-	if err := r.db.UpsertNode(context.Background(), node); err != nil {
+	if err := r.db.UpsertNode(ctx, node); err != nil {
 		return err
 	}
 
 	// Link to workflow
 	if artifact.WorkflowID != "" {
-		if err := r.db.Link(context.Background(), artifact.WorkflowID, artifact.ArtifactID, graphdb.EdgeKindWorkflowHasArtifact, "", 0, nil); err != nil {
+		if err := r.db.Link(ctx, artifact.WorkflowID, artifact.ArtifactID, graphdb.EdgeKindWorkflowHasArtifact, "", 0, nil); err != nil {
 			return err
 		}
 	}
 
 	// Link to run if provided
 	if artifact.RunID != "" {
-		if err := r.db.Link(context.Background(), artifact.RunID, artifact.ArtifactID, graphdb.EdgeKindWorkflowRunHasArtifact, "", 0, nil); err != nil {
+		if err := r.db.Link(ctx, artifact.RunID, artifact.ArtifactID, graphdb.EdgeKindWorkflowRunHasArtifact, "", 0, nil); err != nil {
 			return err
 		}
 	}
@@ -488,7 +488,7 @@ func (r *LifecycleRepository) ListArtifactsByRun(runID string) ([]contextports.W
 
 // Lineage binding operations
 
-func (r *LifecycleRepository) UpsertLineageBinding(binding contextports.LineageBindingRecord) error {
+func (r *LifecycleRepository) UpsertLineageBinding(ctx context.Context, binding contextports.LineageBindingRecord) error {
 	if binding.BindingID == "" {
 		binding.BindingID = graphdb.GenerateID("lb")
 	}
@@ -507,18 +507,18 @@ func (r *LifecycleRepository) UpsertLineageBinding(binding contextports.LineageB
 		Labels: []string{"lineage_binding"},
 	}
 
-	if err := r.db.UpsertNode(context.Background(), node); err != nil {
+	if err := r.db.UpsertNode(ctx, node); err != nil {
 		return err
 	}
 
 	if binding.WorkflowID != "" {
-		if err := r.db.Link(context.Background(), binding.WorkflowID, binding.BindingID, graphdb.EdgeKindLineageBindingForWorkflow, "", 0, nil); err != nil {
+		if err := r.db.Link(ctx, binding.WorkflowID, binding.BindingID, graphdb.EdgeKindLineageBindingForWorkflow, "", 0, nil); err != nil {
 			return err
 		}
 	}
 
 	if binding.FromRunID != "" {
-		if err := r.db.Link(context.Background(), binding.FromRunID, binding.BindingID, graphdb.EdgeKindLineageBindingForRun, "", 0, nil); err != nil {
+		if err := r.db.Link(ctx, binding.FromRunID, binding.BindingID, graphdb.EdgeKindLineageBindingForRun, "", 0, nil); err != nil {
 			return err
 		}
 	}

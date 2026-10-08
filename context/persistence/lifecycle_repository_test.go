@@ -33,9 +33,7 @@ func setupTestDB(t *testing.T) *graphdb.Engine {
 	t.Helper()
 	tmpDir := t.TempDir()
 	db, err := graphdb.Open(context.Background(), graphdb.Options{
-		DataDir:          tmpDir,
-		AOFFileName:      "test.aof",
-		SnapshotFileName: "test.snapshot",
+		DataDir: tmpDir,
 	})
 	if err != nil {
 		t.Fatalf("failed to open test db: %v", err)
@@ -53,7 +51,7 @@ func TestLifecycleRepository_CreateWorkflow(t *testing.T) {
 		Metadata:   map[string]any{"key": "value"},
 	}
 
-	err := repo.CreateWorkflow(workflow)
+	err := repo.CreateWorkflow(context.Background(), workflow)
 	if err != nil {
 		t.Fatalf("CreateWorkflow failed: %v", err)
 	}
@@ -78,7 +76,7 @@ func TestLifecycleRepository_GetWorkflow(t *testing.T) {
 		Metadata:   map[string]any{"key": "value"},
 	}
 
-	_ = repo.CreateWorkflow(workflow)
+	_ = repo.CreateWorkflow(context.Background(), workflow)
 
 	retrieved, err := repo.GetWorkflow(Wftest2_lifecycle_repository_test)
 	if err != nil {
@@ -94,8 +92,8 @@ func TestLifecycleRepository_ListWorkflows(t *testing.T) {
 	defer func() { _ = db.Close(context.Background()) }()
 	repo := NewLifecycleRepository(db)
 
-	_ = repo.CreateWorkflow(contextports.WorkflowRecord{WorkflowID: Wf1_lifecycle_repository_test})
-	_ = repo.CreateWorkflow(contextports.WorkflowRecord{WorkflowID: "wf-2"})
+	_ = repo.CreateWorkflow(context.Background(), contextports.WorkflowRecord{WorkflowID: Wf1_lifecycle_repository_test})
+	_ = repo.CreateWorkflow(context.Background(), contextports.WorkflowRecord{WorkflowID: "wf-2"})
 
 	workflows, err := repo.ListWorkflows("")
 	if err != nil {
@@ -112,7 +110,7 @@ func TestLifecycleRepository_CreateRun(t *testing.T) {
 	repo := NewLifecycleRepository(db)
 
 	// First create a workflow
-	_ = repo.CreateWorkflow(contextports.WorkflowRecord{WorkflowID: Wf1_lifecycle_repository_test})
+	_ = repo.CreateWorkflow(context.Background(), contextports.WorkflowRecord{WorkflowID: Wf1_lifecycle_repository_test})
 
 	run := contextports.WorkflowRunRecord{
 		RunID:      Run1_lifecycle_repository_test,
@@ -120,7 +118,7 @@ func TestLifecycleRepository_CreateRun(t *testing.T) {
 		Status:     Running_lifecycle_repository_test,
 	}
 
-	err := repo.CreateRun(run)
+	err := repo.CreateRun(context.Background(), run)
 	if err != nil {
 		t.Fatalf("CreateRun failed: %v", err)
 	}
@@ -140,9 +138,9 @@ func TestLifecycleRepository_ListRuns(t *testing.T) {
 	defer func() { _ = db.Close(context.Background()) }()
 	repo := NewLifecycleRepository(db)
 
-	_ = repo.CreateWorkflow(contextports.WorkflowRecord{WorkflowID: Wf1_lifecycle_repository_test})
-	_ = repo.CreateRun(contextports.WorkflowRunRecord{RunID: Run1_lifecycle_repository_test, WorkflowID: Wf1_lifecycle_repository_test})
-	_ = repo.CreateRun(contextports.WorkflowRunRecord{RunID: "run-2", WorkflowID: Wf1_lifecycle_repository_test})
+	_ = repo.CreateWorkflow(context.Background(), contextports.WorkflowRecord{WorkflowID: Wf1_lifecycle_repository_test})
+	_ = repo.CreateRun(context.Background(), contextports.WorkflowRunRecord{RunID: Run1_lifecycle_repository_test, WorkflowID: Wf1_lifecycle_repository_test})
+	_ = repo.CreateRun(context.Background(), contextports.WorkflowRunRecord{RunID: "run-2", WorkflowID: Wf1_lifecycle_repository_test})
 
 	runs, err := repo.ListRuns(Wf1_lifecycle_repository_test)
 	if err != nil {
@@ -158,10 +156,10 @@ func TestLifecycleRepository_UpdateRunStatus(t *testing.T) {
 	defer func() { _ = db.Close(context.Background()) }()
 	repo := NewLifecycleRepository(db)
 
-	_ = repo.CreateWorkflow(contextports.WorkflowRecord{WorkflowID: Wf1_lifecycle_repository_test})
-	_ = repo.CreateRun(contextports.WorkflowRunRecord{RunID: Run1_lifecycle_repository_test, WorkflowID: Wf1_lifecycle_repository_test, Status: Running_lifecycle_repository_test})
+	_ = repo.CreateWorkflow(context.Background(), contextports.WorkflowRecord{WorkflowID: Wf1_lifecycle_repository_test})
+	_ = repo.CreateRun(context.Background(), contextports.WorkflowRunRecord{RunID: Run1_lifecycle_repository_test, WorkflowID: Wf1_lifecycle_repository_test, Status: Running_lifecycle_repository_test})
 
-	err := repo.UpdateRunStatus(Run1_lifecycle_repository_test, Completed_lifecycle_repository_test)
+	err := repo.UpdateRunStatus(context.Background(), Run1_lifecycle_repository_test, Completed_lifecycle_repository_test)
 	if err != nil {
 		t.Fatalf("UpdateRunStatus failed: %v", err)
 	}
@@ -180,8 +178,8 @@ func TestLifecycleRepository_UpsertDelegation(t *testing.T) {
 	defer func() { _ = db.Close(context.Background()) }()
 	repo := NewLifecycleRepository(db)
 
-	_ = repo.CreateWorkflow(contextports.WorkflowRecord{WorkflowID: Wf1_lifecycle_repository_test})
-	_ = repo.CreateRun(contextports.WorkflowRunRecord{RunID: Run1_lifecycle_repository_test, WorkflowID: Wf1_lifecycle_repository_test})
+	_ = repo.CreateWorkflow(context.Background(), contextports.WorkflowRecord{WorkflowID: Wf1_lifecycle_repository_test})
+	_ = repo.CreateRun(context.Background(), contextports.WorkflowRunRecord{RunID: Run1_lifecycle_repository_test, WorkflowID: Wf1_lifecycle_repository_test})
 
 	delegation := contextports.DelegationEntry{
 		DelegationID:     Del1_lifecycle_repository_test,
@@ -191,7 +189,7 @@ func TestLifecycleRepository_UpsertDelegation(t *testing.T) {
 		TargetProviderID: Provider1_lifecycle_repository_test,
 	}
 
-	err := repo.UpsertDelegation(delegation)
+	err := repo.UpsertDelegation(context.Background(), delegation)
 	if err != nil {
 		t.Fatalf("UpsertDelegation failed: %v", err)
 	}
@@ -210,11 +208,11 @@ func TestLifecycleRepository_ListDelegations(t *testing.T) {
 	defer func() { _ = db.Close(context.Background()) }()
 	repo := NewLifecycleRepository(db)
 
-	_ = repo.CreateWorkflow(contextports.WorkflowRecord{WorkflowID: Wf1_lifecycle_repository_test})
-	_ = repo.CreateRun(contextports.WorkflowRunRecord{RunID: Run1_lifecycle_repository_test, WorkflowID: Wf1_lifecycle_repository_test})
+	_ = repo.CreateWorkflow(context.Background(), contextports.WorkflowRecord{WorkflowID: Wf1_lifecycle_repository_test})
+	_ = repo.CreateRun(context.Background(), contextports.WorkflowRunRecord{RunID: Run1_lifecycle_repository_test, WorkflowID: Wf1_lifecycle_repository_test})
 
-	_ = repo.UpsertDelegation(contextports.DelegationEntry{DelegationID: Del1_lifecycle_repository_test, WorkflowID: Wf1_lifecycle_repository_test, RunID: Run1_lifecycle_repository_test})
-	_ = repo.UpsertDelegation(contextports.DelegationEntry{DelegationID: "del-2", WorkflowID: Wf1_lifecycle_repository_test, RunID: Run1_lifecycle_repository_test})
+	_ = repo.UpsertDelegation(context.Background(), contextports.DelegationEntry{DelegationID: Del1_lifecycle_repository_test, WorkflowID: Wf1_lifecycle_repository_test, RunID: Run1_lifecycle_repository_test})
+	_ = repo.UpsertDelegation(context.Background(), contextports.DelegationEntry{DelegationID: "del-2", WorkflowID: Wf1_lifecycle_repository_test, RunID: Run1_lifecycle_repository_test})
 
 	delegations, err := repo.ListDelegations(Wf1_lifecycle_repository_test)
 	if err != nil {
@@ -230,15 +228,15 @@ func TestLifecycleRepository_AppendDelegationTransition(t *testing.T) {
 	defer func() { _ = db.Close(context.Background()) }()
 	repo := NewLifecycleRepository(db)
 
-	_ = repo.CreateWorkflow(contextports.WorkflowRecord{WorkflowID: Wf1_lifecycle_repository_test})
-	_ = repo.UpsertDelegation(contextports.DelegationEntry{DelegationID: Del1_lifecycle_repository_test, WorkflowID: Wf1_lifecycle_repository_test})
+	_ = repo.CreateWorkflow(context.Background(), contextports.WorkflowRecord{WorkflowID: Wf1_lifecycle_repository_test})
+	_ = repo.UpsertDelegation(context.Background(), contextports.DelegationEntry{DelegationID: Del1_lifecycle_repository_test, WorkflowID: Wf1_lifecycle_repository_test})
 
 	transition := contextports.DelegationTransitionEntry{
 		DelegationID: Del1_lifecycle_repository_test,
 		ToState:      Completed_lifecycle_repository_test,
 	}
 
-	err := repo.AppendDelegationTransition(transition)
+	err := repo.AppendDelegationTransition(context.Background(), transition)
 	if err != nil {
 		t.Fatalf("AppendDelegationTransition failed: %v", err)
 	}
@@ -257,8 +255,8 @@ func TestLifecycleRepository_AppendEvent(t *testing.T) {
 	defer func() { _ = db.Close(context.Background()) }()
 	repo := NewLifecycleRepository(db)
 
-	_ = repo.CreateWorkflow(contextports.WorkflowRecord{WorkflowID: Wf1_lifecycle_repository_test})
-	_ = repo.CreateRun(contextports.WorkflowRunRecord{RunID: Run1_lifecycle_repository_test, WorkflowID: Wf1_lifecycle_repository_test})
+	_ = repo.CreateWorkflow(context.Background(), contextports.WorkflowRecord{WorkflowID: Wf1_lifecycle_repository_test})
+	_ = repo.CreateRun(context.Background(), contextports.WorkflowRunRecord{RunID: Run1_lifecycle_repository_test, WorkflowID: Wf1_lifecycle_repository_test})
 
 	event := contextports.WorkflowEventRecord{
 		EventID:    "evt-1",
@@ -269,7 +267,7 @@ func TestLifecycleRepository_AppendEvent(t *testing.T) {
 		Payload:    map[string]any{"msg": Test_lifecycle_repository_test},
 	}
 
-	err := repo.AppendEvent(event)
+	err := repo.AppendEvent(context.Background(), event)
 	if err != nil {
 		t.Fatalf("AppendEvent failed: %v", err)
 	}
@@ -288,8 +286,8 @@ func TestLifecycleRepository_UpsertArtifact(t *testing.T) {
 	defer func() { _ = db.Close(context.Background()) }()
 	repo := NewLifecycleRepository(db)
 
-	_ = repo.CreateWorkflow(contextports.WorkflowRecord{WorkflowID: Wf1_lifecycle_repository_test})
-	_ = repo.CreateRun(contextports.WorkflowRunRecord{RunID: Run1_lifecycle_repository_test, WorkflowID: Wf1_lifecycle_repository_test})
+	_ = repo.CreateWorkflow(context.Background(), contextports.WorkflowRecord{WorkflowID: Wf1_lifecycle_repository_test})
+	_ = repo.CreateRun(context.Background(), contextports.WorkflowRunRecord{RunID: Run1_lifecycle_repository_test, WorkflowID: Wf1_lifecycle_repository_test})
 
 	artifact := contextports.WorkflowArtifactRecord{
 		ArtifactID:  Art1_lifecycle_repository_test,
@@ -299,7 +297,7 @@ func TestLifecycleRepository_UpsertArtifact(t *testing.T) {
 		ContentType: "text/plain",
 	}
 
-	err := repo.UpsertArtifact(artifact)
+	err := repo.UpsertArtifact(context.Background(), artifact)
 	if err != nil {
 		t.Fatalf("UpsertArtifact failed: %v", err)
 	}
@@ -318,11 +316,11 @@ func TestLifecycleRepository_ListArtifacts(t *testing.T) {
 	defer func() { _ = db.Close(context.Background()) }()
 	repo := NewLifecycleRepository(db)
 
-	_ = repo.CreateWorkflow(contextports.WorkflowRecord{WorkflowID: Wf1_lifecycle_repository_test})
-	_ = repo.CreateRun(contextports.WorkflowRunRecord{RunID: Run1_lifecycle_repository_test, WorkflowID: Wf1_lifecycle_repository_test})
+	_ = repo.CreateWorkflow(context.Background(), contextports.WorkflowRecord{WorkflowID: Wf1_lifecycle_repository_test})
+	_ = repo.CreateRun(context.Background(), contextports.WorkflowRunRecord{RunID: Run1_lifecycle_repository_test, WorkflowID: Wf1_lifecycle_repository_test})
 
-	_ = repo.UpsertArtifact(contextports.WorkflowArtifactRecord{ArtifactID: Art1_lifecycle_repository_test, WorkflowID: Wf1_lifecycle_repository_test, RunID: Run1_lifecycle_repository_test})
-	_ = repo.UpsertArtifact(contextports.WorkflowArtifactRecord{ArtifactID: "art-2", WorkflowID: Wf1_lifecycle_repository_test, RunID: Run1_lifecycle_repository_test})
+	_ = repo.UpsertArtifact(context.Background(), contextports.WorkflowArtifactRecord{ArtifactID: Art1_lifecycle_repository_test, WorkflowID: Wf1_lifecycle_repository_test, RunID: Run1_lifecycle_repository_test})
+	_ = repo.UpsertArtifact(context.Background(), contextports.WorkflowArtifactRecord{ArtifactID: "art-2", WorkflowID: Wf1_lifecycle_repository_test, RunID: Run1_lifecycle_repository_test})
 
 	artifacts, err := repo.ListArtifactsByRun(Run1_lifecycle_repository_test)
 	if err != nil {
@@ -338,8 +336,8 @@ func TestLifecycleRepository_UpsertLineageBinding(t *testing.T) {
 	defer func() { _ = db.Close(context.Background()) }()
 	repo := NewLifecycleRepository(db)
 
-	_ = repo.CreateWorkflow(contextports.WorkflowRecord{WorkflowID: Wf1_lifecycle_repository_test})
-	_ = repo.CreateRun(contextports.WorkflowRunRecord{RunID: Run1_lifecycle_repository_test, WorkflowID: Wf1_lifecycle_repository_test})
+	_ = repo.CreateWorkflow(context.Background(), contextports.WorkflowRecord{WorkflowID: Wf1_lifecycle_repository_test})
+	_ = repo.CreateRun(context.Background(), contextports.WorkflowRunRecord{RunID: Run1_lifecycle_repository_test, WorkflowID: Wf1_lifecycle_repository_test})
 
 	binding := contextports.LineageBindingRecord{
 		BindingID:    Lb1_lifecycle_repository_test,
@@ -349,7 +347,7 @@ func TestLifecycleRepository_UpsertLineageBinding(t *testing.T) {
 		ToEntityID:   "attempt-1",
 	}
 
-	err := repo.UpsertLineageBinding(binding)
+	err := repo.UpsertLineageBinding(context.Background(), binding)
 	if err != nil {
 		t.Fatalf("UpsertLineageBinding failed: %v", err)
 	}
@@ -368,8 +366,8 @@ func TestLifecycleRepository_FindLineageBindingByLineageID(t *testing.T) {
 	defer func() { _ = db.Close(context.Background()) }()
 	repo := NewLifecycleRepository(db)
 
-	_ = repo.CreateWorkflow(contextports.WorkflowRecord{WorkflowID: Wf1_lifecycle_repository_test})
-	_ = repo.CreateRun(contextports.WorkflowRunRecord{RunID: Run1_lifecycle_repository_test, WorkflowID: Wf1_lifecycle_repository_test})
+	_ = repo.CreateWorkflow(context.Background(), contextports.WorkflowRecord{WorkflowID: Wf1_lifecycle_repository_test})
+	_ = repo.CreateRun(context.Background(), contextports.WorkflowRunRecord{RunID: Run1_lifecycle_repository_test, WorkflowID: Wf1_lifecycle_repository_test})
 
 	binding := contextports.LineageBindingRecord{
 		BindingID:    Lb1_lifecycle_repository_test,
@@ -379,7 +377,7 @@ func TestLifecycleRepository_FindLineageBindingByLineageID(t *testing.T) {
 		ToEntityID:   "attempt-1",
 	}
 
-	_ = repo.UpsertLineageBinding(binding)
+	_ = repo.UpsertLineageBinding(context.Background(), binding)
 
 	bindings, err := repo.FindLineageBindingsByFrom(Lineage123_lifecycle_repository_test)
 	if err != nil {
@@ -398,8 +396,8 @@ func TestLifecycleRepository_FindLineageBindingByAttemptID(t *testing.T) {
 	defer func() { _ = db.Close(context.Background()) }()
 	repo := NewLifecycleRepository(db)
 
-	_ = repo.CreateWorkflow(contextports.WorkflowRecord{WorkflowID: Wf1_lifecycle_repository_test})
-	_ = repo.CreateRun(contextports.WorkflowRunRecord{RunID: Run1_lifecycle_repository_test, WorkflowID: Wf1_lifecycle_repository_test})
+	_ = repo.CreateWorkflow(context.Background(), contextports.WorkflowRecord{WorkflowID: Wf1_lifecycle_repository_test})
+	_ = repo.CreateRun(context.Background(), contextports.WorkflowRunRecord{RunID: Run1_lifecycle_repository_test, WorkflowID: Wf1_lifecycle_repository_test})
 
 	binding := contextports.LineageBindingRecord{
 		BindingID:    Lb1_lifecycle_repository_test,
@@ -409,7 +407,7 @@ func TestLifecycleRepository_FindLineageBindingByAttemptID(t *testing.T) {
 		ToEntityID:   Attempt456_lifecycle_repository_test,
 	}
 
-	_ = repo.UpsertLineageBinding(binding)
+	_ = repo.UpsertLineageBinding(context.Background(), binding)
 
 	bindings, err := repo.FindLineageBindingsByTo(Attempt456_lifecycle_repository_test)
 	if err != nil {
@@ -426,9 +424,7 @@ func TestLifecycleRepository_FindLineageBindingByAttemptID(t *testing.T) {
 func TestLifecycleRepository_Close(t *testing.T) {
 	tmpDir := t.TempDir()
 	db, err := graphdb.Open(context.Background(), graphdb.Options{
-		DataDir:          tmpDir,
-		AOFFileName:      "test.aof",
-		SnapshotFileName: "test.snapshot",
+		DataDir: tmpDir,
 	})
 	if err != nil {
 		t.Fatalf("failed to open test db: %v", err)
@@ -453,7 +449,7 @@ func TestLifecycleRepository_IDGeneration(t *testing.T) {
 
 	// Test auto-generated IDs
 	workflow := contextports.WorkflowRecord{} // No WorkflowID
-	err := repo.CreateWorkflow(workflow)
+	err := repo.CreateWorkflow(context.Background(), workflow)
 	if err != nil {
 		t.Fatalf("CreateWorkflow with auto ID failed: %v", err)
 	}
@@ -477,7 +473,7 @@ func TestLifecycleRepository_RoundTrip(t *testing.T) {
 		WorkflowID: Wfroundtrip_lifecycle_repository_test,
 		Metadata:   map[string]any{Key1_lifecycle_repository_test: "value1", "key2": 123},
 	}
-	_ = repo.CreateWorkflow(workflow)
+	_ = repo.CreateWorkflow(context.Background(), workflow)
 
 	// Create run
 	run := contextports.WorkflowRunRecord{
@@ -486,7 +482,7 @@ func TestLifecycleRepository_RoundTrip(t *testing.T) {
 		Status:     Running_lifecycle_repository_test,
 		Metadata:   map[string]any{"run_key": "run_value"},
 	}
-	_ = repo.CreateRun(run)
+	_ = repo.CreateRun(context.Background(), run)
 
 	// Create delegation
 	delegation := contextports.DelegationEntry{
@@ -497,7 +493,7 @@ func TestLifecycleRepository_RoundTrip(t *testing.T) {
 		TargetProviderID: Provider1_lifecycle_repository_test,
 		Metadata:         map[string]any{"del_key": "del_value"},
 	}
-	_ = repo.UpsertDelegation(delegation)
+	_ = repo.UpsertDelegation(context.Background(), delegation)
 
 	// Verify round-trip
 	retrievedWorkflow, _ := repo.GetWorkflow(Wfroundtrip_lifecycle_repository_test)
@@ -548,11 +544,11 @@ func TestLifecycleRepository_EventLimit(t *testing.T) {
 	defer func() { _ = db.Close(context.Background()) }()
 	repo := NewLifecycleRepository(db)
 
-	_ = repo.CreateWorkflow(contextports.WorkflowRecord{WorkflowID: Wf1_lifecycle_repository_test})
+	_ = repo.CreateWorkflow(context.Background(), contextports.WorkflowRecord{WorkflowID: Wf1_lifecycle_repository_test})
 
 	// Append 5 events
 	for i := 0; i < 5; i++ {
-		_ = repo.AppendEvent(contextports.WorkflowEventRecord{
+		_ = repo.AppendEvent(context.Background(), contextports.WorkflowEventRecord{
 			EventID:    graphdb.GenerateSequenceID(Evt_lifecycle_repository_test, uint64(i)),
 			WorkflowID: Wf1_lifecycle_repository_test,
 			EventType:  Test_lifecycle_repository_test,
@@ -576,5 +572,18 @@ func TestLifecycleRepository_EventLimit(t *testing.T) {
 	}
 	if len(allEvents) != 5 {
 		t.Errorf("expected 5 events without limit, got %d", len(allEvents))
+	}
+}
+
+func TestLifecycleRepository_WriteHonorsCancelledContext(t *testing.T) {
+	db := setupTestDB(t)
+	defer func() { _ = db.Close(context.Background()) }()
+	repo := NewLifecycleRepository(db)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	if err := repo.CreateWorkflow(ctx, contextports.WorkflowRecord{WorkflowID: "wf-cancelled"}); err == nil {
+		t.Fatal("expected CreateWorkflow to honor caller cancellation")
 	}
 }

@@ -6,7 +6,6 @@ import (
 	"errors"
 	"sort"
 	"sync"
-	"sync/atomic"
 	"time"
 )
 
@@ -16,12 +15,9 @@ type Engine struct {
 	store    *adjacencyStore
 	bk       backend
 	mu       sync.Mutex
-	dirty    atomic.Int64
 	dirtyErr error // non-nil when memory apply fails after commit; mu protects
-	lastSave atomic.Int64
 	stopOnce sync.Once
 	stopCh   chan struct{}
-	wg       sync.WaitGroup
 
 	// testHookApplyFailure, when non-nil, causes the next memory apply to
 	// return this error. Used only in tests.
@@ -48,8 +44,6 @@ func Open(ctx context.Context, opts Options) (*Engine, error) {
 		badgerDir = opts.DataDir
 	}
 
-	engine.lastSave.Store(time.Now().UnixNano())
-
 	bb, err := newBadgerBackend(BadgerOptions{Dir: badgerDir})
 	if err != nil {
 		return nil, err
@@ -60,9 +54,6 @@ func Open(ctx context.Context, opts Options) (*Engine, error) {
 	}
 	engine.bk = bb
 
-	engine.wg.Add(1)
-	go engine.background(ctx)
-
 	engine.emitEvent(Event{
 		Kind:     EventOpenComplete,
 		Duration: time.Since(start),
@@ -70,82 +61,17 @@ func Open(ctx context.Context, opts Options) (*Engine, error) {
 	return engine, nil
 }
 
-// Close stops maintenance and closes the durable store.
-func (e *Engine) Close(ctx context.Context) error {
+// Close closes the durable store. Badger persists every committed mutation, so
+// there is no separate snapshot or flush step.
+func (e *Engine) Close(_ context.Context) error {
 	var err error
 	e.stopOnce.Do(func() {
 		close(e.stopCh)
-		e.wg.Wait()
-		if e.opts.SnapshotOnClose && e.dirty.Load() > 0 {
-			err = e.Snapshot(ctx)
-		} else {
-			err = e.Flush()
-		}
 		if e.bk != nil {
-			if closeErr := e.bk.close(); err == nil {
-				err = closeErr
-			}
+			err = e.bk.close()
 		}
 	})
 	return err
-}
-
-// Flush syncs the durable store.
-func (e *Engine) Flush() error {
-	if e == nil || e.bk == nil {
-		return nil
-	}
-	return e.bk.flush()
-}
-
-// Snapshot writes a full snapshot and rewrites the incremental log.
-func (e *Engine) Snapshot(ctx context.Context) error {
-	if e == nil {
-		return nil
-	}
-	e.mu.Lock()
-	defer e.mu.Unlock()
-
-	state := e.snapshotState()
-	if err := e.bk.snapshot(ctx, state); err != nil {
-		return err
-	}
-	e.dirty.Store(0)
-	e.lastSave.Store(time.Now().UnixNano())
-	return nil
-}
-
-func (e *Engine) background(ctx context.Context) {
-	defer e.wg.Done()
-	interval := e.opts.MaintenanceInterval
-	if interval <= 0 {
-		interval = time.Second
-	}
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-e.stopCh:
-			return
-		case <-ticker.C:
-			e.maybeSnapshot(ctx)
-		}
-	}
-}
-
-func (e *Engine) maybeSnapshot(ctx context.Context) {
-	if e.opts.AutoSaveThreshold <= 0 || e.opts.AutoSaveInterval <= 0 {
-		return
-	}
-	if e.dirty.Load() < e.opts.AutoSaveThreshold {
-		return
-	}
-	last := time.Unix(0, e.lastSave.Load())
-	if time.Since(last) < e.opts.AutoSaveInterval {
-		return
-	}
-	_ = e.Snapshot(ctx)
 }
 
 // checkDirty returns the stored dirty error when a previous memory apply
@@ -198,33 +124,18 @@ func (e *Engine) Rebuild(ctx context.Context) error {
 		e.store = oldStore
 		return err
 	}
-	e.dirty.Store(0)
 	e.dirtyErr = nil
 	return nil
-}
-
-func (e *Engine) snapshotState() snapshotState {
-	e.store.mu.RLock()
-	defer e.store.mu.RUnlock()
-
-	state := snapshotState{
-		Nodes:   make([]NodeRecord, 0, len(e.store.nodes)),
-		Forward: make([]EdgeRecord, 0),
-	}
-	for _, node := range e.store.nodes {
-		state.Nodes = append(state.Nodes, cloneNode(node))
-	}
-	for _, edges := range e.store.forward {
-		for _, edge := range edges {
-			state.Forward = append(state.Forward, cloneEdge(edge))
-		}
-	}
-	return state
 }
 
 func (e *Engine) persist(ctx context.Context, kind string, payload any) error {
 	if e == nil || e.bk == nil {
 		return nil
+	}
+	if ctx != nil {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 	}
 	start := time.Now()
 	batch := singleOpBatch(kind, payload)
@@ -242,8 +153,6 @@ func (e *Engine) persist(ctx context.Context, kind string, payload any) error {
 		BatchSize: 1,
 		Duration:  time.Since(start),
 	})
-	e.dirty.Add(1)
-	// AOFRewriteThreshold check removed with AOF backend retirement.
 	return nil
 }
 

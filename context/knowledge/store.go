@@ -43,7 +43,7 @@ func (s *ChunkStore) Save(ctx context.Context, chunk KnowledgeChunk) (*Knowledge
 		chunk.CreatedAt = now
 	}
 	chunk.UpdatedAt = now
-	if existing, ok, err := s.Load(chunk.ID); err != nil {
+	if existing, ok, err := s.loadChunk(chunk.ID); err != nil {
 		return nil, err
 	} else if ok {
 		if chunk.Version <= existing.Version {
@@ -71,7 +71,23 @@ func (s *ChunkStore) Save(ctx context.Context, chunk KnowledgeChunk) (*Knowledge
 	return &chunk, nil
 }
 
+// Load returns an active (non-tombstoned) chunk. Tombstoned chunks are hidden;
+// use LoadIncludingTombstoned for the explicit include-tombstones path.
 func (s *ChunkStore) Load(id ChunkID) (*KnowledgeChunk, bool, error) {
+	chunk, ok, err := s.loadChunk(id)
+	if err != nil || !ok || chunk == nil {
+		return chunk, ok, err
+	}
+	if chunk.Tombstoned {
+		return nil, false, nil
+	}
+	return chunk, true, nil
+}
+
+// loadChunk reads a chunk verbatim, including tombstoned chunks. It is the
+// single raw-read primitive shared by Load, LoadIncludingTombstoned, Save, and
+// Tombstone so tombstone filtering is applied in exactly one place.
+func (s *ChunkStore) loadChunk(id ChunkID) (*KnowledgeChunk, bool, error) {
 	if s == nil || s.Graph == nil || id == "" {
 		return nil, false, nil
 	}
@@ -324,8 +340,7 @@ func (s *ChunkStore) Tombstone(ctx context.Context, id ChunkID, supersededBy Chu
 
 // LoadIncludingTombstoned loads a chunk regardless of tombstone status.
 func (s *ChunkStore) LoadIncludingTombstoned(id ChunkID) (*KnowledgeChunk, bool, error) {
-	// For now, this is equivalent to Load since we don't filter by tombstone status yet
-	return s.Load(id)
+	return s.loadChunk(id)
 }
 
 // MarkStale marks chunks as stale with a reason.

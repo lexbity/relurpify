@@ -137,15 +137,19 @@ func (e *Engine) GetNode(id string) (NodeRecord, bool) {
 	return NodeRecord{}, false
 }
 
-// ListNodes returns active nodes of the given kind. In LRU mode the
-// result reflects only nodes currently in the cache — use
-// ListNodesByLabel or ListNodesByLabelPrefix for indexed access.
+// ListNodes returns active nodes of the given kind. It consults the
+// authoritative kind index, which is built for every node at load time even
+// under LRU, so it never misses nodes evicted from the in-memory working set.
+// An empty kind returns every active node. Use ListNodesByLabel or
+// ListNodesByLabelPrefix for label-scoped access.
 func (e *Engine) ListNodes(kind NodeKind) []NodeRecord {
 	e.store.mu.RLock()
 	defer e.store.mu.RUnlock()
-	out := make([]NodeRecord, 0)
-	for _, node := range e.store.nodes {
-		if node.DeletedAt != 0 {
+	ids := e.store.nodeIDsByKind(kind)
+	out := make([]NodeRecord, 0, len(ids))
+	for _, id := range ids {
+		node := e.getNodeMaybeInRLock(id)
+		if node == nil || node.DeletedAt != 0 {
 			continue
 		}
 		if kind != "" && node.Kind != kind {
@@ -221,12 +225,16 @@ func (e *Engine) applyUpsertNode(node NodeRecord) {
 	if ok && existing != nil && existing.SourceID != "" && existing.SourceID != node.SourceID {
 		e.store.removeNodeSourceIndex(existing.ID, existing.SourceID)
 	}
+	if ok && existing != nil && existing.Kind != node.Kind {
+		e.store.removeNodeKindIndex(*existing)
+	}
 	if ok && existing != nil {
 		e.store.removeNodeLabels(*existing)
 	}
 	n := node
 	e.store.nodes[node.ID] = &n
 	e.store.addNodeSourceIndex(node)
+	e.store.addNodeKindIndex(node)
 	e.store.addNodeLabels(node)
 }
 
@@ -237,6 +245,7 @@ func (e *Engine) applyDeleteNode(id string, deletedAt int64) {
 	node, ok := e.store.nodes[id]
 	if ok {
 		e.store.removeNodeLabels(*node)
+		e.store.removeNodeKindIndex(*node)
 		node.DeletedAt = deletedAt
 		node.UpdatedAt = deletedAt
 		e.store.removeNodeSourceIndex(node.ID, node.SourceID)

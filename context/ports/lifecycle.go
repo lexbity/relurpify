@@ -1,6 +1,9 @@
 package ports
 
-import "time"
+import (
+	"context"
+	"time"
+)
 
 // WorkflowRecord is the context-owned view of a workflow lifecycle record.
 type WorkflowRecord struct {
@@ -102,32 +105,34 @@ type LineageBindingRecord struct {
 
 // LifecycleRepository is the context-owned interface for workflow/run lifecycle storage.
 // execution/agentlifecycle implements it; context/persistence provides adapters.
+// Write methods accept a caller context so cancellation and deadlines are honored
+// by the underlying durable store.
 type LifecycleRepository interface {
-	CreateWorkflow(record WorkflowRecord) error
+	CreateWorkflow(ctx context.Context, record WorkflowRecord) error
 	GetWorkflow(workflowID string) (*WorkflowRecord, error)
 	ListWorkflows(agentID string) ([]WorkflowRecord, error)
 
-	CreateRun(record WorkflowRunRecord) error
+	CreateRun(ctx context.Context, record WorkflowRunRecord) error
 	GetRun(runID string) (*WorkflowRunRecord, error)
 	ListRuns(workflowID string) ([]WorkflowRunRecord, error)
 
-	UpsertDelegation(entry DelegationEntry) error
+	UpsertDelegation(ctx context.Context, entry DelegationEntry) error
 	GetDelegation(delegationID string) (*DelegationEntry, error)
 	ListDelegations(workflowID string) ([]DelegationEntry, error)
 	ListDelegationsByRun(runID string) ([]DelegationEntry, error)
-	AppendDelegationTransition(transition DelegationTransitionEntry) error
+	AppendDelegationTransition(ctx context.Context, transition DelegationTransitionEntry) error
 	ListDelegationTransitions(delegationID string) ([]DelegationTransitionEntry, error)
 
-	AppendEvent(record WorkflowEventRecord) error
+	AppendEvent(ctx context.Context, record WorkflowEventRecord) error
 	ListEvents(workflowID string, limit int) ([]WorkflowEventRecord, error)
 	ListEventsByRun(runID string, limit int) ([]WorkflowEventRecord, error)
 
-	UpsertArtifact(record WorkflowArtifactRecord) error
+	UpsertArtifact(ctx context.Context, record WorkflowArtifactRecord) error
 	GetArtifact(artifactID string) (*WorkflowArtifactRecord, error)
 	ListArtifacts(workflowID string) ([]WorkflowArtifactRecord, error)
 	ListArtifactsByRun(runID string) ([]WorkflowArtifactRecord, error)
 
-	UpsertLineageBinding(record LineageBindingRecord) error
+	UpsertLineageBinding(ctx context.Context, record LineageBindingRecord) error
 	GetLineageBinding(bindingID string) (*LineageBindingRecord, error)
 	FindLineageBinding(fromEntityID, toEntityID string) (*LineageBindingRecord, error)
 	FindLineageBindingsByFrom(fromEntityID string) ([]LineageBindingRecord, error)

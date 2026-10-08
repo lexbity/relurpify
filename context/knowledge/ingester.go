@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -159,7 +160,9 @@ func IngestToolResultAsync(ctx context.Context, ing *OutputIngester, toolName st
 	go func() {
 		timeoutCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 		defer cancel()
-		_, _ = ing.IngestToolResult(timeoutCtx, toolName, result)
+		if _, err := ing.IngestToolResult(timeoutCtx, toolName, result); err != nil {
+			log.Printf("knowledge: async tool result ingestion failed (tool=%s): %v", toolName, err)
+		}
 	}()
 }
 
@@ -171,7 +174,9 @@ func IngestObservationAsync(ctx context.Context, ing *OutputIngester, observatio
 	go func() {
 		timeoutCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 		defer cancel()
-		_, _ = ing.IngestObservation(timeoutCtx, observation)
+		if _, err := ing.IngestObservation(timeoutCtx, observation); err != nil {
+			log.Printf("knowledge: async observation ingestion failed: %v", err)
+		}
 	}()
 }
 

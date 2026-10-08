@@ -72,6 +72,7 @@ func (b *badgerBackend) load(_ context.Context, store *adjacencyStore) error {
 					store.nodes[node.ID] = &n
 				}
 				store.addNodeSourceIndex(node)
+				store.addNodeKindIndex(node)
 				store.addNodeLabels(node)
 				return nil
 			}); err != nil {
@@ -317,14 +318,6 @@ func (b *badgerBackend) commitInTxn(txn *badger.Txn, batch mutationBatch) error 
 	default:
 		return nil
 	}
-}
-
-func (b *badgerBackend) snapshot(_ context.Context, _ snapshotState) error {
-	return nil
-}
-
-func (b *badgerBackend) flush() error {
-	return nil
 }
 
 func (b *badgerBackend) close() error {

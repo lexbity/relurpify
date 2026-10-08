@@ -19,17 +19,12 @@ type Options struct {
 	// DataDir is the top-level state directory.
 	DataDir string
 
-	// AOFFileName and SnapshotFileName are read when loading older AOF-based
-	// stores. They are not used by the Badger backend.
-	AOFFileName              string
-	SnapshotFileName         string
-	SnapshotOnClose          bool
-	SyncMode                 SyncMode
-	SyncInterval             time.Duration
-	AutoSaveInterval         time.Duration
-	AutoSaveThreshold        int64
-	AOFRewriteThresholdBytes int64
-	MaintenanceInterval      time.Duration
+	// SnapshotOnClose is deprecated and has no effect. Badger persists every
+	// committed mutation, so there is no separate snapshot step on close.
+	// Deprecated: retained only so existing configuration continues to compile.
+	SnapshotOnClose bool
+	SyncMode        SyncMode
+	SyncInterval    time.Duration
 
 	// LRUCapacity controls the maximum number of nodes kept in the
 	// in-memory working set. When 0 (default), all nodes are loaded into
@@ -46,16 +41,10 @@ type Options struct {
 // as the durable backend.
 func DefaultOptions(dataDir string) Options {
 	return Options{
-		BadgerDir:                dataDir,
-		DataDir:                  dataDir,
-		AOFFileName:              "graphdb.aof",
-		SnapshotFileName:         "graphdb.snapshot",
-		SnapshotOnClose:          false,
-		SyncMode:                 SyncAlways,
-		SyncInterval:             250 * time.Millisecond,
-		AutoSaveInterval:         time.Minute,
-		AutoSaveThreshold:        1000,
-		AOFRewriteThresholdBytes: 8 << 20,
-		MaintenanceInterval:      10 * time.Second,
+		BadgerDir:       dataDir,
+		DataDir:         dataDir,
+		SnapshotOnClose: false,
+		SyncMode:        SyncAlways,
+		SyncInterval:    250 * time.Millisecond,
 	}
 }

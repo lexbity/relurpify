@@ -16,6 +16,9 @@ import (
 
 // Persist persists a single artifact to the knowledge store.
 // Admission path: structural validation → trust class assignment → suspicion check → quota check → commit.
+//
+// A rejected, quarantined, or failed admission returns a non-nil error together
+// with the populated result so callers cannot mistake a rejection for success.
 func (w *Writer) Persist(ctx context.Context, req PersistenceRequest) (*PersistenceResult, error) {
 	result := &PersistenceResult{}
 
@@ -24,7 +27,7 @@ func (w *Writer) Persist(ctx context.Context, req PersistenceRequest) (*Persiste
 		result.Action = ActionRejected
 		result.Error = fmt.Errorf("validation failed: %w", err)
 		w.writeAuditRecord(req, result, "structural validation failed")
-		return result, nil
+		return result, result.Error
 	}
 
 	// 2. Trust class assignment from source principal
@@ -35,7 +38,7 @@ func (w *Writer) Persist(ctx context.Context, req PersistenceRequest) (*Persiste
 		result.Action = ActionQuarantined
 		result.Error = fmt.Errorf("suspicion check failed: %s", reason)
 		w.writeAuditRecord(req, result, reason)
-		return result, nil
+		return result, result.Error
 	}
 
 	// 4. Quota check
@@ -45,7 +48,7 @@ func (w *Writer) Persist(ctx context.Context, req PersistenceRequest) (*Persiste
 			result.Action = ActionQuarantined
 			result.Error = fmt.Errorf("quota exceeded")
 			w.writeAuditRecord(req, result, "quota exceeded")
-			return result, nil
+			return result, result.Error
 		}
 	}
 
@@ -59,7 +62,7 @@ func (w *Writer) Persist(ctx context.Context, req PersistenceRequest) (*Persiste
 		result.Action = ActionRejected
 		result.Error = fmt.Errorf("commit failed: %w", err)
 		w.writeAuditRecord(req, result, "commit failed")
-		return result, nil
+		return result, result.Error
 	}
 
 	result.Action = ActionCreated
@@ -82,22 +85,26 @@ func (w *Writer) Persist(ctx context.Context, req PersistenceRequest) (*Persiste
 	return result, nil
 }
 
-// PersistBatch persists multiple artifacts with per-item error collection.
+// PersistBatch persists multiple artifacts with per-item error collection. It
+// returns the per-item results and a non-nil error when any item was rejected.
 func (w *Writer) PersistBatch(ctx context.Context, reqs []PersistenceRequest) ([]PersistenceResult, error) {
 	results := make([]PersistenceResult, len(reqs))
-
+	rejections := 0
 	for i, req := range reqs {
 		result, err := w.Persist(ctx, req)
-		if err != nil {
-			results[i] = PersistenceResult{
-				Action: ActionRejected,
-				Error:  err,
-			}
-		} else {
+		switch {
+		case result != nil:
 			results[i] = *result
+		case err != nil:
+			results[i] = PersistenceResult{Action: ActionRejected, Error: err}
+		}
+		if err != nil {
+			rejections++
 		}
 	}
-
+	if rejections > 0 {
+		return results, fmt.Errorf("persist batch had %d rejections", rejections)
+	}
 	return results, nil
 }
 

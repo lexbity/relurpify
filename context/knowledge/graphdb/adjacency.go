@@ -2,6 +2,7 @@ package graphdb
 
 import (
 	"slices"
+	"sort"
 	"sync"
 )
 
@@ -9,6 +10,7 @@ type adjacencyStore struct {
 	mu       sync.RWMutex
 	nodes    map[string]*NodeRecord
 	bySource map[string]map[string]struct{}
+	byKind   map[NodeKind]map[string]struct{}
 	forward  map[string][]EdgeRecord
 	reverse  map[string][]EdgeRecord
 	labels   *LabelIndex
@@ -32,6 +34,7 @@ func newAdjacencyStore() *adjacencyStore {
 	return &adjacencyStore{
 		nodes:    make(map[string]*NodeRecord),
 		bySource: make(map[string]map[string]struct{}),
+		byKind:   make(map[NodeKind]map[string]struct{}),
 		forward:  make(map[string][]EdgeRecord),
 		reverse:  make(map[string][]EdgeRecord),
 		labels:   NewLabelIndex(),
@@ -97,10 +100,10 @@ func (s *adjacencyStore) lruEvict() {
 		// populated on demand from the backend via preloadEdges.
 		delete(s.forward, oldest.id)
 		delete(s.reverse, oldest.id)
-		// Label/source indexes are authoritative and built for all
+		// Label/source/kind indexes are authoritative and built for all
 		// nodes at boot.  They must NOT be touched on eviction —
 		// removing entries would corrupt the index, causing silent
-		// missing results in ListNodesByLabel/NodesBySource after
+		// missing results in ListNodes/ListNodesByLabel/NodesBySource after
 		// cache churn.
 	}
 }
@@ -186,6 +189,65 @@ func (s *adjacencyStore) removeNodeSourceIndex(nodeID, sourceID string) {
 	if len(ids) == 0 {
 		delete(s.bySource, sourceID)
 	}
+}
+
+// addNodeKindIndex records a node under its kind. Like the label and source
+// indexes, the kind index is authoritative: it is built for every node during
+// load (even under LRU, where node bodies are not hydrated) and maintained on
+// mutation. Eviction must never remove entries from it.
+func (s *adjacencyStore) addNodeKindIndex(node NodeRecord) {
+	if s == nil || node.ID == "" || node.DeletedAt != 0 {
+		return
+	}
+	ids := s.byKind[node.Kind]
+	if ids == nil {
+		ids = make(map[string]struct{})
+		s.byKind[node.Kind] = ids
+	}
+	ids[node.ID] = struct{}{}
+}
+
+func (s *adjacencyStore) removeNodeKindIndex(node NodeRecord) {
+	if s == nil || node.ID == "" {
+		return
+	}
+	ids := s.byKind[node.Kind]
+	if len(ids) == 0 {
+		return
+	}
+	delete(ids, node.ID)
+	if len(ids) == 0 {
+		delete(s.byKind, node.Kind)
+	}
+}
+
+// nodeIDsByKind returns the sorted node IDs registered for kind. An empty kind
+// returns every indexed node ID (union over all kind buckets).
+func (s *adjacencyStore) nodeIDsByKind(kind NodeKind) []string {
+	if s == nil {
+		return nil
+	}
+	if kind != "" {
+		ids := s.byKind[kind]
+		out := make([]string, 0, len(ids))
+		for id := range ids {
+			out = append(out, id)
+		}
+		sort.Strings(out)
+		return out
+	}
+	seen := make(map[string]struct{})
+	for _, ids := range s.byKind {
+		for id := range ids {
+			seen[id] = struct{}{}
+		}
+	}
+	out := make([]string, 0, len(seen))
+	for id := range seen {
+		out = append(out, id)
+	}
+	sort.Strings(out)
+	return out
 }
 
 func (s *adjacencyStore) addNodeLabels(node NodeRecord) {

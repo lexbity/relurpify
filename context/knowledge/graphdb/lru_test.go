@@ -314,6 +314,41 @@ func TestLRU_IndexIntegrity_NodesBySource(t *testing.T) {
 	}
 }
 
+func TestLRU_IndexIntegrity_ListNodes(t *testing.T) {
+	// Regression: ListNodes must consult the authoritative kind index, not the
+	// LRU-bound in-memory cache, so it never silently misses evicted nodes.
+	dir := t.TempDir()
+	opts := DefaultOptions(dir)
+	opts.LRUCapacity = 3
+
+	pop, err := Open(context.Background(), opts)
+	require.NoError(t, err)
+	for i := 0; i < 10; i++ {
+		require.NoError(t, pop.UpsertNode(context.TODO(), NodeRecord{ID: "kind-node-" + string(rune('0'+i)), Kind: "test"}))
+	}
+	require.NoError(t, pop.UpsertNode(context.TODO(), NodeRecord{ID: "kind-other", Kind: "other"}))
+	require.NoError(t, pop.Close(context.Background()))
+
+	engine, err := Open(context.Background(), opts)
+	require.NoError(t, err)
+	defer func() { _ = engine.Close(context.Background()) }()
+
+	// Force cache churn so most nodes are evicted from the working set.
+	for i := 0; i < 10; i++ {
+		_, _ = engine.GetNode("kind-node-" + string(rune('0'+i)))
+	}
+
+	if got := len(engine.ListNodes("test")); got != 10 {
+		t.Errorf("ListNodes(test) under LRU = %d, want 10", got)
+	}
+	if got := len(engine.ListNodes("other")); got != 1 {
+		t.Errorf("ListNodes(other) under LRU = %d, want 1", got)
+	}
+	if got := len(engine.ListNodes("")); got != 11 {
+		t.Errorf("ListNodes(\"\") under LRU = %d, want 11", got)
+	}
+}
+
 func TestNFR4_Strict_BootMemory(t *testing.T) {
 	// NFR-4: Engine boot with LRU capacity must hold ≤ LRUCapacity nodes
 	// in RAM, not O(total graph). Edges are lazy-loaded under LRU.

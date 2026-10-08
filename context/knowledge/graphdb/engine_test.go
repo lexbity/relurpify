@@ -4,7 +4,6 @@ import (
 	"context"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -23,12 +22,11 @@ func TestOpen_EmptyDir(t *testing.T) {
 	require.Equal(t, "test", node.ID)
 }
 
-func TestOpen_WithExistingSnapshot(t *testing.T) {
+func TestOpen_WithExistingData(t *testing.T) {
 	dir := t.TempDir()
 	opts := DefaultOptions(filepath.Join(dir, "graphdb"))
-	opts.SnapshotOnClose = true
 
-	// create engine, write data, close (creates snapshot)
+	// create engine, write data, close (Badger persists on commit)
 	eng1, err := Open(context.Background(), opts)
 	require.NoError(t, err)
 	require.NoError(t, eng1.UpsertNode(context.TODO(), NodeRecord{ID: "persisted", Kind: "function", SourceID: "x.go"}))
@@ -49,14 +47,13 @@ func TestOpen_WithExistingSnapshot(t *testing.T) {
 	require.Equal(t, "other", edges[0].TargetID)
 }
 
-func TestSnapshotAndReopen_Badger(t *testing.T) {
+func TestReopen_Badger(t *testing.T) {
 	dir := t.TempDir()
 	opts := DefaultOptions(filepath.Join(dir, "graphdb"))
 	engine, err := Open(context.Background(), opts)
 	require.NoError(t, err)
 
 	require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: "snap", Kind: "function"}))
-	require.NoError(t, engine.Snapshot(context.Background()))
 	require.NoError(t, engine.Close(context.Background()))
 
 	eng2, err := Open(context.Background(), opts)
@@ -94,28 +91,4 @@ func TestApplyLegacyJSONOp_InvalidJSON(t *testing.T) {
 	engine := &Engine{store: newAdjacencyStore()}
 	err := engine.applyLegacyJSONOp([]byte(`{not json}`))
 	require.Error(t, err)
-}
-
-func TestBackgroundAutoSnapshot(t *testing.T) {
-	dir := t.TempDir()
-	opts := DefaultOptions(filepath.Join(dir, "graphdb"))
-	opts.AutoSaveInterval = 50 * time.Millisecond
-	opts.AutoSaveThreshold = 5
-	opts.MaintenanceInterval = 10 * time.Millisecond
-	engine, err := Open(context.Background(), opts)
-	require.NoError(t, err)
-	defer func() { _ = engine.Close(context.Background()) }()
-
-	// write enough ops to exceed threshold
-	for i := 0; i < 10; i++ {
-		id := string(rune('0' + i))
-		require.NoError(t, engine.UpsertNode(context.TODO(), NodeRecord{ID: id, Kind: "function"}))
-	}
-
-	// wait for auto‑snapshot to possibly happen
-	time.Sleep(200 * time.Millisecond)
-
-	// snapshot may have been taken, but at least engine should still work
-	_, ok := engine.GetNode("0")
-	require.True(t, ok)
 }

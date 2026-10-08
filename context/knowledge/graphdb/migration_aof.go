@@ -65,6 +65,7 @@ func loadAOFStore(aofPath, snapPath string) (*adjacencyStore, error) {
 		n := node
 		store.nodes[node.ID] = &n
 		store.addNodeSourceIndex(node)
+		store.addNodeKindIndex(node)
 		store.addNodeLabels(node)
 	}
 	for _, edge := range state.Forward {

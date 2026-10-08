@@ -18,14 +18,6 @@ type backend interface {
 	// the batch to memory only after commit succeeds.
 	commit(ctx context.Context, batch mutationBatch) error
 
-	// snapshot atomically replaces the durable snapshot with the given state
-	// and truncates any incremental log. After a successful snapshot the
-	// engine resets its dirty counter.
-	snapshot(ctx context.Context, state snapshotState) error
-
-	// flush forces any buffered durable state to stable storage.
-	flush() error
-
 	// close releases all backend resources. The engine must not call any
 	// other method after close returns.
 	close() error

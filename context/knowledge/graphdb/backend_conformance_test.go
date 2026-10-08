@@ -3,7 +3,6 @@ package graphdb
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -543,14 +542,13 @@ func runBadgerConformance(t *testing.T) {
 		require.False(t, out[0].IsActive())
 	})
 
-	// snapshot_and_recover
+	// durable_and_recover
 	t.Run("snapshot_and_recover", func(t *testing.T) {
 		dir := t.TempDir()
 		eng := newBadgerEngineAt(t, dir)
 		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: "s1", Kind: "function"}))
 		require.NoError(t, eng.UpsertNode(context.TODO(), NodeRecord{ID: "s2", Kind: "function"}))
 		require.NoError(t, eng.Link(context.TODO(), "s1", "s2", "calls", "", 1, nil))
-		require.NoError(t, eng.Snapshot(context.Background()))
 		require.NoError(t, eng.Close(context.Background()))
 		eng2 := newBadgerEngineAt(t, dir)
 		_, ok := eng2.GetNode("s1")
@@ -578,22 +576,15 @@ func newBadgerEngineAt(t *testing.T, dir string) *Engine {
 	require.NoError(t, bb.load(context.Background(), store))
 
 	eng := &Engine{
-		opts: Options{
-			AOFFileName: "dummy.aof", SnapshotFileName: "dummy.snap",
-			SnapshotOnClose: false,
-		},
+		opts:   Options{},
 		store:  store,
 		bk:     bb,
 		stopCh: make(chan struct{}),
 	}
-	eng.lastSave.Store(time.Now().UnixNano())
-	eng.wg.Add(1)
-	go eng.background(context.Background())
 
 	t.Cleanup(func() {
 		eng.stopOnce.Do(func() {
 			close(eng.stopCh)
-			eng.wg.Wait()
 		})
 		if eng.bk != nil {
 			_ = eng.bk.close()
