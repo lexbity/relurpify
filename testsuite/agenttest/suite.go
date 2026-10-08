@@ -234,6 +234,8 @@ type VerifyStepSpec struct {
 
 // SecuritySpec defines hard pass/fail assertions about sandbox contract enforcement.
 // Assertions here are cross-referenced against the agent manifest's PermissionSet.
+// tools_must_not_call is evaluated against the tool calls recorded in the case
+// report; a forbidden call fails the case (FR-9).
 type SecuritySpec struct {
 	// Filesystem scope
 	NoWritesOutsideScope bool `yaml:"no_writes_outside_scope,omitempty"`
@@ -265,7 +267,11 @@ type ExpectedViolation struct {
 }
 
 // BenchmarkSpec defines soft observations about agent routing and behavior.
-// Mismatches produce BenchmarkObservation records but never fail the test.
+// Presence mismatches (tools_expected) and derived measurements produce
+// BenchmarkObservation records without failing the case; threshold and negative
+// assertions (tools_not_expected, max_tool_calls_hint,
+// max_total_tool_time_hint_ms, tool_call_latency_ms, token_budget) DO fail the
+// case when violated.
 type BenchmarkSpec struct {
 	// Tool usage
 	ToolsExpected        []string         `yaml:"tools_expected,omitempty"`

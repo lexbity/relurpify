@@ -24,6 +24,7 @@ import (
 	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
 	"codeburg.org/lexbit/relurpify/named/euclo"
 	"codeburg.org/lexbit/relurpify/named/euclo/euclocontract"
+	"codeburg.org/lexbit/relurpify/platform/fs"
 	"codeburg.org/lexbit/relurpify/platform/llm"
 	"codeburg.org/lexbit/relurpify/telemetry"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
@@ -40,6 +41,13 @@ type PreparedRunExecutor struct {
 	model      *envcomposition.ModelRuntime
 	telemetry  telemetry.Telemetry
 	agent      *euclo.Agent
+
+	// recorder captures every telemetry event in memory for the duration of the
+	// run so the case report and the OSB evaluators are derived from real
+	// telemetry (FR-8). telemetryFile is the durable JSONL mirror; it is nil
+	// when the descriptor has no telemetry directory.
+	recorder      *recordingTelemetrySink
+	telemetryFile *telemetry.JSONFileTelemetry
 
 	// Security inputs resolved from the derived workspace during buildSecurity,
 	// reused by buildCapability. They are populated only when the executor
@@ -92,9 +100,15 @@ func (e *PreparedRunExecutor) Execute(ctx context.Context, desc *PreparedRunDesc
 	result, attempts, triggeredBy, execErr := e.executeWithRetry(ctx, desc, task, env, out)
 	verifications := e.runVerification(ctx, desc)
 	report := e.buildCaseReport(desc, result, execErr, attempts, triggeredBy, verifications, startedAt)
-	reportDir := firstNonEmpty(desc.ExecutionArtifactsDir, desc.ExecutionDir)
-	if werr := WriteCaseReport(filepath.Join(reportDir, "report.json"), report); werr != nil {
-		_ = werr
+	if e.recorder != nil {
+		events := e.recorder.Events()
+		applyRecordedTelemetry(&report, events)
+		writeCaseTelemetryArtifacts(desc, &report, events)
+	}
+	if reportPath := caseReportPath(desc); reportPath != "" {
+		if werr := WriteCaseReport(reportPath, report); werr != nil {
+			_ = werr
+		}
 	}
 	if report.Output != "" {
 		_, _ = io.Copy(out, strings.NewReader(report.Output))
@@ -257,7 +271,37 @@ func (e *PreparedRunExecutor) buildModel(ctx context.Context, desc *PreparedRunD
 }
 
 func (e *PreparedRunExecutor) buildTelemetry(desc *PreparedRunDescriptor) telemetry.Telemetry {
-	return noopTelemetry{}
+	e.recorder = newRecordingTelemetrySink()
+	sinks := []telemetry.Telemetry{e.recorder}
+	if file := e.openTelemetryFile(desc); file != nil {
+		e.telemetryFile = file
+		sinks = append(sinks, file)
+	}
+	if len(sinks) == 1 {
+		return e.recorder
+	}
+	return telemetry.MultiplexTelemetry{Sinks: sinks}
+}
+
+// openTelemetryFile opens the durable JSONL mirror for the run. It is
+// best-effort: without a telemetry directory the recording sink is still the
+// source of truth, and an open failure must never abort the run (NFR-3).
+func (e *PreparedRunExecutor) openTelemetryFile(desc *PreparedRunDescriptor) *telemetry.JSONFileTelemetry {
+	if desc == nil {
+		return nil
+	}
+	dir := firstNonEmpty(desc.ExecutionTelemetryDir, desc.TelemetryDir)
+	if strings.TrimSpace(dir) == "" {
+		return nil
+	}
+	if err := fs.MkdirAllSecure(dir); err != nil {
+		return nil
+	}
+	file, err := telemetry.NewJSONFileTelemetry(filepath.Join(dir, "agenttest.jsonl"))
+	if err != nil {
+		return nil
+	}
+	return file
 }
 
 func (e *PreparedRunExecutor) assembleDeps(desc *PreparedRunDescriptor, tel telemetry.Telemetry) *paradigm.Deps {
@@ -353,6 +397,10 @@ func (e *PreparedRunExecutor) resetBackend(ctx context.Context, desc *PreparedRu
 }
 
 func (e *PreparedRunExecutor) cleanup() {
+	if e.telemetryFile != nil {
+		_ = e.telemetryFile.Close()
+		e.telemetryFile = nil
+	}
 	if e.model != nil && e.model.Backend != nil {
 		_ = e.model.Backend.Close()
 	}
@@ -393,6 +441,7 @@ func (e *PreparedRunExecutor) buildCaseReport(desc *PreparedRunDescriptor, resul
 		Endpoint:         desc.BackendEndpoint,
 		RecordingMode:    desc.RecordingMode,
 		TapePath:         desc.TapePath,
+		ArtifactsDir:     caseArtifactsDir(desc),
 		StartedAt:        startedAt,
 		FinishedAt:       time.Now().UTC(),
 		DurationMS:       time.Since(startedAt).Milliseconds(),
@@ -414,10 +463,6 @@ func (e *PreparedRunExecutor) buildCaseReport(desc *PreparedRunDescriptor, resul
 	}
 	return report
 }
-
-type noopTelemetry struct{}
-
-func (noopTelemetry) Emit(telemetry.Event) {}
 
 type modelTelemetryAdapter struct {
 	inner telemetry.Telemetry

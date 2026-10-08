@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -330,29 +331,163 @@ func (r *Runner) runPreparedCase(ctx context.Context, suite *Suite, c CaseSpec, 
 		return failedCaseReport(caseStartedAt, c.Name, model.Name, "", prepared.Descriptor.BackendFamily, prepared.Descriptor.BackendEndpoint, "", prepared.Artifacts.DescriptorPath(), layout.WorkspaceDir, layout.ArtifactsDir, err.Error(), "infra", 1)
 	}
 
-	verification, err := PreparedRunVerifierFn(ctx, prepared, CaseReport{Success: true, Output: output.String()}, suite, c, nil)
+	// The executor recorded real telemetry and materialised a telemetry-derived
+	// case report on disk. Load it so measurement and evidence fields (tool
+	// calls, token usage, phase metrics, changed files, security observations)
+	// survive into the suite report — the harness loop is closed at this point
+	// (FR-8).
+	executed := loadExecutorCaseReport(prepared.Descriptor)
+	executed.Output = output.String()
+
+	verification, err := PreparedRunVerifierFn(ctx, prepared, executed, suite, c, nil)
 	if err != nil {
 		return failedCaseReport(caseStartedAt, c.Name, model.Name, "", prepared.Descriptor.BackendFamily, prepared.Descriptor.BackendEndpoint, "", prepared.Artifacts.DescriptorPath(), layout.WorkspaceDir, layout.ArtifactsDir, err.Error(), "assertion", 1)
 	}
 
 	caseFinishedAt := time.Now().UTC()
-	report := CaseReport{
-		Name:             c.Name,
-		Model:            model.Name,
-		Provider:         prepared.Descriptor.BackendProvider,
-		ManifestModel:    prepared.Descriptor.ModelName,
-		Endpoint:         prepared.Descriptor.BackendEndpoint,
-		Workspace:        layout.WorkspaceDir,
-		ArtifactsDir:     layout.ArtifactsDir,
-		StartedAt:        caseStartedAt,
-		FinishedAt:       caseFinishedAt,
-		DurationMS:       caseFinishedAt.Sub(caseStartedAt).Milliseconds(),
-		Success:          verification.Success,
-		Output:           output.String(),
-		AssertionResults: append([]AssertionResult{}, verification.Checks...),
+	report := assembleCaseReport(prepared.Descriptor, c, model, layout, executed, verification, caseStartedAt, caseFinishedAt, output.String())
+	return applyOSBEvaluation(report, c, prepared.Descriptor)
+}
+
+// loadExecutorCaseReport reads the case report the executor wrote from its
+// recorded telemetry. A missing or unreadable report falls back to a neutral,
+// successful report so overridden executor functions cannot regress the runner.
+func loadExecutorCaseReport(desc *PreparedRunDescriptor) CaseReport {
+	report := CaseReport{Success: true}
+	if desc == nil {
+		return report
 	}
+	path := caseReportPath(desc)
+	if path == "" {
+		return report
+	}
+	data, err := os.ReadFile(filepath.Clean(path))
+	if err != nil {
+		return report
+	}
+	var loaded CaseReport
+	if err := json.Unmarshal(data, &loaded); err != nil {
+		return report
+	}
+	return loaded
+}
+
+// assembleCaseReport merges the executor's telemetry-derived report with the
+// verification results into the suite-scoped case report.
+func assembleCaseReport(desc *PreparedRunDescriptor, c CaseSpec, model ModelSpec, layout runCaseLayout, executed CaseReport, verification *PreparedRunVerificationReport, startedAt, finishedAt time.Time, output string) CaseReport {
+	report := executed
+	if report.Name == "" {
+		report.Name = c.Name
+	}
+	if report.Model == "" {
+		report.Model = model.Name
+	}
+	if report.Provider == "" {
+		report.Provider = desc.BackendProvider
+	}
+	if report.ManifestModel == "" {
+		report.ManifestModel = desc.ModelName
+	}
+	if report.Endpoint == "" {
+		report.Endpoint = desc.BackendEndpoint
+	}
+	if report.RecordingMode == "" {
+		report.RecordingMode = desc.RecordingMode
+	}
+	if report.TapePath == "" {
+		report.TapePath = desc.TapePath
+	}
+	report.Workspace = firstNonEmpty(desc.DerivedWorkspaceRoot, layout.WorkspaceDir)
+	report.ArtifactsDir = firstNonEmpty(caseArtifactsDir(desc), layout.ArtifactsDir)
+	report.StartedAt = startedAt
+	report.FinishedAt = finishedAt
+	report.DurationMS = finishedAt.Sub(startedAt).Milliseconds()
+	report.Output = output
+	report.Success = verification.Success
+	report.AssertionResults = append([]AssertionResult{}, verification.Checks...)
 	report.AssertionResults = append(report.AssertionResults, verification.VerificationResults...)
+	if !report.Success && report.FailureKind == "" {
+		report.FailureKind = classifyFailure(errors.New(report.Error))
+	}
 	return report
+}
+
+// applyOSBEvaluation runs the security and benchmark evaluators against the
+// case report, attaching their observations and failing the case when hard
+// assertions are violated (FR-9/FR-10).
+func applyOSBEvaluation(report CaseReport, c CaseSpec, desc *PreparedRunDescriptor) CaseReport {
+	if c.Expect.Security == nil && c.Expect.Benchmark == nil {
+		return report
+	}
+	transcript := loadToolTranscript(report.ArtifactsDir)
+
+	if c.Expect.Security != nil {
+		eval := EvaluateSecurity(&report, c.Expect.Security)
+		report.SecurityObservations = append(report.SecurityObservations, eval.Observations...)
+		if len(eval.Failures) > 0 {
+			report.Success = false
+			if report.FailureKind == "" {
+				report.FailureKind = "security"
+			}
+			report.Error = firstNonEmpty(report.Error, "[security] "+strings.Join(eval.Failures, "; "))
+			report.AssertionResults = append(report.AssertionResults, AssertionResult{
+				AssertionID: "security.assertions",
+				Tier:        "security",
+				Passed:      false,
+				Message:     strings.Join(eval.Failures, "; "),
+			})
+		} else {
+			report.AssertionResults = append(report.AssertionResults, AssertionResult{
+				AssertionID: "security.assertions",
+				Tier:        "security",
+				Passed:      true,
+				Message:     "security assertions satisfied",
+			})
+		}
+	}
+
+	if c.Expect.Benchmark != nil {
+		eval := EvaluateBenchmark(&report, c.Expect.Benchmark, transcript)
+		report.BenchmarkObservations = append(report.BenchmarkObservations, eval.Observations...)
+		if len(eval.Failures) > 0 {
+			report.Success = false
+			if report.FailureKind == "" {
+				report.FailureKind = "benchmark"
+			}
+			report.Error = firstNonEmpty(report.Error, "[benchmark] "+strings.Join(eval.Failures, "; "))
+			report.AssertionResults = append(report.AssertionResults, AssertionResult{
+				AssertionID: "benchmark.thresholds",
+				Tier:        "benchmark",
+				Passed:      false,
+				Message:     strings.Join(eval.Failures, "; "),
+			})
+		} else {
+			report.AssertionResults = append(report.AssertionResults, AssertionResult{
+				AssertionID: "benchmark.thresholds",
+				Tier:        "benchmark",
+				Passed:      true,
+				Message:     "benchmark thresholds satisfied",
+			})
+		}
+	}
+	return report
+}
+
+// loadToolTranscript reads the paired tool transcript artifact written by the
+// executor, returning nil when it is unavailable.
+func loadToolTranscript(artifactsDir string) *ToolTranscriptArtifact {
+	if strings.TrimSpace(artifactsDir) == "" {
+		return nil
+	}
+	data, err := os.ReadFile(filepath.Clean(filepath.Join(artifactsDir, "tool_transcript.json")))
+	if err != nil {
+		return nil
+	}
+	var transcript ToolTranscriptArtifact
+	if err := json.Unmarshal(data, &transcript); err != nil {
+		return nil
+	}
+	return &transcript
 }
 
 func (r *Runner) preflightSuite(ctx context.Context, suite *Suite, opts RunOptions, targetWorkspace string, models []ModelSpec) error {

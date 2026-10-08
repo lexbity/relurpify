@@ -1,6 +1,7 @@
 package agenttest
 
 import (
+	"codeburg.org/lexbit/relurpify/model"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
@@ -25,18 +26,11 @@ func CountTokenUsage(events []telemetry.Event) TokenUsageReport {
 		if ev.Type != telemetry.EventLLMResponse {
 			continue
 		}
-		rawUsage, ok := ev.Metadata["usage"]
-		if !ok {
-			continue
-		}
-		typed, ok := rawUsage.(map[string]any)
+		prompt, completion, total, ok := tokenUsageFromRaw(ev.Metadata["usage"])
 		if !ok {
 			continue
 		}
 		usage.LLMCalls++
-		prompt := intValue(typed["prompt_tokens"])
-		completion := intValue(typed["completion_tokens"])
-		total := intValue(typed["total_tokens"])
 		if total == 0 {
 			total = prompt + completion
 		}
@@ -45,6 +39,28 @@ func CountTokenUsage(events []telemetry.Event) TokenUsageReport {
 		usage.TotalTokens += total
 	}
 	return usage
+}
+
+// tokenUsageFromRaw normalises the several shapes token usage can take before
+// it reaches the harness: the typed model.TokenUsage produced by the LLM
+// instrumentation, a decoded JSON object, or an integer map from a provider
+// client. The second return value reports whether usage was present at all.
+func tokenUsageFromRaw(raw any) (prompt, completion, total int, ok bool) {
+	switch typed := raw.(type) {
+	case model.TokenUsage:
+		return typed.PromptTokens, typed.CompletionTokens, typed.TotalTokens, true
+	case *model.TokenUsage:
+		if typed == nil {
+			return 0, 0, 0, false
+		}
+		return typed.PromptTokens, typed.CompletionTokens, typed.TotalTokens, true
+	case map[string]any:
+		return intValue(typed["prompt_tokens"]), intValue(typed["completion_tokens"]), intValue(typed["total_tokens"]), true
+	case map[string]int:
+		return typed["prompt_tokens"], typed["completion_tokens"], typed["total_tokens"], true
+	default:
+		return 0, 0, 0, false
+	}
 }
 
 func intValue(raw any) int {
