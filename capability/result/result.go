@@ -56,7 +56,7 @@ func (b ApprovalBinding) PermissionMetadata() map[string]string {
 		metadata["provider_id"] = b.ProviderID
 	}
 	if b.SessionID != "" {
-		metadata["session_id"] = b.SessionID
+		metadata["approval_session_id"] = b.SessionID
 	}
 	if len(b.EffectClasses) > 0 {
 		parts := make([]string, 0, len(b.EffectClasses))

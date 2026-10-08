@@ -204,6 +204,7 @@ func (a *HTNAgent) Execute(ctx context.Context, task *execution.Task, env *conte
 	// Decompose into a plan using resolved method (includes operator metadata).
 	compiledPlan, err := DecomposeResolved(resolvedTask, &resolvedMethod)
 	if err != nil {
+		a.planFailed(ctx, resolvedTask, err)
 		return nil, fmt.Errorf("htn: decomposition failed: %w", err)
 	}
 
@@ -212,9 +213,11 @@ func (a *HTNAgent) Execute(ctx context.Context, task *execution.Task, env *conte
 	// Agent-specific preflight state publishing
 	// runtime.PublishPreflightState(env, preflightReport, preflightErr)
 	if preflightErr != nil {
+		a.planFailed(ctx, resolvedTask, preflightErr)
 		return nil, fmt.Errorf("htn: %w", preflightErr)
 	}
 	_ = preflightReport
+	a.planStarted(ctx, resolvedTask, compiledPlan)
 
 	// Agent-specific plan state publishing
 	// runtime.PublishPlanState(env, compiledPlan)
@@ -238,6 +241,9 @@ func (a *HTNAgent) Execute(ctx context.Context, task *execution.Task, env *conte
 			MergeBranches: runtime.MergeHTNBranches,
 			CompletedStepIDs: func(s *contextdata.Envelope) []string {
 				return runtime.CompletedStepsFromEnvelope(s)
+			},
+			BeforeStep: func(step pl.PlanStep, _ *execution.Task, _ *contextdata.Envelope) {
+				a.stepStarted(ctx, step)
 			},
 			Recover: func(ctx context.Context, step pl.PlanStep, stepTask *execution.Task, s *contextdata.Envelope, err error) (*pl.StepRecovery, error) {
 				diagnosis := fmt.Sprintf("retrying step %q after failure: %v", step.ID, err)
@@ -269,10 +275,7 @@ func (a *HTNAgent) Execute(ctx context.Context, task *execution.Task, env *conte
 	result, err := executor.Execute(ctx, primitiveAgent, resolvedTask, compiledPlan, env)
 	_ = time.Since(startTime) // executionDuration - used when persistence is re-enabled
 	if err != nil {
-		// Agent-specific workflow status update
-		// if surfaces.Workflow != nil && workflowID != "" && runID != "" {
-		// 	_ = surfaces.Workflow.UpdateRunStatus(ctx, runID, memory.WorkflowRunStatusFailed, timePtr(time.Now().UTC()))
-		// }
+		a.executionCompleted(ctx, resolvedTask, false, 0, len(compiledPlan.Steps))
 		return nil, fmt.Errorf("htn: plan execution failed: %w", err)
 	}
 	// Agent-specific workflow status update
@@ -295,6 +298,8 @@ func (a *HTNAgent) Execute(ctx context.Context, task *execution.Task, env *conte
 	}
 	// Agent-specific execution state publishing
 	// runtime.PublishExecutionState(env, executionState)
+	a.executionCompleted(ctx, resolvedTask, result != nil && result.Success,
+		executionState.CompletedStepCount, executionState.PlannedStepCount)
 	// Agent-specific termination state publishing
 	// runtime.PublishTerminationState(env, "completed")
 
@@ -360,6 +365,7 @@ func (a *HTNAgent) afterStep(
 	workflowID, runID string,
 	task *execution.Task,
 ) {
+	a.stepCompleted(ctx, step)
 	completed := runtime.CompletedStepsFromEnvelope(env)
 	if !containsStepID(completed, step.ID) {
 		completed = append(completed, step.ID)

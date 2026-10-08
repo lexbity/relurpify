@@ -357,7 +357,6 @@ func clarificationStateVersionFromEnv(env *contextdata.Envelope) uint64 {
 // EmitRouteSelected reports the selected route and candidate metadata.
 func EmitRouteSelected(ctx context.Context, taskID, sessionID, family, routeKind, routeID string, candidateCount int, fallbackTaken bool) {
 	emitRouteEvent(ctx, EventTypeRouteSelected, taskID, sessionID, map[string]any{
-		"session_id":      sessionID,
 		"family":          family,
 		"route_kind":      routeKind,
 		"route_id":        routeID,
@@ -369,7 +368,6 @@ func EmitRouteSelected(ctx context.Context, taskID, sessionID, family, routeKind
 // EmitRouteCompleted reports route completion metadata.
 func EmitRouteCompleted(ctx context.Context, taskID, sessionID, routeKind, routeID string, outcome RouteOutcome, artifactKinds []string, elapsed time.Duration) {
 	emitRouteEvent(ctx, EventTypeRouteCompleted, taskID, sessionID, map[string]any{
-		"session_id":     sessionID,
 		"route_kind":     routeKind,
 		"route_id":       routeID,
 		"outcome":        string(outcome),
@@ -381,7 +379,6 @@ func EmitRouteCompleted(ctx context.Context, taskID, sessionID, routeKind, route
 // EmitRouteUnavailable reports an unavailable route and the reason.
 func EmitRouteUnavailable(ctx context.Context, taskID, sessionID, routeID, availability, reason string) {
 	emitRouteEvent(ctx, EventTypeRouteUnavailable, taskID, sessionID, map[string]any{
-		"session_id":   sessionID,
 		"route_id":     routeID,
 		"availability": availability,
 		"reason":       reason,
@@ -391,15 +388,13 @@ func EmitRouteUnavailable(ctx context.Context, taskID, sessionID, routeID, avail
 // EmitRouteDryRun reports a dry-run payload.
 func EmitRouteDryRun(ctx context.Context, taskID, sessionID string, report any) {
 	emitRouteEvent(ctx, EventTypeRouteDryRun, taskID, sessionID, map[string]any{
-		"session_id": sessionID,
-		"report":     report,
+		"report": report,
 	})
 }
 
 // EmitRouteFallback reports primary and fallback route IDs.
 func EmitRouteFallback(ctx context.Context, taskID, sessionID, primaryID, fallbackID, reason string) {
 	emitRouteEvent(ctx, EventTypeRouteFallback, taskID, sessionID, map[string]any{
-		"session_id":  sessionID,
 		"primary_id":  primaryID,
 		"fallback_id": fallbackID,
 		"reason":      reason,
@@ -414,6 +409,7 @@ func emitRouteEvent(ctx context.Context, eventType EventType, taskID, sessionID 
 	ev := telemetry.Event{
 		Type:      telemetry.EventType(string(eventType)),
 		TaskID:    taskID,
+		SessionID: sessionID,
 		Timestamp: time.Now().UTC(),
 		Metadata:  data,
 	}

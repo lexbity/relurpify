@@ -53,16 +53,15 @@ type BlockTrace struct {
 	Reason  string
 }
 
-// NewRegistry returns a Registry with a no-op telemetry sink.
+// NewRegistry returns a Registry with no telemetry sink. Registries without a
+// sink stay silent through nil-guarded emit helpers.
 func NewRegistry() Registry {
-	return newDefaultRegistry(noopTelemetry{})
+	return newDefaultRegistry(nil)
 }
 
 // NewRegistryWithTelemetry returns a Registry using the provided telemetry sink.
+// A nil sink is valid and keeps the registry silent.
 func NewRegistryWithTelemetry(t PromptTelemetry) Registry {
-	if t == nil {
-		t = noopTelemetry{}
-	}
 	return newDefaultRegistry(t)
 }
 
@@ -82,6 +81,30 @@ func newDefaultRegistry(t PromptTelemetry) *defaultRegistry {
 		issues:    make(map[string][]ValidationIssue),
 		telemetry: t,
 	}
+}
+
+// emit forwards one prompt event to the sink when present. Absence is nil, not
+// a stub: registries without telemetry stay silent without allocating a no-op
+// sink.
+func (r *defaultRegistry) emitValidationIssue(issue ValidationIssue) {
+	if r == nil || r.telemetry == nil {
+		return
+	}
+	r.telemetry.EmitPromptValidationIssue(context.Background(), ValidationIssueEvent{Issue: issue})
+}
+
+func (r *defaultRegistry) emitResolved(ev ResolvedEvent) {
+	if r == nil || r.telemetry == nil {
+		return
+	}
+	r.telemetry.EmitPromptResolved(context.Background(), ev)
+}
+
+func (r *defaultRegistry) emitResolveFailed(ev ResolveFailedEvent) {
+	if r == nil || r.telemetry == nil {
+		return
+	}
+	r.telemetry.EmitPromptResolveFailed(context.Background(), ev)
 }
 
 func (r *defaultRegistry) LoadDir(dir string) error {
@@ -142,7 +165,7 @@ func (r *defaultRegistry) LoadFS(fsys fs.FS, prefix string) error {
 		result, parseErr := ParseBytes(data, sourcePath)
 		if parseErr != nil {
 			issue := ValidationIssue{Severity: SeverityError, Message: parseErr.Error()}
-			r.telemetry.EmitPromptValidationIssue(context.Background(), ValidationIssueEvent{Issue: issue})
+			r.emitValidationIssue(issue)
 			return parseErr
 		}
 		if err := r.indexOne(result.Config, result.Warnings); err != nil {
@@ -157,7 +180,7 @@ func (r *defaultRegistry) loadPaths(paths []string) error {
 		result, err := ParseFile(path)
 		if err != nil {
 			issue := ValidationIssue{Severity: SeverityError, Message: fmt.Sprintf("parse %s: %v", path, err)}
-			r.telemetry.EmitPromptValidationIssue(context.Background(), ValidationIssueEvent{Issue: issue})
+			r.emitValidationIssue(issue)
 			return err
 		}
 		if err := r.indexOne(result.Config, result.Warnings); err != nil {
@@ -177,27 +200,27 @@ func (r *defaultRegistry) indexOne(cfg *PromptConfig, warnings []string) error {
 	if cfg.ID == "" {
 		iss := ValidationIssue{Severity: SeverityError, Message: "prompt file has no id: " + cfg.SourcePath}
 		r.issues[""] = append(r.issues[""], iss)
-		r.telemetry.EmitPromptValidationIssue(context.Background(), ValidationIssueEvent{Issue: iss})
+		r.emitValidationIssue(iss)
 		return &ValidationError{Issues: []ValidationIssue{iss}}
 	}
 	if existing, exists := r.prompts[cfg.ID]; exists {
 		iss := ValidationIssue{PromptID: cfg.ID, Severity: SeverityError, Message: "duplicate prompt id: " + cfg.ID + " (" + existing.SourcePath + ", " + cfg.SourcePath + ")"}
 		r.issues[cfg.ID] = append(r.issues[cfg.ID], iss)
-		r.telemetry.EmitPromptValidationIssue(context.Background(), ValidationIssueEvent{Issue: iss})
+		r.emitValidationIssue(iss)
 		return &DuplicateIDError{ID: cfg.ID, ExistingPath: existing.SourcePath, NewPath: cfg.SourcePath}
 	}
 
 	for _, w := range warnings {
 		iss := ValidationIssue{PromptID: cfg.ID, Severity: SeverityWarning, Message: w}
 		r.issues[cfg.ID] = append(r.issues[cfg.ID], iss)
-		r.telemetry.EmitPromptValidationIssue(context.Background(), ValidationIssueEvent{Issue: iss})
+		r.emitValidationIssue(iss)
 	}
 
 	structIssues := validateConfig(cfg)
 	r.issues[cfg.ID] = append(r.issues[cfg.ID], structIssues...)
 	for _, iss := range structIssues {
 		if iss.Severity == SeverityError {
-			r.telemetry.EmitPromptValidationIssue(context.Background(), ValidationIssueEvent{Issue: iss})
+			r.emitValidationIssue(iss)
 		}
 	}
 
@@ -282,13 +305,13 @@ func (r *defaultRegistry) Resolve(id string, ctx RuntimeContext) (string, error)
 	r.mu.RUnlock()
 	if !ok {
 		err := &NotFoundError{ID: id}
-		r.telemetry.EmitPromptResolveFailed(context.Background(), ResolveFailedEvent{ID: id, Paradigm: ctx.Paradigm, Error: err.Error()})
+		r.emitResolveFailed(ResolveFailedEvent{ID: id, Paradigm: ctx.Paradigm, Error: err.Error()})
 		return "", err
 	}
 
 	result, _, err := resolvePrompt(cfg, ctx)
 	if err != nil {
-		r.telemetry.EmitPromptResolveFailed(context.Background(), ResolveFailedEvent{
+		r.emitResolveFailed(ResolveFailedEvent{
 			ID:         id,
 			Paradigm:   ctx.Paradigm,
 			Error:      err.Error(),
@@ -297,7 +320,7 @@ func (r *defaultRegistry) Resolve(id string, ctx RuntimeContext) (string, error)
 		return "", fmt.Errorf("resolve %s: %w", id, err)
 	}
 
-	r.telemetry.EmitPromptResolved(context.Background(), ResolvedEvent{
+	r.emitResolved(ResolvedEvent{
 		ID:           id,
 		Paradigm:     ctx.Paradigm,
 		OutputLength: len(result),

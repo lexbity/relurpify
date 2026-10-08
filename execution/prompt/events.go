@@ -3,8 +3,9 @@ package prompt
 import "context"
 
 // PromptTelemetry is the telemetry sink for prompt resolution events.
-// NewRegistry uses a no-op sink. NewRegistryWithTelemetry wires the real sink.
-// All methods accept a context for correlation stamping.
+// A nil sink is valid: registries emit through nil-guarded helpers, so sinks
+// are optional without a stub allocation (no-op objects are not part of the
+// contract; absence is expressed as nil).
 type PromptTelemetry interface {
 	EmitPromptResolved(ctx context.Context, e ResolvedEvent)
 	EmitPromptResolveFailed(ctx context.Context, e ResolveFailedEvent)
@@ -55,12 +56,3 @@ type ProviderFailedEvent struct {
 	ProviderName string
 	Error        string
 }
-
-// noopTelemetry is the default no-op sink used when no telemetry is provided.
-type noopTelemetry struct{}
-
-func (noopTelemetry) EmitPromptResolved(context.Context, ResolvedEvent)               {}
-func (noopTelemetry) EmitPromptResolveFailed(context.Context, ResolveFailedEvent)     {}
-func (noopTelemetry) EmitPromptContextMissing(context.Context, ContextMissingEvent)   {}
-func (noopTelemetry) EmitPromptValidationIssue(context.Context, ValidationIssueEvent) {}
-func (noopTelemetry) EmitPromptProviderFailed(context.Context, ProviderFailedEvent)   {}

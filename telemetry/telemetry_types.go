@@ -57,6 +57,34 @@ const (
 	EventSandboxCommandDenied       EventType = "sandbox.command_denied"
 	EventSandboxCommandExecuted     EventType = "sandbox.command_executed"
 	EventSandboxFailure             EventType = "sandbox.failure"
+	EventBootDegraded               EventType = "boot.degraded"
+)
+
+// Paradigm lifecycle events emitted by the cognitionzoo paradigms (HTN,
+// goalcon, reflection, planner) through the standard telemetry.Telemetry +
+// StampCorrelation path (spec §1.7). They use the same dot-qualified spelling
+// as the scheduler/compiler domain events so the JSONL namespace stays
+// consistent.
+const (
+	EventHTNPlanStarted        EventType = "htn.plan.started"
+	EventHTNPlanFailed         EventType = "htn.plan.failed"
+	EventHTNStepStarted        EventType = "htn.step.started"
+	EventHTNStepCompleted      EventType = "htn.step.completed"
+	EventHTNExecutionCompleted EventType = "htn.execution.completed"
+
+	EventGoalConPlanStarted   EventType = "goalcon.plan.started"
+	EventGoalConPlanCompleted EventType = "goalcon.plan.completed"
+	EventGoalConPlanFailed    EventType = "goalcon.plan.failed"
+	EventGoalConStepStarted   EventType = "goalcon.step.started"
+	EventGoalConStepCompleted EventType = "goalcon.step.completed"
+	EventGoalConExecutionDone EventType = "goalcon.execution.completed"
+
+	EventReflectionIteration EventType = "reflection.iteration"
+	EventReflectionCompleted EventType = "reflection.completed"
+
+	EventPlannerPlanStarted   EventType = "planner.plan.started"
+	EventPlannerPlanCompleted EventType = "planner.plan.completed"
+	EventPlannerPlanFailed    EventType = "planner.plan.failed"
 )
 
 const (

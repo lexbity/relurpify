@@ -133,14 +133,19 @@ func (a *GoalConAgent) Execute(ctx context.Context, task *execution.Task, env *c
 		MaxDepth:  a.maxDepth(),
 		Recorder:  a.MetricsRecorder,
 	}
+	a.planStarted(ctx, goal, a.maxDepth())
 	planResult := solver.Solve(goal, ws)
+	a.planCompleted(ctx, planResult.Plan, planResult.Depth, len(planResult.Unsatisfied))
 	env.SetWorkingValueWithClass("goalcon.plan", planResult.Plan, contextdata.MemoryClassTask)
 	env.SetWorkingValueWithClass("goalcon.unsatisfied", planResult.Unsatisfied, contextdata.MemoryClassTask)
 	env.SetWorkingValueWithClass("goalcon.search_depth", planResult.Depth, contextdata.MemoryClassTask)
 
 	executorAgent := a.planExecutorAgent()
 	if len(planResult.Plan.Steps) == 0 {
-		return executorAgent.Execute(ctx, task, env)
+		res, execErr := executorAgent.Execute(ctx, task, env)
+		a.executionDone(ctx, taskIDOf(task), execErr == nil && res != nil && res.Success,
+			planResult.Depth, len(planResult.Unsatisfied))
+		return res, execErr
 	}
 
 	executor := &plan.PlanExecutor{
@@ -148,15 +153,20 @@ func (a *GoalConAgent) Execute(ctx context.Context, task *execution.Task, env *c
 			CompletedStepIDs: func(state *contextdata.Envelope) []string {
 				return state.StringSliceFromContext("plan.completed_steps")
 			},
+			BeforeStep: func(step plan.PlanStep, _ *execution.Task, _ *contextdata.Envelope) {
+				a.stepStarted(ctx, step)
+			},
 			AfterStep: func(step plan.PlanStep, state *contextdata.Envelope, _ *plan.Result) {
 				completed := state.StringSliceFromContext("plan.completed_steps")
 				completed = append(completed, step.ID)
 				state.SetWorkingValueWithClass("plan.completed_steps", completed, contextdata.MemoryClassTask)
+				a.stepCompleted(ctx, step)
 			},
 		},
 	}
 	result, err := executor.Execute(ctx, executorAgent, task, planResult.Plan, env)
 	if err != nil {
+		a.planFailed(ctx, err)
 		return nil, fmt.Errorf("goalcon: execute: %w", err)
 	}
 	fields := execution.ResultFields(result.Data)
@@ -188,6 +198,8 @@ func (a *GoalConAgent) Execute(ctx context.Context, task *execution.Task, env *c
 	}
 
 	result.Data = execution.NewToolResultPayload(fields)
+	a.executionDone(ctx, taskIDOf(task), result != nil && result.Success,
+		planResult.Depth, len(planResult.Unsatisfied))
 	return result, nil
 }
 

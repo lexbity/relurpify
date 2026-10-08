@@ -7,6 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -405,8 +407,8 @@ func buildRuntime(ctx context.Context, cfg Config, secrets config.Secrets) (*Run
 			Backend:      modelProduct.Backend,
 			ModelFactory: modelProduct.ModelFactory,
 		},
-		EventLogFactory:  openRuntimeEventLogFactory,
-		Scope:            session.ScopeFull,
+		EventLogFactory: openRuntimeEventLogFactory,
+		Scope:           session.ScopeFull,
 	})
 	if err != nil {
 		return nil, err
@@ -543,12 +545,59 @@ func newDegradedRuntime(ctx context.Context, cfg Config, secrets config.Secrets,
 		Tools:     registry.NewRegistry(),
 	}
 
-	// Emit boot.degraded observability event (NFR-4).
-	log.Printf("boot.degraded{reason=%q sandbox_ready=false model_ready=false degraded=true}",
-		reason.Error())
-	_ = ctx
+	// Emit boot.degraded as a structured telemetry event (FR-16 / AC-10). A
+	// degraded boot has no runtime telemetry chain, so a dedicated sink records
+	// the structured event — always to stderr, best-effort to the workspace
+	// JSONL — and the plain log line preserves a fast human-readable trace.
+	ws.Telemetry = degradedTelemetrySink(cfg)
+	emitBootDegraded(ctx, ws, reason)
+	log.Printf("runtime degraded: reason=%q degraded=true", reason.Error())
 	_ = secrets
 	return rt
+}
+
+// degradedTelemetrySink assembles the telemetry sink for a degraded boot: a
+// logger-backed sink (always) plus a best-effort JSONL file under the workspace
+// state telemetry path so boot.degraded is durably queryable (AC-10). JSONL
+// failure is non-fatal; a degraded boot never extends further on telemetry.
+func degradedTelemetrySink(cfg Config) telemetry.Telemetry {
+	sinks := []telemetry.Telemetry{telemetry.LoggerTelemetry{Logger: log.Default()}}
+	stateDir := workspace.StateDir(cfg.Workspace)
+	path := filepath.Join(stateDir, "telemetry", "workspace.jsonl")
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err == nil { // public: degraded telemetry dir
+		if fileSink, err := telemetry.NewJSONFileTelemetry(path); err == nil {
+			sinks = append(sinks, fileSink)
+		}
+	}
+	if len(sinks) == 1 {
+		return sinks[0]
+	}
+	return telemetry.MultiplexTelemetry{Sinks: sinks}
+}
+
+// emitBootDegraded emits the boot.degraded telemetry event on the degraded
+// workspace's sink. The event is deliberately structured: reason, sandbox
+// readiness, model readiness, and the degraded flag travel as metadata so the
+// failure mode is diagnosable from the durable trail, not just a log line.
+func emitBootDegraded(ctx context.Context, ws *session.Workspace, reason error) {
+	if ws == nil || ws.Telemetry == nil || reason == nil {
+		return
+	}
+	ev := telemetry.Event{
+		Type:      telemetry.EventBootDegraded,
+		Message:   "boot degraded",
+		Timestamp: time.Now().UTC(),
+		Metadata: map[string]any{
+			"reason":        reason.Error(),
+			"sandbox_ready": false,
+			"model_ready":   false,
+			"degraded":      true,
+		},
+	}
+	// NFR-6: route through the sanctioned correlation stamper even though a
+	// degraded boot carries no run context — consistency over special-casing.
+	telemetry.StampCorrelation(ctx, &ev)
+	ws.Telemetry.Emit(ev)
 }
 
 // Close releases resources managed by fruntime.

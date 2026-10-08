@@ -79,14 +79,17 @@ type WorkspaceConfig struct {
 	HITLTimeout                time.Duration
 	LogPath                    string
 	TelemetryPath              string
-	EventsPath                 string
-	MemoryPath                 string
-	SkipASTIndex               bool
-	MaxIterations              int
-	AllowedCapabilities        []agentspec.CapabilitySelector
-	DebugLLM                   bool
-	DebugAgent                 bool
-	Strict                     bool
+	// TelemetryRetention bounds JSONL growth across sessions (NFR-10). Zero is
+	// treated as telemetry.DefaultTelemetryRetention (7 days).
+	TelemetryRetention  time.Duration
+	EventsPath          string
+	MemoryPath          string
+	SkipASTIndex        bool
+	MaxIterations       int
+	AllowedCapabilities []agentspec.CapabilitySelector
+	DebugLLM            bool
+	DebugAgent          bool
+	Strict              bool
 	// Agent specification for policy engine and capability registration
 	AgentSpec *agentspec.AgentRuntimeSpec
 	// Permission manager for authorization

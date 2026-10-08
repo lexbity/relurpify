@@ -305,7 +305,9 @@ func (n *reactActNode) capabilityEnvelope(ctx context.Context, env *contextdata.
 			metadata["provider_id"] = envelope.Descriptor.Source.ProviderID
 		}
 		if envelope.Descriptor.Source.SessionID != "" {
-			metadata["session_id"] = envelope.Descriptor.Source.SessionID
+			// Capability provenance, distinct from the run's first-class
+			// correlation session.
+			metadata["source_session_id"] = envelope.Descriptor.Source.SessionID
 		}
 		ev := telemetry.Event{
 			Type:      telemetry.EventStateChange,

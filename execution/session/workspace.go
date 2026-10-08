@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"time"
 
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	aconvert "codeburg.org/lexbit/relurpify/capability/agentspec/convert"
@@ -785,6 +786,15 @@ func setupTelemetry(cfg WorkspaceConfig) (*os.File, *log.Logger, telemetry.Telem
 
 	if telemetryPath != "" {
 		if err := os.MkdirAll(filepath.Dir(telemetryPath), 0o700); err == nil { // public: workspace telemetry directory
+			// NFR-10: enforce the JSONL retention window on open so a session's
+			// telemetry file never grows past one retention window of traffic.
+			retention := cfg.TelemetryRetention
+			if retention <= 0 {
+				retention = telemetry.DefaultTelemetryRetention
+			}
+			if err := telemetry.PruneJSONL(telemetryPath, retention, time.Now()); err != nil {
+				logger.Printf("warning: telemetry retention prune failed: %v", err)
+			}
 			if fileSink, err := telemetry.NewJSONFileTelemetry(telemetryPath); err == nil {
 				sinks = append(sinks, fileSink)
 			} else {

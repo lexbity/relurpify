@@ -65,6 +65,47 @@ func TestAuthorizedRunnerEmitsCommandDenied(t *testing.T) {
 	}
 }
 
+func TestAuthorizedRunnerRedactsSecretsFromCommandEvents(t *testing.T) {
+	sink := &commandRecordingSink{}
+	inner := &fakeRunner{}
+	auth, err := NewAuthorizedRunner(inner, CommandPolicyFunc(func(context.Context, CommandRequest) error { return nil }))
+	if err != nil {
+		t.Fatalf("NewAuthorizedRunner: %v", err)
+	}
+	auth.SetTelemetry(sink)
+
+	// A bearer-style token embedded in an argument must be scrubbed before the
+	// event reaches the sink (NFR-7).
+	_, err = auth.Run(context.Background(), CommandRequest{Args: []string{"curl", "-H", "Authorization: Bearer sk-secret123"}})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	ev, ok := sink.Find(telemetry.EventSandboxCommandExecuted)
+	if !ok {
+		t.Fatalf("expected sandbox.command_executed, got %v", sinkTypes(sink))
+	}
+	command, _ := ev.Metadata["command"].(string)
+	if containsString(command, "sk-secret123") {
+		t.Fatalf("secret survived redaction in command: %q", command)
+	}
+	if _, hasArgs := ev.Metadata["args"]; hasArgs {
+		t.Fatal("raw args must not be emitted on sandbox events")
+	}
+}
+
+func containsString(haystack, needle string) bool {
+	if len(needle) == 0 {
+		return true
+	}
+	for i := 0; i+len(needle) <= len(haystack); i++ {
+		if haystack[i:i+len(needle)] == needle {
+			return true
+		}
+	}
+	return false
+}
+
 func TestAuthorizedRunnerEmitsCommandExecuted(t *testing.T) {
 	sink := &commandRecordingSink{}
 	inner := &fakeRunner{}

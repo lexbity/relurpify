@@ -48,8 +48,19 @@ func (a *recordingPrimitiveAgent) Initialize(_ *execution.Config) error { return
 
 func (a *recordingPrimitiveAgent) Capabilities() []string { return nil }
 
-func (a *recordingPrimitiveAgent) BuildGraph(ctx context.Context, _ *execution.Task) (*graph.Graph, error) {
-	return nil, errors.New("BuildGraph not implemented")
+func (a *recordingPrimitiveAgent) BuildGraph(ctx context.Context, task *execution.Task) (*graph.Graph, error) {
+	if a == nil || a.delegate == nil {
+		return nil, errors.New("BuildGraph: recording agent missing delegate")
+	}
+	// The recording wrapper is transparent: graph construction, when the
+	// delegate supports it, is forwarded exactly as Execute is. A delegate
+	// that cannot build graphs fails truthfully rather than pretending.
+	if builder, ok := a.delegate.(interface {
+		BuildGraph(context.Context, *execution.Task) (*graph.Graph, error)
+	}); ok {
+		return builder.BuildGraph(ctx, task)
+	}
+	return nil, fmt.Errorf("BuildGraph: delegate %T cannot build graphs", a.delegate)
 }
 
 func (a *recordingPrimitiveAgent) Execute(ctx context.Context, task *execution.Task, state *contextdata.Envelope) (*execution.Result, error) {

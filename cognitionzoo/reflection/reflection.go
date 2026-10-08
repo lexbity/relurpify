@@ -48,7 +48,13 @@ func (a *ReflectionAgent) Execute(ctx context.Context, task *execution.Task, env
 	if env == nil {
 		env = contextdata.NewEnvelope("reflection", "session")
 	}
-	return graph.Execute(ctx, env)
+	result, err := graph.Execute(ctx, env)
+	iterations := 0
+	if value, ok := contextdata.GetTyped[int](env, "reflection.iteration"); ok {
+		iterations = value
+	}
+	a.emitCompleted(ctx, err == nil && result != nil && result.Success, iterations)
+	return result, err
 }
 
 // Capabilities returns capabilities.
@@ -189,6 +195,7 @@ func (n *reflectionDecisionNode) Execute(ctx context.Context, env *contextdata.E
 	approve := review.Approve && assessment.Allowed
 	revise := !approve && iter < n.agent.maxIterations
 	contextdata.SetTyped(env, "reflection.revise", revise)
+	n.agent.emitIteration(ctx, iter, approve, revise, assessment.IssueScore, assessment.BlockingIssueCount)
 	return &execution.Result{
 		NodeID:  n.id,
 		Success: true,

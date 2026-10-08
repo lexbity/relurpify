@@ -220,11 +220,11 @@ func (n *CheckpointNode) Execute(ctx context.Context, env *contextdata.Envelope)
 			Type:      telemetry.EventStateChange,
 			NodeID:    n.id,
 			TaskID:    env.TaskID,
+			RunID:     snapshot.RunID, // first-class correlation, not metadata
 			Timestamp: time.Now().UTC(),
 			Metadata: map[string]any{
 				"checkpoint_id": ref.ArtifactID,
 				"workflow_id":   snapshot.WorkflowID,
-				"run_id":        snapshot.RunID,
 			},
 		}
 		telemetry.StampCorrelation(ctx, &ev)

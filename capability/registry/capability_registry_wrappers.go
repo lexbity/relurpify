@@ -494,7 +494,10 @@ func emitCapabilitySecurityEvent(ctx context.Context, telemetry fwtelemetry.Tele
 		metadata["provider_id"] = desc.Source.ProviderID
 	}
 	if desc.Source.SessionID != "" {
-		metadata["session_id"] = desc.Source.SessionID
+		// Capability provenance, not run correlation: the source session is the
+		// session the capability was declared in, which can differ from the
+		// executing run's session (that lives on the first-class field).
+		metadata["source_session_id"] = desc.Source.SessionID
 	}
 	if reason != "" {
 		metadata["reason"] = reason

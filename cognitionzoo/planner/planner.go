@@ -73,17 +73,24 @@ func (a *PlannerAgent) Initialize(cfg *execution.Config) error {
 func (a *PlannerAgent) Execute(ctx context.Context, task *execution.Task, env *contextdata.Envelope) (*execution.Result, error) {
 	graph, err := a.BuildGraph(ctx, task)
 	if err != nil {
+		a.planFailed(ctx, task, err)
 		return nil, err
 	}
 	if cfg := a.Config; cfg != nil && cfg.Telemetry != nil {
 		graph.SetTelemetry(cfg.Telemetry)
 	}
+	a.planStarted(ctx, task)
 	result, err := graph.Execute(ctx, env)
+	if err != nil {
+		a.planFailed(ctx, task, err)
+		return nil, err
+	}
+	a.planCompleted(ctx, task, result != nil && result.Success)
 	preservePlannerExecutionResult(env, result)
 	mirrorPlannerSummaryReference(env)
 	mirrorPlannerCheckpointReference(env)
 	compactPlannerResultsStateInContext(env)
-	return result, err
+	return result, nil
 }
 
 func envGetString(env *contextdata.Envelope, key string) string {
