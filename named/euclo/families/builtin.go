@@ -76,7 +76,7 @@ func RegisterBuiltins(registry *KeywordFamilyRegistry) error {
 			DefaultHITLPolicy:   HITLPolicyAsk,
 			DefaultVerification: VerificationConfigurable,
 			RetrievalTemplate:   "code to refactor for: {{.Instruction}}",
-			FallbackCapability:  "euclo:cap.extract_func",
+			FallbackCapability:  "euclo:cap.targeted_refactor",
 		},
 		{
 			ID:                  FamilyMigration,

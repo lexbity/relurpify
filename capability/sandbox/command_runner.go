@@ -48,14 +48,21 @@ type SandboxCommandRunner struct {
 	rt              SandboxRuntime
 	image           string
 	workspace       string
-	workspaceSlash  string
 	user            int
 	readOnlyRoot    bool
 	noNewPrivileges bool
+	// nativeDocker selects Docker's native isolation (no `--runtime runsc`).
+	// It is set by the docker backend's CommandRunnerProvider.
+	nativeDocker bool
 }
 
-// NewSandboxCommandRunner wires the config/runtime metadata into a runner.
+// NewSandboxCommandRunner wires the config/runtime metadata into a runner that
+// launches commands through the runtime's container engine.
 func NewSandboxCommandRunner(config *CommandRunnerConfig, runtime SandboxRuntime) (*SandboxCommandRunner, error) {
+	return newSandboxCommandRunner(config, runtime, false)
+}
+
+func newSandboxCommandRunner(config *CommandRunnerConfig, runtime SandboxRuntime, nativeDocker bool) (*SandboxCommandRunner, error) {
 	if config == nil {
 		return nil, errors.New("config required")
 	}
@@ -76,10 +83,10 @@ func NewSandboxCommandRunner(config *CommandRunnerConfig, runtime SandboxRuntime
 		rt:              runtime,
 		image:           config.Image,
 		workspace:       absWorkspace,
-		workspaceSlash:  filepath.ToSlash(absWorkspace),
 		user:            config.RunAsUser,
 		readOnlyRoot:    config.ReadOnlyRoot,
 		noNewPrivileges: config.NoNewPrivileges,
+		nativeDocker:    nativeDocker,
 	}, nil
 }
 
@@ -95,10 +102,6 @@ func (r *SandboxCommandRunner) Run(ctx context.Context, req CommandRequest) (*po
 	if runtimeBinary == "" {
 		runtimeBinary = "docker"
 	}
-	runtimeName := filepath.Base(r.config.RunscPath)
-	if runtimeName == "" {
-		runtimeName = "runsc"
-	}
 	containerWorkdir, err := r.containerWorkdir(req.Workdir)
 	if err != nil {
 		return nil, err
@@ -107,15 +110,116 @@ func (r *SandboxCommandRunner) Run(ctx context.Context, req CommandRequest) (*po
 	// Container identity for lifecycle management.
 	containerName := "relurpify-sandbox-" + randSuffix()
 
-	args := []string{"run", "--rm", "--name", containerName, "--runtime", runtimeName, "-v", fmt.Sprintf("%s:/workspace", r.workspace), "-w", containerWorkdir}
+	args := r.runArgs(containerName, containerWorkdir, req)
+	runtimeBinaryPath, err := exec.LookPath(runtimeBinary)
+	if err != nil {
+		return nil, fmt.Errorf("%s not found: %w", runtimeBinary, err)
+	}
+	start := time.Now()
+	cmd := &exec.Cmd{
+		Path: runtimeBinaryPath,
+		Args: append([]string{runtimeBinaryPath}, args...),
+	}
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	ceiling := OutputCeilingOrDefault(req.OutputCeiling)
+	stdoutBuf := newSpillWriter(ceiling)
+	stderrBuf := newSpillWriter(ceiling)
+	cmd.Stdout = stdoutBuf
+	cmd.Stderr = stderrBuf
+	if req.Input != "" {
+		cmd.Stdin = strings.NewReader(req.Input)
+	}
+	if err := cmd.Start(); err != nil {
+		return nil, fmt.Errorf("start: %w", err)
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		done <- cmd.Wait()
+	}()
+
+	tornDown := atomic.Bool{}
+
+	grace := GracePeriodOrDefault(req.GracePeriod)
+
+	go func() {
+		timer := time.NewTimer(req.Timeout)
+		defer timer.Stop()
+		select {
+		case <-ctx.Done():
+		case <-timer.C:
+		case <-done:
+			return
+		}
+		tornDown.Store(true)
+
+		_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM)
+		select {
+		case <-done:
+			return
+		case <-time.After(grace):
+		}
+
+		_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+		select {
+		case <-done:
+		case <-time.After(5 * time.Second):
+		}
+	}()
+
+	err = <-done
+	res := NewCommandResult(stdoutBuf.String(), stderrBuf.String(), err, time.Since(start), tornDown.Load())
+	markOOM(res)
+	res.StdoutBytes = int64(stdoutBuf.Len())
+	res.StderrBytes = int64(stderrBuf.Len())
+	return res, nil
+}
+
+// markOOM classifies a container exit as OOM-killed when the runner did not
+// issue the kill and the process was terminated by SIGKILL (exit 137). Docker
+// propagates the container's exit code through `docker run`, so a kernel/cgroup
+// OOM kill surfaces as 137 without the runner tearing the process down.
+func markOOM(res *ports.CommandResult) {
+	if res == nil || res.TornDown {
+		return
+	}
+	if res.ExitCode == 137 {
+		res.OOMKilled = true
+		res.Signaled = true
+	}
+}
+
+// runArgs builds the container-engine argument vector for a command. It is a
+// pure function of the runner's configuration so the exact isolation flags can
+// be asserted without launching a container.
+func (r *SandboxCommandRunner) runArgs(containerName, containerWorkdir string, req CommandRequest) []string {
+	args := []string{"run", "--rm", "--name", containerName}
+	if !r.nativeDocker {
+		runtimeName := filepath.Base(r.config.RunscPath)
+		if runtimeName == "" {
+			runtimeName = "runsc"
+		}
+		args = append(args, "--runtime", runtimeName)
+	}
+	args = append(args, "-v", fmt.Sprintf("%s:/workspace", r.workspace), "-w", containerWorkdir)
 	for _, mount := range r.protectedMounts() {
 		args = append(args, "-v", mount)
 	}
 	if r.user > 0 {
 		args = append(args, "-u", strconv.Itoa(r.user))
 	}
+	if r.nativeDocker {
+		// Docker native isolation: drop every Linux capability and rely on
+		// seccomp plus Docker's default AppArmor profile for syscall
+		// confinement (gVisor's runsc provides the equivalent boundary for the
+		// gvisor backend).
+		args = append(args, "--cap-drop", "ALL")
+	}
 	if r.readOnlyRoot {
 		args = append(args, "--read-only")
+		if r.nativeDocker {
+			args = append(args, "--tmpfs", "/tmp")
+		}
 	}
 	if r.noNewPrivileges {
 		args = append(args, "--security-opt", "no-new-privileges")
@@ -148,77 +252,7 @@ func (r *SandboxCommandRunner) Run(ctx context.Context, req CommandRequest) (*po
 	}
 	args = append(args, image)
 	args = append(args, req.Args...)
-	runtimeBinaryPath, err := exec.LookPath(runtimeBinary)
-	if err != nil {
-		return nil, fmt.Errorf("%s not found: %w", runtimeBinary, err)
-	}
-	start := time.Now()
-	cmd := &exec.Cmd{
-		Path: runtimeBinaryPath,
-		Args: append([]string{runtimeBinaryPath}, args...),
-	}
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	ceiling := OutputCeilingOrDefault(req.OutputCeiling)
-	stdoutBuf := newSpillWriter(ceiling)
-	stderrBuf := newSpillWriter(ceiling)
-	cmd.Stdout = stdoutBuf
-	cmd.Stderr = stderrBuf
-	if req.Input != "" {
-		cmd.Stdin = strings.NewReader(req.Input)
-	}
-	if err := cmd.Start(); err != nil {
-		return nil, fmt.Errorf("start: %w", err)
-	}
-
-	done := make(chan error, 1)
-	go func() {
-		done <- cmd.Wait()
-	}()
-
-	oomCheck := time.NewTicker(100 * time.Millisecond)
-	defer oomCheck.Stop()
-
-	oomKilled := atomic.Bool{}
-	tornDown := atomic.Bool{}
-
-	grace := GracePeriodOrDefault(req.GracePeriod)
-
-	go func() {
-		timer := time.NewTimer(req.Timeout)
-		defer timer.Stop()
-		select {
-		case <-ctx.Done():
-		case <-timer.C:
-		case <-done:
-			return
-		}
-		tornDown.Store(true)
-
-		_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM)
-		select {
-		case <-done:
-			return
-		case <-time.After(grace):
-		}
-
-		_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
-		select {
-		case <-done:
-		case <-time.After(5 * time.Second):
-		}
-	}()
-
-	err = <-done
-	res := NewCommandResult(stdoutBuf.String(), stderrBuf.String(), err, time.Since(start), tornDown.Load())
-	if oomKilled.Load() {
-		res.OOMKilled = true
-		res.TornDown = true
-		res.TimedOut = false
-		res.ExitCode = -1
-	}
-	res.StdoutBytes = int64(stdoutBuf.Len())
-	res.StderrBytes = int64(stderrBuf.Len())
-	return res, nil
+	return args
 }
 
 func (r *SandboxCommandRunner) protectedMounts() []string {

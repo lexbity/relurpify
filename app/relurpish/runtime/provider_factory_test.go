@@ -29,7 +29,7 @@ func (r *recordingTelemetry) len() int {
 	return len(r.events)
 }
 
-func TestRegisterBuiltinProvidersWarnsAndSkipsConfiguredProviders(t *testing.T) {
+func TestRegisterBuiltinProvidersRecordsConfiguredProviders(t *testing.T) {
 	telemetrySink := &recordingTelemetry{}
 	rt := &Runtime{
 		Workspace: &session.Workspace{
@@ -56,11 +56,11 @@ func TestRegisterBuiltinProvidersWarnsAndSkipsConfiguredProviders(t *testing.T) 
 	if event.Type != telemetry.EventStateChange {
 		t.Fatalf("event type = %s, want state_change", event.Type)
 	}
-	if got := event.Message; got != "provider config unsupported" {
-		t.Fatalf("event message = %q, want %q", got, "provider config unsupported")
+	if got := event.Message; got != "provider spec detected" {
+		t.Fatalf("event message = %q, want %q", got, "provider spec detected")
 	}
-	if got := event.Metadata["provider_event"]; got != "provider_config_unsupported" {
-		t.Fatalf("provider_event = %#v, want %q", got, "provider_config_unsupported")
+	if got := event.Metadata["provider_event"]; got != "provider_spec_detected" {
+		t.Fatalf("provider_event = %#v, want %q", got, "provider_spec_detected")
 	}
 	if got := event.Metadata["provider_id"]; got != "external-search" {
 		t.Fatalf("provider_id = %#v, want %q", got, "external-search")
@@ -70,6 +70,23 @@ func TestRegisterBuiltinProvidersWarnsAndSkipsConfiguredProviders(t *testing.T) 
 	}
 	if got := len(rt.registeredProviders()); got != 0 {
 		t.Fatalf("registered providers = %d, want 0", got)
+	}
+}
+
+func TestRegisterBuiltinProvidersRejectsInvalidSpec(t *testing.T) {
+	rt := &Runtime{
+		Workspace: &session.Workspace{
+			AgentSpec: &agentspec.AgentRuntimeSpec{
+				Providers: []agentspec.ProviderConfig{{
+					ID:   "bad-provider",
+					Kind: agentspec.ProviderKind("not-a-kind"),
+				}},
+			},
+		},
+	}
+
+	if err := RegisterBuiltinProviders(context.Background(), rt); err == nil {
+		t.Fatal("expected an error for an invalid provider kind")
 	}
 }
 

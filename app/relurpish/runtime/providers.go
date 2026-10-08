@@ -52,18 +52,35 @@ type runtimeProviderRecord struct {
 	desc     provider.ProviderDescriptor
 }
 
-// RegisterBuiltinProviders installs builtin runtime-managed providers declared by the agent spec.
+// RegisterBuiltinProviders validates and records the provider specs declared by
+// the agent spec. Builtin provider implementations are not yet wired, so this
+// reports each declared spec with a clear log and telemetry event instead of
+// silently ignoring it, and fails closed on an invalid spec.
 func RegisterBuiltinProviders(ctx context.Context, rt *Runtime) error {
 	if rt == nil || rt.AgentWorkspace() == nil || rt.AgentWorkspace().AgentSpec == nil {
 		return nil
 	}
 	for _, providerSpec := range rt.AgentWorkspace().AgentSpec.Providers {
-		log.Printf("runtime provider config unsupported: id=%s kind=%s target=%s", providerSpec.ID, providerSpec.Kind, providerSpec.Target)
-		rt.emitProviderLifecycleEvent(ctx, providerSpec.ID, "", "provider_config_unsupported", "runtime provider config unsupported", map[string]any{
+		cfg := provider.ProviderConfig{
+			ID:              providerSpec.ID,
+			Kind:            providerSpec.Kind,
+			Enabled:         providerSpec.Enabled,
+			Target:          providerSpec.Target,
+			ActivationScope: providerSpec.ActivationScope,
+			TrustBaseline:   providerSpec.TrustBaseline,
+			Recoverability:  policy.RecoverabilityMode(providerSpec.Recoverability),
+			Config:          providerSpec.Config,
+		}
+		if err := cfg.Validate(); err != nil {
+			return fmt.Errorf("provider %s: %w", providerSpec.ID, err)
+		}
+		log.Printf("runtime provider spec detected: id=%s kind=%s target=%s enabled=%t (no builtin implementation registered; spec recorded for future activation)", providerSpec.ID, providerSpec.Kind, providerSpec.Target, providerSpec.Enabled)
+		rt.emitProviderLifecycleEvent(ctx, providerSpec.ID, "", "provider_spec_detected", "provider spec detected", map[string]any{
 			providerKindMetadataKey: string(providerSpec.Kind),
 			"provider_target":       providerSpec.Target,
 			"activation_scope":      providerSpec.ActivationScope,
 			"recoverability":        string(providerSpec.Recoverability),
+			"provider_enabled":      providerSpec.Enabled,
 		})
 	}
 	return nil

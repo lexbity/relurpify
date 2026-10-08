@@ -71,6 +71,14 @@ func (g *SandboxRuntimeImpl) Capabilities() Capabilities {
 
 // ValidatePolicy checks policy structure and backend support before apply.
 func (g *SandboxRuntimeImpl) ValidatePolicy(policy SandboxPolicy) error {
+	return validateBackendPolicy(g.Name(), g.Capabilities(), policy)
+}
+
+// validateBackendPolicy applies the shared, backend-neutral policy checks every
+// sandbox backend must enforce. Backends supply their name and enforced
+// capabilities; a policy rejected by one backend for a structural reason is
+// rejected by all of them.
+func validateBackendPolicy(name string, caps Capabilities, policy SandboxPolicy) error {
 	if err := policy.Validate(); err != nil {
 		return err
 	}
@@ -80,27 +88,26 @@ func (g *SandboxRuntimeImpl) ValidatePolicy(policy SandboxPolicy) error {
 	// metadata protection) that no agent configuration can relax.
 	for i, rule := range policy.NetworkRules {
 		if rule.Host != "" && IsPrivateOrLoopbackHost(rule.Host) {
-			return fmt.Errorf("%s backend: network rule %d targets blocked host %q (private, loopback, and link-local addresses are denied)", g.Name(), i, rule.Host)
+			return fmt.Errorf("%s backend: network rule %d targets blocked host %q (private, loopback, and link-local addresses are denied)", name, i, rule.Host)
 		}
 	}
-	caps := g.Capabilities()
 	switch {
 	case len(policy.AllowedEnvKeys) > 0 || len(policy.DeniedEnvKeys) > 0:
 		if !caps.EnvFiltering {
-			return fmt.Errorf("%s backend does not support environment filtering", g.Name())
+			return fmt.Errorf("%s backend does not support environment filtering", name)
 		}
 	}
 	if policy.ReadOnlyRoot && !caps.ReadOnlyRoot {
-		return fmt.Errorf("%s backend does not support read-only root", g.Name())
+		return fmt.Errorf("%s backend does not support read-only root", name)
 	}
 	if len(policy.ProtectedPaths) > 0 && !caps.ProtectedPaths {
-		return fmt.Errorf("%s backend does not support protected paths", g.Name())
+		return fmt.Errorf("%s backend does not support protected paths", name)
 	}
 	if policy.NoNewPrivileges && !caps.NoNewPrivileges {
-		return fmt.Errorf("%s backend does not support no-new-privileges", g.Name())
+		return fmt.Errorf("%s backend does not support no-new-privileges", name)
 	}
 	if strings.TrimSpace(policy.SeccompProfile) != "" && !caps.Seccomp {
-		return fmt.Errorf("%s backend does not support seccomp profiles", g.Name())
+		return fmt.Errorf("%s backend does not support seccomp profiles", name)
 	}
 	return nil
 }
@@ -168,25 +175,32 @@ func (g *SandboxRuntimeImpl) checkRunsc(ctx context.Context) error {
 // checkContainerRuntime ensures docker/containerd are installed and respond to
 // a basic info command so the agent runtime can launch workloads later.
 func (g *SandboxRuntimeImpl) checkContainerRuntime(ctx context.Context) error {
-	runtime := strings.ToLower(g.config.ContainerRuntime)
+	return verifyContainerRuntime(ctx, g.config.ContainerRuntime)
+}
+
+// verifyContainerRuntime checks that the named container runtime binary exists
+// and responds to a lightweight command. It is shared by every sandbox backend
+// so docker/containerd availability is probed identically.
+func verifyContainerRuntime(ctx context.Context, runtime string) error {
+	runtime = strings.ToLower(strings.TrimSpace(runtime))
 	switch runtime {
 	case "docker", "containerd":
 	default:
-		return fmt.Errorf("unsupported container runtime %s", g.config.ContainerRuntime)
+		return fmt.Errorf("unsupported container runtime %s", runtime)
 	}
-	_, err := exec.LookPath(runtime)
+	path, err := exec.LookPath(runtime)
 	if err != nil {
 		return fmt.Errorf("%s binary not found: %w", runtime, err)
 	}
-	// We run a lightweight version command to ensure the selected container runtime is available.
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
 	var args []string
 	if runtime == "docker" {
 		args = []string{"info", "--format", "'{{json .Runtimes}}'"}
 	} else {
 		args = []string{"--version"}
 	}
-	cmd, cancel := g.commandContext(ctx, runtime, args...)
-	defer cancel()
+	cmd := safeexec.CommandContext(ctx, safeexec.Prepare(path, args...))
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("%s verification failed: %w", runtime, err)
 	}

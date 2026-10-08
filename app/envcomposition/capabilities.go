@@ -112,7 +112,7 @@ func BuildCapabilityRuntime(ctx context.Context, workspace string, runner *fsand
 	manifestTools := toolcapabilities.Build(workspace, fsandbox.CommandRunnerAdapter{Runner: runner}, toolManifests,
 		toolcapabilities.StrictMode(),
 		toolcapabilities.WithBackendBuilder("subprocess", subprocess.BackendBuilder()),
-		toolcapabilities.WithBackendBuilder("composite", composite.BackendBuilder()),
+		toolcapabilities.WithBackendBuilder("composite", composite.BackendBuilder(registry.Get)),
 	)
 
 	for _, tool := range manifestTools {
@@ -217,7 +217,7 @@ func BuildMinimalToolRegistry(ctx context.Context, workspace string, runner fsan
 	tools := toolcapabilities.Build(workspace, fsandbox.CommandRunnerAdapter{Runner: runner}, manifests,
 		toolcapabilities.StrictMode(),
 		toolcapabilities.WithBackendBuilder("subprocess", subprocess.BackendBuilder()),
-		toolcapabilities.WithBackendBuilder("composite", composite.BackendBuilder()),
+		toolcapabilities.WithBackendBuilder("composite", composite.BackendBuilder(capReg.Get)),
 	)
 
 	for _, tool := range tools {

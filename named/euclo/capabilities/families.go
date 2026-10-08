@@ -32,7 +32,6 @@ func GetBuiltinFamilies() []CapabilityFamily {
 			CapabilityIDs: []string{
 				"euclo:cap.targeted_refactor",
 				"euclo:cap.rename_symbol",
-				"euclo:cap.extract_func",
 			},
 		},
 		{
@@ -41,7 +40,6 @@ func GetBuiltinFamilies() []CapabilityFamily {
 			Description:        "Capabilities for testing and verification",
 			FallbackCapability: "euclo:cap.test_run",
 			CapabilityIDs: []string{
-				"euclo:cap.test_synthesis",
 				"euclo:cap.test_run",
 				"euclo:cap.coverage_check",
 			},
@@ -63,7 +61,6 @@ func GetBuiltinFamilies() []CapabilityFamily {
 			FallbackCapability: "euclo:cap.api_compat",
 			CapabilityIDs: []string{
 				"euclo:cap.api_compat",
-				"euclo:cap.dep_upgrade",
 			},
 		},
 		{

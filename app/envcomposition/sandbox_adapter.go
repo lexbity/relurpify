@@ -95,18 +95,19 @@ func NewSandboxBackendFactory() fauthorization.SandboxBackendFactory {
 			supported := strings.Join(sandbox.SupportedSandboxBackends(), ", ")
 			return nil, fmt.Errorf("unsupported sandbox backend %q (supported: %s)", backend, supported)
 		}
+		sboxCfg := sandbox.SandboxConfig{
+			RunscPath:        cfg.RunscPath,
+			ContainerRuntime: cfg.ContainerRuntime,
+			Platform:         cfg.Platform,
+			NetworkIsolation: cfg.NetworkIsolation,
+			ReadOnlyRoot:     cfg.ReadOnlyRoot,
+			SeccompProfile:   cfg.SeccompProfile,
+		}
 		switch b {
 		case "gvisor":
-			return &sandboxRuntimeAdapter{
-				inner: sandbox.NewSandboxRuntime(sandbox.SandboxConfig{
-					RunscPath:        cfg.RunscPath,
-					ContainerRuntime: cfg.ContainerRuntime,
-					Platform:         cfg.Platform,
-					NetworkIsolation: cfg.NetworkIsolation,
-					ReadOnlyRoot:     cfg.ReadOnlyRoot,
-					SeccompProfile:   cfg.SeccompProfile,
-				}),
-			}, nil
+			return &sandboxRuntimeAdapter{inner: sandbox.NewSandboxRuntime(sboxCfg)}, nil
+		case "docker":
+			return &sandboxRuntimeAdapter{inner: sandbox.NewDockerSandboxBackend(sboxCfg)}, nil
 		default:
 			return nil, fmt.Errorf("unreachable: unsupported sandbox backend %q", b)
 		}

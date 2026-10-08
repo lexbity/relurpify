@@ -18,6 +18,8 @@ func NewSandboxRuntimeForBackend(backend string, cfg SandboxConfig, image, works
 	switch b {
 	case "gvisor":
 		return NewSandboxRuntime(cfg), nil
+	case "docker":
+		return NewDockerSandboxBackend(cfg), nil
 	default:
 		return nil, fmt.Errorf("unreachable: unsupported sandbox backend %q", b)
 	}

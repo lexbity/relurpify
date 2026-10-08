@@ -1,14 +1,28 @@
 package composite
 
-import "codeburg.org/lexbit/relurpify/capability/ports"
+import (
+	"errors"
 
-type builder struct{}
+	"codeburg.org/lexbit/relurpify/capability/ports"
+)
 
-func (builder) BuildTool(manifest ports.ToolManifest, runner ports.CommandRunner) (ports.Tool, error) {
-	resolver := func(name string) (ports.Tool, bool) {
-		return nil, false
-	}
-	return New(manifest, resolver), nil
+// builder is the composite ToolBackendBuilder. It carries the tool resolver
+// used at execution time to locate each step's implementation.
+type builder struct {
+	resolver ToolResolver
 }
 
-func BackendBuilder() ports.ToolBackendBuilder { return builder{} }
+func (b builder) BuildTool(manifest ports.ToolManifest, _ ports.CommandRunner) (ports.Tool, error) {
+	if b.resolver == nil {
+		return nil, errors.New("composite backend requires a tool resolver")
+	}
+	return New(manifest, b.resolver), nil
+}
+
+// BackendBuilder returns the composite ToolBackendBuilder. The resolver resolves
+// sub-tool names to their runtime implementations at execution time; the
+// composition root wires it to the capability registry so composite steps
+// actually execute instead of failing with "tool not found".
+func BackendBuilder(resolver ToolResolver) ports.ToolBackendBuilder {
+	return builder{resolver: resolver}
+}

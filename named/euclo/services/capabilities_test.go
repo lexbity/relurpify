@@ -4,6 +4,7 @@ import (
 	"sort"
 	"testing"
 
+	euclocapabilities "codeburg.org/lexbit/relurpify/named/euclo/capabilities"
 	"codeburg.org/lexbit/relurpify/named/euclo/relurpicabilities"
 )
 
@@ -41,6 +42,30 @@ func TestEucloCapabilitiesMatchBlueprints(t *testing.T) {
 	for _, id := range blueprintIDs {
 		if _, ok := declSet[id]; !ok {
 			t.Errorf("blueprint %q is missing from eucloCapabilities", id)
+		}
+	}
+}
+
+// TestFamilyCapabilitiesExistInBlueprint guards against advertising capability
+// families that reference capabilities with no handler. Every capability ID and
+// fallback referenced by the builtin families must exist in the canonical
+// blueprint table.
+func TestFamilyCapabilitiesExistInBlueprint(t *testing.T) {
+	blueprints := make(map[string]struct{})
+	for _, id := range relurpicabilities.AllCapabilityIDs() {
+		blueprints[id] = struct{}{}
+	}
+
+	for _, family := range euclocapabilities.GetBuiltinFamilies() {
+		if fallback := family.FallbackCapability; fallback != "" {
+			if _, ok := blueprints[fallback]; !ok {
+				t.Errorf("family %s fallback %q has no blueprint entry", family.ID, fallback)
+			}
+		}
+		for _, id := range family.CapabilityIDs {
+			if _, ok := blueprints[id]; !ok {
+				t.Errorf("family %s references capability %q with no blueprint entry", family.ID, id)
+			}
 		}
 	}
 }

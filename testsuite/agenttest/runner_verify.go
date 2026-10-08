@@ -20,13 +20,19 @@ func buildVerifyToolIndex(workspace string, runner sandbox.CommandRunner) map[st
 	if err != nil {
 		return nil
 	}
+	index := make(map[string]ports.Tool, len(manifests))
+	byNormalized := make(map[string]ports.Tool, len(manifests))
+	resolver := func(name string) (ports.Tool, bool) {
+		tool, ok := byNormalized[ports.NormalizeToolName(name)]
+		return tool, ok
+	}
 	tools := toolcapabilities.Build(workspace, sandbox.CommandRunnerAdapter{Runner: runner}, manifests,
 		toolcapabilities.WithBackendBuilder("subprocess", subprocess.BackendBuilder()),
-		toolcapabilities.WithBackendBuilder("composite", composite.BackendBuilder()),
+		toolcapabilities.WithBackendBuilder("composite", composite.BackendBuilder(resolver)),
 	)
-	index := make(map[string]ports.Tool, len(tools))
 	for _, tool := range tools {
 		index[tool.Name()] = tool
+		byNormalized[ports.NormalizeToolName(tool.Name())] = tool
 	}
 	return index
 }
