@@ -2,6 +2,7 @@ package authorization
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -23,7 +24,7 @@ type ApprovalRequest struct {
 
 func EvaluatePolicyRequest(ctx context.Context, engine PolicyEngine, req policy.PolicyRequest) (policy.PolicyDecision, error) {
 	if engine == nil {
-		return policy.PolicyDecisionAllow("no policy engine"), nil
+		return policy.PolicyDecisionDeny(policyEngineUnavailable), errors.New(policyEngineUnavailable)
 	}
 	return engine.Evaluate(ctx, req)
 }
@@ -31,11 +32,18 @@ func EvaluatePolicyRequest(ctx context.Context, engine PolicyEngine, req policy.
 func EnforcePolicyRequest(ctx context.Context, engine PolicyEngine, req policy.PolicyRequest, approval ApprovalRequest) (policy.PolicyDecision, error) {
 	decision, err := EvaluatePolicyRequest(ctx, engine, req)
 	if err != nil {
-		return policy.PolicyDecision{}, err
+		// Propagate the (fail-closed deny) decision alongside the error so
+		// callers that inspect the decision still see the deny.
+		return decision, err
 	}
 	switch decision.Effect {
-	case "", "allow":
+	case "allow":
 		return decision, nil
+	case "":
+		// An empty effect is not "allow": fail closed to deny.
+		decision.Effect = "deny"
+		decision.Reason = "empty policy effect"
+		return decision, errors.New("empty policy effect")
 	case "deny":
 		reason := decision.Reason
 		if reason == "" {

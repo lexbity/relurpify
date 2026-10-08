@@ -254,6 +254,27 @@ func (m *PermissionManager) emitPolicyDecision(ctx context.Context, agentID stri
 	})
 }
 
+// emitPolicyConflict forwards one shadowed-allow conflict to the decision sink.
+// It is a distinct event from PolicyEvaluated so operators can detect policies
+// whose effective meaning changed under the deny-wins lattice.
+func (m *PermissionManager) emitPolicyConflict(ctx context.Context, agentID string, conflict shadowedRule) {
+	if m == nil {
+		return
+	}
+	m.mu.RLock()
+	sink := m.decisions
+	m.mu.RUnlock()
+	if sink == nil {
+		return
+	}
+	sink.PolicyConflictShadowed(ctx, fwtelemetry.PolicyConflict{
+		Winner:   conflict.Winner.ID,
+		Shadowed: conflict.Shadowed.ID,
+		Effect:   conflict.Shadowed.Effect.Action,
+		Actor:    agentID,
+	})
+}
+
 // ruleIDFromFields extracts the matched rule identifier carried by engine
 // decisions (rule_id/rule_name fields).
 func ruleIDFromFields(fields map[string]any) string {

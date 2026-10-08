@@ -1,6 +1,7 @@
 package authorization
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
@@ -9,29 +10,134 @@ import (
 	"codeburg.org/lexbit/relurpify/governance/risk"
 )
 
-func evaluateCompiledRules(rules []policy.PolicyRule, req policy.PolicyRequest) *policy.PolicyDecision {
-	for i := range rules {
-		rule := rules[i]
-		if !rule.Enabled {
-			continue
-		}
-		if !ruleMatchesRequest(rule, req) {
-			continue
-		}
-		decision := decisionForRule(&rule)
-		return &decision
-	}
-	return nil
+// policyEffect is the typed rule-effect vocabulary. The deny-wins lattice order
+// (weakest to strongest) is:
+//
+//	allow < log_only < rate_limit < require_approval < deny
+type policyEffect string
+
+const (
+	effectAllow           policyEffect = "allow"
+	effectLogOnly         policyEffect = "log_only"
+	effectRateLimit       policyEffect = "rate_limit"
+	effectRequireApproval policyEffect = "require_approval"
+	effectDeny            policyEffect = "deny"
+)
+
+// effectSeverity is the single source of truth for the deny-wins lattice.
+var effectSeverity = map[policyEffect]int{
+	effectAllow:           0,
+	effectLogOnly:         1,
+	effectRateLimit:       2,
+	effectRequireApproval: 3,
+	effectDeny:            4,
 }
 
-func decisionForRule(rule *policy.PolicyRule) policy.PolicyDecision {
-	switch rule.Effect.Action {
-	case "allow":
-		return policy.PolicyDecision{Effect: "allow", Rule: rule, Reason: rule.Effect.Reason}
-	case "deny":
-		return policy.PolicyDecision{Effect: "deny", Rule: rule, Reason: rule.Effect.Reason}
-	default:
+// allPolicyEffects lists every effect constant. init asserts the severity table
+// covers all of them, so adding a constant without registering its severity
+// fails at process start rather than silently weakening the lattice.
+var allPolicyEffects = [...]policyEffect{
+	effectAllow, effectLogOnly, effectRateLimit, effectRequireApproval, effectDeny,
+}
+
+func init() {
+	for _, effect := range allPolicyEffects {
+		if _, ok := effectSeverity[effect]; !ok {
+			panic("authorization: effectSeverity is missing policy effect " + string(effect))
+		}
+	}
+}
+
+// parsePolicyEffect parses a rule effect action into the typed vocabulary.
+func parsePolicyEffect(action string) (policyEffect, bool) {
+	effect := policyEffect(strings.TrimSpace(action))
+	if _, ok := effectSeverity[effect]; ok {
+		return effect, true
+	}
+	return "", false
+}
+
+// effectSeverityOf returns the lattice severity. An unknown effect is treated
+// as maximally strong so the fail-closed deny mapping always wins.
+func effectSeverityOf(effect policyEffect) int {
+	if severity, ok := effectSeverity[effect]; ok {
+		return severity
+	}
+	return int(^uint(0) >> 1)
+}
+
+// shadowedRule records an allow rule that lost to a stronger effect.
+type shadowedRule struct {
+	Winner   policy.PolicyRule
+	Shadowed policy.PolicyRule
+}
+
+// evaluateCompiledRules applies the deny-wins lattice over every matching
+// enabled rule. It returns the winning decision and any allow rules that were
+// shadowed by a stronger effect. A nil decision means no rule matched and the
+// caller must apply its fallback.
+func evaluateCompiledRules(rules []policy.PolicyRule, req policy.PolicyRequest) (*policy.PolicyDecision, []shadowedRule) {
+	var matches []policy.PolicyRule
+	for i := range rules {
+		rule := rules[i]
+		if !rule.Enabled || !ruleMatchesRequest(rule, req) {
+			continue
+		}
+		matches = append(matches, rule)
+	}
+	if len(matches) == 0 {
+		return nil, nil
+	}
+
+	winnerIdx := 0
+	winnerEffect, _ := parsePolicyEffect(matches[0].Effect.Action)
+	winnerSeverity := effectSeverityOf(winnerEffect)
+	for i := 1; i < len(matches); i++ {
+		effect, _ := parsePolicyEffect(matches[i].Effect.Action)
+		severity := effectSeverityOf(effect)
+		// Stronger effect wins; on a tie the higher priority wins; on a full
+		// tie the earliest rule (list order) stays the winner.
+		if severity > winnerSeverity ||
+			(severity == winnerSeverity && matches[i].Priority > matches[winnerIdx].Priority) {
+			winnerIdx = i
+			winnerEffect = effect
+			winnerSeverity = severity
+		}
+	}
+
+	winner := matches[winnerIdx]
+	var shadowed []shadowedRule
+	for _, match := range matches {
+		effect, _ := parsePolicyEffect(match.Effect.Action)
+		if effect == effectAllow && effectSeverityOf(effect) < winnerSeverity {
+			shadowed = append(shadowed, shadowedRule{Winner: winner, Shadowed: match})
+		}
+	}
+
+	decision := decisionForEffect(winnerEffect, &winner)
+	return &decision, shadowed
+}
+
+// decisionForEffect maps a winning effect to the decision vocabulary consumed by
+// EnforcePolicyRequest. An unknown effect fails closed to deny.
+func decisionForEffect(effect policyEffect, rule *policy.PolicyRule) policy.PolicyDecision {
+	reason := ""
+	if rule != nil {
+		reason = rule.Effect.Reason
+	}
+	switch effect {
+	case effectAllow, effectLogOnly:
+		decision := policy.PolicyDecisionAllow(reason)
+		decision.Rule = rule
+		return decision
+	case effectDeny:
+		decision := policy.PolicyDecisionDeny(reason)
+		decision.Rule = rule
+		return decision
+	case effectRequireApproval, effectRateLimit:
 		return policy.PolicyDecisionRequireApproval(rule)
+	default:
+		return policy.PolicyDecisionDeny(fmt.Sprintf("unsupported effect %q", effect))
 	}
 }
 
