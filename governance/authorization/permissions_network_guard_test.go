@@ -166,7 +166,7 @@ func TestCheckNetworkAllowsPublicIP(t *testing.T) {
 	}
 }
 
-func TestDefaultPolicyAllowRejectedAtRegistration(t *testing.T) {
+func TestDefaultDecisionAllowRejectedAtRegistration(t *testing.T) {
 	perm := &permissions.PermissionSet{
 		Executables: []permissions.ExecutablePermission{
 			{Binary: "echo"},
@@ -177,7 +177,15 @@ func TestDefaultPolicyAllowRejectedAtRegistration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewPermissionManager: %v", err)
 	}
-	m.SetDefaultPolicy("allow")
+	if err := m.SetDefaultDecision(permissions.DecisionAllow); err == nil {
+		t.Fatal("expected SetDefaultDecision(allow) to be rejected")
+	}
+	if got := m.DefaultPolicy(); got != string(permissions.DecisionAsk) {
+		t.Fatalf("default after rejected allow = %q, want ask", got)
+	}
+	if err := m.SetDefaultDecision(permissions.Decision("alow")); err == nil {
+		t.Fatal("expected an invalid decision to be rejected")
+	}
 }
 
 func TestDefaultPolicyAskIsValid(t *testing.T) {
@@ -191,7 +199,7 @@ func TestDefaultPolicyAskIsValid(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewPermissionManager: %v", err)
 	}
-	m.SetDefaultPolicy("ask")
+	_ = m.SetDefaultDecision(permissions.DecisionAsk)
 }
 
 func TestDefaultPolicyDenyIsValid(t *testing.T) {
@@ -205,7 +213,7 @@ func TestDefaultPolicyDenyIsValid(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewPermissionManager: %v", err)
 	}
-	m.SetDefaultPolicy("deny")
+	_ = m.SetDefaultDecision(permissions.DecisionDeny)
 }
 
 func TestUndeclaredToolPermissionDeniedNotSilent(t *testing.T) {

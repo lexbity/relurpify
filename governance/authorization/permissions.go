@@ -71,7 +71,7 @@ type PermissionManager struct {
 	mu               sync.RWMutex
 	grantClock       func() time.Time
 	netPolicy        []governanceports.SandboxNetworkRule
-	defaultPolicy    string // governs undeclared tool permissions; default is Ask
+	defaultDecision  permissions.Decision // governs undeclared tool permissions; default is Ask
 	decisions        fwtelemetry.DecisionSink
 	runtimePolicyErr error
 	taskGrants       map[string]taskGrant
@@ -91,16 +91,17 @@ func NewPermissionManager(basePath string, declared *permissions.PermissionSet, 
 		return nil, err
 	}
 	pm := &PermissionManager{
-		basePath:       basePath,
-		declared:       declared,
-		audit:          audit,
-		hitl:           hitl,
-		grants:         make(map[string]*PermissionGrant),
-		taskGrants:     make(map[string]taskGrant),
-		hitlRateLimits: make(map[string]*hitlRateBucket),
-		fsPermCache:    make(map[string]*permissions.FileSystemPermission),
-		execPermCache:  make(map[string]*permissions.ExecutablePermission),
-		grantClock:     time.Now,
+		basePath:        basePath,
+		declared:        declared,
+		audit:           audit,
+		hitl:            hitl,
+		grants:          make(map[string]*PermissionGrant),
+		taskGrants:      make(map[string]taskGrant),
+		hitlRateLimits:  make(map[string]*hitlRateBucket),
+		fsPermCache:     make(map[string]*permissions.FileSystemPermission),
+		execPermCache:   make(map[string]*permissions.ExecutablePermission),
+		grantClock:      time.Now,
+		defaultDecision: permissions.DecisionAsk,
 	}
 	pm.inflateScopes()
 	return pm, nil
@@ -114,12 +115,20 @@ func (m *PermissionManager) AttachRuntime(ctx context.Context, runtime governanc
 	m.applyRuntimePolicyLocked(ctx)
 }
 
-// SetDefaultPolicy configures how undeclared permissions are handled.
-// agentspec.AgentPermissionAsk (default) routes to HITL; Allow bypasses; Deny hard-blocks.
-func (m *PermissionManager) SetDefaultPolicy(level string) {
+// SetDefaultDecision configures how undeclared permissions are handled.
+// DecisionAllow is rejected here (compile-time enforcement of the posture);
+// DecisionDeny hard-blocks; the terminal default is DecisionAsk (HITL).
+func (m *PermissionManager) SetDefaultDecision(level permissions.Decision) error {
+	if _, err := permissions.ParseDecision(string(level)); err != nil {
+		return err
+	}
+	if level == permissions.DecisionAllow {
+		return errors.New("default decision allow is not permitted; use ask (HITL) or deny")
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.defaultPolicy = level
+	m.defaultDecision = level
+	return nil
 }
 
 // SetDecisionSink configures the port that receives structured decision
@@ -130,19 +139,20 @@ func (m *PermissionManager) SetDecisionSink(sink fwtelemetry.DecisionSink) {
 	m.decisions = sink
 }
 
-// DefaultPolicy returns the configured default policy level, falling back to Ask.
+// DefaultPolicy returns the configured default decision as a string, falling
+// back to ask. It is a projection for consumers that persist a string.
 func (m *PermissionManager) DefaultPolicy() string {
-	return m.effectiveDefaultPolicy()
+	return string(m.effectiveDefaultDecision())
 }
 
-// effectiveDefaultPolicy returns the configured policy, falling back to Ask.
-func (m *PermissionManager) effectiveDefaultPolicy() string {
+// effectiveDefaultDecision returns the configured decision, falling back to ask.
+func (m *PermissionManager) effectiveDefaultDecision() permissions.Decision {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	if m.defaultPolicy == "" {
-		return defaultPolicyAsk
+	if m.defaultDecision == "" {
+		return permissions.DecisionAsk
 	}
-	return m.defaultPolicy
+	return m.defaultDecision
 }
 
 func (m *PermissionManager) applyRuntimePolicyLocked(ctx context.Context) {

@@ -32,6 +32,7 @@ import (
 	"codeburg.org/lexbit/relurpify/execution/session"
 	"codeburg.org/lexbit/relurpify/execution/workspace"
 	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/governance/policy"
 	"codeburg.org/lexbit/relurpify/model"
 	"codeburg.org/lexbit/relurpify/named/euclo"
@@ -424,12 +425,16 @@ func buildRuntime(ctx context.Context, cfg Config, secrets config.Secrets) (*Run
 	logger := ws.Logger
 	baseTelemetry := ws.Telemetry
 	if registration != nil && registration.Permissions != nil {
-		var bashCfg *fauthorization.BashConfig
+		bashCfg := &fauthorization.BashConfig{Default: permissions.DecisionAsk}
 		if spec, ok := registration.AgentSpec.(*config.AgentSpec); ok && spec != nil {
+			decision, derr := permissions.DecisionOr(string(spec.Bash.Default), permissions.DecisionAsk)
+			if derr != nil {
+				return nil, fmt.Errorf("agent bash default: %w", derr)
+			}
 			bashCfg = &fauthorization.BashConfig{
 				AllowPatterns: spec.Bash.AllowPatterns,
 				DenyPatterns:  spec.Bash.DenyPatterns,
-				Default:       string(spec.Bash.Default),
+				Default:       decision,
 			}
 		}
 		authPolicy := fauthorization.NewCommandAuthorizationPolicy(registration.Permissions, registration.ID, bashCfg, "runtime")

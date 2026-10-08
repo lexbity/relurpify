@@ -44,10 +44,10 @@ func (m *PermissionManager) CheckNetwork(ctx context.Context, agentID string, di
 	perm := m.findNetworkPermission(direction, protocol, host, port)
 	if perm == nil {
 		desc := networkDescriptor(direction, protocol, host, port)
-		switch m.effectiveDefaultPolicy() {
-		case "deny":
+		switch m.effectiveDefaultDecision() {
+		case permissions.DecisionDeny:
 			return m.deny(ctx, agentID, desc, "network scope missing")
-		default: // AgentPermissionAsk (Allow is rejected at registration time)
+		default: // DecisionAsk (allow is rejected at registration time)
 			desc.RequiresHITL = true
 			return m.ensureGrant(ctx, agentID, desc)
 		}

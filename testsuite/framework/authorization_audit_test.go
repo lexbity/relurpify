@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/governance/authorization"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
@@ -82,7 +81,7 @@ func TestAllowDecisionAudit(t *testing.T) {
 // with clear denial reasons and distinguishable from allow decisions.
 func TestDenyDecisionAudit(t *testing.T) {
 	env := NewTestEnvironment(t)
-	env.PermissionManager.SetDefaultPolicy(string(agentspec.AgentPermissionDeny))
+	_ = env.PermissionManager.SetDefaultDecision(permissions.DecisionDeny)
 
 	agentID := "test-agent"
 
@@ -407,7 +406,7 @@ func TestAuditQueryFiltering(t *testing.T) {
 // decisions are clearly distinguishable in the audit surface.
 func TestDenyAndHITLDistinguishability(t *testing.T) {
 	env := NewTestEnvironment(t)
-	env.PermissionManager.SetDefaultPolicy(string(agentspec.AgentPermissionDeny))
+	_ = env.PermissionManager.SetDefaultDecision(permissions.DecisionDeny)
 
 	agentID := "test-agent"
 

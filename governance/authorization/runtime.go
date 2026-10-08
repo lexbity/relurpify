@@ -13,12 +13,6 @@ import (
 	governanceports "codeburg.org/lexbit/relurpify/governance/ports"
 )
 
-const (
-	defaultToolPolicyAllow = "allow"
-	defaultPolicyAsk       = "ask"
-	defaultPolicyDeny      = "deny"
-)
-
 // runtimeStateDirName is the workspace-relative runtime state directory used as a
 // filesystem-guard root fallback when the caller does not supply StateDir. Kept
 // local to avoid importing userconfig (mirrors userconfig secretscan.RuntimeStateDirName).
@@ -129,12 +123,13 @@ func RegisterAgent(ctx context.Context, cfg RuntimeConfig) (*AgentRegistration, 
 			[]string{stateDir},
 		)
 		if strings.TrimSpace(cfg.DefaultToolPolicy) != "" {
-			if strings.ToLower(strings.TrimSpace(cfg.DefaultToolPolicy)) == defaultToolPolicyAllow {
-				return nil, errors.New(
-					"agent spec sets default_policy=allow which is not permitted; " +
-						"use default_policy=ask for HITL or declare explicit permissions")
+			decision, err := permissions.ParseDecision(cfg.DefaultToolPolicy)
+			if err != nil {
+				return nil, fmt.Errorf("agent spec default_policy: %w", err)
 			}
-			permManager.SetDefaultPolicy(cfg.DefaultToolPolicy)
+			if err := permManager.SetDefaultDecision(decision); err != nil {
+				return nil, fmt.Errorf("agent spec default_policy: %w", err)
+			}
 		}
 		permManager.AttachRuntime(ctx, runtime)
 	}

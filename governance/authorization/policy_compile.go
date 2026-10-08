@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/governance/classification"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
 	pol "codeburg.org/lexbit/relurpify/governance/policy"
 	"codeburg.org/lexbit/relurpify/governance/ports"
 	"codeburg.org/lexbit/relurpify/governance/risk"
@@ -286,11 +287,15 @@ func permissionLevelToEffect(level string, reason string) pol.PolicyEffect {
 }
 
 func permissionLevelToAction(level string) string {
-	switch level {
-	case "allow":
-		return "allow"
-	case "deny":
-		return "deny"
+	decision, err := permissions.ParseDecision(level)
+	if err != nil {
+		return "require_approval"
+	}
+	switch decision {
+	case permissions.DecisionAllow:
+		return string(permissions.DecisionAllow)
+	case permissions.DecisionDeny:
+		return string(permissions.DecisionDeny)
 	default:
 		return "require_approval"
 	}

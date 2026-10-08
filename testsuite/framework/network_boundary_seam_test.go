@@ -6,7 +6,6 @@ import (
 	"strings"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	regpkg "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/governance/authorization"
@@ -81,7 +80,7 @@ func TestNetworkBoundaryEnforcement(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to create permission manager: %v", err)
 		}
-		manager.SetDefaultPolicy(string(agentspec.AgentPermissionDeny))
+		_ = manager.SetDefaultDecision(permissions.DecisionDeny)
 
 		// Check network access to non-allow-listed host
 		err = manager.CheckNetwork(context.Background(), "test-agent", "egress", "tcp", networkTargetFor("denied.com"), 443)

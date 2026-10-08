@@ -6,8 +6,11 @@ import (
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 )
 
-// DecideByPatterns returns allow/deny/ask based on deny-first then allow list.
-func DecideByPatterns(target string, allowPatterns, denyPatterns []string, defaultDecision permissions.AgentPermissionLevel) (permissions.AgentPermissionLevel, string) {
+// DecideByPatterns returns the typed decision for a target using deny-first
+// then allow-list matching. An empty default resolves to the terminal ask
+// default; an invalid (non-empty) default also resolves to ask rather than
+// silently allowing.
+func DecideByPatterns(target string, allowPatterns, denyPatterns []string, defaultDecision permissions.Decision) (permissions.Decision, string) {
 	target = strings.TrimSpace(target)
 	for _, pattern := range denyPatterns {
 		pattern = strings.TrimSpace(pattern)
@@ -15,7 +18,7 @@ func DecideByPatterns(target string, allowPatterns, denyPatterns []string, defau
 			continue
 		}
 		if matchGlob(pattern, target) {
-			return permissions.AgentPermissionDeny, pattern
+			return permissions.DecisionDeny, pattern
 		}
 	}
 	for _, pattern := range allowPatterns {
@@ -24,11 +27,12 @@ func DecideByPatterns(target string, allowPatterns, denyPatterns []string, defau
 			continue
 		}
 		if matchGlob(pattern, target) {
-			return permissions.AgentPermissionAllow, pattern
+			return permissions.DecisionAllow, pattern
 		}
 	}
-	if defaultDecision == "" {
-		defaultDecision = permissions.AgentPermissionAllow
+	decision, err := permissions.DecisionOr(string(defaultDecision), permissions.DecisionAsk)
+	if err != nil {
+		return permissions.DecisionAsk, ""
 	}
-	return defaultDecision, ""
+	return decision, ""
 }

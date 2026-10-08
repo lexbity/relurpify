@@ -13,11 +13,12 @@ import (
 const commandApprovalAction = "command:exec"
 
 // BashConfig holds the allow/deny patterns and default decision for
-// bash command authorization.
+// bash command authorization. Default is a typed decision; its zero value
+// resolves to ask (never allow).
 type BashConfig struct {
 	AllowPatterns []string
 	DenyPatterns  []string
-	Default       string
+	Default       permissions.Decision
 }
 
 // CommandAuthorizationRequest describes a command that should be validated
@@ -93,11 +94,11 @@ func AuthorizeCommand(ctx context.Context, manager *PermissionManager, agentID s
 		return nil
 	}
 	commandString := strings.TrimSpace(binary + " " + strings.Join(args, " "))
-	decision := decideCommandByPatterns(commandString, bashCfg.AllowPatterns, bashCfg.DenyPatterns, bashCfg.Default)
+	decision, _ := DecideByPatterns(commandString, bashCfg.AllowPatterns, bashCfg.DenyPatterns, bashCfg.Default)
 	switch decision {
-	case "deny":
+	case permissions.DecisionDeny:
 		return fmt.Errorf("command blocked: denied by bash_permissions")
-	case "ask":
+	case permissions.DecisionAsk:
 		if manager == nil {
 			return fmt.Errorf("command blocked: approval required but permission manager missing")
 		}
@@ -112,7 +113,7 @@ func AuthorizeCommand(ctx context.Context, manager *PermissionManager, agentID s
 			Metadata:     metadata,
 			RequiresHITL: true,
 		}, "bash permission policy", policy.GrantScopeOneTime, policy.RiskLevelMedium, 0)
-	default:
+	default: // DecisionAllow
 		return nil
 	}
 }
@@ -128,30 +129,4 @@ func extractShellCommandString(binary string, args []string) string {
 		}
 	}
 	return strings.Join(append([]string{binary}, args...), " ")
-}
-
-func decideCommandByPatterns(target string, allowPatterns, denyPatterns []string, defaultDecision string) string {
-	target = strings.TrimSpace(target)
-	for _, pattern := range denyPatterns {
-		pattern = strings.TrimSpace(pattern)
-		if pattern == "" {
-			continue
-		}
-		if matchGlob(pattern, target) {
-			return "deny"
-		}
-	}
-	for _, pattern := range allowPatterns {
-		pattern = strings.TrimSpace(pattern)
-		if pattern == "" {
-			continue
-		}
-		if matchGlob(pattern, target) {
-			return "allow"
-		}
-	}
-	if defaultDecision == "" {
-		return "allow"
-	}
-	return defaultDecision
 }

@@ -36,7 +36,7 @@ func TestAuthorizeToolByNameFailsClosedWithoutHITL(t *testing.T) {
 
 func TestAuthorizeToolByNameDenyPolicy(t *testing.T) {
 	pm, _ := newToolAuthManager(t)
-	pm.SetDefaultPolicy("deny")
+	_ = pm.SetDefaultDecision(permissions.DecisionDeny)
 	if err := pm.AuthorizeToolByName(context.Background(), "agent-1", "file_read"); err == nil {
 		t.Fatal("expected a deny error")
 	}
@@ -59,7 +59,7 @@ func TestAuthorizeToolByNameAskPolicyWithHITL(t *testing.T) {
 // instead of dropping it.
 func TestEnforcerCheckToolInvokeCarriesToolName(t *testing.T) {
 	pm, audit := newToolAuthManager(t)
-	pm.SetDefaultPolicy("deny")
+	_ = pm.SetDefaultDecision(permissions.DecisionDeny)
 	e := NewEnforcer(pm)
 
 	decision := e.Check(context.Background(), governanceports.AccessRequest{

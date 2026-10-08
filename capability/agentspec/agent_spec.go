@@ -7,6 +7,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/capability/safety"
 	"codeburg.org/lexbit/relurpify/governance/classification"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/governance/risk"
 )
 
@@ -211,6 +212,20 @@ type AgentBashPermissions struct {
 	AllowPatterns []string             `yaml:"allow_patterns" json:"allow_patterns"`
 	DenyPatterns  []string             `yaml:"deny_patterns" json:"deny_patterns"`
 	Default       AgentPermissionLevel `yaml:"default" json:"default"`
+}
+
+// Validate rejects a default outside the decision vocabulary and empty
+// patterns. An empty default is valid (it inherits the ask terminal default).
+func (b AgentBashPermissions) Validate() error {
+	if _, err := permissions.DecisionOr(string(b.Default), permissions.DecisionAsk); err != nil {
+		return fmt.Errorf("bash_permissions.default %w", err)
+	}
+	for _, pattern := range append(append([]string{}, b.AllowPatterns...), b.DenyPatterns...) {
+		if strings.TrimSpace(pattern) == "" {
+			return fmt.Errorf("bash_permissions contains empty pattern")
+		}
+	}
+	return nil
 }
 
 // AgentFileMatrix scopes write/edit operations.
@@ -577,6 +592,9 @@ func (a *AgentRuntimeSpec) Validate() error {
 		}
 	}
 	if err := a.Files.Validate(); err != nil {
+		return err
+	}
+	if err := a.Bash.Validate(); err != nil {
 		return err
 	}
 	return nil
@@ -1030,10 +1048,8 @@ func (set AgentFilePermissionSet) validate(label string) error {
 			return fmt.Errorf("%s permission glob %s invalid", label, pattern)
 		}
 	}
-	switch set.Default {
-	case AgentPermissionAllow, AgentPermissionAsk, AgentPermissionDeny, "":
-	default:
-		return fmt.Errorf("%s permission default %s invalid", label, set.Default)
+	if _, err := permissions.DecisionOr(string(set.Default), permissions.DecisionAsk); err != nil {
+		return fmt.Errorf("%s permission default %s invalid: %w", label, set.Default, err)
 	}
 	return nil
 }

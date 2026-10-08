@@ -92,10 +92,10 @@ func (e *ManifestPolicyEngine) capabilityFallbackDecision(req policy.PolicyReque
 	case "builtin-trusted", "workspace-trusted":
 		return policy.PolicyDecisionAllow("workspace trusted")
 	default:
-		switch e.manager.DefaultPolicy() {
-		case "allow":
+		switch e.manager.effectiveDefaultDecision() {
+		case permissions.DecisionAllow:
 			return policy.PolicyDecisionAllow("default policy: allow")
-		case "deny":
+		case permissions.DecisionDeny:
 			return policy.PolicyDecisionDeny(
 				fmt.Sprintf("capability %q denied by default policy for agent %s", req.CapabilityName, e.agentID),
 			)

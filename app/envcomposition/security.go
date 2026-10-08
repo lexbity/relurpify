@@ -54,7 +54,6 @@ type SecurityRuntime struct {
 //  4. Resolve CommandAuthorizationPolicy (default-deny if no PermissionManager)
 //  5. NewAuthorizedRunner(verified, policy)
 //  6. Compile PolicyEngine from agent spec
-//
 func BuildSecurityRuntime(ctx context.Context, in SecurityRuntimeInput) (*SecurityRuntime, error) {
 	if in.Context == nil {
 		in.Context = context.Background()
@@ -86,11 +85,17 @@ func BuildSecurityRuntime(ctx context.Context, in SecurityRuntimeInput) (*Securi
 	}
 	var cmdPolicy sandbox.CommandPolicy
 	if permManager != nil {
-		bashCfg := &fauthorization.BashConfig{}
+		// The terminal bash default is ask: an absent agent spec or an unset
+		// default never means "allow". An explicit default: allow still works.
+		bashCfg := &fauthorization.BashConfig{Default: permissions.DecisionAsk}
 		if in.AgentSpec != nil {
 			bashCfg.AllowPatterns = in.AgentSpec.Bash.AllowPatterns
 			bashCfg.DenyPatterns = in.AgentSpec.Bash.DenyPatterns
-			bashCfg.Default = string(in.AgentSpec.Bash.Default)
+			decision, err := permissions.DecisionOr(string(in.AgentSpec.Bash.Default), permissions.DecisionAsk)
+			if err != nil {
+				return nil, fmt.Errorf("agent bash default: %w", err)
+			}
+			bashCfg.Default = decision
 		}
 		authPolicy := fauthorization.NewCommandAuthorizationPolicy(permManager, in.AgentID, bashCfg, "sandbox")
 		cmdPolicy = sandbox.CommandPolicyFunc(func(_ context.Context, req sandbox.CommandRequest) error {

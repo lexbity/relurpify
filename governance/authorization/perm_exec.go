@@ -21,10 +21,10 @@ func (m *PermissionManager) CheckExecutable(ctx context.Context, agentID, binary
 			Action:   fmt.Sprintf("exec:binary:%s", binary),
 			Resource: binary,
 		}
-		switch m.effectiveDefaultPolicy() {
-		case "deny":
+		switch m.effectiveDefaultDecision() {
+		case permissions.DecisionDeny:
 			return m.deny(ctx, agentID, desc, "binary not declared")
-		default: // AgentPermissionAsk (Allow is rejected at registration time)
+		default: // DecisionAsk (allow is rejected at registration time)
 			desc.RequiresHITL = true
 			return m.ensureGrant(ctx, agentID, desc)
 		}

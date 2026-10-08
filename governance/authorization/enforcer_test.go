@@ -45,7 +45,7 @@ func TestEnforcer_Check_fileRead_allowed(t *testing.T) {
 
 func TestEnforcer_Check_fileRead_denied(t *testing.T) {
 	pm := newTestPermissionManager(t)
-	pm.SetDefaultPolicy("deny")
+	_ = pm.SetDefaultDecision(permissions.DecisionDeny)
 	e := NewEnforcer(pm)
 	d := e.Check(context.Background(), governanceports.AccessRequest{
 		Principal: governanceports.Principal{AgentID: "test-agent"},

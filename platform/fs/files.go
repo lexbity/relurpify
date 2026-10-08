@@ -18,6 +18,7 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	registry "codeburg.org/lexbit/relurpify/capability/registry"
+	authorization "codeburg.org/lexbit/relurpify/governance/authorization"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
 )
@@ -922,16 +923,16 @@ func enforceFileMatrix(ctx context.Context, checker FilePermissionChecker, agent
 	if perm.DocumentationOnly && !strings.HasSuffix(strings.ToLower(rel), ".md") {
 		return fmt.Errorf("file %s blocked: documentation_only enabled", rel)
 	}
-	decision, _ := DecideByPatterns(rel, perm.AllowPatterns, perm.DenyPatterns, permissions.AgentPermissionLevel(perm.Default))
+	decision, _ := authorization.DecideByPatterns(rel, perm.AllowPatterns, perm.DenyPatterns, permissions.Decision(perm.Default))
 	if perm.RequireApproval {
-		decision = permissions.AgentPermissionAsk
+		decision = permissions.DecisionAsk
 	}
 	switch decision {
-	case permissions.AgentPermissionAllow:
+	case permissions.DecisionAllow:
 		return nil
-	case permissions.AgentPermissionDeny:
+	case permissions.DecisionDeny:
 		return fmt.Errorf("file %s blocked: denied by file_permissions", rel)
-	case permissions.AgentPermissionAsk:
+	case permissions.DecisionAsk:
 		if checker == nil {
 			return fmt.Errorf("file %s blocked: approval required but permission manager missing", rel)
 		}
@@ -939,31 +940,6 @@ func enforceFileMatrix(ctx context.Context, checker FilePermissionChecker, agent
 	default:
 		return nil
 	}
-}
-
-// DecideByPatterns returns allow/deny/ask based on deny-first then allow list.
-// This is a local copy to avoid importing framework/authorization.
-func DecideByPatterns(target string, allowPatterns, denyPatterns []string, defaultDecision permissions.AgentPermissionLevel) (permissions.AgentPermissionLevel, string) {
-	target = strings.TrimSpace(target)
-	for _, pattern := range denyPatterns {
-		pattern = strings.TrimSpace(pattern)
-		if pattern == "" {
-			continue
-		}
-		if matched, _ := filepath.Match(pattern, target); matched {
-			return permissions.AgentPermissionDeny, pattern
-		}
-	}
-	for _, pattern := range allowPatterns {
-		pattern = strings.TrimSpace(pattern)
-		if pattern == "" {
-			continue
-		}
-		if matched, _ := filepath.Match(pattern, target); matched {
-			return permissions.AgentPermissionAllow, pattern
-		}
-	}
-	return defaultDecision, ""
 }
 
 // scanChunkSize is the maximum bytes returned per scanner token. Lines longer
@@ -1004,11 +980,27 @@ func scanLinesOrChunks(maxChunk int) bufio.SplitFunc {
 func FileOperations(basePath string) []ports.Tool {
 	return []ports.Tool{
 		func() *ReadFileTool { t := &ReadFileTool{BasePath: basePath}; t.SetToolName("file_read"); return t }(),
-		func() *WriteFileTool { t := &WriteFileTool{BasePath: basePath, Backup: true}; t.SetToolName("file_write"); return t }(),
+		func() *WriteFileTool {
+			t := &WriteFileTool{BasePath: basePath, Backup: true}
+			t.SetToolName("file_write")
+			return t
+		}(),
 		func() *EditFileTool { t := &EditFileTool{BasePath: basePath}; t.SetToolName("file_edit"); return t }(),
 		func() *ListFilesTool { t := &ListFilesTool{BasePath: basePath}; t.SetToolName("file_list"); return t }(),
-		func() *SearchInFilesTool { t := &SearchInFilesTool{BasePath: basePath}; t.SetToolName("file_search"); return t }(),
-		func() *CreateFileTool { t := &CreateFileTool{BasePath: basePath}; t.SetToolName("file_create"); return t }(),
-		func() *DeleteFileTool { t := &DeleteFileTool{BasePath: basePath}; t.SetToolName("file_delete"); return t }(),
+		func() *SearchInFilesTool {
+			t := &SearchInFilesTool{BasePath: basePath}
+			t.SetToolName("file_search")
+			return t
+		}(),
+		func() *CreateFileTool {
+			t := &CreateFileTool{BasePath: basePath}
+			t.SetToolName("file_create")
+			return t
+		}(),
+		func() *DeleteFileTool {
+			t := &DeleteFileTool{BasePath: basePath}
+			t.SetToolName("file_delete")
+			return t
+		}(),
 	}
 }

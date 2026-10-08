@@ -1,13 +1,13 @@
 package authorization
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
-	"codeburg.org/lexbit/relurpify/platform/fs"
 )
 
 func TestNormalizePathSimpleFile(t *testing.T) {
@@ -61,7 +61,7 @@ func TestNormalizePathAbsoluteEscapeBlocked(t *testing.T) {
 func TestNormalizePathSymlinkInsideWorkspace(t *testing.T) {
 	ws := t.TempDir()
 	realDir := filepath.Join(ws, "realdir")
-	if err := fs.MkdirAllSecure(realDir); err != nil {
+	if err := os.MkdirAll(realDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	link := filepath.Join(ws, "link")
@@ -138,7 +138,7 @@ func TestNormalizePathEmptyString(t *testing.T) {
 func TestNormalizePathSymlinkChainsResolved(t *testing.T) {
 	ws := t.TempDir()
 	targetDir := filepath.Join(ws, "target")
-	if err := fs.MkdirAllSecure(targetDir); err != nil {
+	if err := os.MkdirAll(targetDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	link1 := filepath.Join(ws, "link1")
@@ -172,6 +172,17 @@ func TestNormalizePathDotInMiddle(t *testing.T) {
 	want := filepath.ToSlash(filepath.Join(ws, "foo/bar"))
 	if result != want {
 		t.Fatalf("expected %q, got %q", want, result)
+	}
+}
+
+func TestSetDefaultDecisionDenyBlocksUndeclaredTool(t *testing.T) {
+	ws := t.TempDir()
+	m := testPermManager(ws)
+	if err := m.SetDefaultDecision(permissions.DecisionDeny); err != nil {
+		t.Fatalf("SetDefaultDecision: %v", err)
+	}
+	if err := m.AuthorizeTool(context.Background(), "agent-1", &testAuthTool{name: "undeclared"}, nil); err == nil {
+		t.Fatal("expected an undeclared tool to be denied under a deny default")
 	}
 }
 

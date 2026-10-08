@@ -59,8 +59,8 @@ func TestSelectedAll(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(checks) != 4 {
-		t.Fatalf("expected 4 checks (config, tools, recipes, prompts), got %d: %v", len(checks), checks)
+	if len(checks) != 5 {
+		t.Fatalf("expected 5 checks (agents, config, tools, recipes, prompts), got %d: %v", len(checks), checks)
 	}
 }
 
