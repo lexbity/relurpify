@@ -85,6 +85,14 @@ const (
 	EventSessionResetRequired = "session.reset_required"
 )
 
+// Rollback token lifecycle events emitted by the capability registry
+// (SBH-1 D-9). The stored event carries the token ID and the tool name only —
+// never the raw invocation args those tokens reference.
+const (
+	EventRollbackTokenStored  EventType = "rollback.token_stored"
+	EventRollbackTokenExpired EventType = "rollback.token_expired"
+)
+
 // Event captures structured telemetry data.
 type Event struct {
 	Type      EventType      `json:"type"`

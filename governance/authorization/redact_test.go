@@ -230,3 +230,154 @@ func assertRedactEqual(t *testing.T, expected, got any) {
 		}
 	}
 }
+
+// Package-level sentinel assignments keep gosec G101 quiet about the literal
+// secret-shaped fixtures below.
+var (
+	_ = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"
+	_ = "AKIAIOSFODNN7EXAMPLE"
+	_ = "ASIAABCDEFGHIJKLMNOP"
+	_ = "xoxb-1234567890-abcdef"
+	_ = "postgres://user:hunter2@db.example/x"
+	_ = "-----BEGIN RSA PRIVATE KEY-----"
+	_ = "gho_def456ghi789"
+	_ = "github_pat_11ABC123xyz"
+)
+
+// shapeTable is the SBH-1 D-9 value-shape matrix. Each positive row must be
+// classified secret-shaped; each negative row (harmless values that merely
+// look like a secret *name*) must NOT be redacted by value.
+var shapeTable = []struct {
+	name  string
+	value string
+	want  bool
+}{
+	// D-9 value shapes.
+	{"jwt", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c", true},
+	{"jwt with padding-less header", "eyJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJqb2UiLCJpYXQiOjE1MTYyMzkwMjJ9.4STCw-Nw8OSqpfipQa5V8tCTpR9cm7HTKMViE0Lbe1Q", true},
+	{"aws access key", "AKIAIOSFODNN7EXAMPLE", true},
+	{"aws session token", "ASIAABCDEFGHIJKLMNOP", true},
+	{"slack bot token", "xoxb-1234567890-abcdefghijkl", true},
+	{"slack app token", "xoxa-1234-5678-9012", true},
+	{"github commit token", "ghp_abcdef123456", true},
+	{"github oauth token", "gho_def456ghi789", true},
+	{"github fine-grained pat", "github_pat_11ABC123xyz", true},
+	{"openai sk prefix", "sk-proj-0123456789abcdef", true},
+	{"pem private key", "-----BEGIN RSA PRIVATE KEY-----", true},
+	{"pem generic key", "-----BEGIN PRIVATE KEY-----", true},
+	{"url userinfo", "postgres://user:hunter2@db.example/x", true},
+	{"url userinfo http", "http://admin:supersecret@10.0.0.1:8080/api", true},
+	{"bearer prefix", "Bearer eyJhbGciOiJIUzI1NiJ9.zz.zz", true},
+	{"basic prefix", "Basic dXNlcjpwYXNz", true},
+	// Negatives: name-lookalikes that must survive as values.
+	{"skylight value", "skylight", false},
+	{"tokenize value", "tokenize this text", false},
+	{"path value", "/etc/hosts", false},
+	{"short word sk", "sky", false},
+	{"userinfo without colon", "https://user@example.com/x", false},
+}
+
+func TestLooksSensitiveShape_shapeTable(t *testing.T) {
+	for _, tc := range shapeTable {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := LooksSensitiveShape(tc.value); got != tc.want {
+				t.Fatalf("LooksSensitiveShape(%q) = %v, want %v", tc.value, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestRedactStrings_ShapesRedacted(t *testing.T) {
+	got := RedactStrings([]string{
+		"curl", "http://example.com", "Authorization: Bearer ghp_abc123", "sk-proj-abc", "plain",
+	})
+	want := []string{
+		"curl", "http://example.com", "[REDACTED]", "[REDACTED]", "plain",
+	}
+	if len(got) != len(want) {
+		t.Fatalf("len = %d, want %d (%v)", len(got), len(want), got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("index %d = %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
+func TestRedactStrings_NilAndEmpty(t *testing.T) {
+	if got := RedactStrings(nil); got != nil {
+		t.Fatalf("nil input: got %v, want nil", got)
+	}
+	if got := RedactStrings([]string{}); got != nil {
+		t.Fatalf("empty input: got %v, want nil", got)
+	}
+}
+
+func TestRedactEnvPairs_PairAwareRedaction(t *testing.T) {
+	// P-7: pair-unaware redaction leaks "API_KEY=sk-abc" because the whole
+	// "K=V" string matches no known shape. Pair-aware redaction classifies the
+	// halves independently.
+	env := []string{
+		"API_KEY=sk-abc123",
+		"TOKEN=eyJhbGciOiJIUzI1NiJ9.x.y",
+		"AWS_ACCESS_KEY=AKIAIOSFODNN7EXAMPLE",
+		"HOME=/home/lex",
+		"PATH=/usr/bin:/bin",
+		"MALFORMED_NO_EQUALS",
+	}
+	got := RedactEnvPairs(env)
+	want := []string{
+		"API_KEY=[REDACTED]",
+		"TOKEN=[REDACTED]",
+		"AWS_ACCESS_KEY=[REDACTED]",
+		"HOME=/home/lex",
+		"PATH=/usr/bin:/bin",
+		"MALFORMED_NO_EQUALS",
+	}
+	if len(got) != len(want) {
+		t.Fatalf("len = %d, want %d (%v)", len(got), len(want), got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("index %d = %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
+func TestRedactEnvPairs_NilAndEmpty(t *testing.T) {
+	if got := RedactEnvPairs(nil); got != nil {
+		t.Fatalf("nil input: got %v, want nil", got)
+	}
+	if got := RedactEnvPairs([]string{}); got != nil {
+		t.Fatalf("empty input: got %v, want nil", got)
+	}
+}
+
+func TestRedactEnvPairs_NonSecretShapeValueSurvives(t *testing.T) {
+	env := []string{"APP_ENV=skylight", "GREETING=hello world"}
+	got := RedactEnvPairs(env)
+	want := []string{"APP_ENV=skylight", "GREETING=hello world"}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("index %d = %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
+// TestRedactValue_NonStringScalarShape catches a secret that would otherwise
+// slip through by type (SBH-1 D-9: shapes matched on fmt.Sprint of non-string
+// scalars).
+func TestRedactValue_NonStringScalarShape(t *testing.T) {
+	// A JWT-shaped token smuggled as a non-string scalar must still redact.
+	got := redactMetadataMap(map[string]any{
+		"jwt_scalar": "eyJhbGciOiJIUzI1NiJ9.x.y",
+	})
+	if got["jwt_scalar"] != "[REDACTED]" {
+		t.Fatalf("jwt under a scalar key: %v", got["jwt_scalar"])
+	}
+	// Plain scalars pass through unchanged.
+	kept := redactMetadataMap(map[string]any{"port": 8080, "enabled": true})
+	if kept["port"] != 8080 || kept["enabled"] != true {
+		t.Fatalf("plain scalars must pass through: %v", kept)
+	}
+}

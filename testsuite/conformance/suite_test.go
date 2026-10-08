@@ -50,6 +50,9 @@ func TestConformanceMatrix(t *testing.T) {
 	t.Run("grant", func(t *testing.T) {
 		runRecipeGrantMatrixRow(t)
 	})
+	t.Run("no-leak", func(t *testing.T) {
+		runNoLeakMatrixRow(t)
+	})
 	t.Run("context", func(t *testing.T) {
 		runContextControlMatrixRow(t)
 	})

@@ -1,6 +1,11 @@
 package ports
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+
+	"codeburg.org/lexbit/relurpify/governance/authorization"
+)
 
 // secretArgPatterns contains parameter name substrings that may indicate
 // sensitive data.
@@ -27,7 +32,13 @@ func isSecretArgName(name string) bool {
 }
 
 // RedactArgs returns a shallow copy of the argument map with secret values
-// replaced by "[REDACTED]".
+// replaced by "[REDACTED]". A value is redacted when its key is secret-named,
+// when the manifest declares the parameter sensitive, or when the stringified
+// value matches a known secret shape (JWT, AWS keys, Slack/GitHub tokens,
+// PEM blocks, URL userinfo — SBH-1 D-9). The shape classifier is the single
+// canonical implementation in governance/authorization; this is the thin
+// capability-facing entry point that composes it (capability → governance is
+// the legal domain direction and is already used by this package).
 func RedactArgs(args map[string]any, params []ToolParameter) map[string]any {
 	if len(args) == 0 {
 		return args
@@ -44,6 +55,9 @@ func RedactArgs(args map[string]any, params []ToolParameter) map[string]any {
 				redact = declaredRedact
 			}
 		}
+		if !redact {
+			redact = authorization.LooksSensitiveShape(shapeString(v))
+		}
 		if redact {
 			out[k] = "[REDACTED]"
 		} else {
@@ -51,4 +65,26 @@ func RedactArgs(args map[string]any, params []ToolParameter) map[string]any {
 		}
 	}
 	return out
+}
+
+// shapeString renders a scalar value to the string form used by value-shape
+// redaction. Strings are matched verbatim; non-string scalars are matched on
+// their printed representation so a secret cannot slip through by type.
+func shapeString(v any) string {
+	if s, ok := v.(string); ok {
+		return s
+	}
+	return fmt.Sprint(v)
+}
+
+// RedactStrings is the capability-facing adapter over the canonical
+// governance/authorization value-shape redaction for string collections.
+func RedactStrings(values []string) []string {
+	return authorization.RedactStrings(values)
+}
+
+// RedactEnvPairs is the capability-facing adapter over the canonical
+// pair-aware environment redaction (K=[REDACTED] for sensitive halves).
+func RedactEnvPairs(env []string) []string {
+	return authorization.RedactEnvPairs(env)
 }
