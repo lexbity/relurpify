@@ -19,7 +19,6 @@ relurpify/
 /relurpify_cfg/telemetry/
 /relurpify_cfg/telemetry.jsonl
 /app/relurpish/runtime/relurpify_cfg/
-/devdocs
 
 .claudeignore
 
@@ -35,11 +34,17 @@ testsuite/agenttest_fixtures/**/*.pyc
 *~
 /toolgen
 
-#temp
+#temp files
+devdocs/
 /docs/website/
-.aider*
 /CLAUDE.md
 
 # Build artifacts: test binaries must not be committed
 *.test
 /driftcheck
+
+# GoReleaser output
+/dist/
+
+# Coverage profile
+/coverage.out

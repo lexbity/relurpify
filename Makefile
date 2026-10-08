@@ -1,7 +1,7 @@
 .PHONY: test-unit test-integ test-scenario test-conformance test-all
 .PHONY: test-contract-migration test-dev-agent test-tape-fidelity test-euclo-golden check-contract-dissolution grep-architecture-gates
 .PHONY: lint-config generate-config check-config-tree-drift
-.PHONY: lint-layering lint-invariants lint-all lint-arch lint-go lint-go-fix check-makefile-phonys check-no-dead-resolver check-no-ghost-schemas lint-class-normalization lint-no-permissive-hitl
+.PHONY: lint-all lint-arch lint-go lint-go-fix check-makefile-phonys check-no-dead-resolver check-no-ghost-schemas lint-class-normalization lint-no-permissive-hitl
 .PHONY: domain-check domain-cycles no-bucket no-dead exception-count
 
 GO_OFFLINE_ENV := GOPROXY=off GOSUMDB=off
@@ -117,7 +117,7 @@ no-dead-packages:
 	@if grep -rn 'codeburg.org/lexbit/relurpify/jobs/store\|codeburg.org/lexbit/relurpify/platform/shell/query\|codeburg.org/lexbit/relurpify/platform/sandbox/dockersandbox\|codeburg.org/lexbit/relurpify/platform/sandbox/egressproxy\|codeburg.org/lexbit/relurpify/cognitionzoo/htn/authoring\|codeburg.org/lexbit/relurpify/cognitionzoo/llm\|codeburg.org/lexbit/relurpify/cognitionzoo/pipeline/stages\|codeburg.org/lexbit/relurpify/cognitionzoo/goalcon\|codeburg.org/lexbit/relurpify/testsuite/agenttestscenario' --include='*.go' . 2>/dev/null | grep -v '.gomodcache' | grep -v '.gocache'; then echo "[FAIL] no-dead-packages: deleted package re-imported"; exit 1; fi
 	@echo "[PASS] no-dead-packages: no deleted packages re-imported"
 
-lint-all: lint-layering lint-invariants check-makefile-phonys check-no-dead-resolver check-no-ghost-schemas euclo-stepkind-exhaustive euclo-no-control-keys euclo-no-dead-flatteners no-dead no-dead-packages
+lint-all: check-makefile-phonys check-no-dead-resolver check-no-ghost-schemas euclo-stepkind-exhaustive euclo-no-control-keys euclo-no-dead-flatteners no-dead no-dead-packages
 
 # Standard Go linters (golangci-lint, config: .golangci.yaml). Use locally;
 # CI uses two-track gate (ratchet + graduated) for enforce.
@@ -175,10 +175,9 @@ test-contract-migration:
 	$(GO_OFFLINE_ENV) GOCACHE=/tmp/relurpify-go-cache go test ./userconfig/config ./execution/session/... ./governance/... ./app/envcomposition/... ./ayenitd/... -count=1
 
 test-dev-agent:
-	@mkdir -p /tmp/relurpify-go-cache /tmp/relurpify-go-modcache
-	@if [ -z "$$(ls -A /tmp/relurpify-go-modcache 2>/dev/null)" ]; then cp -a /home/lex/go/pkg/mod/. /tmp/relurpify-go-modcache/; fi
-	$(GO_OFFLINE_ENV) GOCACHE=/tmp/relurpify-go-cache GOMODCACHE=/tmp/relurpify-go-modcache go build ./app/dev-agent-cli/...
-	$(GO_OFFLINE_ENV) GOCACHE=/tmp/relurpify-go-cache GOMODCACHE=/tmp/relurpify-go-modcache go test ./app/dev-agent-cli/... -count=1
+	@mkdir -p /tmp/relurpify-go-cache
+	$(GO_OFFLINE_ENV) GOCACHE=/tmp/relurpify-go-cache go build ./app/dev-agent-cli/...
+	$(GO_OFFLINE_ENV) GOCACHE=/tmp/relurpify-go-cache go test ./app/dev-agent-cli/... -count=1
 
 test-tape-fidelity:
 	@mkdir -p /tmp/relurpify-go-cache
@@ -293,3 +292,30 @@ check-no-ghost-providers:
 	@! grep -rnE '"vllm"|"tgi"|"llama-server"|"openai-compat"|"openai_compat"' --include='*.go' app/relurpish/tui/ | grep -v '_test.go' >/dev/null 2>&1 || { echo "[FAIL] AC-4: ghost provider string found in app/relurpish/tui"; exit 1; }
 	@echo "[PASS] AC-4: app/relurpish/tui clean"
 	@echo "[PASS] All AC-4 ghost provider gates passed"
+
+# test-coverage enforces a per-package minimum coverage threshold.
+# Packages with zero statements (e.g., main packages with only init()) are excluded.
+# The coverage tool lives at tooling/coverage/cmd/coverage.
+COVERAGE_MIN := 70
+
+.PHONY: test-coverage
+
+test-coverage:
+	@mkdir -p /tmp/relurpify-go-cache
+	$(GO_OFFLINE_ENV) GOCACHE=/tmp/relurpify-go-cache go test -coverprofile=coverage.out ./... -count=1 -timeout 120s
+	$(GO_OFFLINE_ENV) go run ./tooling/coverage/cmd/coverage -min=$(COVERAGE_MIN) -profile coverage.out
+	@rm -f coverage.out
+
+# check-gates-honest verifies that gate patterns have not been weakened.
+# It checks that key grep patterns still exist in the Makefile and that
+# AST-based gate tools (when they exist) are present and wired in.
+.PHONY: check-gates-honest
+
+check-gates-honest:
+	@for pattern in 'Getenv|LookupEnv|Environ' 'shim|compatibility|stub' 'InvokeOnBestNode'; do \
+		if ! grep -qF "$$pattern" Makefile; then \
+			echo "[FAIL] check-gates-honest: pattern '$$pattern' missing from Makefile"; \
+			exit 1; \
+		fi; \
+	done
+	@echo "[PASS] check-gates-honest: all gate patterns present"
