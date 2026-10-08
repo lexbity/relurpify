@@ -48,3 +48,6 @@ devdocs/
 
 # Coverage profile
 /coverage.out
+
+# Built coverage gate binary (use: make test-coverage)
+/coverage

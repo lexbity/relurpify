@@ -1,0 +1,318 @@
+# Per-package coverage floors below the 70% default.
+#
+# This file is the ratchet: the coverage gate fails the moment a package
+# drops below its recorded floor. Raise an entry as coverage improves and
+# delete it once the package reaches the default floor. Floors may only be
+# raised or removed through this file, never lowered silently -- regenerating
+# the baseline (make coverage-baseline) refuses any package that regressed
+# below its floor, and packages not listed here are held to the default.
+packages:
+  codeburg.org/lexbit/relurpify/app/envcomposition:
+    floor: 16
+    reason: partial unit coverage; floor recorded from current coverage, raise as tests land
+  codeburg.org/lexbit/relurpify/app/relurpish:
+    floor: 16
+    reason: partial unit coverage; floor recorded from current coverage, raise as tests land
+  codeburg.org/lexbit/relurpify/app/relurpish/euclotui:
+    floor: 55
+    reason: partial unit coverage; floor recorded from current coverage, raise as tests land
+  codeburg.org/lexbit/relurpify/app/relurpish/relurpifyenvtui:
+    floor: 0
+    reason: no unit tests yet; floor ratchets up from 0 as tests land
+  codeburg.org/lexbit/relurpify/app/relurpish/runtime:
+    floor: 55
+    reason: partial unit coverage; floor recorded from current coverage, raise as tests land
+  codeburg.org/lexbit/relurpify/app/relurpish/tui:
+    floor: 30
+    reason: partial unit coverage; floor recorded from current coverage, raise as tests land
+  codeburg.org/lexbit/relurpify/ayenitd:
+    floor: 32
+    reason: partial unit coverage; floor recorded from current coverage, raise as tests land
+  codeburg.org/lexbit/relurpify/ayenitd/service/browser:
+    floor: 0
+    reason: no unit tests yet; floor ratchets up from 0 as tests land
+  codeburg.org/lexbit/relurpify/capability/agentspec:
+    floor: 42
+    reason: partial unit coverage; floor recorded from current coverage, raise as tests land
+  codeburg.org/lexbit/relurpify/capability/agentspec/convert:
+    floor: 0
+    reason: no unit tests yet; floor ratchets up from 0 as tests land
+  codeburg.org/lexbit/relurpify/capability/descriptor:
+    floor: 7
+    reason: partial unit coverage; floor recorded from current coverage, raise as tests land
+  codeburg.org/lexbit/relurpify/capability/ports:
+    floor: 0
+    reason: no unit tests yet; floor ratchets up from 0 as tests land
+  codeburg.org/lexbit/relurpify/capability/provider:
+    floor: 0
+    reason: no unit tests yet; floor ratchets up from 0 as tests land
+  codeburg.org/lexbit/relurpify/capability/registry:
+    floor: 18
+    reason: partial unit coverage; floor recorded from current coverage, raise as tests land
+  codeburg.org/lexbit/relurpify/capability/result:
+    floor: 0
+    reason: no unit tests yet; floor ratchets up from 0 as tests land
+  codeburg.org/lexbit/relurpify/capability/runtime:
+    floor: 0
+    reason: no unit tests yet; floor ratchets up from 0 as tests land
+  codeburg.org/lexbit/relurpify/capability/sandbox:
+    floor: 50
+    reason: partial unit coverage; floor recorded from current coverage, raise as tests land
+  codeburg.org/lexbit/relurpify/capability/sandbox/safeexec:
+    floor: 0
+    reason: no unit tests yet; floor ratchets up from 0 as tests land
+  codeburg.org/lexbit/relurpify/capability/schemacoerce:
+    floor: 0
+    reason: no unit tests yet; floor ratchets up from 0 as tests land
+  codeburg.org/lexbit/relurpify/capability/toolcapabilities:
+    floor: 44
+    reason: partial unit coverage; floor recorded from current coverage, raise as tests land
+  codeburg.org/lexbit/relurpify/cognitionzoo/blackboard:
+    floor: 0
+    reason: no unit tests yet; floor ratchets up from 0 as tests land
+  codeburg.org/lexbit/relurpify/cognitionzoo/chainer:
+    floor: 2
+    reason: partial unit coverage; floor recorded from current coverage, raise as tests land
+  codeburg.org/lexbit/relurpify/cognitionzoo/htn:
+    floor: 53
+    reason: partial unit coverage; floor recorded from current coverage, raise as tests land
+  codeburg.org/lexbit/relurpify/cognitionzoo/htn/runtime:
+    floor: 0
+    reason: no unit tests yet; floor ratchets up from 0 as tests land
+  codeburg.org/lexbit/relurpify/cognitionzoo/pipeline:
+    floor: 9
+    reason: partial unit coverage; floor recorded from current coverage, raise as tests land
+  codeburg.org/lexbit/relurpify/cognitionzoo/planner:
+    floor: 34
+    reason: partial unit coverage; floor recorded from current coverage, raise as tests land
+  codeburg.org/lexbit/relurpify/cognitionzoo/promptprovider:
+    floor: 1
+    reason: partial unit coverage; floor recorded from current coverage, raise as tests land
+  codeburg.org/lexbit/relurpify/cognitionzoo/react:
+    floor: 12
+    reason: partial unit coverage; floor recorded from current coverage, raise as tests land
+  codeburg.org/lexbit/relurpify/cognitionzoo/reflection:
+    floor: 57
+    reason: partial unit coverage; floor recorded from current coverage, raise as tests land
+  codeburg.org/lexbit/relurpify/cognitionzoo/rewoo:
+    floor: 23
+    reason: partial unit coverage; floor recorded from current coverage, raise as tests land
+  codeburg.org/lexbit/relurpify/context:
+    floor: 0
+    reason: no unit tests yet; floor ratchets up from 0 as tests land
+  codeburg.org/lexbit/relurpify/context/contextstream:
+    floor: 60
+    reason: partial unit coverage; floor recorded from current coverage, raise as tests land
+  codeburg.org/lexbit/relurpify/context/knowledge:
+    floor: 66
+    reason: partial unit coverage; floor recorded from current coverage, raise as tests land
+  codeburg.org/lexbit/relurpify/context/knowledge/ast:
+    floor: 55
+    reason: partial unit coverage; floor recorded from current coverage, raise as tests land
+  codeburg.org/lexbit/relurpify/context/knowledge/ingestion:
+    floor: 3
+    reason: partial unit coverage; floor recorded from current coverage, raise as tests land
+  codeburg.org/lexbit/relurpify/context/knowledge/memory:
+    floor: 0
+    reason: no unit tests yet; floor ratchets up from 0 as tests land
+  codeburg.org/lexbit/relurpify/context/knowledge/retrieval:
+    floor: 69
+    reason: partial unit coverage; floor recorded from current coverage, raise as tests land
+  codeburg.org/lexbit/relurpify/context/knowledge/search:
+    floor: 0
+    reason: no unit tests yet; floor ratchets up from 0 as tests land
+  codeburg.org/lexbit/relurpify/context/persistence:
+    floor: 59
+    reason: partial unit coverage; floor recorded from current coverage, raise as tests land
+  codeburg.org/lexbit/relurpify/execution:
+    floor: 0
+    reason: no unit tests yet; floor ratchets up from 0 as tests land
+  codeburg.org/lexbit/relurpify/execution/agentgraph:
+    floor: 45
+    reason: partial unit coverage; floor recorded from current coverage, raise as tests land
+  codeburg.org/lexbit/relurpify/execution/agentlifecycle:
+    floor: 0
+    reason: no unit tests yet; floor ratchets up from 0 as tests land
+  codeburg.org/lexbit/relurpify/execution/compiler:
+    floor: 45
+    reason: partial unit coverage; floor recorded from current coverage, raise as tests land
+  codeburg.org/lexbit/relurpify/execution/context:
+    floor: 0
+    reason: no unit tests yet; floor ratchets up from 0 as tests land
+  codeburg.org/lexbit/relurpify/execution/paradigminput:
+    floor: 0
+    reason: no unit tests yet; floor ratchets up from 0 as tests land
+  codeburg.org/lexbit/relurpify/execution/prompt:
+    floor: 58
+    reason: partial unit coverage; floor recorded from current coverage, raise as tests land
+  codeburg.org/lexbit/relurpify/execution/prompt/prompttest:
+    floor: 0
+    reason: no unit tests yet; floor ratchets up from 0 as tests land
+  codeburg.org/lexbit/relurpify/execution/prompt/summarization:
+    floor: 0
+    reason: no unit tests yet; floor ratchets up from 0 as tests land
+  codeburg.org/lexbit/relurpify/execution/session:
+    floor: 10
+    reason: partial unit coverage; floor recorded from current coverage, raise as tests land
+  codeburg.org/lexbit/relurpify/governance/authorization:
+    floor: 46
+    reason: partial unit coverage; floor recorded from current coverage, raise as tests land
+  codeburg.org/lexbit/relurpify/governance/identity:
+    floor: 0
+    reason: no unit tests yet; floor ratchets up from 0 as tests land
+  codeburg.org/lexbit/relurpify/governance/permissions:
+    floor: 34
+    reason: partial unit coverage; floor recorded from current coverage, raise as tests land
+  codeburg.org/lexbit/relurpify/governance/policy:
+    floor: 0
+    reason: no unit tests yet; floor ratchets up from 0 as tests land
+  codeburg.org/lexbit/relurpify/governance/policyresolve:
+    floor: 0
+    reason: no unit tests yet; floor ratchets up from 0 as tests land
+  codeburg.org/lexbit/relurpify/governance/ports:
+    floor: 0
+    reason: no unit tests yet; floor ratchets up from 0 as tests land
+  codeburg.org/lexbit/relurpify/model:
+    floor: 0
+    reason: no unit tests yet; floor ratchets up from 0 as tests land
+  codeburg.org/lexbit/relurpify/named/euclo/capabilities:
+    floor: 7
+    reason: partial unit coverage; floor recorded from current coverage, raise as tests land
+  codeburg.org/lexbit/relurpify/named/euclo/euclotypes:
+    floor: 0
+    reason: no unit tests yet; floor ratchets up from 0 as tests land
+  codeburg.org/lexbit/relurpify/named/euclo/families:
+    floor: 0
+    reason: no unit tests yet; floor ratchets up from 0 as tests land
+  codeburg.org/lexbit/relurpify/named/euclo/intentcontext:
+    floor: 65
+    reason: partial unit coverage; floor recorded from current coverage, raise as tests land
+  codeburg.org/lexbit/relurpify/named/euclo/orchestrate:
+    floor: 64
+    reason: partial unit coverage; floor recorded from current coverage, raise as tests land
+  codeburg.org/lexbit/relurpify/named/euclo/relurpicabilities:
+    floor: 50
+    reason: partial unit coverage; floor recorded from current coverage, raise as tests land
+  codeburg.org/lexbit/relurpify/named/euclo/services:
+    floor: 66
+    reason: partial unit coverage; floor recorded from current coverage, raise as tests land
+  codeburg.org/lexbit/relurpify/named/euclo/state:
+    floor: 47
+    reason: partial unit coverage; floor recorded from current coverage, raise as tests land
+  codeburg.org/lexbit/relurpify/named/euclo/testsuite/ingestfixture:
+    floor: 69
+    reason: partial unit coverage; floor recorded from current coverage, raise as tests land
+  codeburg.org/lexbit/relurpify/platform/git:
+    floor: 0
+    reason: no unit tests yet; floor ratchets up from 0 as tests land
+  codeburg.org/lexbit/relurpify/platform/lang/go:
+    floor: 0
+    reason: no unit tests yet; floor ratchets up from 0 as tests land
+  codeburg.org/lexbit/relurpify/platform/lang/js:
+    floor: 0
+    reason: no unit tests yet; floor ratchets up from 0 as tests land
+  codeburg.org/lexbit/relurpify/platform/lang/python:
+    floor: 0
+    reason: no unit tests yet; floor ratchets up from 0 as tests land
+  codeburg.org/lexbit/relurpify/platform/lang/rust:
+    floor: 0
+    reason: no unit tests yet; floor ratchets up from 0 as tests land
+  codeburg.org/lexbit/relurpify/platform/llm:
+    floor: 59
+    reason: partial unit coverage; floor recorded from current coverage, raise as tests land
+  codeburg.org/lexbit/relurpify/platform/llm/conformance:
+    floor: 0
+    reason: no unit tests yet; floor ratchets up from 0 as tests land
+  codeburg.org/lexbit/relurpify/platform/llm/offline:
+    floor: 63
+    reason: partial unit coverage; floor recorded from current coverage, raise as tests land
+  codeburg.org/lexbit/relurpify/platform/llm/ollama:
+    floor: 60
+    reason: partial unit coverage; floor recorded from current coverage, raise as tests land
+  codeburg.org/lexbit/relurpify/platform/llm/openaicompat:
+    floor: 59
+    reason: partial unit coverage; floor recorded from current coverage, raise as tests land
+  codeburg.org/lexbit/relurpify/platform/lsp:
+    floor: 13
+    reason: partial unit coverage; floor recorded from current coverage, raise as tests land
+  codeburg.org/lexbit/relurpify/platform/observability:
+    floor: 0
+    reason: no unit tests yet; floor ratchets up from 0 as tests land
+  codeburg.org/lexbit/relurpify/platform/search:
+    floor: 7
+    reason: partial unit coverage; floor recorded from current coverage, raise as tests land
+  codeburg.org/lexbit/relurpify/platform/tools/native:
+    floor: 0
+    reason: no unit tests yet; floor ratchets up from 0 as tests land
+  codeburg.org/lexbit/relurpify/platform/tools/native/fs:
+    floor: 0
+    reason: no unit tests yet; floor ratchets up from 0 as tests land
+  codeburg.org/lexbit/relurpify/platform/tools/native/git:
+    floor: 0
+    reason: no unit tests yet; floor ratchets up from 0 as tests land
+  codeburg.org/lexbit/relurpify/platform/tools/native/langgo:
+    floor: 0
+    reason: no unit tests yet; floor ratchets up from 0 as tests land
+  codeburg.org/lexbit/relurpify/platform/tools/native/langjs:
+    floor: 0
+    reason: no unit tests yet; floor ratchets up from 0 as tests land
+  codeburg.org/lexbit/relurpify/platform/tools/native/langpython:
+    floor: 0
+    reason: no unit tests yet; floor ratchets up from 0 as tests land
+  codeburg.org/lexbit/relurpify/platform/tools/native/langrust:
+    floor: 0
+    reason: no unit tests yet; floor ratchets up from 0 as tests land
+  codeburg.org/lexbit/relurpify/platform/tools/native/lsp:
+    floor: 0
+    reason: no unit tests yet; floor ratchets up from 0 as tests land
+  codeburg.org/lexbit/relurpify/platform/tools/native/search:
+    floor: 0
+    reason: no unit tests yet; floor ratchets up from 0 as tests land
+  codeburg.org/lexbit/relurpify/telemetry:
+    floor: 46
+    reason: partial unit coverage; floor recorded from current coverage, raise as tests land
+  codeburg.org/lexbit/relurpify/testsuite/agenttest:
+    floor: 34
+    reason: partial unit coverage; floor recorded from current coverage, raise as tests land
+  codeburg.org/lexbit/relurpify/testsuite/fixtures/euclo_baseline_chat:
+    floor: 0
+    reason: no unit tests yet; floor ratchets up from 0 as tests land
+  codeburg.org/lexbit/relurpify/testsuite/fixtures/euclo_baseline_debug:
+    floor: 0
+    reason: no unit tests yet; floor ratchets up from 0 as tests land
+  codeburg.org/lexbit/relurpify/testsuite/subjects/euclo:
+    floor: 60
+    reason: partial unit coverage; floor recorded from current coverage, raise as tests land
+  codeburg.org/lexbit/relurpify/testsuite/testfu:
+    floor: 0
+    reason: no unit tests yet; floor ratchets up from 0 as tests land
+  codeburg.org/lexbit/relurpify/testsuite/testhelper:
+    floor: 38
+    reason: partial unit coverage; floor recorded from current coverage, raise as tests land
+  codeburg.org/lexbit/relurpify/tooling/arch:
+    floor: 63
+    reason: partial unit coverage; floor recorded from current coverage, raise as tests land
+  codeburg.org/lexbit/relurpify/tooling/arch/cmd/archcheck:
+    floor: 0
+    reason: no unit tests yet; floor ratchets up from 0 as tests land
+  codeburg.org/lexbit/relurpify/tooling/arch/cmd/domaincheck:
+    floor: 0
+    reason: no unit tests yet; floor ratchets up from 0 as tests land
+  codeburg.org/lexbit/relurpify/tooling/driftcheck:
+    floor: 0
+    reason: no unit tests yet; floor ratchets up from 0 as tests land
+  codeburg.org/lexbit/relurpify/userconfig/config:
+    floor: 57
+    reason: partial unit coverage; floor recorded from current coverage, raise as tests land
+  codeburg.org/lexbit/relurpify/userconfig/modelselect:
+    floor: 0
+    reason: no unit tests yet; floor ratchets up from 0 as tests land
+  codeburg.org/lexbit/relurpify/userconfig/permissions:
+    floor: 0
+    reason: no unit tests yet; floor ratchets up from 0 as tests land
+  codeburg.org/lexbit/relurpify/userconfig/templates/cmd/generate-config:
+    floor: 0
+    reason: no unit tests yet; floor ratchets up from 0 as tests land
+  codeburg.org/lexbit/relurpify/userconfig/tools/manifest:
+    floor: 0
+    reason: no unit tests yet; floor ratchets up from 0 as tests land

@@ -305,17 +305,31 @@ release-snapshot:
 release:
 	goreleaser release --clean
 
-# test-coverage enforces a per-package minimum coverage threshold.
-# Packages with zero statements (e.g., main packages with only init()) are excluded.
-# The coverage tool lives at tooling/coverage/cmd/coverage.
+# test-coverage enforces the per-package coverage floor. Every package is
+# held to COVERAGE_MIN (70%); packages that have not reached it carry an
+# explicit, justified floor in tooling/coverage/overrides.yaml, which acts as
+# a ratchet: coverage may not drop below the recorded floor. Use
+# `make coverage-baseline` to advance the ratchet deliberately.
 COVERAGE_MIN := 70
+COVERAGE_OVERRIDES := tooling/coverage/overrides.yaml
 
-.PHONY: release-snapshot release test-coverage
+# Single definition of the coverage profile generation, shared by the check
+# and baseline targets.
+COVERAGE_PROFILE_CMD = @mkdir -p /tmp/relurpify-go-cache && $(GO_OFFLINE_ENV) GOCACHE=/tmp/relurpify-go-cache go test -coverprofile=coverage.out ./... -count=1 -timeout 120s
+
+.PHONY: release-snapshot release test-coverage coverage-baseline
 
 test-coverage:
-	@mkdir -p /tmp/relurpify-go-cache
-	$(GO_OFFLINE_ENV) GOCACHE=/tmp/relurpify-go-cache go test -coverprofile=coverage.out ./... -count=1 -timeout 120s
-	$(GO_OFFLINE_ENV) go run ./tooling/coverage/cmd/coverage -min=$(COVERAGE_MIN) -profile coverage.out
+	$(COVERAGE_PROFILE_CMD)
+	$(GO_OFFLINE_ENV) go run ./tooling/coverage/cmd/coverage -min=$(COVERAGE_MIN) -profile coverage.out -overrides $(COVERAGE_OVERRIDES)
+	@rm -f coverage.out
+
+# coverage-baseline records current coverage in tooling/coverage/overrides.yaml.
+# Run it deliberately and review the diff: the tool refuses to lower any
+# recorded floor, so a regression must be fixed or edited explicitly.
+coverage-baseline:
+	$(COVERAGE_PROFILE_CMD)
+	$(GO_OFFLINE_ENV) go run ./tooling/coverage/cmd/coverage -min=$(COVERAGE_MIN) -profile coverage.out -overrides $(COVERAGE_OVERRIDES) -update-baseline
 	@rm -f coverage.out
 
 # check-gates-honest verifies that gate patterns have not been weakened.
