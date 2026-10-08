@@ -338,7 +338,7 @@ func TestWrapWithCapabilityProvidesManifestEffectClasses(t *testing.T) {
 		EffectClasses() []classification.EffectClass
 	})
 	require.True(t, ok)
-	require.Equal(t, []classification.EffectClass{"filesystem_read", "process_spawn"}, provider.EffectClasses())
+	require.Equal(t, []classification.EffectClass{"filesystem-read", "process-spawn"}, provider.EffectClasses())
 }
 
 func TestWrapWithCapabilityReturnsOriginalWhenNoCapability(t *testing.T) {
@@ -399,7 +399,7 @@ func TestBuildToolGetsCapabilityClassProvider(t *testing.T) {
 		EffectClasses() []classification.EffectClass
 	})
 	require.True(t, ok)
-	require.Equal(t, []classification.EffectClass{"process_spawn"}, effectProv.EffectClasses())
+	require.Equal(t, []classification.EffectClass{"process-spawn"}, effectProv.EffectClasses())
 }
 
 func TestBuildToolWithoutCapabilityNoProvider(t *testing.T) {

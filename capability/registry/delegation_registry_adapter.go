@@ -152,7 +152,7 @@ func descriptorFromView(view governanceports.DescriptorView) descriptor.Capabili
 	return descriptor.CapabilityDescriptor{
 		ID:            view.CapabilityID(),
 		Name:          view.CapabilityName(),
-		TrustClass:    agentspec.TrustClass(view.TrustClass()),
+		TrustClass:    agentspec.TrustClass(classification.NormalizeClassString(view.TrustClass())),
 		RuntimeFamily: agentspec.CapabilityRuntimeFamily(view.RuntimeFamily()),
 		Source: descriptor.CapabilitySource{
 			ProviderID: view.SourceProviderID(),
@@ -218,7 +218,7 @@ func stringSliceToScopes(s []string) []classification.CapabilityScope {
 func stringSliceToTrustClasses(s []string) []agentspec.TrustClass {
 	out := make([]agentspec.TrustClass, len(s))
 	for i, v := range s {
-		out[i] = agentspec.TrustClass(v)
+		out[i] = agentspec.TrustClass(classification.NormalizeClassString(v))
 	}
 	return out
 }
@@ -226,7 +226,7 @@ func stringSliceToTrustClasses(s []string) []agentspec.TrustClass {
 func stringSliceToRiskClasses(s []string) []risk.RiskClass {
 	out := make([]risk.RiskClass, len(s))
 	for i, v := range s {
-		out[i] = risk.RiskClass(v)
+		out[i] = risk.RiskClass(classification.NormalizeClassString(v))
 	}
 	return out
 }
@@ -234,7 +234,7 @@ func stringSliceToRiskClasses(s []string) []risk.RiskClass {
 func stringSliceToEffectClasses(s []string) []classification.EffectClass {
 	out := make([]classification.EffectClass, len(s))
 	for i, v := range s {
-		out[i] = classification.EffectClass(v)
+		out[i] = classification.EffectClass(classification.NormalizeClassString(v))
 	}
 	return out
 }

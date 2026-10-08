@@ -13,6 +13,7 @@ import (
 	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/model"
 	"codeburg.org/lexbit/relurpify/named/euclo"
+	"codeburg.org/lexbit/relurpify/testsuite/testsupport"
 )
 
 type slice1Model struct{}
@@ -42,7 +43,7 @@ func TestInstantiateAgentReturnsEuclo(t *testing.T) {
 		Model:    slice1Model{},
 	}
 
-	agent, err := instantiateAgent(deps)
+	agent, err := instantiateAgent(deps, testsupport.NewAutoApproveHITLBroker())
 	if err != nil {
 		t.Fatalf("instantiateAgent returned error: %v", err)
 	}
@@ -59,7 +60,7 @@ func TestInstantiateAgentNilRegistry(t *testing.T) {
 		Model: slice1Model{},
 	}
 
-	agent, err := instantiateAgent(deps)
+	agent, err := instantiateAgent(deps, testsupport.NewAutoApproveHITLBroker())
 	if err == nil {
 		t.Fatal("instantiateAgent returned nil error")
 	}
@@ -79,7 +80,7 @@ func TestEucloExecutesWithEmptyRegistry(t *testing.T) {
 		Registry: registry.NewRegistry(),
 		Model:    slice1Model{},
 	}
-	agent, err := instantiateAgent(deps)
+	agent, err := instantiateAgent(deps, testsupport.NewAutoApproveHITLBroker())
 	if err != nil {
 		t.Fatalf("instantiateAgent returned error: %v", err)
 	}
@@ -116,7 +117,7 @@ func TestEucloMalformedRecipeErrors(t *testing.T) {
 		Registry: registry.NewRegistry(),
 		Model:    slice1Model{},
 	}
-	agent, err := instantiateAgent(deps)
+	agent, err := instantiateAgent(deps, testsupport.NewAutoApproveHITLBroker())
 	if err != nil {
 		t.Fatalf("instantiateAgent returned error: %v", err)
 	}

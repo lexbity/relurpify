@@ -28,6 +28,7 @@ import (
 	eucloingestion "codeburg.org/lexbit/relurpify/named/euclo/testsuite/ingestfixture"
 	thoughtrecipepkg "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
+	"codeburg.org/lexbit/relurpify/testsuite/testsupport"
 )
 
 type stubLanguageModel struct{}
@@ -238,6 +239,7 @@ func rootGraphDeps(reg *registry.CapabilityRegistry) orchestrate.RootGraphDeps {
 	return orchestrate.RootGraphDeps{
 		DispatchCapabilities: reg,
 		ThoughtRecipes:       thoughtrecipepkg.NewThoughtRecipeRegistry(),
+		HITLBroker:           testsupport.NewAutoApproveHITLBroker(),
 		Paradigm: &paradigm.Deps{
 			Registry: reg,
 		},
@@ -250,6 +252,7 @@ func rootGraphDepsWithModel(reg *registry.CapabilityRegistry, m model.LanguageMo
 	return orchestrate.RootGraphDeps{
 		DispatchCapabilities: reg,
 		ThoughtRecipes:       thoughtrecipepkg.NewThoughtRecipeRegistry(),
+		HITLBroker:           testsupport.NewAutoApproveHITLBroker(),
 		Paradigm: &paradigm.Deps{
 			Model:    m,
 			Registry: reg,

@@ -11,6 +11,7 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/provider"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
+	"codeburg.org/lexbit/relurpify/governance/classification"
 	"codeburg.org/lexbit/relurpify/governance/policy"
 	governanceports "codeburg.org/lexbit/relurpify/governance/ports"
 )
@@ -144,7 +145,7 @@ func (p *backgroundDelegationProvider) StartBackgroundDelegation(ctx context.Con
 				ProviderID:     p.Descriptor().ID,
 				WorkflowID:     request.WorkflowID,
 				TaskID:         request.TaskID,
-				TrustClass:     agentspec.TrustClass(target.TrustClass()),
+				TrustClass:     agentspec.TrustClass(classification.NormalizeClassString(target.TrustClass())),
 				Recoverability: p.Descriptor().RecoverabilityMode,
 				CreatedAt:      now,
 				LastActivityAt: now,

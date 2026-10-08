@@ -15,13 +15,14 @@ import (
 	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 	"codeburg.org/lexbit/relurpify/named/euclo/intake"
 	"codeburg.org/lexbit/relurpify/named/euclo/state"
+	"codeburg.org/lexbit/relurpify/testsuite/testsupport"
 )
 
 func TestAgentCompiles(t *testing.T) {
 	deps := &paradigm.Deps{
 		Registry: registry.NewRegistry(),
 	}
-	agent := New(deps)
+	agent := New(deps, WithHITLBroker(testsupport.NewAutoApproveHITLBroker()))
 
 	if agent == nil {
 		t.Fatal("New() returned nil")
@@ -42,7 +43,7 @@ func TestBuildGraphReturnsGraph(t *testing.T) {
 		},
 		Registry: registry.NewRegistry(),
 	}
-	agent := New(deps)
+	agent := New(deps, WithHITLBroker(testsupport.NewAutoApproveHITLBroker()))
 
 	task := &execution.Task{
 		ID:          "test-task",
@@ -69,7 +70,7 @@ func TestExecuteCallsBuildGraph(t *testing.T) {
 		},
 		Registry: registry.NewRegistry(),
 	}
-	agent := New(deps)
+	agent := New(deps, WithHITLBroker(testsupport.NewAutoApproveHITLBroker()))
 
 	task := &execution.Task{
 		ID:          "test-task",
@@ -124,7 +125,7 @@ func TestBuildGraphResumeStateSkipsIntake(t *testing.T) {
 		},
 		Registry: registry.NewRegistry(),
 	}
-	agent := New(deps)
+	agent := New(deps, WithHITLBroker(testsupport.NewAutoApproveHITLBroker()))
 	if err := agent.Initialize(nil); err != nil {
 		t.Fatalf("Initialize returned error: %v", err)
 	}
@@ -166,7 +167,7 @@ func TestInitializeStoresConfig(t *testing.T) {
 		},
 		Registry: registry.NewRegistry(),
 	}
-	agent := New(deps)
+	agent := New(deps, WithHITLBroker(testsupport.NewAutoApproveHITLBroker()))
 
 	config := &execution.Config{}
 
@@ -191,7 +192,7 @@ func TestExecuteStashesResumeClassification(t *testing.T) {
 	deps := &paradigm.Deps{
 		Registry: registry.NewRegistry(),
 	}
-	agent := New(deps)
+	agent := New(deps, WithHITLBroker(testsupport.NewAutoApproveHITLBroker()))
 
 	task := &execution.Task{
 		ID:          "test-task",
@@ -236,7 +237,7 @@ func TestExecuteClearsResumeStateAfterGraph(t *testing.T) {
 		},
 		Registry: registry.NewRegistry(),
 	}
-	agent := New(deps)
+	agent := New(deps, WithHITLBroker(testsupport.NewAutoApproveHITLBroker()))
 
 	task := &execution.Task{
 		ID:          "test-task",
@@ -271,7 +272,7 @@ func TestCapabilitiesReturnsExpectedIDs(t *testing.T) {
 	deps := &paradigm.Deps{
 		Registry: registry.NewRegistry(),
 	}
-	agent := New(deps)
+	agent := New(deps, WithHITLBroker(testsupport.NewAutoApproveHITLBroker()))
 
 	caps := agent.Capabilities()
 

@@ -144,6 +144,25 @@ func TestClassify_deterministicOrder(t *testing.T) {
 	}
 }
 
+func TestClassifyNormalizedManifestEffect(t *testing.T) {
+	// A manifest declares "process_spawn"; the load boundary normalizes it to
+	// the canonical "process-spawn", which Classify must recognise as execute
+	// rather than silently falling through to read-only.
+	normalized := classification.EffectClass(classification.NormalizeClassString("process_spawn"))
+	got := Classify([]classification.EffectClass{normalized}, classification.CapabilityScopeBuiltin)
+	if len(got) != 1 || got[0] != RiskClassExecute {
+		t.Fatalf("Classify(normalized process_spawn) = %v, want [execute]", got)
+	}
+}
+
+func TestClassifyNormalizedManifestFilesystemMutation(t *testing.T) {
+	normalized := classification.EffectClass(classification.NormalizeClassString("filesystem_mutation"))
+	got := Classify([]classification.EffectClass{normalized}, classification.CapabilityScopeBuiltin)
+	if len(got) != 1 || got[0] != RiskClassDestructive {
+		t.Fatalf("Classify(normalized filesystem_mutation) = %v, want [destructive]", got)
+	}
+}
+
 func containsRisk(classes []RiskClass, want RiskClass) bool {
 	for _, c := range classes {
 		if c == want {

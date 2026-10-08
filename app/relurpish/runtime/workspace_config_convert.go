@@ -75,7 +75,7 @@ func convertRuntimeTrustClasses(values []string) []agentspec.TrustClass {
 	}
 	out := make([]agentspec.TrustClass, 0, len(values))
 	for _, value := range values {
-		out = append(out, agentspec.TrustClass(strings.TrimSpace(value)))
+		out = append(out, agentspec.TrustClass(classification.NormalizeClassString(value)))
 	}
 	return out
 }
@@ -86,7 +86,7 @@ func convertRuntimeRiskClasses(values []string) []risk.RiskClass {
 	}
 	out := make([]risk.RiskClass, 0, len(values))
 	for _, value := range values {
-		out = append(out, risk.RiskClass(strings.TrimSpace(value)))
+		out = append(out, risk.RiskClass(classification.NormalizeClassString(value)))
 	}
 	return out
 }
@@ -97,7 +97,7 @@ func convertRuntimeEffectClasses(values []string) []classification.EffectClass {
 	}
 	out := make([]classification.EffectClass, 0, len(values))
 	for _, value := range values {
-		out = append(out, classification.EffectClass(strings.TrimSpace(value)))
+		out = append(out, classification.EffectClass(classification.NormalizeClassString(value)))
 	}
 	return out
 }

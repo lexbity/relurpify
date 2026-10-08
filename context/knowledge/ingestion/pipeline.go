@@ -11,6 +11,7 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/context/knowledge"
 	contextports "codeburg.org/lexbit/relurpify/context/ports"
+	"codeburg.org/lexbit/relurpify/governance/classification"
 	"codeburg.org/lexbit/relurpify/governance/identity"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/platform/fs"
@@ -267,7 +268,7 @@ func defaultTrustClass(policy *contextports.PolicyBundle) agentspec.TrustClass {
 	if policy == nil || policy.DefaultTrustClass == "" {
 		return agentspec.TrustClassWorkspaceTrusted
 	}
-	return agentspec.TrustClass(policy.DefaultTrustClass)
+	return agentspec.TrustClass(classification.NormalizeClassString(policy.DefaultTrustClass))
 }
 
 // stage6Commit commits chunks to the store.

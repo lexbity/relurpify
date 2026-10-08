@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	registry "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/cognitionzoo/paradigm"
@@ -14,7 +13,6 @@ import (
 	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/execution/agentgraph"
 	"codeburg.org/lexbit/relurpify/execution/agentlifecycle"
-	"codeburg.org/lexbit/relurpify/governance/authorization"
 	"codeburg.org/lexbit/relurpify/named/euclo/families"
 	"codeburg.org/lexbit/relurpify/named/euclo/intake"
 	"codeburg.org/lexbit/relurpify/named/euclo/policy"
@@ -68,10 +66,10 @@ func NewRootGraph(ctx context.Context, deps RootGraphDeps) (*RootGraph, error) {
 	if famReg == nil {
 		famReg = defaultFamilyRegistry()
 	}
-	hitl := deps.HITLBroker
-	if hitl == nil {
-		hitl = permissiveHITLBroker{}
+	if deps.HITLBroker == nil {
+		return nil, fmt.Errorf("euclo root graph: a HITL broker is required (fail-closed)")
 	}
+	hitl := deps.HITLBroker
 
 	g := agentgraph.NewGraph()
 	nodes, err := buildNodes(ctx, buildNodeInput{
@@ -521,21 +519,6 @@ func defaultFamilyRegistry() *families.KeywordFamilyRegistry {
 		return reg
 	}
 	return reg
-}
-
-type permissiveHITLBroker struct{}
-
-func (permissiveHITLBroker) RequestPermission(_ context.Context, req authorization.PermissionRequest) (*authorization.PermissionGrant, error) {
-	now := time.Now().UTC()
-	return &authorization.PermissionGrant{
-		ID:         "euclo-auto-approve",
-		Permission: req.Permission,
-		Scope:      req.Scope,
-		ExpiresAt:  now.Add(5 * time.Minute),
-		ApprovedBy: "euclo",
-		Conditions: map[string]string{},
-		GrantedAt:  now,
-	}, nil
 }
 
 type stageNode struct {

@@ -584,7 +584,7 @@ func normalizeEffectClasses(classes []classification.EffectClass) []classificati
 	}
 	set := make(map[classification.EffectClass]struct{}, len(classes))
 	for _, class := range classes {
-		class = classification.EffectClass(strings.TrimSpace(string(class)))
+		class = classification.EffectClass(classification.NormalizeClassString(string(class)))
 		if class == "" {
 			continue
 		}

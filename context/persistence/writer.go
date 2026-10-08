@@ -9,6 +9,7 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/context/knowledge"
 	contextports "codeburg.org/lexbit/relurpify/context/ports"
+	"codeburg.org/lexbit/relurpify/governance/classification"
 	"codeburg.org/lexbit/relurpify/governance/identity"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
@@ -160,7 +161,7 @@ func (w *Writer) validateRequest(req PersistenceRequest) error {
 // determineTrustClass determines the trust class from source principal.
 func (w *Writer) determineTrustClass(principal identity.SubjectRef) agentspec.TrustClass {
 	if w.Policy != nil && w.Policy.DefaultTrustClass != "" {
-		return agentspec.TrustClass(w.Policy.DefaultTrustClass)
+		return agentspec.TrustClass(classification.NormalizeClassString(w.Policy.DefaultTrustClass))
 	}
 	return agentspec.TrustClassWorkspaceTrusted
 }
@@ -234,7 +235,7 @@ func (w *Writer) writeAuditRecord(req PersistenceRequest, result *PersistenceRes
 	}
 
 	if w.Policy != nil {
-		record.TrustClass = agentspec.TrustClass(w.Policy.DefaultTrustClass)
+		record.TrustClass = agentspec.TrustClass(classification.NormalizeClassString(w.Policy.DefaultTrustClass))
 	}
 
 	w.AuditLog = append(w.AuditLog, record)

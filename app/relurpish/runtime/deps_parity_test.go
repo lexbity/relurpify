@@ -53,7 +53,7 @@ func TestSwitchAgentDepsParity(t *testing.T) {
 	if switched.AgentLifecycle != base.AgentLifecycle {
 		t.Fatalf("agent lifecycle deps changed: got %p want %p", switched.AgentLifecycle, base.AgentLifecycle)
 	}
-	if _, err := instantiateAgent(switched); err != nil {
+	if _, err := instantiateAgent(switched, rt.hitlBroker()); err != nil {
 		t.Fatalf("instantiate switched deps: %v", err)
 	}
 }

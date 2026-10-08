@@ -17,6 +17,7 @@ import (
 	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 	"codeburg.org/lexbit/relurpify/named/euclo/intake"
 	"codeburg.org/lexbit/relurpify/named/euclo/orchestrate"
+	euclopolicy "codeburg.org/lexbit/relurpify/named/euclo/policy"
 	"codeburg.org/lexbit/relurpify/named/euclo/services"
 	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
 	thoughtrecipe "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
@@ -76,6 +77,14 @@ func WithCheckpointRepository(repo agentlifecycle.Repository) Option {
 func WithPersistenceWriter(writer *persistence.Writer) Option {
 	return func(a *Agent) {
 		a.config.PersistenceWriter = writer
+	}
+}
+
+// WithHITLBroker wires the HITL broker consulted by the policy gate. The
+// execution graph cannot be built without one; a nil broker fails closed.
+func WithHITLBroker(broker euclopolicy.HITLBroker) Option {
+	return func(a *Agent) {
+		a.config.HITLBroker = broker
 	}
 }
 
@@ -164,6 +173,7 @@ func (a *Agent) BuildGraph(ctx context.Context, task *execution.Task) (*agentgra
 		StreamTrigger:        a.deps.StreamTrigger,
 		MaxStreamTokens:      a.config.MaxStreamTokens,
 		DefaultStreamMode:    a.config.DefaultStreamMode,
+		HITLBroker:           a.config.HITLBroker,
 		Checkpoints:          a.config.CheckpointRepository,
 		Persistence:          a.config.PersistenceWriter,
 		Telemetry:            a.deps.Telemetry,

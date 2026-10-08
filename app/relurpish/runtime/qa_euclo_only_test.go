@@ -14,6 +14,7 @@ import (
 	"codeburg.org/lexbit/relurpify/model"
 	"codeburg.org/lexbit/relurpify/named/euclo"
 	"codeburg.org/lexbit/relurpify/platform/fs"
+	"codeburg.org/lexbit/relurpify/testsuite/testsupport"
 	config "codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
@@ -70,7 +71,7 @@ func TestQA_NilRegistryFailsFast(t *testing.T) {
 	deps := &paradigm.Deps{
 		Registry: nil,
 	}
-	agent, err := instantiateAgent(deps)
+	agent, err := instantiateAgent(deps, testsupport.NewAutoApproveHITLBroker())
 	if err == nil {
 		t.Fatal("expected error on nil registry")
 	}
@@ -91,7 +92,7 @@ func TestQA_NilRegistryNoPanic(t *testing.T) {
 	deps := &paradigm.Deps{
 		Registry: nil,
 	}
-	_, _ = instantiateAgent(deps)
+	_, _ = instantiateAgent(deps, testsupport.NewAutoApproveHITLBroker())
 }
 
 func TestQA_EucloExecutesEmptyRegistry(t *testing.T) {
@@ -102,7 +103,7 @@ func TestQA_EucloExecutesEmptyRegistry(t *testing.T) {
 		Registry: registry.NewRegistry(),
 		Model:    qaModel{},
 	}
-	agent, err := instantiateAgent(deps)
+	agent, err := instantiateAgent(deps, testsupport.NewAutoApproveHITLBroker())
 	if err != nil {
 		t.Fatalf("instantiateAgent failed: %v", err)
 	}
@@ -138,7 +139,7 @@ func TestQA_MalformedRecipeErrorsNotSwallowed(t *testing.T) {
 		Registry: registry.NewRegistry(),
 		Model:    qaModel{},
 	}
-	agent, err := instantiateAgent(deps)
+	agent, err := instantiateAgent(deps, testsupport.NewAutoApproveHITLBroker())
 	if err != nil {
 		t.Fatalf("instantiateAgent failed: %v", err)
 	}

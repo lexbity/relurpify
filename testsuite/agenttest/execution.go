@@ -24,6 +24,7 @@ import (
 	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
 	"codeburg.org/lexbit/relurpify/named/euclo"
 	"codeburg.org/lexbit/relurpify/named/euclo/euclocontract"
+	euclopolicy "codeburg.org/lexbit/relurpify/named/euclo/policy"
 	"codeburg.org/lexbit/relurpify/platform/fs"
 	"codeburg.org/lexbit/relurpify/platform/llm"
 	"codeburg.org/lexbit/relurpify/telemetry"
@@ -58,6 +59,7 @@ type PreparedRunExecutor struct {
 	securityBundle *cfgsecurity.Bundle
 	agentSpec      *agentspec.AgentRuntimeSpec
 	permManager    *fauthorization.PermissionManager
+	hitlBroker     euclopolicy.HITLBroker
 
 	runnerOverride sandbox.CommandRunner       // test seam; nil in production
 	agentOverride  agentgraph.WorkflowExecutor // test seam; nil in production
@@ -146,6 +148,12 @@ func (e *PreparedRunExecutor) buildSecurity(ctx context.Context, desc *PreparedR
 			return err
 		}
 		e.security = sec
+		// Test seam: no agent registration runs on this path, so supply an
+		// auto-approving broker to keep the graph buildable. The production
+		// path always uses the registration broker.
+		broker := fauthorization.NewHITLBroker(0, nil)
+		broker.AutoApprove = true
+		e.hitlBroker = broker
 		return nil
 	}
 
@@ -207,6 +215,7 @@ func (e *PreparedRunExecutor) buildSecurity(ctx context.Context, desc *PreparedR
 	e.securityBundle = bundle
 	e.agentSpec = agentSpec
 	e.permManager = registration.Permissions
+	e.hitlBroker = registration.HITL
 	return nil
 }
 
@@ -349,7 +358,11 @@ func (e *PreparedRunExecutor) assembleDeps(desc *PreparedRunDescriptor, tel tele
 }
 
 func (e *PreparedRunExecutor) createAgent(deps *paradigm.Deps) error {
-	agent := euclo.New(deps, euclo.WithCheckpointRepository(deps.AgentLifecycle))
+	agent := euclo.New(
+		deps,
+		euclo.WithCheckpointRepository(deps.AgentLifecycle),
+		euclo.WithHITLBroker(e.hitlBroker),
+	)
 	if err := agent.Initialize(nil); err != nil {
 		return err
 	}

@@ -38,6 +38,7 @@ import (
 	"codeburg.org/lexbit/relurpify/named/euclo/euclocontract"
 	intentcontext "codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
+	euclopolicy "codeburg.org/lexbit/relurpify/named/euclo/policy"
 	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
 	"codeburg.org/lexbit/relurpify/platform/llm"
 	"codeburg.org/lexbit/relurpify/platform/observability"
@@ -490,7 +491,7 @@ func buildRuntime(ctx context.Context, cfg Config, secrets config.Secrets) (*Run
 		ws.Telemetry.Emit(ev)
 	}
 
-	agent, err := instantiateAgent(rt.paradigmDeps())
+	agent, err := instantiateAgent(rt.paradigmDeps(), rt.hitlBroker())
 	if err != nil {
 		_ = rt.Close(ctx)
 		return nil, fmt.Errorf("instantiate agent: %w", err)
@@ -729,7 +730,7 @@ func (r *Runtime) applyResolvedAgentState(name string, effectiveContract *config
 		AgentSpec:         agentSpecCap,
 		Telemetry:         r.Workspace.Telemetry,
 	}
-	agent, err := instantiateAgent(r.switchAgentDeps(agentCfg))
+	agent, err := instantiateAgent(r.switchAgentDeps(agentCfg), r.hitlBroker())
 	if err != nil {
 		return fmt.Errorf("instantiate agent %q: %w", name, err)
 	}
@@ -763,12 +764,27 @@ func builtinDocumentSnapshot(contract *config.EffectiveAgentContract, workspace 
 	}
 }
 
-// instantiateAgent builds the euclo workflow executor.
-func instantiateAgent(deps *paradigm.Deps) (agentgraph.WorkflowExecutor, error) {
+// instantiateAgent builds the euclo workflow executor. The HITL broker is
+// required by the execution graph; passing nil makes graph construction fail
+// closed at execution time.
+func instantiateAgent(deps *paradigm.Deps, hitl euclopolicy.HITLBroker) (agentgraph.WorkflowExecutor, error) {
 	if deps == nil || deps.Registry == nil {
 		return nil, fmt.Errorf("instantiate euclo: capability registry is required")
 	}
-	return euclo.New(deps, euclo.WithCheckpointRepository(deps.AgentLifecycle)), nil
+	return euclo.New(
+		deps,
+		euclo.WithCheckpointRepository(deps.AgentLifecycle),
+		euclo.WithHITLBroker(hitl),
+	), nil
+}
+
+// hitlBroker returns the HITL broker registered at boot, or nil when the
+// runtime is degraded. A nil broker makes euclo graph construction fail closed.
+func (r *Runtime) hitlBroker() euclopolicy.HITLBroker {
+	if r == nil || r.registration == nil {
+		return nil
+	}
+	return r.registration.HITL
 }
 
 func (r *Runtime) paradigmDeps() *paradigm.Deps {

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/governance/classification"
 	"codeburg.org/lexbit/relurpify/model"
 	cfg "codeburg.org/lexbit/relurpify/userconfig/config"
 	cfgmodel "codeburg.org/lexbit/relurpify/userconfig/config/model"
@@ -65,7 +66,7 @@ func ConvertAgentSpec(in *cfg.AgentSpec) *agentspec.AgentRuntimeSpec {
 	for k, v := range in.ProviderPolicies {
 		out.ProviderPolicies[k] = agentspec.ProviderPolicy{
 			Activate:               agentspec.AgentPermissionLevel(v.Activate),
-			DefaultTrust:           agentspec.TrustClass(v.DefaultTrust),
+			DefaultTrust:           agentspec.TrustClass(classification.NormalizeClassString(v.DefaultTrust)),
 			AllowCredentialSharing: v.AllowCredentialSharing,
 		}
 	}

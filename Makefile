@@ -1,7 +1,7 @@
 .PHONY: test-unit test-integ test-scenario test-conformance test-all
 .PHONY: test-contract-migration test-dev-agent test-tape-fidelity test-euclo-golden check-contract-dissolution grep-architecture-gates
 .PHONY: lint-config generate-config check-config-tree-drift
-.PHONY: lint-layering lint-invariants lint-all lint-arch lint-go lint-go-fix check-makefile-phonys check-no-dead-resolver check-no-ghost-schemas
+.PHONY: lint-layering lint-invariants lint-all lint-arch lint-go lint-go-fix check-makefile-phonys check-no-dead-resolver check-no-ghost-schemas lint-class-normalization lint-no-permissive-hitl
 .PHONY: domain-check domain-cycles no-bucket no-dead exception-count
 
 GO_OFFLINE_ENV := GOPROXY=off GOSUMDB=off
@@ -9,7 +9,7 @@ GO_OFFLINE_ENV := GOPROXY=off GOSUMDB=off
 # Architecture invariant gates (GP-9).
 # governance-no-orch and no-bucket are now in enforce mode (Slice 7).
 # classification-ownership was deleted in Slice 4 -- EffectClass/CapabilityScope live in governance/classification.
-lint-arch:
+lint-arch: lint-class-normalization lint-no-permissive-hitl
 	$(GO_OFFLINE_ENV) go run ./tooling/arch/cmd/archcheck; EXIT_CODE=$$?; \
 	$(GO_OFFLINE_ENV) go run ./tooling/arch/cmd/domaincheck -mode=enforce -check=governance-orch; \
 	$(GO_OFFLINE_ENV) go run ./tooling/arch/cmd/domaincheck -mode=enforce -check=context-ports; \
@@ -44,6 +44,33 @@ check-no-dead-resolver:
 check-no-ghost-schemas:
 	@if rg -n 'relurpify/tool/v2|"skill"' userconfig/config --glob '*.go' --glob '!*_test.go' 2>/dev/null; then echo "[FAIL] ghost schema remains"; exit 1; fi
 	@echo "[PASS] no ghost schemas"
+
+# lint-class-normalization asserts every production cast from a raw string to a
+# class type routes through classification.NormalizeClassString, so manifest and
+# config snake_case spellings ("process_spawn") match the canonical kebab-case
+# vocabulary ("process-spawn"). Test files and testsuite/ are exempt.
+lint-class-normalization:
+	@hits=$$(rg -n '(agentspec\.TrustClass|risk\.RiskClass|classification\.EffectClass)\(' \
+		--glob '*.go' --glob '!**/*_test.go' --glob '!testsuite/**' --glob '!tooling/**' \
+		--glob '!.gomodcache/**' --glob '!.gocache/**' . 2>/dev/null \
+		| grep -v 'NormalizeClassString'); \
+	if [ -n "$$hits" ]; then \
+		echo "[FAIL] lint-class-normalization: class cast without NormalizeClassString:"; \
+		echo "$$hits"; \
+		exit 1; \
+	fi; \
+	echo "[PASS] lint-class-normalization: all class casts normalize"
+
+# lint-no-permissive-hitl asserts the Euclo root graph never substitutes a
+# permissive HITL broker. Graph construction must fail closed when no broker is
+# wired (Q2 / FR-3).
+lint-no-permissive-hitl:
+	@if rg -n 'permissiveHITLBroker' --glob '*.go' \
+		--glob '!.gomodcache/**' --glob '!.gocache/**' . 2>/dev/null; then \
+		echo "[FAIL] lint-no-permissive-hitl: permissive HITL broker present"; \
+		exit 1; \
+	fi; \
+	echo "[PASS] lint-no-permissive-hitl: no permissive HITL broker"
 
 # Domain DAG direction checker (§2.1). Warn-mode: reports violations, exits 0.
 # Enforce-mode available as a separate target (15 pre-existing non-P-phase

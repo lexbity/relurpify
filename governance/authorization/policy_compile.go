@@ -226,11 +226,11 @@ func compileGlobalPolicy(key string, level string) (*pol.PolicyRule, error) {
 	case "builtin-trusted", "workspace-trusted", "provider-local-untrusted", "remote-declared-untrusted", "remote-approved":
 		rule.Conditions.TrustClasses = []string{key}
 	case string(risk.RiskClassReadOnly), string(risk.RiskClassDestructive), string(risk.RiskClassExecute), string(risk.RiskClassNetwork), string(risk.RiskClassCredentialed), string(risk.RiskClassExfiltration), string(risk.RiskClassSessioned):
-		rule.Conditions.MinRiskClasses = []risk.RiskClass{risk.RiskClass(key)}
+		rule.Conditions.MinRiskClasses = []risk.RiskClass{risk.RiskClass(classification.NormalizeClassString(key))}
 	case "local-tool", "provider", "relurpic":
 		rule.Conditions.RuntimeFamilies = []string{key}
 	case string(classification.EffectClassFilesystemMutation), string(classification.EffectClassProcessSpawn), string(classification.EffectClassNetworkEgress), string(classification.EffectClassCredentialUse), string(classification.EffectClassExternalState), string(classification.EffectClassSessionCreation), string(classification.EffectClassContextInsertion):
-		rule.Conditions.EffectClasses = []classification.EffectClass{classification.EffectClass(key)}
+		rule.Conditions.EffectClasses = []classification.EffectClass{classification.EffectClass(classification.NormalizeClassString(key))}
 	default:
 		return nil, fmt.Errorf("unsupported global policy class %q", key)
 	}
@@ -265,7 +265,7 @@ func compileCapabilitySelector(selector ports.CapabilitySelectorView) (pol.Polic
 func toRiskClasses(values []string) []risk.RiskClass {
 	out := make([]risk.RiskClass, 0, len(values))
 	for _, v := range values {
-		out = append(out, risk.RiskClass(v))
+		out = append(out, risk.RiskClass(classification.NormalizeClassString(v)))
 	}
 	return out
 }
@@ -273,7 +273,7 @@ func toRiskClasses(values []string) []risk.RiskClass {
 func toEffectClasses(values []string) []classification.EffectClass {
 	out := make([]classification.EffectClass, 0, len(values))
 	for _, v := range values {
-		out = append(out, classification.EffectClass(v))
+		out = append(out, classification.EffectClass(classification.NormalizeClassString(v)))
 	}
 	return out
 }

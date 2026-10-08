@@ -2,6 +2,7 @@ package toolcapabilities
 
 import (
 	"context"
+	"slices"
 
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
@@ -31,11 +32,11 @@ func (w *withCapability) TrustClass() agentspec.TrustClass {
 }
 
 func (w *withCapability) RiskClasses() []risk.RiskClass {
-	return append([]risk.RiskClass(nil), w.risk...)
+	return slices.Clone(w.risk)
 }
 
 func (w *withCapability) EffectClasses() []classification.EffectClass {
-	return append([]classification.EffectClass(nil), w.effect...)
+	return slices.Clone(w.effect)
 }
 
 // wrapWithCapability returns a tool whose capability classes are sourced from
@@ -49,14 +50,14 @@ func wrapWithCapability(tool ports.Tool, manifest ports.ToolManifest) ports.Tool
 	if cap.TrustClass == "" && len(cap.RiskClass) == 0 && len(cap.EffectClass) == 0 {
 		return tool
 	}
-	trust := agentspec.TrustClass(cap.TrustClass)
+	trust := agentspec.TrustClass(classification.NormalizeClassString(cap.TrustClass))
 	riskClasses := make([]risk.RiskClass, len(cap.RiskClass))
 	for i, c := range cap.RiskClass {
-		riskClasses[i] = risk.RiskClass(c)
+		riskClasses[i] = risk.RiskClass(classification.NormalizeClassString(c))
 	}
 	effect := make([]classification.EffectClass, len(cap.EffectClass))
 	for i, c := range cap.EffectClass {
-		effect[i] = classification.EffectClass(c)
+		effect[i] = classification.EffectClass(classification.NormalizeClassString(c))
 	}
 	return &withCapability{
 		Tool:   tool,

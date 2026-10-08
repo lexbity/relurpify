@@ -7,6 +7,7 @@ import (
 	"codeburg.org/lexbit/relurpify/context/persistence"
 	"codeburg.org/lexbit/relurpify/execution/agentlifecycle"
 	"codeburg.org/lexbit/relurpify/model"
+	euclopolicy "codeburg.org/lexbit/relurpify/named/euclo/policy"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
@@ -44,6 +45,11 @@ type EucloConfig struct {
 	// HITLTimeout is the maximum duration Euclo waits for a HITL decision.
 	// Zero uses the HITLBroker's default.
 	HITLTimeout time.Duration
+
+	// HITLBroker approves human-in-the-loop requests raised by the policy gate.
+	// It is required to build the execution graph; a nil broker fails closed
+	// rather than silently auto-approving.
+	HITLBroker euclopolicy.HITLBroker
 
 	// TelemetrySink is the telemetry backend for execution events.
 	// When nil, a no-op sink is used.
