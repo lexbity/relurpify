@@ -6,7 +6,6 @@ import (
 
 	"codeburg.org/lexbit/relurpify/governance/netpolicy"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
-	policy "codeburg.org/lexbit/relurpify/governance/policy"
 )
 
 // literalTarget classifies a host token through the canonical resolver. Every
@@ -138,7 +137,7 @@ func TestCheckNetworkBlocksPrivateEvenIfDeclared(t *testing.T) {
 			{Direction: "egress", Protocol: "tcp", Host: "10.0.0.1", Port: 443},
 		},
 	}
-	audit := policy.NewInMemoryAuditLogger(100)
+	audit := newTestAuditLogger(t)
 	m, err := NewPermissionManager("/workspace", declared, audit, nil)
 	if err != nil {
 		t.Fatalf("NewPermissionManager: %v", err)
@@ -155,7 +154,7 @@ func TestCheckNetworkAllowsPublicIP(t *testing.T) {
 			{Direction: "egress", Protocol: "tcp", Host: "8.8.8.8", Port: 443},
 		},
 	}
-	audit := policy.NewInMemoryAuditLogger(100)
+	audit := newTestAuditLogger(t)
 	m, err := NewPermissionManager("/workspace", declared, audit, nil)
 	if err != nil {
 		t.Fatalf("NewPermissionManager: %v", err)
@@ -172,7 +171,7 @@ func TestDefaultDecisionAllowRejectedAtRegistration(t *testing.T) {
 			{Binary: "echo"},
 		},
 	}
-	audit := policy.NewInMemoryAuditLogger(100)
+	audit := newTestAuditLogger(t)
 	m, err := NewPermissionManager("/workspace", perm, audit, nil)
 	if err != nil {
 		t.Fatalf("NewPermissionManager: %v", err)
@@ -194,7 +193,7 @@ func TestDefaultPolicyAskIsValid(t *testing.T) {
 			{Binary: "echo"},
 		},
 	}
-	audit := policy.NewInMemoryAuditLogger(100)
+	audit := newTestAuditLogger(t)
 	m, err := NewPermissionManager("/workspace", perm, audit, nil)
 	if err != nil {
 		t.Fatalf("NewPermissionManager: %v", err)
@@ -208,7 +207,7 @@ func TestDefaultPolicyDenyIsValid(t *testing.T) {
 			{Binary: "echo"},
 		},
 	}
-	audit := policy.NewInMemoryAuditLogger(100)
+	audit := newTestAuditLogger(t)
 	m, err := NewPermissionManager("/workspace", perm, audit, nil)
 	if err != nil {
 		t.Fatalf("NewPermissionManager: %v", err)
@@ -222,7 +221,7 @@ func TestUndeclaredToolPermissionDeniedNotSilent(t *testing.T) {
 			{Binary: "echo"},
 		},
 	}
-	audit := policy.NewInMemoryAuditLogger(100)
+	audit := newTestAuditLogger(t)
 	m, err := NewPermissionManager("/workspace", perm, audit, nil)
 	if err != nil {
 		t.Fatalf("NewPermissionManager: %v", err)
@@ -245,7 +244,7 @@ func testPermissionManager(t *testing.T) *PermissionManager {
 			{Binary: "echo"},
 		},
 	}
-	audit := policy.NewInMemoryAuditLogger(100)
+	audit := newTestAuditLogger(t)
 	m, err := NewPermissionManager("/workspace", declared, audit, nil)
 	if err != nil {
 		t.Fatalf("NewPermissionManager: %v", err)

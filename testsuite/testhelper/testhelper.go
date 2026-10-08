@@ -5,8 +5,23 @@ import (
 	"runtime"
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/governance/policy"
 	"codeburg.org/lexbit/relurpify/platform/fs"
 )
+
+// NewTestAuditLogger returns a file-backed audit chain logger over a fresh
+// temp dir. It is the test replacement for the deleted in-memory ring buffer
+// (SBH-1 D-10): every audit consumer in tests now exercises the real chain.
+// The logger is closed on test cleanup so its writer goroutine drains.
+func NewTestAuditLogger(t *testing.T) *policy.FileChainAuditLogger {
+	t.Helper()
+	l, err := policy.NewFileChainAuditLogger(t.TempDir(), policy.FileChainOptions{})
+	if err != nil {
+		t.Fatalf("NewFileChainAuditLogger: %v", err)
+	}
+	t.Cleanup(func() { _ = l.Close() })
+	return l
+}
 
 func RepoRoot(t *testing.T) string {
 	t.Helper()

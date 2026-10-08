@@ -10,9 +10,9 @@ import (
 	governanceports "codeburg.org/lexbit/relurpify/governance/ports"
 )
 
-func newToolAuthManager(t *testing.T) (*PermissionManager, *policy.InMemoryAuditLogger) {
+func newToolAuthManager(t *testing.T) (*PermissionManager, *policy.FileChainAuditLogger) {
 	t.Helper()
-	audit := policy.NewInMemoryAuditLogger(32)
+	audit := newTestAuditLogger(t)
 	pm, err := NewPermissionManager("/tmp", &permissions.PermissionSet{}, audit, nil)
 	if err != nil {
 		t.Fatalf("NewPermissionManager: %v", err)
@@ -45,7 +45,7 @@ func TestAuthorizeToolByNameDenyPolicy(t *testing.T) {
 func TestAuthorizeToolByNameAskPolicyWithHITL(t *testing.T) {
 	broker := NewHITLBroker(time.Minute, nil)
 	broker.AutoApprove = true
-	pm, err := NewPermissionManager("/tmp", &permissions.PermissionSet{}, policy.NewInMemoryAuditLogger(32), broker)
+	pm, err := NewPermissionManager("/tmp", &permissions.PermissionSet{}, newTestAuditLogger(t), broker)
 	if err != nil {
 		t.Fatalf("NewPermissionManager: %v", err)
 	}

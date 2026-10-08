@@ -294,13 +294,19 @@ func (m *PermissionManager) CheckFileAccess(ctx context.Context, agentID string,
 			return err
 		}
 	}
-	m.log(ctx, agentID, permissions.PermissionDescriptor{
+	if err := m.log(ctx, agentID, permissions.PermissionDescriptor{
 		Type:     permissions.PermissionTypeFilesystem,
 		Action:   string(action),
 		Resource: clean,
 	}, "granted", map[string]any{
 		"pattern": perm.Path,
-	})
+		// fs_action makes the record's enforcement class total: mutating
+		// filesystem grants (write/execute/delete/…) are strict, read/list
+		// are best-effort (SBH-1 D-10).
+		"fs_action": string(action),
+	}); err != nil {
+		return err
+	}
 	return nil
 }
 

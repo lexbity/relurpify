@@ -203,6 +203,9 @@ func buildRuntime(ctx context.Context, cfg Config, secrets config.Secrets) (*Run
 			if v1Cfg.Sandbox.Backend != "" && preSandboxBackend == "" {
 				cfg.SandboxBackend = v1Cfg.Sandbox.Backend
 			}
+			if strings.TrimSpace(v1Cfg.Audit.Enforcement) != "" && strings.EqualFold(strings.TrimSpace(cfg.AuditEnforcement), "strict") {
+				cfg.AuditEnforcement = v1Cfg.Audit.Enforcement
+			}
 		}
 		// Also inspect the flat RuntimeWorkspaceConfig for fields still
 		// honored from older workspace files (TapePath, Agents,
@@ -281,18 +284,19 @@ func buildRuntime(ctx context.Context, cfg Config, secrets config.Secrets) (*Run
 			ReadOnlyRoot:    contract.Security.ReadOnlyRoot,
 			NoNewPrivileges: contract.Security.NoNewPrivileges,
 		},
-		Image:          "",
-		Runtime:        "",
-		ProtectedPaths: securityBundle.Sandbox.ProtectedPaths,
-		ConfigPath:     cfg.ConfigPath,
-		Backend:        cfg.SandboxBackend,
-		BackendFactory: backendFactory,
-		AuditLimit:     cfg.AuditLimit,
-		BaseFS:         cfg.Workspace,
-		StateDir:       config.DefaultWorkspaceStateDir(cfg.Workspace),
-		HITLTimeout:    cfg.HITLTimeout,
-		WorkspaceID:    filepath.Base(cfg.Workspace),
-		AgentName:      contract.AgentID,
+		Image:            "",
+		Runtime:          "",
+		ProtectedPaths:   securityBundle.Sandbox.ProtectedPaths,
+		ConfigPath:       cfg.ConfigPath,
+		Backend:          cfg.SandboxBackend,
+		BackendFactory:   backendFactory,
+		AuditLimit:       cfg.AuditLimit,
+		AuditEnforcement: cfg.AuditEnforcement,
+		BaseFS:           cfg.Workspace,
+		StateDir:         config.DefaultWorkspaceStateDir(cfg.Workspace),
+		HITLTimeout:      cfg.HITLTimeout,
+		WorkspaceID:      filepath.Base(cfg.Workspace),
+		AgentName:        contract.AgentID,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("compose authorization registration: %w", err)

@@ -8,7 +8,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"codeburg.org/lexbit/relurpify/governance/permissions"
-	policy "codeburg.org/lexbit/relurpify/governance/policy"
 )
 
 type capturingHITL struct {
@@ -26,7 +25,7 @@ func newCommandApprovalManager(t *testing.T) (*PermissionManager, *capturingHITL
 		Executables: []permissions.ExecutablePermission{{Binary: "echo"}, {Binary: "bash"}, {Binary: "curl"}},
 	}
 	hitl := &capturingHITL{}
-	pm, err := NewPermissionManager("/tmp", declared, policy.NewInMemoryAuditLogger(10), hitl)
+	pm, err := NewPermissionManager("/tmp", declared, newTestAuditLogger(t), hitl)
 	require.NoError(t, err)
 	return pm, hitl
 }

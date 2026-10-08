@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/governance/permissions"
-	policy "codeburg.org/lexbit/relurpify/governance/policy"
 	governanceports "codeburg.org/lexbit/relurpify/governance/ports"
 )
 
@@ -122,7 +121,7 @@ func TestEnforcer_Check_netEgressPublicLiteralAllowed(t *testing.T) {
 			{Direction: "egress", Protocol: "tcp", Host: "8.8.8.8", Port: 0},
 		},
 	}
-	audit := policy.NewInMemoryAuditLogger(100)
+	audit := newTestAuditLogger(t)
 	pm, err := NewPermissionManager("/tmp", declared, audit, nil)
 	if err != nil {
 		t.Fatalf("NewPermissionManager: %v", err)
@@ -147,7 +146,7 @@ func TestEnforcer_Check_netEgressNameDeniedUnresolved(t *testing.T) {
 			{Direction: "egress", Protocol: "tcp", Host: "example.com", Port: 0},
 		},
 	}
-	audit := policy.NewInMemoryAuditLogger(100)
+	audit := newTestAuditLogger(t)
 	pm, err := NewPermissionManager("/tmp", declared, audit, nil)
 	if err != nil {
 		t.Fatalf("NewPermissionManager: %v", err)
@@ -201,7 +200,7 @@ func newTestPermissionManager(t *testing.T) *PermissionManager {
 			{Capability: "test-cap"},
 		},
 	}
-	audit := policy.NewInMemoryAuditLogger(100)
+	audit := newTestAuditLogger(t)
 	pm, err := NewPermissionManager("/tmp", declared, audit, nil)
 	if err != nil {
 		t.Fatalf("NewPermissionManager: %v", err)

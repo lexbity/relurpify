@@ -52,7 +52,9 @@ func (m *PermissionManager) AuthorizeTool(ctx context.Context, agentID string, t
 		t = &toolAdapter{inner: pt}
 	}
 	if m.toolAllowedByTaskGrant(ctx, t) {
-		m.log(ctx, agentID, toolDescriptor(t.Name(), agentID), "tool_allowed_task_grant", map[string]any{"tags": t.Tags()})
+		if err := m.log(ctx, agentID, toolDescriptor(t.Name(), agentID), "tool_allowed_task_grant", map[string]any{"tags": t.Tags()}); err != nil {
+			return err
+		}
 		return nil
 	}
 	requirements := t.Permissions()
@@ -64,7 +66,9 @@ func (m *PermissionManager) AuthorizeTool(ctx context.Context, agentID string, t
 			return err
 		}
 	}
-	m.log(ctx, agentID, toolDescriptor(t.Name(), agentID), "tool_allowed", nil)
+	if err := m.log(ctx, agentID, toolDescriptor(t.Name(), agentID), "tool_allowed", nil); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -85,7 +89,9 @@ func (m *PermissionManager) AuthorizeToolByName(ctx context.Context, agentID, to
 	if err := m.handleUndeclaredTool(ctx, agentID, name, []string{"tool permissions unknown"}); err != nil {
 		return err
 	}
-	m.log(ctx, agentID, toolDescriptor(name, agentID), "tool_allowed", nil)
+	if err := m.log(ctx, agentID, toolDescriptor(name, agentID), "tool_allowed", nil); err != nil {
+		return err
+	}
 	return nil
 }
 

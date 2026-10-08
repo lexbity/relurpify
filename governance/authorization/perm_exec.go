@@ -53,7 +53,7 @@ func (m *PermissionManager) CheckExecutable(ctx context.Context, agentID, binary
 			return err
 		}
 	}
-	m.log(ctx, agentID, permissions.PermissionDescriptor{
+	if err := m.log(ctx, agentID, permissions.PermissionDescriptor{
 		Type:     permissions.PermissionTypeExecutable,
 		Action:   fmt.Sprintf("exec:%s", binary),
 		Resource: binary,
@@ -64,7 +64,9 @@ func (m *PermissionManager) CheckExecutable(ctx context.Context, agentID, binary
 		// string (SBH-1 D-9, INV-7).
 		"args": RedactStrings(args),
 		"env":  RedactEnvPairs(env),
-	})
+	}); err != nil {
+		return err
+	}
 	return nil
 }
 

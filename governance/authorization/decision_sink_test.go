@@ -19,7 +19,7 @@ func newDecisionSinkPermissionManager(t *testing.T) (*PermissionManager, *fwtele
 			{Capability: "test-cap"},
 		},
 	}
-	pm, err := NewPermissionManager("/tmp", declared, policy.NewInMemoryAuditLogger(100), nil)
+	pm, err := NewPermissionManager("/tmp", declared, newTestAuditLogger(t), nil)
 	require.NoError(t, err)
 	sink := &fwtelemetry.SnapshotDecisionSink{}
 	pm.SetDecisionSink(sink)

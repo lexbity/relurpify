@@ -62,11 +62,13 @@ func (m *PermissionManager) CheckNetwork(ctx context.Context, agentID string, di
 			return err
 		}
 	}
-	m.log(ctx, agentID, permissions.PermissionDescriptor{
+	if err := m.log(ctx, agentID, permissions.PermissionDescriptor{
 		Type:     permissions.PermissionTypeNetwork,
 		Action:   fmt.Sprintf("net:%s", direction),
 		Resource: fmt.Sprintf("%s:%d", host, port),
-	}, "granted", nil)
+	}, "granted", nil); err != nil {
+		return err
+	}
 	m.recordNetworkRule(ctx, direction, protocol, host, port)
 	return nil
 }

@@ -332,10 +332,13 @@ func redactSensitivePath(path string) string {
 }
 
 // log forwards permission decisions to the configured audit sink to provide a
-// tamper-evident trail of runtime behavior.
-func (m *PermissionManager) log(ctx context.Context, agentID string, desc permissions.PermissionDescriptor, result string, fields map[string]any) {
+// tamper-evident trail of runtime behavior. In strict audit enforcement the
+// chain logger blocks on durable enqueue and returns an error that grant
+// callers MUST propagate ("no unrecorded governed effects", SBH-1 INV-5);
+// best-effort or denial records return nil here.
+func (m *PermissionManager) log(ctx context.Context, agentID string, desc permissions.PermissionDescriptor, result string, fields map[string]any) error {
 	if m.audit != nil {
-		_ = m.audit.Log(ctx, policy.AuditRecord{
+		err := m.audit.Log(ctx, policy.AuditRecord{
 			Timestamp:   time.Now().UTC(),
 			AgentID:     agentID,
 			Action:      desc.Action,
@@ -345,8 +348,15 @@ func (m *PermissionManager) log(ctx context.Context, agentID string, desc permis
 			Metadata:    redactMetadataMap(fields),
 			Correlation: agentID,
 		})
+		if err != nil {
+			// Fail the grant closed: no unrecorded governed effects (SBH-1
+			// INV-5). The chain logger's ErrAuditUnavailable carries the
+			// operator-facing reason verbatim.
+			return err
+		}
 	}
 	m.emitPolicyDecision(ctx, agentID, desc, decisionEffectFor(result), reasonFor(result, fields), fields)
+	return nil
 }
 
 // reasonFor derives the emitted reason: an explicit reason field when the
@@ -369,11 +379,13 @@ func (m *PermissionManager) CheckCapability(ctx context.Context, agentID string,
 			Resource: capability,
 		}, "capability not declared")
 	}
-	m.log(ctx, agentID, permissions.PermissionDescriptor{
+	if err := m.log(ctx, agentID, permissions.PermissionDescriptor{
 		Type:     permissions.PermissionTypeCapability,
 		Action:   fmt.Sprintf("cap:%s", capability),
 		Resource: capability,
-	}, "granted", nil)
+	}, "granted", nil); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -397,11 +409,13 @@ func (m *PermissionManager) CheckIPC(ctx context.Context, agentID string, kind s
 			return err
 		}
 	}
-	m.log(ctx, agentID, permissions.PermissionDescriptor{
+	if err := m.log(ctx, agentID, permissions.PermissionDescriptor{
 		Type:     permissions.PermissionTypeIPC,
 		Action:   fmt.Sprintf("ipc:%s", kind),
 		Resource: target,
-	}, "granted", nil)
+	}, "granted", nil); err != nil {
+		return err
+	}
 	return nil
 }
 

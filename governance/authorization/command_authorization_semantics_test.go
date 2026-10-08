@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/governance/permissions"
-	policy "codeburg.org/lexbit/relurpify/governance/policy"
 )
 
 type mockHITLProvider struct {
@@ -48,7 +47,7 @@ func TestAuthorizeCommand_SemanticInterception(t *testing.T) {
 		},
 	}
 
-	audit := policy.NewInMemoryAuditLogger(10)
+	audit := newTestAuditLogger(t)
 	hitl := &mockHITLProvider{}
 	pm, err := NewPermissionManager("/home/workspace", declared, audit, hitl)
 	if err != nil {

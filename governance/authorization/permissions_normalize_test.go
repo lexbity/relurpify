@@ -7,12 +7,11 @@ import (
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/governance/permissions"
-	policy "codeburg.org/lexbit/relurpify/governance/policy"
 )
 
 func TestNormalizePathSimpleFile(t *testing.T) {
 	ws := t.TempDir()
-	m := testPermManager(ws)
+	m := testPermManager(t, ws)
 
 	result, err := m.normalizePath("foo.txt")
 	if err != nil {
@@ -26,7 +25,7 @@ func TestNormalizePathSimpleFile(t *testing.T) {
 
 func TestNormalizePathSubDirectory(t *testing.T) {
 	ws := t.TempDir()
-	m := testPermManager(ws)
+	m := testPermManager(t, ws)
 
 	result, err := m.normalizePath("a/b/c.txt")
 	if err != nil {
@@ -40,7 +39,7 @@ func TestNormalizePathSubDirectory(t *testing.T) {
 
 func TestNormalizePathTraversalDotDot(t *testing.T) {
 	ws := t.TempDir()
-	m := testPermManager(ws)
+	m := testPermManager(t, ws)
 
 	_, err := m.normalizePath("../../etc/passwd")
 	if err == nil {
@@ -50,7 +49,7 @@ func TestNormalizePathTraversalDotDot(t *testing.T) {
 
 func TestNormalizePathAbsoluteEscapeBlocked(t *testing.T) {
 	ws := t.TempDir()
-	m := testPermManager(ws)
+	m := testPermManager(t, ws)
 
 	_, err := m.normalizePath("/etc/passwd")
 	if err == nil {
@@ -69,7 +68,7 @@ func TestNormalizePathSymlinkInsideWorkspace(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	m := testPermManager(ws)
+	m := testPermManager(t, ws)
 	result, err := m.normalizePath("link/file.txt")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -89,7 +88,7 @@ func TestNormalizePathSymlinkEscapesWorkspace(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	m := testPermManager(ws)
+	m := testPermManager(t, ws)
 	_, err := m.normalizePath("evil/passwd")
 	if err == nil {
 		t.Fatal("expected error for symlink escaping workspace")
@@ -98,7 +97,7 @@ func TestNormalizePathSymlinkEscapesWorkspace(t *testing.T) {
 
 func TestNormalizePathNewFileNoSymlinks(t *testing.T) {
 	ws := t.TempDir()
-	m := testPermManager(ws)
+	m := testPermManager(t, ws)
 
 	// A non-existent path under a non-existent directory — no symlinks
 	// to resolve, but the path must still be within the workspace.
@@ -114,7 +113,7 @@ func TestNormalizePathNewFileNoSymlinks(t *testing.T) {
 
 func TestNormalizePathWorkspaceBoundaryExact(t *testing.T) {
 	ws := t.TempDir()
-	m := testPermManager(ws)
+	m := testPermManager(t, ws)
 
 	result, err := m.normalizePath(ws)
 	if err != nil {
@@ -127,7 +126,7 @@ func TestNormalizePathWorkspaceBoundaryExact(t *testing.T) {
 
 func TestNormalizePathEmptyString(t *testing.T) {
 	ws := t.TempDir()
-	m := testPermManager(ws)
+	m := testPermManager(t, ws)
 
 	_, err := m.normalizePath("")
 	if err == nil {
@@ -150,7 +149,7 @@ func TestNormalizePathSymlinkChainsResolved(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	m := testPermManager(ws)
+	m := testPermManager(t, ws)
 	result, err := m.normalizePath("link2/data.txt")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -163,7 +162,7 @@ func TestNormalizePathSymlinkChainsResolved(t *testing.T) {
 
 func TestNormalizePathDotInMiddle(t *testing.T) {
 	ws := t.TempDir()
-	m := testPermManager(ws)
+	m := testPermManager(t, ws)
 
 	result, err := m.normalizePath("./foo/./bar")
 	if err != nil {
@@ -177,7 +176,7 @@ func TestNormalizePathDotInMiddle(t *testing.T) {
 
 func TestSetDefaultDecisionDenyBlocksUndeclaredTool(t *testing.T) {
 	ws := t.TempDir()
-	m := testPermManager(ws)
+	m := testPermManager(t, ws)
 	if err := m.SetDefaultDecision(permissions.DecisionDeny); err != nil {
 		t.Fatalf("SetDefaultDecision: %v", err)
 	}
@@ -188,8 +187,9 @@ func TestSetDefaultDecisionDenyBlocksUndeclaredTool(t *testing.T) {
 
 // testPermManager creates a PermissionManager with basePath set to the given
 // workspace directory, with minimal permissions for initialization.
-func testPermManager(ws string) *PermissionManager {
-	audit := policy.NewInMemoryAuditLogger(100)
+func testPermManager(t *testing.T, ws string) *PermissionManager {
+	t.Helper()
+	audit := newTestAuditLogger(t)
 	declared := &permissions.PermissionSet{
 		Executables: []permissions.ExecutablePermission{
 			{Binary: "echo"},

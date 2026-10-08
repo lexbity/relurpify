@@ -54,6 +54,7 @@ type RuntimeConfig struct {
 	SandboxCfg         governanceports.SandboxConfig
 	BackendFactory     SandboxBackendFactory
 	AuditLimit         int
+	AuditEnforcement   string // "strict" (default) | "best_effort"
 	BaseFS             string
 	StateDir           string
 	HITLTimeout        time.Duration
@@ -87,18 +88,49 @@ func RegisterAgent(ctx context.Context, cfg RuntimeConfig) (*AgentRegistration, 
 		return nil, errors.New("document snapshot required")
 	}
 
+	agentID := generateAgentID(cfg.WorkspaceID, cfg.AgentName)
+	stateDir := cfg.StateDir
+	if strings.TrimSpace(stateDir) == "" && strings.TrimSpace(cfg.BaseFS) != "" {
+		stateDir = filepath.Join(cfg.BaseFS, runtimeStateDirName)
+	}
+	if strings.TrimSpace(stateDir) == "" {
+		return nil, errors.New("audit chain requires a state dir (StateDir or BaseFS)")
+	}
+
+	// The audit chain is the durable, tamper-evident trail. Registration fails
+	// closed when the chain cannot be initialized: an audit-less runtime must
+	// not silently register (SBH-1 D-10).
+	bestEffort, enforcementErr := policy.ParseAuditEnforcement(cfg.AuditEnforcement)
+	if enforcementErr != nil {
+		return nil, fmt.Errorf("audit.enforcement: %w", enforcementErr)
+	}
+	queueSize := cfg.AuditLimit
+	if queueSize < 128 {
+		queueSize = 128
+	}
+	chainLog, auditErr := policy.NewFileChainAuditLogger(
+		filepath.Join(stateDir, "audit", agentID),
+		policy.FileChainOptions{QueueSize: queueSize, BestEffort: bestEffort},
+	)
+	if auditErr != nil {
+		return nil, fmt.Errorf("audit chain init: %w", auditErr)
+	}
+	audit := policy.AuditLogger(chainLog)
+	closeChain := func() { _ = chainLog.Close() }
+
 	var err error
 	effectivePerms := permissions.ResolveEffective(cfg.DefaultPermissions, &cfg.Permissions)
 	image := strings.TrimSpace(cfg.Image)
 	runtime, err := selectSandboxRuntime(ctx, cfg.Backend, cfg.SandboxCfg, image, cfg.BaseFS, cfg.BackendFactory)
 	if err != nil {
+		closeChain()
 		return nil, err
 	}
 	if err := runtime.Verify(ctx); err != nil {
+		closeChain()
 		return nil, fmt.Errorf("sandbox verification failed: %w", err)
 	}
 	hitl := NewHITLBroker(cfg.HITLTimeout, nil)
-	audit := policy.NewInMemoryAuditLogger(cfg.AuditLimit)
 	var permManager *PermissionManager
 	if len(effectivePerms.FileSystem) > 0 ||
 		len(effectivePerms.Executables) > 0 ||
@@ -107,14 +139,11 @@ func RegisterAgent(ctx context.Context, cfg RuntimeConfig) (*AgentRegistration, 
 		len(effectivePerms.IPC) > 0 {
 		permManager, err = NewPermissionManager(cfg.BaseFS, &effectivePerms, audit, hitl)
 		if err != nil {
+			closeChain()
 			return nil, fmt.Errorf("permission manager init: %w", err)
 		}
 	}
 	if permManager != nil {
-		stateDir := cfg.StateDir
-		if strings.TrimSpace(stateDir) == "" && strings.TrimSpace(cfg.BaseFS) != "" {
-			stateDir = filepath.Join(cfg.BaseFS, runtimeStateDirName)
-		}
 		permManager.SetFilesystemGuardRoots(
 			[]string{
 				filepath.Join(cfg.BaseFS, "relurpify_cfg"),
@@ -125,9 +154,11 @@ func RegisterAgent(ctx context.Context, cfg RuntimeConfig) (*AgentRegistration, 
 		if strings.TrimSpace(cfg.DefaultToolPolicy) != "" {
 			decision, err := permissions.ParseDecision(cfg.DefaultToolPolicy)
 			if err != nil {
+				closeChain()
 				return nil, fmt.Errorf("agent spec default_policy: %w", err)
 			}
 			if err := permManager.SetDefaultDecision(decision); err != nil {
+				closeChain()
 				return nil, fmt.Errorf("agent spec default_policy: %w", err)
 			}
 		}
@@ -135,13 +166,15 @@ func RegisterAgent(ctx context.Context, cfg RuntimeConfig) (*AgentRegistration, 
 	}
 	sboxPolicy := buildSandboxPolicy(cfg.Permissions, cfg.Security, cfg.ProtectedPaths)
 	if err := runtime.ValidatePolicy(sboxPolicy); err != nil {
+		closeChain()
 		return nil, fmt.Errorf("sandbox policy validation failed: %w", err)
 	}
 	if err := runtime.ApplyPolicy(ctx, sboxPolicy); err != nil {
+		closeChain()
 		return nil, fmt.Errorf("sandbox policy application failed: %w", err)
 	}
 	return &AgentRegistration{
-		ID:                generateAgentID(cfg.WorkspaceID, cfg.AgentName),
+		ID:                agentID,
 		DocumentSnapshot:  cfg.DocumentSnapshot,
 		AgentSpec:         cfg.AgentSpec,
 		Permissions:       permManager,

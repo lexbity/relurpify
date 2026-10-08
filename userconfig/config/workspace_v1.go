@@ -12,12 +12,12 @@ import (
 const WorkspaceSchemaV1 = "relurpify/workspace/v1"
 
 type WorkspaceConfigV1 struct {
-	Schema    string          `yaml:"schema"`
-	Paths     PathsConfigV1   `yaml:"paths"`
-	Model     ModelConfigV1   `yaml:"model"`
-	Sandbox   SandboxConfigV1 `yaml:"sandbox"`
-	Logging   LoggingConfigV1 `yaml:"logging"`
-	Audit     AuditConfigV1   `yaml:"audit"`
+	Schema    string            `yaml:"schema"`
+	Paths     PathsConfigV1     `yaml:"paths"`
+	Model     ModelConfigV1     `yaml:"model"`
+	Sandbox   SandboxConfigV1   `yaml:"sandbox"`
+	Logging   LoggingConfigV1   `yaml:"logging"`
+	Audit     AuditConfigV1     `yaml:"audit"`
 	Telemetry TelemetryConfigV1 `yaml:"telemetry"`
 }
 
@@ -41,7 +41,8 @@ type LoggingConfigV1 struct {
 }
 
 type AuditConfigV1 struct {
-	RetentionDays int `yaml:"retention_days"`
+	RetentionDays int    `yaml:"retention_days"`
+	Enforcement   string `yaml:"enforcement"`
 }
 
 type TelemetryConfigV1 struct {
