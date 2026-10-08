@@ -17,6 +17,19 @@ type EventTelemetry struct {
 	Clock     func() time.Time
 }
 
+// NewEventTelemetry assembles the causal mirror from platform-neutral
+// identity inputs. The observability.Actor type stays inside telemetry so
+// domain packages (execution, governance, capability) do not need the
+// platform import to participate in the causal record.
+func NewEventTelemetry(log evt.Log, partition, agentID, label string) EventTelemetry {
+	actor := observability.Actor{Kind: "agent", ID: agentID, Label: label}
+	return EventTelemetry{
+		Log:       log,
+		Partition: partition,
+		Actor:     actor,
+	}
+}
+
 func (e EventTelemetry) Emit(ev Event) {
 	if e.Log == nil {
 		return
@@ -29,13 +42,20 @@ func (e EventTelemetry) Emit(ev Event) {
 	if when.IsZero() {
 		when = e.now()
 	}
-	_, _ = e.Log.Append(context.Background(), e.partition(), []evt.FrameworkEvent{{
+	fev := evt.FrameworkEvent{
 		Timestamp: when.UTC(),
 		Type:      e.mapEventType(ev),
 		Payload:   payload,
 		Actor:     e.actor(),
 		Partition: e.partition(),
-	}})
+	}
+	// FR-4: carried CausedBy chains stay intact through the mirror. The
+	// causal reference is expressed as the standard metadata key so the
+	// telemetry Event schema stays domain-agnostic.
+	if causedBy, ok := ev.Metadata["caused_by"].([]uint64); ok {
+		fev.CausedBy = causedBy
+	}
+	_, _ = e.Log.Append(context.Background(), e.partition(), []evt.FrameworkEvent{fev})
 }
 
 func (e EventTelemetry) partition() string {
@@ -76,6 +96,22 @@ func (e EventTelemetry) mapEventType(ev Event) string {
 		return evt.EventCapabilityInvoked
 	case EventCapabilityResult, EventToolResult:
 		return evt.EventCapabilityResult
+	// Decision forensics map onto their canonical .v1 spellings so the
+	// causal record stays queryable without a second writer (FR-5, FR-6).
+	case EventPolicyEvaluated:
+		return evt.EventPolicyEvaluated
+	case EventHITLRequested:
+		return evt.EventHITLRequested
+	case EventHITLResolved:
+		// The lifecycle outcome decides the record type: expired requests
+		// land in their own .v1 slot for consumption exactly like approved
+		// and denied ones.
+		if outcome, ok := metadataValue(ev.Metadata, "outcome"); ok && outcome == "expired" {
+			return evt.EventHITLExpired
+		}
+		return evt.EventHITLResolved
+	case EventDoomLoopDetected:
+		return evt.EventDoomLoopDetected
 	default:
 		return "telemetry." + string(ev.Type) + ".v1"
 	}

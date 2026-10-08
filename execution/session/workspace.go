@@ -515,13 +515,18 @@ func OpenWorkspace(ctx context.Context, cfg WorkspaceConfig) (_ *Workspace, err 
 	}
 	cleanup.Add(func(_ context.Context) error { return logFile.Close() })
 
-	// Phase C.5: Event Log Setup (gated by Scope.Services)
+	// Phase C.5: Event Log Setup (gated by Scope.Services). Fail-closed
+	// per NFR-4: an unavailable Badger store downgrades the runtime to
+	// JSONL-only telemetry with a warning — boot never fails on telemetry.
 	var eventLog event.Log
 	if cfg.Scope.Services && cfg.EventLogFactory != nil && cfg.EventsPath != "" {
 		eventLog, err = cfg.EventLogFactory(cfg.EventsPath)
 		if err != nil {
-			return nil, fmt.Errorf("create event log: %w", err)
+			logger.Printf("warning: framework event log unavailable at %s: %v (continuing with JSONL-only telemetry)", cfg.EventsPath, err)
+			eventLog = nil
 		}
+	}
+	if eventLog != nil {
 		cleanup.Add(func(_ context.Context) error { return eventLog.Close() })
 	}
 
@@ -546,6 +551,19 @@ func OpenWorkspace(ctx context.Context, cfg WorkspaceConfig) (_ *Workspace, err 
 	}
 	runner := cfg.SecurityRuntime.Runner
 
+	// Phase E.5: telemetry chain — the workspace mux gains the causal event
+	// log leg when the Badger store is available, so every downstream
+	// emitter (model, decision forensics, registry, prompt registry)
+	// mirrors into the framework event log through one writer
+	// (EventTelemetry), never a second one.
+	telemetryChain := tel
+	if eventLog != nil {
+		telemetryChain = telemetry.MultiplexTelemetry{Sinks: []telemetry.Telemetry{
+			tel,
+			telemetry.NewEventTelemetry(eventLog, "local", registration.ID, cfg.AgentName),
+		}}
+	}
+
 	// Resolve model from the registered agent spec if not overridden in config.
 	inferenceModel := cfg.InferenceModel
 	inferenceModel, logLLM := resolveRuntimeModelSettings(inferenceModel, cfg.DebugLLM, registration)
@@ -555,16 +573,17 @@ func OpenWorkspace(ctx context.Context, cfg WorkspaceConfig) (_ *Workspace, err 
 	if cfg.Scope.LLMBackend && backend != nil {
 		backend.SetDebugLogging(logLLM)
 		if cfg.ModelProduct.ModelFactory != nil {
-			model = cfg.ModelProduct.ModelFactory(newModelTelemetryAdapter(tel), logLLM)
+			model = cfg.ModelProduct.ModelFactory(newModelTelemetryAdapter(telemetryChain), logLLM)
 		} else {
 			model = backend.Model()
 		}
 	}
 
 	// Wire the decision sink: every policy evaluation and HITL lifecycle
-	// event flows into the operational telemetry (FR-5, FR-6).
+	// event flows through the full telemetry chain — operational sinks and
+	// the causal event log alike (FR-5, FR-6).
 	if registration.Permissions != nil {
-		registration.Permissions.SetDecisionSink(telemetry.TelemetryDecisionSink{Telemetry: tel})
+		registration.Permissions.SetDecisionSink(telemetry.TelemetryDecisionSink{Telemetry: telemetryChain})
 	}
 
 	// Phase G: Bootstrap Agent Runtime
@@ -621,6 +640,10 @@ func OpenWorkspace(ctx context.Context, cfg WorkspaceConfig) (_ *Workspace, err 
 	// (gated by Scope.Services and Scope.Knowledge)
 	env := boot.Environment
 	env.PermissionManager = registration.Permissions
+	// The causal event log opened in Phase C.5 is shared with the agent
+	// environment so runtime consumers (decision forensics, session
+	// runners) and the workspace close the same instance.
+	env.EventLog = eventLog
 
 	// Phase H.5: Artifact Store — per-session durable storage for tool output.
 	artifactStore, err := artifactstore.NewDiskStore(cfg.Workspace, 0)
@@ -667,7 +690,7 @@ func OpenWorkspace(ctx context.Context, cfg WorkspaceConfig) (_ *Workspace, err 
 		CompiledPolicy:       boot.CompiledPolicy,
 		PolicyEngine:         boot.PolicyEngine,
 		CapabilityAdmissions: boot.CapabilityAdmissions,
-		Telemetry:            tel,
+		Telemetry:            telemetryChain,
 		Logger:               logger,
 		ServiceManager:       sm,
 	}

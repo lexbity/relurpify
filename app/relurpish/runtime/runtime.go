@@ -405,7 +405,8 @@ func buildRuntime(ctx context.Context, cfg Config, secrets config.Secrets) (*Run
 			Backend:      modelProduct.Backend,
 			ModelFactory: modelProduct.ModelFactory,
 		},
-		Scope: session.ScopeFull,
+		EventLogFactory:  openRuntimeEventLogFactory,
+		Scope:            session.ScopeFull,
 	})
 	if err != nil {
 		return nil, err
@@ -430,53 +431,14 @@ func buildRuntime(ctx context.Context, cfg Config, secrets config.Secrets) (*Run
 		})
 	}
 
-	// Extend telemetry with an event log sink. The event log is created via
-	// EventLogFactory during composition, so we just need to wire it into the
-	// telemetry chain.
-	var eventTelemetry telemetry.EventTelemetry
-	if cfg.EventsPath != "" && registration != nil {
-		// The event log is now owned by Workspace and will be closed by Workspace.Close()
-		// We need to get it from the Workspace's Environment
-		if env.EventLog != nil {
-			eventTelemetry = telemetry.EventTelemetry{
-				Log:       env.EventLog,
-				Partition: "local",
-				Actor:     observability.Actor{Kind: "agent", ID: registration.ID, Label: cfg.AgentLabel()},
-			}
-			// Re-wire the decision sink with full event log support: every
-			// policy evaluation and HITL lifecycle goes to both the
-			// operational telemetry (JSONL/broadcast) and the causal event
-			// log (FR-5, FR-6).
-			if registration.Permissions != nil || registration.HITL != nil {
-				decisions := telemetry.MultiplexDecisionSink{Sinks: []telemetry.DecisionSink{
-					telemetry.TelemetryDecisionSink{Telemetry: baseTelemetry},
-					eventLogDecisionSink{
-						log:       env.EventLog,
-						partition: "local",
-						actor:     observability.Actor{Kind: "agent", ID: registration.ID, Label: cfg.AgentLabel()},
-					},
-				}}
-				if registration.Permissions != nil {
-					registration.Permissions.SetDecisionSink(decisions)
-				}
-				if registration.HITL != nil {
-					registration.HITL.SetDecisionSink(decisions)
-				}
-			}
-			// S2: built-in contract has no source path; skip reload event.
-			// S8: replace with contract-fingerprint event.
-			if docSnapshot != nil && docSnapshot.SourcePath != "" {
-				emitDocumentReloadedEvent(ctx, env.EventLog, registration.ID, cfg.AgentLabel(), docSnapshot)
-			}
-		} else if logger != nil {
-			logger.Printf("warning: event log not available from workspace")
-		}
-	}
-
-	// Assemble the final telemetry (base + event log if available).
-	if eventTelemetry.Log != nil {
-		if mt, ok := baseTelemetry.(telemetry.MultiplexTelemetry); ok {			mt.Sinks = append(mt.Sinks, eventTelemetry)
-		}
+	// The causal event log mirror lives in the workspace telemetry chain
+	// (opened via the composition root's EventLogFactory, FR-4). Surface a
+	// warning when it is not available so operators see the JSONL-only
+	// downgrade (NFR-4), and stamp the contract-fingerprint reload event.
+	if env.EventLog == nil && cfg.EventsPath != "" {
+		logger.Printf("warning: framework event log not available from workspace (JSONL-only telemetry)")
+	} else if env.EventLog != nil && docSnapshot != nil && docSnapshot.SourcePath != "" {
+		emitDocumentReloadedEvent(ctx, env.EventLog, registration.ID, cfg.AgentLabel(), docSnapshot)
 	}
 
 	execSink := telemetry.NewBroadcastSink()
@@ -538,8 +500,8 @@ func buildRuntime(ctx context.Context, cfg Config, secrets config.Secrets) (*Run
 	}
 
 	rt.Agent = agent
-	emitAgentStartupEvent(ctx, eventTelemetry.Log, eventTelemetry.Partition, registration.ID, cfg.AgentLabel(), agent)
-	emitContractResolvedEvent(ctx, eventTelemetry.Log, eventTelemetry.Partition, registration.ID, cfg.AgentLabel(), docSnapshot)
+	emitAgentStartupEvent(ctx, env.EventLog, "local", registration.ID, cfg.AgentLabel(), agent)
+	emitContractResolvedEvent(ctx, env.EventLog, "local", registration.ID, cfg.AgentLabel(), docSnapshot)
 	if err := ayenitd.RegisterWorkspaceServices(ctx, ayenitd.WorkspaceConfig{Workspace: cfg.Workspace}, sess, rt.Tools, registration); err != nil {
 		_ = rt.Close(ctx)
 		return nil, fmt.Errorf("register workspace services: %w", err)
