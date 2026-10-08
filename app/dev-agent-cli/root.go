@@ -24,7 +24,12 @@ func NewRootCmd() *cobra.Command {
 		Short:         "Development CLI for Relurpify",
 		SilenceUsage:  true,
 		SilenceErrors: true,
+		Version:       version,
 	}
+	// A non-empty Version makes cobra register --version; the template renders
+	// the link-time build metadata. The name is taken from the command itself
+	// so renaming Use renames the version output.
+	root.SetVersionTemplate(fmt.Sprintf("%s %s (commit %s, built %s)\n", root.Name(), version, commit, date))
 	root.PersistentFlags().StringVar(&workspace, "workspace", "", "Workspace directory")
 	root.AddCommand(newAgentTestCmd())
 	return root

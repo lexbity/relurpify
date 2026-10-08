@@ -23,6 +23,15 @@ import (
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
+// Build metadata reported by `relurpish --version`. Release builds override
+// these at link time (GoReleaser ldflags: -X main.version/commit/date); the
+// values below are what a plain `go build` from source produces.
+var (
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
+)
+
 func init() {
 	cfg.SubprocessToolFactory = func(m ports.ToolManifest) any {
 		return subprocess.NewTool(m, nil)
@@ -66,6 +75,7 @@ func newRootCmd() *cobra.Command {
 		Short:         "Bubble Tea shell for the Relurpify agent runtime",
 		SilenceUsage:  true,
 		SilenceErrors: false,
+		Version:       version,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			if offline, _ := cmd.Flags().GetBool("offline"); offline {
 				cfg.InferenceProvider = "offline"
@@ -73,6 +83,10 @@ func newRootCmd() *cobra.Command {
 			return cfg.Normalize()
 		},
 	}
+	// A non-empty Version makes cobra register --version; the template renders
+	// the link-time build metadata. The name is taken from the command itself
+	// so renaming Use renames the version output.
+	root.SetVersionTemplate(fmt.Sprintf("%s %s (commit %s, built %s)\n", root.Name(), version, commit, date))
 	root.PersistentFlags().StringVar(&cfg.Workspace, "workspace", cfg.Workspace, "Workspace directory")
 	root.PersistentFlags().StringVar(&cfg.InferenceEndpoint, "inference-endpoint", cfg.InferenceEndpoint, "Inference backend endpoint URL")
 	root.PersistentFlags().StringVar(&cfg.InferenceModel, "inference-model", cfg.InferenceModel, "Inference backend model name")
