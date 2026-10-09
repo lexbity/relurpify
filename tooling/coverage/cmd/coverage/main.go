@@ -358,7 +358,9 @@ func parseProfile(path string) ([]packageCoverage, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open profile: %w", err)
 	}
-	defer file.Close()
+	// Read-only handle on the operator-supplied profile; a close failure has
+	// no effect on the already-scanned content.
+	defer func() { _ = file.Close() }()
 
 	pkgMap := make(map[string]*packageCoverage)
 	scanner := bufio.NewScanner(file)

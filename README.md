@@ -34,17 +34,10 @@ Relurpify is a fullstack Agent framework
 
 ## Docs
 
-The canonical documentation now lives in `docs/`:
-
-- [Configuration](docs/configuration.md)
-- [Architecture](docs/architecture.md)
-- [Testing](docs/testing.md)
-- [CLI](docs/cli.md)
-- [Persistence](docs/persistence.md)
-- [Jobs](docs/jobs.md)
-- [Troubleshooting](docs/troubleshooting.md)
-- [Glossary](docs/glossary.md)
-- [Known Limitations](docs/known-limitations.md)
+Developer documentation lives in the repository's `devdocs` folder;
+`developer-documentation.md` is the canonical internal reference. Contribution
+gates, coverage requirements, and the release process are described in
+[CONTRIBUTING.md](CONTRIBUTING.md).
 
 The `go build` examples in this README were verified in this workspace. The
 runtime examples are documented invocation shapes, not all re-run here.
@@ -73,6 +66,64 @@ export GOCACHE=$PWD/.gocache
 ```bash
 go build ./app/relurpish
 ```
+
+### Release binaries
+
+Pre-built artifacts are attached to every
+[GitHub release](https://github.com/lexbit/relurpify/releases): per-platform
+archives, `checksums.txt`, SBOMs (`*.sbom.json`), `.deb`/`.rpm` packages, and
+an AUR package. Releases are created as drafts; the maintainer reviews and
+publishes them.
+
+`relurpish`, `dev-agent`, `relurplint`, and `generate-config` are built for
+Linux and macOS (amd64 + arm64). The internal tooling binaries `archcheck`,
+`domaincheck`, and `driftcheck` additionally build for Windows (zip archives).
+Every binary is statically linked (CGO disabled).
+
+#### Linux (deb)
+
+```bash
+wget https://github.com/lexbit/relurpify/releases/download/v0.1.0/relurpify_0.1.0_amd64.deb
+sudo dpkg -i relurpify_0.1.0_amd64.deb
+```
+
+#### Linux (rpm)
+
+```bash
+wget https://github.com/lexbit/relurpify/releases/download/v0.1.0/relurpify-0.1.0-1.x86_64.rpm
+sudo rpm -i relurpify-0.1.0-1.x86_64.rpm
+```
+
+#### Linux / macOS (archive)
+
+```bash
+wget https://github.com/lexbit/relurpify/releases/download/v0.1.0/relurpify_0.1.0_linux_amd64.tar.gz
+tar -xzf relurpify_0.1.0_linux_amd64.tar.gz
+```
+
+Download `checksums.txt` from the same release and verify before installing:
+
+```bash
+sha256sum -c checksums.txt
+```
+
+#### Arch Linux (AUR)
+
+```bash
+yay -S relurpify-bin
+```
+
+#### Version
+
+Release binaries report their build metadata (`--version` on `relurpish` and
+`dev-agent`):
+
+```bash
+relurpish --version
+# relurpish 0.1.0 (commit 594da458..., built 2026-10-08T...)
+```
+
+Source builds report `dev` / `none` / `unknown`.
 
 ### Optional: build all project binaries
 
@@ -127,7 +178,8 @@ make test-dev-agent
 make test-tape-fidelity
 ```
 
-See [docs/testing.md](docs/testing.md) for the full matrix and agent-test workflow.
+See `developer-documentation.md` in the repository's `devdocs` folder for the
+full matrix and agent-test workflow.
 
 ## Additional Tools
 
