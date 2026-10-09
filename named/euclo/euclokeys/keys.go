@@ -84,6 +84,9 @@ const (
 	KeyRouteOutcome        = "euclo.route.outcome"
 	KeyRouteTelemetryOff   = "euclo.route.telemetry_off"
 	KeySkillFilter         = "euclo.skill_filter"
+	// KeyRouteDecidedBy records the D8 lattice rule that produced the
+	// selection ("explicit", "default_recipe", or "lattice:*").
+	KeyRouteDecidedBy = "euclo.route.decided_by"
 )
 
 // Background job state keys.

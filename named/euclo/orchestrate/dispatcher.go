@@ -9,6 +9,7 @@ import (
 	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/execution/agentgraph"
 	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
+	"codeburg.org/lexbit/relurpify/named/euclo/families"
 	intentcontext "codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
 	"codeburg.org/lexbit/relurpify/named/euclo/reporting"
 	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
@@ -21,6 +22,7 @@ type Dispatcher struct {
 	id                    string
 	capabilityRegistry    *registry.CapabilityRegistry
 	thoughtrecipeRegistry *thoughtrecipepkg.ThoughtRecipeRegistry
+	familyRegistry        *families.KeywordFamilyRegistry
 	workspace             string
 }
 
@@ -37,10 +39,21 @@ func (d *Dispatcher) WithCapabilityRegistry(reg *registry.CapabilityRegistry) *D
 	return d
 }
 
-// WithThoughtRecipeRegistry wires the thoughtrecipe registry used for route selection.
+// WithThoughtRecipeRegistry wires the thoughtrecipe registry used for route
+// selection.
 func (d *Dispatcher) WithThoughtRecipeRegistry(reg *thoughtrecipepkg.ThoughtRecipeRegistry) *Dispatcher {
 	if d != nil && reg != nil {
 		d.thoughtrecipeRegistry = reg
+	}
+	return d
+}
+
+// WithFamilyRegistry wires the keyword-family registry whose vocabulary feeds
+// the family-affinity and intent-keyword score components (D9). Nil keeps the
+// family ID alone as the affinity signal.
+func (d *Dispatcher) WithFamilyRegistry(reg *families.KeywordFamilyRegistry) *Dispatcher {
+	if d != nil {
+		d.familyRegistry = reg
 	}
 	return d
 }
@@ -80,7 +93,7 @@ func (d *Dispatcher) Execute(ctx context.Context, env *contextdata.Envelope) (*e
 		err    error
 	)
 	if req.DryRun {
-		report, dryRunErr := DryRun(ctx, env, req, caps, d.thoughtrecipeRegistry)
+		report, dryRunErr := DryRun(ctx, env, req, caps, d.thoughtrecipeRegistry, d.familyRegistry)
 		err = dryRunErr
 		if err != nil {
 			return &execution.Result{NodeID: d.id, Success: false, Data: execution.NewErrorResultPayload(err.Error())}, err
@@ -95,9 +108,10 @@ func (d *Dispatcher) Execute(ctx context.Context, env *contextdata.Envelope) (*e
 			ArtifactKinds:       append([]string(nil), report.ExpectedArtifactKinds...),
 			Outcome:             string(reporting.RouteOutcomeDryRun),
 			TelemetrySuppressed: req.TelemetryOff,
+			DecidedBy:           report.DecidedBy,
 		}
 	} else {
-		result, err = Dispatch(ctx, env, req, caps, d.thoughtrecipeRegistry)
+		result, err = Dispatch(ctx, env, req, caps, d.thoughtrecipeRegistry, d.familyRegistry)
 		if err != nil {
 			return &execution.Result{NodeID: d.id, Success: false, Data: execution.NewErrorResultPayload(err.Error())}, err
 		}
@@ -190,6 +204,7 @@ func applyRouteSelectionToEnvelope(env *contextdata.Envelope, selection *eucloty
 		euclostate.SetRouteFallbackID(env, result.FallbackID)
 		euclostate.SetRouteSkillFilter(env, result.SkillFilterName)
 		euclostate.SetRouteOutcome(env, result.Outcome)
+		euclostate.SetRouteDecidedBy(env, result.DecidedBy)
 	}
 }
 

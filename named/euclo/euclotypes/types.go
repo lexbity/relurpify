@@ -28,6 +28,9 @@ type RouteResolution struct {
 	FallbackTaken             bool
 	ClarificationStateVersion uint64
 	ReasonCodes               []string
+	// DecidedBy names the D8 lattice rule (or explicit/default) that produced
+	// the selection; it is the durable seed of the Selection Decision Record.
+	DecidedBy string
 }
 
 // Normalize trims route-resolution fields and preserves stable reason ordering.
@@ -39,6 +42,7 @@ func (r *RouteResolution) Normalize() {
 	r.ThoughtRecipeID = strings.TrimSpace(r.ThoughtRecipeID)
 	r.CapabilityID = strings.TrimSpace(r.CapabilityID)
 	r.ResolutionSource = strings.TrimSpace(r.ResolutionSource)
+	r.DecidedBy = strings.TrimSpace(r.DecidedBy)
 	if len(r.ReasonCodes) == 0 {
 		r.ReasonCodes = nil
 		return

@@ -9,16 +9,20 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/descriptor"
 	registry "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
-	"codeburg.org/lexbit/relurpify/governance/risk"
 	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
+	"codeburg.org/lexbit/relurpify/named/euclo/families"
 	intentcontext "codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
 	"codeburg.org/lexbit/relurpify/named/euclo/reporting"
+	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
 	thoughtrecipepkg "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
 )
 
-// Dispatch resolves a route request and records route telemetry.
-func Dispatch(ctx context.Context, env *contextdata.Envelope, req RouteRequest, caps *registry.CapabilityRegistry, thoughtrecipes *thoughtrecipepkg.ThoughtRecipeRegistry) (*RouteResult, error) {
-	report, selected, fallbackTaken, ok := resolveRoute(env, req, caps, thoughtrecipes)
+// Dispatch resolves a route request and records route telemetry. famReg is the
+// keyword-family registry whose vocabulary feeds the family-affinity and
+// intent-keyword score components (D9); nil keeps the classified family ID as
+// the sole affinity signal.
+func Dispatch(ctx context.Context, env *contextdata.Envelope, req RouteRequest, caps *registry.CapabilityRegistry, thoughtrecipes *thoughtrecipepkg.ThoughtRecipeRegistry, famReg *families.KeywordFamilyRegistry) (*RouteResult, error) {
+	report, selected, fallbackTaken, ok := resolveRoute(env, req, caps, thoughtrecipes, famReg)
 	resolution := buildRouteResolution(env, req, report, selected, ok, fallbackTaken)
 	if env != nil {
 		applyRouteResolutionToEnvelope(env, resolution)
@@ -63,7 +67,7 @@ func Dispatch(ctx context.Context, env *contextdata.Envelope, req RouteRequest, 
 		}
 	}
 	if !req.TelemetryOff {
-		reporting.EmitRouteSelected(ctx, taskID(env), sessionID(env), req.FamilyID, result.RouteKind, result.RouteID, result.CandidateCount, result.FallbackTaken)
+		reporting.EmitRouteSelected(ctx, taskID(env), sessionID(env), req.FamilyID, result.RouteKind, result.RouteID, result.CandidateCount, result.FallbackTaken, result.DecidedBy)
 		if result.FallbackTaken && result.FallbackID != "" {
 			reporting.EmitRouteFallback(ctx, taskID(env), sessionID(env), primaryRouteID(req), result.FallbackID, "primary route unavailable")
 		}
@@ -75,8 +79,11 @@ func Dispatch(ctx context.Context, env *contextdata.Envelope, req RouteRequest, 
 	return result, nil
 }
 
-func dryRun(ctx context.Context, env *contextdata.Envelope, req RouteRequest, caps *registry.CapabilityRegistry, thoughtrecipes *thoughtrecipepkg.ThoughtRecipeRegistry) (*DryRunReport, error) {
-	report, selected, fallbackTaken, ok := resolveRoute(env, req, caps, thoughtrecipes)
+// DryRun resolves a route request without executing it and returns the ranked
+// candidate set. It shares the live dispatch's selection context, including the
+// family registry, so preflight and execution select identically.
+func DryRun(ctx context.Context, env *contextdata.Envelope, req RouteRequest, caps *registry.CapabilityRegistry, thoughtrecipes *thoughtrecipepkg.ThoughtRecipeRegistry, famReg *families.KeywordFamilyRegistry) (*DryRunReport, error) {
+	report, selected, fallbackTaken, ok := resolveRoute(env, req, caps, thoughtrecipes, famReg)
 	resolution := buildRouteResolution(env, req, report, selected, ok, fallbackTaken)
 	if env != nil {
 		applyRouteResolutionToEnvelope(env, resolution)
@@ -151,14 +158,19 @@ func routeResultFromSelection(report *DryRunReport, selected CandidateRouteInfo,
 		ArtifactKinds:       artifactKinds,
 		Outcome:             string(outcome),
 		TelemetrySuppressed: telemetrySuppressed,
+		DecidedBy:           report.DecidedBy,
 	}
 	return result
 }
 
-func resolveRoute(env *contextdata.Envelope, req RouteRequest, caps *registry.CapabilityRegistry, thoughtrecipes *thoughtrecipepkg.ThoughtRecipeRegistry) (*DryRunReport, CandidateRouteInfo, bool, bool) {
+// resolveRoute builds the deterministic candidate pool, applies the D8
+// lattice, and applies the default-recipe degradation when no candidate
+// scored above zero.
+func resolveRoute(env *contextdata.Envelope, req RouteRequest, caps *registry.CapabilityRegistry, thoughtrecipes *thoughtrecipepkg.ThoughtRecipeRegistry, famReg *families.KeywordFamilyRegistry) (*DryRunReport, CandidateRouteInfo, bool, bool) {
 	report := &DryRunReport{Request: req}
-	report.Candidates = deterministicRouteCandidates(env, req, caps, thoughtrecipes)
-	selected, ok := selectDeterministicCandidate(req, report.Candidates)
+	ctx := selectionContextFor(env, req, famReg)
+	report.Candidates = deterministicRouteCandidates(env, req, caps, thoughtrecipes, ctx)
+	selected, ok, decidedBy := selectByLattice(req, report.Candidates)
 	fallbackTaken := false
 	if !ok && strings.TrimSpace(req.ThoughtRecipeID) == "" && strings.TrimSpace(req.CapabilityID) == "" && thoughtrecipes != nil {
 		// No deterministic candidate is available (recipes absent, capability
@@ -167,9 +179,10 @@ func resolveRoute(env *contextdata.Envelope, req RouteRequest, caps *registry.Ca
 		// failing route resolution.
 		if candidate, okFallback := defaultExecutionRecipeCandidate(thoughtrecipes); okFallback {
 			report.Candidates = append(report.Candidates, candidate)
-			selected, ok, fallbackTaken = candidate, true, true
+			selected, ok, fallbackTaken, decidedBy = candidate, true, true, decidedByDefaultRecipe
 		}
 	}
+	report.DecidedBy = decidedBy
 	return report, selected, fallbackTaken, ok
 }
 
@@ -211,7 +224,7 @@ func defaultExecutionRecipeCandidate(reg *thoughtrecipepkg.ThoughtRecipeRegistry
 	return candidate, true
 }
 
-func deterministicRouteCandidates(env *contextdata.Envelope, req RouteRequest, caps *registry.CapabilityRegistry, thoughtrecipes *thoughtrecipepkg.ThoughtRecipeRegistry) []CandidateRouteInfo {
+func deterministicRouteCandidates(env *contextdata.Envelope, req RouteRequest, caps *registry.CapabilityRegistry, thoughtrecipes *thoughtrecipepkg.ThoughtRecipeRegistry, ctx selectionContext) []CandidateRouteInfo {
 	clarificationCandidate := clarificationRouteCandidate(env, req, thoughtrecipes)
 	if explicit := explicitRouteCandidate(req, caps, thoughtrecipes); explicit != nil {
 		if clarificationCandidate != nil && candidateRouteID(*explicit) == candidateRouteID(*clarificationCandidate) {
@@ -224,8 +237,8 @@ func deterministicRouteCandidates(env *contextdata.Envelope, req RouteRequest, c
 	if clarificationCandidate != nil {
 		candidates = append(candidates, *clarificationCandidate)
 	}
-	candidates = append(candidates, metadataThoughtRecipeCandidates(env, req, thoughtrecipes)...)
-	candidates = append(candidates, metadataCapabilityCandidates(env, req, caps)...)
+	candidates = append(candidates, metadataThoughtRecipeCandidates(thoughtrecipes, ctx)...)
+	candidates = append(candidates, metadataCapabilityCandidates(req, caps, ctx)...)
 	return dedupeAndSortRouteCandidates(candidates)
 }
 
@@ -237,53 +250,61 @@ func explicitRouteCandidate(req RouteRequest, caps *registry.CapabilityRegistry,
 			// The clarification interaction is built in: it is always
 			// registered by graph construction (ensureClarificationThoughtRecipe).
 			if candidate, ok := availableRecipeCandidate(thoughtrecipes, id,
-				euclotypes.RouteKindIntent, 1000,
+				euclotypes.RouteKindIntent, scoreExplicit,
 				[]string{"explicit clarification route"}); ok {
-				return &candidate
+				return markExplicit(candidate)
 			}
 		}
 		if thoughtrecipes != nil {
 			if candidate, ok := availableRecipeCandidate(thoughtrecipes, id,
-				euclotypes.RouteKindForThoughtRecipeID(id), 1000,
+				euclotypes.RouteKindForThoughtRecipeID(id), scoreExplicit,
 				[]string{"explicit thoughtrecipe"}); ok {
-				return &candidate
+				return markExplicit(candidate)
 			}
 		}
-		return &CandidateRouteInfo{
+		return markExplicit(CandidateRouteInfo{
 			RouteID:        RouteID(id),
 			RouteKind:      euclotypes.RouteKindForThoughtRecipeID(id),
 			Availability:   RouteUnavailableUnsupported,
-			RankScore:      1000,
 			RankReasons:    []string{"explicit thoughtrecipe not found"},
 			SuppressReason: "explicit thoughtrecipe not found",
-		}
+		})
 	case strings.TrimSpace(req.CapabilityID) != "":
 		id := strings.TrimSpace(req.CapabilityID)
 		if caps != nil {
 			if snapshot, ok := capabilitySnapshotByID(caps, id); ok {
 				availability, reason := routeAvailabilityFromSnapshot(snapshot)
-				return &CandidateRouteInfo{
+				return markExplicit(CandidateRouteInfo{
 					RouteID:        RouteID(snapshot.Descriptor.ID),
 					RouteKind:      euclotypes.RouteKindCapability,
 					Availability:   availability,
-					RankScore:      1000,
 					RankReasons:    []string{"explicit capability"},
 					Suppressed:     availability == RouteUnavailablePolicyDenied,
 					SuppressReason: reason,
-				}
+				})
 			}
 		}
-		return &CandidateRouteInfo{
+		return markExplicit(CandidateRouteInfo{
 			RouteID:        RouteID(id),
 			RouteKind:      euclotypes.RouteKindCapability,
 			Availability:   RouteUnavailableUnsupported,
-			RankScore:      1000,
 			RankReasons:    []string{"explicit capability not found"},
 			SuppressReason: "explicit capability not found",
-		}
+		})
 	default:
 		return nil
 	}
+}
+
+// markExplicit stamps the rank-1 explicit component onto a candidate and
+// returns it, so the selection record shows why the explicit route dominated.
+func markExplicit(candidate CandidateRouteInfo) *CandidateRouteInfo {
+	candidate.RankScore = scoreExplicit
+	if candidate.Components == nil {
+		candidate.Components = make(map[string]int, 1)
+	}
+	candidate.Components[compExplicit] = scoreExplicit
+	return &candidate
 }
 
 func clarificationRouteCandidate(env *contextdata.Envelope, req RouteRequest, thoughtrecipes *thoughtrecipepkg.ThoughtRecipeRegistry) *CandidateRouteInfo {
@@ -306,11 +327,11 @@ func clarificationRouteCandidate(env *contextdata.Envelope, req RouteRequest, th
 	return &candidate
 }
 
-func metadataThoughtRecipeCandidates(env *contextdata.Envelope, req RouteRequest, thoughtrecipes *thoughtrecipepkg.ThoughtRecipeRegistry) []CandidateRouteInfo {
+func metadataThoughtRecipeCandidates(thoughtrecipes *thoughtrecipepkg.ThoughtRecipeRegistry, ctx selectionContext) []CandidateRouteInfo {
 	if thoughtrecipes == nil {
 		return nil
 	}
-	tokens := routeSearchTokens(env, req)
+	tokens := ctx.tokens
 	if len(tokens) == 0 {
 		return nil
 	}
@@ -320,7 +341,7 @@ func metadataThoughtRecipeCandidates(env *contextdata.Envelope, req RouteRequest
 		if routeID == "" {
 			continue
 		}
-		score, reasons := scoreThoughtRecipeCandidate(entry, tokens)
+		score, components, reasons := scoreThoughtRecipeCandidate(entry, ctx)
 		if score <= 0 {
 			continue
 		}
@@ -329,16 +350,17 @@ func metadataThoughtRecipeCandidates(env *contextdata.Envelope, req RouteRequest
 		if !ok {
 			continue
 		}
+		candidate.Components = components
 		candidates = append(candidates, candidate)
 	}
 	return candidates
 }
 
-func metadataCapabilityCandidates(env *contextdata.Envelope, req RouteRequest, caps *registry.CapabilityRegistry) []CandidateRouteInfo {
+func metadataCapabilityCandidates(req RouteRequest, caps *registry.CapabilityRegistry, ctx selectionContext) []CandidateRouteInfo {
 	if caps == nil {
 		return nil
 	}
-	tokens := routeSearchTokens(env, req)
+	tokens := ctx.tokens
 	snapshots := caps.AllCapabilitySnapshots()
 	if len(tokens) == 0 {
 		if strings.TrimSpace(req.SkillFilter) == "" {
@@ -347,11 +369,13 @@ func metadataCapabilityCandidates(env *contextdata.Envelope, req RouteRequest, c
 		candidates := make([]CandidateRouteInfo, 0, len(snapshots))
 		for _, snapshot := range snapshots {
 			availability, reason := routeAvailabilityFromSnapshot(snapshot)
+			priority := capabilityPriorityScore(snapshot.Descriptor)
 			candidates = append(candidates, CandidateRouteInfo{
 				RouteID:        RouteID(snapshot.Descriptor.ID),
 				RouteKind:      euclotypes.RouteKindCapability,
 				Availability:   availability,
-				RankScore:      capabilityPriorityScore(snapshot.Descriptor) + availabilityScore(availability),
+				RankScore:      priority + availabilityScore(availability),
+				Components:     map[string]int{compPriority: priority},
 				Suppressed:     availability == RouteUnavailablePolicyDenied,
 				SuppressReason: reason,
 			})
@@ -360,7 +384,7 @@ func metadataCapabilityCandidates(env *contextdata.Envelope, req RouteRequest, c
 	}
 	candidates := make([]CandidateRouteInfo, 0, len(snapshots))
 	for _, snapshot := range snapshots {
-		score, reasons := scoreCapabilityCandidate(snapshot.Descriptor, tokens)
+		score, components, reasons := scoreCapabilityCandidate(snapshot.Descriptor, ctx)
 		if score <= 0 {
 			continue
 		}
@@ -379,6 +403,7 @@ func metadataCapabilityCandidates(env *contextdata.Envelope, req RouteRequest, c
 			Availability:   availability,
 			RankScore:      score,
 			RankReasons:    reasons,
+			Components:     components,
 			Suppressed:     availability == RouteUnavailablePolicyDenied,
 			SuppressReason: reason,
 		})
@@ -395,39 +420,169 @@ func capabilityRequiresArgs(desc descriptor.CapabilityDescriptor) bool {
 	return len(desc.InputSchema.Required) > 0
 }
 
-func selectDeterministicCandidate(req RouteRequest, candidates []CandidateRouteInfo) (CandidateRouteInfo, bool) {
+// selectByLattice is the D8 selection lattice: a pure, deterministic total
+// order over the candidate pool, with the rule that decided recorded per rank:
+//
+//	1 explicit request (selected iff registered+available)
+//	2 highest deterministic score
+//	3 tie → higher family-affinity component
+//	4 tie → non-builtin candidate (user recipes shadow builtins)
+//	5 tie → thoughtrecipe before capability (governed decomposition over
+//	       immediate host effect; deliberate reversal of the old
+//	       lexicographic kind order)
+//	6 tie → lexicographic RouteID (total order; determinism)
+func selectByLattice(req RouteRequest, candidates []CandidateRouteInfo) (CandidateRouteInfo, bool, string) {
 	if len(candidates) == 0 {
-		return CandidateRouteInfo{}, false
+		return CandidateRouteInfo{}, false, ""
 	}
+
+	// Rank 1: an explicit request names the route; it is selected iff it is
+	// available. An unavailable explicit route is a RouteResolutionError, never
+	// a fallback (D8).
 	if strings.TrimSpace(req.ThoughtRecipeID) != "" || strings.TrimSpace(req.CapabilityID) != "" {
 		for _, candidate := range candidates {
 			if candidateMatchesRequest(candidate, req) {
-				return candidate, candidate.Availability == RouteAvailable
+				return candidate, candidate.Availability == RouteAvailable, decidedByExplicit
 			}
 		}
-		return CandidateRouteInfo{}, false
+		return CandidateRouteInfo{}, false, decidedByExplicit
 	}
-	bestScore := -1
-	var best CandidateRouteInfo
+
+	var available []CandidateRouteInfo
 	for _, candidate := range candidates {
-		if candidate.Availability != RouteAvailable {
-			continue
+		if candidate.Availability == RouteAvailable {
+			available = append(available, candidate)
 		}
+	}
+	if len(available) == 0 {
+		return CandidateRouteInfo{}, false, ""
+	}
+
+	// Rank 2: the highest deterministic score.
+	bestScore := -1
+	for _, candidate := range available {
 		if candidate.RankScore > bestScore {
 			bestScore = candidate.RankScore
-			best = candidate
+		}
+	}
+	top := scoreFilter(available, bestScore)
+	if len(top) == 1 {
+		return top[0], true, decidedByScore
+	}
+
+	// Rank 3: tie on score → higher family-affinity component.
+	bestAffinity := -1
+	for _, candidate := range top {
+		if affinity := candidate.Components[compFamilyAffinity]; affinity > bestAffinity {
+			bestAffinity = affinity
+		}
+	}
+	affinity := affinityFilter(top, bestAffinity)
+	if len(affinity) == 1 {
+		return affinity[0], true, decidedByFamilyAffinity
+	}
+
+	// Rank 4: tie → user recipes shadow builtin recipes. Scoped to recipe-kind
+	// candidates so a capability can never use this rank to outrank a recipe
+	// (rank 5 owns kind precedence).
+	userShadowed := dropShadowedBuiltins(affinity)
+	if len(userShadowed) == 1 {
+		return userShadowed[0], true, decidedByUserOverBuiltin
+	}
+
+	// Rank 5: tie → thoughtrecipe before capability.
+	preferred := kindFilter(userShadowed)
+	if len(preferred) == 1 {
+		return preferred[0], true, decidedByRecipeOverCap
+	}
+
+	// Rank 6: tie → lexicographic RouteID (total order; determinism).
+	sort.SliceStable(preferred, func(i, j int) bool {
+		return preferred[i].RouteID < preferred[j].RouteID
+	})
+	return preferred[0], true, decidedByRouteID
+}
+
+// scoreFilter keeps the candidates whose RankScore equals best.
+func scoreFilter(candidates []CandidateRouteInfo, best int) []CandidateRouteInfo {
+	out := make([]CandidateRouteInfo, 0, len(candidates))
+	for _, candidate := range candidates {
+		if candidate.RankScore == best {
+			out = append(out, candidate)
+		}
+	}
+	return out
+}
+
+// affinityFilter keeps the candidates whose family-affinity component equals
+// best.
+func affinityFilter(candidates []CandidateRouteInfo, best int) []CandidateRouteInfo {
+	if best <= 0 {
+		return candidates
+	}
+	out := make([]CandidateRouteInfo, 0, len(candidates))
+	for _, candidate := range candidates {
+		if candidate.Components[compFamilyAffinity] == best {
+			out = append(out, candidate)
+		}
+	}
+	return out
+}
+
+// dropShadowedBuiltins applies the D8 rank-4 rule: when the survivors include
+// both a user thoughtrecipe and a builtin thoughtrecipe, the builtin recipes
+// are shadowed and dropped. Capabilities never participate: only a genuine
+// user recipe can shadow a builtin recipe.
+func dropShadowedBuiltins(candidates []CandidateRouteInfo) []CandidateRouteInfo {
+	userRecipeCount := 0
+	builtinRecipeCount := 0
+	for _, candidate := range candidates {
+		if !isThoughtRecipeKind(candidate.RouteKind) {
 			continue
 		}
-		if candidate.RankScore == bestScore {
-			if best.RouteID == "" || candidate.RouteID < best.RouteID {
-				best = candidate
-			}
+		if isBuiltinRoute(candidate.RouteID) {
+			builtinRecipeCount++
+		} else {
+			userRecipeCount++
 		}
 	}
-	if bestScore < 0 {
-		return CandidateRouteInfo{}, false
+	if userRecipeCount == 0 || builtinRecipeCount == 0 {
+		return candidates
 	}
-	return best, true
+	out := make([]CandidateRouteInfo, 0, len(candidates))
+	for _, candidate := range candidates {
+		if isThoughtRecipeKind(candidate.RouteKind) && isBuiltinRoute(candidate.RouteID) {
+			continue
+		}
+		out = append(out, candidate)
+	}
+	return out
+}
+
+// isThoughtRecipeKind reports whether a route kind is governed decomposition
+// (thoughtrecipe or intent).
+func isThoughtRecipeKind(kind string) bool {
+	switch kind {
+	case euclotypes.RouteKindThoughtRecipe, euclotypes.RouteKindIntent:
+		return true
+	default:
+		return false
+	}
+}
+
+// kindFilter prefers governed decomposition (thoughtrecipe/intent) over direct
+// host effects (capability) at equal evidence (D8 rank 5).
+func kindFilter(candidates []CandidateRouteInfo) []CandidateRouteInfo {
+	out := make([]CandidateRouteInfo, 0, len(candidates))
+	for _, candidate := range candidates {
+		if isThoughtRecipeKind(candidate.RouteKind) {
+			out = append(out, candidate)
+		}
+	}
+	if len(out) > 0 {
+		return out
+	}
+	return candidates
 }
 
 func candidateMatchesRequest(candidate CandidateRouteInfo, req RouteRequest) bool {
@@ -450,13 +605,24 @@ func dedupeAndSortRouteCandidates(candidates []CandidateRouteInfo) []CandidateRo
 		if id == "" {
 			continue
 		}
-		if existing, ok := byID[id]; ok {
-			if candidate.RankScore > existing.RankScore {
-				byID[id] = candidate
-			}
+		existing, ok := byID[id]
+		if !ok {
+			byID[id] = candidate
 			continue
 		}
-		byID[id] = candidate
+		// D8: duplicate IDs from multiple producer functions keep the
+		// higher-scored variant and the union of reasons (and the per-component
+		// evidence of both), so dedup never loses a reason or a matched
+		// keyword.
+		if candidate.RankScore > existing.RankScore {
+			candidate.RankReasons = unionStrings(existing.RankReasons, candidate.RankReasons)
+			candidate.Components = mergeComponents(existing.Components, candidate.Components)
+			byID[id] = candidate
+			continue
+		}
+		existing.RankReasons = unionStrings(existing.RankReasons, candidate.RankReasons)
+		existing.Components = mergeComponents(existing.Components, candidate.Components)
+		byID[id] = existing
 	}
 	out := make([]CandidateRouteInfo, 0, len(byID))
 	for _, candidate := range byID {
@@ -471,6 +637,60 @@ func dedupeAndSortRouteCandidates(candidates []CandidateRouteInfo) []CandidateRo
 		}
 		return out[i].RankScore > out[j].RankScore
 	})
+	return out
+}
+
+// unionStrings merges two reason lists preserving order and de-duplicating by
+// exact value.
+func unionStrings(a, b []string) []string {
+	if len(a) == 0 {
+		return append([]string(nil), b...)
+	}
+	if len(b) == 0 {
+		return append([]string(nil), a...)
+	}
+	seen := make(map[string]struct{}, len(a)+len(b))
+	out := make([]string, 0, len(a)+len(b))
+	for _, value := range a {
+		if value == "" {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		out = append(out, value)
+	}
+	for _, value := range b {
+		if value == "" {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		out = append(out, value)
+	}
+	return out
+}
+
+// mergeComponents unions two component maps taking the maximum per component.
+func mergeComponents(a, b map[string]int) map[string]int {
+	if len(a) == 0 {
+		return b
+	}
+	if len(b) == 0 {
+		return a
+	}
+	out := make(map[string]int, len(a)+len(b))
+	for key, value := range a {
+		out[key] = value
+	}
+	for key, value := range b {
+		if current, ok := out[key]; !ok || value > current {
+			out[key] = value
+		}
+	}
 	return out
 }
 
@@ -631,6 +851,10 @@ func buildRouteResolution(env *contextdata.Envelope, req RouteRequest, report *D
 		ResolutionSource: "registry",
 		FallbackTaken:    fallbackTaken,
 		ReasonCodes:      nil,
+		DecidedBy:        "",
+	}
+	if report != nil {
+		resolution.DecidedBy = strings.TrimSpace(report.DecidedBy)
 	}
 	if state := routeClarificationState(env); state != nil {
 		resolution.ClarificationStateVersion = state.StateVersion
@@ -739,79 +963,188 @@ func routeIDForThoughtRecipeEntry(entry thoughtrecipepkg.ThoughtRecipeEntry) str
 	return strings.TrimSpace(entry.Name)
 }
 
-func scoreThoughtRecipeCandidate(entry thoughtrecipepkg.ThoughtRecipeEntry, tokens []string) (int, []string) {
-	if entry.ThoughtRecipe == nil {
-		return 0, nil
-	}
-	score := 0
-	reasons := make([]string, 0, 4)
-	if exactTokenMatch(tokens, entry.ThoughtRecipe.ID, entry.Name) {
-		score += 100
-		reasons = append(reasons, "explicit thoughtrecipe")
-	}
-	if matched, ok := tokenMatchesAny(tokens, entry.ThoughtRecipe.Metadata.Families...); ok {
-		score += 30
-		reasons = append(reasons, "family")
-		_ = matched
-	}
-	if matched, ok := tokenMatchesAny(tokens, entry.ThoughtRecipe.Metadata.Keywords...); ok {
-		score += 20
-		reasons = append(reasons, "keyword")
-		_ = matched
-	}
-	if matched, ok := tokenMatchesAny(tokens, entry.ThoughtRecipe.Metadata.HandoffTargets...); ok {
-		score += 40
-		reasons = append(reasons, "handoff")
-		_ = matched
-	}
-	if matched, ok := tokenMatchesAny(tokens, entry.ThoughtRecipe.Metadata.Tags...); ok {
-		score += 10
-		reasons = append(reasons, "tag")
-		_ = matched
-	}
-	return score, reasons
+// selectionContext scopes deterministic scoring: the classified family, the
+// utterance search tokens, and the family registry whose vocabulary feeds the
+// family-affinity and intent-keyword score components (D9: the family system
+// is a score component, not a parallel universe).
+type selectionContext struct {
+	family string
+	tokens []string
+	famReg *families.KeywordFamilyRegistry
 }
 
-func scoreCapabilityCandidate(desc descriptor.CapabilityDescriptor, tokens []string) (int, []string) {
-	score := 0
-	reasons := make([]string, 0, 4)
-	if exactTokenMatch(tokens, desc.ID, desc.Name) {
-		score += 100
-		reasons = append(reasons, "explicit capability")
+// selectionContextFor builds the scoring context for a dispatch. The family
+// is the classified family carried by intake; the accessor is formalized here
+// (falling back from the request to the envelope's classification so resume
+// and direct-call paths see the same family evidence).
+func selectionContextFor(env *contextdata.Envelope, req RouteRequest, famReg *families.KeywordFamilyRegistry) selectionContext {
+	return selectionContext{
+		family: resolvedFamilyID(env, req),
+		tokens: routeSearchTokens(env, req),
+		famReg: famReg,
 	}
-	if _, ok := tokenMatchesAny(tokens, desc.Category); ok {
-		score += 20
-		reasons = append(reasons, "category")
+}
+
+// resolvedFamilyID returns the classified family ID: the request carries it
+// when dispatch runs after intake; otherwise the envelope's classification
+// records it (the same evidence on resume/direct paths).
+func resolvedFamilyID(env *contextdata.Envelope, req RouteRequest) string {
+	if family := strings.TrimSpace(req.FamilyID); family != "" {
+		return family
 	}
-	if _, ok := tokenMatchesAny(tokens, desc.Tags...); ok {
-		score += 30
-		reasons = append(reasons, "tag")
+	if env == nil {
+		return ""
 	}
-	for _, family := range []string{"query", "review", "repair", "test", "architecture", "migration", "debug"} {
-		if _, ok := tokenMatchesAny(tokens, family); ok && familyMatchBonus(desc, family) {
-			score += 20
-			reasons = append(reasons, "family")
-			break
+	if family, ok := euclostate.GetFamilySelection(env); ok {
+		if trimmed := strings.TrimSpace(family); trimmed != "" {
+			return trimmed
 		}
 	}
-	score += capabilityPriorityScore(desc)
-	if _, ok := tokenMatchesAny(tokens, capabilityRiskTokens(desc)...); ok {
-		score += 5
-		reasons = append(reasons, "risk")
+	if classification, ok := euclostate.GetIntentClassification(env); ok && classification != nil {
+		return strings.TrimSpace(classification.WinningFamily)
 	}
-	return score, reasons
+	return ""
 }
 
-func capabilityRiskTokens(desc descriptor.CapabilityDescriptor) []string {
-	riskClasses := risk.Classify(desc.EffectClasses, desc.Source.Scope)
-	if len(riskClasses) == 0 {
-		return nil
+// intentKeywordHits computes the §3.6.1 intent-keyword component: the
+// classified family's IntentKeywords that are shared by the utterance and the
+// candidate's own vocabulary. The candidate-side overlap keeps a family-intent
+// term from promoting a candidate with no other evidence, and the pool-wide
+// term cannot manufacture a candidate. +5 each, capped at 15.
+func intentKeywordHits(ctx selectionContext, candidateVocabulary ...string) int {
+	if ctx.famReg == nil || ctx.family == "" {
+		return 0
 	}
-	out := make([]string, 0, len(riskClasses))
-	for _, rc := range riskClasses {
-		out = append(out, strings.TrimSpace(string(rc)))
+	family, ok := ctx.famReg.Lookup(ctx.family)
+	if !ok {
+		return 0
 	}
-	return out
+	intentSet := tokenNormalizedSet(family.IntentKeywords)
+	if len(intentSet) == 0 {
+		return 0
+	}
+	candidateSet := tokenNormalizedSet(candidateVocabulary)
+	if len(candidateSet) == 0 {
+		return 0
+	}
+	utteranceSet := tokenNormalizedSet(ctx.tokens)
+	hits := 0
+	for token := range intentSet {
+		if _, inCandidate := candidateSet[token]; !inCandidate {
+			continue
+		}
+		if _, inUtterance := utteranceSet[token]; inUtterance {
+			hits++
+		}
+	}
+	return boundedComponent(hits, scorePerIntentKeyword, capIntentKeyword)
+}
+
+func scoreThoughtRecipeCandidate(entry thoughtrecipepkg.ThoughtRecipeEntry, ctx selectionContext) (int, map[string]int, []string) {
+	if entry.ThoughtRecipe == nil {
+		return 0, nil, nil
+	}
+	total := 0
+	components := make(map[string]int)
+	reasons := make([]string, 0, 6)
+
+	addComponent := func(name string, value int, reason string) {
+		if value <= 0 {
+			return
+		}
+		components[name] = value
+		total += value
+		reasons = append(reasons, reason)
+	}
+
+	// Keyword hit: the utterance names the recipe (its declared keyword
+	// vocabulary plus its name and ID) (+10 each, cap 30).
+	keywordVocabulary := append([]string(nil), entry.ThoughtRecipe.Metadata.Keywords...)
+	keywordVocabulary = append(keywordVocabulary, entry.ThoughtRecipe.Name, entry.ThoughtRecipe.ID, entry.Name)
+	hits := tokenIntersectionCount(ctx.tokens, keywordVocabulary)
+	addComponent(compKeyword, boundedComponent(hits, scorePerKeyword, capKeyword), "keyword")
+
+	// Handoff-context match (+100, cap 100): the utterance names a handoff
+	// target of the recipe.
+	handoff := tokenIntersectionCount(ctx.tokens, entry.ThoughtRecipe.Metadata.HandoffTargets)
+	if handoff > 0 {
+		addComponent(compHandoff, boundedComponent(1, scoreHandoff, capHandoff), "handoff")
+	}
+
+	// Family affinity (+50): the recipe declares the classified family.
+	if ctx.family != "" && stringSliceContainsFold(entry.ThoughtRecipe.Metadata.Families, ctx.family) {
+		addComponent(compFamilyAffinity, boundedComponent(1, scoreFamilyAffinity, capFamilyAffinity), "family_affinity")
+	}
+
+	// Intent-keyword evidence: family intent vocabulary shared by the utterance
+	// and the recipe.
+	addComponent(compIntentKeyword, intentKeywordHits(ctx, keywordVocabulary...), "intent_keyword")
+
+	// Description-token overlap (+1 each, cap 10): shared vocabulary between the
+	// utterance and the recipe description.
+	descriptionOverlap := tokenIntersectionCount(ctx.tokens, []string{entry.ThoughtRecipe.Description})
+	addComponent(compDescription, boundedComponent(descriptionOverlap, scorePerDescription, capDescription), "description")
+
+	return total, components, reasons
+}
+
+func scoreCapabilityCandidate(desc descriptor.CapabilityDescriptor, ctx selectionContext) (int, map[string]int, []string) {
+	total := 0
+	components := make(map[string]int)
+	reasons := make([]string, 0, 6)
+
+	addComponent := func(name string, value int, reason string) {
+		if value <= 0 {
+			return
+		}
+		components[name] = value
+		total += value
+		reasons = append(reasons, reason)
+	}
+
+	// Keyword hit: the utterance matches the capability vocabulary — its name,
+	// ID, tags, and the family names it belongs to (+10 each, cap 30).
+	keywordVocabulary := append([]string(nil), desc.Tags...)
+	keywordVocabulary = append(keywordVocabulary, desc.Name, desc.ID)
+	for _, family := range capabilityFamilyVocabulary {
+		if familyMatchBonus(desc, family) {
+			keywordVocabulary = append(keywordVocabulary, family)
+		}
+	}
+	hits := tokenIntersectionCount(ctx.tokens, keywordVocabulary)
+	addComponent(compKeyword, boundedComponent(hits, scorePerKeyword, capKeyword), "keyword")
+
+	// Family affinity (+50): the capability belongs to the classified family.
+	if ctx.family != "" && familyMatchBonus(desc, ctx.family) {
+		addComponent(compFamilyAffinity, boundedComponent(1, scoreFamilyAffinity, capFamilyAffinity), "family_affinity")
+	}
+
+	// Intent-keyword evidence: family intent vocabulary shared by the utterance
+	// and the capability.
+	addComponent(compIntentKeyword, intentKeywordHits(ctx, keywordVocabulary...), "intent_keyword")
+
+	// Description-token overlap (+1 each, cap 10): shared vocabulary between
+	// the utterance and the capability name/category/description.
+	descriptionOverlap := tokenIntersectionCount(ctx.tokens, []string{desc.Name}) +
+		tokenIntersectionCount(ctx.tokens, []string{desc.Category}) +
+		tokenIntersectionCount(ctx.tokens, []string{desc.Description})
+	addComponent(compDescription, boundedComponent(descriptionOverlap, scorePerDescription, capDescription), "description")
+
+	// Priority: the shipped euclo.priority annotation (shipped data, not a
+	// config surface) contributes directly to the deterministic score.
+	priority := capabilityPriorityScore(desc)
+	if priority > 0 {
+		addComponent(compPriority, priority, "priority")
+	}
+
+	return total, components, reasons
+}
+
+// capabilityFamilyVocabulary is the closed family vocabulary used to map
+// capability IDs onto families (the capability-side equivalent of a recipe's
+// `family [...]` declaration).
+var capabilityFamilyVocabulary = []string{ //nolint:gochecknoglobals // immutable family vocabulary
+	"query", "review", "repair", "test", "architecture", "migration", "debug",
 }
 
 func capabilitySnapshotByID(caps *registry.CapabilityRegistry, id string) (registry.CapabilitySnapshot, bool) {
@@ -826,8 +1159,11 @@ func capabilitySnapshotByID(caps *registry.CapabilityRegistry, id string) (regis
 	return registry.CapabilitySnapshot{}, false
 }
 
-func tokenMatchesAny(tokens []string, values ...string) (string, bool) {
-	normalized := make(map[string]struct{}, len(tokens))
+// tokenNormalizedSet expands the utterance tokens into the normalized match
+// vocabulary used by every scorer: the trimmed lowercased token plus its
+// split sub-tokens.
+func tokenNormalizedSet(tokens []string) map[string]struct{} {
+	normalized := make(map[string]struct{}, len(tokens)*2)
 	for _, token := range tokens {
 		if trimmed := strings.TrimSpace(strings.ToLower(token)); trimmed != "" {
 			normalized[trimmed] = struct{}{}
@@ -838,37 +1174,39 @@ func tokenMatchesAny(tokens []string, values ...string) (string, bool) {
 			}
 		}
 	}
-	for _, value := range values {
-		candidates := append([]string{value}, splitRouteTokens(value)...)
-		for _, candidate := range candidates {
-			trimmed := strings.TrimSpace(strings.ToLower(candidate))
-			if trimmed == "" {
-				continue
-			}
-			if _, ok := normalized[trimmed]; ok {
-				return trimmed, true
-			}
-		}
-	}
-	return "", false
+	return normalized
 }
 
-func exactTokenMatch(tokens []string, values ...string) bool {
-	if len(tokens) == 0 || len(values) == 0 {
+// tokenIntersectionCount counts the distinct normalized tokens shared by two
+// token lists. Both lists are expanded into their split sub-tokens, so a
+// candidate whose name is also its ID counts once, never twice.
+func tokenIntersectionCount(a, b []string) int {
+	if len(a) == 0 || len(b) == 0 {
+		return 0
+	}
+	setA := tokenNormalizedSet(a)
+	setB := tokenNormalizedSet(b)
+	if len(setB) < len(setA) {
+		setA, setB = setB, setA
+	}
+	count := 0
+	for token := range setA {
+		if _, ok := setB[token]; ok {
+			count++
+		}
+	}
+	return count
+}
+
+// stringSliceContainsFold reports whether value matches any element of values
+// case-insensitively.
+func stringSliceContainsFold(values []string, value string) bool {
+	want := strings.ToLower(strings.TrimSpace(value))
+	if want == "" {
 		return false
 	}
-	normalized := make(map[string]struct{}, len(tokens))
-	for _, token := range tokens {
-		if trimmed := strings.TrimSpace(strings.ToLower(token)); trimmed != "" {
-			normalized[trimmed] = struct{}{}
-		}
-	}
-	for _, value := range values {
-		trimmed := strings.TrimSpace(strings.ToLower(value))
-		if trimmed == "" {
-			continue
-		}
-		if _, ok := normalized[trimmed]; ok {
+	for _, existing := range values {
+		if strings.ToLower(strings.TrimSpace(existing)) == want {
 			return true
 		}
 	}

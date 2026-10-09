@@ -177,6 +177,12 @@ func buildNodes(ctx context.Context, in buildNodeInput) ([]agentgraph.Node, erro
 	}
 	ensureClarificationThoughtRecipe(thoughtrecipeReg)
 	ensureDefaultThoughtRecipe(thoughtrecipeReg)
+	// FR-15: the clarification family→recipe table is validated against the
+	// recipe registry at agent construction; a dangling target fails boot, not
+	// the first ambiguous utterance.
+	if err := assertClarificationFamilyTable(thoughtrecipeReg); err != nil {
+		return nil, err
+	}
 	var thoughtrecipeCapReg *registry.CapabilityRegistry
 	if in.paradigmDeps != nil {
 		thoughtrecipeCapReg = in.paradigmDeps.Registry
@@ -288,7 +294,8 @@ func buildNodes(ctx context.Context, in buildNodeInput) ([]agentgraph.Node, erro
 	dispatchNode := NewDispatcher("euclo.dispatch").
 		WithWorkspace(in.workspace).
 		WithCapabilityRegistry(dispatchCapReg).
-		WithThoughtRecipeRegistry(thoughtrecipeReg)
+		WithThoughtRecipeRegistry(thoughtrecipeReg).
+		WithFamilyRegistry(in.famReg)
 
 	routeForkNode := NewRouteForkNode("euclo.route_fork")
 

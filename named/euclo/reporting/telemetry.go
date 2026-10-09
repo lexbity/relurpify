@@ -355,13 +355,14 @@ func clarificationStateVersionFromEnv(env *contextdata.Envelope) uint64 {
 }
 
 // EmitRouteSelected reports the selected route and candidate metadata.
-func EmitRouteSelected(ctx context.Context, taskID, sessionID, family, routeKind, routeID string, candidateCount int, fallbackTaken bool) {
+func EmitRouteSelected(ctx context.Context, taskID, sessionID, family, routeKind, routeID string, candidateCount int, fallbackTaken bool, decidedBy string) {
 	emitRouteEvent(ctx, EventTypeRouteSelected, taskID, sessionID, map[string]any{
 		"family":          family,
 		"route_kind":      routeKind,
 		"route_id":        routeID,
 		"candidate_count": candidateCount,
 		"fallback_taken":  fallbackTaken,
+		"decided_by":      decidedBy,
 	})
 }
 

@@ -39,6 +39,9 @@ type RouteResult struct {
 	ArtifactKinds       []string
 	Outcome             string
 	TelemetrySuppressed bool
+	// DecidedBy names the D8 lattice rule (or explicit/default) that produced
+	// the selection, e.g. "lattice:family_affinity" or "explicit".
+	DecidedBy string
 }
 
 // DryRunReport captures the selected route plus the candidate set considered.
@@ -54,6 +57,8 @@ type DryRunReport struct {
 	FallbackPath          *RouteID
 	ExecutionClass        string
 	PreflightErrors       []string
+	// DecidedBy names the D8 lattice rule that produced the selection.
+	DecidedBy string
 }
 
 // CandidateRouteInfo describes one candidate route in the ranking set.
@@ -65,6 +70,10 @@ type CandidateRouteInfo struct {
 	RankReasons    []string
 	Suppressed     bool
 	SuppressReason string
+	// Components is the per-component score split (§3.6.1). Keys are the
+	// selection_config component names; the values cap at the per-component
+	// ceiling. RankScore is the sum of the components the candidate earned.
+	Components map[string]int
 }
 
 // RouteResolutionError indicates that no route could be selected.
