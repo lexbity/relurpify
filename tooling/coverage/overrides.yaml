@@ -20,8 +20,8 @@ packages:
     floor: 0
     reason: no unit tests yet; floor ratchets up from 0 as tests land
   codeburg.org/lexbit/relurpify/app/relurpish/runtime:
-    floor: 55
-    reason: partial unit coverage; floor recorded from current coverage, raise as tests land
+    floor: 63
+    reason: partial unit coverage; floor recorded from current coverage, raise as tests land (Phase 7 quiesce tests landed)
   codeburg.org/lexbit/relurpify/app/relurpish/tui:
     floor: 30
     reason: partial unit coverage; floor recorded from current coverage, raise as tests land
@@ -104,8 +104,8 @@ packages:
     floor: 60
     reason: partial unit coverage; floor recorded from current coverage, raise as tests land
   codeburg.org/lexbit/relurpify/context/knowledge:
-    floor: 66
-    reason: partial unit coverage; floor recorded from current coverage, raise as tests land
+    floor: 75
+    reason: partial unit coverage; floor recorded from current coverage, raise as tests land (capture-bridge phases 1-6 landed)
   codeburg.org/lexbit/relurpify/context/knowledge/ast:
     floor: 55
     reason: partial unit coverage; floor recorded from current coverage, raise as tests land
@@ -128,8 +128,8 @@ packages:
     floor: 0
     reason: no unit tests yet; floor ratchets up from 0 as tests land
   codeburg.org/lexbit/relurpify/execution/agentgraph:
-    floor: 45
-    reason: partial unit coverage; floor recorded from current coverage, raise as tests land
+    floor: 57
+    reason: partial unit coverage; floor recorded from current coverage, raise as tests land (epoch coordinator + phase 8 checkpoint honesty landed)
   codeburg.org/lexbit/relurpify/execution/agentlifecycle:
     floor: 0
     reason: no unit tests yet; floor ratchets up from 0 as tests land
