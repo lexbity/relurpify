@@ -961,6 +961,7 @@ func (c *Compiler) generateAndPersistSummary(ctx context.Context, chunks []knowl
 	// Persist via persistence writer
 	_, err = c.persistenceWriter.Persist(ctx, persistence.PersistenceRequest{
 		Content:      []byte(result.Summary),
+		Kind:         knowledge.ChunkKindDerivation,
 		ContentType:  "summary",
 		SourceOrigin: "summary_derivation",
 		DerivedFrom:  sourceIDs,

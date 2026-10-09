@@ -78,6 +78,16 @@ func (b *EventBusTelemetryBridge) forward(event Event) {
 			"workspace_root": payload.WorkspaceRoot,
 			"workflow_id":    payload.WorkflowID,
 		})
+	case EventTombstonePreserved:
+		payload, ok := event.Payload.(TombstonePreservedPayload)
+		if !ok {
+			return
+		}
+		b.emit(event.Timestamp, telemetry.EventTombstonePreserved, "tombstone preserved", map[string]any{
+			"chunk_id":     payload.ChunkID,
+			"content_hash": payload.ContentHash,
+			"kind":         payload.Kind,
+		})
 	case EventCodeRevisionChanged:
 		payload, ok := event.Payload.(CodeRevisionChangedPayload)
 		if !ok {

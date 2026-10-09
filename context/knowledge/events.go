@@ -13,6 +13,7 @@ const (
 	EventCodeRevisionChanged EventKind = "knowledge.code_revision_changed"
 	EventChunkStaled         EventKind = "knowledge.chunk_staled"
 	EventChunkIngested       EventKind = "knowledge.chunk_ingested"
+	EventTombstonePreserved  EventKind = "knowledge.tombstone_preserved"
 	EventPatternConfirmed    EventKind = "knowledge.pattern_confirmed"
 	EventAnchorConfirmed     EventKind = "knowledge.anchor_confirmed"
 	EventIndexEntryProduced  EventKind = "knowledge.index_entry_produced"
@@ -59,6 +60,14 @@ type ChunkIngestedPayload struct {
 	SourceOrigin   string   `json:"source_origin,omitempty"`
 	TokenEstimate  int      `json:"token_estimate,omitempty"`
 	SourceChunkIDs []string `json:"source_chunk_ids,omitempty"`
+}
+
+// TombstonePreservedPayload reports that identical content matched a tombstoned
+// chunk and was deliberately not resurrected.
+type TombstonePreservedPayload struct {
+	ChunkID     string `json:"chunk_id,omitempty"`
+	ContentHash string `json:"content_hash,omitempty"`
+	Kind        string `json:"kind,omitempty"`
 }
 
 // EventBus is a lightweight in-process artifact event broker.
@@ -151,4 +160,12 @@ func (b *EventBus) EmitChunkIngested(payload ChunkIngestedPayload) {
 		return
 	}
 	b.Publish(Event{Kind: EventChunkIngested, Timestamp: time.Now().UTC(), Payload: payload})
+}
+
+// EmitTombstonePreserved publishes a tombstone-preserved event.
+func (b *EventBus) EmitTombstonePreserved(payload TombstonePreservedPayload) {
+	if b == nil {
+		return
+	}
+	b.Publish(Event{Kind: EventTombstonePreserved, Timestamp: time.Now().UTC(), Payload: payload})
 }

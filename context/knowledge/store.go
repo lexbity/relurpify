@@ -36,21 +36,39 @@ func (s *ChunkStore) Save(ctx context.Context, chunk KnowledgeChunk) (*Knowledge
 		return nil, errors.New("knowledge: chunk id is required")
 	}
 	now := time.Now().UTC()
-	if chunk.Freshness == "" {
+	explicitFreshness := chunk.Freshness != ""
+	if !explicitFreshness {
 		chunk.Freshness = FreshnessValid
 	}
 	if chunk.CreatedAt.IsZero() {
 		chunk.CreatedAt = now
 	}
 	chunk.UpdatedAt = now
-	if existing, ok, err := s.loadChunk(chunk.ID); err != nil {
+	existing, ok, err := s.loadChunk(chunk.ID)
+	if err != nil {
 		return nil, err
-	} else if ok {
+	}
+	if ok {
+		if existing.Tombstoned {
+			if chunk.DerivationGeneration > existing.DerivationGeneration {
+				// A newer derivation re-establishes the fact. This is the only
+				// path that may clear a tombstone.
+				chunk.Tombstoned = false
+				chunk.SupersededBy = ""
+				chunk.Freshness = FreshnessValid
+				explicitFreshness = true
+			} else {
+				return existing, nil
+			}
+		}
 		if chunk.Version <= existing.Version {
 			chunk.Version = existing.Version + 1
 		}
 		if chunk.CreatedAt.IsZero() || chunk.CreatedAt.Before(existing.CreatedAt) {
 			chunk.CreatedAt = existing.CreatedAt
+		}
+		if !explicitFreshness {
+			chunk.Freshness = existing.Freshness
 		}
 	} else if chunk.Version <= 0 {
 		chunk.Version = 1
@@ -276,6 +294,9 @@ func (s *ChunkStore) findMatching(match func(KnowledgeChunk) bool) ([]KnowledgeC
 		if err := json.Unmarshal(node.Props, &chunk); err != nil {
 			return nil, err
 		}
+		if chunk.Tombstoned {
+			continue
+		}
 		if match == nil || match(chunk) {
 			out = append(out, chunk)
 		}
@@ -472,6 +493,9 @@ func decodeChunks(nodes []graphdb.NodeRecord) ([]KnowledgeChunk, error) {
 		var chunk KnowledgeChunk
 		if err := json.Unmarshal(node.Props, &chunk); err != nil {
 			return nil, err
+		}
+		if chunk.Tombstoned {
+			continue
 		}
 		out = append(out, chunk)
 	}

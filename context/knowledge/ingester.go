@@ -88,7 +88,7 @@ func (ing *OutputIngester) IngestLLMResponseFull(ctx context.Context, resp *mode
 	}
 	env, _ := contextdata.EnvelopeFrom(ctx)
 	return ing.ingestText(ctx, ingestTextInput{
-		kind:           "llm_response",
+		kind:           ChunkKindLLM,
 		text:           resp.Text,
 		sourceOrigin:   SourceOriginLLM,
 		trustClass:     agentspec.TrustClassLLMGenerated,
@@ -112,7 +112,7 @@ func (ing *OutputIngester) IngestToolResult(ctx context.Context, toolName string
 	}
 	env, _ := contextdata.EnvelopeFrom(ctx)
 	return ing.ingestText(ctx, ingestTextInput{
-		kind:           "tool_result",
+		kind:           ChunkKindTool,
 		text:           string(result),
 		sourceOrigin:   SourceOriginTool,
 		trustClass:     agentspec.TrustClassToolResult,
@@ -136,7 +136,7 @@ func (ing *OutputIngester) IngestObservation(ctx context.Context, observation st
 	}
 	env, _ := contextdata.EnvelopeFrom(ctx)
 	return ing.ingestText(ctx, ingestTextInput{
-		kind:           "observation",
+		kind:           ChunkKindObservation,
 		text:           observation,
 		sourceOrigin:   SourceOriginDerivation,
 		trustClass:     agentspec.TrustClassLLMGenerated,
@@ -181,17 +181,18 @@ func IngestObservationAsync(ctx context.Context, ing *OutputIngester, observatio
 }
 
 type ingestTextInput struct {
-	kind           string
-	text           string
-	sourceOrigin   SourceOrigin
-	trustClass     agentspec.TrustClass
-	memoryClass    MemoryClass
-	storageMode    StorageMode
-	sessionID      string
-	workflowID     string
-	nodeID         string
-	sourceChunkIDs []ChunkID
-	fields         map[string]any
+	kind                 ChunkKind
+	text                 string
+	sourceOrigin         SourceOrigin
+	trustClass           agentspec.TrustClass
+	memoryClass          MemoryClass
+	storageMode          StorageMode
+	sessionID            string
+	workflowID           string
+	nodeID               string
+	derivationGeneration int
+	sourceChunkIDs       []ChunkID
+	fields               map[string]any
 }
 
 func (ing *OutputIngester) ingestText(ctx context.Context, input ingestTextInput) (*KnowledgeChunk, error) {
@@ -209,17 +210,18 @@ func (ing *OutputIngester) ingestText(ctx context.Context, input ingestTextInput
 	}
 	now := time.Now().UTC()
 	chunk := KnowledgeChunk{
-		ID:                deterministicChunkID(input.kind, contentHash),
-		WorkspaceID:       input.sessionID,
-		ContentHash:       contentHash,
-		TokenEstimate:     estimateTokens(text),
-		MemoryClass:       input.memoryClass,
-		StorageMode:       input.storageMode,
-		SourceOrigin:      input.sourceOrigin,
-		AcquisitionMethod: AcquisitionMethodRuntimeWrite,
-		AcquiredAt:        now,
-		TrustClass:        input.trustClass,
-		DerivedFrom:       append([]ChunkID(nil), input.sourceChunkIDs...),
+		ID:                   CanonicalChunkIDFromHash(input.kind, contentHash),
+		WorkspaceID:          input.sessionID,
+		ContentHash:          contentHash,
+		TokenEstimate:        estimateTokens(text),
+		MemoryClass:          input.memoryClass,
+		StorageMode:          input.storageMode,
+		SourceOrigin:         input.sourceOrigin,
+		AcquisitionMethod:    AcquisitionMethodRuntimeWrite,
+		AcquiredAt:           now,
+		TrustClass:           input.trustClass,
+		DerivedFrom:          append([]ChunkID(nil), input.sourceChunkIDs...),
+		DerivationGeneration: input.derivationGeneration,
 		Provenance: ChunkProvenance{
 			Sources:    provenanceSourcesFromChunkIDs(input.sourceChunkIDs),
 			SessionID:  input.sessionID,
@@ -234,7 +236,7 @@ func (ing *OutputIngester) ingestText(ctx context.Context, input ingestTextInput
 		},
 	}
 	chunk.Body.Fields = ensureFields(chunk.Body.Fields)
-	chunk.Body.Fields["kind"] = input.kind
+	chunk.Body.Fields["kind"] = string(input.kind)
 	chunk.Body.Fields["content_hash"] = contentHash
 	chunk.Body.Fields["session_id"] = input.sessionID
 	chunk.Body.Fields["workflow_id"] = input.workflowID
@@ -243,10 +245,17 @@ func (ing *OutputIngester) ingestText(ctx context.Context, input ingestTextInput
 	chunk.Body.Fields["token_estimate"] = chunk.TokenEstimate
 
 	if len(existing) > 0 {
-		// Reuse the newest matching chunk rather than duplicating identical output.
+		// Reuse the matching live chunk rather than duplicating identical output.
 		chunk.ID = existing[0].ID
 		chunk.Version = existing[0].Version
 		chunk.CreatedAt = existing[0].CreatedAt
+	} else if prior, ok, err := ing.Store.LoadIncludingTombstoned(chunk.ID); err != nil {
+		return nil, err
+	} else if ok && prior.Tombstoned && chunk.DerivationGeneration <= prior.DerivationGeneration {
+		// A tombstoned chunk with equal-or-older derivation is not resurrected;
+		// identical content no longer clears a retraction by accident.
+		ing.emitTombstonePreserved(input, prior)
+		return prior, nil
 	}
 
 	saved, err := ing.Store.Save(ctx, chunk)
@@ -260,7 +269,7 @@ func (ing *OutputIngester) ingestText(ctx context.Context, input ingestTextInput
 		edgeKind := EdgeKindDerivesFrom
 		fromID := sourceID
 		toID := saved.ID
-		if input.kind == "tool_result" {
+		if input.kind == ChunkKindTool {
 			edgeKind = EdgeKindGrounds
 			fromID = saved.ID
 			toID = sourceID
@@ -298,6 +307,17 @@ func (ing *OutputIngester) ingestText(ctx context.Context, input ingestTextInput
 func contentHashForText(text string) string {
 	sum := sha256.Sum256([]byte(text))
 	return hex.EncodeToString(sum[:16])
+}
+
+func (ing *OutputIngester) emitTombstonePreserved(input ingestTextInput, prior *KnowledgeChunk) {
+	if ing == nil || ing.Events == nil || prior == nil {
+		return
+	}
+	ing.Events.EmitTombstonePreserved(TombstonePreservedPayload{
+		ChunkID:     string(prior.ID),
+		ContentHash: prior.ContentHash,
+		Kind:        string(input.kind),
+	})
 }
 
 func provenanceSourcesFromChunkIDs(ids []ChunkID) []ProvenanceSource {

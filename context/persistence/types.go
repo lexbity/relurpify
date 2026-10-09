@@ -3,6 +3,7 @@
 package persistence
 
 import (
+	"sync"
 	"time"
 
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
@@ -14,7 +15,8 @@ import (
 // PersistenceRequest is the caller-facing write contract.
 type PersistenceRequest struct {
 	Content              []byte
-	ContentType          string // mime type or structural type
+	Kind                 knowledge.ChunkKind // canonical closed-set kind; part of the chunk ID
+	ContentType          string              // mime type or structural type
 	SourcePrincipal      identity.SubjectRef
 	SourceOrigin         knowledge.SourceOrigin
 	Reason               string
@@ -61,7 +63,14 @@ type Writer struct {
 	Events    EventLog
 	Policy    *contextports.PolicyBundle
 	Evaluator contextports.PolicyEvaluator
-	AuditLog  []PersistenceAuditRecord
+
+	// AuditLog is the bounded in-memory audit ring. It is guarded by auditMu;
+	// read it through GetAuditLog, never by direct indexing.
+	AuditLog []PersistenceAuditRecord
+
+	auditMu   sync.Mutex
+	auditNext int
+	auditSeq  int64
 }
 
 // EventLog is a minimal event logging interface.
@@ -78,6 +87,7 @@ type WorkingMemoryStore interface {
 // PromotionRequest represents a request to promote content from working memory.
 type PromotionRequest struct {
 	Key                  string
+	Kind                 knowledge.ChunkKind
 	ContentType          string
 	SourcePrincipal      identity.SubjectRef
 	SourceOrigin         knowledge.SourceOrigin

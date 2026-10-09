@@ -50,6 +50,7 @@ const (
 	EventCompilerSummarySubstituted   EventType = "compiler.summary_substituted"
 	EventChunkStaled                  EventType = "chunk.staled"
 	EventChunkInvalidated             EventType = "chunk.invalidated"
+	EventTombstonePreserved           EventType = "knowledge.tombstone_preserved"
 	EventSchedulerJobStarted          EventType = "scheduler.job_started"
 	EventSchedulerJobCompleted        EventType = "scheduler.job_completed"
 	EventSchedulerJobFailed           EventType = "scheduler.job_failed"

@@ -19,9 +19,14 @@ type SchemaVersion struct {
 	Version int
 }
 
+// ChunkSchemaVersion is the current schema version for artifact knowledge
+// chunks. Version 2 adds the capture-origin, epistemics, and grounding fields.
+const ChunkSchemaVersion = 2
+
 // CurrentSchemaVersions returns the current schema versions for all entity kinds.
 func CurrentSchemaVersions() map[string]SchemaVersion {
 	return map[string]SchemaVersion{
+		"chunk":                   {Name: "chunk", Version: ChunkSchemaVersion},
 		"workflow":                {Name: "workflow", Version: 1},
 		"workflow_run":            {Name: "workflow_run", Version: 1},
 		"delegation":              {Name: "delegation", Version: 1},
