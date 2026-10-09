@@ -109,6 +109,14 @@ const (
 	KeyExecutionThoughtRecipe = euclokeys.KeyExecutionThoughtRecipe
 )
 
+// Operational failure keys — written by step nodes and aggregated by the recipe
+// executor. Callers should prefer the typed accessors in failure_state.go.
+const (
+	KeyStepFailure   = euclokeys.KeyStepFailure
+	KeyStepFailures  = euclokeys.KeyStepFailures
+	KeyFallbackTaken = euclokeys.KeyFallbackTaken
+)
+
 // Interaction frame state keys.
 // Callers should prefer the typed accessors in interaction_state.go.
 const (

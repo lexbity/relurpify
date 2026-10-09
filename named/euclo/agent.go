@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"codeburg.org/lexbit/relurpify/cognitionzoo/paradigm"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
@@ -21,6 +22,7 @@ import (
 	"codeburg.org/lexbit/relurpify/named/euclo/services"
 	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
 	thoughtrecipe "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 // Agent is the Euclo coding agent. It implements agentgraph.WorkflowExecutor.
@@ -127,8 +129,38 @@ func (a *Agent) Initialize(config *execution.Config) error {
 		a.thoughtrecipeRegistry = thoughtrecipe.NewThoughtRecipeRegistry()
 	}
 
+	// FR-24: nil StateReground is a declared cold-start mode. Emit exactly one
+	// info-level boot event so grounding composition is observable, never a
+	// silent absent port.
+	if a.config.StateReground == nil {
+		a.emitGroundingPortsUnwired()
+	}
+
 	a.initialized = true
 	return nil
+}
+
+// emitGroundingPortsUnwired emits the single boot event that declares the
+// cold-start grounding mode. It is a no-op without a telemetry sink.
+func (a *Agent) emitGroundingPortsUnwired() {
+	if a == nil || a.deps == nil || a.deps.Telemetry == nil {
+		return
+	}
+	a.deps.Telemetry.Emit(telemetry.Event{
+		Type:      telemetry.EventGroundingPortsUnwired,
+		Message:   "grounding ports not wired; Euclo starts cold",
+		Timestamp: time.Now().UTC(),
+	})
+}
+
+// GroundingComposition reports the composed grounding mode for the status
+// surface: "wired" when a StateReground source is present, "cold_start"
+// otherwise. Doctor/reporting surfaces read this rather than guessing.
+func (a *Agent) GroundingComposition() string {
+	if a == nil || a.config.StateReground == nil {
+		return "cold_start"
+	}
+	return "wired"
 }
 
 func (a *Agent) Execute(ctx context.Context, task *execution.Task, env *contextdata.Envelope) (*execution.Result, error) {
@@ -180,6 +212,7 @@ func (a *Agent) BuildGraph(ctx context.Context, task *execution.Task) (*agentgra
 		Checkpoints:          a.config.CheckpointRepository,
 		Persistence:          a.config.PersistenceWriter,
 		Telemetry:            a.deps.Telemetry,
+		StateReground:        a.config.StateReground,
 	}
 	rootGraph, err := orchestrate.NewRootGraph(ctx, deps)
 	if err != nil {

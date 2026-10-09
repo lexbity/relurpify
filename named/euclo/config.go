@@ -5,6 +5,7 @@ import (
 	"codeburg.org/lexbit/relurpify/context/persistence"
 	"codeburg.org/lexbit/relurpify/execution/agentlifecycle"
 	"codeburg.org/lexbit/relurpify/model"
+	"codeburg.org/lexbit/relurpify/named/euclo/grounding"
 	euclopolicy "codeburg.org/lexbit/relurpify/named/euclo/policy"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
@@ -44,6 +45,13 @@ type EucloConfig struct {
 	// It is required to build the execution graph; a nil broker fails closed
 	// rather than silently auto-approving.
 	HITLBroker euclopolicy.HITLBroker
+
+	// StateReground is the optional restart query over the knowledge layer's
+	// grounded capture corpus (Wave 1 IF-2). When composed, recipe dispatch
+	// re-grounds durable state.* captures before the recipe runs; when nil,
+	// Euclo starts cold and emits exactly one info-level grounding.ports_unwired
+	// boot event. Nil is a declared degraded mode, not a silent fallback.
+	StateReground grounding.StateRegroundSource
 
 	// TelemetrySink is the telemetry backend for execution events.
 	// When nil, a no-op sink is used.

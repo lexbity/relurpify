@@ -107,6 +107,15 @@ const (
 	KeyExecutionThoughtRecipe = "euclo.execution.thoughtrecipe_id"
 )
 
+// Operational failure keys written by step nodes and aggregated by the recipe
+// executor. KeyStepFailure holds the most recent typed failure; KeyStepFailures
+// holds every failure for the run in step order.
+const (
+	KeyStepFailure   = "euclo.step_failure"
+	KeyStepFailures  = "euclo.step_failures"
+	KeyFallbackTaken = "euclo.fallback_taken"
+)
+
 // Interaction frame state keys.
 const (
 	KeyInteractionFrameSeq           = "euclo.interaction.frame_seq"

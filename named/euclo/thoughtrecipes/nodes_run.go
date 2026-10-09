@@ -10,6 +10,7 @@ import (
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/execution/agentgraph"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 )
 
 // RunNode executes a run/pipeline step using a cognitionzoo agent.
@@ -54,20 +55,28 @@ func (n *RunNode) Execute(ctx context.Context, env *contextdata.Envelope) (retRe
 	}
 
 	result, execErr := agent.Execute(ctx, task, env)
+	// model_invalid_output is the one class with a retry default (D6): retry
+	// exactly once, then fall through to the failure protocol.
+	if execErr != nil && ClassifyFailure(execErr) == euclotypes.FailureModelInvalidOutput {
+		retryResult, retryErr := agent.Execute(ctx, task, env)
+		result, execErr = retryResult, retryErr
+	}
+	if execErr != nil {
+		failureResult := n.recordOperationalFailure(ctx, env, execErr)
+		n.markFallbackActivated(ctx, env, failureResult)
+		return failureResult, nil
+	}
 	if result == nil {
 		result = &execution.Result{
 			NodeID:  n.id,
-			Success: execErr == nil,
+			Success: true,
 			Data:    execution.NewToolResultPayload(map[string]any{}),
 		}
 	}
 	if result.Data == nil {
 		result.Data = execution.NewToolResultPayload(map[string]any{})
 	}
-	if execErr != nil {
-		result.Success = false
-		result.Error = execErr.Error()
-	}
+	n.markFallbackActivated(ctx, env, result)
 
 	if err := n.writeCaptures(ctx, env, result); err != nil {
 		return result, err
@@ -78,8 +87,5 @@ func (n *RunNode) Execute(ctx context.Context, env *contextdata.Envelope) (retRe
 		contextdata.SetTyped(env, "euclo.execution.step."+n.step.ID+".error", result.Error)
 	}
 
-	if execErr != nil {
-		return result, nil
-	}
 	return result, nil
 }

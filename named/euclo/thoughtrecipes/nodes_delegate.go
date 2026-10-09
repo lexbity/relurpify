@@ -87,9 +87,14 @@ func (n *DelegateNode) Execute(ctx context.Context, env *contextdata.Envelope) (
 
 	stepResult = result
 	if execErr != nil {
-		stepErr = execErr
-		return result, execErr
+		// FR-9: an operational failure in a delegated sub-agent ends the step
+		// structured, classified, and recorded — never a raw graph error.
+		failureResult := n.recordOperationalFailure(ctx, env, execErr)
+		n.markFallbackActivated(ctx, env, failureResult)
+		stepResult = failureResult
+		return failureResult, nil
 	}
+	n.markFallbackActivated(ctx, env, result)
 	return result, nil
 }
 

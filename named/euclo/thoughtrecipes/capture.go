@@ -101,6 +101,34 @@ func ApplyCaptureBindingsFromSnapshot(env *contextdata.Envelope, sourceData map[
 	return writes, nil
 }
 
+// ApplyCaptureValue writes one captured value to a namespace destination and
+// preserves the caller-supplied dataflow origin. It is the origin-preserving
+// sibling of ApplyCaptureBindings used by restart re-grounding (Wave 2 D/FR-24):
+// restore and capture share one typed application path, and a destination that
+// is not a namespace reference is a typed capture failure rather than a silent
+// coercion. An invalid or empty origin degrades to llm so restore never
+// elevates trust.
+func ApplyCaptureValue(env *contextdata.Envelope, destination string, value any, origin contextdata.OriginClass) error {
+	if env == nil {
+		return fmt.Errorf("capture destination %q: envelope is nil", destination)
+	}
+	dest := strings.TrimSpace(destination)
+	parts := strings.Split(dest, ".")
+	if dest == "" || len(parts) < 2 {
+		return fmt.Errorf("capture destination %q must be a namespace reference", dest)
+	}
+	switch strings.TrimSpace(parts[0]) {
+	case "state", "scratch", "user", "output":
+	default:
+		return fmt.Errorf("capture destination %q must use state, scratch, user, or output", dest)
+	}
+	if !origin.Valid() {
+		origin = contextdata.OriginLLM
+	}
+	env.SetWorkingValueWithOrigin(dest, value, contextdata.MemoryClassTask, origin)
+	return nil
+}
+
 func lookupCaptureSourceValue(expr ValueExpr, resultData map[string]any, envData map[string]any) (any, bool) {
 	if value, ok := lookupNamedValue(expr, resultData); ok {
 		return value, true

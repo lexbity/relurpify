@@ -12,6 +12,7 @@ import (
 	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/execution/agentgraph"
 	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
+	"codeburg.org/lexbit/relurpify/named/euclo/grounding"
 	intentcontext "codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
 	"codeburg.org/lexbit/relurpify/named/euclo/reporting"
 	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
@@ -26,6 +27,8 @@ type ThoughtRecipeExecutorNode struct {
 	deps              *paradigm.Deps
 	registry          *thoughtrecipepkg.ThoughtRecipeRegistry
 	ingestionPipeline *frameworkingestion.Pipeline
+	workspace         string
+	stateReground     grounding.StateRegroundSource
 }
 
 // NewThoughtRecipeExecutorNode creates a new thoughtrecipe executor node.
@@ -56,6 +59,24 @@ func (n *ThoughtRecipeExecutorNode) WithParadigmDeps(deps *paradigm.Deps) *Thoug
 func (n *ThoughtRecipeExecutorNode) WithIngestionPipeline(p *frameworkingestion.Pipeline) *ThoughtRecipeExecutorNode {
 	if n != nil {
 		n.ingestionPipeline = p
+	}
+	return n
+}
+
+// WithWorkspace sets the workspace identifier used to scope restart
+// re-grounding queries.
+func (n *ThoughtRecipeExecutorNode) WithWorkspace(workspace string) *ThoughtRecipeExecutorNode {
+	if n != nil {
+		n.workspace = workspace
+	}
+	return n
+}
+
+// WithStateReground wires the optional Wave 1 restart query (IF-2). Nil is a
+// declared cold-start mode.
+func (n *ThoughtRecipeExecutorNode) WithStateReground(src grounding.StateRegroundSource) *ThoughtRecipeExecutorNode {
+	if n != nil {
+		n.stateReground = src
 	}
 	return n
 }
@@ -100,6 +121,12 @@ func (n *ThoughtRecipeExecutorNode) Execute(ctx context.Context, env *contextdat
 
 	contextdata.SetTyped(env, "euclo.execution.step_total", len(plan.Steps))
 	contextdata.SetTyped(env, "euclo.execution.step_index", 0)
+
+	// IF-2: re-ground durable state.* captures before any step executes. When
+	// no source is composed this is a no-op (declared cold-start mode).
+	if restoreResult, stop := n.restoreState(ctx, env, thoughtrecipeID); stop {
+		return restoreResult, nil
+	}
 
 	graph, err := thoughtrecipepkg.BuildThoughtRecipeGraph(plan, n.deps, n.ingestionPipeline)
 	if err != nil {
@@ -165,6 +192,10 @@ func (n *ThoughtRecipeExecutorNode) Execute(ctx context.Context, env *contextdat
 		subResult = &execution.Result{NodeID: n.id, Success: err == nil}
 	}
 	subResult.NodeID = n.id
+	if err != nil {
+		n.recordGraphLevelFailure(ctx, env, err)
+	}
+	n.attachRecipeOutcome(env, subResult, err)
 	return subResult, err
 }
 

@@ -5,7 +5,9 @@ import (
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/cognitionzoo/paradigm"
+	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/execution/agentgraph"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 	"codeburg.org/lexbit/relurpify/named/euclo/surface"
 )
 
@@ -136,24 +138,15 @@ pipeline:
 
 func TestFallbackStepInheritsParentScope(t *testing.T) {
 	parent := ExecutionStep{
-		ID:   "parent.step",
-		Kind: StepKindRun,
+		ID:    "parent.step",
+		Kind:  StepKindRun,
 		Scope: AllowTools([]string{"file_write"}),
 	}
 	agent := &surface.ThoughtRecipeStepAgent{
 		Paradigm: "react",
 		Prompt:   "fallback",
 	}
-	fallback := ExecutionStep{
-		ID:       "fallback.step",
-		Kind:     parent.Kind,
-		Scope:    parent.Scope,
-		Paradigm: agent.Paradigm,
-		Prompt:   agent.Prompt,
-		Stream:   cloneStreamSpec(agent.Context.Stream),
-		Inherit:  append([]string(nil), agent.Context.Inherit...),
-		Capture:  append([]string(nil), agent.Context.Capture...),
-	}
+	fallback := buildFallbackStep(fallbackExecutionStep(parent, agent))
 
 	if !fallback.Scope.IsResolved() {
 		t.Fatal("fallback scope should be resolved")
@@ -161,6 +154,75 @@ func TestFallbackStepInheritsParentScope(t *testing.T) {
 	got := fallback.Scope.AllowedToolNames()
 	if !equalStringSlices(got, []string{"file_write"}) {
 		t.Fatalf("fallback allowed tools = %#v, want [file_write]", got)
+	}
+}
+
+// fallbackExecutionStep constructs a primary step carrying an authored fallback
+// agent, the shape surface code builds (D7).
+func fallbackExecutionStep(parent ExecutionStep, agent *surface.ThoughtRecipeStepAgent) ExecutionStep {
+	parent.Fallback = agent
+	return parent
+}
+
+// TestBuildThoughtRecipeGraphWiresAuthoredFallback pins the D7 wiring: the
+// primary exec node carries a success edge and an operational-class-only
+// fallback edge to the fallback node.
+func TestBuildThoughtRecipeGraphWiresAuthoredFallback(t *testing.T) {
+	primary := ExecutionStep{
+		ID:       "primary.step",
+		Kind:     StepKindRun,
+		Paradigm: "react",
+		Goal:     "do it",
+		Scope:    AllowAll(),
+		Fallback: &surface.ThoughtRecipeStepAgent{Paradigm: "planner", Prompt: "fallback"},
+	}
+	plan := &ExecutionPlan{
+		ThoughtRecipe: &surface.ThoughtRecipe{ID: "fallback.graph", Name: "fallback graph"},
+		Steps:         []ExecutionStep{primary},
+	}
+	graph, err := BuildThoughtRecipeGraph(plan, &paradigm.Deps{}, nil)
+	if err != nil {
+		t.Fatalf("BuildThoughtRecipeGraph: %v", err)
+	}
+	execID := "primary.step.execute"
+	if !graph.HasNode(execID) {
+		t.Fatalf("missing primary exec node %s", execID)
+	}
+	if !graph.HasNode("primary.step.fallback") {
+		t.Fatal("missing fallback node primary.step.fallback")
+	}
+
+	var fallbackEdge *agentgraph.Edge
+	var successEdge *agentgraph.Edge
+	for i := range graph.OutgoingEdges(execID) {
+		edge := graph.OutgoingEdges(execID)[i]
+		switch edge.To {
+		case "primary.step.fallback":
+			fallbackEdge = &edge
+		case "euclo.execution.done":
+			successEdge = &edge
+		}
+	}
+	if fallbackEdge == nil {
+		t.Fatal("expected an edge from primary to the fallback node")
+	}
+	if successEdge == nil {
+		t.Fatal("expected the success edge from primary to continue the recipe")
+	}
+
+	// Classified operational failure fires the fallback.
+	if !fallbackEdge.Condition(&execution.Result{Success: false, Metadata: map[string]any{
+		operationalFailureKindMetadata: string(euclotypes.FailureModelUnavailable),
+	}}, nil) {
+		t.Fatal("operational failure must fire the fallback edge")
+	}
+	// A structured success must not fire it.
+	if fallbackEdge.Condition(&execution.Result{Success: true}, nil) {
+		t.Fatal("success must not fire the fallback edge")
+	}
+	// An unclassified failure must not fire it either (D7 tightening).
+	if fallbackEdge.Condition(&execution.Result{Success: false, Metadata: map[string]any{}}, nil) {
+		t.Fatal("unclassified failure must not fire the fallback edge")
 	}
 }
 

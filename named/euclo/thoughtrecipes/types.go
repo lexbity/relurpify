@@ -231,25 +231,31 @@ type TypedDirective struct {
 
 // ExecutionStep carries the graph-time data for a single compiled thoughtrecipe step.
 type ExecutionStep struct {
-	ID                  string
-	Kind                StepKind
-	Paradigm            string
-	Scope               ResolvedToolScope
-	Question            string
-	Choices             []string
-	ChoiceSource        string
-	PipelineStages      []PipelineStageSpec
-	Goal                string
-	Sources             []string
-	Directives          []TypedDirective
-	CaptureBindings     []CaptureBinding
-	CapabilityID        string
-	Prompt              string
-	PromptID            string
-	Mutation            string
-	HITL                string
-	Stream              *surface.ThoughtRecipeStreamSpec
-	Fallback            *surface.ThoughtRecipeStepAgent
+	ID              string
+	Kind            StepKind
+	Paradigm        string
+	Scope           ResolvedToolScope
+	Question        string
+	Choices         []string
+	ChoiceSource    string
+	PipelineStages  []PipelineStageSpec
+	Goal            string
+	Sources         []string
+	Directives      []TypedDirective
+	CaptureBindings []CaptureBinding
+	CapabilityID    string
+	Prompt          string
+	PromptID        string
+	Mutation        string
+	HITL            string
+	Stream          *surface.ThoughtRecipeStreamSpec
+	Fallback        *surface.ThoughtRecipeStepAgent
+	// FallbackFor is the ID of the primary step this step is the authored
+	// fallback for. Empty for every ordinary step. It is structural metadata:
+	// it is how the fallback node knows to record fallback_taken and emit
+	// step.fallback_activated. It is excluded from JSON so the DSL goldens do
+	// not change.
+	FallbackFor         string `json:"-"`
 	Inherit             []string
 	Capture             []string
 	Dependencies        []string

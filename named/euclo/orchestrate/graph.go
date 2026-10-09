@@ -14,6 +14,7 @@ import (
 	"codeburg.org/lexbit/relurpify/execution/agentgraph"
 	"codeburg.org/lexbit/relurpify/execution/agentlifecycle"
 	"codeburg.org/lexbit/relurpify/named/euclo/families"
+	"codeburg.org/lexbit/relurpify/named/euclo/grounding"
 	"codeburg.org/lexbit/relurpify/named/euclo/intake"
 	"codeburg.org/lexbit/relurpify/named/euclo/policy"
 	"codeburg.org/lexbit/relurpify/named/euclo/reporting"
@@ -39,6 +40,9 @@ type RootGraphDeps struct {
 	Checkpoints          agentlifecycle.Repository
 	Persistence          *persistence.Writer
 	Telemetry            telemetry.Telemetry
+	// StateReground is the optional Wave 1 restart query (IF-2). Nil is a
+	// declared cold-start mode.
+	StateReground grounding.StateRegroundSource
 }
 
 // RootGraph wires together orchestration nodes using the agentgraph runtime.
@@ -85,6 +89,7 @@ func NewRootGraph(ctx context.Context, deps RootGraphDeps) (*RootGraph, error) {
 		hitlBroker:           hitl,
 		checkpointRepository: deps.Checkpoints,
 		persistenceWriter:    deps.Persistence,
+		stateReground:        deps.StateReground,
 	})
 	if err != nil {
 		return nil, err
@@ -161,6 +166,7 @@ type buildNodeInput struct {
 	hitlBroker           policy.HITLBroker
 	checkpointRepository agentlifecycle.Repository
 	persistenceWriter    *persistence.Writer
+	stateReground        grounding.StateRegroundSource
 }
 
 func buildNodes(ctx context.Context, in buildNodeInput) ([]agentgraph.Node, error) {
@@ -288,7 +294,9 @@ func buildNodes(ctx context.Context, in buildNodeInput) ([]agentgraph.Node, erro
 
 	thoughtrecipeExec := NewThoughtRecipeExecutorNode("euclo.execute_thoughtrecipe").
 		WithParadigmDeps(in.paradigmDeps).
-		WithIngestionPipeline(nil)
+		WithIngestionPipeline(nil).
+		WithWorkspace(in.workspace).
+		WithStateReground(in.stateReground)
 	thoughtrecipeExec.WithThoughtRecipeRegistry(thoughtrecipeReg)
 
 	capabilityExec := NewCapabilityExecutionNode("euclo.execute_capability")
