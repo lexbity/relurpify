@@ -418,8 +418,15 @@ type CaptureBinding struct {
 	positioned
 	Source      ValueExpr
 	Annotation  TypeExpr
+	Epistemics  *EpistemicExpr `json:"epistemics,omitempty"` // optional as claimed|given annotation; nil = claimed
 	Destination PathExpr
 	Forwarding  bool
+}
+
+// EpistemicExpr is a capture epistemic annotation (claimed|given).
+type EpistemicExpr struct {
+	positioned
+	Value string `json:"value"`
 }
 
 // QuestionClause preserves ask user question text.

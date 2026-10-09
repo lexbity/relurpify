@@ -361,6 +361,7 @@ func (n *CheckpointNode) persistMirroredCheckpoint(ctx context.Context, env *con
 	}
 	_, _ = n.writer.Persist(ctx, persistence.PersistenceRequest{
 		Content:         payload,
+		Kind:            knowledge.ChunkKindDerivation,
 		ContentType:     "application/json",
 		SourcePrincipal: principal,
 		SourceOrigin:    knowledge.SourceOriginDerivation,

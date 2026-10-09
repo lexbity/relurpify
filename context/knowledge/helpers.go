@@ -1,24 +1,8 @@
 package knowledge
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
-	"fmt"
 	"strings"
 )
-
-func deterministicChunkID(kind, ref string) ChunkID {
-	return ChunkID(fmt.Sprintf("chunk:%s:%s", kind, hashStrings(kind, ref)))
-}
-
-func hashStrings(values ...string) string {
-	h := sha256.New()
-	for _, value := range values {
-		_, _ = h.Write([]byte(value))
-		_, _ = h.Write([]byte{'\n'})
-	}
-	return hex.EncodeToString(h.Sum(nil))[:16]
-}
 
 func estimateTokens(raw string) int {
 	if raw == "" {

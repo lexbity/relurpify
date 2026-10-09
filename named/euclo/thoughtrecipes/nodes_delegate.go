@@ -68,7 +68,7 @@ func (n *DelegateNode) Execute(ctx context.Context, env *contextdata.Envelope) (
 		result.Error = execErr.Error()
 	}
 
-	if err := n.writeDelegationCaptures(env, childEnv, result); err != nil {
+	if err := n.writeDelegationCaptures(ctx, env, childEnv, result); err != nil {
 		stepResult = result
 		stepErr = err
 		return result, err
@@ -134,14 +134,17 @@ func (n *DelegateNode) buildDelegationEnvelope(parent *contextdata.Envelope) *co
 	return child
 }
 
-func (n *DelegateNode) writeDelegationCaptures(parent, child *contextdata.Envelope, result *execution.Result) error {
+func (n *DelegateNode) writeDelegationCaptures(ctx context.Context, parent, child *contextdata.Envelope, result *execution.Result) error {
 	if parent == nil || child == nil || result == nil {
 		return nil
 	}
 	sourceData := child.Snapshot()
 	if len(n.step.CaptureBindings) > 0 {
-		_, err := ApplyCaptureBindingsFromSnapshot(parent, sourceData, n.step.CaptureBindings, execution.ResultFields(result.Data))
-		return err
+		if _, err := ApplyCaptureBindingsFromSnapshot(parent, sourceData, n.step.CaptureBindings, execution.ResultFields(result.Data)); err != nil {
+			return err
+		}
+		n.enqueueCaptureItems(ctx, parent, n.step.CaptureBindings, execution.ResultFields(result.Data))
+		return nil
 	}
-	return n.writeCaptures(parent, result)
+	return n.writeCaptures(ctx, parent, result)
 }

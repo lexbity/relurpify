@@ -119,11 +119,15 @@ func (c *stepCore) buildAgent(task *execution.Task) (agentgraph.WorkflowExecutor
 	}
 }
 
-func (c *stepCore) writeCaptures(env *contextdata.Envelope, result *execution.Result) error {
-	if len(c.step.CaptureBindings) > 0 {
-		_, err := ApplyCaptureBindings(env, c.step.CaptureBindings, execution.ResultFields(result.Data))
+func (c *stepCore) writeCaptures(ctx context.Context, env *contextdata.Envelope, result *execution.Result) error {
+	if len(c.step.CaptureBindings) == 0 {
+		return nil
+	}
+	_, err := ApplyCaptureBindings(env, c.step.CaptureBindings, execution.ResultFields(result.Data))
+	if err != nil {
 		return err
 	}
+	c.enqueueCaptureItems(ctx, env, c.step.CaptureBindings, execution.ResultFields(result.Data))
 	return nil
 }
 

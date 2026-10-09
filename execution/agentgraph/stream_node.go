@@ -59,37 +59,46 @@ func (n *StreamTriggerNode) Execute(ctx context.Context, env *contextdata.Envelo
 	if err := contextstream.ApplyRequestMetadata(env, req); err != nil {
 		return nil, err
 	}
+	coord := EpochCoordinatorFromContext(ctx)
+	if coord != nil && req.Metadata == nil {
+		req.Metadata = make(map[string]any)
+	}
+	if coord != nil {
+		req.Metadata["epoch_id"] = coord.EpochID()
+	}
 
 	switch req.Mode {
 	case contextstream.ModeBackground:
-		job, err := trigger.RequestBackground(ctx, req)
+		if coord == nil {
+			return nil, fmt.Errorf("stream trigger node %q: background stream requires an epoch coordinator", n.id)
+		}
+		job, err := trigger.RequestBackground(coord.RunContext(), req)
 		if err != nil {
 			return nil, err
 		}
+		coord.TrackStreamJob(job)
 		env.SetWorkingValueWithClass("contextstream.job_id", job.ID, contextdata.MemoryClassTask)
 		env.SetWorkingValueWithClass("contextstream.job_mode", string(req.Mode), contextdata.MemoryClassTask)
-		go func(ctx context.Context) {
-			result, err := job.Wait(ctx)
-			if result != nil {
-				_ = contextstream.ApplyResult(env, result)
-			}
-			if err != nil {
-				env.SetWorkingValueWithClass("contextstream.background_error", err.Error(), contextdata.MemoryClassTask)
-			}
-		}(ctx)
 		return &execution.Result{
 			NodeID:  n.id,
 			Success: true,
 			Data: execution.NewToolResultPayload(map[string]any{
-				"contextstream_job_id": job.ID,
-				"mode":                 string(req.Mode),
-				"requested_query":      n.Query.Text,
+				"contextstream_job_id":               job.ID,
+				"mode":                               string(req.Mode),
+				"requested_query":                    n.Query.Text,
+				"contextstream_background_requested": true,
 			}),
 		}, nil
 	default:
+		var epoch uint64
+		if coord != nil {
+			epoch = coord.EpochID()
+		}
 		result, err := trigger.RequestBlocking(ctx, req)
 		if result != nil {
-			_ = contextstream.ApplyResult(env, result)
+			if applyErr := contextstream.ApplyResult(env, result, epoch); applyErr != nil {
+				return nil, applyErr
+			}
 			env.SetWorkingValueWithClass("contextstream.result", result, contextdata.MemoryClassTask)
 			env.SetWorkingValueWithClass("euclo.stream_result", result, contextdata.MemoryClassTask)
 		}

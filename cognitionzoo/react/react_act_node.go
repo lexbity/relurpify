@@ -438,10 +438,67 @@ func (n *reactActNode) recordObservation(ctx context.Context, env *contextdata.E
 	env.SetWorkingValueWithClass("react.tool_observations", history, contextdata.MemoryClassTask)
 	if n != nil && n.agent != nil && n.agent.outputIngestionEnabled() {
 		summary := strings.TrimSpace(observation.Summary)
-		// Observations are surfaced through the knowledge ingester instead of
-		// a framework ContextManager hook in this tree.
-		knowledge.IngestObservationAsync(contextdata.WithEnvelope(ctx, env), n.agent.OutputIngester, summary)
+		if summary == "" {
+			return
+		}
+		// Observations ground through the capture sink (the run's epoch
+		// coordinator); the fire-and-forget async ingestion path is gone.
+		sink := agentgraph.CaptureSinkFromContext(ctx)
+		if sink == nil {
+			n.emitGroundingEvent(ctx, "capture.sink_absent", map[string]any{
+				"node_id": n.id,
+				"kind":    string(knowledge.ChunkKindObservation),
+			})
+			return
+		}
+		sink.EnqueueCapture(knowledge.GroundingItem{
+			Value:          summary,
+			Epistemics:     knowledge.EpistemicClaimed,
+			Origin:         contextdata.OriginLLM,
+			Kind:           knowledge.ChunkKindObservation,
+			NodeID:         n.id,
+			TaskID:         env.TaskID,
+			SessionID:      env.SessionID,
+			SourceChunkIDs: cappedObservationChunkIDs(env.StreamedChunkIDs()),
+		})
 	}
+}
+
+// cappedObservationChunkIDs bounds the streamed-context sources carried into an
+// observation grounding item.
+func cappedObservationChunkIDs(ids []contextdata.ChunkID) []knowledge.ChunkID {
+	const cap = 16
+	if len(ids) == 0 {
+		return nil
+	}
+	out := make([]knowledge.ChunkID, 0, cap)
+	seen := make(map[knowledge.ChunkID]struct{}, cap)
+	for _, id := range ids {
+		if id == "" {
+			continue
+		}
+		chunkID := knowledge.ChunkID(id)
+		if _, ok := seen[chunkID]; ok {
+			continue
+		}
+		seen[chunkID] = struct{}{}
+		out = append(out, chunkID)
+		if len(out) >= cap {
+			break
+		}
+	}
+	return out
+}
+
+// emitGroundingEvent surfaces a grounding-lifecycle debug signal on the react
+// agent's telemetry trail.
+func (n *reactActNode) emitGroundingEvent(ctx context.Context, eventType string, metadata map[string]any) {
+	if n == nil || n.agent == nil || n.agent.Config == nil || n.agent.Config.Telemetry == nil {
+		return
+	}
+	ev := telemetry.Event{Type: telemetry.EventType(eventType), Metadata: metadata, Timestamp: time.Now().UTC()}
+	telemetry.StampCorrelation(ctx, &ev)
+	n.agent.Config.Telemetry.Emit(ev)
 }
 
 func (n *reactActNode) refreshIndexesAfterMutation(ctx context.Context, call model.ToolCall, res *ports.ToolResult) {

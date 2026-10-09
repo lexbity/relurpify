@@ -215,7 +215,7 @@ func seedTaskEnvelope(env *contextdata.Envelope, task *execution.Task) {
 	if task == nil {
 		return
 	}
-	env.SetWorkingValueWithClass(euclokeys.KeyTaskInput, task, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithOrigin(euclokeys.KeyTaskInput, task, contextdata.MemoryClassTask, contextdata.OriginUser)
 	env.SetWorkingValueWithClass("task.id", task.ID, contextdata.MemoryClassTask)
 	env.SetWorkingValueWithClass("task.instruction", task.Instruction, contextdata.MemoryClassTask)
 	env.SetWorkingValueWithClass("task.type", task.Type, contextdata.MemoryClassTask)

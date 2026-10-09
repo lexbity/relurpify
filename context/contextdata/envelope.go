@@ -25,6 +25,7 @@ type Envelope struct {
 	NodeID            string
 	References        ReferenceBundle
 	WorkingData       map[string]any
+	Origins           map[string]OriginClass
 	CheckpointRequest *CheckpointRequest
 	AssemblyMetadata  AssemblyMeta
 	createdAt         time.Time
@@ -37,6 +38,7 @@ type AssemblyMeta struct {
 	BudgetTokens    int
 	ShortfallTokens int
 	AssembledAt     time.Time
+	EpochID         uint64
 }
 
 type contextKey struct{}

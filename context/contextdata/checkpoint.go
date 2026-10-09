@@ -68,6 +68,17 @@ func (e *Envelope) SetAssemblyMetadata(meta AssemblyMeta) {
 	e.AssemblyMetadata = meta
 }
 
+// UpdateAssemblyMetadata applies a functional update to the assembly metadata
+// under the envelope lock. Fields the caller does not touch are preserved.
+func (e *Envelope) UpdateAssemblyMetadata(update func(AssemblyMeta) AssemblyMeta) {
+	if e == nil || update == nil {
+		return
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.AssemblyMetadata = update(e.AssemblyMetadata)
+}
+
 // Clone returns a deep copy of the envelope.
 func (e *Envelope) Clone() *Envelope {
 	// Scalar fields are read under the same lock that guards map and slice
@@ -79,12 +90,14 @@ func (e *Envelope) Clone() *Envelope {
 	e.mu.RUnlock()
 
 	workingData := e.WorkingDataSnapshot()
+	origins := e.OriginsSnapshot()
 	refs := e.ReferencesSnapshot()
 	clone := &Envelope{
 		TaskID:            taskID,
 		SessionID:         sessionID,
 		NodeID:            nodeID,
 		WorkingData:       workingData,
+		Origins:           origins,
 		CheckpointRequest: nil,
 		AssemblyMetadata:  assemblyMetadata,
 		createdAt:         createdAt,
@@ -149,6 +162,14 @@ func (e *Envelope) HandoffSnapshot(policy HandoffPolicy) *Envelope {
 	if policy.PreserveWorkingMemory {
 		snapshot.WorkingData = cloneWorkingDataForHandoff(workingData, policy)
 		snapshot.References.WorkingMemory = cloneWorkingMemoryRefsForHandoff(refs.WorkingMemory, taskID, policy)
+		if origins := e.OriginsSnapshot(); len(origins) > 0 {
+			snapshot.Origins = make(map[string]OriginClass)
+			for key, origin := range origins {
+				if _, kept := snapshot.WorkingData[key]; kept {
+					snapshot.Origins[key] = origin
+				}
+			}
+		}
 	}
 	if policy.PreserveStreamedContext {
 		snapshot.References.StreamedContext = append([]ChunkReference(nil), refs.StreamedContext...)
@@ -242,13 +263,16 @@ func hasWorkingPrefix(key string, prefixes []string) bool {
 }
 
 // Merge merges working data from another envelope into this one.
-// Source envelope data takes precedence on conflicts.
+// Source envelope data takes precedence on conflicts; the copied values bring
+// their recorded origin classes with them (a key the source carries without a
+// recorded origin takes the default llm class).
 func (e *Envelope) Merge(other *Envelope) {
 	if other == nil {
 		return
 	}
 	otherWorkingData := other.WorkingDataSnapshot()
 	otherRefs := other.ReferencesSnapshot()
+	otherOrigins := other.OriginsSnapshot()
 	if len(otherWorkingData) == 0 && len(otherRefs.WorkingMemory) == 0 {
 		return
 	}
@@ -261,6 +285,14 @@ func (e *Envelope) Merge(other *Envelope) {
 	}
 	for k, v := range otherWorkingData {
 		e.WorkingData[k] = v
+		if e.Origins == nil {
+			e.Origins = make(map[string]OriginClass)
+		}
+		if origin, ok := otherOrigins[k]; ok {
+			e.Origins[k] = origin
+		} else {
+			delete(e.Origins, k)
+		}
 	}
 	for _, ref := range otherRefs.WorkingMemory {
 		found := false

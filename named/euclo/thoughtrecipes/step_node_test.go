@@ -501,7 +501,7 @@ func TestThoughtRecipeStepNodeDelegationFiltersChildEnvelopeAndReturnsCaptures(t
 			"result": "child summary",
 		}),
 	}
-	if err := node.writeDelegationCaptures(parent, child, result); err != nil {
+	if err := node.writeDelegationCaptures(context.Background(), parent, child, result); err != nil {
 		t.Fatalf("writeDelegationCaptures failed: %v", err)
 	}
 	if got, ok := contextdata.GetTyped[string](parent, "state.plan"); !ok || got != "child summary" {

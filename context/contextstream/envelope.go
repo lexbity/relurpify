@@ -7,8 +7,10 @@ import (
 	contextports "codeburg.org/lexbit/relurpify/context/ports"
 )
 
-// ApplyResult writes streamed refs and metadata into an envelope.
-func ApplyResult(env *contextdata.Envelope, result *Result) error {
+// ApplyResult writes streamed refs and metadata into an envelope, merging into
+// the existing assembly metadata instead of replacing it. The epoch is stamped
+// so every applied compilation is attributable to a memory state.
+func ApplyResult(env *contextdata.Envelope, result *Result, epoch uint64) error {
 	if env == nil || result == nil {
 		return nil
 	}
@@ -19,7 +21,11 @@ func ApplyResult(env *contextdata.Envelope, result *Result) error {
 		ApplyStaleGaps(env, result.Compilation)
 	}
 	if result.Record != nil {
-		env.SetAssemblyMetadata(contextdata.AssemblyMeta{CompilationID: result.Record.ID})
+		env.UpdateAssemblyMetadata(func(meta contextdata.AssemblyMeta) contextdata.AssemblyMeta {
+			meta.CompilationID = result.Record.ID
+			meta.EpochID = epoch
+			return meta
+		})
 	}
 	if result.Trim.ShortfallTokens > 0 || len(result.Trim.Substitutions) > 0 {
 		env.SetWorkingValueWithClass("contextstream.trimmed", true, contextdata.MemoryClassTask)

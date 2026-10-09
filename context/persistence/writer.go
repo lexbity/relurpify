@@ -56,7 +56,13 @@ func (w *Writer) Persist(ctx context.Context, req PersistenceRequest) (*Persiste
 	contentHash := w.computeContentHash(req.Content)
 
 	// 6. Build and commit chunk
-	chunk := w.buildChunk(req, trustClass, contentHash)
+	chunk, alreadyExisted, err := w.buildChunk(ctx, req, trustClass, contentHash)
+	if err != nil {
+		result.Action = ActionRejected
+		result.Error = fmt.Errorf("commit failed: %w", err)
+		w.writeAuditRecord(req, result, "commit failed")
+		return result, result.Error
+	}
 	savedChunk, err := w.Store.Save(ctx, *chunk)
 	if err != nil {
 		result.Action = ActionRejected
@@ -65,11 +71,31 @@ func (w *Writer) Persist(ctx context.Context, req PersistenceRequest) (*Persiste
 		return result, result.Error
 	}
 
-	result.Action = ActionCreated
+	if savedChunk.Tombstoned {
+		// Save preserved a retraction: the content matched a tombstoned chunk
+		// with equal-or-older derivation. Nothing was committed.
+		result.Action = ActionUpdated
+		result.ChunkID = savedChunk.ID
+		if w.Events != nil {
+			w.Events.Emit(string(telemetry.EventTombstonePreserved), map[string]any{
+				"chunk_id":     string(savedChunk.ID),
+				"content_hash": contentHash,
+				"origin":       "persistence",
+			})
+		}
+		w.writeAuditRecord(req, result, "tombstone preserved")
+		return result, nil
+	}
+
+	if alreadyExisted {
+		result.Action = ActionUpdated
+	} else {
+		result.Action = ActionCreated
+	}
 	result.ChunkID = savedChunk.ID
 
-	// 7. Emit event
-	if w.Events != nil {
+	// 7. Emit event (only for a genuinely new chunk; dedup is not a commit)
+	if w.Events != nil && !alreadyExisted {
 		w.Events.Emit(string(telemetry.EventChunkCommitted), map[string]any{
 			"chunk_id":         string(savedChunk.ID),
 			"content_hash":     contentHash,
@@ -119,6 +145,7 @@ func (w *Writer) PromoteFromMemory(ctx context.Context, store WorkingMemoryStore
 		// Convert promotion request to persistence request
 		persistReq := PersistenceRequest{
 			Content:              content,
+			Kind:                 req.Kind,
 			ContentType:          req.ContentType,
 			SourcePrincipal:      req.SourcePrincipal,
 			SourceOrigin:         req.SourceOrigin,
@@ -142,26 +169,23 @@ func (w *Writer) PromoteFromMemory(ctx context.Context, store WorkingMemoryStore
 
 // validateRequest performs structural validation on the request.
 func (w *Writer) validateRequest(req PersistenceRequest) error {
-	// Check required fields
-	if len(req.Content) == 0 {
-		return fmt.Errorf("content is required")
+	maxTokens := 0
+	if w.Policy != nil && w.Policy.MaxTokensPerWindow > 0 {
+		maxTokens = w.Policy.MaxTokensPerWindow
 	}
-	if req.ContentType == "" {
-		return fmt.Errorf("content_type is required")
+	if err := knowledge.ValidateContentAdmission(knowledge.ContentAdmissionRequest{
+		Content:     req.Content,
+		ContentType: req.ContentType,
+		MaxTokens:   maxTokens,
+	}); err != nil {
+		return err
+	}
+	if !req.Kind.Valid() {
+		return fmt.Errorf("kind is required and must be one of the canonical chunk kinds")
 	}
 	if req.SourcePrincipal.ID == "" {
 		return fmt.Errorf("source_principal is required")
 	}
-
-	// Check max content size from policy
-	if w.Policy != nil && w.Policy.MaxTokensPerWindow > 0 {
-		// Rough estimate: 1 token ≈ 4 bytes for text
-		estimatedTokens := len(req.Content) / 4
-		if estimatedTokens > w.Policy.MaxTokensPerWindow {
-			return fmt.Errorf("content exceeds max size: %d tokens estimated", estimatedTokens)
-		}
-	}
-
 	return nil
 }
 
@@ -175,28 +199,8 @@ func (w *Writer) determineTrustClass(principal identity.SubjectRef) agentspec.Tr
 
 // suspicionCheck performs lightweight suspicion detection.
 func (w *Writer) suspicionCheck(req PersistenceRequest) (bool, string) {
-	// Check for obviously suspicious patterns (lightweight version)
-	content := string(req.Content)
-
-	// Check for null bytes (binary content)
-	for _, b := range req.Content {
-		if b == 0 {
-			return true, "binary content detected"
-		}
-	}
-
-	// Check for non-printable character ratio
-	nonPrintable := 0
-	for _, r := range content {
-		if r < 32 && r != '\n' && r != '\r' && r != '\t' {
-			nonPrintable++
-		}
-	}
-	if len(content) > 0 && float64(nonPrintable)/float64(len(content)) > 0.1 {
-		return true, "high non-printable character ratio"
-	}
-
-	return false, ""
+	reason, suspicious := knowledge.SuspicionReason(req.Content)
+	return suspicious, reason
 }
 
 // computeContentHash computes a content hash for deduplication.
@@ -205,10 +209,16 @@ func (w *Writer) computeContentHash(content []byte) string {
 	return fmt.Sprintf("%x", hash[:16]) // Use first 16 bytes
 }
 
-// buildChunk builds a KnowledgeChunk from a persistence request.
-func (w *Writer) buildChunk(req PersistenceRequest, trustClass agentspec.TrustClass, contentHash string) *knowledge.KnowledgeChunk {
-	return &knowledge.KnowledgeChunk{
-		ID:                   knowledge.ChunkID(fmt.Sprintf("chunk_%d", time.Now().UnixNano())),
+// auditLogCap bounds the in-memory audit ring so a long-lived writer cannot
+// grow without limit.
+const auditLogCap = 1024
+
+// buildChunk builds a KnowledgeChunk from a persistence request, reusing the
+// identity of an existing live chunk when the content hash already matches.
+// The returned bool reports whether the content was already present.
+func (w *Writer) buildChunk(ctx context.Context, req PersistenceRequest, trustClass agentspec.TrustClass, contentHash string) (*knowledge.KnowledgeChunk, bool, error) {
+	chunk := &knowledge.KnowledgeChunk{
+		ID:                   knowledge.CanonicalChunkID(req.Kind, req.Content),
 		ContentHash:          contentHash,
 		SourceOrigin:         req.SourceOrigin,
 		SourcePrincipal:      req.SourcePrincipal,
@@ -227,12 +237,29 @@ func (w *Writer) buildChunk(req PersistenceRequest, trustClass agentspec.TrustCl
 			},
 		},
 	}
+	existing, err := w.Store.FindByContentHash(contentHash)
+	if err != nil {
+		return nil, false, err
+	}
+	if len(existing) == 0 {
+		return chunk, false, nil
+	}
+	// Route through the same identity the store already holds so the merge rule
+	// in ChunkStore.Save is the only write semantics in the tree.
+	chunk.ID = existing[0].ID
+	chunk.Version = existing[0].Version
+	chunk.CreatedAt = existing[0].CreatedAt
+	chunk.Freshness = existing[0].Freshness
+	return chunk, true, nil
 }
 
-// writeAuditRecord writes an audit record for the operation.
+// writeAuditRecord appends to the bounded audit ring under its mutex.
 func (w *Writer) writeAuditRecord(req PersistenceRequest, result *PersistenceResult, reason string) {
+	w.auditMu.Lock()
+	defer w.auditMu.Unlock()
+	w.auditSeq++
 	record := PersistenceAuditRecord{
-		AuditID:         w.generateAuditID(),
+		AuditID:         fmt.Sprintf("audit_%d_%d", time.Now().UnixNano(), w.auditSeq),
 		Action:          result.Action,
 		ChunkID:         result.ChunkID,
 		SourcePrincipal: req.SourcePrincipal,
@@ -245,12 +272,12 @@ func (w *Writer) writeAuditRecord(req PersistenceRequest, result *PersistenceRes
 		record.TrustClass = agentspec.TrustClass(classification.NormalizeClassString(w.Policy.DefaultTrustClass))
 	}
 
-	w.AuditLog = append(w.AuditLog, record)
-}
-
-// generateAuditID generates a unique audit ID.
-func (w *Writer) generateAuditID() string {
-	return fmt.Sprintf("audit_%d_%d", time.Now().UnixNano(), len(w.AuditLog))
+	if len(w.AuditLog) < auditLogCap {
+		w.AuditLog = append(w.AuditLog, record)
+		return
+	}
+	w.AuditLog[w.auditNext] = record
+	w.auditNext = (w.auditNext + 1) % auditLogCap
 }
 
 // NewWriter creates a new persistence writer.
@@ -260,16 +287,24 @@ func NewWriter(store *knowledge.ChunkStore, events EventLog, policy *contextport
 		Events:    events,
 		Policy:    policy,
 		Evaluator: evaluator,
-		AuditLog:  make([]PersistenceAuditRecord, 0),
+		AuditLog:  make([]PersistenceAuditRecord, 0, auditLogCap),
 	}
 }
 
-// GetAuditLog returns the audit log.
+// GetAuditLog returns a copy of the audit ring.
 func (w *Writer) GetAuditLog() []PersistenceAuditRecord {
-	return w.AuditLog
+	w.auditMu.Lock()
+	defer w.auditMu.Unlock()
+	out := make([]PersistenceAuditRecord, len(w.AuditLog))
+	copy(out, w.AuditLog)
+	return out
 }
 
-// ClearAuditLog clears the audit log.
+// ClearAuditLog clears the audit ring.
 func (w *Writer) ClearAuditLog() {
-	w.AuditLog = make([]PersistenceAuditRecord, 0)
+	w.auditMu.Lock()
+	defer w.auditMu.Unlock()
+	w.AuditLog = make([]PersistenceAuditRecord, 0, auditLogCap)
+	w.auditNext = 0
+	w.auditSeq = 0
 }

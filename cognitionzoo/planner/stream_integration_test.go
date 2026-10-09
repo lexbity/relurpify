@@ -5,14 +5,15 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/context/contextstream"
+	"codeburg.org/lexbit/relurpify/context/knowledge"
 	contextports "codeburg.org/lexbit/relurpify/context/ports"
 	execution "codeburg.org/lexbit/relurpify/execution"
+	"codeburg.org/lexbit/relurpify/execution/agentgraph"
 	"codeburg.org/lexbit/relurpify/model"
 )
 
@@ -130,6 +131,11 @@ func TestPlannerExecuteBackgroundContextStreamPublishesJobMetadata(t *testing.T)
 	task := &execution.Task{ID: "task-2", Instruction: "build a plan"}
 
 	ctx := contextstream.WithTrigger(context.Background(), contextstream.NewTrigger(compilerStub))
+	// The epoch coordinator owns background stream jobs; the planner's graph
+	// shares it and lands the job at its node barrier.
+	runCtx := contextdata.WithEnvelope(ctx, env)
+	ctx = agentgraph.WithEpochCoordinator(ctx, agentgraph.NewEpochCoordinator(runCtx, plannerNoopGrounder{}, nil))
+
 	result, err := agent.Execute(ctx, task, env)
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -139,8 +145,12 @@ func TestPlannerExecuteBackgroundContextStreamPublishesJobMetadata(t *testing.T)
 	require.NotEmpty(t, jobID)
 	require.Equal(t, "background", envGetString(env, "contextstream.job_mode"))
 
-	require.Eventually(t, func() bool {
-		ids := env.StreamedChunkIDs()
-		return len(ids) == 1 && ids[0] == "chunk-2"
-	}, time.Second, 10*time.Millisecond)
+	// The barrier lands the completed job before the run returns.
+	require.Equal(t, []contextdata.ChunkID{"chunk-2"}, env.StreamedChunkIDs())
+}
+
+type plannerNoopGrounder struct{}
+
+func (plannerNoopGrounder) Ground(_ context.Context, _ []knowledge.GroundingItem) (knowledge.GroundingReport, error) {
+	return knowledge.GroundingReport{}, nil
 }

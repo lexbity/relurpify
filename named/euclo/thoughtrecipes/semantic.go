@@ -607,11 +607,52 @@ func (s *SymbolTable) resolveCaptureBlock(block *CaptureBlock) error {
 				return err
 			}
 		}
+		if binding.Epistemics != nil {
+			if binding.Epistemics.Value != "claimed" && binding.Epistemics.Value != "given" {
+				return fmt.Errorf("%s:%d:%d: unknown epistemic annotation %q (expected claimed|given)", binding.GetSpan().Start.File, binding.GetSpan().Start.Line, binding.GetSpan().Start.Column, binding.Epistemics.Value)
+			}
+			if binding.Epistemics.Value == "given" && !s.captureSourceCanCarryUserOrigin(binding.Source) {
+				return fmt.Errorf("%s:%d:%d: 'as given' requires a user-origin source (user.* or an input declared from user.request)", binding.GetSpan().Start.File, binding.GetSpan().Start.Line, binding.GetSpan().Start.Column)
+			}
+		}
 		if err := s.validateReference(binding.Destination); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// captureSourceCanCarryUserOrigin reports whether a capture source is
+// statically known to be user-origin: a user.* path, or an input declared from
+// a user.* source.
+func (s *SymbolTable) captureSourceCanCarryUserOrigin(source ValueExpr) bool {
+	path, ok := valueExprPath(source)
+	if !ok || len(path.Parts) == 0 {
+		return false
+	}
+	switch path.Parts[0].Value {
+	case "user":
+		return len(path.Parts) >= 2
+	case "input":
+		if len(path.Parts) < 2 {
+			return false
+		}
+		decl, ok := s.inputs[path.Parts[1].Value]
+		return ok && inputDeclHasUserOrigin(decl)
+	default:
+		return false
+	}
+}
+
+func inputDeclHasUserOrigin(decl *InputDecl) bool {
+	if decl == nil || decl.Source == nil {
+		return false
+	}
+	source, ok := valueExprPath(decl.Source)
+	if !ok || len(source.Parts) == 0 {
+		return false
+	}
+	return source.Parts[0].Value == "user" && len(source.Parts) >= 2
 }
 
 func (s *SymbolTable) resolveCapabilityInvocation(inv *CapabilityInvocation) error {

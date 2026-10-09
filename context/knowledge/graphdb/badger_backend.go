@@ -121,18 +121,7 @@ func (b *badgerBackend) commitInTxn(txn *badger.Txn, batch mutationBatch) error 
 		if !ok {
 			return errors.New("graphdb: invalid upsert_node payload")
 		}
-		if old, _ := b.getNodeRecordInTxn(txn, op.Node.ID); old != nil {
-			deleteNodeIndexes(txn, *old)
-			// Persist old version to history before overwriting.
-			if err := b.putNodeHistory(txn, *old); err != nil {
-				return err
-			}
-		}
-		if err := b.putNodeRecord(txn, op.Node); err != nil {
-			return err
-		}
-		putNodeIndexes(txn, op.Node)
-		return nil
+		return b.putNodeInTxn(txn, op.Node)
 
 	case "upsert_nodes":
 		op, ok := batch.op.(nodeBatchOp)
@@ -140,16 +129,26 @@ func (b *badgerBackend) commitInTxn(txn *badger.Txn, batch mutationBatch) error 
 			return errors.New("graphdb: invalid upsert_nodes payload")
 		}
 		for _, node := range op.Nodes {
-			if old, _ := b.getNodeRecordInTxn(txn, node.ID); old != nil {
-				deleteNodeIndexes(txn, *old)
-				if err := b.putNodeHistory(txn, *old); err != nil {
-					return err
-				}
-			}
-			if err := b.putNodeRecord(txn, node); err != nil {
+			if err := b.putNodeInTxn(txn, node); err != nil {
 				return err
 			}
-			putNodeIndexes(txn, node)
+		}
+		return nil
+
+	case "apply_batch":
+		op, ok := batch.op.(graphBatchOp)
+		if !ok {
+			return errors.New("graphdb: invalid apply_batch payload")
+		}
+		for _, node := range op.Nodes {
+			if err := b.putNodeInTxn(txn, node); err != nil {
+				return err
+			}
+		}
+		for _, edge := range op.Edges {
+			if err := b.putEdgeInTxn(txn, edge); err != nil {
+				return err
+			}
 		}
 		return nil
 
@@ -209,16 +208,7 @@ func (b *badgerBackend) commitInTxn(txn *badger.Txn, batch mutationBatch) error 
 		if !ok {
 			return errors.New("graphdb: invalid link_edge payload")
 		}
-		if old, _ := b.getEdgeRecord(txn, op.Edge.SourceID, op.Edge.TargetID, op.Edge.Kind); old != nil {
-			if err := b.putEdgeHistory(txn, *old); err != nil {
-				return err
-			}
-		}
-		if err := b.putEdgeRecord(txn, op.Edge); err != nil {
-			return err
-		}
-		putEdgeIndexes(txn, op.Edge)
-		return nil
+		return b.putEdgeInTxn(txn, op.Edge)
 
 	case "link_edges":
 		op, ok := batch.op.(edgeBatchOp)
@@ -226,15 +216,9 @@ func (b *badgerBackend) commitInTxn(txn *badger.Txn, batch mutationBatch) error 
 			return errors.New("graphdb: invalid link_edges payload")
 		}
 		for _, edge := range op.Edges {
-			if old, _ := b.getEdgeRecord(txn, edge.SourceID, edge.TargetID, edge.Kind); old != nil {
-				if err := b.putEdgeHistory(txn, *old); err != nil {
-					return err
-				}
-			}
-			if err := b.putEdgeRecord(txn, edge); err != nil {
+			if err := b.putEdgeInTxn(txn, edge); err != nil {
 				return err
 			}
-			putEdgeIndexes(txn, edge)
 		}
 		return nil
 
@@ -522,6 +506,22 @@ func (b *badgerBackend) putNodeRecord(txn *badger.Txn, node NodeRecord) error {
 	return txn.Set(key, val)
 }
 
+// putNodeInTxn writes a node and its indexes, preserving the previous version
+// to history. It is the shared node-write primitive for upsert and batch ops.
+func (b *badgerBackend) putNodeInTxn(txn *badger.Txn, node NodeRecord) error {
+	if old, _ := b.getNodeRecordInTxn(txn, node.ID); old != nil {
+		deleteNodeIndexes(txn, *old)
+		if err := b.putNodeHistory(txn, *old); err != nil {
+			return err
+		}
+	}
+	if err := b.putNodeRecord(txn, node); err != nil {
+		return err
+	}
+	putNodeIndexes(txn, node)
+	return nil
+}
+
 func (b *badgerBackend) getNodeRecordInTxn(txn *badger.Txn, id string) (*NodeRecord, error) {
 	key := keyNodeByID(id)
 	item, err := txn.Get(key)
@@ -547,6 +547,21 @@ func (b *badgerBackend) putEdgeRecord(txn *badger.Txn, edge EdgeRecord) error {
 		return err
 	}
 	return txn.Set(key, val)
+}
+
+// putEdgeInTxn writes an edge and its indexes, preserving the previous version
+// to history. It is the shared edge-write primitive for link and batch ops.
+func (b *badgerBackend) putEdgeInTxn(txn *badger.Txn, edge EdgeRecord) error {
+	if old, _ := b.getEdgeRecord(txn, edge.SourceID, edge.TargetID, edge.Kind); old != nil {
+		if err := b.putEdgeHistory(txn, *old); err != nil {
+			return err
+		}
+	}
+	if err := b.putEdgeRecord(txn, edge); err != nil {
+		return err
+	}
+	putEdgeIndexes(txn, edge)
+	return nil
 }
 
 func (b *badgerBackend) getEdgeRecord(txn *badger.Txn, sourceID, targetID string, kind EdgeKind) (*EdgeRecord, error) {

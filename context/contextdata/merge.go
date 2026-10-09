@@ -92,6 +92,7 @@ func (e *Envelope) ApplyBranchMerges(units []BranchMergeUnit) (MergeStats, error
 		if u.Env != nil {
 			p.values = u.Env.WorkingDataSnapshot()
 			p.refs = u.Env.ReferencesSnapshot()
+			p.origins = u.Env.OriginsSnapshot()
 		}
 		prepared = append(prepared, p)
 	}
@@ -100,12 +101,14 @@ func (e *Envelope) ApplyBranchMerges(units []BranchMergeUnit) (MergeStats, error
 	// order inside a unit is irrelevant to the resulting map state; Index order
 	// across units is what matters and is enforced above.
 	writes := make(map[string]any)
+	originWrites := make(map[string]OriginClass)
 	deletes := make(map[string]struct{})
 	touched := make(map[string]int)
 	for _, p := range prepared {
 		for _, k := range sortedUniqueStrings(p.unit.Delta.WorkingMemoryDeleted) {
 			deletes[k] = struct{}{}
 			delete(writes, k)
+			delete(originWrites, k)
 			touched[k]++
 		}
 		writeKeys := append(append([]string(nil), p.unit.Delta.WorkingMemoryAdded...), p.unit.Delta.WorkingMemoryModified...)
@@ -123,6 +126,15 @@ func (e *Envelope) ApplyBranchMerges(units []BranchMergeUnit) (MergeStats, error
 			writes[k] = v
 			delete(deletes, k)
 			touched[k]++
+			origin := OriginLLM
+			if o, ok := p.origins[k]; ok {
+				origin = o
+			}
+			if existing, seen := originWrites[k]; seen {
+				originWrites[k] = MostRestrictive(existing, origin)
+			} else {
+				originWrites[k] = origin
+			}
 		}
 	}
 
@@ -137,9 +149,14 @@ func (e *Envelope) ApplyBranchMerges(units []BranchMergeUnit) (MergeStats, error
 			stats.KeysDeleted++
 		}
 		delete(e.WorkingData, k)
+		delete(e.Origins, k)
 	}
 	for k, v := range writes {
 		e.WorkingData[k] = v
+		if e.Origins == nil {
+			e.Origins = make(map[string]OriginClass)
+		}
+		e.Origins[k] = originWrites[k]
 		stats.KeysWritten++
 	}
 	for k, count := range touched {
@@ -158,9 +175,10 @@ func (e *Envelope) ApplyBranchMerges(units []BranchMergeUnit) (MergeStats, error
 // preparedBranchMergeUnit is the merge-internal view of a unit: the declared
 // unit plus the snapshots taken before the receiver's lock is acquired.
 type preparedBranchMergeUnit struct {
-	unit   BranchMergeUnit
-	values map[string]any
-	refs   ReferenceBundle
+	unit    BranchMergeUnit
+	values  map[string]any
+	refs    ReferenceBundle
+	origins map[string]OriginClass
 }
 
 // mergeBranchReferencesLocked unions branch references into the receiver. The

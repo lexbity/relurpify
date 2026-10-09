@@ -9,17 +9,28 @@ func (e *Envelope) SetWorkingValue(key string, value any) {
 	e.SetWorkingValueWithClass(key, value, MemoryClassTask)
 }
 
-// SetWorkingValueWithClass stores a value in working memory with a memory class.
+// SetWorkingValueWithClass stores a value in working memory with a memory
+// class and the default llm origin.
 func (e *Envelope) SetWorkingValueWithClass(key string, value any, class MemoryClass) {
+	e.SetWorkingValueWithOrigin(key, value, class, OriginLLM)
+}
+
+// SetWorkingValueWithOrigin stores a value in working memory with a memory
+// class and its dataflow origin class.
+func (e *Envelope) SetWorkingValueWithOrigin(key string, value any, class MemoryClass, origin OriginClass) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
 	if e.WorkingData == nil {
 		e.WorkingData = make(map[string]any)
 	}
+	if e.Origins == nil {
+		e.Origins = make(map[string]OriginClass)
+	}
 
 	now := time.Now().UTC()
 	e.WorkingData[key] = value
+	e.Origins[key] = origin
 
 	found := false
 	for i, ref := range e.References.WorkingMemory {
@@ -42,6 +53,34 @@ func (e *Envelope) SetWorkingValueWithClass(key string, value any, class MemoryC
 	}
 }
 
+// OriginOf returns the recorded origin class for a working-memory key,
+// defaulting to the least provable (llm) class when none was recorded.
+func (e *Envelope) OriginOf(key string) OriginClass {
+	if e == nil {
+		return OriginLLM
+	}
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	if origin, ok := e.Origins[key]; ok {
+		return origin
+	}
+	return OriginLLM
+}
+
+// OriginsSnapshot returns a copy of the working-memory origin map.
+func (e *Envelope) OriginsSnapshot() map[string]OriginClass {
+	if e == nil {
+		return nil
+	}
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	out := make(map[string]OriginClass, len(e.Origins))
+	for key, origin := range e.Origins {
+		out[key] = origin
+	}
+	return out
+}
+
 // DeleteWorkingValue removes a value from working memory.
 func (e *Envelope) DeleteWorkingValue(key string) {
 	e.mu.Lock()
@@ -51,6 +90,7 @@ func (e *Envelope) DeleteWorkingValue(key string) {
 		return
 	}
 	delete(e.WorkingData, key)
+	delete(e.Origins, key)
 
 	newRefs := make([]WorkingMemoryReference, 0, len(e.References.WorkingMemory))
 	for _, ref := range e.References.WorkingMemory {
@@ -76,6 +116,7 @@ func (e *Envelope) ClearWorkingData() {
 	}
 	for _, key := range keysToDelete {
 		delete(e.WorkingData, key)
+		delete(e.Origins, key)
 	}
 	newRefs := make([]WorkingMemoryReference, 0, len(e.References.WorkingMemory))
 	for _, ref := range e.References.WorkingMemory {

@@ -206,8 +206,10 @@ func (p *Pipeline) stage4Enrich(ctx context.Context, typed *TypedIngestion) []Ca
 
 	// Simple enrichment - in real implementation would parse imports, calls, etc.
 	for i := range typed.ChunkBoundaries {
+		boundary := typed.ChunkBoundaries[i]
+		content := typed.Content[boundary.Start:boundary.End]
 		edge := CandidateEdges{
-			ChunkID: knowledge.ChunkID(fmt.Sprintf("chunk_%d_%d", time.Now().Unix(), i)),
+			ChunkID: knowledge.CanonicalChunkID(knowledge.ChunkKindFile, content),
 		}
 
 		// Extract references from metadata if available
@@ -299,7 +301,7 @@ func (p *Pipeline) stage6Commit(ctx context.Context, typed *TypedIngestion, edge
 	for i, boundary := range typed.ChunkBoundaries {
 		chunkContent := string(typed.Content[boundary.Start:boundary.End])
 		chunk := knowledge.KnowledgeChunk{
-			ID:                knowledge.ChunkID(fmt.Sprintf("chunk_%d_%d", time.Now().UnixNano(), i)),
+			ID:                knowledge.CanonicalChunkID(knowledge.ChunkKindFile, []byte(chunkContent)),
 			MemoryClass:       knowledge.MemoryClassWorking,
 			SourceOrigin:      knowledge.SourceOriginFile,
 			SourcePrincipal:   p.raw.SourcePrincipal,

@@ -28,6 +28,136 @@ type ChunkStore struct {
 	Graph *graphdb.Engine
 }
 
+// mergeOutcome describes what the D3 merge rule decided for an incoming chunk.
+type mergeOutcome int
+
+const (
+	// mergeInserted means no existing chunk was stored.
+	mergeInserted mergeOutcome = iota
+	// mergeMerged means the incoming chunk merges over a live existing chunk.
+	mergeMerged
+	// mergePreserved means a tombstoned chunk with equal-or-older derivation
+	// was returned untouched.
+	mergePreserved
+	// mergeResurrected means a newer derivation cleared a tombstone.
+	mergeResurrected
+)
+
+// applyMergeRule merges an incoming chunk over its currently stored record.
+// The incoming chunk must already have a non-empty Freshness default. It is
+// the single D3 decision shared by Save and the grounding batch.
+func applyMergeRule(chunk *KnowledgeChunk, existing *KnowledgeChunk) mergeOutcome {
+	if existing == nil {
+		return mergeInserted
+	}
+	resurrected := false
+	if existing.Tombstoned {
+		if chunk.DerivationGeneration > existing.DerivationGeneration {
+			// A newer derivation re-establishes the fact. This is the only
+			// path that may clear a tombstone.
+			chunk.Tombstoned = false
+			chunk.SupersededBy = ""
+			chunk.Freshness = FreshnessValid
+			resurrected = true
+		} else {
+			return mergePreserved
+		}
+	}
+	if chunk.Version <= existing.Version {
+		chunk.Version = existing.Version + 1
+	}
+	if chunk.CreatedAt.IsZero() || chunk.CreatedAt.Before(existing.CreatedAt) {
+		chunk.CreatedAt = existing.CreatedAt
+	}
+	if resurrected {
+		return mergeResurrected
+	}
+	return mergeMerged
+}
+
+// preparedChunk is one grounding batch member: a fully merged chunk plus its
+// provenance edges.
+type preparedChunk struct {
+	chunk   KnowledgeChunk
+	grounds []ChunkID // grounds edges: capture chunk → streamed context sources
+	derives []ChunkID // derives_from edges: capture chunk → forwarded sources
+}
+
+// GroundBatch writes every prepared chunk and its edges in one atomic graph
+// transaction. The chunks are already merged per the D3 rule; this method only
+// commits them together.
+func (s *ChunkStore) GroundBatch(ctx context.Context, prepared []preparedChunk) error {
+	if s == nil || s.Graph == nil {
+		return errors.New("knowledge: chunk store graph is required")
+	}
+	if len(prepared) == 0 {
+		return nil
+	}
+	batch := graphdb.GraphBatch{Nodes: make([]graphdb.NodeRecord, 0, len(prepared))}
+	for _, item := range prepared {
+		props, err := json.Marshal(item.chunk)
+		if err != nil {
+			return err
+		}
+		batch.Nodes = append(batch.Nodes, graphdb.NodeRecord{
+			ID:       string(item.chunk.ID),
+			Kind:     ChunkNodeKind,
+			SourceID: item.chunk.WorkspaceID,
+			Labels:   chunkLabels(item.chunk),
+			Props:    props,
+		})
+		now := item.chunk.UpdatedAt
+		for _, target := range item.grounds {
+			edge, err := groundingEdge(item.chunk.ID, target, EdgeKindGrounds, now)
+			if err != nil {
+				return err
+			}
+			batch.Edges = append(batch.Edges, edge)
+		}
+		for _, target := range item.derives {
+			edge, err := groundingEdge(item.chunk.ID, target, EdgeKindDerivesFrom, now)
+			if err != nil {
+				return err
+			}
+			batch.Edges = append(batch.Edges, edge)
+		}
+	}
+	return s.Graph.ApplyBatch(ctx, batch)
+}
+
+// groundingEdge builds a graphdb edge record from a ChunkEdge-shaped link.
+func groundingEdge(from, to ChunkID, kind EdgeKind, timestamp time.Time) (graphdb.EdgeRecord, error) {
+	edge := ChunkEdge{
+		FromChunk: from,
+		ToChunk:   to,
+		Kind:      kind,
+		Weight:    1,
+		Provenance: ChunkProvenance{
+			Sources:    []ProvenanceSource{{Kind: "chunk", Ref: string(to)}},
+			CompiledBy: CompilerDeterministic,
+			Timestamp:  timestamp,
+		},
+		CreatedAt: timestamp,
+	}
+	props, err := json.Marshal(edgeEnvelope{
+		ID:         defaultEdgeID(edge),
+		Meta:       cloneMap(edge.Meta),
+		Provenance: edge.Provenance,
+		CreatedAt:  edge.CreatedAt,
+	})
+	if err != nil {
+		return graphdb.EdgeRecord{}, err
+	}
+	return graphdb.EdgeRecord{
+		SourceID:  string(edge.FromChunk),
+		TargetID:  string(edge.ToChunk),
+		Kind:      graphdb.EdgeKind(edge.Kind),
+		Weight:    float32(edge.Weight),
+		Props:     props,
+		CreatedAt: edge.CreatedAt.UnixNano(),
+	}, nil
+}
+
 func (s *ChunkStore) Save(ctx context.Context, chunk KnowledgeChunk) (*KnowledgeChunk, error) {
 	if s == nil || s.Graph == nil {
 		return nil, errors.New("knowledge: chunk store graph is required")
@@ -36,21 +166,26 @@ func (s *ChunkStore) Save(ctx context.Context, chunk KnowledgeChunk) (*Knowledge
 		return nil, errors.New("knowledge: chunk id is required")
 	}
 	now := time.Now().UTC()
-	if chunk.Freshness == "" {
+	explicitFreshness := chunk.Freshness != ""
+	if !explicitFreshness {
 		chunk.Freshness = FreshnessValid
 	}
 	if chunk.CreatedAt.IsZero() {
 		chunk.CreatedAt = now
 	}
 	chunk.UpdatedAt = now
-	if existing, ok, err := s.loadChunk(chunk.ID); err != nil {
+	existing, ok, err := s.loadChunk(chunk.ID)
+	if err != nil {
 		return nil, err
-	} else if ok {
-		if chunk.Version <= existing.Version {
-			chunk.Version = existing.Version + 1
+	}
+	var outcome mergeOutcome
+	if ok {
+		outcome = applyMergeRule(&chunk, existing)
+		if outcome == mergePreserved {
+			return existing, nil
 		}
-		if chunk.CreatedAt.IsZero() || chunk.CreatedAt.Before(existing.CreatedAt) {
-			chunk.CreatedAt = existing.CreatedAt
+		if !explicitFreshness && outcome == mergeMerged {
+			chunk.Freshness = existing.Freshness
 		}
 	} else if chunk.Version <= 0 {
 		chunk.Version = 1
@@ -276,6 +411,9 @@ func (s *ChunkStore) findMatching(match func(KnowledgeChunk) bool) ([]KnowledgeC
 		if err := json.Unmarshal(node.Props, &chunk); err != nil {
 			return nil, err
 		}
+		if chunk.Tombstoned {
+			continue
+		}
 		if match == nil || match(chunk) {
 			out = append(out, chunk)
 		}
@@ -472,6 +610,9 @@ func decodeChunks(nodes []graphdb.NodeRecord) ([]KnowledgeChunk, error) {
 		var chunk KnowledgeChunk
 		if err := json.Unmarshal(node.Props, &chunk); err != nil {
 			return nil, err
+		}
+		if chunk.Tombstoned {
+			continue
 		}
 		out = append(out, chunk)
 	}

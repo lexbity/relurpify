@@ -17,6 +17,27 @@ func LowerCaptureBindings(block *CaptureBlock) []CaptureBinding {
 	return out
 }
 
+// EpistemicsValue returns the annotation spelling, defaulting to claimed when
+// the binding carries no annotation.
+func (b CaptureBinding) EpistemicsValue() string {
+	if b.Epistemics != nil {
+		return b.Epistemics.Value
+	}
+	return "claimed"
+}
+
+// typeAnnotationName extracts the DSL type name from a capture annotation.
+func typeAnnotationName(annotation TypeExpr) string {
+	switch typed := annotation.(type) {
+	case *NamedTypeExpr:
+		return strings.TrimSpace(typed.Name.Raw)
+	case NamedTypeExpr:
+		return strings.TrimSpace(typed.Name.Raw)
+	default:
+		return ""
+	}
+}
+
 // CaptureDestinationKey returns the explicit working-memory key for a capture destination.
 func CaptureDestinationKey(binding CaptureBinding) string {
 	return strings.TrimSpace(binding.Destination.Raw)

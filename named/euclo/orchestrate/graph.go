@@ -514,7 +514,7 @@ func seedDefaultTask(env *contextdata.Envelope) {
 	if task.ID == "" {
 		task.ID = "euclo.task"
 	}
-	env.SetWorkingValueWithClass(euclostate.KeyTaskInput, task, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithOrigin(euclostate.KeyTaskInput, task, contextdata.MemoryClassTask, contextdata.OriginUser)
 	env.SetWorkingValueWithClass(euclostate.KeyTaskRaw, task, contextdata.MemoryClassTask)
 }
 
