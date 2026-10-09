@@ -57,6 +57,7 @@ const (
 	EventCaptureQuarantined           EventType = "capture.quarantined"
 	EventCaptureEpistemicsDowngraded  EventType = "capture.epistemics_downgraded"
 	EventCaptureGroundFailed          EventType = "capture.ground_failed"
+	EventCaptureSinkAbsent            EventType = "capture.sink_absent"
 	EventSchedulerJobStarted          EventType = "scheduler.job_started"
 	EventSchedulerJobCompleted        EventType = "scheduler.job_completed"
 	EventSchedulerJobFailed           EventType = "scheduler.job_failed"

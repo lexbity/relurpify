@@ -90,7 +90,7 @@ func (n *AskNode) Execute(ctx context.Context, env *contextdata.Envelope) (*exec
 		fields["response"] = frame.Response.ExtraData
 		stepResult.Data = execution.NewToolResultPayload(fields)
 	}
-	if err := n.writeCaptures(env, stepResult); err != nil {
+	if err := n.writeCaptures(ctx, env, stepResult); err != nil {
 		stepErr = err
 		return stepResult, err
 	}

@@ -58,6 +58,7 @@ func (e *Envelope) SetAssemblyMetadata(meta AssemblyMeta) {
 // Clone returns a deep copy of the envelope.
 func (e *Envelope) Clone() *Envelope {
 	workingData := e.WorkingDataSnapshot()
+	origins := e.OriginsSnapshot()
 	refs := e.ReferencesSnapshot()
 	e.mu.RLock()
 	assemblyMetadata := e.AssemblyMetadata
@@ -68,6 +69,7 @@ func (e *Envelope) Clone() *Envelope {
 		SessionID:         e.SessionID,
 		NodeID:            e.NodeID,
 		WorkingData:       workingData,
+		Origins:           origins,
 		CheckpointRequest: nil,
 		AssemblyMetadata:  assemblyMetadata,
 		createdAt:         createdAt,
@@ -129,6 +131,14 @@ func (e *Envelope) HandoffSnapshot(policy HandoffPolicy) *Envelope {
 	if policy.PreserveWorkingMemory {
 		snapshot.WorkingData = cloneWorkingDataForHandoff(workingData, policy)
 		snapshot.References.WorkingMemory = cloneWorkingMemoryRefsForHandoff(refs.WorkingMemory, e.TaskID, policy)
+		if origins := e.OriginsSnapshot(); len(origins) > 0 {
+			snapshot.Origins = make(map[string]OriginClass)
+			for key, origin := range origins {
+				if _, kept := snapshot.WorkingData[key]; kept {
+					snapshot.Origins[key] = origin
+				}
+			}
+		}
 	}
 	if policy.PreserveStreamedContext {
 		snapshot.References.StreamedContext = append([]ChunkReference(nil), refs.StreamedContext...)

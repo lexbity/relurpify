@@ -69,7 +69,7 @@ func (n *RunNode) Execute(ctx context.Context, env *contextdata.Envelope) (retRe
 		result.Error = execErr.Error()
 	}
 
-	if err := n.writeCaptures(env, result); err != nil {
+	if err := n.writeCaptures(ctx, env, result); err != nil {
 		return result, err
 	}
 	contextdata.SetTyped(env, "euclo.execution.step."+n.step.ID+".result", result.Data)

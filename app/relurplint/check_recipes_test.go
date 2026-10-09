@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/platform/fs"
@@ -91,5 +92,38 @@ func TestRecipesCheckCleanRepo(t *testing.T) {
 	diags := c.Run(testRepoRoot)
 	if len(diags) != 0 {
 		t.Fatalf("expected no diagnostics for clean repo, got %d: %+v", len(diags), diags)
+	}
+}
+
+func TestRecipesCheckUnknownEpistemicsAnnotation(t *testing.T) {
+	workspace := t.TempDir()
+	recipesDir := filepath.Join(workspace, "relurpify_cfg", "euclo")
+	_ = os.MkdirAll(recipesDir, fs.PublicDirMode) // public: test dir
+	testhelper.MustWrite(t, filepath.Join(recipesDir, "bad_epistemics.erpe"), `thoughtrecipe bad_epistemics
+
+trigger as capability:
+  may read workspace
+
+agent reviewer uses react
+
+run reviewer:
+  capture:
+    input.prompt : Text as verified -> state.answer
+`)
+
+	c := recipesCheck{}
+	diags := c.Run(workspace)
+	if len(diags) == 0 {
+		t.Fatal("expected a diagnostic for an unknown epistemic annotation, got none")
+	}
+	found := false
+	for _, d := range diags {
+		if strings.Contains(d.Message, "epistemic annotation") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected an epistemic-vocabulary diagnostic, got: %+v", diags)
 	}
 }

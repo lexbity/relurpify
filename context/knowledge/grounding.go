@@ -63,6 +63,7 @@ type GroundingItem struct {
 	WorkspaceID    string
 	RecipeID       string
 	Epoch          uint64
+	Kind           ChunkKind // capture by default; tool results use ChunkKindTool
 	SourceChunkIDs []ChunkID // streamed context of the producing step (≤16)
 	ForwardedFrom  []ChunkID // prior chunks when the capture forwards state
 }
@@ -192,7 +193,7 @@ func (g *GroundingService) prepare(ctx context.Context, items []GroundingItem, r
 			g.emitDowngraded(item, trust)
 		}
 
-		id := CanonicalChunkID(groundingKind, encoded)
+		id := CanonicalChunkID(kindFor(item), encoded)
 		existing, _, err := g.store.LoadIncludingTombstoned(id)
 		if err != nil {
 			return nil, err
@@ -408,7 +409,7 @@ func (g *GroundingService) emitTombstonePreserved(item GroundingItem, id ChunkID
 	if g.events != nil {
 		g.events.EmitTombstonePreserved(TombstonePreservedPayload{
 			ChunkID: string(id),
-			Kind:    string(groundingKind),
+			Kind:    string(kindFor(item)),
 		})
 	}
 }
@@ -436,7 +437,7 @@ type captureEncoding struct {
 
 func groundingFields(item GroundingItem) map[string]any {
 	fields := make(map[string]any, 3)
-	fields["kind"] = string(groundingKind)
+	fields["kind"] = string(kindFor(item))
 	fields["type"] = item.TypeAnnotation
 	if item.StateKey != "" {
 		fields["state_key"] = item.StateKey
@@ -445,6 +446,15 @@ func groundingFields(item GroundingItem) map[string]any {
 		fields["recipe_id"] = item.RecipeID
 	}
 	return fields
+}
+
+// kindFor resolves the canonical chunk kind for a grounding item, defaulting
+// to capture so existing callers remain byte-identical.
+func kindFor(item GroundingItem) ChunkKind {
+	if item.Kind.Valid() {
+		return item.Kind
+	}
+	return ChunkKindCapture
 }
 
 func sourceOriginForClass(origin contextdata.OriginClass) SourceOrigin {

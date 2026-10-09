@@ -2,13 +2,11 @@ package thoughtrecipe
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 
 	registry "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
-	"codeburg.org/lexbit/relurpify/context/knowledge"
 	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/named/euclo/state"
 )
@@ -133,10 +131,8 @@ func (c *stepCore) executeCapability(ctx context.Context, env *contextdata.Envel
 		}
 	}
 
-	if c.deps.IngestOutputs && c.deps.OutputIngester != nil {
-		if payload, marshalErr := json.Marshal(data); marshalErr == nil {
-			knowledge.IngestToolResultAsync(contextdata.WithEnvelope(ctx, env), c.deps.OutputIngester, c.step.CapabilityID, payload)
-		}
+	if c.deps.IngestOutputs {
+		c.enqueueToolResult(ctx, env, data)
 	}
 
 	result := &execution.Result{
@@ -161,7 +157,7 @@ func (c *stepCore) executeCapability(ctx context.Context, env *contextdata.Envel
 		}
 	}
 
-	if err := c.writeCaptures(env, result); err != nil {
+	if err := c.writeCaptures(ctx, env, result); err != nil {
 		return result, err
 	}
 	contextdata.SetTyped(env, "euclo.execution.step."+c.step.ID+".result", data)

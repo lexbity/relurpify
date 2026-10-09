@@ -15,6 +15,7 @@ type Envelope struct {
 	NodeID            string
 	References        ReferenceBundle
 	WorkingData       map[string]any
+	Origins           map[string]OriginClass
 	CheckpointRequest *CheckpointRequest
 	AssemblyMetadata  AssemblyMeta
 	createdAt         time.Time

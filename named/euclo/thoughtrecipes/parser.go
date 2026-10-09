@@ -753,6 +753,20 @@ func (p *Parser) parseCaptureBinding() (CaptureBinding, error) {
 		}
 		binding.Annotation = annotation
 	}
+	if p.peekLexeme("as") {
+		asTok := p.next()
+		epistemicTok, err := p.expectName("epistemic annotation")
+		if err != nil {
+			return CaptureBinding{}, err
+		}
+		if epistemicTok.Lexeme != "claimed" && epistemicTok.Lexeme != "given" {
+			return CaptureBinding{}, p.unexpectedToken(epistemicTok, "expected epistemic annotation (claimed|given)")
+		}
+		binding.Epistemics = &EpistemicExpr{
+			positioned: positioned{Span: spanFromTokens(asTok, epistemicTok)},
+			Value:      epistemicTok.Lexeme,
+		}
+	}
 	if _, err := p.expectArrow(); err != nil {
 		return CaptureBinding{}, err
 	}
