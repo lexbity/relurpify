@@ -27,6 +27,7 @@ type Retriever struct {
 
 	invalidateMu sync.Mutex
 	subCancel    func()
+	bus          *knowledge.EventBus
 }
 
 // NewRetriever creates a new retriever.
@@ -63,9 +64,23 @@ func (r *Retriever) SetEventBus(bus *knowledge.EventBus) func() {
 		return func() {}
 	}
 	events, cancel := bus.Subscribe(64)
+	r.invalidateMu.Lock()
+	r.bus = bus
 	r.subCancel = cancel
+	r.invalidateMu.Unlock()
 	go r.consumeEvents(events)
 	return cancel
+}
+
+// EventBus returns the knowledge event bus the retriever consumes, so the
+// composition root can assert every knowledge consumer shares one instance.
+func (r *Retriever) EventBus() *knowledge.EventBus {
+	if r == nil {
+		return nil
+	}
+	r.invalidateMu.Lock()
+	defer r.invalidateMu.Unlock()
+	return r.bus
 }
 
 // consumeEvents invalidates the snapshot generation on chunk events until

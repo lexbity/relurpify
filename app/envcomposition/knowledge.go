@@ -60,12 +60,20 @@ func BuildKnowledgeRuntime(input KnowledgeRuntimeInput) (*KnowledgeRuntime, erro
 	}
 	rankerRegistry.Register(&retrieval.TrustRanker{})
 	retriever := retrieval.NewRetriever(rankerRegistry, knowledgeStore)
+	// The retriever's corpus snapshot invalidates on chunk lifecycle events;
+	// the subscription is owned by this composition root and torn down on Close.
+	closeRetriever := retriever.SetEventBus(bkcEvents)
 	comp := compiler.NewCompiler(retriever, nil, knowledgeStore)
 	// Record persistence and invalidation events are owned by the
 	// composition root: records go through the O(1) graph repository, and
 	// chunk events on the knowledge bus drive cache invalidation.
 	comp.SetRepository(compiler.NewCompilerRepository(input.GraphDB))
 	comp.SetEventBus(bkcEvents)
+	// Boot-time contract: every knowledge consumer must subscribe to the one
+	// composition-owned bus, or invalidation silently diverges.
+	if comp.EventBus() != retriever.EventBus() {
+		return nil, fmt.Errorf("knowledge composition: compiler and retriever must share one event bus")
+	}
 	if err := comp.Start(context.Background()); err != nil {
 		return nil, fmt.Errorf("start compiler: %w", err)
 	}
@@ -75,6 +83,7 @@ func BuildKnowledgeRuntime(input KnowledgeRuntimeInput) (*KnowledgeRuntime, erro
 		Retriever:       retriever,
 		Compiler:        comp,
 		StreamTrigger:   contextstream.NewTrigger(&compilerTriggerAdapter{inner: comp}),
+		closeRetriever:  closeRetriever,
 	}, nil
 }
 

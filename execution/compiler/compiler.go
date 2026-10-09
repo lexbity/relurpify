@@ -101,6 +101,15 @@ func (c *Compiler) SetEventBus(bus *knowledge.EventBus) {
 	c.eventBus = bus
 }
 
+// EventBus returns the knowledge event bus the compiler consumes, so the
+// composition root can assert every knowledge consumer shares one instance.
+func (c *Compiler) EventBus() *knowledge.EventBus {
+	if c == nil {
+		return nil
+	}
+	return c.eventBus
+}
+
 // SetRepository wires the O(1) compilation-record repository. Records are
 // persisted and loaded exclusively through it.
 func (c *Compiler) SetRepository(repo Repository) {

@@ -51,6 +51,8 @@ const (
 	EventChunkStaled                  EventType = "chunk.staled"
 	EventChunkInvalidated             EventType = "chunk.invalidated"
 	EventTombstonePreserved           EventType = "knowledge.tombstone_preserved"
+	EventEventDropped                 EventType = "knowledge.event_dropped"
+	EventInvalidationDegraded         EventType = "knowledge.invalidation_degraded"
 	EventSchedulerJobStarted          EventType = "scheduler.job_started"
 	EventSchedulerJobCompleted        EventType = "scheduler.job_completed"
 	EventSchedulerJobFailed           EventType = "scheduler.job_failed"

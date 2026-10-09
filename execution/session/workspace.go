@@ -707,6 +707,7 @@ func OpenWorkspace(ctx context.Context, cfg WorkspaceConfig) (_ *Workspace, err 
 			return nil
 		})
 		if cfg.KnowledgeProduct.KnowledgeEvents != nil {
+			cfg.KnowledgeProduct.KnowledgeEvents.SetTelemetry(tel)
 			bridge := knowledge.NewEventBusTelemetryBridge(cfg.KnowledgeProduct.KnowledgeEvents, tel)
 			cleanup.Add(func(_ context.Context) error {
 				bridge.Close()

@@ -261,6 +261,7 @@ func (e *PreparedRunExecutor) buildKnowledge() error {
 			kn.StreamTrigger.SetTelemetry(e.telemetry)
 		}
 		if kn.KnowledgeEvents != nil {
+			kn.KnowledgeEvents.SetTelemetry(e.telemetry)
 			e.knowledgeBridge = knowledge.NewEventBusTelemetryBridge(kn.KnowledgeEvents, e.telemetry)
 		}
 	}

@@ -88,6 +88,16 @@ func (b *EventBusTelemetryBridge) forward(event Event) {
 			"content_hash": payload.ContentHash,
 			"kind":         payload.Kind,
 		})
+	case EventInvalidationDegraded:
+		payload, ok := event.Payload.(InvalidationDegradedPayload)
+		if !ok {
+			return
+		}
+		b.emit(event.Timestamp, telemetry.EventInvalidationDegraded, "invalidation degraded", map[string]any{
+			"workspace_root": payload.WorkspaceRoot,
+			"failure_count":  payload.FailureCount,
+			"error":          payload.Error,
+		})
 	case EventCodeRevisionChanged:
 		payload, ok := event.Payload.(CodeRevisionChangedPayload)
 		if !ok {
