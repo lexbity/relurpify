@@ -26,51 +26,51 @@ func TestEnvelopeInitialization(t *testing.T) {
 	}
 
 	// Validate TaskID is set correctly
-	if env.TaskID != taskID {
-		t.Errorf("expected TaskID %s, got %s", taskID, env.TaskID)
+	if env.TaskIDSnapshot() != taskID {
+		t.Errorf("expected TaskID %s, got %s", taskID, env.TaskIDSnapshot())
 	}
 
 	// Validate SessionID is set correctly
-	if env.SessionID != sessionID {
-		t.Errorf("expected SessionID %s, got %s", sessionID, env.SessionID)
+	if env.SessionIDSnapshot() != sessionID {
+		t.Errorf("expected SessionID %s, got %s", sessionID, env.SessionIDSnapshot())
 	}
 
 	// Validate NodeID is empty (not set during initialization)
-	if env.NodeID != "" {
-		t.Errorf("expected empty NodeID, got %s", env.NodeID)
+	if env.NodeIDSnapshot() != "" {
+		t.Errorf("expected empty NodeID, got %s", env.NodeIDSnapshot())
 	}
 
 	// Validate WorkingData is initialized as a non-nil map
-	if env.WorkingData == nil {
+	if env.WorkingDataSnapshot() == nil {
 		t.Error("expected WorkingData to be initialized, got nil")
 	}
 
 	// Validate WorkingData is empty
-	if len(env.WorkingData) != 0 {
-		t.Errorf("expected empty WorkingData, got %d items", len(env.WorkingData))
+	if len(env.WorkingDataSnapshot()) != 0 {
+		t.Errorf("expected empty WorkingData, got %d items", len(env.WorkingDataSnapshot()))
 	}
 
 	// Validate References is initialized as empty bundle
 	// Note: StreamedContext is a slice, so it's initialized as nil
 	// This is acceptable - it will be allocated when references are added
-	if len(env.References.StreamedContext) != 0 {
-		t.Errorf("expected empty StreamedContext references, got %d items", len(env.References.StreamedContext))
+	if len(env.ReferencesSnapshot().StreamedContext) != 0 {
+		t.Errorf("expected empty StreamedContext references, got %d items", len(env.ReferencesSnapshot().StreamedContext))
 	}
 
 	// Validate CheckpointRequest is nil (not set during initialization)
-	if env.CheckpointRequest != nil {
+	if env.CheckpointRequestSnapshot() != nil {
 		t.Error("expected CheckpointRequest to be nil, got non-nil")
 	}
 
 	// Validate AssemblyMetadata is initialized with zero values
-	if env.AssemblyMetadata.CompilationID != "" {
-		t.Errorf("expected empty CompilationID, got %s", env.AssemblyMetadata.CompilationID)
+	if env.AssemblyMetadataSnapshot().CompilationID != "" {
+		t.Errorf("expected empty CompilationID, got %s", env.AssemblyMetadataSnapshot().CompilationID)
 	}
-	if env.AssemblyMetadata.EventLogSeq != 0 {
-		t.Errorf("expected EventLogSeq 0, got %d", env.AssemblyMetadata.EventLogSeq)
+	if env.AssemblyMetadataSnapshot().EventLogSeq != 0 {
+		t.Errorf("expected EventLogSeq 0, got %d", env.AssemblyMetadataSnapshot().EventLogSeq)
 	}
-	if env.AssemblyMetadata.BudgetTokens != 0 {
-		t.Errorf("expected BudgetTokens 0, got %d", env.AssemblyMetadata.BudgetTokens)
+	if env.AssemblyMetadataSnapshot().BudgetTokens != 0 {
+		t.Errorf("expected BudgetTokens 0, got %d", env.AssemblyMetadataSnapshot().BudgetTokens)
 	}
 }
 
@@ -94,8 +94,8 @@ func TestEnvelopeWorkingValues(t *testing.T) {
 	env.SetWorkingValueWithClass("key2", 42, contextdata.MemoryClassTask)
 
 	// Verify both values exist
-	if len(env.WorkingData) != 2 {
-		t.Errorf("expected 2 working values, got %d", len(env.WorkingData))
+	if len(env.WorkingDataSnapshot()) != 2 {
+		t.Errorf("expected 2 working values, got %d", len(env.WorkingDataSnapshot()))
 	}
 
 	// Overwrite existing value
@@ -124,13 +124,13 @@ func TestEnvelopeReferences(t *testing.T) {
 	env.AddStreamedContextReference(ref)
 
 	// Verify reference was added
-	if len(env.References.StreamedContext) != 1 {
-		t.Errorf("expected 1 streamed reference, got %d", len(env.References.StreamedContext))
+	if len(env.ReferencesSnapshot().StreamedContext) != 1 {
+		t.Errorf("expected 1 streamed reference, got %d", len(env.ReferencesSnapshot().StreamedContext))
 	}
 
 	// Verify reference content
-	if env.References.StreamedContext[0].ChunkID != "chunk-1" {
-		t.Errorf("expected chunk ID 'chunk-1', got %s", env.References.StreamedContext[0].ChunkID)
+	if env.ReferencesSnapshot().StreamedContext[0].ChunkID != "chunk-1" {
+		t.Errorf("expected chunk ID 'chunk-1', got %s", env.ReferencesSnapshot().StreamedContext[0].ChunkID)
 	}
 
 	// Add another reference
@@ -142,12 +142,12 @@ func TestEnvelopeReferences(t *testing.T) {
 	env.AddStreamedContextReference(ref2)
 
 	// Verify both references exist
-	if len(env.References.StreamedContext) != 2 {
-		t.Errorf("expected 2 streamed references, got %d", len(env.References.StreamedContext))
+	if len(env.ReferencesSnapshot().StreamedContext) != 2 {
+		t.Errorf("expected 2 streamed references, got %d", len(env.ReferencesSnapshot().StreamedContext))
 	}
 
 	// Verify references can be accessed directly
-	refs := env.References.StreamedContext
+	refs := env.ReferencesSnapshot().StreamedContext
 	if len(refs) != 2 {
 		t.Errorf("expected 2 references from StreamedContext, got %d", len(refs))
 	}
@@ -161,27 +161,27 @@ func TestEnvelopeCheckpointRequest(t *testing.T) {
 	env.RequestCheckpoint("test reason", 5, true)
 
 	// Verify checkpoint request was set
-	if env.CheckpointRequest == nil {
+	if env.CheckpointRequestSnapshot() == nil {
 		t.Fatal("expected CheckpointRequest to be set, got nil")
 	}
 
 	// Verify checkpoint request fields
-	if env.CheckpointRequest.RequestedBy != "" {
+	if env.CheckpointRequestSnapshot().RequestedBy != "" {
 		// RequestedBy is set automatically to the node ID, which we don't have in this test
-		t.Logf("CheckpointRequest.RequestedBy: %s", env.CheckpointRequest.RequestedBy)
+		t.Logf("CheckpointRequest.RequestedBy: %s", env.CheckpointRequestSnapshot().RequestedBy)
 	}
-	if env.CheckpointRequest.Reason != "test reason" {
-		t.Errorf("expected Reason 'test reason', got %s", env.CheckpointRequest.Reason)
+	if env.CheckpointRequestSnapshot().Reason != "test reason" {
+		t.Errorf("expected Reason 'test reason', got %s", env.CheckpointRequestSnapshot().Reason)
 	}
-	if env.CheckpointRequest.Priority != 5 {
-		t.Errorf("expected Priority 5, got %d", env.CheckpointRequest.Priority)
+	if env.CheckpointRequestSnapshot().Priority != 5 {
+		t.Errorf("expected Priority 5, got %d", env.CheckpointRequestSnapshot().Priority)
 	}
-	if !env.CheckpointRequest.EvictWorkingMemory {
+	if !env.CheckpointRequestSnapshot().EvictWorkingMemory {
 		t.Error("expected EvictWorkingMemory to be true")
 	}
 
 	// Verify timestamp was set
-	if env.CheckpointRequest.RequestedAt.IsZero() {
+	if env.CheckpointRequestSnapshot().RequestedAt.IsZero() {
 		t.Error("expected RequestedAt to be set")
 	}
 }
@@ -377,25 +377,25 @@ func TestEnvelopeStateStability(t *testing.T) {
 	env.AddStreamedContextReference(ref)
 
 	// Capture initial state
-	initialTaskID := env.TaskID
-	initialSessionID := env.SessionID
-	initialWorkingDataLen := len(env.WorkingData)
-	initialRefsLen := len(env.References.StreamedContext)
+	initialTaskID := env.TaskIDSnapshot()
+	initialSessionID := env.SessionIDSnapshot()
+	initialWorkingDataLen := len(env.WorkingDataSnapshot())
+	initialRefsLen := len(env.ReferencesSnapshot().StreamedContext)
 
 	// Simulate time passing
 	time.Sleep(10 * time.Millisecond)
 
 	// Validate state remains stable
-	if env.TaskID != initialTaskID {
+	if env.TaskIDSnapshot() != initialTaskID {
 		t.Error("expected TaskID to remain stable")
 	}
-	if env.SessionID != initialSessionID {
+	if env.SessionIDSnapshot() != initialSessionID {
 		t.Error("expected SessionID to remain stable")
 	}
-	if len(env.WorkingData) != initialWorkingDataLen {
+	if len(env.WorkingDataSnapshot()) != initialWorkingDataLen {
 		t.Error("expected WorkingData length to remain stable")
 	}
-	if len(env.References.StreamedContext) != initialRefsLen {
+	if len(env.ReferencesSnapshot().StreamedContext) != initialRefsLen {
 		t.Error("expected StreamedContext references length to remain stable")
 	}
 

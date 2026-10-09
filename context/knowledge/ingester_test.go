@@ -25,7 +25,7 @@ func TestOutputIngester_IngestLLMResponse(t *testing.T) {
 	require.NoError(t, err)
 
 	env := contextdata.NewEnvelope("task-1", "session-1")
-	env.NodeID = "node-1"
+	env.SetNodeID("node-1")
 	env.SetWorkingValueWithClass("workflow.id", "workflow-1", contextdata.MemoryClassTask)
 	env.AddStreamedContextReference(contextdata.ChunkReference{ChunkID: contextdata.ChunkID(source.ID), Rank: 1})
 	ctx := contextdata.WithEnvelope(WithOutputIngester(context.Background(), ing), env)

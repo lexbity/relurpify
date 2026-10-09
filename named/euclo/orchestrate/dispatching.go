@@ -1046,11 +1046,11 @@ func executionClassForCandidate(candidate CandidateRouteInfo) string {
 }
 
 func taskID(env *contextdata.Envelope) string {
-	return env.TaskID
+	return env.TaskIDSnapshot()
 }
 
 func sessionID(env *contextdata.Envelope) string {
-	return env.SessionID
+	return env.SessionIDSnapshot()
 }
 
 func fallbackIDString(id *RouteID) string {

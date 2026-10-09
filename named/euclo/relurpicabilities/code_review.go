@@ -163,29 +163,36 @@ type reflectionReviewPayload struct {
 }
 
 func hasReviewContext(env *contextdata.Envelope) bool {
-	return len(env.References.Retrieval) > 0 || len(env.WorkingData) > 0
+	if env == nil {
+		return false
+	}
+	refs := env.ReferencesSnapshot()
+	return len(refs.Retrieval) > 0 || len(env.WorkingDataSnapshot()) > 0
 }
 
 func buildReviewContext(env *contextdata.Envelope) (string, int) {
 	var parts []string
 	fileCount := 0
 
-	if len(env.References.Retrieval) > 0 {
-		fileCount += len(env.References.Retrieval)
-		for i, ref := range env.References.Retrieval {
+	refs := env.ReferencesSnapshot()
+	working := env.WorkingDataSnapshot()
+
+	if len(refs.Retrieval) > 0 {
+		fileCount += len(refs.Retrieval)
+		for i, ref := range refs.Retrieval {
 			parts = append(parts, fmt.Sprintf("retrieval[%d]: query=%q scope=%q chunks=%d total_found=%d", i, ref.QueryText, ref.Scope, len(ref.ChunkIDs), ref.TotalFound))
 		}
 	}
 
-	if len(env.WorkingData) > 0 {
-		fileCount += len(env.WorkingData)
-		keys := make([]string, 0, len(env.WorkingData))
-		for key := range env.WorkingData {
+	if len(working) > 0 {
+		fileCount += len(working)
+		keys := make([]string, 0, len(working))
+		for key := range working {
 			keys = append(keys, key)
 		}
 		sort.Strings(keys)
 		for _, key := range keys {
-			parts = append(parts, fmt.Sprintf("working[%s]: %s", key, truncate(fmt.Sprintf("%#v", env.WorkingData[key]), 2000)))
+			parts = append(parts, fmt.Sprintf("working[%s]: %s", key, truncate(fmt.Sprintf("%#v", working[key]), 2000)))
 		}
 	}
 

@@ -461,8 +461,8 @@ func TestThoughtRecipeStepNodeDelegationFiltersChildEnvelopeAndReturnsCaptures(t
 	if child == nil {
 		t.Fatal("expected child envelope")
 	}
-	if child.TaskID == parent.TaskID {
-		t.Fatalf("expected delegated child task id to differ from parent, got %q", child.TaskID)
+	if child.TaskIDSnapshot() == parent.TaskIDSnapshot() {
+		t.Fatalf("expected delegated child task id to differ from parent, got %q", child.TaskIDSnapshot())
 	}
 	if got, ok := contextdata.GetTyped[string](child, "input.findings"); !ok || got != "parent findings" {
 		t.Fatalf("expected delegated child to inherit declared source, got %#v (ok=%v)", got, ok)
@@ -484,10 +484,10 @@ func TestThoughtRecipeStepNodeDelegationFiltersChildEnvelopeAndReturnsCaptures(t
 	if err != nil {
 		t.Fatalf("buildTask failed: %v", err)
 	}
-	if got := task.Context["euclo.delegate.parent_task_id"]; got != parent.TaskID {
+	if got := task.Context["euclo.delegate.parent_task_id"]; got != parent.TaskIDSnapshot() {
 		t.Fatalf("expected parent task id in delegate context, got %#v", got)
 	}
-	if got := task.Context["euclo.delegate.child_task_id"]; got != child.TaskID {
+	if got := task.Context["euclo.delegate.child_task_id"]; got != child.TaskIDSnapshot() {
 		t.Fatalf("expected child task id in delegate context, got %#v", got)
 	}
 	if got, ok := task.Context["euclo.delegate.source_keys"].([]string); !ok || len(got) != 1 || got[0] != "input.findings" {

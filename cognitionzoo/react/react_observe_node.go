@@ -109,8 +109,8 @@ func (n *reactObserveNode) Execute(ctx context.Context, env *contextdata.Envelop
 	}
 	env.SetWorkingValueWithClass("react.done", completed, contextdata.MemoryClassTask)
 
-	if n.agent.Memory != nil && env != nil && strings.TrimSpace(env.TaskID) != "" {
-		scope := n.agent.Memory.Scope(env.TaskID)
+	if n.agent.Memory != nil && env != nil && strings.TrimSpace(env.TaskIDSnapshot()) != "" {
+		scope := n.agent.Memory.Scope(env.TaskIDSnapshot())
 		scope.Set("react.iteration", iter, relurpctx.MemoryClassWorking)
 		scope.Set("react.decision", decision, relurpctx.MemoryClassWorking)
 		scope.Set("react.done", completed, relurpctx.MemoryClassWorking)

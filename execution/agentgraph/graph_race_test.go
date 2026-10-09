@@ -176,12 +176,14 @@ func TestGraphSnapshotIndependence(t *testing.T) {
 	require.NoError(t, err)
 	require.ErrorIs(t, mutator.errValue(), ErrGraphSealed)
 	require.False(t, g.HasNode("intruder"), "mid-run mutation must not take effect")
+	require.Equal(t, "b1", env.WorkingDataSnapshot()["k"])
 
-	// A second run still sees the sealed, whole structure.
-	_, err = g.Execute(context.Background(), env)
+	// A second run still sees the sealed, whole structure. A fresh envelope keeps
+	// the branch inputs identical, so the declaration-order winner is stable.
+	_, err = g.Execute(context.Background(), contextdata.NewEnvelope("task-merge", "session-2"))
 	require.NoError(t, err)
 	require.False(t, g.HasNode("intruder"))
-	require.Equal(t, "b1", env.WorkingDataSnapshot()["k"])
+	require.ErrorIs(t, mutator.errValue(), ErrGraphSealed)
 }
 
 type graphMutatingNode struct {

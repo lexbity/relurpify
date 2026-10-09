@@ -57,6 +57,10 @@ type Edge struct {
 	Parallel  bool
 }
 
+// parallelBranchResult is the outcome of one parallel branch. index is the
+// branch's edge-declaration position and therefore the merge order; delta is
+// the branch's change set relative to the fork-time parent and is the merge
+// input; env is the branch-final envelope supplying the values and references.
 type parallelBranchResult struct {
 	index int
 	edge  Edge
@@ -101,7 +105,6 @@ type Graph struct {
 	preflightDirty    bool
 	lastValidationErr error
 	validationDirty   bool
-	hashDirty         bool
 }
 
 // NewGraph creates a graph with sane defaults.
@@ -115,7 +118,6 @@ func NewGraph() *Graph {
 		executionPath:   make([]string, 0),
 		preflightDirty:  true,
 		validationDirty: true,
-		hashDirty:       true,
 	}
 }
 
@@ -133,7 +135,6 @@ func (g *Graph) SetTelemetry(t telemetry.Telemetry) error {
 func (g *Graph) invalidateStructureLocked() {
 	g.validationDirty = true
 	g.invalidatePreflightLocked()
-	g.hashDirty = true
 }
 
 func (g *Graph) invalidatePreflightLocked() {
@@ -180,7 +181,7 @@ func (g *Graph) extractTaskID(env *contextdata.Envelope) string {
 	if env == nil {
 		return ""
 	}
-	return env.TaskID
+	return env.TaskIDSnapshot()
 }
 
 // SetStart marks the starting node.
@@ -576,8 +577,10 @@ func (g *Graph) mergeParallelBranchEnvelopes(ctx context.Context, parent *contex
 		Timestamp: time.Now().UTC(),
 		Metadata: map[string]any{
 			"units_applied":   stats.UnitsApplied,
+			"branches":        mergeUnitIDs(units),
 			"keys_written":    stats.KeysWritten,
 			"keys_deleted":    stats.KeysDeleted,
+			"keys_skipped":    stats.KeysSkipped,
 			"conflicted_keys": stats.Conflicts,
 			"winner_index":    conflictWinnerIndices(units, stats.Conflicts),
 			"refs_streamed":   stats.RefsStreamed,
@@ -585,6 +588,16 @@ func (g *Graph) mergeParallelBranchEnvelopes(ctx context.Context, parent *contex
 		},
 	})
 	return nil
+}
+
+// mergeUnitIDs returns the branch identifiers that participated in the merge,
+// in declaration order.
+func mergeUnitIDs(units []contextdata.BranchMergeUnit) []string {
+	ids := make([]string, 0, len(units))
+	for _, unit := range units {
+		ids = append(ids, unit.ID)
+	}
+	return ids
 }
 
 // conflictWinnerIndices maps each conflicted key to the index of the last unit

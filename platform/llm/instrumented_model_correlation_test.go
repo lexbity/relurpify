@@ -40,7 +40,7 @@ func llmCorrelationContext() (context.Context, *contextdata.Envelope) {
 		AgentID:   "agent-1",
 	}
 	env := contextdata.NewEnvelope("task-1", "session-1")
-	env.NodeID = "node-1"
+	env.SetNodeID("node-1")
 	ctx := observability.WithRunContext(
 		contextdata.WithEnvelope(context.Background(), env),
 		rc,
@@ -98,7 +98,7 @@ func TestInstrumentedModel_NodeContextPreferredOverEnvelopeNodeID(t *testing.T) 
 	sink := &correlationSink{}
 	instrumented := NewInstrumentedModel(&profileAwareStubModel{}, sink, false)
 	env := contextdata.NewEnvelope("task-p", "session-p")
-	env.NodeID = "node-env"
+	env.SetNodeID("node-env")
 	ctx := observability.WithNodeContext(
 		contextdata.WithEnvelope(context.Background(), env),
 		"node-ctx",
@@ -223,7 +223,7 @@ func TestInstrumentedModel_TraceContextFallbackWhenNoTurnScope(t *testing.T) {
 
 func TestInstrumentedModel_EnvelopeFieldsNeverDowngraded(t *testing.T) {
 	env := contextdata.NewEnvelope("", "session-env")
-	env.NodeID = "node-env"
+	env.SetNodeID("node-env")
 	ctx := contextdata.WithEnvelope(context.Background(), env)
 	ctx = observability.WithRunContext(ctx, observability.RunContext{
 		RunID:     "run-4",

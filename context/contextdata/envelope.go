@@ -9,14 +9,15 @@ import (
 
 // Envelope is the execution context passed to graph nodes.
 //
-// Locking invariant: all Envelope state is guarded by mu. Every read and write
-// of WorkingData, References, CheckpointRequest, AssemblyMetadata, and the
-// scalar identity fields happens under mu. The public snapshot accessors
-// (WorkingDataSnapshot, ReferencesSnapshot, AssemblyMetadataSnapshot,
-// Clone, HandoffSnapshot) are the sanctioned read path.
-//
-// Direct field access from outside the package is legacy; each such site is
-// being migrated to the accessor APIs as the branch-merge redesign lands.
+// Locking invariant: all Envelope state is guarded by mu. Callers outside the
+// package read through the snapshot accessors and mutate through the setter
+// methods; the exported fields are an implementation detail and must not be
+// accessed directly. Reads: TaskIDSnapshot, SessionIDSnapshot, NodeIDSnapshot,
+// WorkingDataSnapshot, ReferencesSnapshot, AssemblyMetadataSnapshot,
+// CheckpointRequestSnapshot, Clone, HandoffSnapshot. Writes: SetTaskID,
+// SetSessionID, SetNodeID, SetAssemblyMetadata, SetWorkingValue[WithClass],
+// DeleteWorkingValue, AddStreamedContextReference, AddRetrievalReference,
+// AddCheckpointReference, RequestCheckpoint, ClearCheckpointRequest.
 type Envelope struct {
 	mu                sync.RWMutex
 	TaskID            string
@@ -49,6 +50,50 @@ func NewEnvelope(taskID, sessionID string) *Envelope {
 		References:  ReferenceBundle{},
 		createdAt:   time.Now().UTC(),
 	}
+}
+
+// NodeIDSnapshot returns the envelope's current node identifier, or "" when it
+// is unset. NodeID is reassignable, so callers outside the package read it
+// through this accessor rather than the field.
+func (e *Envelope) NodeIDSnapshot() string {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.NodeID
+}
+
+// SetNodeID replaces the envelope's node identifier under the lock.
+func (e *Envelope) SetNodeID(nodeID string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.NodeID = nodeID
+}
+
+// TaskIDSnapshot returns the envelope's task identifier under the read lock.
+func (e *Envelope) TaskIDSnapshot() string {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.TaskID
+}
+
+// SetTaskID replaces the envelope's task identifier under the lock.
+func (e *Envelope) SetTaskID(taskID string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.TaskID = taskID
+}
+
+// SessionIDSnapshot returns the envelope's session identifier under the read lock.
+func (e *Envelope) SessionIDSnapshot() string {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.SessionID
+}
+
+// SetSessionID replaces the envelope's session identifier under the lock.
+func (e *Envelope) SetSessionID(sessionID string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.SessionID = sessionID
 }
 
 // IsEmpty returns true if the envelope has no working data and no references.

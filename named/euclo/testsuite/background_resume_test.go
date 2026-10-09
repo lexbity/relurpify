@@ -139,7 +139,7 @@ func TestEndToEndBackgroundContinuationFromCheckpoint(t *testing.T) {
 	if !mustBoolValue(t, resumed, "euclo.background.resume_completed") {
 		t.Fatal("expected resume completion marker")
 	}
-	if len(resumed.References.Checkpoints) != 1 {
-		t.Fatalf("expected 1 checkpoint reference on resumed envelope, got %d", len(resumed.References.Checkpoints))
+	if len(resumed.ReferencesSnapshot().Checkpoints) != 1 {
+		t.Fatalf("expected 1 checkpoint reference on resumed envelope, got %d", len(resumed.ReferencesSnapshot().Checkpoints))
 	}
 }

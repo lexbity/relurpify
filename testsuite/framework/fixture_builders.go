@@ -411,7 +411,7 @@ func (b *EnvelopeBuilder) Build() *contextdata.Envelope {
 		return nil
 	}
 	env := contextdata.NewEnvelope(b.taskID, b.sessionID)
-	env.NodeID = b.nodeID
+	env.SetNodeID(b.nodeID)
 	for _, item := range b.data {
 		env.SetWorkingValueWithClass(item.key, item.value, item.class)
 	}

@@ -403,7 +403,7 @@ func TestEnvelopeFixtureBuilder(t *testing.T) {
 		if env == nil {
 			t.Fatal("envelope should not be nil")
 		}
-		if env.TaskID != "test-task" || env.SessionID != "test-session" || env.NodeID != "test-node" {
+		if env.TaskIDSnapshot() != "test-task" || env.SessionIDSnapshot() != "test-session" || env.NodeIDSnapshot() != "test-node" {
 			t.Fatalf("unexpected minimal envelope identity: %+v", env)
 		}
 		if !env.IsEmpty() {
@@ -420,14 +420,14 @@ func TestEnvelopeFixtureBuilder(t *testing.T) {
 			WithWorkingValue("key2", "value2", contextdata.MemoryClassTask)
 		env := builder.Build()
 
-		if env.TaskID != "custom-task" {
-			t.Errorf("task ID mismatch: got %s", env.TaskID)
+		if env.TaskIDSnapshot() != "custom-task" {
+			t.Errorf("task ID mismatch: got %s", env.TaskIDSnapshot())
 		}
-		if env.SessionID != "custom-session" {
-			t.Errorf("session ID mismatch: got %s", env.SessionID)
+		if env.SessionIDSnapshot() != "custom-session" {
+			t.Errorf("session ID mismatch: got %s", env.SessionIDSnapshot())
 		}
-		if env.NodeID != "custom-node" {
-			t.Errorf("node ID mismatch: got %s", env.NodeID)
+		if env.NodeIDSnapshot() != "custom-node" {
+			t.Errorf("node ID mismatch: got %s", env.NodeIDSnapshot())
 		}
 
 		if keys := env.WorkingMemoryKeys(); !reflect.DeepEqual(keys, []string{"key1", "key2"}) {

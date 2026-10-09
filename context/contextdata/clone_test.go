@@ -9,16 +9,16 @@ import (
 // Phase 1: the free function is a nil-safe delegate to Envelope.Clone, so both
 // produce identical snapshots for the same source.
 func TestCloneEnvelopeMatchesEnvelopeClone(t *testing.T) {
-	env := NewEnvelope("task-1", "session-1")
-	env.NodeID = "node-1"
-	env.SetWorkingValueWithClass("key1", "value1", MemoryClassTask)
+	env := NewEnvelope(testTaskID, testSessionID)
+	env.NodeID = testNodeID
+	env.SetWorkingValueWithClass(testKey1, testValue1, MemoryClassTask)
 	env.SetWorkingValueWithClass("key2", 42, MemoryClassSession)
-	env.AddStreamedContextReference(ChunkReference{ChunkID: "chunk-1", Source: "test", Rank: 1})
-	env.AddRetrievalReference(RetrievalReference{QueryID: "query-1", ChunkIDs: []ChunkID{"chunk-1"}})
+	env.AddStreamedContextReference(ChunkReference{ChunkID: testChunkID1, Source: testSource, Rank: 1})
+	env.AddRetrievalReference(RetrievalReference{QueryID: testQueryID, ChunkIDs: []ChunkID{testChunkID1}})
 	env.AddCheckpointReference(CheckpointReference{
-		CheckpointID:      "cp-1",
-		RequestedBy:       "node-1",
-		WorkingMemoryKeys: []string{"key1"},
+		CheckpointID:      testCheckpointID,
+		RequestedBy:       testNodeID,
+		WorkingMemoryKeys: []string{testKey1},
 	})
 	meta := env.AssemblyMetadataSnapshot()
 	meta.EventLogSeq = 7
@@ -38,8 +38,8 @@ func TestCloneEnvelopeNilReturnsNil(t *testing.T) {
 }
 
 func TestCloneEnvelopeDoesNotInheritCheckpointRequest(t *testing.T) {
-	env := NewEnvelope("task-1", "session-1")
-	env.NodeID = "node-1"
+	env := NewEnvelope(testTaskID, testSessionID)
+	env.NodeID = testNodeID
 	env.RequestCheckpoint("checkpoint for recovery", 5, true)
 
 	clone := CloneEnvelope(env)
@@ -49,7 +49,7 @@ func TestCloneEnvelopeDoesNotInheritCheckpointRequest(t *testing.T) {
 	if clone.CheckpointRequest != nil {
 		t.Fatalf("clone inherited checkpoint request: %#v", clone.CheckpointRequest)
 	}
-	if clone.NodeID != "node-1" {
+	if clone.NodeID != testNodeID {
 		t.Fatalf("clone lost NodeID: %q", clone.NodeID)
 	}
 	if env.CheckpointRequest == nil {

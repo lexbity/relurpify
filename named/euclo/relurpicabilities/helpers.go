@@ -174,7 +174,7 @@ func writeRetrievalReferences(env *contextdata.Envelope, query string, nodes []*
 		Duration:    0, // Would be measured in a real implementation
 	}
 
-	env.References.Retrieval = append(env.References.Retrieval, ref)
+	env.AddRetrievalReference(ref)
 }
 
 // graphNodeEntry converts an AST node to a graph node entry map.

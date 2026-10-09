@@ -227,7 +227,7 @@ func TestCheckStateKeyStability(t *testing.T) {
 	}
 
 	// Unstable key
-	snapshots[1].WorkingData[key2] = "different"
+	snapshots[1].SetWorkingValueWithClass(key2, "different", contextdata.MemoryClassTask)
 	failures = CheckStateKeyStability(snapshots, []string{key1, key2})
 	if len(failures) != 1 {
 		t.Errorf("Expected 1 failure for unstable key2, got %d", len(failures))
@@ -242,7 +242,9 @@ func TestCheckStateKeyStability_EdgeCases(t *testing.T) {
 	}
 
 	// Single snapshot
-	snapshots := []*contextdata.Envelope{{WorkingData: map[string]any{key: "value"}}}
+	seeded := contextdata.NewEnvelope("", "")
+	seeded.SetWorkingValueWithClass(key, "value", contextdata.MemoryClassTask)
+	snapshots := []*contextdata.Envelope{seeded}
 	failures = CheckStateKeyStability(snapshots, []string{key})
 	if len(failures) > 0 {
 		t.Error("Expected no failures for single snapshot")

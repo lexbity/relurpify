@@ -123,8 +123,8 @@ func (n *BackgroundJobNode) Execute(ctx context.Context, env *contextdata.Envelo
 	if tel != nil {
 		tel.EmitJobSubmitted(ctx, reporting.EventJobSubmitted{
 			EventHeader: reporting.EventHeader{
-				TaskID:     env.TaskID,
-				SessionID:  env.SessionID,
+				TaskID:     env.TaskIDSnapshot(),
+				SessionID:  env.SessionIDSnapshot(),
 				Seq:        0,
 				OccurredAt: submittedAt,
 			},
@@ -150,8 +150,8 @@ func (n *BackgroundJobNode) Execute(ctx context.Context, env *contextdata.Envelo
 	if tel != nil {
 		tel.EmitJobCompleted(ctx, reporting.EventJobCompleted{
 			EventHeader: reporting.EventHeader{
-				TaskID:     env.TaskID,
-				SessionID:  env.SessionID,
+				TaskID:     env.TaskIDSnapshot(),
+				SessionID:  env.SessionIDSnapshot(),
 				Seq:        1,
 				OccurredAt: time.Now().UTC(),
 			},
@@ -218,8 +218,8 @@ func (n *BackgroundJobNode) buildJobSpec(env *contextdata.Envelope) (jobs.Spec, 
 	}
 	if payload == nil {
 		payload = map[string]any{
-			"task_id":    env.TaskID,
-			"session_id": env.SessionID,
+			"task_id":    env.TaskIDSnapshot(),
+			"session_id": env.SessionIDSnapshot(),
 		}
 	}
 

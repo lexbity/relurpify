@@ -227,7 +227,7 @@ func TestEnvelopeAdditiveMutation(t *testing.T) {
 
 	// Validate the expected keys exist (don't check exact count as graph may add internal state)
 	expectedKeys := map[string]bool{"key1": false, "key2": false, "key3": false}
-	for key := range env.WorkingData {
+	for key := range env.WorkingDataSnapshot() {
 		if _, ok := expectedKeys[key]; ok {
 			expectedKeys[key] = true
 		}

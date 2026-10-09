@@ -43,11 +43,11 @@ func MergeBlackboardBranches(parent *contextdata.Envelope, branches []Blackboard
 			label = "unknown"
 		}
 		// Merge working data from branch into parent
-		for key, value := range branch.State.WorkingData {
+		for key, value := range branch.State.WorkingDataSnapshot() {
 			if existingBranch, exists := writtenKeys[key]; exists {
 				return fmt.Errorf("blackboard branch merge conflict: key %q written by both %q and %q", key, existingBranch, label)
 			}
-			parent.WorkingData[key] = value
+			parent.SetWorkingValueWithClass(key, value, contextdata.MemoryClassTask)
 			writtenKeys[key] = label
 		}
 	}

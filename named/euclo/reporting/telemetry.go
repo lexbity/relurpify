@@ -215,8 +215,8 @@ func (n *TelemetryNode) Execute(ctx context.Context, env *contextdata.Envelope) 
 		if mutation, ok := contextdata.GetTyped[*graphdb.MutationResult](env, "euclo.projection.mutation_result"); ok && mutation != nil {
 			tel.EmitProjectionCompleted(ctx, EventProjectionCompleted{
 				EventHeader: EventHeader{
-					TaskID:     env.TaskID,
-					SessionID:  env.SessionID,
+					TaskID:     env.TaskIDSnapshot(),
+					SessionID:  env.SessionIDSnapshot(),
 					Seq:        0,
 					OccurredAt: time.Now().UTC(),
 				},
@@ -238,8 +238,8 @@ func (n *TelemetryNode) Execute(ctx context.Context, env *contextdata.Envelope) 
 		}
 		tel.EmitVerifyStarted(ctx, EventVerifyStarted{
 			EventHeader: EventHeader{
-				TaskID:     env.TaskID,
-				SessionID:  env.SessionID,
+				TaskID:     env.TaskIDSnapshot(),
+				SessionID:  env.SessionIDSnapshot(),
 				Seq:        0,
 				OccurredAt: time.Now().UTC(),
 			},
@@ -247,8 +247,8 @@ func (n *TelemetryNode) Execute(ctx context.Context, env *contextdata.Envelope) 
 		})
 		tel.EmitVerifyComplete(ctx, EventVerifyComplete{
 			EventHeader: EventHeader{
-				TaskID:     env.TaskID,
-				SessionID:  env.SessionID,
+				TaskID:     env.TaskIDSnapshot(),
+				SessionID:  env.SessionIDSnapshot(),
 				Seq:        0,
 				OccurredAt: time.Now().UTC(),
 			},
@@ -257,8 +257,8 @@ func (n *TelemetryNode) Execute(ctx context.Context, env *contextdata.Envelope) 
 		})
 		tel.EmitExecutionComplete(ctx, EventExecutionComplete{
 			EventHeader: EventHeader{
-				TaskID:     env.TaskID,
-				SessionID:  env.SessionID,
+				TaskID:     env.TaskIDSnapshot(),
+				SessionID:  env.SessionIDSnapshot(),
 				Seq:        0,
 				OccurredAt: time.Now().UTC(),
 			},
@@ -271,8 +271,8 @@ func (n *TelemetryNode) Execute(ctx context.Context, env *contextdata.Envelope) 
 		if shouldEmitClarificationCompletion(env) {
 			tel.EmitClarificationCompleted(ctx, EventClarificationCompleted{
 				EventHeader: EventHeader{
-					TaskID:     env.TaskID,
-					SessionID:  env.SessionID,
+					TaskID:     env.TaskIDSnapshot(),
+					SessionID:  env.SessionIDSnapshot(),
 					Seq:        0,
 					OccurredAt: time.Now().UTC(),
 				},

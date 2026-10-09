@@ -356,7 +356,7 @@ func (n *reactActNode) capabilityEnvelope(ctx context.Context, env *contextdata.
 	}
 	if approval == nil {
 		// ApprovalBindingFromCapability already works with envelope WorkingData
-		approval = capresult.ApprovalBindingFromCapability(desc, env.WorkingData, call.Args)
+		approval = capresult.ApprovalBindingFromCapability(desc, env.WorkingDataSnapshot(), call.Args)
 	}
 	var snapshot *capresult.PolicySnapshot
 	if n != nil && n.agent != nil {

@@ -16,9 +16,9 @@ func TestApplyBranchMergesDeterministic(t *testing.T) {
 	rng := rand.New(rand.NewSource(1))
 
 	base := map[string]any{
-		"keep": "keep",
-		"del":  "base-del",
-		"over": "base-over",
+		testKeyKeep: testKeyKeep,
+		"del":       "base-del",
+		testKeyOver: "base-over",
 	}
 	specs := []struct {
 		added    []string
@@ -26,23 +26,23 @@ func TestApplyBranchMergesDeterministic(t *testing.T) {
 		deleted  []string
 		values   map[string]any
 	}{
-		{modified: []string{"over"}, deleted: []string{"del"}, added: []string{"add0"}, values: map[string]any{"over": "u0", "add0": "a0"}},
-		{modified: []string{"over", "keep"}, added: []string{"add1"}, values: map[string]any{"over": "u1", "keep": "keep1", "add1": "a1"}},
-		{modified: []string{"over"}, deleted: []string{"add0"}, values: map[string]any{"over": "u2"}},
-		{modified: []string{"keep"}, added: []string{"add3"}, values: map[string]any{"keep": "keep3", "add3": "a3"}},
+		{modified: []string{testKeyOver}, deleted: []string{"del"}, added: []string{testKeyAdd0}, values: map[string]any{testKeyOver: "u0", testKeyAdd0: "a0"}},
+		{modified: []string{testKeyOver, testKeyKeep}, added: []string{testKeyAdd1}, values: map[string]any{testKeyOver: "u1", testKeyKeep: "keep1", testKeyAdd1: "a1"}},
+		{modified: []string{testKeyOver}, deleted: []string{testKeyAdd0}, values: map[string]any{testKeyOver: "u2"}},
+		{modified: []string{testKeyKeep}, added: []string{testKeyAdd3}, values: map[string]any{testKeyKeep: "keep3", testKeyAdd3: "a3"}},
 	}
-	want := map[string]any{"keep": "keep3", "over": "u2", "add1": "a1", "add3": "a3"}
-	wantConflicts := []string{"add0", "keep", "over"}
+	want := map[string]any{testKeyKeep: "keep3", testKeyOver: "u2", testKeyAdd1: "a1", testKeyAdd3: "a3"}
+	wantConflicts := []string{testKeyAdd0, testKeyKeep, testKeyOver}
 
 	for iter := 0; iter < 1000; iter++ {
-		parent := NewEnvelope("task-1", "session-1")
+		parent := NewEnvelope(testTaskID, testSessionID)
 		for k, v := range base {
 			parent.SetWorkingValueWithClass(k, v, MemoryClassTask)
 		}
 
 		units := make([]BranchMergeUnit, 0, len(specs))
 		for i, spec := range specs {
-			env := NewEnvelope("task-1", "session-1")
+			env := NewEnvelope(testTaskID, testSessionID)
 			for k, v := range spec.values {
 				env.SetWorkingValueWithClass(k, v, MemoryClassTask)
 			}

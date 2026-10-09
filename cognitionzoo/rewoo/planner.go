@@ -193,5 +193,5 @@ func taskIDForEnvelope(env *contextdata.Envelope) string {
 	if env == nil {
 		return ""
 	}
-	return env.TaskID
+	return env.TaskIDSnapshot()
 }

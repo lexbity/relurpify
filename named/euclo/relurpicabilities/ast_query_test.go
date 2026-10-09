@@ -332,8 +332,8 @@ func TestASTQueryHandlerWritesReferences(t *testing.T) {
 		t.Fatalf("Invoke returned error: %v", err)
 	}
 
-	if len(envelope.References.Retrieval) == 0 {
-		t.Errorf("envelope.References.Retrieval is empty, want non-empty")
+	if len(envelope.ReferencesSnapshot().Retrieval) == 0 {
+		t.Errorf("envelope.ReferencesSnapshot().Retrieval is empty, want non-empty")
 	}
 }
 
@@ -578,8 +578,8 @@ func TestCallGraphHandlerWritesReferences(t *testing.T) {
 		t.Fatalf("Invoke returned error: %v", err)
 	}
 
-	if len(envelope.References.Retrieval) == 0 {
-		t.Errorf("envelope.References.Retrieval is empty, want non-empty")
+	if len(envelope.ReferencesSnapshot().Retrieval) == 0 {
+		t.Errorf("envelope.ReferencesSnapshot().Retrieval is empty, want non-empty")
 	}
 }
 
@@ -1043,4 +1043,3 @@ func TestDiffSummaryHandlerCommandDenied(t *testing.T) {
 		t.Errorf("error message is empty, want non-empty")
 	}
 }
-

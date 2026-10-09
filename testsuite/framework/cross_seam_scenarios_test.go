@@ -171,8 +171,8 @@ func TestFullFrameworkFlowScenario(t *testing.T) {
 	})
 
 	// Transition assertion: envelope updated
-	if len(envelope.References.StreamedContext) != 1 {
-		t.Errorf("expected 1 streamed reference, got %d", len(envelope.References.StreamedContext))
+	if len(envelope.ReferencesSnapshot().StreamedContext) != 1 {
+		t.Errorf("expected 1 streamed reference, got %d", len(envelope.ReferencesSnapshot().StreamedContext))
 	}
 
 	// Step 5: Verify audit records (audit seam)
@@ -227,7 +227,7 @@ func TestFullFrameworkFlowScenario(t *testing.T) {
 	}
 
 	// Step 7: Validate the complete flow
-	if len(records) == 0 || len(telemetryEvents) == 0 || len(envelope.References.StreamedContext) == 0 {
+	if len(records) == 0 || len(telemetryEvents) == 0 || len(envelope.ReferencesSnapshot().StreamedContext) == 0 {
 		t.Error("expected all seams to be active: audit, telemetry, envelope")
 	}
 

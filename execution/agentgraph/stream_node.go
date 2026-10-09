@@ -128,8 +128,8 @@ func (n *StreamTriggerNode) requestID(env *contextdata.Envelope) string {
 	if n.id != "" {
 		return n.id + ".stream"
 	}
-	if env != nil && env.TaskID != "" {
-		return env.TaskID + ".stream"
+	if env != nil && env.TaskIDSnapshot() != "" {
+		return env.TaskIDSnapshot() + ".stream"
 	}
 	return "stream.request"
 }

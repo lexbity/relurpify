@@ -504,7 +504,7 @@ func seedDefaultTask(env *contextdata.Envelope) {
 		return
 	}
 	task := &execution.Task{
-		ID:          strings.TrimSpace(env.TaskID),
+		ID:          strings.TrimSpace(env.TaskIDSnapshot()),
 		Type:        "euclo",
 		Instruction: "",
 		Data:        map[string]any{},

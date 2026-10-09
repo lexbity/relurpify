@@ -968,7 +968,7 @@ func (r *Runtime) clearActiveWorkflowID(id string) {
 // execution, and working-memory eviction.
 func (r *Runtime) executeTask(ctx context.Context, task *execution.Task) (*execution.Result, error) {
 	env := contextdata.NewEnvelope(task.ID, r.ensureSessionID())
-	env.NodeID = "runtime"
+	env.SetNodeID("runtime")
 	if task.Context != nil {
 		for key, value := range task.Context {
 			env.SetWorkingValueWithClass(key, value, contextdata.MemoryClassTask)
@@ -1072,11 +1072,11 @@ func (r *Runtime) ensureSessionID() string {
 // the envelope. Called once per turn (including interaction resumes).
 func (r *Runtime) beginTurn(ctx context.Context, env *contextdata.Envelope) context.Context {
 	sessionID := r.ensureSessionID()
-	if env != nil && env.SessionID != "" {
-		sessionID = env.SessionID
+	if env != nil && env.SessionIDSnapshot() != "" {
+		sessionID = env.SessionIDSnapshot()
 	}
 	if env != nil {
-		env.SessionID = sessionID
+		env.SetSessionID(sessionID)
 	}
 	agentID := ""
 	if r.registration != nil {
@@ -1220,7 +1220,7 @@ func (r *Runtime) persistInteractionResolution(ctx context.Context, env *context
 		return err
 	}
 	if state == nil {
-		state = intentcontext.NewState(env.TaskID, env.SessionID)
+		state = intentcontext.NewState(env.TaskIDSnapshot(), env.SessionIDSnapshot())
 	}
 	turn := interaction.ClarificationTurnFromFrame(frame, state.StateVersion)
 	if turn != nil {

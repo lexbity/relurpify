@@ -164,8 +164,8 @@ func thoughtrecipeTemplateData(env *contextdata.Envelope, step ExecutionStep) ma
 		data["RunDirectives"] = append([]string(nil), step.Directives...)
 	}
 	if env != nil {
-		data["TaskID"] = env.TaskID
-		data["SessionID"] = env.SessionID
+		data["TaskID"] = env.TaskIDSnapshot()
+		data["SessionID"] = env.SessionIDSnapshot()
 		for key, value := range env.Snapshot() {
 			data[key] = value
 		}

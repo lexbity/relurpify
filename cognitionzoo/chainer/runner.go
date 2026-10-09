@@ -33,7 +33,7 @@ func FilterState(env *contextdata.Envelope, keys []string) map[string]any {
 	if snapshot == nil {
 		return map[string]any{}
 	}
-	return snapshot.WorkingData
+	return snapshot.WorkingDataSnapshot()
 }
 
 // RunChain executes a chain against state using isolated prompts.

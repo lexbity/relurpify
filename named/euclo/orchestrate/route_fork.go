@@ -79,8 +79,8 @@ func emitBranchResolved(ctx context.Context, env *contextdata.Envelope, groupID,
 	tel := reporting.NewEucloTelemetry(telemetry.TelemetryFromContext(ctx))
 	tel.EmitBranchResolved(ctx, reporting.EventBranchResolved{
 		EventHeader: reporting.EventHeader{
-			TaskID:     env.TaskID,
-			SessionID:  env.SessionID,
+			TaskID:     env.TaskIDSnapshot(),
+			SessionID:  env.SessionIDSnapshot(),
 			OccurredAt: time.Now().UTC(),
 		},
 		GroupID:      groupID,

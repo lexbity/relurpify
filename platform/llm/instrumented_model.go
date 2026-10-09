@@ -29,14 +29,14 @@ func stampObservabilityCorrelation(ctx context.Context, ev *observability.Event)
 	}
 	observability.StampCorrelation(ctx, ev)
 	if env, ok := contextdata.EnvelopeFrom(ctx); ok {
-		if ev.NodeID == "" && env.NodeID != "" {
-			ev.NodeID = env.NodeID
+		if ev.NodeID == "" && env.NodeIDSnapshot() != "" {
+			ev.NodeID = env.NodeIDSnapshot()
 		}
-		if ev.SessionID == "" && env.SessionID != "" {
-			ev.SessionID = env.SessionID
+		if ev.SessionID == "" && env.SessionIDSnapshot() != "" {
+			ev.SessionID = env.SessionIDSnapshot()
 		}
-		if ev.TaskID == "" && env.TaskID != "" {
-			ev.TaskID = env.TaskID
+		if ev.TaskID == "" && env.TaskIDSnapshot() != "" {
+			ev.TaskID = env.TaskIDSnapshot()
 		}
 	}
 }

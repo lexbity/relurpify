@@ -75,7 +75,7 @@ func (n *DelegateNode) Execute(ctx context.Context, env *contextdata.Envelope) (
 	}
 	n.writeStepMetadata(env)
 	contextdata.SetTyped(env, "euclo.execution.delegate."+n.step.ID+".child_task_id", childEnv.TaskID)
-	contextdata.SetTyped(env, "euclo.execution.delegate."+n.step.ID+".parent_task_id", env.TaskID)
+	contextdata.SetTyped(env, "euclo.execution.delegate."+n.step.ID+".parent_task_id", env.TaskIDSnapshot())
 	if len(n.step.Sources) > 0 {
 		contextdata.SetTyped(env, "euclo.execution.delegate."+n.step.ID+".sources", append([]string(nil), n.step.Sources...))
 	}
@@ -114,21 +114,22 @@ func (n *DelegateNode) buildDelegationEnvelope(parent *contextdata.Envelope) *co
 	}
 	child := parent.HandoffSnapshot(policy)
 	if child == nil {
-		child = contextdata.NewEnvelope(parent.TaskID, parent.SessionID)
+		child = contextdata.NewEnvelope(parent.TaskIDSnapshot(), parent.SessionIDSnapshot())
 	}
-	child.TaskID = parent.TaskID + "::delegate::" + n.step.ID
-	child.NodeID = n.id
-	child.WorkingData["euclo.delegate.parent_task_id"] = parent.TaskID
-	child.WorkingData["euclo.delegate.child_task_id"] = child.TaskID
-	child.WorkingData["euclo.handoff.continuation"] = map[string]any{
+	parentTaskID := parent.TaskIDSnapshot()
+	child.SetTaskID(parentTaskID + "::delegate::" + n.step.ID)
+	child.SetNodeID(n.id)
+	child.SetWorkingValueWithClass("euclo.delegate.parent_task_id", parentTaskID, contextdata.MemoryClassTask)
+	child.SetWorkingValueWithClass("euclo.delegate.child_task_id", child.TaskIDSnapshot(), contextdata.MemoryClassTask)
+	child.SetWorkingValueWithClass("euclo.handoff.continuation", map[string]any{
 		"shared_context":    true,
-		"parent_task_id":    parent.TaskID,
-		"child_task_id":     child.TaskID,
+		"parent_task_id":    parentTaskID,
+		"child_task_id":     child.TaskIDSnapshot(),
 		"source_keys":       append([]string(nil), n.step.Sources...),
 		"source_route_kind": mustRouteKind(parent),
-	}
+	}, contextdata.MemoryClassTask)
 	if len(n.step.Sources) > 0 {
-		child.WorkingData["euclo.delegate.source_keys"] = append([]string(nil), n.step.Sources...)
+		child.SetWorkingValueWithClass("euclo.delegate.source_keys", append([]string(nil), n.step.Sources...), contextdata.MemoryClassTask)
 	}
 	return child
 }

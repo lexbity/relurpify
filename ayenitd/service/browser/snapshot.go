@@ -280,10 +280,10 @@ func browserTaskScope(env *contextdata.Envelope) string {
 	if env == nil {
 		return defaultBrowserScope
 	}
-	if taskID := strings.TrimSpace(env.TaskID); taskID != "" {
+	if taskID := strings.TrimSpace(env.TaskIDSnapshot()); taskID != "" {
 		return taskID
 	}
-	if sessionID := strings.TrimSpace(env.SessionID); sessionID != "" {
+	if sessionID := strings.TrimSpace(env.SessionIDSnapshot()); sessionID != "" {
 		return sessionID
 	}
 	return defaultBrowserScope
@@ -293,7 +293,7 @@ func browserWorkflowID(env *contextdata.Envelope) string {
 	if env == nil {
 		return ""
 	}
-	return strings.TrimSpace(env.SessionID)
+	return strings.TrimSpace(env.SessionIDSnapshot())
 }
 
 func defaultSessionID(env *contextdata.Envelope, args map[string]any) string {

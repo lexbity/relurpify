@@ -219,27 +219,27 @@ func TestStreamedChunkReferenceIntegrity(t *testing.T) {
 	}
 
 	// Validate references were added with correct chunk IDs
-	if len(envelope.References.StreamedContext) != 3 {
-		t.Errorf("expected 3 streamed references, got %d", len(envelope.References.StreamedContext))
+	if len(envelope.ReferencesSnapshot().StreamedContext) != 3 {
+		t.Errorf("expected 3 streamed references, got %d", len(envelope.ReferencesSnapshot().StreamedContext))
 	}
 
 	// Validate chunk IDs are in the expected order
 	expectedIDs := []contextdata.ChunkID{contextdata.ChunkID(chunk3.ID), contextdata.ChunkID(chunk1.ID), contextdata.ChunkID(chunk2.ID)}
-	for i, ref := range envelope.References.StreamedContext {
+	for i, ref := range envelope.ReferencesSnapshot().StreamedContext {
 		if ref.ChunkID != expectedIDs[i] {
 			t.Errorf("reference %d: expected chunk ID %s, got %s", i, expectedIDs[i], ref.ChunkID)
 		}
 	}
 
 	// Validate source is preserved
-	for _, ref := range envelope.References.StreamedContext {
+	for _, ref := range envelope.ReferencesSnapshot().StreamedContext {
 		if ref.Source != "test-ranker" {
 			t.Errorf("expected source 'test-ranker', got %s", ref.Source)
 		}
 	}
 
 	// Validate rank ordering is preserved
-	for i, ref := range envelope.References.StreamedContext {
+	for i, ref := range envelope.ReferencesSnapshot().StreamedContext {
 		if ref.Rank != i {
 			t.Errorf("reference %d: expected rank %d, got %d", i, i, ref.Rank)
 		}
@@ -265,8 +265,8 @@ func TestEnvelopeMutation(t *testing.T) {
 	envelope.AddStreamedContextReference(existingRef)
 
 	// Capture initial state
-	initialWorkingDataLen := len(envelope.WorkingData)
-	initialRefsLen := len(envelope.References.StreamedContext)
+	initialWorkingDataLen := len(envelope.WorkingDataSnapshot())
+	initialRefsLen := len(envelope.ReferencesSnapshot().StreamedContext)
 
 	// Simulate streaming by adding new references
 	newRef1 := contextdata.ChunkReference{
@@ -300,24 +300,24 @@ func TestEnvelopeMutation(t *testing.T) {
 	}
 
 	// Validate working data count increased
-	if len(envelope.WorkingData) != initialWorkingDataLen {
-		t.Errorf("expected working data length to remain %d, got %d", initialWorkingDataLen, len(envelope.WorkingData))
+	if len(envelope.WorkingDataSnapshot()) != initialWorkingDataLen {
+		t.Errorf("expected working data length to remain %d, got %d", initialWorkingDataLen, len(envelope.WorkingDataSnapshot()))
 	}
 
 	// Validate existing reference is still present
-	if len(envelope.References.StreamedContext) != initialRefsLen+2 {
-		t.Errorf("expected reference count to increase from %d to %d, got %d", initialRefsLen, initialRefsLen+2, len(envelope.References.StreamedContext))
+	if len(envelope.ReferencesSnapshot().StreamedContext) != initialRefsLen+2 {
+		t.Errorf("expected reference count to increase from %d to %d, got %d", initialRefsLen, initialRefsLen+2, len(envelope.ReferencesSnapshot().StreamedContext))
 	}
 
 	// Validate existing reference is still first
-	if envelope.References.StreamedContext[0].ChunkID != "existing-chunk" {
-		t.Errorf("expected first reference to be existing-chunk, got %s", envelope.References.StreamedContext[0].ChunkID)
+	if envelope.ReferencesSnapshot().StreamedContext[0].ChunkID != "existing-chunk" {
+		t.Errorf("expected first reference to be existing-chunk, got %s", envelope.ReferencesSnapshot().StreamedContext[0].ChunkID)
 	}
 
 	// Validate new references were added
 	foundNew1 := false
 	foundNew2 := false
-	for _, ref := range envelope.References.StreamedContext {
+	for _, ref := range envelope.ReferencesSnapshot().StreamedContext {
 		if ref.ChunkID == contextdata.ChunkID("new-chunk-1") {
 			foundNew1 = true
 		}
@@ -474,7 +474,7 @@ func TestStreamingWithTelemetry(t *testing.T) {
 	}
 
 	// Validate envelope was updated
-	if len(envelope.References.StreamedContext) == 0 {
+	if len(envelope.ReferencesSnapshot().StreamedContext) == 0 {
 		// In a real scenario, the compiler would add references
 		// For this test, we simulate it
 		envelope.AddStreamedContextReference(contextdata.ChunkReference{
@@ -497,7 +497,7 @@ func TestStreamingWithTelemetry(t *testing.T) {
 	}
 
 	// Validate envelope was updated with references
-	if len(envelope.References.StreamedContext) == 0 {
+	if len(envelope.ReferencesSnapshot().StreamedContext) == 0 {
 		t.Error("expected envelope to have streamed context references")
 	}
 }

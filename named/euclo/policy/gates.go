@@ -172,7 +172,7 @@ func (n *GateNode) handleHITL(ctx context.Context, env *contextdata.Envelope, de
 		return nil, fmt.Errorf("gate %q missing policy decision", n.id)
 	}
 
-	frame := interaction.NewHITLApprovalFrame(env.TaskID, env.SessionID, "euclo.policy.gate", n.reasonString(decision))
+	frame := interaction.NewHITLApprovalFrame(env.TaskIDSnapshot(), env.SessionIDSnapshot(), "euclo.policy.gate", n.reasonString(decision))
 	if err := interaction.EmitFrame(ctx, frame, env, n.telemetry()); err != nil {
 		return nil, err
 	}
@@ -252,7 +252,7 @@ func (n *GateNode) riskLevel(decision *PolicyDecision) govpolicy.RiskLevel {
 }
 
 func (n *GateNode) resourceID(env *contextdata.Envelope) string {
-	if id := strings.TrimSpace(env.TaskID); id != "" {
+	if id := strings.TrimSpace(env.TaskIDSnapshot()); id != "" {
 		return id
 	}
 	return strings.TrimSpace(n.agentID)

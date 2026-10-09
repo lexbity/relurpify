@@ -173,13 +173,13 @@ func TestEndToEndCheckpointMaterialization(t *testing.T) {
 	if got := mustStringValue(t, env, "checkpoint.id"); got != repo.artifact.ArtifactID {
 		t.Fatalf("checkpoint id = %q, want %q", got, repo.artifact.ArtifactID)
 	}
-	if env.CheckpointRequest != nil {
+	if env.CheckpointRequestSnapshot() != nil {
 		t.Fatal("expected checkpoint request to be cleared")
 	}
-	if len(env.References.Checkpoints) != 1 {
-		t.Fatalf("expected 1 checkpoint reference, got %d", len(env.References.Checkpoints))
+	if len(env.ReferencesSnapshot().Checkpoints) != 1 {
+		t.Fatalf("expected 1 checkpoint reference, got %d", len(env.ReferencesSnapshot().Checkpoints))
 	}
-	if got := env.References.Checkpoints[0].CheckpointID; got != repo.artifact.ArtifactID {
+	if got := env.ReferencesSnapshot().Checkpoints[0].CheckpointID; got != repo.artifact.ArtifactID {
 		t.Fatalf("checkpoint reference id = %q, want %q", got, repo.artifact.ArtifactID)
 	}
 	if got := len(writer.GetAuditLog()); got == 0 {

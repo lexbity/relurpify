@@ -151,6 +151,15 @@ func (w *Workspace) Close(ctx context.Context) error {
 		}
 	}
 
+	// Close the telemetry chain last: it owns the JSONL file sink, which must be
+	// flushed/closed rather than left to the OS. Sinks without an error-returning
+	// Close (logger, event-log mirror, broadcast) are skipped by design.
+	if w.Telemetry != nil {
+		if err := closeTelemetry(w.Telemetry); err != nil {
+			errs = append(errs, fmt.Errorf("close telemetry: %w", err))
+		}
+	}
+
 	return errors.Join(errs...)
 }
 
@@ -526,6 +535,7 @@ func OpenWorkspace(ctx context.Context, cfg WorkspaceConfig) (_ *Workspace, err 
 		return nil, err
 	}
 	cleanup.Add(func(_ context.Context) error { return logFile.Close() })
+	cleanup.Add(func(_ context.Context) error { return closeTelemetry(tel) })
 
 	// Phase C.5: Event Log Setup (gated by Scope.Services). Fail-closed
 	// per NFR-4: an unavailable Badger store downgrades the runtime to
@@ -821,4 +831,16 @@ func setupTelemetry(cfg WorkspaceConfig) (io.Closer, *log.Logger, telemetry.Tele
 	}
 
 	return logFile, logger, telemetry.MultiplexTelemetry{Sinks: sinks}, nil
+}
+
+// closeTelemetry releases the resources owned by a telemetry chain.
+// MultiplexTelemetry implements io.Closer and closes only sinks that own an OS
+// resource (the JSONL file sink and nested multiplexes); other sink shapes
+// (logger, event mirror, broadcast) are left to their own owners. A nil or
+// non-closeable telemetry is a no-op.
+func closeTelemetry(t telemetry.Telemetry) error {
+	if closer, ok := t.(io.Closer); ok {
+		return closer.Close()
+	}
+	return nil
 }

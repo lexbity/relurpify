@@ -142,10 +142,10 @@ func mirrorBlackboardToWorkingMemoryStore(state *contextdata.Envelope) {
 		return
 	}
 	store, ok := rawStore.(*memory.WorkingMemoryStore)
-	if !ok || store == nil || state.TaskID == "" {
+	if !ok || store == nil || state.TaskIDSnapshot() == "" {
 		return
 	}
-	task := store.Scope(state.TaskID)
+	task := store.Scope(state.TaskIDSnapshot())
 	if task == nil {
 		return
 	}

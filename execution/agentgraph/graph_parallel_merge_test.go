@@ -15,8 +15,9 @@ import (
 // Fan-out node IDs used by the Phase 3 parallel tests. Distinct from the
 // literals other tests use so the ids are self-documenting here.
 const (
-	fanOutRootID = "fanout-root"
-	fanOutDoneID = "fanout-done"
+	fanOutRootID    = "fanout-root"
+	fanOutDoneID    = "fanout-done"
+	deleterBranchID = "deleter"
 )
 
 // branchActionNode applies a side effect to the branch envelope. A nil apply
@@ -116,6 +117,7 @@ func TestParallelBranchMergeTelemetry(t *testing.T) {
 	event, ok := sink.find(telemetry.EventGraphBranchMerged)
 	require.True(t, ok, "expected a graph.branch_merged event")
 	require.Equal(t, 2, event.Metadata["units_applied"])
+	require.Equal(t, []string{"b0", "b1"}, event.Metadata["branches"])
 	require.Equal(t, 1, event.Metadata["keys_written"])
 	require.Equal(t, []string{"winner"}, event.Metadata["conflicted_keys"])
 
@@ -134,7 +136,7 @@ func TestParallelBranchDeletionPropagation(t *testing.T) {
 
 	t.Run("later write overrides earlier delete", func(t *testing.T) {
 		g, env := buildFanOut(t, nil,
-			&branchActionNode{id: "deleter", apply: func(e *contextdata.Envelope) { e.DeleteWorkingValue("k") }},
+			&branchActionNode{id: deleterBranchID, apply: func(e *contextdata.Envelope) { e.DeleteWorkingValue("k") }},
 			&branchActionNode{id: "writer", apply: writeKey("k", "from-writer")},
 		)
 		env.SetWorkingValueWithClass("k", "base", contextdata.MemoryClassTask)
@@ -146,11 +148,23 @@ func TestParallelBranchDeletionPropagation(t *testing.T) {
 	t.Run("later delete overrides earlier write", func(t *testing.T) {
 		g, env := buildFanOut(t, nil,
 			&branchActionNode{id: "writer", apply: writeKey("k", "from-writer")},
-			&branchActionNode{id: "deleter", apply: func(e *contextdata.Envelope) { e.DeleteWorkingValue("k") }},
+			&branchActionNode{id: deleterBranchID, apply: func(e *contextdata.Envelope) { e.DeleteWorkingValue("k") }},
 		)
 		env.SetWorkingValueWithClass("k", "base", contextdata.MemoryClassTask)
 		_, err := g.Execute(ctx, env)
 		require.NoError(t, err)
 		require.NotContains(t, env.WorkingDataSnapshot(), "k")
+	})
+
+	t.Run("untouched branch does not resurrect a deletion", func(t *testing.T) {
+		g, env := buildFanOut(t, nil,
+			&branchActionNode{id: deleterBranchID, apply: func(e *contextdata.Envelope) { e.DeleteWorkingValue("k") }},
+			&branchActionNode{id: "untouched", apply: nil},
+		)
+		env.SetWorkingValueWithClass("k", "base", contextdata.MemoryClassTask)
+		_, err := g.Execute(ctx, env)
+		require.NoError(t, err)
+		require.NotContains(t, env.WorkingDataSnapshot(), "k",
+			"a branch that never changed the key must not re-write it and defeat the delete")
 	})
 }

@@ -56,22 +56,22 @@ func NewCheckpointNode(id string) *CheckpointNode {
 			if env == nil {
 				return ""
 			}
-			return strings.TrimSpace(env.TaskID)
+			return strings.TrimSpace(env.TaskIDSnapshot())
 		},
 		runResolver: func(env *contextdata.Envelope) string {
 			if env == nil {
 				return ""
 			}
-			return strings.TrimSpace(env.SessionID)
+			return strings.TrimSpace(env.SessionIDSnapshot())
 		},
 		principalResolver: func(env *contextdata.Envelope) (identity.SubjectRef, bool) {
-			if env == nil || strings.TrimSpace(env.TaskID) == "" || strings.TrimSpace(env.SessionID) == "" {
+			if env == nil || strings.TrimSpace(env.TaskIDSnapshot()) == "" || strings.TrimSpace(env.SessionIDSnapshot()) == "" {
 				return identity.SubjectRef{}, false
 			}
 			return identity.SubjectRef{
-				TenantID: strings.TrimSpace(env.SessionID),
+				TenantID: strings.TrimSpace(env.SessionIDSnapshot()),
 				Kind:     identity.SubjectKindSystem,
-				ID:       strings.TrimSpace(env.TaskID),
+				ID:       strings.TrimSpace(env.TaskIDSnapshot()),
 			}, true
 		},
 	}
@@ -222,20 +222,20 @@ func (n *CheckpointNode) Execute(ctx context.Context, env *contextdata.Envelope)
 	// The checkpoint is durable: the task's working memory expires here.
 	// Idempotent; a missing task is a no-op.
 	if n.memoryEvictor != nil {
-		n.memoryEvictor.Evict(env.TaskID)
+		n.memoryEvictor.Evict(env.TaskIDSnapshot())
 	}
 
 	if n.writer != nil {
 		n.persistMirroredCheckpoint(ctx, env, snapshot)
 	}
 	if tel, ok := telemetry.TelemetryFromContext(ctx).(telemetry.CheckpointTelemetry); ok {
-		tel.OnCheckpointCreated(env.TaskID, ref.ArtifactID, n.id)
+		tel.OnCheckpointCreated(env.TaskIDSnapshot(), ref.ArtifactID, n.id)
 	}
 	if n.telemetry != nil {
 		ev := telemetry.Event{
 			Type:      telemetry.EventStateChange,
 			NodeID:    n.id,
-			TaskID:    env.TaskID,
+			TaskID:    env.TaskIDSnapshot(),
 			RunID:     snapshot.RunID, // first-class correlation, not metadata
 			Timestamp: time.Now().UTC(),
 			Metadata: map[string]any{
@@ -263,7 +263,7 @@ func (n *CheckpointNode) buildSnapshot(ctx context.Context, env *contextdata.Env
 	if n.snapshotHook != nil {
 		return n.snapshotHook(ctx, env)
 	}
-	req := env.CheckpointRequest
+	req := env.CheckpointRequestSnapshot()
 	if req == nil {
 		return persistence.CheckpointSnapshot{}, false, nil
 	}
@@ -280,10 +280,10 @@ func (n *CheckpointNode) buildSnapshot(ctx context.Context, env *contextdata.Env
 		runID = strings.TrimSpace(n.runResolver(env))
 	}
 	if workflowID == "" {
-		workflowID = strings.TrimSpace(env.TaskID)
+		workflowID = strings.TrimSpace(env.TaskIDSnapshot())
 	}
 	if runID == "" {
-		runID = strings.TrimSpace(env.SessionID)
+		runID = strings.TrimSpace(env.SessionIDSnapshot())
 	}
 	snapshot := persistence.CheckpointSnapshot{
 		CheckpointID: n.checkpointID(env, req),
@@ -321,12 +321,12 @@ func (n *CheckpointNode) buildSnapshot(ctx context.Context, env *contextdata.Env
 
 func (n *CheckpointNode) checkpointID(env *contextdata.Envelope, req *contextdata.CheckpointRequest) string {
 	if req != nil && strings.TrimSpace(req.RequestedBy) != "" {
-		return strings.TrimSpace(req.RequestedBy) + ":" + strings.TrimSpace(env.TaskID) + ":" + strings.TrimSpace(env.SessionID)
+		return strings.TrimSpace(req.RequestedBy) + ":" + strings.TrimSpace(env.TaskIDSnapshot()) + ":" + strings.TrimSpace(env.SessionIDSnapshot())
 	}
 	if env == nil {
 		return "checkpoint"
 	}
-	return strings.TrimSpace(env.TaskID) + ":" + strings.TrimSpace(env.SessionID) + ":" + n.id
+	return strings.TrimSpace(env.TaskIDSnapshot()) + ":" + strings.TrimSpace(env.SessionIDSnapshot()) + ":" + n.id
 }
 
 func reqReason(req *contextdata.CheckpointRequest) string {
@@ -370,8 +370,12 @@ func (n *CheckpointNode) persistMirroredCheckpoint(ctx context.Context, env *con
 }
 
 func checkpointRequester(env *contextdata.Envelope) string {
-	if env == nil || env.CheckpointRequest == nil {
+	if env == nil {
 		return ""
 	}
-	return strings.TrimSpace(env.CheckpointRequest.RequestedBy)
+	req := env.CheckpointRequestSnapshot()
+	if req == nil {
+		return ""
+	}
+	return strings.TrimSpace(req.RequestedBy)
 }

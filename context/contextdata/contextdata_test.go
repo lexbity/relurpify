@@ -7,14 +7,14 @@ import (
 )
 
 func TestNewEnvelopeCreatesEmptyEnvelope(t *testing.T) {
-	env := NewEnvelope("task-1", "session-1")
+	env := NewEnvelope(testTaskID, testSessionID)
 	if env == nil {
 		t.Fatal("expected envelope to be created")
 	}
-	if env.TaskID != "task-1" {
+	if env.TaskID != testTaskID {
 		t.Errorf("expected task ID task-1, got %s", env.TaskID)
 	}
-	if env.SessionID != "session-1" {
+	if env.SessionID != testSessionID {
 		t.Errorf("expected session ID session-1, got %s", env.SessionID)
 	}
 	if !env.IsEmpty() {
@@ -26,40 +26,40 @@ func TestNewEnvelopeCreatesEmptyEnvelope(t *testing.T) {
 }
 
 func TestSetWorkingValueStoresAndRetrieves(t *testing.T) {
-	env := NewEnvelope("task-1", "session-1")
-	env.SetWorkingValueWithClass("key1", "value1", MemoryClassEphemeral)
+	env := NewEnvelope(testTaskID, testSessionID)
+	env.SetWorkingValueWithClass(testKey1, testValue1, MemoryClassEphemeral)
 
-	val, ok := env.getWorkingValue("key1")
+	val, ok := env.getWorkingValue(testKey1)
 	if !ok {
 		t.Fatal("expected to find key1")
 	}
-	if val != "value1" {
+	if val != testValue1 {
 		t.Errorf("expected value1, got %v", val)
 	}
 }
 
 func TestDeleteWorkingValueRemovesEntry(t *testing.T) {
-	env := NewEnvelope("task-1", "session-1")
-	env.SetWorkingValueWithClass("key1", "value1", MemoryClassEphemeral)
-	env.DeleteWorkingValue("key1")
+	env := NewEnvelope(testTaskID, testSessionID)
+	env.SetWorkingValueWithClass(testKey1, testValue1, MemoryClassEphemeral)
+	env.DeleteWorkingValue(testKey1)
 
-	_, ok := env.getWorkingValue("key1")
+	_, ok := env.getWorkingValue(testKey1)
 	if ok {
 		t.Error("expected key1 to be deleted")
 	}
 
 	// Reference should also be removed
-	if env.References.HasWorkingMemoryKey("task-1", "key1") {
+	if env.References.HasWorkingMemoryKey(testTaskID, testKey1) {
 		t.Error("expected reference to be removed")
 	}
 }
 
 func TestCloneEnvelopeCopiesWorkingData(t *testing.T) {
-	parent := NewEnvelope("task-1", "session-1")
-	parent.SetWorkingValueWithClass("key1", "value1", MemoryClassEphemeral)
+	parent := NewEnvelope(testTaskID, testSessionID)
+	parent.SetWorkingValueWithClass(testKey1, testValue1, MemoryClassEphemeral)
 	parent.AddStreamedContextReference(ChunkReference{
-		ChunkID: ChunkID("chunk-1"),
-		Source:  "test",
+		ChunkID: ChunkID(testChunkID1),
+		Source:  testSource,
 		Rank:    1,
 	})
 
@@ -69,11 +69,11 @@ func TestCloneEnvelopeCopiesWorkingData(t *testing.T) {
 	}
 
 	// Working data should be copied
-	val, ok := clone.getWorkingValue("key1")
+	val, ok := clone.getWorkingValue(testKey1)
 	if !ok {
 		t.Fatal("expected cloned envelope to have key1")
 	}
-	if val != "value1" {
+	if val != testValue1 {
 		t.Errorf("expected value1, got %v", val)
 	}
 
@@ -89,8 +89,8 @@ func TestCloneEnvelopeCopiesWorkingData(t *testing.T) {
 }
 
 func TestCloneEnvelopeIsIndependent(t *testing.T) {
-	parent := NewEnvelope("task-1", "session-1")
-	parent.SetWorkingValueWithClass("key1", "value1", MemoryClassEphemeral)
+	parent := NewEnvelope(testTaskID, testSessionID)
+	parent.SetWorkingValueWithClass(testKey1, testValue1, MemoryClassEphemeral)
 
 	clone := CloneEnvelope(parent)
 
@@ -104,7 +104,7 @@ func TestCloneEnvelopeIsIndependent(t *testing.T) {
 	}
 
 	// Clone should have both keys
-	if _, ok := clone.getWorkingValue("key1"); !ok {
+	if _, ok := clone.getWorkingValue(testKey1); !ok {
 		t.Error("expected clone to have key1")
 	}
 	if _, ok := clone.getWorkingValue("key2"); !ok {
@@ -113,22 +113,22 @@ func TestCloneEnvelopeIsIndependent(t *testing.T) {
 }
 
 func TestHandoffCloneCopiesDefaultEnvelopeState(t *testing.T) {
-	env := NewEnvelope("task-1", "session-1")
-	env.NodeID = "node-1"
-	env.SetWorkingValueWithClass("key1", "value1", MemoryClassTask)
+	env := NewEnvelope(testTaskID, testSessionID)
+	env.NodeID = testNodeID
+	env.SetWorkingValueWithClass(testKey1, testValue1, MemoryClassTask)
 	env.AddStreamedContextReference(ChunkReference{
-		ChunkID: ChunkID("chunk-1"),
-		Source:  "test",
+		ChunkID: ChunkID(testChunkID1),
+		Source:  testSource,
 		Rank:    1,
 	})
 	env.AddRetrievalReference(RetrievalReference{
-		QueryID:    "query-1",
-		ChunkIDs:   []ChunkID{"chunk-1"},
+		QueryID:    testQueryID,
+		ChunkIDs:   []ChunkID{testChunkID1},
 		TotalFound: 1,
 	})
 	env.References.Checkpoints = append(env.References.Checkpoints, CheckpointReference{
-		CheckpointID: "cp-1",
-		RequestedBy:  "node-1",
+		CheckpointID: testCheckpointID,
+		RequestedBy:  testNodeID,
 	})
 	env.RequestCheckpoint("checkpoint for recovery", 5, true)
 
@@ -136,10 +136,10 @@ func TestHandoffCloneCopiesDefaultEnvelopeState(t *testing.T) {
 	if clone == nil {
 		t.Fatal("expected handoff clone to be created")
 	}
-	if clone.NodeID != "node-1" {
+	if clone.NodeID != testNodeID {
 		t.Errorf("expected node ID to be preserved, got %s", clone.NodeID)
 	}
-	if val, ok := clone.getWorkingValue("key1"); !ok || val != "value1" {
+	if val, ok := clone.getWorkingValue(testKey1); !ok || val != testValue1 {
 		t.Fatalf("expected cloned working value key1=value1, got %v, %v", val, ok)
 	}
 	if len(clone.References.StreamedContext) != 1 {
@@ -157,33 +157,33 @@ func TestHandoffCloneCopiesDefaultEnvelopeState(t *testing.T) {
 }
 
 func TestHandoffSnapshotFiltersByPolicy(t *testing.T) {
-	env := NewEnvelope("task-1", "session-1")
-	env.NodeID = "node-1"
+	env := NewEnvelope(testTaskID, testSessionID)
+	env.NodeID = testNodeID
 	env.AssemblyMetadata = AssemblyMeta{
 		CompilationID:   "compile-1",
 		EventLogSeq:     7,
 		BudgetTokens:    100,
 		ShortfallTokens: 3,
 	}
-	env.SetWorkingValueWithClass("keep", "value-keep", MemoryClassTask)
+	env.SetWorkingValueWithClass(testKeyKeep, "value-keep", MemoryClassTask)
 	env.SetWorkingValueWithClass("keep.local", "value-prefix", MemoryClassTask)
 	env.SetWorkingValueWithClass("drop", "value-drop", MemoryClassTask)
 	env.References.WorkingMemory = append(env.References.WorkingMemory,
-		WorkingMemoryReference{TaskID: "task-1", Key: "keep", Class: MemoryClassTask},
-		WorkingMemoryReference{TaskID: "task-1", Key: "keep.local", Class: MemoryClassTask},
-		WorkingMemoryReference{TaskID: "task-1", Key: "drop", Class: MemoryClassTask},
-		WorkingMemoryReference{TaskID: "other-task", Key: "keep", Class: MemoryClassTask},
+		WorkingMemoryReference{TaskID: testTaskID, Key: testKeyKeep, Class: MemoryClassTask},
+		WorkingMemoryReference{TaskID: testTaskID, Key: "keep.local", Class: MemoryClassTask},
+		WorkingMemoryReference{TaskID: testTaskID, Key: "drop", Class: MemoryClassTask},
+		WorkingMemoryReference{TaskID: "other-task", Key: testKeyKeep, Class: MemoryClassTask},
 	)
-	env.AddStreamedContextReference(ChunkReference{ChunkID: "chunk-1", Source: "test", Rank: 1})
-	env.AddRetrievalReference(RetrievalReference{QueryID: "query-1", ChunkIDs: []ChunkID{"chunk-1"}})
+	env.AddStreamedContextReference(ChunkReference{ChunkID: testChunkID1, Source: testSource, Rank: 1})
+	env.AddRetrievalReference(RetrievalReference{QueryID: testQueryID, ChunkIDs: []ChunkID{testChunkID1}})
 	env.References.Checkpoints = append(env.References.Checkpoints, CheckpointReference{
-		CheckpointID: "cp-1",
-		RequestedBy:  "node-1",
+		CheckpointID: testCheckpointID,
+		RequestedBy:  testNodeID,
 	})
 
 	snapshot := env.HandoffSnapshot(HandoffPolicy{
 		PreserveWorkingMemory:    true,
-		WorkingKeys:              []string{"keep"},
+		WorkingKeys:              []string{testKeyKeep},
 		WorkingPrefixes:          []string{"keep."},
 		PreserveStreamedContext:  true,
 		PreserveRetrieval:        true,
@@ -200,7 +200,7 @@ func TestHandoffSnapshotFiltersByPolicy(t *testing.T) {
 	if snapshot.AssemblyMetadata != (AssemblyMeta{}) {
 		t.Errorf("expected assembly metadata to be omitted, got %#v", snapshot.AssemblyMetadata)
 	}
-	if _, ok := snapshot.getWorkingValue("keep"); !ok {
+	if _, ok := snapshot.getWorkingValue(testKeyKeep); !ok {
 		t.Error("expected exact working key to be preserved")
 	}
 	if _, ok := snapshot.getWorkingValue("keep.local"); !ok {
@@ -212,10 +212,10 @@ func TestHandoffSnapshotFiltersByPolicy(t *testing.T) {
 	if len(snapshot.References.WorkingMemory) != 4 {
 		t.Fatalf("expected 4 working memory refs, got %d", len(snapshot.References.WorkingMemory))
 	}
-	if !snapshot.References.HasWorkingMemoryKey("task-1", "keep") {
+	if !snapshot.References.HasWorkingMemoryKey(testTaskID, testKeyKeep) {
 		t.Error("expected task-local working reference to be preserved")
 	}
-	if snapshot.References.HasWorkingMemoryKey("other-task", "keep") {
+	if snapshot.References.HasWorkingMemoryKey("other-task", testKeyKeep) {
 		t.Error("expected foreign task working reference to be filtered out")
 	}
 	if len(snapshot.References.StreamedContext) != 1 {
@@ -251,16 +251,16 @@ func TestReferenceBundleIsEmpty(t *testing.T) {
 func TestReferenceBundleClone(t *testing.T) {
 	original := ReferenceBundle{
 		StreamedContext: []ChunkReference{
-			{ChunkID: ChunkID("chunk-1"), Rank: 1},
+			{ChunkID: ChunkID(testChunkID1), Rank: 1},
 		},
 		WorkingMemory: []WorkingMemoryReference{
-			{TaskID: "task-1", Key: "key1", Class: MemoryClassEphemeral},
+			{TaskID: testTaskID, Key: testKey1, Class: MemoryClassEphemeral},
 		},
 		Retrieval: []RetrievalReference{
-			{QueryID: "query-1", ChunkIDs: []ChunkID{"chunk-1", "chunk-2"}},
+			{QueryID: testQueryID, ChunkIDs: []ChunkID{testChunkID1, testChunkID2}},
 		},
 		Checkpoints: []CheckpointReference{
-			{CheckpointID: "cp-1", RequestedBy: "node-1", WorkingMemoryKeys: []string{"euclo.intent.clarification.state"}},
+			{CheckpointID: testCheckpointID, RequestedBy: testNodeID, WorkingMemoryKeys: []string{testClarificationStateKey}},
 		},
 	}
 
@@ -274,17 +274,17 @@ func TestReferenceBundleClone(t *testing.T) {
 	if len(clone.Retrieval[0].ChunkIDs) != 2 {
 		t.Errorf("expected clone to have 2 chunk IDs, got %d", len(clone.Retrieval[0].ChunkIDs))
 	}
-	if clone.Checkpoints[0].WorkingMemoryKeys[0] != "euclo.intent.clarification.state" {
+	if clone.Checkpoints[0].WorkingMemoryKeys[0] != testClarificationStateKey {
 		t.Fatalf("expected checkpoint keys to be deep copied, got %v", clone.Checkpoints[0].WorkingMemoryKeys)
 	}
 }
 
 func TestCheckpointReferenceKeysSurviveHandoffClone(t *testing.T) {
-	env := NewEnvelope("task-1", "session-1")
+	env := NewEnvelope(testTaskID, testSessionID)
 	env.AddCheckpointReference(CheckpointReference{
-		CheckpointID:      "cp-1",
-		RequestedBy:       "node-1",
-		WorkingMemoryKeys: []string{"euclo.intent.clarification.state", "euclo.intent.clarification.turns"},
+		CheckpointID:      testCheckpointID,
+		RequestedBy:       testNodeID,
+		WorkingMemoryKeys: []string{testClarificationStateKey, "euclo.intent.clarification.turns"},
 	})
 
 	clone := env.HandoffClone()
@@ -298,26 +298,26 @@ func TestCheckpointReferenceKeysSurviveHandoffClone(t *testing.T) {
 	if len(got) != 2 {
 		t.Fatalf("expected 2 checkpoint working-memory keys, got %d", len(got))
 	}
-	if got[0] != "euclo.intent.clarification.state" || got[1] != "euclo.intent.clarification.turns" {
+	if got[0] != testClarificationStateKey || got[1] != "euclo.intent.clarification.turns" {
 		t.Fatalf("unexpected checkpoint working-memory keys: %v", got)
 	}
 
 	env.References.Checkpoints[0].WorkingMemoryKeys[0] = "changed"
-	if clone.References.Checkpoints[0].WorkingMemoryKeys[0] != "euclo.intent.clarification.state" {
+	if clone.References.Checkpoints[0].WorkingMemoryKeys[0] != testClarificationStateKey {
 		t.Fatal("expected checkpoint keys in clone to remain unchanged after source mutation")
 	}
 }
 
 func TestCheckpointRequest(t *testing.T) {
-	env := NewEnvelope("task-1", "session-1")
-	env.NodeID = "node-1"
+	env := NewEnvelope(testTaskID, testSessionID)
+	env.NodeID = testNodeID
 
 	env.RequestCheckpoint("checkpoint for recovery", 5, true)
 
 	if env.CheckpointRequest == nil {
 		t.Fatal("expected checkpoint request to be set")
 	}
-	if env.CheckpointRequest.RequestedBy != "node-1" {
+	if env.CheckpointRequest.RequestedBy != testNodeID {
 		t.Errorf("expected requested by node-1, got %s", env.CheckpointRequest.RequestedBy)
 	}
 	if env.CheckpointRequest.Reason != "checkpoint for recovery" {
@@ -333,12 +333,32 @@ func TestCheckpointRequest(t *testing.T) {
 	}
 }
 
+func TestCheckpointRequestSnapshotIsIsolated(t *testing.T) {
+	env := NewEnvelope(testTaskID, testSessionID)
+	env.NodeID = testNodeID
+	env.RequestCheckpoint("reason", 5, true)
+
+	snapshot := env.CheckpointRequestSnapshot()
+	if snapshot == nil {
+		t.Fatal("expected a snapshot while a request is pending")
+	}
+	snapshot.Reason = "mutated by caller"
+	if got := env.CheckpointRequestSnapshot().Reason; got != "reason" {
+		t.Fatalf("snapshot mutation leaked into the envelope: %q", got)
+	}
+
+	env.ClearCheckpointRequest()
+	if env.CheckpointRequestSnapshot() != nil {
+		t.Fatal("expected nil snapshot after ClearCheckpointRequest")
+	}
+}
+
 func TestComputeBranchDelta(t *testing.T) {
-	parent := NewEnvelope("task-1", "session-1")
-	parent.SetWorkingValueWithClass("key1", "value1", MemoryClassEphemeral)
+	parent := NewEnvelope(testTaskID, testSessionID)
+	parent.SetWorkingValueWithClass(testKey1, testValue1, MemoryClassEphemeral)
 	parent.SetWorkingValueWithClass("key2", "value2", MemoryClassEphemeral)
 
-	child := NewEnvelope("task-1", "session-1")
+	child := NewEnvelope(testTaskID, testSessionID)
 	child.SetWorkingValueWithClass("key2", "modified", MemoryClassEphemeral) // Modified
 	child.SetWorkingValueWithClass("key3", "value3", MemoryClassEphemeral)   // Added
 	// key1 not in child = deleted
@@ -361,7 +381,7 @@ func TestComputeBranchDelta(t *testing.T) {
 	// key1 should be in deleted list
 	hasKey1 := false
 	for _, k := range delta.WorkingMemoryDeleted {
-		if k == "key1" {
+		if k == testKey1 {
 			hasKey1 = true
 			break
 		}
@@ -373,21 +393,21 @@ func TestComputeBranchDelta(t *testing.T) {
 
 func TestValidateBranchMerge(t *testing.T) {
 	// Single envelope should validate
-	env1 := NewEnvelope("task-1", "session-1")
+	env1 := NewEnvelope(testTaskID, testSessionID)
 	err := ValidateBranchMerge([]*Envelope{env1})
 	if err != nil {
 		t.Errorf("expected single envelope to validate, got: %v", err)
 	}
 
 	// Multiple envelopes same task should validate
-	env2 := NewEnvelope("task-1", "session-1")
+	env2 := NewEnvelope(testTaskID, testSessionID)
 	err = ValidateBranchMerge([]*Envelope{env1, env2})
 	if err != nil {
 		t.Errorf("expected same-task envelopes to validate, got: %v", err)
 	}
 
 	// Different tasks should fail
-	env3 := NewEnvelope("task-2", "session-1")
+	env3 := NewEnvelope("task-2", testSessionID)
 	err = ValidateBranchMerge([]*Envelope{env1, env3})
 	if err == nil {
 		t.Error("expected different-task envelopes to fail validation")
@@ -396,9 +416,9 @@ func TestValidateBranchMerge(t *testing.T) {
 
 func TestDeduplicateChunkReferences(t *testing.T) {
 	refs := []ChunkReference{
-		{ChunkID: ChunkID("chunk-1"), Source: "ranker-a", Rank: 2},
-		{ChunkID: ChunkID("chunk-2"), Source: "ranker-a", Rank: 3},
-		{ChunkID: ChunkID("chunk-1"), Source: "ranker-b", Rank: 1}, // Duplicate, better rank
+		{ChunkID: ChunkID(testChunkID1), Source: "ranker-a", Rank: 2},
+		{ChunkID: ChunkID(testChunkID2), Source: "ranker-a", Rank: 3},
+		{ChunkID: ChunkID(testChunkID1), Source: "ranker-b", Rank: 1}, // Duplicate, better rank
 	}
 
 	deduped := DeduplicateChunkReferences(refs)
@@ -409,7 +429,7 @@ func TestDeduplicateChunkReferences(t *testing.T) {
 
 	// chunk-1 should have rank 1 (the better one)
 	for _, ref := range deduped {
-		if ref.ChunkID == ChunkID("chunk-1") && ref.Rank != 1 {
+		if ref.ChunkID == ChunkID(testChunkID1) && ref.Rank != 1 {
 			t.Errorf("expected chunk-1 to have rank 1, got %d", ref.Rank)
 		}
 	}
@@ -423,13 +443,13 @@ func TestDeduplicateChunkReferences(t *testing.T) {
 }
 
 func TestEnvelopeContextStorage(t *testing.T) {
-	ctx := WithEnvelope(context.TODO(), NewEnvelope("task-1", "session-1"))
+	ctx := WithEnvelope(context.TODO(), NewEnvelope(testTaskID, testSessionID))
 
 	env, ok := EnvelopeFrom(ctx)
 	if !ok {
 		t.Fatal("expected to retrieve envelope from context")
 	}
-	if env.TaskID != "task-1" {
+	if env.TaskID != testTaskID {
 		t.Errorf("expected task-1, got %s", env.TaskID)
 	}
 
@@ -451,8 +471,8 @@ func TestMustEnvelopeFromPanicsOnMissing(t *testing.T) {
 }
 
 func TestEnvelopeSnapshot(t *testing.T) {
-	env := NewEnvelope("task-1", "session-1")
-	env.SetWorkingValueWithClass("key1", "value1", MemoryClassEphemeral)
+	env := NewEnvelope(testTaskID, testSessionID)
+	env.SetWorkingValueWithClass(testKey1, testValue1, MemoryClassEphemeral)
 
 	snapshot := env.Snapshot()
 	if len(snapshot) != 1 {
@@ -467,10 +487,10 @@ func TestEnvelopeSnapshot(t *testing.T) {
 }
 
 func TestEnvelopeString(t *testing.T) {
-	env := NewEnvelope("task-1", "session-1")
-	env.NodeID = "node-1"
-	env.SetWorkingValueWithClass("key1", "value1", MemoryClassEphemeral)
-	env.AddStreamedContextReference(ChunkReference{ChunkID: "chunk-1"})
+	env := NewEnvelope(testTaskID, testSessionID)
+	env.NodeID = testNodeID
+	env.SetWorkingValueWithClass(testKey1, testValue1, MemoryClassEphemeral)
+	env.AddStreamedContextReference(ChunkReference{ChunkID: testChunkID1})
 
 	s := env.String()
 	if s == "" || s == "<nil envelope>" {
@@ -506,26 +526,26 @@ func TestReferenceTypeConstants(t *testing.T) {
 func TestWorkingMemoryReferenceLookup(t *testing.T) {
 	bundle := ReferenceBundle{
 		WorkingMemory: []WorkingMemoryReference{
-			{TaskID: "task-1", Key: "key1", Class: MemoryClassEphemeral, CreatedAt: time.Now()},
-			{TaskID: "task-1", Key: "key2", Class: MemoryClassSession, CreatedAt: time.Now()},
+			{TaskID: testTaskID, Key: testKey1, Class: MemoryClassEphemeral, CreatedAt: time.Now()},
+			{TaskID: testTaskID, Key: "key2", Class: MemoryClassSession, CreatedAt: time.Now()},
 		},
 	}
 
-	if !bundle.HasWorkingMemoryKey("task-1", "key1") {
+	if !bundle.HasWorkingMemoryKey(testTaskID, testKey1) {
 		t.Error("expected to find key1 for task-1")
 	}
-	if bundle.HasWorkingMemoryKey("task-1", "key3") {
+	if bundle.HasWorkingMemoryKey(testTaskID, "key3") {
 		t.Error("expected not to find key3 for task-1")
 	}
-	if bundle.HasWorkingMemoryKey("task-2", "key1") {
+	if bundle.HasWorkingMemoryKey("task-2", testKey1) {
 		t.Error("expected not to find key1 for task-2")
 	}
 
-	ref, ok := bundle.GetWorkingMemoryRef("task-1", "key1")
+	ref, ok := bundle.GetWorkingMemoryRef(testTaskID, testKey1)
 	if !ok {
 		t.Error("expected to get ref for key1")
 	}
-	if ref.Key != "key1" {
+	if ref.Key != testKey1 {
 		t.Errorf("expected key1, got %s", ref.Key)
 	}
 	if ref.Class != MemoryClassEphemeral {
@@ -534,11 +554,11 @@ func TestWorkingMemoryReferenceLookup(t *testing.T) {
 }
 
 func TestAddRetrievalReference(t *testing.T) {
-	env := NewEnvelope("task-1", "session-1")
+	env := NewEnvelope(testTaskID, testSessionID)
 	ref := RetrievalReference{
-		QueryID:     "query-1",
+		QueryID:     testQueryID,
 		QueryText:   "test query",
-		ChunkIDs:    []ChunkID{"chunk-1"},
+		ChunkIDs:    []ChunkID{testChunkID1},
 		TotalFound:  5,
 		FilteredOut: 2,
 		RetrievedAt: time.Now(),
@@ -553,9 +573,9 @@ func TestAddRetrievalReference(t *testing.T) {
 }
 
 func TestStreamedChunkIDs(t *testing.T) {
-	env := NewEnvelope("task-1", "session-1")
-	env.AddStreamedContextReference(ChunkReference{ChunkID: "chunk-1"})
-	env.AddStreamedContextReference(ChunkReference{ChunkID: "chunk-2"})
+	env := NewEnvelope(testTaskID, testSessionID)
+	env.AddStreamedContextReference(ChunkReference{ChunkID: testChunkID1})
+	env.AddStreamedContextReference(ChunkReference{ChunkID: testChunkID2})
 
 	ids := env.StreamedChunkIDs()
 	if len(ids) != 2 {
@@ -566,8 +586,8 @@ func TestStreamedChunkIDs(t *testing.T) {
 }
 
 func TestWorkingMemoryKeys(t *testing.T) {
-	env := NewEnvelope("task-1", "session-1")
-	env.SetWorkingValueWithClass("key1", "value1", MemoryClassEphemeral)
+	env := NewEnvelope(testTaskID, testSessionID)
+	env.SetWorkingValueWithClass(testKey1, testValue1, MemoryClassEphemeral)
 	env.SetWorkingValueWithClass("key2", "value2", MemoryClassEphemeral)
 
 	// Add reference for different task (shouldn't appear)
@@ -587,24 +607,24 @@ func TestWorkingMemoryKeys(t *testing.T) {
 // Edge-case tests per migration spec
 
 func TestSetWorkingValueUpdatesReferenceNotDuplicate(t *testing.T) {
-	env := NewEnvelope("task-1", "session-1")
+	env := NewEnvelope(testTaskID, testSessionID)
 
 	// Set initial value
-	env.SetWorkingValueWithClass("key1", "value1", MemoryClassEphemeral)
-	initialRef, _ := env.References.GetWorkingMemoryRef("task-1", "key1")
+	env.SetWorkingValueWithClass(testKey1, testValue1, MemoryClassEphemeral)
+	initialRef, _ := env.References.GetWorkingMemoryRef(testTaskID, testKey1)
 	initialCreatedAt := initialRef.CreatedAt
 
 	// Small delay to ensure time difference
 	time.Sleep(time.Millisecond)
 
 	// Set same key again - should update existing reference, not create duplicate
-	env.SetWorkingValueWithClass("key1", "value2", MemoryClassSession)
+	env.SetWorkingValueWithClass(testKey1, "value2", MemoryClassSession)
 
 	// Should still have only 1 reference for this key
 	refCount := 0
 	var updatedRef WorkingMemoryReference
 	for _, ref := range env.References.WorkingMemory {
-		if ref.TaskID == "task-1" && ref.Key == "key1" {
+		if ref.TaskID == testTaskID && ref.Key == testKey1 {
 			refCount++
 			updatedRef = ref
 		}
@@ -629,7 +649,7 @@ func TestSetWorkingValueUpdatesReferenceNotDuplicate(t *testing.T) {
 	}
 
 	// Value should be updated
-	val, _ := env.getWorkingValue("key1")
+	val, _ := env.getWorkingValue(testKey1)
 	if val != "value2" {
 		t.Errorf("expected value2, got %v", val)
 	}

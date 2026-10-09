@@ -35,6 +35,10 @@ type MergeStats struct {
 	KeysWritten int
 	// KeysDeleted is the number of working-memory keys removed from the parent.
 	KeysDeleted int
+	// KeysSkipped is the number of delta-named keys whose value was absent from
+	// the unit envelope. Defensive: unreachable when deltas and envelopes come
+	// from the same branch execution, but counted so a mismatch is observable.
+	KeysSkipped int
 	// Conflicts lists, sorted, every key mentioned by more than one unit. The
 	// last mentioning unit wins; the list exists for observability, not to
 	// reject the merge.
@@ -113,6 +117,7 @@ func (e *Envelope) ApplyBranchMerges(units []BranchMergeUnit) (MergeStats, error
 			if !ok {
 				// Defensive: a delta that names a key its envelope does not
 				// hold is skipped rather than fabricating a value.
+				stats.KeysSkipped++
 				continue
 			}
 			writes[k] = v

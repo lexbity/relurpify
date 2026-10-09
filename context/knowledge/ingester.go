@@ -333,7 +333,7 @@ func sessionIDFromEnvelope(env *contextdata.Envelope) string {
 	if env == nil {
 		return ""
 	}
-	return env.SessionID
+	return env.SessionIDSnapshot()
 }
 
 func workflowIDFromEnvelope(env *contextdata.Envelope) string {
@@ -351,7 +351,7 @@ func nodeIDFromEnvelope(env *contextdata.Envelope) string {
 	if env == nil {
 		return ""
 	}
-	return env.NodeID
+	return env.NodeIDSnapshot()
 }
 
 func storageModeForSize(size int) StorageMode {

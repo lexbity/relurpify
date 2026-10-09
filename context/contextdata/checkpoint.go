@@ -34,6 +34,19 @@ func (e *Envelope) ClearCheckpointRequest() {
 	e.CheckpointRequest = nil
 }
 
+// CheckpointRequestSnapshot returns a copy of the pending checkpoint request, or
+// nil when none is pending. Callers outside the package use this instead of
+// reading the CheckpointRequest field directly, which is replaced under mu.
+func (e *Envelope) CheckpointRequestSnapshot() *CheckpointRequest {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	if e.CheckpointRequest == nil {
+		return nil
+	}
+	request := *e.CheckpointRequest
+	return &request
+}
+
 // AddCheckpointReference adds a checkpoint reference to the envelope.
 func (e *Envelope) AddCheckpointReference(ref CheckpointReference) {
 	e.mu.Lock()

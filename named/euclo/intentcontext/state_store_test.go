@@ -173,7 +173,7 @@ func TestStateStoreSurvivesCloneAndCheckpointKeys(t *testing.T) {
 		t.Fatalf("initial write failed: %v", err)
 	}
 
-	env.References.Checkpoints = append(env.References.Checkpoints, contextdata.CheckpointReference{
+	env.AddCheckpointReference(contextdata.CheckpointReference{
 		CheckpointID:      "checkpoint-2",
 		RequestedBy:       "node-2",
 		WorkingMemoryKeys: ClarificationWorkingMemoryKeys(),
@@ -183,11 +183,11 @@ func TestStateStoreSurvivesCloneAndCheckpointKeys(t *testing.T) {
 	if clone == nil {
 		t.Fatal("expected handoff clone to be created")
 	}
-	if len(clone.References.Checkpoints) != 1 {
-		t.Fatalf("expected one checkpoint reference, got %d", len(clone.References.Checkpoints))
+	if len(clone.ReferencesSnapshot().Checkpoints) != 1 {
+		t.Fatalf("expected one checkpoint reference, got %d", len(clone.ReferencesSnapshot().Checkpoints))
 	}
-	if len(clone.References.Checkpoints[0].WorkingMemoryKeys) != len(ClarificationWorkingMemoryKeys()) {
-		t.Fatalf("expected checkpoint working-memory keys to survive clone, got %v", clone.References.Checkpoints[0].WorkingMemoryKeys)
+	if len(clone.ReferencesSnapshot().Checkpoints[0].WorkingMemoryKeys) != len(ClarificationWorkingMemoryKeys()) {
+		t.Fatalf("expected checkpoint working-memory keys to survive clone, got %v", clone.ReferencesSnapshot().Checkpoints[0].WorkingMemoryKeys)
 	}
 
 	readBack, err := store.Read(context.Background(), clone)

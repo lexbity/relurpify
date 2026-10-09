@@ -10,11 +10,15 @@ import (
 type reactStreamedContextProvider struct{}
 
 func (reactStreamedContextProvider) Provide(ctx prompt.RuntimeContext) prompt.ContextChunk {
-	if ctx.Envelope == nil || len(ctx.Envelope.References.StreamedContext) == 0 {
+	if ctx.Envelope == nil {
+		return prompt.ContextChunk{}
+	}
+	streamed := ctx.Envelope.ReferencesSnapshot().StreamedContext
+	if len(streamed) == 0 {
 		return prompt.ContextChunk{}
 	}
 	var lines []string
-	for _, ref := range ctx.Envelope.References.StreamedContext {
+	for _, ref := range streamed {
 		chunkID := strings.TrimSpace(string(ref.ChunkID))
 		if chunkID == "" {
 			continue

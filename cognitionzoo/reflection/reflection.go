@@ -268,8 +268,8 @@ func taskScope(task *execution.Task, env *contextdata.Envelope) string {
 		return task.ID
 	}
 	if env != nil {
-		if env.TaskID != "" {
-			return env.TaskID
+		if env.TaskIDSnapshot() != "" {
+			return env.TaskIDSnapshot()
 		}
 		return envGetString(env, "task.id")
 	}

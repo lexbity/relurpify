@@ -2,6 +2,7 @@ package contextdata
 
 import (
 	"fmt"
+	"reflect"
 	"sort"
 	"time"
 )
@@ -55,6 +56,12 @@ func CloneEnvelope(env *Envelope) *Envelope {
 
 // ComputeBranchDelta calculates the difference between a parent and child envelope.
 // This is used to track what changed on a branch.
+//
+// Modification detection compares values: a key the branch left byte-identical
+// is not a modification. This precision is required by ApplyBranchMerges —
+// with an over-approximating "any pre-existing key is modified" rule, an
+// untouched branch would re-write a key another branch deleted and resurrect
+// it (the Q2 deletion-resurrection defect).
 func ComputeBranchDelta(parent, child *Envelope) BranchDelta {
 	if parent == nil || child == nil {
 		return BranchDelta{}
@@ -72,15 +79,14 @@ func ComputeBranchDelta(parent, child *Envelope) BranchDelta {
 	}
 
 	childKeys := make(map[string]struct{})
-	for k := range childWorkingData {
+	for k, childValue := range childWorkingData {
 		childKeys[k] = struct{}{}
-		if _, existed := parentKeys[k]; !existed {
+		parentValue, existed := parentWorkingData[k]
+		if !existed {
 			delta.WorkingMemoryAdded = append(delta.WorkingMemoryAdded, k)
+			continue
 		}
-		// Note: Modification detection would require value comparison
-		// For now, we consider any existing key as potentially modified
-		if _, existed := parentKeys[k]; existed {
-			// Could add deep equality check here
+		if !valuesEqual(parentValue, childValue) {
 			delta.WorkingMemoryModified = append(delta.WorkingMemoryModified, k)
 		}
 	}
@@ -104,6 +110,14 @@ func ComputeBranchDelta(parent, child *Envelope) BranchDelta {
 	}
 
 	return delta
+}
+
+// valuesEqual reports whether two working-memory values are deeply equal. It
+// backs precise modification detection in ComputeBranchDelta. A value mutated
+// in place through a shared pointer compares equal and is therefore not
+// re-written, which is correct: the parent observes the same object already.
+func valuesEqual(a, b any) bool {
+	return reflect.DeepEqual(a, b)
 }
 
 // BranchMergeError is returned when branch merge operations fail.

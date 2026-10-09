@@ -69,6 +69,8 @@ func (s *EnvelopeState) TaskID() string {
 	if s.env == nil {
 		return ""
 	}
+	s.env.mu.RLock()
+	defer s.env.mu.RUnlock()
 	return s.env.TaskID
 }
 
@@ -76,6 +78,8 @@ func (s *EnvelopeState) SessionID() string {
 	if s.env == nil {
 		return ""
 	}
+	s.env.mu.RLock()
+	defer s.env.mu.RUnlock()
 	return s.env.SessionID
 }
 

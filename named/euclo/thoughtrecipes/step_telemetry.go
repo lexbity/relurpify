@@ -20,8 +20,8 @@ func emitStepStarted(ctx context.Context, env *contextdata.Envelope, step Execut
 	tel := reporting.NewEucloTelemetry(telemetry.TelemetryFromContext(ctx))
 	tel.EmitStepStarted(ctx, reporting.EventStepStarted{
 		EventHeader: reporting.EventHeader{
-			TaskID:     env.TaskID,
-			SessionID:  env.SessionID,
+			TaskID:     env.TaskIDSnapshot(),
+			SessionID:  env.SessionIDSnapshot(),
 			OccurredAt: time.Now().UTC(),
 		},
 		StepID:          step.ID,
@@ -40,8 +40,8 @@ func emitStepCompleted(ctx context.Context, env *contextdata.Envelope, step Exec
 	tel := reporting.NewEucloTelemetry(telemetry.TelemetryFromContext(ctx))
 	tel.EmitStepCompleted(ctx, reporting.EventStepCompleted{
 		EventHeader: reporting.EventHeader{
-			TaskID:     env.TaskID,
-			SessionID:  env.SessionID,
+			TaskID:     env.TaskIDSnapshot(),
+			SessionID:  env.SessionIDSnapshot(),
 			OccurredAt: time.Now().UTC(),
 		},
 		StepID:          step.ID,

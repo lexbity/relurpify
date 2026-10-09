@@ -155,7 +155,7 @@ func newThoughtRecipeRegistry(t *testing.T, thoughtrecipe *surface.ThoughtRecipe
 
 func seedTask(env *contextdata.Envelope, instruction string, userFiles ...string) *execution.Task {
 	task := &execution.Task{
-		ID:          env.TaskID,
+		ID:          env.TaskIDSnapshot(),
 		Type:        "euclo",
 		Instruction: instruction,
 		Data:        map[string]any{},
@@ -164,8 +164,8 @@ func seedTask(env *contextdata.Envelope, instruction string, userFiles ...string
 	}
 	contextdata.SetTyped(env, euclostate.KeyTaskInput, task)
 	taskEnvelope := &intake.TaskEnvelope{
-		TaskID:    env.TaskID,
-		SessionID: env.SessionID,
+		TaskID:    env.TaskIDSnapshot(),
+		SessionID: env.SessionIDSnapshot(),
 		UserFiles: append([]string(nil), userFiles...),
 	}
 	euclostate.SetTaskEnvelope(env, taskEnvelope)

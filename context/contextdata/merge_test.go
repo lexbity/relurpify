@@ -8,16 +8,51 @@ import (
 
 // mergeEnv builds a branch-final envelope carrying values under task-1.
 func mergeEnv(values map[string]any) *Envelope {
-	env := NewEnvelope("task-1", "session-1")
+	env := NewEnvelope(testTaskID, testSessionID)
 	for k, v := range values {
 		env.SetWorkingValueWithClass(k, v, MemoryClassTask)
 	}
 	return env
 }
 
+func containsString(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
+}
+
+// TestComputeBranchDeltaIgnoresUnchangedValues pins the precise modification
+// detection that makes the merge's deletion propagation sound: a key the branch
+// did not actually change must not appear in the delta, or an untouched branch
+// would resurrect another branch's deletion.
+func TestComputeBranchDeltaIgnoresUnchangedValues(t *testing.T) {
+	parent := NewEnvelope(testTaskID, testSessionID)
+	parent.SetWorkingValueWithClass("same", "value", MemoryClassTask)
+	parent.SetWorkingValueWithClass("changed", "old", MemoryClassTask)
+	parent.SetWorkingValueWithClass("deleted", "gone", MemoryClassTask)
+
+	child := parent.Clone()
+	child.SetWorkingValueWithClass("changed", "updated", MemoryClassTask)
+	child.DeleteWorkingValue("deleted")
+
+	delta := ComputeBranchDelta(parent, child)
+	if containsString(delta.WorkingMemoryAdded, "same") || containsString(delta.WorkingMemoryModified, "same") {
+		t.Fatalf("unchanged key reported as written: %#v", delta)
+	}
+	if !containsString(delta.WorkingMemoryModified, "changed") {
+		t.Fatalf("changed key not reported as modified: %#v", delta)
+	}
+	if !containsString(delta.WorkingMemoryDeleted, "deleted") {
+		t.Fatalf("deleted key not reported as deleted: %#v", delta)
+	}
+}
+
 func TestApplyBranchMergesEmpty(t *testing.T) {
-	parent := NewEnvelope("task-1", "session-1")
-	parent.SetWorkingValueWithClass("keep", "v", MemoryClassTask)
+	parent := NewEnvelope(testTaskID, testSessionID)
+	parent.SetWorkingValueWithClass(testKeyKeep, "v", MemoryClassTask)
 
 	stats, err := parent.ApplyBranchMerges(nil)
 	if err != nil {
@@ -26,7 +61,7 @@ func TestApplyBranchMergesEmpty(t *testing.T) {
 	if !reflect.DeepEqual(stats, MergeStats{}) {
 		t.Fatalf("expected zero stats, got %#v", stats)
 	}
-	if got := parent.WorkingDataSnapshot(); !reflect.DeepEqual(got, map[string]any{"keep": "v"}) {
+	if got := parent.WorkingDataSnapshot(); !reflect.DeepEqual(got, map[string]any{testKeyKeep: "v"}) {
 		t.Fatalf("empty merge mutated working data: %#v", got)
 	}
 }
@@ -43,18 +78,18 @@ func TestApplyBranchMergesNilReceiver(t *testing.T) {
 }
 
 func TestApplyBranchMergesAddsAndModifiesInPlace(t *testing.T) {
-	parent := NewEnvelope("task-1", "session-1")
-	parent.SetWorkingValueWithClass("base", 1, MemoryClassTask)
-	parent.SetWorkingValueWithClass("keep", 2, MemoryClassTask)
+	parent := NewEnvelope(testTaskID, testSessionID)
+	parent.SetWorkingValueWithClass(testKeyBase, 1, MemoryClassTask)
+	parent.SetWorkingValueWithClass(testKeyKeep, 2, MemoryClassTask)
 
 	stats, err := parent.ApplyBranchMerges([]BranchMergeUnit{
-		{Index: 0, ID: "a", Delta: BranchDelta{WorkingMemoryModified: []string{"base"}}, Env: mergeEnv(map[string]any{"base": 10})},
-		{Index: 1, ID: "b", Delta: BranchDelta{WorkingMemoryAdded: []string{"new"}}, Env: mergeEnv(map[string]any{"new": 3})},
+		{Index: 0, ID: "a", Delta: BranchDelta{WorkingMemoryModified: []string{testKeyBase}}, Env: mergeEnv(map[string]any{testKeyBase: 10})},
+		{Index: 1, ID: "b", Delta: BranchDelta{WorkingMemoryAdded: []string{testKeyNew}}, Env: mergeEnv(map[string]any{testKeyNew: 3})},
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	want := map[string]any{"base": 10, "keep": 2, "new": 3}
+	want := map[string]any{testKeyBase: 10, testKeyKeep: 2, testKeyNew: 3}
 	if got := parent.WorkingDataSnapshot(); !reflect.DeepEqual(got, want) {
 		t.Fatalf("working data = %#v, want %#v", got, want)
 	}
@@ -67,7 +102,7 @@ func TestApplyBranchMergesAddsAndModifiesInPlace(t *testing.T) {
 }
 
 func TestApplyBranchMergesHigherIndexWins(t *testing.T) {
-	parent := NewEnvelope("task-1", "session-1")
+	parent := NewEnvelope(testTaskID, testSessionID)
 	stats, err := parent.ApplyBranchMerges([]BranchMergeUnit{
 		{Index: 0, ID: "a", Delta: BranchDelta{WorkingMemoryAdded: []string{"k"}}, Env: mergeEnv(map[string]any{"k": "u0"})},
 		{Index: 1, ID: "b", Delta: BranchDelta{WorkingMemoryAdded: []string{"k"}}, Env: mergeEnv(map[string]any{"k": "u1"})},
@@ -84,8 +119,8 @@ func TestApplyBranchMergesHigherIndexWins(t *testing.T) {
 }
 
 func TestApplyBranchMergesRejectsNonAscending(t *testing.T) {
-	parent := NewEnvelope("task-1", "session-1")
-	parent.SetWorkingValueWithClass("k", "base", MemoryClassTask)
+	parent := NewEnvelope(testTaskID, testSessionID)
+	parent.SetWorkingValueWithClass("k", testKeyBase, MemoryClassTask)
 
 	cases := map[string][]BranchMergeUnit{
 		"descending": {
@@ -106,7 +141,7 @@ func TestApplyBranchMergesRejectsNonAscending(t *testing.T) {
 			if !reflect.DeepEqual(stats, MergeStats{}) {
 				t.Fatalf("rejected merge must not report stats: %#v", stats)
 			}
-			if got := parent.WorkingDataSnapshot()["k"]; got != "base" {
+			if got := parent.WorkingDataSnapshot()["k"]; got != testKeyBase {
 				t.Fatalf("rejected merge mutated parent: %v", got)
 			}
 		})
@@ -123,7 +158,7 @@ func TestBranchMergeDeletion(t *testing.T) {
 	}{
 		{
 			name: "write then delete",
-			base: map[string]any{"k": "base"},
+			base: map[string]any{"k": testKeyBase},
 			units: []BranchMergeUnit{
 				{Index: 0, Delta: BranchDelta{WorkingMemoryModified: []string{"k"}}, Env: mergeEnv(map[string]any{"k": "u0"})},
 				{Index: 1, Delta: BranchDelta{WorkingMemoryDeleted: []string{"k"}}, Env: mergeEnv(nil)},
@@ -133,7 +168,7 @@ func TestBranchMergeDeletion(t *testing.T) {
 		},
 		{
 			name: "delete then write",
-			base: map[string]any{"k": "base"},
+			base: map[string]any{"k": testKeyBase},
 			units: []BranchMergeUnit{
 				{Index: 0, Delta: BranchDelta{WorkingMemoryDeleted: []string{"k"}}, Env: mergeEnv(nil)},
 				{Index: 1, Delta: BranchDelta{WorkingMemoryAdded: []string{"k"}}, Env: mergeEnv(map[string]any{"k": "u1"})},
@@ -151,19 +186,19 @@ func TestBranchMergeDeletion(t *testing.T) {
 		},
 		{
 			name: "untouched branch does not resurrect a deletion",
-			base: map[string]any{"k": "base", "other": "keep"},
+			base: map[string]any{"k": testKeyBase, "other": testKeyKeep},
 			units: []BranchMergeUnit{
 				{Index: 0, Delta: BranchDelta{WorkingMemoryDeleted: []string{"k"}}, Env: mergeEnv(nil)},
 				{Index: 1, Delta: BranchDelta{}, Env: mergeEnv(nil)},
 			},
-			want:    map[string]any{"other": "keep"},
+			want:    map[string]any{"other": testKeyKeep},
 			deleted: 1,
 		},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			parent := NewEnvelope("task-1", "session-1")
+			parent := NewEnvelope(testTaskID, testSessionID)
 			for k, v := range tc.base {
 				parent.SetWorkingValueWithClass(k, v, MemoryClassTask)
 			}
@@ -182,7 +217,7 @@ func TestBranchMergeDeletion(t *testing.T) {
 }
 
 func TestApplyBranchMergesConflictReporting(t *testing.T) {
-	parent := NewEnvelope("task-1", "session-1")
+	parent := NewEnvelope(testTaskID, testSessionID)
 	stats, err := parent.ApplyBranchMerges([]BranchMergeUnit{
 		{Index: 0, Delta: BranchDelta{WorkingMemoryAdded: []string{"a", "b"}}, Env: mergeEnv(map[string]any{"a": 1, "b": 1})},
 		{Index: 1, Delta: BranchDelta{WorkingMemoryAdded: []string{"b", "c"}}, Env: mergeEnv(map[string]any{"b": 2, "c": 3})},
@@ -203,7 +238,7 @@ func TestApplyBranchMergesConflictReporting(t *testing.T) {
 }
 
 func TestApplyBranchMergesSkipsMissingValue(t *testing.T) {
-	parent := NewEnvelope("task-1", "session-1")
+	parent := NewEnvelope(testTaskID, testSessionID)
 	stats, err := parent.ApplyBranchMerges([]BranchMergeUnit{
 		{Index: 0, Delta: BranchDelta{WorkingMemoryAdded: []string{"ghost"}}, Env: mergeEnv(nil)},
 	})
@@ -216,23 +251,26 @@ func TestApplyBranchMergesSkipsMissingValue(t *testing.T) {
 	if stats.KeysWritten != 0 {
 		t.Fatalf("expected 0 writes, got %d", stats.KeysWritten)
 	}
+	if stats.KeysSkipped != 1 {
+		t.Fatalf("expected 1 skipped delta key, got %d", stats.KeysSkipped)
+	}
 }
 
 func TestApplyBranchMergesUnionsReferences(t *testing.T) {
-	parent := NewEnvelope("task-1", "session-1")
-	parent.AddStreamedContextReference(ChunkReference{ChunkID: "chunk-1", Rank: 5})
+	parent := NewEnvelope(testTaskID, testSessionID)
+	parent.AddStreamedContextReference(ChunkReference{ChunkID: testChunkID1, Rank: 5})
 
-	u0 := NewEnvelope("task-1", "session-1")
-	u0.AddStreamedContextReference(ChunkReference{ChunkID: "chunk-1", Rank: 5}) // duplicate
-	u0.AddStreamedContextReference(ChunkReference{ChunkID: "chunk-2", Rank: 2})
+	u0 := NewEnvelope(testTaskID, testSessionID)
+	u0.AddStreamedContextReference(ChunkReference{ChunkID: testChunkID1, Rank: 5}) // duplicate
+	u0.AddStreamedContextReference(ChunkReference{ChunkID: testChunkID2, Rank: 2})
 	u0.AddRetrievalReference(RetrievalReference{QueryID: "q1", QueryText: "dup"})
-	u0.AddRetrievalReference(RetrievalReference{QueryID: "q2", QueryText: "new"})
-	u0.AddCheckpointReference(CheckpointReference{CheckpointID: "cp-1", WorkingMemoryKeys: []string{"a", "b"}})
+	u0.AddRetrievalReference(RetrievalReference{QueryID: "q2", QueryText: testKeyNew})
+	u0.AddCheckpointReference(CheckpointReference{CheckpointID: testCheckpointID, WorkingMemoryKeys: []string{"a", "b"}})
 
-	u1 := NewEnvelope("task-1", "session-1")
+	u1 := NewEnvelope(testTaskID, testSessionID)
 	u1.AddStreamedContextReference(ChunkReference{ChunkID: "chunk-3", Rank: 1})
 	u1.AddRetrievalReference(RetrievalReference{QueryID: "q1", QueryText: "dup"})
-	u1.AddCheckpointReference(CheckpointReference{CheckpointID: "cp-1", WorkingMemoryKeys: []string{"b", "c"}})
+	u1.AddCheckpointReference(CheckpointReference{CheckpointID: testCheckpointID, WorkingMemoryKeys: []string{"b", "c"}})
 
 	stats, err := parent.ApplyBranchMerges([]BranchMergeUnit{
 		{Index: 0, Env: u0},
@@ -247,7 +285,7 @@ func TestApplyBranchMergesUnionsReferences(t *testing.T) {
 	for _, ref := range parent.References.StreamedContext {
 		gotChunks = append(gotChunks, ref.ChunkID)
 	}
-	wantChunks := []ChunkID{"chunk-3", "chunk-2", "chunk-1"}
+	wantChunks := []ChunkID{"chunk-3", testChunkID2, testChunkID1}
 	if !reflect.DeepEqual(gotChunks, wantChunks) {
 		t.Fatalf("streamed chunks = %v, want %v", gotChunks, wantChunks)
 	}
@@ -277,8 +315,8 @@ func TestApplyBranchMergesUnionsReferences(t *testing.T) {
 }
 
 func TestApplyBranchMergesDropsReferenceOnDelete(t *testing.T) {
-	parent := NewEnvelope("task-1", "session-1")
-	parent.SetWorkingValueWithClass("doomed", "base", MemoryClassTask)
+	parent := NewEnvelope(testTaskID, testSessionID)
+	parent.SetWorkingValueWithClass("doomed", testKeyBase, MemoryClassTask)
 
 	branch := parent.Clone()
 	branch.DeleteWorkingValue("doomed")
@@ -292,7 +330,7 @@ func TestApplyBranchMergesDropsReferenceOnDelete(t *testing.T) {
 	if _, ok := parent.WorkingDataSnapshot()["doomed"]; ok {
 		t.Fatal("deleted key remains in working data")
 	}
-	if parent.References.HasWorkingMemoryKey("task-1", "doomed") {
+	if parent.References.HasWorkingMemoryKey(testTaskID, "doomed") {
 		t.Fatal("working-memory reference for a deleted key must be dropped")
 	}
 	if stats.KeysDeleted != 1 {

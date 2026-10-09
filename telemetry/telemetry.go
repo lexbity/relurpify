@@ -9,10 +9,13 @@ package telemetry
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 
 	"codeburg.org/lexbit/relurpify/platform/observability"
 )
@@ -80,13 +83,38 @@ func (m MultiplexTelemetry) Emit(event Event) {
 	}
 }
 
+// Close releases every sink that owns an OS resource. Only sinks whose Close
+// returns an error — today *JSONFileTelemetry and nested multiplexes — are
+// closed; pure fan-out sinks (LoggerTelemetry, EventTelemetry, *BroadcastSink,
+// whose Close returns nothing) are skipped so their owning lifecycles are not
+// ended twice. Safe to call on a multiplex whose file sinks are already closed
+// because JSONFileTelemetry.Close is idempotent.
+func (m MultiplexTelemetry) Close() error {
+	var errs []error
+	for _, s := range m.Sinks {
+		if closer, ok := s.(io.Closer); ok {
+			if err := closer.Close(); err != nil {
+				errs = append(errs, err)
+			}
+		}
+	}
+	return errors.Join(errs...)
+}
+
 // JSONFileTelemetry writes events as newline-delimited JSON to a file.
 // This allows external tools to tail and process the stream in real-time.
+//
+// It never panics. Encode/write failures and emits after Close are dropped and
+// counted (see DroppedTotal); the first drop logs exactly once. Telemetry must
+// never break the runtime, so the write path fails open rather than fatal.
 type JSONFileTelemetry struct {
-	path string
-	file *os.File
-	enc  *json.Encoder
-	mu   sync.Mutex
+	path    string
+	file    *os.File
+	enc     *json.Encoder
+	mu      sync.Mutex
+	closed  bool
+	dropped atomic.Uint64
+	warned  atomic.Bool
 }
 
 // NewJSONFileTelemetry opens (or creates) the log file.
@@ -102,25 +130,55 @@ func NewJSONFileTelemetry(path string) (*JSONFileTelemetry, error) {
 	}, nil
 }
 
-// Emit writes the JSON record.
+// Emit writes the JSON record. It never panics: if the sink is closed or the
+// write fails, the event is dropped and counted, and the first drop is logged
+// once. The mutex keeps the write synchronous (no batching) while serializing
+// concurrent emitters against Close.
 func (j *JSONFileTelemetry) Emit(event Event) {
 	j.mu.Lock()
 	defer j.mu.Unlock()
-	if j.enc != nil {
-		if err := j.enc.Encode(event); err != nil {
-			panic(err)
-		}
+	if j.closed || j.enc == nil {
+		j.drop()
+		return
+	}
+	if err := j.enc.Encode(event); err != nil {
+		j.drop()
 	}
 }
 
-// Close releases the file handle.
+// drop counts a dropped event and logs the degradation exactly once. Callers
+// must hold j.mu; the counters themselves are atomic so DroppedTotal is
+// lock-free.
+func (j *JSONFileTelemetry) drop() {
+	j.dropped.Add(1)
+	if j.warned.CompareAndSwap(false, true) {
+		log.Printf("telemetry: sink %s degraded, dropping events (total will accumulate)", j.path)
+	}
+}
+
+// Close releases the file handle. It is idempotent: once closed, subsequent
+// calls return nil and later Emits are dropped and counted rather than writing
+// to a closed file.
 func (j *JSONFileTelemetry) Close() error {
 	j.mu.Lock()
 	defer j.mu.Unlock()
-	if j.file != nil {
-		return j.file.Close()
+	if j.closed {
+		return nil
 	}
-	return nil
+	j.closed = true
+	j.enc = nil
+	if j.file == nil {
+		return nil
+	}
+	err := j.file.Close()
+	j.file = nil
+	return err
+}
+
+// DroppedTotal returns the number of events dropped since construction. It is
+// safe to call concurrently with Emit.
+func (j *JSONFileTelemetry) DroppedTotal() uint64 {
+	return j.dropped.Load()
 }
 
 // LoggerTelemetry emits events via the standard logger. It is intentionally

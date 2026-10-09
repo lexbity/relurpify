@@ -98,7 +98,7 @@ func (h *clarificationCapabilityHandler) Invoke(ctx context.Context, st ports.St
 	env := contextdata.EnvelopeFromState(st)
 	state, err := intentcontext.NewStateStore().Read(ctx, env)
 	if err != nil {
-		state = intentcontext.NewState(env.TaskID, env.SessionID)
+		state = intentcontext.NewState(env.TaskIDSnapshot(), env.SessionIDSnapshot())
 	}
 	if state == nil {
 		state = intentcontext.NewState(taskID(env), sessionID(env))
@@ -659,8 +659,8 @@ func emitClarificationGateResult(ctx context.Context, env *contextdata.Envelope,
 		taskID = state.TaskID
 		sessionID = state.SessionID
 	} else if env != nil {
-		taskID = env.TaskID
-		sessionID = env.SessionID
+		taskID = env.TaskIDSnapshot()
+		sessionID = env.SessionIDSnapshot()
 	}
 	tel.EmitGateResult(ctx, reporting.EventGateResult{
 		EventHeader: reporting.EventHeader{

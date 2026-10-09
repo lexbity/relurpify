@@ -233,8 +233,8 @@ func emitRecipeSelected(ctx context.Context, env *contextdata.Envelope, recipe *
 	tel := reporting.NewEucloTelemetry(telemetry.TelemetryFromContext(ctx))
 	tel.EmitRecipeSelected(ctx, reporting.EventRecipeSelected{
 		EventHeader: reporting.EventHeader{
-			TaskID:     env.TaskID,
-			SessionID:  env.SessionID,
+			TaskID:     env.TaskIDSnapshot(),
+			SessionID:  env.SessionIDSnapshot(),
 			Seq:        0,
 			OccurredAt: time.Now().UTC(),
 		},

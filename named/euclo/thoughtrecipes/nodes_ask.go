@@ -112,7 +112,7 @@ func (n *AskNode) ensureAskFrame(env *contextdata.Envelope) (*interaction.Intera
 		return frame, false
 	}
 	choices := n.askChoices(env)
-	frame := interaction.NewAskUserFrame(env.TaskID, env.SessionID, n.step.Question, choices)
+	frame := interaction.NewAskUserFrame(env.TaskIDSnapshot(), env.SessionIDSnapshot(), n.step.Question, choices)
 	frame.Payload["step_id"] = n.step.ID
 	frame.Payload["step_type"] = n.step.Kind.String()
 	frame.Payload["choice_source"] = n.step.ChoiceSource

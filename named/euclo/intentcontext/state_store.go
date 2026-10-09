@@ -30,7 +30,7 @@ func (s *EnvelopeStateStore) Read(ctx context.Context, env *contextdata.Envelope
 	_ = ctx
 	value, ok := contextdata.GetTyped[any](env, ClarificationStateKey)
 	if !ok || value == nil {
-		return NewState(env.TaskID, env.SessionID), nil
+		return NewState(env.TaskIDSnapshot(), env.SessionIDSnapshot()), nil
 	}
 	state, ok := value.(*ClarificationState)
 	if !ok {
@@ -57,16 +57,16 @@ func (s *EnvelopeStateStore) Write(ctx context.Context, env *contextdata.Envelop
 		return fmt.Errorf("clarification state write: missing state version")
 	}
 	if strings.TrimSpace(state.TaskID) == "" {
-		state.TaskID = env.TaskID
+		state.TaskID = env.TaskIDSnapshot()
 	}
 	if strings.TrimSpace(state.SessionID) == "" {
-		state.SessionID = env.SessionID
+		state.SessionID = env.SessionIDSnapshot()
 	}
-	if state.TaskID != env.TaskID {
-		return fmt.Errorf("clarification state write: task mismatch %q != %q", state.TaskID, env.TaskID)
+	if state.TaskID != env.TaskIDSnapshot() {
+		return fmt.Errorf("clarification state write: task mismatch %q != %q", state.TaskID, env.TaskIDSnapshot())
 	}
-	if state.SessionID != env.SessionID {
-		return fmt.Errorf("clarification state write: session mismatch %q != %q", state.SessionID, env.SessionID)
+	if state.SessionID != env.SessionIDSnapshot() {
+		return fmt.Errorf("clarification state write: session mismatch %q != %q", state.SessionID, env.SessionIDSnapshot())
 	}
 
 	current, err := s.readCurrent(env)

@@ -127,17 +127,17 @@ func TestCheckpointNodeMaterializesCheckpointFromStreamHook(t *testing.T) {
 	if repo.artifact.WorkflowID != "task-1" || repo.artifact.RunID != "session-1" {
 		t.Fatalf("unexpected workflow/run ids: %+v", repo.artifact)
 	}
-	if env.CheckpointRequest != nil {
+	if env.CheckpointRequestSnapshot() != nil {
 		t.Fatal("expected checkpoint request to be cleared")
 	}
 	if got := mustWorkingValue(t, env, "checkpoint.materialized"); got != true {
 		t.Fatalf("expected checkpoint.materialized true, got %v", got)
 	}
-	if len(env.References.Checkpoints) != 1 {
-		t.Fatalf("expected 1 checkpoint reference, got %d", len(env.References.Checkpoints))
+	if len(env.ReferencesSnapshot().Checkpoints) != 1 {
+		t.Fatalf("expected 1 checkpoint reference, got %d", len(env.ReferencesSnapshot().Checkpoints))
 	}
-	if env.References.Checkpoints[0].CheckpointID != repo.artifact.ArtifactID {
-		t.Fatalf("unexpected checkpoint reference: %+v", env.References.Checkpoints[0])
+	if env.ReferencesSnapshot().Checkpoints[0].CheckpointID != repo.artifact.ArtifactID {
+		t.Fatalf("unexpected checkpoint reference: %+v", env.ReferencesSnapshot().Checkpoints[0])
 	}
 }
 

@@ -35,7 +35,7 @@ func EmitFrame(ctx context.Context, frame *InteractionFrame, env *contextdata.En
 	if sink != nil {
 		ev := telemetry.Event{
 			Type:      telemetry.EventType("euclo.interaction.frame.emitted"),
-			TaskID:    env.TaskID,
+			TaskID:    env.TaskIDSnapshot(),
 			NodeID:    frame.ID,
 			Timestamp: time.Now().UTC(),
 			Metadata: map[string]any{
