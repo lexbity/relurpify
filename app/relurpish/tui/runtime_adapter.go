@@ -157,9 +157,11 @@ type RuntimeAdapter interface {
 	// ActiveWorkflowID returns the current active workflow ID (empty if none).
 	ActiveWorkflowID() string
 
-	// ResumeSession rehydrates a session from a workflow ID, returning
-	// a non-nil error when the workflow cannot be resumed.
-	ResumeSession(ctx context.Context, workflowID string) error
+	// ResumeSession continues a previous session by executing a real turn:
+	// the follow-up instruction when supplied, else a re-grounding seed from
+	// the recorded prior task. Returns a non-nil error when the workflow
+	// cannot be resumed or a run is already active.
+	ResumeSession(ctx context.Context, workflowID, followUp string) error
 	// ResolveInteractionFrame writes a resolved interaction response back into
 	// the live runtime envelope for the given task.
 	ResolveInteractionFrame(ctx context.Context, taskID, frameID, choice, freetext string) error
@@ -1290,13 +1292,19 @@ func (r *runtimeAdapter) GetLatestTrace() (TraceInfo, error) {
 }
 
 // ActiveWorkflowID satisfies RuntimeAdapter.
-func (r *runtimeAdapter) ActiveWorkflowID() string { return r.activeWorkflowID() }
-
-func (r *runtimeAdapter) ResumeSession(ctx context.Context, workflowID string) error {
+func (r *runtimeAdapter) ActiveWorkflowID() string {
 	if r == nil || r.rt == nil {
-		return nil
+		return ""
 	}
-	_, err := r.rt.ResumeSession(ctx, workflowID)
+	return r.rt.ActiveWorkflowID()
+}
+
+// ResumeSession satisfies RuntimeAdapter.
+func (r *runtimeAdapter) ResumeSession(ctx context.Context, workflowID, followUp string) error {
+	if r == nil || r.rt == nil {
+		return fmt.Errorf("runtime unavailable")
+	}
+	_, err := r.rt.ResumeSession(ctx, workflowID, followUp)
 	return err
 }
 
@@ -1331,8 +1339,4 @@ func (r *runtimeAdapter) InitializeWorkspaceFromTemplates(overwrite bool) error 
 		return fmt.Errorf("runtime unavailable")
 	}
 	return runtimesvc.InitializeWorkspaceFromTemplates(r.rt.Config, overwrite)
-}
-
-func (r *runtimeAdapter) activeWorkflowID() string {
-	return ""
 }

@@ -3,7 +3,6 @@ package euclotui
 import (
 	"context"
 
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
 	"codeburg.org/lexbit/relurpify/app/relurpish/relurpifyenvtui"
@@ -133,28 +132,4 @@ func (s *EucloSurface) HandleFrame(ctx context.Context, m *tui.RootModel, msg tu
 
 func (s *EucloSurface) Theme() *theme.Theme {
 	return s.th
-}
-
-func (s *EucloSurface) ResumeSession(ctx context.Context, sessionID string) tea.Cmd {
-	if s == nil || s.router == nil {
-		return nil
-	}
-	// In a full implementation, the resume data would be loaded from the
-	// persisted session store. For now, feed the router with any available
-	// recipe data from the lookup.
-	if s.recipeLookup != nil {
-		// Apply any persisted resume data — currently starts fresh with
-		// whatever the lookup provides.
-		s.router.ApplyResumeData(recipeResumeDataFromRegistry(s.recipeLookup), nil)
-	}
-	return nil
-}
-
-// recipeResumeDataFromRegistry builds a minimal RecipeResumeData by trying each
-// known recipe in the lookup. This is a best-effort rebuild on resume.
-func recipeResumeDataFromRegistry(lookup surface.RecipeRegistryLookup) RecipeResumeData {
-	// The registry lookup can't enumerate recipes, so try a well-known ID.
-	// On a real resume, the persisted recipe ID from the session store
-	// would be used. The lookup-based path is a fallback.
-	return RecipeResumeData{}
 }

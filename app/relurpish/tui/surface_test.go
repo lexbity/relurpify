@@ -107,7 +107,6 @@ func (s *fakeSurface) InitialSubTab(TabID) SubTabID                             
 func (s *fakeSurface) RenderNotification(item NotificationItem) string          { return item.Msg }
 func (s *fakeSurface) HandleFrame(context.Context, *RootModel, SurfaceFrameMsg) {}
 func (s *fakeSurface) Theme() *theme.Theme                                      { return nil }
-func (s *fakeSurface) ResumeSession(_ context.Context, _ string) tea.Cmd        { return nil }
 func (s *fakeSurface) DoctorReport() DoctorReport                               { return s.doctorReport }
 func (s *fakeSurface) SetDoctorReport(report DoctorReport)                      { s.doctorReport = report }
 func (s *fakeSurface) SetDoctorStatus(status string)                            { s.doctorStatus = status }

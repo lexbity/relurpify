@@ -78,6 +78,13 @@ type Runtime struct {
 	sessionID   string
 	sessionIDMu sync.Mutex
 
+	// activeWorkflowID is the lifecycle workflow of the run currently
+	// executing (set by RunTask/ResumeSession from the run record created in
+	// agentlifecycle, cleared when that run completes). The autosave reads it
+	// so session records carry a resumable ID.
+	activeWorkflowMu sync.RWMutex
+	activeWorkflowID string
+
 	execSink *telemetry.BroadcastSink
 
 	providersMu          sync.Mutex
@@ -906,6 +913,46 @@ func (r *Runtime) RunTask(ctx context.Context, task *execution.Task) (*execution
 	if task == nil {
 		return nil, errors.New("task required")
 	}
+	return r.executeTask(ctx, task)
+}
+
+// ActiveWorkflowID returns the lifecycle workflow ID of the run currently
+// executing, or "" when no run is active. The TUI autosave persists it so
+// session records are resumable.
+func (r *Runtime) ActiveWorkflowID() string {
+	if r == nil {
+		return ""
+	}
+	r.activeWorkflowMu.RLock()
+	defer r.activeWorkflowMu.RUnlock()
+	return r.activeWorkflowID
+}
+
+func (r *Runtime) setActiveWorkflowID(id string) {
+	r.activeWorkflowMu.Lock()
+	r.activeWorkflowID = id
+	r.activeWorkflowMu.Unlock()
+}
+
+// clearActiveWorkflowID clears the active ID only when it still names the
+// run that is finishing, so a newer run's ID is never cleared by an older
+// one's defer.
+func (r *Runtime) clearActiveWorkflowID(id string) {
+	if id == "" {
+		return
+	}
+	r.activeWorkflowMu.Lock()
+	if r.activeWorkflowID == id {
+		r.activeWorkflowID = ""
+	}
+	r.activeWorkflowMu.Unlock()
+}
+
+// executeTask is the single turn-execution path shared by RunTask and
+// ResumeSession so the two cannot diverge: envelope assembly, lifecycle
+// bookkeeping (workflow + run records, active workflow ID tracking), agent
+// execution, and working-memory eviction.
+func (r *Runtime) executeTask(ctx context.Context, task *execution.Task) (*execution.Result, error) {
 	env := contextdata.NewEnvelope(task.ID, r.ensureSessionID())
 	env.NodeID = "runtime"
 	if task.Context != nil {
@@ -922,6 +969,7 @@ func (r *Runtime) RunTask(ctx context.Context, task *execution.Task) (*execution
 	if err := r.Agent.Initialize(&execution.Config{Workspace: r.Config.Workspace}); err != nil {
 		return nil, fmt.Errorf("initialize agent: %w", err)
 	}
+	workflowID, runID := r.beginWorkflow(task)
 	result, err := r.Agent.Execute(r.beginTurn(ctx, env), task, env)
 	// Task completion ends the task's working-memory lifetime: the result is
 	// in hand, so the per-task entries are released (idempotent no-op when
@@ -929,7 +977,67 @@ func (r *Runtime) RunTask(ctx context.Context, task *execution.Task) (*execution
 	if r.Memory != nil {
 		r.Memory.Evict(task.ID)
 	}
+	r.endWorkflow(workflowID, runID, err)
+	if result != nil && workflowID != "" {
+		if result.Metadata == nil {
+			result.Metadata = make(map[string]any)
+		}
+		result.Metadata["workflow_id"] = workflowID
+	}
 	return result, err
+}
+
+// beginWorkflow creates the lifecycle records for one executed turn and
+// marks its workflow as the runtime's active one. When no lifecycle
+// repository is wired (degraded boot, tests) the turn executes untracked.
+func (r *Runtime) beginWorkflow(task *execution.Task) (workflowID, runID string) {
+	if r.AgentLifecycle == nil {
+		return "", ""
+	}
+	ctx := context.Background()
+	workflowID = "wf-" + observability.NewRunID()
+	meta := map[string]any{"instruction": task.Instruction}
+	if task.Type != "" {
+		meta["type"] = task.Type
+	}
+	now := time.Now()
+	if err := r.AgentLifecycle.CreateWorkflow(ctx, agentlifecycle.WorkflowRecord{
+		WorkflowID: workflowID,
+		CreatedAt:  now,
+		UpdatedAt:  now,
+		Metadata:   meta,
+	}); err != nil {
+		return "", ""
+	}
+	runID = "run-" + observability.NewRunID()
+	if err := r.AgentLifecycle.CreateRun(ctx, agentlifecycle.WorkflowRunRecord{
+		RunID:      runID,
+		WorkflowID: workflowID,
+		Status:     "running",
+		StartedAt:  now,
+		Metadata:   map[string]any{"instruction": task.Instruction},
+	}); err != nil {
+		return workflowID, ""
+	}
+	r.setActiveWorkflowID(workflowID)
+	return workflowID, runID
+}
+
+// endWorkflow finalizes the lifecycle records of a completed turn and clears
+// the active workflow ID.
+func (r *Runtime) endWorkflow(workflowID, runID string, runErr error) {
+	if workflowID == "" {
+		return
+	}
+	r.clearActiveWorkflowID(workflowID)
+	if r.AgentLifecycle == nil || runID == "" {
+		return
+	}
+	status := "completed"
+	if runErr != nil {
+		status = "failed"
+	}
+	_ = r.AgentLifecycle.UpdateRunStatus(context.Background(), runID, status)
 }
 
 // ensureSessionID returns the runtime-scoped correlation session ID, generating

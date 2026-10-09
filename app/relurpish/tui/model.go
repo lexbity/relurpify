@@ -779,7 +779,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if !ok {
 			m2 = m
 		}
-		m2.autoSave()
+		m2.autoSave(msg.WorkflowID)
 		m2.session.SyncChanges(m2.latestChanges())
 		m2.session.SyncContext(m2.sharedCtx)
 		if m2.taskRunIDs[msg.RunID] {
@@ -823,6 +823,11 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.addSystemMessage("Resume unavailable: no session store or runtime")
 			return m, nil
 		}
+		// Resume never queue-jumps an active run.
+		if m.chat != nil && m.chat.HasActiveRuns() {
+			m.addSystemMessage("a run is active; resume refused")
+			return m, nil
+		}
 		rec, err := m.store.Load(msg.SessionID)
 		if err != nil {
 			m.addSystemMessage(fmt.Sprintf("Failed to load session: %v", err))
@@ -843,16 +848,31 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.chat.AppendMessage(msg)
 			}
 		}
-		if len(rec.Messages) > 0 {
-			m.addSystemMessage(fmt.Sprintf("Resumed session %s (%d messages)", msg.SessionID, len(rec.Messages)))
-		}
-		if rec.WorkflowID != "" {
-			if err := m.runtime.ResumeSession(context.Background(), rec.WorkflowID); err != nil {
-				m.addSystemMessage(fmt.Sprintf("Runtime resume: %v", err))
-			}
-		}
+		m.addSystemMessage(fmt.Sprintf("Resumed from transcript %s (%d messages)", msg.SessionID, len(rec.Messages)))
 		m.setActiveTab(TabChat)
 		m.setFocus(FocusRegionInput)
+		if rec.WorkflowID == "" {
+			// Transcript-only record: the runtime has no prior task to
+			// re-ground from, so resume stops at the restored transcript
+			// until the user sends a follow-up.
+			return m, nil
+		}
+		// The continuation turn executes off the UI thread; its completion
+		// is reported through resumeFinishedMsg.
+		workflowID := rec.WorkflowID
+		rt := m.runtime
+		return m, func() tea.Msg {
+			err := rt.ResumeSession(context.Background(), workflowID, "")
+			return resumeFinishedMsg{err: err}
+		}
+
+	case resumeFinishedMsg:
+		if msg.err != nil {
+			m.addSystemMessage(fmt.Sprintf("Runtime resume: %v", msg.err))
+			return m, nil
+		}
+		m.addSystemMessage("Continuation turn finished")
+		m.autoSave("")
 		return m, nil
 
 	case OpenDoctorMsg:
@@ -1619,13 +1639,15 @@ func (m *RootModel) addSystemMessage(text string) {
 	}
 }
 
-// autoSave persists the current session after each completed run.
-func (m RootModel) autoSave() {
+// autoSave persists the current session after each completed run. The
+// workflow ID comes from the finished run's terminal message; when absent
+// (transcript-only session) the previously stored record's ID is preserved
+// so a resumable session never loses its workflow linkage.
+func (m RootModel) autoSave(workflowID string) {
 	if m.store == nil || m.chat == nil {
 		return
 	}
-	workflowID := ""
-	if m.runtime != nil {
+	if workflowID == "" && m.runtime != nil {
 		workflowID = m.runtime.ActiveWorkflowID()
 	}
 	mode := ""
@@ -1643,6 +1665,11 @@ func (m RootModel) autoSave() {
 		},
 		Messages: m.chat.Messages(),
 		Context:  m.sharedCtx,
+	}
+	if workflowID == "" {
+		if prev, err := m.store.Load(rec.ID); err == nil {
+			rec.WorkflowID = prev.WorkflowID
+		}
 	}
 	_ = m.store.Save(rec) // fire-and-forget; errors are silently dropped
 }

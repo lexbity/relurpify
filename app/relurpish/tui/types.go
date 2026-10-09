@@ -560,4 +560,14 @@ type RunFinishedMsg struct {
 	Duration       time.Duration
 	TokensUsed     int
 	DroppedUpdates int64
+	// WorkflowID is the lifecycle workflow that executed this run, stamped
+	// by the runtime into the result metadata; the autosave persists it so
+	// the session record stays resumable.
+	WorkflowID string
+}
+
+// resumeFinishedMsg reports the completion of a resume continuation turn
+// executed off the UI thread.
+type resumeFinishedMsg struct {
+	err error
 }

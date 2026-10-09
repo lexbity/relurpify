@@ -538,6 +538,12 @@ func (p *ChatPane) finishRun(run *chatRun, outcome tui.RunOutcome, err error, to
 		p.finishedRuns = p.finishedRuns[len(p.finishedRuns)-chatRunHistory:]
 	}
 	p.runsMu.Unlock()
+	workflowID := ""
+	if res := run.takeResult(); res != nil {
+		if id, ok := res.Metadata["workflow_id"].(string); ok {
+			workflowID = id
+		}
+	}
 	run.ch <- tui.RunFinishedMsg{
 		RunID:          run.id,
 		Outcome:        outcome,
@@ -545,6 +551,7 @@ func (p *ChatPane) finishRun(run *chatRun, outcome tui.RunOutcome, err error, to
 		Duration:       time.Since(run.started),
 		TokensUsed:     tokens,
 		DroppedUpdates: run.dropped.Load(),
+		WorkflowID:     workflowID,
 	}
 }
 

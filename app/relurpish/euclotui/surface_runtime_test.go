@@ -24,6 +24,8 @@ type stubRuntimeAdapter struct {
 	submitFunc func(ctx context.Context, instruction string, taskType execution.TaskType, metadata map[string]any, callback func(string)) (*execution.Result, error)
 }
 
+func (s *stubRuntimeAdapter) ResumeSession(context.Context, string, string) error { return nil }
+
 func (s *stubRuntimeAdapter) SubmitTurn(ctx context.Context, instruction string, taskType execution.TaskType, metadata map[string]any, callback func(string)) (*execution.Result, error) {
 	return s.submitFunc(ctx, instruction, taskType, metadata, callback)
 }
@@ -36,62 +38,77 @@ func (s *stubRuntimeAdapter) ExecuteInstructionStream(ctx context.Context, instr
 	return s.submitFunc(ctx, instruction, taskType, metadata, callback)
 }
 
-func (s *stubRuntimeAdapter) AvailableAgents() []string                                                  { return []string{"euclo"} }
-func (s *stubRuntimeAdapter) SwitchAgent(name string) error                                               { return nil }
-func (s *stubRuntimeAdapter) SessionInfo() tui.SessionInfo                                                { return tui.SessionInfo{} }
-func (s *stubRuntimeAdapter) ResolveContextFiles(ctx context.Context, files []string) tui.ContextFileResolution { return tui.ContextFileResolution{Allowed: files} }
-func (s *stubRuntimeAdapter) SessionArtifacts() tui.SessionArtifacts                                       { return tui.SessionArtifacts{} }
-func (s *stubRuntimeAdapter) InferenceModels(ctx context.Context) ([]string, error)                        { return nil, nil }
-func (s *stubRuntimeAdapter) RecordingMode() string                                                        { return "off" }
-func (s *stubRuntimeAdapter) SetRecordingMode(string) error                                                { return nil }
-func (s *stubRuntimeAdapter) SaveModel(string) error                                                       { return nil }
-func (s *stubRuntimeAdapter) ContractSummary() *tui.ContractSummary                                        { return nil }
-func (s *stubRuntimeAdapter) CapabilityAdmissions() []tui.CapabilityAdmissionInfo                          { return nil }
-func (s *stubRuntimeAdapter) SaveToolPolicy(string, agentspec.AgentPermissionLevel) error                    { return nil }
-func (s *stubRuntimeAdapter) LoadSandboxDocument() (*config.Document, error)                                { return nil, nil }
-func (s *stubRuntimeAdapter) SaveSandboxDocument(*config.Document) (string, error)                          { return "", nil }
-func (s *stubRuntimeAdapter) SandboxBackend() string                                                        { return "" }
-func (s *stubRuntimeAdapter) SaveSandboxBackend(string) (string, error)                                    { return "", nil }
-func (s *stubRuntimeAdapter) ExecutionMode() config.ExecutionMode                                           { return config.ExecutionModeStaged }
-func (s *stubRuntimeAdapter) ListToolsInfo() []tui.ToolInfo                                                 { return nil }
-func (s *stubRuntimeAdapter) ListCapabilities() []tui.CapabilityInfo                                       { return nil }
-func (s *stubRuntimeAdapter) ListPrompts() []tui.PromptInfo                                                 { return nil }
-func (s *stubRuntimeAdapter) ListResources([]string) []tui.ResourceInfo                                     { return nil }
-func (s *stubRuntimeAdapter) ListLiveProviders() []tui.LiveProviderInfo                                    { return nil }
-func (s *stubRuntimeAdapter) ListLiveSessions() []tui.LiveProviderSessionInfo                              { return nil }
-func (s *stubRuntimeAdapter) ListApprovals() []tui.ApprovalInfo                                           { return nil }
-func (s *stubRuntimeAdapter) GetCapabilityDetail(string) (*tui.CapabilityDetail, error)                    { return nil, nil }
-func (s *stubRuntimeAdapter) GetPromptDetail(string) (*tui.PromptDetail, error)                            { return nil, nil }
-func (s *stubRuntimeAdapter) GetResourceDetail(string) (*tui.ResourceDetail, error)                        { return nil, nil }
-func (s *stubRuntimeAdapter) GetLiveProviderDetail(string) (*tui.LiveProviderDetail, error)                { return nil, nil }
-func (s *stubRuntimeAdapter) GetLiveSessionDetail(string) (*tui.LiveProviderSessionDetail, error)          { return nil, nil }
-func (s *stubRuntimeAdapter) GetApprovalDetail(string) (*tui.ApprovalDetail, error)                       { return nil, nil }
-func (s *stubRuntimeAdapter) GetClassPolicies() map[string]agentspec.AgentPermissionLevel                    { return nil }
-func (s *stubRuntimeAdapter) SetToolPolicyLive(string, agentspec.AgentPermissionLevel)                       {}
-func (s *stubRuntimeAdapter) SetClassPolicyLive(string, agentspec.AgentPermissionLevel)                     {}
-func (s *stubRuntimeAdapter) ListWorkflows(int) ([]tui.WorkflowInfo, error)                                { return nil, nil }
-func (s *stubRuntimeAdapter) GetWorkflow(string) (*tui.WorkflowDetails, error)                             { return nil, nil }
-func (s *stubRuntimeAdapter) CancelWorkflow(string) error                                                  { return nil }
-func (s *stubRuntimeAdapter) InvokeCapability(context.Context, string, map[string]any) (*capabilityports.ToolResult, error) { return nil, nil }
-func (s *stubRuntimeAdapter) Diagnostics() tui.DiagnosticsInfo                                               { return tui.DiagnosticsInfo{} }
-func (s *stubRuntimeAdapter) BuildDoctorReport(context.Context) tui.DoctorReport                            { return tui.DoctorReport{} }
-func (s *stubRuntimeAdapter) ReloadWorkspace(context.Context, string) error                                 { return nil }
-func (s *stubRuntimeAdapter) InitializeWorkspaceFromTemplates(bool) error                                   { return nil }
-func (s *stubRuntimeAdapter) ApplyChatPolicy(tui.SubTabID) error                                            { return nil }
-func (s *stubRuntimeAdapter) ListServices() []tui.ServiceInfo                                                { return nil }
-func (s *stubRuntimeAdapter) StopService(string) error                                                      { return nil }
-func (s *stubRuntimeAdapter) RestartService(context.Context, string) error                                  { return nil }
-func (s *stubRuntimeAdapter) RestartAllServices(context.Context) error                                      { return nil }
-func (s *stubRuntimeAdapter) AddFileToContext(string) error                                                 { return nil }
-func (s *stubRuntimeAdapter) DropFileFromContext(string) error                                              { return nil }
-func (s *stubRuntimeAdapter) ActiveWorkflowID() string                                                      { return "" }
-func (s *stubRuntimeAdapter) ProbeBackendHealth(ctx context.Context) string                                 { return "checking" }
-func (s *stubRuntimeAdapter) ResumeSession(context.Context, string) error                                   { return nil }
-func (s *stubRuntimeAdapter) ResolveInteractionFrame(context.Context, string, string, string, string) error { return nil }
+func (s *stubRuntimeAdapter) AvailableAgents() []string     { return []string{"euclo"} }
+func (s *stubRuntimeAdapter) SwitchAgent(name string) error { return nil }
+func (s *stubRuntimeAdapter) SessionInfo() tui.SessionInfo  { return tui.SessionInfo{} }
+func (s *stubRuntimeAdapter) ResolveContextFiles(ctx context.Context, files []string) tui.ContextFileResolution {
+	return tui.ContextFileResolution{Allowed: files}
+}
+func (s *stubRuntimeAdapter) SessionArtifacts() tui.SessionArtifacts                      { return tui.SessionArtifacts{} }
+func (s *stubRuntimeAdapter) InferenceModels(ctx context.Context) ([]string, error)       { return nil, nil }
+func (s *stubRuntimeAdapter) RecordingMode() string                                       { return "off" }
+func (s *stubRuntimeAdapter) SetRecordingMode(string) error                               { return nil }
+func (s *stubRuntimeAdapter) SaveModel(string) error                                      { return nil }
+func (s *stubRuntimeAdapter) ContractSummary() *tui.ContractSummary                       { return nil }
+func (s *stubRuntimeAdapter) CapabilityAdmissions() []tui.CapabilityAdmissionInfo         { return nil }
+func (s *stubRuntimeAdapter) SaveToolPolicy(string, agentspec.AgentPermissionLevel) error { return nil }
+func (s *stubRuntimeAdapter) LoadSandboxDocument() (*config.Document, error)              { return nil, nil }
+func (s *stubRuntimeAdapter) SaveSandboxDocument(*config.Document) (string, error)        { return "", nil }
+func (s *stubRuntimeAdapter) SandboxBackend() string                                      { return "" }
+func (s *stubRuntimeAdapter) SaveSandboxBackend(string) (string, error)                   { return "", nil }
+func (s *stubRuntimeAdapter) ExecutionMode() config.ExecutionMode                         { return config.ExecutionModeStaged }
+func (s *stubRuntimeAdapter) ListToolsInfo() []tui.ToolInfo                               { return nil }
+func (s *stubRuntimeAdapter) ListCapabilities() []tui.CapabilityInfo                      { return nil }
+func (s *stubRuntimeAdapter) ListPrompts() []tui.PromptInfo                               { return nil }
+func (s *stubRuntimeAdapter) ListResources([]string) []tui.ResourceInfo                   { return nil }
+func (s *stubRuntimeAdapter) ListLiveProviders() []tui.LiveProviderInfo                   { return nil }
+func (s *stubRuntimeAdapter) ListLiveSessions() []tui.LiveProviderSessionInfo             { return nil }
+func (s *stubRuntimeAdapter) ListApprovals() []tui.ApprovalInfo                           { return nil }
+func (s *stubRuntimeAdapter) GetCapabilityDetail(string) (*tui.CapabilityDetail, error) {
+	return nil, nil
+}
+func (s *stubRuntimeAdapter) GetPromptDetail(string) (*tui.PromptDetail, error)     { return nil, nil }
+func (s *stubRuntimeAdapter) GetResourceDetail(string) (*tui.ResourceDetail, error) { return nil, nil }
+func (s *stubRuntimeAdapter) GetLiveProviderDetail(string) (*tui.LiveProviderDetail, error) {
+	return nil, nil
+}
+func (s *stubRuntimeAdapter) GetLiveSessionDetail(string) (*tui.LiveProviderSessionDetail, error) {
+	return nil, nil
+}
+func (s *stubRuntimeAdapter) GetApprovalDetail(string) (*tui.ApprovalDetail, error)       { return nil, nil }
+func (s *stubRuntimeAdapter) GetClassPolicies() map[string]agentspec.AgentPermissionLevel { return nil }
+func (s *stubRuntimeAdapter) SetToolPolicyLive(string, agentspec.AgentPermissionLevel)    {}
+func (s *stubRuntimeAdapter) SetClassPolicyLive(string, agentspec.AgentPermissionLevel)   {}
+func (s *stubRuntimeAdapter) ListWorkflows(int) ([]tui.WorkflowInfo, error)               { return nil, nil }
+func (s *stubRuntimeAdapter) GetWorkflow(string) (*tui.WorkflowDetails, error)            { return nil, nil }
+func (s *stubRuntimeAdapter) CancelWorkflow(string) error                                 { return nil }
+func (s *stubRuntimeAdapter) InvokeCapability(context.Context, string, map[string]any) (*capabilityports.ToolResult, error) {
+	return nil, nil
+}
+func (s *stubRuntimeAdapter) Diagnostics() tui.DiagnosticsInfo { return tui.DiagnosticsInfo{} }
+func (s *stubRuntimeAdapter) BuildDoctorReport(context.Context) tui.DoctorReport {
+	return tui.DoctorReport{}
+}
+func (s *stubRuntimeAdapter) ReloadWorkspace(context.Context, string) error { return nil }
+func (s *stubRuntimeAdapter) InitializeWorkspaceFromTemplates(bool) error   { return nil }
+func (s *stubRuntimeAdapter) ApplyChatPolicy(tui.SubTabID) error            { return nil }
+func (s *stubRuntimeAdapter) ListServices() []tui.ServiceInfo               { return nil }
+func (s *stubRuntimeAdapter) StopService(string) error                      { return nil }
+func (s *stubRuntimeAdapter) RestartService(context.Context, string) error  { return nil }
+func (s *stubRuntimeAdapter) RestartAllServices(context.Context) error      { return nil }
+func (s *stubRuntimeAdapter) AddFileToContext(string) error                 { return nil }
+func (s *stubRuntimeAdapter) DropFileFromContext(string) error              { return nil }
+func (s *stubRuntimeAdapter) ActiveWorkflowID() string                      { return "" }
+func (s *stubRuntimeAdapter) ProbeBackendHealth(ctx context.Context) string { return "checking" }
+func (s *stubRuntimeAdapter) ResolveInteractionFrame(context.Context, string, string, string, string) error {
+	return nil
+}
 
 // HITL methods
 func (s *stubRuntimeAdapter) PendingHITL() []*fauthorization.PermissionRequest { return nil }
-func (s *stubRuntimeAdapter) ApproveHITL(string, string, policy.GrantScope, time.Duration) error { return nil }
+func (s *stubRuntimeAdapter) ApproveHITL(string, string, policy.GrantScope, time.Duration) error {
+	return nil
+}
 func (s *stubRuntimeAdapter) DenyHITL(string, string) error { return nil }
 func (s *stubRuntimeAdapter) SubscribeHITL() (<-chan fauthorization.HITLEvent, func()) {
 	ch := make(chan fauthorization.HITLEvent)

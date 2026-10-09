@@ -3,8 +3,6 @@ package relurpifyenvtui
 import (
 	"context"
 
-	tea "github.com/charmbracelet/bubbletea"
-
 	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 	"codeburg.org/lexbit/relurpify/app/relurpish/tui"
 )
@@ -62,8 +60,6 @@ func (s *Surface) InitialTab() tui.TabID { return tui.TabWelcome }
 func (s *Surface) InitialSubTab(tab tui.TabID) tui.SubTabID { return "" }
 
 func (s *Surface) Theme() *theme.Theme { return nil }
-
-func (s *Surface) ResumeSession(_ context.Context, _ string) tea.Cmd { return nil }
 
 func (s *Surface) RenderNotification(item tui.NotificationItem) string {
 	return item.Msg
