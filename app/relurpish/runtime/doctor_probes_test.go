@@ -4,6 +4,9 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -132,4 +135,48 @@ func itoa(i int) string {
 func secretsFor(t *testing.T) config.Secrets {
 	t.Helper()
 	return config.Secrets{}
+}
+
+// TestCheckCanonicalRecipes_MissingOnEmptyWorkspace: a workspace without the
+// canonical recipe set fails closed with the actionable re-init message and
+// lists the missing IDs (FR-25).
+func TestCheckCanonicalRecipes_MissingOnEmptyWorkspace(t *testing.T) {
+	result := checkCanonicalRecipes(t.TempDir())
+	if result.ready {
+		t.Fatal("empty workspace must not report recipes ready")
+	}
+	if !strings.Contains(result.errText, "relurpish doctor --fix") {
+		t.Fatalf("error text missing re-init hint: %q", result.errText)
+	}
+	if len(result.missing) != len(canonicalRecipeIDs) {
+		t.Fatalf("missing = %d, want %d", len(result.missing), len(canonicalRecipeIDs))
+	}
+}
+
+// TestCheckCanonicalRecipes_MaterializedWorkspace: a workspace whose
+// relurpify_cfg/euclo carries the canonical set reports ready with all IDs
+// found (AC-8 doctor side).
+func TestCheckCanonicalRecipes_MaterializedWorkspace(t *testing.T) {
+	workspace := t.TempDir()
+	dst := filepath.Join(workspace, "relurpify_cfg", "euclo")
+	if err := os.MkdirAll(dst, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"default", "code_review", "investigation", "debug_tdd_repair", "dep_upgrade", "test_synthesis", "extract_func"} {
+		src := filepath.Join("..", "..", "..", "userconfig", "templates", "embedfs", "workspace", "euclo", name+".erpe")
+		data, err := os.ReadFile(src)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dst, name+".erpe"), data, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	result := checkCanonicalRecipes(workspace)
+	if !result.ready {
+		t.Fatalf("materialized workspace not ready: %s", result.errText)
+	}
+	if len(result.found) != len(canonicalRecipeIDs) {
+		t.Fatalf("found = %d, want %d", len(result.found), len(canonicalRecipeIDs))
+	}
 }

@@ -52,3 +52,10 @@ func (r *defaultCapabilityRegistrar) RegisterAll(reg *registry.CapabilityRegistr
 		Model:         r.deps.Model,
 	})
 }
+
+// EucloCapabilityIDs returns the self-declared euclo capability ID set.
+// Diagnostics (doctor recipe checks) use it to seed a static capability
+// view when the live runtime registry is not available.
+func EucloCapabilityIDs() []string {
+	return append([]string(nil), eucloCapabilities...)
+}

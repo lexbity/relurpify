@@ -125,7 +125,7 @@ func TestDispatch_AmbiguousClassificationRoutesToClarificationThoughtRecipe(t *t
 	if got := routeKindFromRequest(req); got != euclotypes.RouteKindIntent {
 		t.Fatalf("route kind from request = %q, want intent; request=%+v", got, req)
 	}
-	directResult, directErr := Dispatch(context.Background(), env, req, nil, nil)
+	directResult, directErr := Dispatch(context.Background(), env, req, nil, testRecipeRegistryWith(clarificationThoughtRecipeID))
 	if directErr != nil {
 		t.Fatalf("direct Dispatch failed: %v", directErr)
 	}
@@ -133,7 +133,8 @@ func TestDispatch_AmbiguousClassificationRoutesToClarificationThoughtRecipe(t *t
 		t.Fatalf("direct dispatch route kind = %q, want intent", directResult.RouteKind)
 	}
 
-	dispatcher := NewDispatcher("test-dispatch")
+	dispatcher := NewDispatcher("test-dispatch").
+		WithThoughtRecipeRegistry(testRecipeRegistryWith(clarificationThoughtRecipeID))
 	resultCore, err := dispatcher.Execute(context.Background(), env)
 	if err != nil {
 		t.Fatalf("Dispatcher.Execute failed: %v", err)

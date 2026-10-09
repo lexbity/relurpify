@@ -13,8 +13,13 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/ayenitd"
+	capabilityagentspec "codeburg.org/lexbit/relurpify/capability/agentspec"
+	capabilitydescriptor "codeburg.org/lexbit/relurpify/capability/descriptor"
+	capabilityregistry "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/named/euclo/euclocontract"
+	eucloservices "codeburg.org/lexbit/relurpify/named/euclo/services"
+	thoughtrecipes "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
 	platformfs "codeburg.org/lexbit/relurpify/platform/fs"
 	"codeburg.org/lexbit/relurpify/platform/llm"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
@@ -57,6 +62,12 @@ type DoctorReport struct {
 	ManifestError         string
 	ModelProfilesError    string
 	StarterTemplatesError string
+	// Recipes reports the canonical thoughtrecipe set state (Q6: missing
+	// recipes are reported, not hidden).
+	RecipesReady          bool
+	RecipesError          string
+	RecipesFound          []string
+	RecipesMissing        []string
 	ManifestWarnings      []string
 	DeprecationNotices    []string
 	ProtectedPaths        []string
@@ -169,6 +180,11 @@ func BuildDoctorReport(ctx context.Context, cfg Config, secrets config.Secrets) 
 	if !report.StarterTemplatesReady {
 		report.StarterTemplatesError = fmt.Errorf("embedded templates not found").Error()
 	}
+	recipesCheck := checkCanonicalRecipes(cfg.Workspace)
+	report.RecipesReady = recipesCheck.ready
+	report.RecipesError = recipesCheck.errText
+	report.RecipesFound = recipesCheck.found
+	report.RecipesMissing = recipesCheck.missing
 
 	var env EnvironmentReport
 	backend, err := llm.New(llm.ProviderConfigFromRuntimeConfig(cfg), llm.ProviderSecrets{
@@ -561,4 +577,75 @@ func applyProviderProbe(ctx context.Context, ph *ProviderHealth, def *model.Reso
 			ph.Models = append(ph.Models, m.Name)
 		}
 	}
+}
+
+// canonicalRecipeIDs is the seven-recipe canonical set (§5.7) plus the
+// built-in clarification target: every family handoff must resolve to one of
+// these, and doctor reports any that a workspace lacks.
+var canonicalRecipeIDs = []string{
+	"euclo.thoughtrecipe.default",
+	"euclo.thoughtrecipe.code_review",
+	"euclo.thoughtrecipe.investigation",
+	"euclo.thoughtrecipe.debug_tdd_repair",
+	"euclo.thoughtrecipe.dep_upgrade",
+	"euclo.thoughtrecipe.test_synthesis",
+	"euclo.thoughtrecipe.extract_func",
+}
+
+type recipesCheckResult struct {
+	ready   bool
+	errText string
+	found   []string
+	missing []string
+}
+
+// checkCanonicalRecipes reports the workspace's canonical recipe state:
+// directory present, files parseable, every canonical ID registered. A
+// workspace initialized before the canonical set ships fails closed with an
+// actionable message (re-init), never silently.
+func checkCanonicalRecipes(workspace string) recipesCheckResult {
+	result := recipesCheckResult{}
+	// Diagnostics have no live runtime registry; seed a static capability
+	// view from the self-declared euclo set so `do relurpic:` references in
+	// the canonical recipes resolve exactly as they would at run time.
+	caps := capabilityregistry.NewRegistry()
+	for _, capID := range eucloservices.EucloCapabilityIDs() {
+		desc := capabilitydescriptor.CapabilityDescriptor{
+			ID:           capID,
+			Name:         capID,
+			Kind:         capabilityagentspec.CapabilityKindTool,
+			Availability: capabilitydescriptor.AvailabilitySpec{Available: true},
+		}
+		if err := caps.RegisterCapability(context.Background(), desc); err != nil {
+			result.errText = fmt.Sprintf("seed capability view: %v", err)
+			result.missing = append(result.missing, canonicalRecipeIDs...)
+			return result
+		}
+	}
+	loader := thoughtrecipes.NewLoader().WithCapabilityRegistry(eucloservices.CapabilityLookup(caps))
+	loadResult, err := loader.LoadWorkspace(workspace)
+	if err != nil {
+		// Sources unreadable (missing directory, unreadable file): nothing
+		// registered, so every canonical ID is missing.
+		result.errText = fmt.Sprintf("read thoughtrecipe sources: %v (run 'relurpish doctor --fix' to materialize starter recipes)", err)
+		result.missing = append(result.missing, canonicalRecipeIDs...)
+		return result
+	}
+	if loadResult == nil || loadResult.Registry == nil {
+		result.errText = "thoughtrecipe registry unavailable (run 'relurpish doctor --fix' to materialize starter recipes)"
+		return result
+	}
+	for _, id := range canonicalRecipeIDs {
+		if _, ok := loadResult.Registry.Get(id); ok {
+			result.found = append(result.found, id)
+		} else {
+			result.missing = append(result.missing, id)
+		}
+	}
+	if len(result.missing) > 0 {
+		result.errText = fmt.Sprintf("missing canonical thoughtrecipes: %s (run 'relurpish doctor --fix' to materialize starter recipes)", strings.Join(result.missing, ", "))
+		return result
+	}
+	result.ready = true
+	return result
 }

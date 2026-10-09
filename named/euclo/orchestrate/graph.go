@@ -176,7 +176,7 @@ func buildNodes(ctx context.Context, in buildNodeInput) ([]agentgraph.Node, erro
 	if thoughtrecipeCapReg == nil {
 		thoughtrecipeCapReg = registry.NewRegistry()
 	}
-	if err := registerClarificationCapability(ctx, thoughtrecipeCapReg); err != nil {
+	if err := registerClarificationCapability(ctx, thoughtrecipeCapReg, thoughtrecipeReg); err != nil {
 		return nil, err
 	}
 	intakePipeline := intake.NewIntakePipelineNode(

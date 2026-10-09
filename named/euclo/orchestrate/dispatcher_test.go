@@ -11,7 +11,8 @@ import (
 )
 
 func TestDispatcherExecute(t *testing.T) {
-	dispatcher := NewDispatcher("dispatcher1")
+	dispatcher := NewDispatcher("dispatcher1").
+		WithThoughtRecipeRegistry(testRecipeRegistryWith(clarificationThoughtRecipeID))
 
 	env := contextdata.NewEnvelope("task-123", "session-456")
 
@@ -37,7 +38,8 @@ func TestDispatcherExecute(t *testing.T) {
 }
 
 func TestDispatcherID(t *testing.T) {
-	dispatcher := NewDispatcher("dispatcher1")
+	dispatcher := NewDispatcher("dispatcher1").
+		WithThoughtRecipeRegistry(testRecipeRegistryWith(clarificationThoughtRecipeID))
 
 	if dispatcher.ID() != "dispatcher1" {
 		t.Errorf("Expected ID dispatcher1, got %s", dispatcher.ID())
@@ -45,7 +47,8 @@ func TestDispatcherID(t *testing.T) {
 }
 
 func TestDispatcherType(t *testing.T) {
-	dispatcher := NewDispatcher("dispatcher1")
+	dispatcher := NewDispatcher("dispatcher1").
+		WithThoughtRecipeRegistry(testRecipeRegistryWith(clarificationThoughtRecipeID))
 
 	if dispatcher.Type() != agentgraph.NodeTypeSystem {
 		t.Errorf("Expected Type system, got %s", dispatcher.Type())

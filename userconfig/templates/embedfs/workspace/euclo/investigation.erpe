@@ -1,0 +1,22 @@
+thoughtrecipe euclo.thoughtrecipe.investigation
+"Investigation-family recipe: an exploration-biased react pass that captures findings, then anchors them through the code-understanding capability. Family defaults: read-only; no writes without an explicit follow-up task."
+
+trigger as capability:
+  may read workspace
+  may invoke ["file_read", "grep"]
+  family ["investigation", "architecture"]
+
+input workspace: "**/*"
+input prompt: user.request
+
+agent investigator uses react
+
+run investigator:
+  may invoke ["file_read", "grep", "ast_query"]
+  from input.workspace
+  goal "Investigate the reported question: gather evidence, trace causes, and record findings."
+  capture result -> state.findings
+
+route:
+  otherwise:
+    do relurpic:ast_query on state.findings
