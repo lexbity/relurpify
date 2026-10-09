@@ -12,6 +12,7 @@ import (
 	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
+	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	"codeburg.org/lexbit/relurpify/named/euclo/state"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
@@ -29,6 +30,7 @@ const (
 	policyContinue policyActionKind = "continue"
 	policyFallback policyActionKind = "fallback"
 	policyAsk      policyActionKind = "ask"
+	policyRetry    policyActionKind = "retry"
 )
 
 // ClassifyFailure maps an execution error onto the §3.5 operational-failure
@@ -81,24 +83,42 @@ func stepPolicyAction(step ExecutionStep) policyActionKind {
 // with a structured degraded result, and the failure never substitutes a
 // paradigm the recipe did not declare (FR-7).
 //
-// The interim `ask` branch is honest about the resolver not existing yet: it
-// aborts and records ask_unavailable, and is deleted when Phase 8 lands the
-// InteractionResolver. The resolver == nil seam is intentionally greppable.
+// The `ask` policy consults the InteractionResolver (D12), which is required at
+// Euclo construction. An unanswered, denied, or expired error-decision frame
+// resolves to abort (the frame's default is abort); a human answer of
+// "continue" or "retry" is honored exactly as answered.
 func (c *stepCore) recordOperationalFailure(ctx context.Context, env *contextdata.Envelope, err error) *execution.Result {
+	return c.classifyAndRecord(ctx, env, err, "", "")
+}
+
+// recordExhaustedRetry records the failure of a step whose ask-retry was
+// already honored once and then failed again. The human's retry is bounded to
+// one re-execution: the second failure aborts without re-asking (D6/D12).
+func (c *stepCore) recordExhaustedRetry(ctx context.Context, env *contextdata.Envelope, err error) *execution.Result {
+	return c.classifyAndRecord(ctx, env, err, policyAbort, "retry_exhausted")
+}
+
+// classifyAndRecord is the shared failure-record core. forcedAction, when
+// non-empty, pins the effective action (retry-exhaustion); forcedNote is
+// carried into the ask_outcome telemetry field.
+func (c *stepCore) classifyAndRecord(ctx context.Context, env *contextdata.Envelope, err error, forcedAction policyActionKind, forcedNote string) *execution.Result {
 	kind := ClassifyFailure(err)
 	action := stepPolicyAction(c.step)
 	actionTaken := action
-	resolveUnavailable := false
+	askOutcome := ""
 	if kind == "" {
 		kind = euclotypes.FailureUnknown
 	}
 
-	// Phase 4 interim: the interaction resolver does not exist yet. `ask`
-	// degrades to abort with an explicit, greppable marker. Phase 8 deletes
-	// this branch and routes `ask` through interaction.Resolver.
-	if action == policyAsk {
-		actionTaken = policyAbort
-		resolveUnavailable = true
+	if forcedAction != "" {
+		actionTaken = forcedAction
+		askOutcome = forcedNote
+	} else if action == policyAsk {
+		// D12: the surface answers the operational-failure decision frame. The
+		// resolver is construction-required, so it is never nil here when the
+		// graph is built for Euclo; a resolver that errors/expires/denies maps
+		// to abort (no silent continuation, ever).
+		actionTaken, askOutcome = c.resolveAskPolicy(ctx, env, err)
 	}
 
 	failure := &euclotypes.StepFailure{Kind: kind, Message: err.Error(), Cause: err}
@@ -107,12 +127,15 @@ func (c *stepCore) recordOperationalFailure(ctx context.Context, env *contextdat
 		c.writeStepFailureMetadata(env, kind, action, actionTaken)
 	}
 
-	success := action == policyContinue
-	c.emitOperationalFailure(ctx, env, kind, action, actionTaken, resolveUnavailable)
+	success := action == policyContinue || actionTaken == policyContinue
+	c.emitOperationalFailure(ctx, env, kind, action, actionTaken, askOutcome)
 
 	data := map[string]any{
 		"failure_kind":    string(kind),
 		"on_error_action": string(action),
+	}
+	if askOutcome != "" {
+		data["ask_outcome"] = askOutcome
 	}
 	if success {
 		data["skipped"] = true
@@ -133,13 +156,55 @@ func (c *stepCore) recordOperationalFailure(ctx context.Context, env *contextdat
 			"on_error_resolved":            string(actionTaken),
 		},
 	}
-	if resolveUnavailable {
-		result.Metadata["ask_unavailable"] = true
+	if askOutcome != "" {
+		result.Metadata["ask_outcome"] = askOutcome
+	}
+	if actionTaken == policyRetry {
+		result.Metadata["ask_retry_requested"] = true
 	}
 	if !success {
 		result.Error = err.Error()
 	}
 	return result
+}
+
+// operationallyRequestsRetry reports whether an ask-policy failure resolved to
+// "retry", signaling the step executor to re-execute the step's agent once.
+func operationallyRequestsRetry(result *execution.Result) bool {
+	if result == nil || result.Metadata == nil {
+		return false
+	}
+	requested, _ := result.Metadata["ask_retry_requested"].(bool)
+	return requested
+}
+
+// resolveAskPolicy consults the InteractionResolver with an operational-failure
+// decision frame (retry/continue/abort) and returns the effective action and
+// the recorded ask outcome (D6/D12). Unanswered, denied, expired, or unusable
+// answers resolve to abort — never silent continuation. The frame is emitted
+// into the envelope so a runtime-backed surface (TUI adapter) can render and
+// answer it while Resolve blocks on the human.
+func (c *stepCore) resolveAskPolicy(ctx context.Context, env *contextdata.Envelope, err error) (policyActionKind, string) {
+	taskID, sessionID := "", ""
+	if env != nil {
+		taskID, sessionID = env.TaskIDSnapshot(), env.SessionIDSnapshot()
+	}
+	frame := interaction.NewErrorDecisionFrame(taskID, sessionID, c.step.ID, err.Error())
+	if env != nil {
+		_ = interaction.EmitFrame(ctx, frame, env, telemetry.TelemetryFromContext(ctx))
+	}
+	resolution, resolveErr := c.resolver.Resolve(ctx, frame)
+	switch {
+	case resolveErr != nil,
+		resolution.Status == interaction.ResolutionDenied,
+		resolution.Status == interaction.ResolutionExpired,
+		resolution.Answer != "continue" && resolution.Answer != "retry":
+		return policyAbort, "abort"
+	case resolution.Answer == "continue":
+		return policyContinue, "continue"
+	default:
+		return policyRetry, "retry"
+	}
 }
 
 // writeStepFailureMetadata records the typed failure class alongside the step
@@ -157,7 +222,7 @@ func (c *stepCore) writeStepFailureMetadata(env *contextdata.Envelope, kind eucl
 
 // emitOperationalFailure emits the step.operational_failure telemetry event
 // with the correlation identifiers already flowing through the node context.
-func (c *stepCore) emitOperationalFailure(ctx context.Context, env *contextdata.Envelope, kind euclotypes.FailureKind, action, actionTaken policyActionKind, askUnavailable bool) {
+func (c *stepCore) emitOperationalFailure(ctx context.Context, env *contextdata.Envelope, kind euclotypes.FailureKind, action, actionTaken policyActionKind, askOutcome string) {
 	sink := telemetry.TelemetryFromContext(ctx)
 	if sink == nil && c.deps != nil {
 		sink = c.deps.Telemetry
@@ -172,8 +237,8 @@ func (c *stepCore) emitOperationalFailure(ctx context.Context, env *contextdata.
 		"on_error":     string(action),
 		"action_taken": string(actionTaken),
 	}
-	if askUnavailable {
-		metadata["ask_unavailable"] = true
+	if askOutcome != "" {
+		metadata["ask_outcome"] = askOutcome
 	}
 	if env != nil {
 		metadata["task_id"] = env.TaskIDSnapshot()

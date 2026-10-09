@@ -11,6 +11,7 @@ import (
 	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/named/euclo/grounding"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
+	"codeburg.org/lexbit/relurpify/testsuite/testhelper"
 	"codeburg.org/lexbit/relurpify/testsuite/testsupport"
 )
 
@@ -94,7 +95,7 @@ func TestGroundingPortsUnwiredEmittedOnceForColdStart(t *testing.T) {
 		Registry:  registry.NewRegistry(),
 		Telemetry: sink,
 	}
-	agent := New(deps, WithHITLBroker(testsupport.NewAutoApproveHITLBroker()))
+	agent := New(deps, WithHITLBroker(testsupport.NewAutoApprovingBroker()), WithInteractionResolver(testhelper.NewPermissiveResolver()))
 
 	if err := agent.Initialize(nil); err != nil {
 		t.Fatalf("Initialize: %v", err)
@@ -126,7 +127,7 @@ func TestGroundingPortsUnwiredAbsentWhenWired(t *testing.T) {
 	}
 	agent := New(deps,
 		WithConfig(EucloConfig{StateReground: &fakeRegroundSource{}}),
-		WithHITLBroker(testsupport.NewAutoApproveHITLBroker()),
+		WithHITLBroker(testsupport.NewAutoApprovingBroker()), WithInteractionResolver(testhelper.NewPermissiveResolver()),
 	)
 
 	if err := agent.Initialize(nil); err != nil {

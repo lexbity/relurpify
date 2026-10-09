@@ -529,7 +529,7 @@ func buildRuntime(ctx context.Context, cfg Config, secrets config.Secrets) (*Run
 		ws.Telemetry.Emit(ev)
 	}
 
-	agent, err := instantiateAgent(rt.paradigmDeps(), rt.hitlBroker())
+	agent, err := instantiateAgent(rt.paradigmDeps(), rt.hitlBroker(), rt.interactionResolver())
 	if err != nil {
 		_ = rt.Close(ctx)
 		return nil, fmt.Errorf("instantiate agent: %w", err)
@@ -785,7 +785,7 @@ func (r *Runtime) applyResolvedAgentState(name string, effectiveContract *config
 		AgentSpec:         agentSpecCap,
 		Telemetry:         r.Workspace.Telemetry,
 	}
-	agent, err := instantiateAgent(r.switchAgentDeps(agentCfg), r.hitlBroker())
+	agent, err := instantiateAgent(r.switchAgentDeps(agentCfg), r.hitlBroker(), r.interactionResolver())
 	if err != nil {
 		return fmt.Errorf("instantiate agent %q: %w", name, err)
 	}
@@ -819,10 +819,10 @@ func builtinDocumentSnapshot(contract *config.EffectiveAgentContract, workspace 
 	}
 }
 
-// instantiateAgent builds the euclo workflow executor. The HITL broker is
-// required by the execution graph; passing nil makes graph construction fail
-// closed at execution time.
-func instantiateAgent(deps *paradigm.Deps, hitl euclopolicy.HITLBroker) (agentgraph.WorkflowExecutor, error) {
+// instantiateAgent builds the euclo workflow executor. The HITL broker and the
+// InteractionResolver are required by the execution graph; passing nil makes
+// graph construction fail closed at execution time (D12).
+func instantiateAgent(deps *paradigm.Deps, hitl euclopolicy.HITLBroker, resolver interaction.Resolver) (agentgraph.WorkflowExecutor, error) {
 	if deps == nil || deps.Registry == nil {
 		return nil, fmt.Errorf("instantiate euclo: capability registry is required")
 	}
@@ -830,6 +830,7 @@ func instantiateAgent(deps *paradigm.Deps, hitl euclopolicy.HITLBroker) (agentgr
 		deps,
 		euclo.WithCheckpointRepository(deps.AgentLifecycle),
 		euclo.WithHITLBroker(hitl),
+		euclo.WithInteractionResolver(resolver),
 	), nil
 }
 

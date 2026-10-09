@@ -63,9 +63,25 @@ func (n *RunNode) Execute(ctx context.Context, env *contextdata.Envelope) (retRe
 	}
 	if execErr != nil {
 		failureResult := n.recordOperationalFailure(ctx, env, execErr)
+		if operationallyRequestsRetry(failureResult) {
+			// D12: the surface answered "retry" on the error-decision frame.
+			// Re-execute this step's agent exactly once; a second failure
+			// aborts without re-asking.
+			if retryResult, retryErr := agent.Execute(ctx, task, env); retryErr == nil {
+				return n.completeRunStep(ctx, env, retryResult)
+			} else {
+				failureResult = n.recordExhaustedRetry(ctx, env, retryErr)
+			}
+		}
 		n.markFallbackActivated(ctx, env, failureResult)
 		return failureResult, nil
 	}
+	return n.completeRunStep(ctx, env, result)
+}
+
+// completeRunStep writes captures and step metadata for a successful (or
+// retried-successfully) run step and returns the normalized result.
+func (n *RunNode) completeRunStep(ctx context.Context, env *contextdata.Envelope, result *execution.Result) (*execution.Result, error) {
 	if result == nil {
 		result = &execution.Result{
 			NodeID:  n.id,

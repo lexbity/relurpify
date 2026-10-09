@@ -9,14 +9,21 @@ import (
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
+// frameSeqKey is the per-envelope atomic sequence counter for frames (D15:
+// assignment is a single Envelope.NextSequence critical section, never an
+// unlocked read-increment-write).
+const frameSeqKey = "euclo.interaction.frame_seq"
+
 // EmitFrame writes a frame to the envelope and publishes to the event log.
 func EmitFrame(ctx context.Context, frame *InteractionFrame, env *contextdata.Envelope, eventLog telemetry.Telemetry) error {
 	if frame == nil {
 		return nil
 	}
+	if env == nil {
+		return fmt.Errorf("interaction.emit: envelope required")
+	}
 
-	seq := getNextFrameSeq(env)
-	frame.Seq = seq
+	frame.Seq = int(env.NextSequence(frameSeqKey))
 	if frame.CreatedAt.IsZero() {
 		frame.CreatedAt = time.Now().UTC()
 	}
@@ -24,9 +31,8 @@ func EmitFrame(ctx context.Context, frame *InteractionFrame, env *contextdata.En
 		frame.Metadata.Timestamp = frame.CreatedAt
 	}
 
-	frameKey := frameStorageKey(seq)
+	frameKey := frameStorageKey(frame.Seq)
 	env.SetWorkingValueWithClass(frameKey, frame, contextdata.MemoryClassTask)
-	env.SetWorkingValueWithClass("euclo.interaction.frame_seq", seq+1, contextdata.MemoryClassTask)
 
 	sink := eventLog
 	if sink == nil {
@@ -45,6 +51,7 @@ func EmitFrame(ctx context.Context, frame *InteractionFrame, env *contextdata.En
 				"session_id":   frame.SessionID,
 				"default_slot": frame.DefaultSlot,
 				"slot_count":   len(frame.Slots),
+				"deadline":     frame.Deadline(time.Now().UTC()).Format(time.RFC3339Nano),
 			},
 		}
 		telemetry.StampCorrelation(ctx, &ev)
@@ -52,18 +59,6 @@ func EmitFrame(ctx context.Context, frame *InteractionFrame, env *contextdata.En
 	}
 
 	return nil
-}
-
-// getNextFrameSeq gets the next frame sequence number from the envelope.
-func getNextFrameSeq(env *contextdata.Envelope) int {
-	seqVal, ok := contextdata.GetTyped[any](env, "euclo.interaction.frame_seq")
-	if !ok {
-		return 0
-	}
-	if seq, ok := seqVal.(int); ok {
-		return seq
-	}
-	return 0
 }
 
 func frameStorageKey(seq int) string {

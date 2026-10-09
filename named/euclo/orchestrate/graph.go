@@ -18,6 +18,7 @@ import (
 	"codeburg.org/lexbit/relurpify/named/euclo/families"
 	"codeburg.org/lexbit/relurpify/named/euclo/grounding"
 	"codeburg.org/lexbit/relurpify/named/euclo/intake"
+	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	"codeburg.org/lexbit/relurpify/named/euclo/policy"
 	"codeburg.org/lexbit/relurpify/named/euclo/reporting"
 	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
@@ -52,6 +53,9 @@ type RootGraphDeps struct {
 	// Decision Records (D11). Nil is a declared degraded mode: dispatch
 	// proceeds and no records are persisted.
 	Lifecycle contextports.LifecycleRepository
+	// InteractionResolver answers interaction frames (D12). It is required:
+	// a surface always exists, and absence is a construction error.
+	InteractionResolver interaction.Resolver
 }
 
 // RootGraph wires together orchestration nodes using the agentgraph runtime.
@@ -83,6 +87,10 @@ func NewRootGraph(ctx context.Context, deps RootGraphDeps) (*RootGraph, error) {
 		return nil, fmt.Errorf("euclo root graph: a HITL broker is required (fail-closed)")
 	}
 	hitl := deps.HITLBroker
+	if deps.InteractionResolver == nil {
+		// D12: a surface always exists; construction fails closed when absent.
+		return nil, fmt.Errorf("euclo root graph: an interaction resolver is required (fail-closed)")
+	}
 
 	g := agentgraph.NewGraph()
 	nodes, err := buildNodes(ctx, buildNodeInput{
@@ -101,6 +109,7 @@ func NewRootGraph(ctx context.Context, deps RootGraphDeps) (*RootGraph, error) {
 		stateReground:        deps.StateReground,
 		tier2Model:           deps.Tier2Model,
 		lifecycle:            deps.Lifecycle,
+		resolver:             deps.InteractionResolver,
 	})
 	if err != nil {
 		return nil, err
@@ -180,6 +189,7 @@ type buildNodeInput struct {
 	stateReground        grounding.StateRegroundSource
 	tier2Model           model.LanguageModel
 	lifecycle            contextports.LifecycleRepository
+	resolver             interaction.Resolver
 }
 
 func buildNodes(ctx context.Context, in buildNodeInput) ([]agentgraph.Node, error) {
@@ -308,7 +318,8 @@ func buildNodes(ctx context.Context, in buildNodeInput) ([]agentgraph.Node, erro
 		WithIngestionPipeline(nil).
 		WithWorkspace(in.workspace).
 		WithStateReground(in.stateReground).
-		WithSelectionRecorder(selectionRecorder(in.lifecycle))
+		WithSelectionRecorder(selectionRecorder(in.lifecycle)).
+		WithInteractionResolver(in.resolver)
 	thoughtrecipeExec.WithThoughtRecipeRegistry(thoughtrecipeReg)
 
 	capabilityExec := NewCapabilityExecutionNode("euclo.execute_capability").

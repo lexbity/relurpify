@@ -257,6 +257,34 @@ func selectionOptionsFromSlots(slots []ActionSlot) []SelectionOption {
 	return out
 }
 
+// Deadline returns the frame's resolution deadline: CreatedAt + Timeout, with
+// the default TTL policy (5 minutes, the same default that governs HITL) when
+// Timeout is unset (D12). A zero CreatedAt is taken as now.
+func (f *InteractionFrame) Deadline(now time.Time) time.Time {
+	if f == nil {
+		return now
+	}
+	timeout := f.Timeout
+	if timeout <= 0 {
+		timeout = defaultFrameDeadline
+	}
+	created := f.CreatedAt
+	if created.IsZero() {
+		created = now
+	}
+	return created.Add(timeout)
+}
+
+// Expired reports whether the frame's resolution deadline has passed at the
+// given time. A resolved frame is never "expired" for idempotency purposes —
+// expiry governs only frames awaiting resolution.
+func (f *InteractionFrame) Expired(now time.Time) bool {
+	if f == nil || f.RespondedAt != nil {
+		return false
+	}
+	return now.After(f.Deadline(now))
+}
+
 // SetResponse records a user's response on the frame and mirrors it into payload.
 func (f *InteractionFrame) SetResponse(choice string, extra map[string]any, responder string, respondedAt time.Time) {
 	if f == nil {

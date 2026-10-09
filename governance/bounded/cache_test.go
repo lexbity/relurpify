@@ -167,3 +167,64 @@ func TestRingPartialFill(t *testing.T) {
 		t.Fatalf("Snapshot() = %v, want [a b]", got)
 	}
 }
+
+// TestCacheTakeIf is the exactly-once consumption primitive test (D14): a
+// value removed by TakeIf is never observed again by a concurrent consumer,
+// and a non-matching condition leaves the entry in place.
+func TestCacheTakeIf(t *testing.T) {
+	c := NewCache[string, string](8, 0, nil)
+	c.Put("one_time", "grant-1")
+
+	// Matching condition consumes and returns the value.
+	value, ok := c.TakeIf("one_time", func(v string) bool { return v == "grant-1" })
+	if !ok || value != "grant-1" {
+		t.Fatalf("TakeIf(match) = (%q, %v), want (grant-1, true)", value, ok)
+	}
+	// The entry is gone: a second take finds nothing, so exactly-once holds.
+	if _, ok := c.TakeIf("one_time", nil); ok {
+		t.Fatal("consumed entry must not be observable again")
+	}
+
+	// Non-matching condition keeps the entry.
+	c.Put("session", "grant-2")
+	value, ok = c.TakeIf("session", func(v string) bool { return v == "grant-1" })
+	if !ok || value != "grant-2" {
+		t.Fatalf("TakeIf(no-match) = (%q, %v), want (grant-2, true)", value, ok)
+	}
+	if v, ok := c.Get("session"); !ok || v != "grant-2" {
+		t.Fatalf("no-match TakeIf must keep the entry, got (%q, %v)", v, ok)
+	}
+
+	// Missing keys return false.
+	if _, ok := c.TakeIf("missing", nil); ok {
+		t.Fatal("missing key must not be consumed")
+	}
+}
+
+// TestCacheTakeIfConcurrency proves concurrent consumers cannot both take one
+// removable value.
+func TestCacheTakeIfConcurrency(t *testing.T) {
+	c := NewCache[int, int](16, 0, nil)
+	c.Put(1, 42)
+	var wg sync.WaitGroup
+	taken := make(chan bool, 8)
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, ok := c.TakeIf(1, func(v int) bool { return v == 42 })
+			taken <- ok
+		}()
+	}
+	wg.Wait()
+	close(taken)
+	winners := 0
+	for ok := range taken {
+		if ok {
+			winners++
+		}
+	}
+	if winners != 1 {
+		t.Fatalf("exactly one concurrent consumer must win the take, got %d", winners)
+	}
+}

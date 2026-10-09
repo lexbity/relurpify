@@ -47,15 +47,14 @@ type PermissionDecision struct {
 
 // HITLBroker coordinates blocking and async approvals.
 type HITLBroker struct {
-	timeout     time.Duration
-	mu          sync.Mutex
-	requests    map[string]*PermissionRequest
-	waiters     map[string]chan PermissionDecision
-	subs        map[int]chan HITLEvent
-	subSeq      int
-	clock       func() time.Time
-	AutoApprove bool
-	decisions   fwtelemetry.DecisionSink
+	timeout   time.Duration
+	mu        sync.Mutex
+	requests  map[string]*PermissionRequest
+	waiters   map[string]chan PermissionDecision
+	subs      map[int]chan HITLEvent
+	subSeq    int
+	clock     func() time.Time
+	decisions fwtelemetry.DecisionSink
 
 	// The sweeper expires async entries past the broker TTL so a request
 	// that nobody answers cannot hold the stale-consent window open.
@@ -274,17 +273,6 @@ func (h *HITLBroker) RequestPermission(ctx context.Context, req PermissionReques
 	req.RequestedAt = h.clock()
 	req.State = "pending"
 
-	if h.AutoApprove {
-		return &PermissionGrant{
-			ID:          req.ID + ":auto-approve",
-			Permission:  req.Permission,
-			Scope:       req.Scope,
-			ApprovedBy:  "auto-approve",
-			GrantedAt:   h.clock(),
-			Description: req.Justification,
-		}, nil
-	}
-
 	waitCh := make(chan PermissionDecision, 1)
 
 	h.mu.Lock()
@@ -421,9 +409,9 @@ func (h *HITLBroker) resolve(requestID string, approved bool, decision Permissio
 	if decision.Scope == "" && approved {
 		decision.Scope = req.Scope
 	}
-	if approved && decision.ExpiresAt.IsZero() && decision.Scope == policy.GrantScopeOneTime {
-		decision.ExpiresAt = h.clock().Add(time.Minute)
-	}
+	// D14: one-time grants carry no reuse window — they are consumed at first
+	// authorizing use by the permission manager, and zero ExpiresAt means the
+	// grant never silently extends into a one-minute reuse burst.
 	waiter, hasWaiter := h.waiters[requestID]
 	delete(h.waiters, requestID)
 	reqCopy := *req

@@ -7,6 +7,7 @@ import (
 	"codeburg.org/lexbit/relurpify/execution/agentlifecycle"
 	"codeburg.org/lexbit/relurpify/model"
 	"codeburg.org/lexbit/relurpify/named/euclo/grounding"
+	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	euclopolicy "codeburg.org/lexbit/relurpify/named/euclo/policy"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
@@ -46,6 +47,12 @@ type EucloConfig struct {
 	// It is required to build the execution graph; a nil broker fails closed
 	// rather than silently auto-approving.
 	HITLBroker euclopolicy.HITLBroker
+
+	// InteractionResolver answers interaction frames (D12). It is required at
+	// construction: a surface always exists, and a nil resolver fails graph
+	// construction closed. The resolver is the UX boundary (ask/decision
+	// frames); governance approval remains the HITLBroker's security boundary.
+	InteractionResolver interaction.Resolver
 
 	// StateReground is the optional restart query over the knowledge layer's
 	// grounded capture corpus (Wave 1 IF-2). When composed, recipe dispatch

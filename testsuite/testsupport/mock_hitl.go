@@ -26,10 +26,11 @@ func NewMockHITLBroker() *MockHITLBroker {
 	return &MockHITLBroker{Responses: map[string]*authorization.PermissionGrant{}}
 }
 
-// NewAutoApproveHITLBroker returns a mock that approves every request. It is
+// NewAutoApprovingBroker returns a mock that approves every request. It is
 // intended for tests that exercise non-HITL behavior but still run the policy
-// gate.
-func NewAutoApproveHITLBroker() *MockHITLBroker {
+// gate. The production HITLBroker contains no auto-approve switch (D13); this
+// explicit fake is its test-side replacement.
+func NewAutoApprovingBroker() *MockHITLBroker {
 	now := time.Now().UTC()
 	return &MockHITLBroker{
 		Responses: map[string]*authorization.PermissionGrant{},

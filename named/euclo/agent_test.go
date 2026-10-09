@@ -3,6 +3,7 @@ package euclo
 import (
 	"context"
 	"reflect"
+	"strings"
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
@@ -15,6 +16,7 @@ import (
 	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 	"codeburg.org/lexbit/relurpify/named/euclo/intake"
 	"codeburg.org/lexbit/relurpify/named/euclo/state"
+	"codeburg.org/lexbit/relurpify/testsuite/testhelper"
 	"codeburg.org/lexbit/relurpify/testsuite/testsupport"
 )
 
@@ -22,7 +24,7 @@ func TestAgentCompiles(t *testing.T) {
 	deps := &paradigm.Deps{
 		Registry: registry.NewRegistry(),
 	}
-	agent := New(deps, WithHITLBroker(testsupport.NewAutoApproveHITLBroker()))
+	agent := New(deps, WithHITLBroker(testsupport.NewAutoApprovingBroker()), WithInteractionResolver(testhelper.NewPermissiveResolver()))
 
 	if agent == nil {
 		t.Fatal("New() returned nil")
@@ -43,7 +45,7 @@ func TestBuildGraphReturnsGraph(t *testing.T) {
 		},
 		Registry: registry.NewRegistry(),
 	}
-	agent := New(deps, WithHITLBroker(testsupport.NewAutoApproveHITLBroker()))
+	agent := New(deps, WithHITLBroker(testsupport.NewAutoApprovingBroker()), WithInteractionResolver(testhelper.NewPermissiveResolver()))
 
 	task := &execution.Task{
 		ID:          "test-task",
@@ -61,6 +63,29 @@ func TestBuildGraphReturnsGraph(t *testing.T) {
 	}
 }
 
+// TestResolverRequired is AC-12: the InteractionResolver is a required Euclo
+// dependency — graph construction fails closed without one (D12: a surface
+// always exists).
+func TestResolverRequired(t *testing.T) {
+	deps := &paradigm.Deps{
+		Config: &execution.Config{
+			AgentSpec: &agentspec.AgentRuntimeSpec{
+				Capabilities: agentspec.AgentCapabilitiesSpec{Relurpic: append([]string{}, testRelurpicCapabilities...)},
+			},
+		},
+		Registry: registry.NewRegistry(),
+	}
+	agent := New(deps, WithHITLBroker(testsupport.NewAutoApprovingBroker()))
+	if err := agent.Initialize(nil); err != nil {
+		t.Fatalf("Initialize: %v", err)
+	}
+	task := &execution.Task{ID: "test-task", Type: "analysis", Instruction: "test instruction"}
+	_, err := agent.BuildGraph(context.Background(), task)
+	if err == nil || !strings.Contains(err.Error(), "interaction resolver") {
+		t.Fatalf("expected a fail-closed error naming the interaction resolver, got %v", err)
+	}
+}
+
 func TestExecuteCallsBuildGraph(t *testing.T) {
 	deps := &paradigm.Deps{
 		Config: &execution.Config{
@@ -70,7 +95,7 @@ func TestExecuteCallsBuildGraph(t *testing.T) {
 		},
 		Registry: registry.NewRegistry(),
 	}
-	agent := New(deps, WithHITLBroker(testsupport.NewAutoApproveHITLBroker()))
+	agent := New(deps, WithHITLBroker(testsupport.NewAutoApprovingBroker()), WithInteractionResolver(testhelper.NewPermissiveResolver()))
 
 	task := &execution.Task{
 		ID:          "test-task",
@@ -125,7 +150,7 @@ func TestBuildGraphResumeStateSkipsIntake(t *testing.T) {
 		},
 		Registry: registry.NewRegistry(),
 	}
-	agent := New(deps, WithHITLBroker(testsupport.NewAutoApproveHITLBroker()))
+	agent := New(deps, WithHITLBroker(testsupport.NewAutoApprovingBroker()), WithInteractionResolver(testhelper.NewPermissiveResolver()))
 	if err := agent.Initialize(nil); err != nil {
 		t.Fatalf("Initialize returned error: %v", err)
 	}
@@ -167,7 +192,7 @@ func TestInitializeStoresConfig(t *testing.T) {
 		},
 		Registry: registry.NewRegistry(),
 	}
-	agent := New(deps, WithHITLBroker(testsupport.NewAutoApproveHITLBroker()))
+	agent := New(deps, WithHITLBroker(testsupport.NewAutoApprovingBroker()), WithInteractionResolver(testhelper.NewPermissiveResolver()))
 
 	config := &execution.Config{}
 
@@ -192,7 +217,7 @@ func TestExecuteStashesResumeClassification(t *testing.T) {
 	deps := &paradigm.Deps{
 		Registry: registry.NewRegistry(),
 	}
-	agent := New(deps, WithHITLBroker(testsupport.NewAutoApproveHITLBroker()))
+	agent := New(deps, WithHITLBroker(testsupport.NewAutoApprovingBroker()), WithInteractionResolver(testhelper.NewPermissiveResolver()))
 
 	task := &execution.Task{
 		ID:          "test-task",
@@ -237,7 +262,7 @@ func TestExecuteClearsResumeStateAfterGraph(t *testing.T) {
 		},
 		Registry: registry.NewRegistry(),
 	}
-	agent := New(deps, WithHITLBroker(testsupport.NewAutoApproveHITLBroker()))
+	agent := New(deps, WithHITLBroker(testsupport.NewAutoApprovingBroker()), WithInteractionResolver(testhelper.NewPermissiveResolver()))
 
 	task := &execution.Task{
 		ID:          "test-task",
@@ -272,7 +297,7 @@ func TestCapabilitiesReturnsExpectedIDs(t *testing.T) {
 	deps := &paradigm.Deps{
 		Registry: registry.NewRegistry(),
 	}
-	agent := New(deps, WithHITLBroker(testsupport.NewAutoApproveHITLBroker()))
+	agent := New(deps, WithHITLBroker(testsupport.NewAutoApprovingBroker()), WithInteractionResolver(testhelper.NewPermissiveResolver()))
 
 	caps := agent.Capabilities()
 

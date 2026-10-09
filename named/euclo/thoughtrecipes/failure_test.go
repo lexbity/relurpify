@@ -16,9 +16,11 @@ import (
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/model"
 	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
+	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
 	"codeburg.org/lexbit/relurpify/named/euclo/surface"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
+	"codeburg.org/lexbit/relurpify/testsuite/testhelper"
 )
 
 // --- AC-19: grounding failure classification uses errors.Is, never strings ---
@@ -151,17 +153,56 @@ func TestRecordOperationalFailureProtocol(t *testing.T) {
 		}
 	})
 
-	t.Run("ask degrades to abort until the resolver lands", func(t *testing.T) {
+	t.Run("ask aborts on an unanswered or expired decision frame", func(t *testing.T) {
 		env := contextdata.NewEnvelope("task-ask", "session-ask")
 		ask := *core
 		ask.step.OnError = &surface.StepErrorPolicy{Action: "ask"}
+		// A permissive resolver answers with the frame's default (abort).
+		ask.setResolver(testhelper.NewPermissiveResolver())
 		result := ask.recordOperationalFailure(context.Background(), env, errors.New("boom"))
 
 		if result == nil || result.Success {
 			t.Fatalf("expected abort-style failure result, got %+v", result)
 		}
-		if unavailable, _ := result.Metadata["ask_unavailable"].(bool); !unavailable {
-			t.Fatalf("expected ask_unavailable metadata, got %#v", result.Metadata)
+		if got := result.Metadata["on_error_resolved"]; got != string(policyAbort) {
+			t.Fatalf("on_error_resolved = %v, want abort", got)
+		}
+		if got := result.Metadata["ask_outcome"]; got != "abort" {
+			t.Fatalf("ask_outcome = %v, want abort", got)
+		}
+		if _, present := result.Metadata["ask_unavailable"]; present {
+			t.Fatal("the interim ask_unavailable marker must be gone (phase 8 deletes it)")
+		}
+	})
+
+	t.Run("ask continues when the human chooses continue", func(t *testing.T) {
+		env := contextdata.NewEnvelope("task-ask-continue", "session-ask-continue")
+		ask := *core
+		ask.step.OnError = &surface.StepErrorPolicy{Action: "ask"}
+		ask.setResolver(askScriptedResolver{answer: "continue"})
+		result := ask.recordOperationalFailure(context.Background(), env, errors.New("boom"))
+
+		if result == nil || !result.Success {
+			t.Fatalf("expected a resolved-success result, got %+v", result)
+		}
+		if got := result.Metadata["ask_outcome"]; got != "continue" {
+			t.Fatalf("ask_outcome = %v, want continue", got)
+		}
+	})
+
+	t.Run("ask retry requests a single re-execution", func(t *testing.T) {
+		env := contextdata.NewEnvelope("task-ask-retry", "session-ask-retry")
+		ask := *core
+		ask.step.OnError = &surface.StepErrorPolicy{Action: "ask"}
+		ask.setResolver(askScriptedResolver{answer: "retry"})
+		result := ask.recordOperationalFailure(context.Background(), env, errors.New("boom"))
+
+		if result == nil || result.Success {
+			t.Fatalf("expected a pending-retry failure result, got %+v", result)
+		}
+		requested, _ := result.Metadata["ask_retry_requested"].(bool)
+		if !requested {
+			t.Fatalf("expected ask_retry_requested, got %#v", result.Metadata)
 		}
 	})
 }
@@ -253,6 +294,119 @@ func TestFallbackEdgeFiresOnlyOnOperationalFailure(t *testing.T) {
 	}
 }
 
+// TestRunNodeAskPolicyEndToEnd drives the on_error: ask policy through a real
+// RunNode: a failing model asks the resolver, and the human's answer governs —
+// abort on the frame's default, single bounded retry otherwise.
+func TestRunNodeAskPolicyEndToEnd(t *testing.T) {
+	newEnv := func() *contextdata.Envelope { return contextdata.NewEnvelope("task-ask-e2e", "session-ask-e2e") }
+	step := func() ExecutionStep {
+		return ExecutionStep{
+			ID:       "react.ask.step",
+			Kind:     StepKindRun,
+			Paradigm: "react",
+			Goal:     "Do the thing.",
+			Prompt:   "Do the thing.",
+			OnError:  &surface.StepErrorPolicy{Action: "ask"},
+		}
+	}
+
+	t.Run("unanswered frame aborts structured", func(t *testing.T) {
+		sink := &recordingTelemetry{}
+		deps := &paradigm.Deps{
+			Model:         failingModel{err: errors.New("provider exploded")},
+			Config:        &execution.Config{Name: "ask-e2e", Model: "failing"},
+			Telemetry:     sink,
+			StreamTrigger: contextstream.NewTrigger(noopCompiler{}),
+		}
+		node := NewRunNode("react.ask.step.execute", deps, step())
+		node.setResolver(askScriptedResolver{answer: ""}) // expired / unanswered
+		result, err := node.Execute(context.Background(), newEnv())
+		if err != nil {
+			t.Fatalf("expected a structured result, got error: %v", err)
+		}
+		if result == nil || result.Success {
+			t.Fatalf("expected abort-style failure, got %+v", result)
+		}
+		if got := result.Metadata["ask_outcome"]; got != "abort" {
+			t.Fatalf("ask_outcome = %v, want abort", got)
+		}
+	})
+
+	t.Run("retry re-executes and finishes on the second attempt", func(t *testing.T) {
+		sink := &recordingTelemetry{}
+		deps := &paradigm.Deps{
+			Model:         &flakyModel{failFirst: true},
+			Config:        &execution.Config{Name: "ask-retry-e2e", Model: "flaky"},
+			Telemetry:     sink,
+			StreamTrigger: contextstream.NewTrigger(noopCompiler{}),
+		}
+		node := NewRunNode("react.ask.step.execute", deps, step())
+		node.setResolver(askScriptedResolver{answer: "retry"})
+		result, err := node.Execute(context.Background(), newEnv())
+		if err != nil {
+			t.Fatalf("retry-success must not surface an error: %v", err)
+		}
+		if result == nil || !result.Success {
+			t.Fatalf("expected retry-success, got %+v", result)
+		}
+	})
+
+	t.Run("retry exhausts to abort on repeated failure", func(t *testing.T) {
+		sink := &recordingTelemetry{}
+		deps := &paradigm.Deps{
+			Model:         failingModel{err: errors.New("provider exploded")},
+			Config:        &execution.Config{Name: "ask-retry-exhausted", Model: "failing"},
+			Telemetry:     sink,
+			StreamTrigger: contextstream.NewTrigger(noopCompiler{}),
+		}
+		node := NewRunNode("react.ask.step.execute", deps, step())
+		node.setResolver(askScriptedResolver{answer: "retry"})
+		result, err := node.Execute(context.Background(), newEnv())
+		if err != nil {
+			t.Fatalf("expected a structured result, got error: %v", err)
+		}
+		if result == nil || result.Success {
+			t.Fatalf("expected abort after retry exhaustion, got %+v", result)
+		}
+		if got := result.Metadata["ask_outcome"]; got != "retry_exhausted" {
+			t.Fatalf("ask_outcome = %v, want retry_exhausted", got)
+		}
+	})
+}
+
+// flakyModel fails the first Generate call and succeeds thereafter, proving an
+// ask-guided retry actually re-executes the step's agent.
+type flakyModel struct {
+	failFirst bool
+}
+
+func (m *flakyModel) Generate(_ context.Context, _ string, _ *model.LLMOptions) (*model.LLMResponse, error) {
+	if m.failFirst {
+		m.failFirst = false
+		return nil, errors.New("transient explosion")
+	}
+	return &model.LLMResponse{Text: `{"thought":"ok","action":"complete","complete":true,"summary":"done"}`}, nil
+}
+
+func (m *flakyModel) GenerateStream(_ context.Context, prompt string, opts *model.LLMOptions) (<-chan string, error) {
+	response, err := m.Generate(nil, prompt, opts)
+	if err != nil {
+		return nil, err
+	}
+	ch := make(chan string, 1)
+	ch <- response.Text
+	close(ch)
+	return ch, nil
+}
+
+func (m *flakyModel) Chat(_ context.Context, _ []model.Message, opts *model.LLMOptions) (*model.LLMResponse, error) {
+	return m.Generate(nil, "", opts)
+}
+
+func (m *flakyModel) ChatWithTools(ctx context.Context, _ []model.Message, _ []model.LLMToolSpec, opts *model.LLMOptions) (*model.LLMResponse, error) {
+	return m.Generate(ctx, "", opts)
+}
+
 // --- AC-7: a failing model ends the turn structured, no panic ---
 
 func TestRunNodeOperationalFailureEndsStructured(t *testing.T) {
@@ -296,6 +450,23 @@ func TestRunNodeOperationalFailureEndsStructured(t *testing.T) {
 }
 
 // --- helpers ---------------------------------------------------------------
+
+// askScriptedResolver answers every error-decision frame with a fixed answer,
+// driving the ask-policy mapping deterministically in failure tests.
+type askScriptedResolver struct {
+	answer string
+}
+
+func (r askScriptedResolver) Resolve(_ context.Context, _ *interaction.InteractionFrame) (interaction.FrameResolution, error) {
+	if r.answer == "" {
+		return interaction.FrameResolution{Status: interaction.ResolutionExpired}, nil
+	}
+	return interaction.FrameResolution{Status: interaction.ResolutionAnswered, Answer: r.answer}, nil
+}
+
+func (askScriptedResolver) Notify(_ context.Context, _ *interaction.InteractionFrame) error {
+	return nil
+}
 
 type recordingTelemetry struct {
 	mu     sync.Mutex

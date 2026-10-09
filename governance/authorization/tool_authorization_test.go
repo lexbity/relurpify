@@ -6,9 +6,34 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/governance/permissions"
-	policy "codeburg.org/lexbit/relurpify/governance/policy"
+	"codeburg.org/lexbit/relurpify/governance/policy"
 	governanceports "codeburg.org/lexbit/relurpify/governance/ports"
 )
+
+// toolApprovingProvider is an inline HITLProvider test double that approves
+// every request. It lives here (not in testsuite) so the enforcement tests can
+// exercise HITL-ask paths without the production broker's approval workflow.
+type toolApprovingProvider struct {
+	grants map[string]*PermissionGrant
+}
+
+func (p *toolApprovingProvider) RequestPermission(_ context.Context, req PermissionRequest) (*PermissionGrant, error) {
+	now := time.Now().UTC()
+	grant := &PermissionGrant{
+		ID:          "tool-approving-" + req.Permission.Action,
+		Permission:  req.Permission,
+		Scope:       req.Scope,
+		ApprovedBy:  "test",
+		GrantedAt:   now,
+		ExpiresAt:   now.Add(time.Minute),
+		Description: req.Justification,
+	}
+	if p.grants == nil {
+		p.grants = make(map[string]*PermissionGrant)
+	}
+	p.grants[req.Permission.Action] = grant
+	return grant, nil
+}
 
 func newToolAuthManager(t *testing.T) (*PermissionManager, *policy.FileChainAuditLogger) {
 	t.Helper()
@@ -43,9 +68,7 @@ func TestAuthorizeToolByNameDenyPolicy(t *testing.T) {
 }
 
 func TestAuthorizeToolByNameAskPolicyWithHITL(t *testing.T) {
-	broker := NewHITLBroker(time.Minute, nil)
-	defer broker.Stop()
-	broker.AutoApprove = true
+	broker := &toolApprovingProvider{}
 	pm, err := NewPermissionManager("/tmp", &permissions.PermissionSet{}, newTestAuditLogger(t), broker)
 	if err != nil {
 		t.Fatalf("NewPermissionManager: %v", err)

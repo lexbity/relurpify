@@ -117,6 +117,8 @@ func (c *stepCore) executeCapability(ctx context.Context, env *contextdata.Envel
 		data["error"] = err.Error()
 	}
 	failureDetected := !success
+	actionTaken := policyAction
+	askOutcome := ""
 	if err != nil {
 		switch policyAction {
 		case "skip":
@@ -126,6 +128,47 @@ func (c *stepCore) executeCapability(ctx context.Context, env *contextdata.Envel
 				data["skipped_reason"] = msg
 			}
 			delete(data, "error")
+		case "ask":
+			// D12: the operational-failure decision frame goes to the
+			// InteractionResolver (construction-required). Unanswered, denied,
+			// expired, or unusable answers abort; "continue" skips; "retry"
+			// re-invokes the capability exactly once.
+			resolvedAction, outcome := c.resolveAskPolicy(ctx, env, err)
+			askOutcome = outcome
+			switch resolvedAction {
+			case policyContinue:
+				success = true
+				actionTaken = "continue"
+				data["skipped"] = true
+				if msg, ok := data["error"].(string); ok && strings.TrimSpace(msg) != "" {
+					data["skipped_reason"] = msg
+				}
+				delete(data, "error")
+			case policyRetry:
+				retryResult, retryErr := reg.InvokeCapability(ctx, env.State(), c.step.CapabilityID, args)
+				if retryErr == nil {
+					success = true
+					actionTaken = "continue"
+					toolResult = retryResult
+					if toolResult != nil {
+						data["output"] = toolResult.Data
+						if toolResult.Metadata != nil {
+							data["metadata"] = toolResult.Metadata
+						}
+					}
+					askOutcome = "retry"
+				} else {
+					// The human's retry was honored once; a second failure
+					// aborts without re-asking.
+					success = false
+					actionTaken = "abort"
+					data["error"] = retryErr.Error()
+					askOutcome = "retry_exhausted"
+				}
+			default: // abort
+				success = false
+				actionTaken = "abort"
+			}
 		case "fallback", "fail", "":
 			success = false
 		default:
@@ -133,7 +176,6 @@ func (c *stepCore) executeCapability(ctx context.Context, env *contextdata.Envel
 		}
 	}
 
-	actionTaken := policyAction
 	if success {
 		actionTaken = string(policyContinue)
 	}
@@ -159,8 +201,11 @@ func (c *stepCore) executeCapability(ctx context.Context, env *contextdata.Envel
 			state.SetStepFailure(env, failure)
 			c.writeStepFailureMetadata(env, failureKind, policyActionKind(rawAction), policyActionKind(actionTaken))
 		}
-		c.emitOperationalFailure(ctx, env, failureKind, policyActionKind(rawAction), policyActionKind(actionTaken), policyActionKind(rawAction) == policyAsk)
+		c.emitOperationalFailure(ctx, env, failureKind, policyActionKind(rawAction), policyActionKind(actionTaken), askOutcome)
 		data["failure_kind"] = string(failureKind)
+		if askOutcome != "" {
+			data["ask_outcome"] = askOutcome
+		}
 	}
 
 	if c.deps.IngestOutputs {

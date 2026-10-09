@@ -68,9 +68,42 @@ func (n *DelegateNode) Execute(ctx context.Context, env *contextdata.Envelope) (
 		result.Error = execErr.Error()
 	}
 
+	if execErr != nil {
+		// FR-9: an operational failure in a delegated sub-agent ends the step
+		// structured, classified, and recorded — never a raw graph error. The
+		// failed attempt's output is still recorded, then the policy result
+		// governs.
+		failureResult := n.recordOperationalFailure(ctx, env, execErr)
+		if operationallyRequestsRetry(failureResult) {
+			// D12: the surface answered "retry" on the error-decision frame.
+			// Re-run the delegated sub-agent exactly once; a second failure
+			// aborts without re-asking.
+			if retryResult, retryErr := agent.Execute(ctx, task, childEnv); retryErr == nil {
+				return n.completeDelegateStep(ctx, env, childEnv, retryResult)
+			} else {
+				failureResult = n.recordExhaustedRetry(ctx, env, retryErr)
+			}
+		}
+		if _, capErr := n.completeDelegateStep(ctx, env, childEnv, result); capErr != nil {
+			stepResult = result
+			stepErr = capErr
+			return result, capErr
+		}
+		n.markFallbackActivated(ctx, env, failureResult)
+		stepResult = failureResult
+		return failureResult, nil
+	}
+	return n.completeDelegateStep(ctx, env, childEnv, result)
+}
+
+// completeDelegateStep writes delegation captures and step metadata for a
+// successful (or retried-successfully) delegate step.
+func (n *DelegateNode) completeDelegateStep(ctx context.Context, env, childEnv *contextdata.Envelope, result *execution.Result) (*execution.Result, error) {
+	if result.Data == nil {
+		result.Data = execution.NewToolResultPayload(map[string]any{})
+	}
+
 	if err := n.writeDelegationCaptures(ctx, env, childEnv, result); err != nil {
-		stepResult = result
-		stepErr = err
 		return result, err
 	}
 	n.writeStepMetadata(env)
@@ -85,15 +118,6 @@ func (n *DelegateNode) Execute(ctx context.Context, env *contextdata.Envelope) (
 		contextdata.SetTyped(env, "euclo.execution.step."+n.step.ID+".error", result.Error)
 	}
 
-	stepResult = result
-	if execErr != nil {
-		// FR-9: an operational failure in a delegated sub-agent ends the step
-		// structured, classified, and recorded — never a raw graph error.
-		failureResult := n.recordOperationalFailure(ctx, env, execErr)
-		n.markFallbackActivated(ctx, env, failureResult)
-		stepResult = failureResult
-		return failureResult, nil
-	}
 	n.markFallbackActivated(ctx, env, result)
 	return result, nil
 }

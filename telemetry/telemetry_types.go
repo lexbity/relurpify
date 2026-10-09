@@ -134,6 +134,10 @@ const (
 	// EventGroundingRegroundFailed reports a dispatch-time reground query that
 	// failed; the run continues cold rather than silently restoring nothing.
 	EventGroundingRegroundFailed EventType = "grounding.reground_failed"
+	// EventFrameExpiredLateAnswer is emitted when a resolution arrives for an
+	// interaction frame whose deadline has already passed. Nothing changes:
+	// the stale-consent hole is closed at the resolver boundary (D12/FR-18).
+	EventFrameExpiredLateAnswer EventType = "frame.expired_late_answer"
 )
 
 const (

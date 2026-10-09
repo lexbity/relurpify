@@ -144,11 +144,42 @@ func (c *Cache[K, V]) Delete(k K) {
 	defer c.mu.Unlock()
 	if entry, ok := c.entries[k]; ok {
 		c.removeLocked(k, entry)
-		for i, existing := range c.order {
-			if existing == k {
-				c.order = append(c.order[:i], c.order[i+1:]...)
-				break
-			}
+		c.removeFromOrderLocked(k)
+	}
+}
+
+// TakeIf atomically returns the live value for k and removes it when cond
+// holds. When cond is false the entry stays and its value is returned. A
+// missing or TTL-expired key returns the zero value and false. This is the
+// exactly-once consumption primitive: concurrent callers cannot both observe
+// and remove the same removable value, so a one-time grant can never authorize
+// a burst (D14).
+func (c *Cache[K, V]) TakeIf(k K, cond func(V) bool) (V, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	entry, ok := c.entries[k]
+	if !ok {
+		var zero V
+		return zero, false
+	}
+	if c.expiredLocked(k, entry) {
+		var zero V
+		return zero, false
+	}
+	value := entry.value
+	if cond == nil || cond(value) {
+		c.removeLocked(k, entry)
+		c.removeFromOrderLocked(k)
+	}
+	return value, true
+}
+
+// removeFromOrderLocked drops k from the LRU order slice. Caller holds c.mu.
+func (c *Cache[K, V]) removeFromOrderLocked(k K) {
+	for i, existing := range c.order {
+		if existing == k {
+			c.order = append(c.order[:i], c.order[i+1:]...)
+			return
 		}
 	}
 }

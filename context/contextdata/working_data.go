@@ -53,6 +53,65 @@ func (e *Envelope) SetWorkingValueWithOrigin(key string, value any, class Memory
 	}
 }
 
+// NextSequence atomically reads, increments, and rewrites a per-key monotonic
+// counter under the envelope lock (D15). The stored value is the next
+// sequence (post-increment), so two concurrent callers can never observe the
+// same value: the counter's read-increment-write is one critical section.
+// A missing key starts at 1. Numeric compatibility: an existing int/int64/uint
+// stored value is normalized to uint64, so code that previously maintained the
+// counter via an unlocked read-modify-write migrates without interpretation
+// drift.
+func (e *Envelope) NextSequence(key string) uint64 {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	var current uint64
+	switch v := e.WorkingData[key].(type) {
+	case uint64:
+		current = v
+	case uint:
+		current = uint64(v)
+	case int:
+		if v > 0 {
+			current = uint64(v)
+		}
+	case int64:
+		if v > 0 {
+			current = uint64(v)
+		}
+	}
+	current++
+
+	if e.WorkingData == nil {
+		e.WorkingData = make(map[string]any)
+	}
+	if e.Origins == nil {
+		e.Origins = make(map[string]OriginClass)
+	}
+	e.WorkingData[key] = current
+	e.Origins[key] = OriginLLM
+
+	now := time.Now().UTC()
+	found := false
+	for i, ref := range e.References.WorkingMemory {
+		if ref.TaskID == e.TaskID && ref.Key == key {
+			e.References.WorkingMemory[i].UpdatedAt = now
+			found = true
+			break
+		}
+	}
+	if !found {
+		e.References.WorkingMemory = append(e.References.WorkingMemory, WorkingMemoryReference{
+			TaskID:    e.TaskID,
+			Key:       key,
+			Class:     MemoryClassTask,
+			CreatedAt: now,
+			UpdatedAt: now,
+		})
+	}
+	return current
+}
+
 // OriginOf returns the recorded origin class for a working-memory key,
 // defaulting to the least provable (llm) class when none was recorded.
 func (e *Envelope) OriginOf(key string) OriginClass {

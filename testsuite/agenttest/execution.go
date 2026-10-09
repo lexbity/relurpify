@@ -32,6 +32,8 @@ import (
 	"codeburg.org/lexbit/relurpify/platform/fs"
 	"codeburg.org/lexbit/relurpify/platform/llm"
 	"codeburg.org/lexbit/relurpify/telemetry"
+	"codeburg.org/lexbit/relurpify/testsuite/testhelper"
+	"codeburg.org/lexbit/relurpify/testsuite/testsupport"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 	cfgsecurity "codeburg.org/lexbit/relurpify/userconfig/config/security"
 )
@@ -154,10 +156,10 @@ func (e *PreparedRunExecutor) buildSecurity(ctx context.Context, desc *PreparedR
 		e.security = sec
 		// Test seam: no agent registration runs on this path, so supply an
 		// auto-approving broker to keep the graph buildable. The production
-		// path always uses the registration broker.
-		broker := fauthorization.NewHITLBroker(0, nil)
-		broker.AutoApprove = true
-		e.hitlBroker = broker
+		// path always uses the registration broker. The production
+		// authorization.HITLBroker carries no auto-approval switch (D13):
+		// this explicit test-support fake is the only approving broker.
+		e.hitlBroker = testsupport.NewAutoApprovingBroker()
 		return nil
 	}
 
@@ -370,6 +372,10 @@ func (e *PreparedRunExecutor) createAgent(deps *paradigm.Deps) error {
 		euclo.WithCheckpointRepository(deps.AgentLifecycle),
 		euclo.WithHITLBroker(e.hitlBroker),
 		euclo.WithLifecycleRepository(e.lifecycleRepository()),
+		// D12: a surface always exists. The harness answers interaction
+		// frames permissively (default choice) — the explicit test-side fake,
+		// never a production approval switch.
+		euclo.WithInteractionResolver(testhelper.NewPermissiveResolver()),
 	)
 	if err := agent.Initialize(nil); err != nil {
 		return err

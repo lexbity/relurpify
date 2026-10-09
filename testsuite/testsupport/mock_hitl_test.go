@@ -21,8 +21,8 @@ func TestMockHITLBrokerFailsClosedByDefault(t *testing.T) {
 	}
 }
 
-func TestMockHITLBrokerAutoApprove(t *testing.T) {
-	broker := NewAutoApproveHITLBroker()
+func TestMockHITLBrokerApproves(t *testing.T) {
+	broker := NewAutoApprovingBroker()
 	grant, err := broker.RequestPermission(context.Background(), authorization.PermissionRequest{
 		Permission: permissions.PermissionDescriptor{Action: "euclo.policy.gate"},
 	})

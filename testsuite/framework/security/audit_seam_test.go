@@ -3,7 +3,6 @@ package security
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -22,8 +21,7 @@ func TestAuditChainEndToEnd(t *testing.T) {
 	declared := &permissions.PermissionSet{
 		Executables: []permissions.ExecutablePermission{{Binary: "echo"}},
 	}
-	broker := fauthorization.NewHITLBroker(time.Minute, nil)
-	broker.AutoApprove = true
+	broker := testhelper.NewAutoApprovingBroker()
 	pm, err := fauthorization.NewPermissionManager(t.TempDir(), declared, audit, broker)
 	require.NoError(t, err)
 

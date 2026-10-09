@@ -18,6 +18,7 @@ import (
 	"codeburg.org/lexbit/relurpify/named/euclo/euclokeys"
 	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 	"codeburg.org/lexbit/relurpify/named/euclo/intake"
+	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	"codeburg.org/lexbit/relurpify/named/euclo/orchestrate"
 	euclopolicy "codeburg.org/lexbit/relurpify/named/euclo/policy"
 	"codeburg.org/lexbit/relurpify/named/euclo/services"
@@ -92,6 +93,15 @@ func WithHITLBroker(broker euclopolicy.HITLBroker) Option {
 func WithLifecycleRepository(repo contextports.LifecycleRepository) Option {
 	return func(a *Agent) {
 		a.config.LifecycleRepository = repo
+	}
+}
+
+// WithInteractionResolver wires the InteractionResolver required by the
+// execution graph (D12). A nil resolver fails graph construction closed; the
+// surface always exists.
+func WithInteractionResolver(resolver interaction.Resolver) Option {
+	return func(a *Agent) {
+		a.config.InteractionResolver = resolver
 	}
 }
 
@@ -228,6 +238,7 @@ func (a *Agent) BuildGraph(ctx context.Context, task *execution.Task) (*agentgra
 		StateReground:        a.config.StateReground,
 		Tier2Model:           tier2Model,
 		Lifecycle:            a.config.LifecycleRepository,
+		InteractionResolver:  a.config.InteractionResolver,
 	}
 	rootGraph, err := orchestrate.NewRootGraph(ctx, deps)
 	if err != nil {

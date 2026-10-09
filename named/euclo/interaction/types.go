@@ -29,6 +29,9 @@ const (
 	FrameExecutionSummary       FrameType = "execution_summary"
 	FrameVerificationEvidence   FrameType = "verification_evidence"
 	FrameOutcomeFeedback        FrameType = "outcome_feedback"
+	// FrameErrorDecision is the operational-failure decision frame emitted by
+	// the on_error: ask policy (D6/D12): retry, continue, or abort.
+	FrameErrorDecision FrameType = "error_decision"
 )
 
 // ActionSlot represents an action the user can take on a frame.

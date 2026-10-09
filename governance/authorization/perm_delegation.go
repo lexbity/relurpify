@@ -113,11 +113,23 @@ func (m *PermissionManager) toolAllowedByTaskGrant(ctx context.Context, tool Too
 // ensureGrant obtains a HITL approval when a permission requires human review.
 func (m *PermissionManager) ensureGrant(ctx context.Context, agentID string, desc permissions.PermissionDescriptor) error {
 	key := desc.Action + ":" + desc.Resource
-	if grant, ok := m.grants.Get(key); ok && !grant.Expired(m.grantClock()) {
+	// D14: one-time grants are consumed at the moment they authorize an
+	// enforcement check. TakeIf makes allow+consume one atomic critical
+	// section: a concurrent second check sees the consumed grant and re-asks,
+	// so a single approval can never authorize a burst of same-shaped
+	// actions. Expired grants are removed when observed.
+	grant, ok := m.grants.TakeIf(key, func(g *PermissionGrant) bool {
+		return g == nil || g.Expired(m.grantClock()) || g.Scope == policy.GrantScopeOneTime
+	})
+	if ok && grant != nil && !grant.Expired(m.grantClock()) {
 		return nil
-	} else if ok {
-		m.grants.Delete(key)
 	}
+	return m.requestGrant(ctx, agentID, desc)
+}
+
+// requestGrant asks the HITL provider for a fresh approval and caches the
+// grant under the permission key.
+func (m *PermissionManager) requestGrant(ctx context.Context, agentID string, desc permissions.PermissionDescriptor) error {
 	if m.hitl == nil {
 		return m.deny(ctx, agentID, desc, "hitl approval required")
 	}
@@ -131,7 +143,7 @@ func (m *PermissionManager) ensureGrant(ctx context.Context, agentID string, des
 		return err
 	}
 	grant.SessionID = governanceports.PrincipalFromContext(ctx).AgentID
-	m.putGrant(key, grant)
+	m.putGrant(desc.Action+":"+desc.Resource, grant)
 	return nil
 }
 
@@ -161,10 +173,13 @@ func (m *PermissionManager) RequireApproval(ctx context.Context, agentID string,
 	}
 	desc.RequiresHITL = true
 	key := desc.Action + ":" + desc.Resource
-	if grant, ok := m.grants.Get(key); ok && !grant.Expired(m.grantClock()) {
+	// D14: a cached one-time grant is consumed at the moment it authorizes
+	// this check — TakeIf makes the allow-decide-and-remove one atomic section.
+	grant, ok := m.grants.TakeIf(key, func(g *PermissionGrant) bool {
+		return g == nil || g.Expired(m.grantClock()) || g.Scope == policy.GrantScopeOneTime
+	})
+	if ok && grant != nil && !grant.Expired(m.grantClock()) {
 		return nil
-	} else if ok {
-		m.grants.Delete(key)
 	}
 	if err := m.checkHITLRateLimit(key); err != nil {
 		m.emitPolicyDecision(ctx, agentID, desc, fwtelemetry.PolicyEffectDeny, err.Error(), nil)

@@ -12,24 +12,49 @@ import (
 	"codeburg.org/lexbit/relurpify/context/knowledge/retrieval"
 	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/execution/agentgraph"
+	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 )
+
+// GraphOption configures a thoughtrecipe execution graph at build time.
+type GraphOption func(*graphBuildStash)
+
+// WithInteractionResolver wires the InteractionResolver consumed by the
+// on_error: ask policy (D12). It is required at Euclo construction and is
+// threaded from the composition root through the recipe executor to here.
+func WithInteractionResolver(resolver interaction.Resolver) GraphOption {
+	return func(s *graphBuildStash) {
+		s.resolver = resolver
+	}
+}
+
+// graphBuildStash carries the build-time options that step nodes receive.
+type graphBuildStash struct {
+	resolver interaction.Resolver
+}
 
 // BuildThoughtRecipeGraph builds an agentgraph.Graph for a compiled execution plan.
 //
 // The graph preserves the linear thoughtrecipe steps and also materializes parallel and
 // conditional groups using the primitives available in framework/agentgraph.
-func BuildThoughtRecipeGraph(plan *ExecutionPlan, deps *paradigm.Deps, ingestionPipeline *frameworkingestion.Pipeline) (*agentgraph.Graph, error) {
+func BuildThoughtRecipeGraph(plan *ExecutionPlan, deps *paradigm.Deps, ingestionPipeline *frameworkingestion.Pipeline, opts ...GraphOption) (*agentgraph.Graph, error) {
 	_ = ingestionPipeline // retained for future plumbing; step nodes currently own ingestion.
 
 	if plan == nil {
 		return nil, fmt.Errorf("execution plan is nil")
 	}
 
+	stash := &graphBuildStash{}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(stash)
+		}
+	}
+
 	graph := agentgraph.NewGraph()
 	sections := make([]graphSection, 0, 1+len(plan.Routes))
 
 	if len(plan.Steps) > 0 {
-		section, err := buildLinearSection(graph, deps, plan.Steps)
+		section, err := buildLinearSection(graph, deps, stash, plan.Steps)
 		if err != nil {
 			return nil, err
 		}
@@ -37,7 +62,7 @@ func BuildThoughtRecipeGraph(plan *ExecutionPlan, deps *paradigm.Deps, ingestion
 	}
 
 	for _, group := range plan.Routes {
-		section, err := buildRouteSection(graph, deps, group)
+		section, err := buildRouteSection(graph, deps, stash, group)
 		if err != nil {
 			return nil, err
 		}
@@ -89,10 +114,10 @@ type stepArtifacts struct {
 	fallback string
 }
 
-func buildLinearSection(graph *agentgraph.Graph, deps *paradigm.Deps, steps []ExecutionStep) (graphSection, error) {
+func buildLinearSection(graph *agentgraph.Graph, deps *paradigm.Deps, stash *graphBuildStash, steps []ExecutionStep) (graphSection, error) {
 	artifacts := make([]stepArtifacts, 0, len(steps))
 	for _, step := range steps {
-		artifact, err := addExecutionStep(graph, deps, step)
+		artifact, err := addExecutionStep(graph, deps, stash, step)
 		if err != nil {
 			return graphSection{}, err
 		}
@@ -115,7 +140,7 @@ func buildLinearSection(graph *agentgraph.Graph, deps *paradigm.Deps, steps []Ex
 	}, nil
 }
 
-func buildRouteSection(graph *agentgraph.Graph, deps *paradigm.Deps, group CompiledRouteGroup) (graphSection, error) {
+func buildRouteSection(graph *agentgraph.Graph, deps *paradigm.Deps, stash *graphBuildStash, group CompiledRouteGroup) (graphSection, error) {
 	routeID := scopedGroupNodeID(group.Group.ID, "route")
 	joinID := scopedGroupNodeID(group.Group.ID, "join")
 
@@ -156,7 +181,7 @@ func buildRouteSection(graph *agentgraph.Graph, deps *paradigm.Deps, group Compi
 	nextEntry := noMatchID
 	for i := len(group.Branches) - 1; i >= 0; i-- {
 		branch := group.Branches[i]
-		bodyEntry, err := buildExecutionSequence(graph, deps, branch.Steps, joinID)
+		bodyEntry, err := buildExecutionSequence(graph, deps, stash, branch.Steps, joinID)
 		if err != nil {
 			return graphSection{}, err
 		}
@@ -205,7 +230,7 @@ func buildRouteSection(graph *agentgraph.Graph, deps *paradigm.Deps, group Compi
 	}, nil
 }
 
-func buildExecutionSequence(graph *agentgraph.Graph, deps *paradigm.Deps, steps []ExecutionStep, continuation string) (string, error) {
+func buildExecutionSequence(graph *agentgraph.Graph, deps *paradigm.Deps, stash *graphBuildStash, steps []ExecutionStep, continuation string) (string, error) {
 	if len(steps) == 0 {
 		if strings.TrimSpace(continuation) != "" {
 			return continuation, nil
@@ -215,7 +240,7 @@ func buildExecutionSequence(graph *agentgraph.Graph, deps *paradigm.Deps, steps 
 
 	artifacts := make([]stepArtifacts, 0, len(steps))
 	for _, step := range steps {
-		artifact, err := addExecutionStep(graph, deps, step)
+		artifact, err := addExecutionStep(graph, deps, stash, step)
 		if err != nil {
 			return "", err
 		}
@@ -234,9 +259,9 @@ func buildExecutionSequence(graph *agentgraph.Graph, deps *paradigm.Deps, steps 
 	return artifacts[0].entry, nil
 }
 
-func addExecutionStep(graph *agentgraph.Graph, deps *paradigm.Deps, step ExecutionStep) (stepArtifacts, error) {
+func addExecutionStep(graph *agentgraph.Graph, deps *paradigm.Deps, stash *graphBuildStash, step ExecutionStep) (stepArtifacts, error) {
 	if step.Kind == StepKindPipelineStage {
-		return addPipelineStep(graph, deps, step)
+		return addPipelineStep(graph, deps, stash, step)
 	}
 
 	entry := ""
@@ -292,7 +317,7 @@ func addExecutionStep(graph *agentgraph.Graph, deps *paradigm.Deps, step Executi
 	}
 
 	execNodeID := step.ID + ".execute"
-	execNode := newNodeForStep(execNodeID, deps, step)
+	execNode := newNodeForStep(execNodeID, deps, stash.resolver, step)
 	if err := graph.AddNode(execNode); err != nil {
 		return stepArtifacts{}, err
 	}
@@ -307,7 +332,7 @@ func addExecutionStep(graph *agentgraph.Graph, deps *paradigm.Deps, step Executi
 	if step.Fallback != nil {
 		fallbackID = step.ID + ".fallback"
 		fallbackStep := buildFallbackStep(step)
-		if err := graph.AddNode(newNodeForStep(fallbackID, deps, fallbackStep)); err != nil {
+		if err := graph.AddNode(newNodeForStep(fallbackID, deps, stash.resolver, fallbackStep)); err != nil {
 			return stepArtifacts{}, err
 		}
 		// D7: the fallback fires only on a classified operational failure, never
@@ -351,7 +376,7 @@ func buildFallbackStep(parent ExecutionStep) ExecutionStep {
 	return fallbackStep
 }
 
-func addPipelineStep(graph *agentgraph.Graph, deps *paradigm.Deps, step ExecutionStep) (stepArtifacts, error) {
+func addPipelineStep(graph *agentgraph.Graph, deps *paradigm.Deps, stash *graphBuildStash, step ExecutionStep) (stepArtifacts, error) {
 	entry := step.ID + ".pipeline"
 	joinID := step.ID + ".join"
 	if err := graph.AddNode(newThoughtRecipeStageNode(entry, agentgraph.NodeTypeSystem, "pipeline", map[string]any{
@@ -385,7 +410,7 @@ func addPipelineStep(graph *agentgraph.Graph, deps *paradigm.Deps, step Executio
 		})); err != nil {
 			return stepArtifacts{}, err
 		}
-		bodyEntry, err := buildExecutionSequence(graph, deps, stage.Steps, nextEntry)
+		bodyEntry, err := buildExecutionSequence(graph, deps, stash, stage.Steps, nextEntry)
 		if err != nil {
 			return stepArtifacts{}, err
 		}

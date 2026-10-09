@@ -3,25 +3,28 @@ package interaction
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 )
 
 // ResumeFrame reconstructs the pending frame from the envelope on restart.
-// It scans envelope working memory for the highest-seq frame with nil RespondedAt.
+// It scans envelope working memory for the highest-seq open frame — an
+// unanswered frame within its deadline. Expired frames surface as gaps
+// (D12/FR-18): a frame whose deadline passed is never resumed.
 func ResumeFrame(env *contextdata.Envelope) (*InteractionFrame, bool) {
-	// Get the highest sequence number
-	seqVal, ok := contextdata.GetTyped[any](env, "euclo.interaction.frame_seq")
-	if !ok {
+	// Get the highest sequence number (atomic, per-key; D15). Both the new
+	// uint64 counter and a legacy int value are accepted.
+	seq := frameSeqFromEnvelope(env)
+	if seq == 0 {
 		return nil, false
 	}
-	seq, ok := seqVal.(int)
-	if !ok || seq == 0 {
-		return nil, false
-	}
+	now := time.Now().UTC()
 
-	// Check frames from highest to lowest to find pending one
-	for i := seq - 1; i >= 0; i-- {
+	// Check frames from highest to lowest to find pending one. The stored
+	// counter is the last-assigned sequence (post-increment), so the scan
+	// starts at seq inclusive.
+	for i := seq; i >= 0; i-- {
 		frameKey := fmt.Sprintf("euclo.interaction.frame.%d", i)
 		frameVal, ok := contextdata.GetTyped[any](env, frameKey)
 		if !ok {
@@ -32,12 +35,44 @@ func ResumeFrame(env *contextdata.Envelope) (*InteractionFrame, bool) {
 			continue
 		}
 		// Return the first pending frame (highest seq with nil RespondedAt)
-		if frame.RespondedAt == nil {
-			return frame, true
+		// that is still within its deadline.
+		if frame.RespondedAt != nil {
+			continue
 		}
+		if frame.Expired(now) {
+			continue
+		}
+		return frame, true
 	}
 
 	return nil, false
+}
+
+// frameSeqFromEnvelope reads the atomically-maintained frame counter,
+// normalizing the numeric shapes it can hold.
+func frameSeqFromEnvelope(env *contextdata.Envelope) int {
+	if env == nil {
+		return 0
+	}
+	raw, ok := contextdata.GetTyped[any](env, frameSeqKey)
+	if !ok {
+		return 0
+	}
+	switch v := raw.(type) {
+	case uint64:
+		return int(v)
+	case uint:
+		return int(v)
+	case int:
+		if v > 0 {
+			return v
+		}
+	case int64:
+		if v > 0 {
+			return int(v)
+		}
+	}
+	return 0
 }
 
 // ResumeClarificationFrame returns the most recent pending clarification frame.

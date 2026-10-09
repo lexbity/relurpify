@@ -14,6 +14,7 @@ import (
 	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 	"codeburg.org/lexbit/relurpify/named/euclo/grounding"
 	intentcontext "codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
+	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	"codeburg.org/lexbit/relurpify/named/euclo/reporting"
 	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
 	"codeburg.org/lexbit/relurpify/named/euclo/surface"
@@ -30,6 +31,7 @@ type ThoughtRecipeExecutorNode struct {
 	workspace         string
 	stateReground     grounding.StateRegroundSource
 	recorder          *SelectionRecorder
+	resolver          interaction.Resolver
 }
 
 // NewThoughtRecipeExecutorNode creates a new thoughtrecipe executor node.
@@ -92,6 +94,15 @@ func (n *ThoughtRecipeExecutorNode) WithSelectionRecorder(r *SelectionRecorder) 
 	return n
 }
 
+// WithInteractionResolver wires the InteractionResolver consumed by the
+// on_error: ask policy (D12). It is required at Euclo construction.
+func (n *ThoughtRecipeExecutorNode) WithInteractionResolver(resolver interaction.Resolver) *ThoughtRecipeExecutorNode {
+	if n != nil && resolver != nil {
+		n.resolver = resolver
+	}
+	return n
+}
+
 // ID implements agentgraph.Node.
 func (n *ThoughtRecipeExecutorNode) ID() string { return n.id }
 
@@ -139,7 +150,13 @@ func (n *ThoughtRecipeExecutorNode) Execute(ctx context.Context, env *contextdat
 		return restoreResult, nil
 	}
 
-	graph, err := thoughtrecipepkg.BuildThoughtRecipeGraph(plan, n.deps, n.ingestionPipeline)
+	// Build the recipe subgraph. The InteractionResolver (D12) is threaded from
+	// the composition root so on_error: ask steps can consult the surface.
+	var graphOpts []thoughtrecipepkg.GraphOption
+	if n.resolver != nil {
+		graphOpts = append(graphOpts, thoughtrecipepkg.WithInteractionResolver(n.resolver))
+	}
+	graph, err := thoughtrecipepkg.BuildThoughtRecipeGraph(plan, n.deps, n.ingestionPipeline, graphOpts...)
 	if err != nil {
 		return &execution.Result{
 			NodeID:  n.id,
@@ -169,7 +186,7 @@ func (n *ThoughtRecipeExecutorNode) Execute(ctx context.Context, env *contextdat
 					Data:    execution.NewErrorResultPayload("compiled plan not found for thoughtrecipe: " + nextThoughtRecipeID),
 				}, fmt.Errorf("compiled plan not found for thoughtrecipe: %s", nextThoughtRecipeID)
 			}
-			nextGraph, nextErr := thoughtrecipepkg.BuildThoughtRecipeGraph(nextPlan, n.deps, n.ingestionPipeline)
+			nextGraph, nextErr := thoughtrecipepkg.BuildThoughtRecipeGraph(nextPlan, n.deps, n.ingestionPipeline, graphOpts...)
 			if nextErr != nil {
 				return &execution.Result{
 					NodeID:  n.id,

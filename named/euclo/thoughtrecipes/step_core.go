@@ -20,6 +20,7 @@ import (
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/execution/agentgraph"
+	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 )
 
 const (
@@ -28,13 +29,24 @@ const (
 
 // stepCore is the shared plumbing embedded by all per-kind node types.
 type stepCore struct {
-	id   string
-	deps *paradigm.Deps
-	step ExecutionStep
+	id       string
+	deps     *paradigm.Deps
+	step     ExecutionStep
+	resolver interaction.Resolver
 }
 
 func (c *stepCore) ID() string                    { return c.id }
 func (c *stepCore) NodeType() agentgraph.NodeType { return agentgraph.NodeTypeTool }
+
+// setResolver wires the InteractionResolver consumed by the on_error: ask
+// policy (D12). It is installed by the graph builder from the Euclo composition
+// root; the resolver is required at Euclo construction, so a step carrying an
+// ask policy always has one.
+func (c *stepCore) setResolver(resolver interaction.Resolver) {
+	if c != nil {
+		c.resolver = resolver
+	}
+}
 
 func (c *stepCore) buildTask(ctx context.Context, env *contextdata.Envelope) (*execution.Task, error) {
 	data := thoughtrecipeTemplateData(env, c.step)
@@ -224,18 +236,26 @@ func lookupTemplateValue(data map[string]any, ref string) (any, bool) {
 	return value, ok
 }
 
-// newNodeForStep creates the appropriate node type for the step's Kind.
-func newNodeForStep(id string, deps *paradigm.Deps, step ExecutionStep) agentgraph.Node {
+// newNodeForStep creates the appropriate node type for the step's Kind and
+// installs the InteractionResolver on its stepCore (D12) when one is supplied.
+func newNodeForStep(id string, deps *paradigm.Deps, resolver interaction.Resolver, step ExecutionStep) agentgraph.Node {
+	var node agentgraph.Node
 	switch step.Kind {
 	case StepKindDelegate:
-		return NewDelegateNode(id, deps, step)
+		node = NewDelegateNode(id, deps, step)
 	case StepKindAsk:
-		return NewAskNode(id, deps, step)
+		node = NewAskNode(id, deps, step)
 	case StepKindCapability:
-		return NewCapabilityNode(id, deps, step)
+		node = NewCapabilityNode(id, deps, step)
 	default:
-		return NewRunNode(id, deps, step)
+		node = NewRunNode(id, deps, step)
 	}
+	if resolver != nil {
+		if settable, ok := node.(interface{ setResolver(interaction.Resolver) }); ok {
+			settable.setResolver(resolver)
+		}
+	}
+	return node
 }
 
 func askFrameKey(stepID string) string {
