@@ -1,0 +1,11 @@
+thoughtrecipe pipeline_stages
+"Pipeline stages execute in declared order; the conformance harness asserts both stage steps produce their capture/result envelope entries."
+
+trigger as capability:
+  may read workspace
+
+pipeline:
+  stage discover:
+    do relurpic:conformance_first
+  stage verify:
+    do relurpic:conformance_second

@@ -1,0 +1,52 @@
+declared:
+    - paradigm: chainer
+      directive: link
+      status: implemented
+      cases:
+        - chainer/link_builds_chain
+        - chainer/link_from_registry_prompt
+    - paradigm: pipeline
+      directive: ""
+      status: honored
+      cases:
+        - pipeline/stages_execute_in_order
+    - paradigm: react
+      directive: until
+      status: implemented
+      cases:
+        - react/until_bounds_iterations
+deleted:
+    - blackboard/source
+    - clarify
+    - decompose
+    - detect
+    - htn/method
+    - htn/task
+    - planner/plan
+    - planner/step
+    - planner/summarize
+    - planner/verify
+    - reflection/review
+    - reflection/revise
+    - retry
+    - rewoo/plan
+    - rewoo/step
+    - rewoo/synthesize
+    - solve
+documented_directive_keywords:
+    - clarify
+    - decompose
+    - detect
+    - link
+    - method
+    - plan
+    - retry
+    - review
+    - revise
+    - solve
+    - source
+    - step
+    - summarize
+    - task
+    - until
+    - verify

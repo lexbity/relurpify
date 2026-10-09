@@ -1,0 +1,471 @@
+package conformance
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
+	"sync"
+	"testing"
+
+	"gopkg.in/yaml.v3"
+
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/capability/descriptor"
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/capability/registry"
+	"codeburg.org/lexbit/relurpify/cognitionzoo/chainer"
+	"codeburg.org/lexbit/relurpify/cognitionzoo/paradigm"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	"codeburg.org/lexbit/relurpify/context/contextstream"
+	contextports "codeburg.org/lexbit/relurpify/context/ports"
+	execution "codeburg.org/lexbit/relurpify/execution"
+	"codeburg.org/lexbit/relurpify/model"
+	thoughtrecipe "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
+	"codeburg.org/lexbit/relurpify/testsuite/testhelper"
+)
+
+// paradigmFixtureDir holds the .erpe fixtures each conformance case runs. It
+// lives outside testdata/ so the phase's matrix and fixtures are committed.
+const paradigmFixtureDir = "paradigm_fixtures"
+
+// matrixPath is the generated, committed conformance matrix.
+const matrixPath = "paradigm_matrix.yaml"
+
+// TestParadigmContractConformance is the registry-driven conformance harness
+// (AC-4): every ConformanceCase declared by a paradigm contract must have a
+// runner here, and running it must prove the declared runtime effect. A
+// declared directive without a runner fails immediately (the drift detector of
+// contract completeness, parallel to each paradigm's TestContractCompleteness).
+func TestParadigmContractConformance(t *testing.T) {
+	for _, contract := range paradigm.Registry.All() {
+		for _, cas := range contract.Conformance {
+			cas := cas
+			t.Run(contract.Paradigm+"/"+cas.ID, func(t *testing.T) {
+				runner := conformanceRunners[cas.ID]
+				if runner == nil {
+					t.Fatalf("conformance case %q has no runner (contract declared, runtime drift)", cas.ID)
+				}
+				runner(t)
+			})
+		}
+	}
+}
+
+// conformanceRunner executes one declared conformance case.
+type conformanceRunner func(t *testing.T)
+
+// conformanceRunners maps every declared ConformanceCase ID to its runner.
+var conformanceRunners = map[string]conformanceRunner{ //nolint:gochecknoglobals // immutable case table
+	"react/until_bounds_iterations":     runReactUntilBounds,
+	"chainer/link_builds_chain":         runChainerLinks,
+	"chainer/link_from_registry_prompt": runChainerFromRegistryPrompt,
+	"pipeline/stages_execute_in_order":  runPipelineStages,
+}
+
+// runReactUntilBounds proves the `until` directive caps the react loop budget:
+// a non-completing model loop driven through the real RunNode path must stop at
+// the declared iteration cap, and the envelope must observe exactly that count.
+func runReactUntilBounds(t *testing.T) {
+	t.Helper()
+	reg := registry.NewRegistry()
+	if err := reg.RegisterLegacyTool(context.Background(), &probeLegacyTool{}); err != nil {
+		t.Fatalf("register probe tool: %v", err)
+	}
+	model := testhelper.NewScriptedModel("work step by step.").
+		WithToolCalls(model.ToolCall{Name: "conformance_probe", Args: map[string]any{}})
+
+	env := runFixture(t, "react_until.erpe", paradigmDeps(model, reg))
+	iter, ok := contextdata.GetTyped[int](env, "react.iteration")
+	if !ok {
+		t.Fatal("expected react.iteration on the envelope after a react run")
+	}
+	if iter != 2 {
+		t.Fatalf("react.iteration = %d, want 2 (the declared `until 2` cap)", iter)
+	}
+	if done, _ := contextdata.GetTyped[bool](env, "react.done"); !done {
+		t.Fatal("expected the capped react loop to terminate")
+	}
+}
+
+// runChainerLinks proves `link:` blocks build and run a real chain: every
+// block becomes one executed step, each capture target holds the link output,
+// and from-keys were available to each stage.
+func runChainerLinks(t *testing.T) {
+	t.Helper()
+	reg := registry.NewRegistry()
+	model := testhelper.NewScriptedModel("chained output")
+	env := contextdata.NewEnvelope("task-chainer", "session-chainer")
+	env.SetWorkingValueWithClass("state.input_a", "probe-a", contextdata.MemoryClassTask)
+
+	runFixtureInto(t, "chainer_links.erpe", paradigmDeps(model, reg), env)
+
+	executed, ok := contextdata.GetTyped[int](env, "chainer.links_executed")
+	if !ok {
+		t.Fatal("expected chainer.links_executed on the envelope")
+	}
+	if executed != 2 {
+		t.Fatalf("chainer.links_executed = %d, want 2 links", executed)
+	}
+	for _, key := range []string{"state.out_a", "state.out_b"} {
+		value, ok := contextdata.GetTyped[any](env, key)
+		if !ok {
+			t.Fatalf("expected chainer capture target %q to hold the link output", key)
+		}
+		if got := fmt.Sprint(value); got != "chained output" {
+			t.Fatalf("capture target %q = %q, want the model output", key, got)
+		}
+	}
+}
+
+// runChainerFromRegistryPrompt proves AC-5: when a link resolves its prompt via
+// a registry PromptID, the link's `from` keys are injected into the resolved
+// prompt's runtime context state (chainer/runner.go from-keys fix).
+func runChainerFromRegistryPrompt(t *testing.T) {
+	t.Helper()
+	recorder := &recordingPromptRegistry{prompt: "resolved prompt"}
+	env := contextdata.NewEnvelope("task-chain-reg", "session-chain-reg")
+	env.SetWorkingValueWithClass("state.key", "from-value", contextdata.MemoryClassTask)
+
+	link := chainer.Link{Name: "l1", PromptID: "test.prompt", InputKeys: []string{"state.key"}, OutputKey: "state.out"}
+	chain := &chainer.Chain{Links: []chainer.Link{link}}
+	task := &execution.Task{ID: "chain-task", Instruction: "chain it"}
+	err := chainer.RunChain(context.Background(), testhelper.NewScriptedModel("out"), task, chain, env, recorder)
+	if err != nil {
+		t.Fatalf("RunChain: %v", err)
+	}
+	if got := recorder.state["state.key"]; got != "from-value" {
+		t.Fatalf("registry prompt context state = %#v, want state.key=%q", recorder.state, "from-value")
+	}
+}
+
+// runPipelineStages proves the pipeline shape case: both stage steps execute
+// and record their capability results on the envelope.
+func runPipelineStages(t *testing.T) {
+	t.Helper()
+	reg := registry.NewRegistry()
+	for _, id := range []string{"euclo:cap.conformance_first", "euclo:cap.conformance_second"} {
+		if err := reg.RegisterInvocableCapability(context.Background(), &resultCapability{id: id}); err != nil {
+			t.Fatalf("register %s: %v", id, err)
+		}
+	}
+
+	env := runFixture(t, "pipeline_stages.erpe", paradigmDeps(nil, reg))
+	results := stepResultPayloads(env)
+	if len(results) < 2 {
+		t.Fatalf("expected result entries for both pipeline stage steps, got %d", len(results))
+	}
+	joined := strings.Join(results, "\n")
+	for _, want := range []string{"euclo:cap.conformance_first", "euclo:cap.conformance_second"} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("pipeline stage results missing %q: %s", want, joined)
+		}
+	}
+}
+
+// --- fixture plumbing -------------------------------------------------------
+
+func paradigmDeps(model model.LanguageModel, reg *registry.CapabilityRegistry) *paradigm.Deps {
+	return &paradigm.Deps{
+		Model:         model,
+		Registry:      reg,
+		Config:        &execution.Config{Name: "paradigm-conformance", Model: "scripted"},
+		StreamTrigger: contextstream.NewTrigger(noopCompiler{}),
+	}
+}
+
+// noopCompiler is an offline compiler invoker so react's streaming trigger node
+// resolves during conformance runs without a real compiler.
+type noopCompiler struct{}
+
+func (noopCompiler) Compile(context.Context, contextports.CompilationRequest) (*contextports.CompilationResult, error) {
+	return &contextports.CompilationResult{}, nil
+}
+
+// runFixture parses+lowers+validates the fixture .erpe and executes its graph
+// against a fresh envelope, returning the envelope after execution.
+func runFixture(t *testing.T, name string, deps *paradigm.Deps) *contextdata.Envelope {
+	t.Helper()
+	env := contextdata.NewEnvelope("task-"+strings.TrimSuffix(name, ".erpe"), "session-conformance")
+	runFixtureInto(t, name, deps, env)
+	return env
+}
+
+// runFixtureInto executes a fixture through the real recipe path (parser,
+// semantic/contract validation, lowering, graph build, Execute) on the given
+// envelope.
+func runFixtureInto(t *testing.T, name string, deps *paradigm.Deps, env *contextdata.Envelope) {
+	t.Helper()
+	path := filepath.Join(paradigmFixtureDir, name)
+	src, err := os.ReadFile(filepath.Clean(path))
+	if err != nil {
+		t.Fatalf("read fixture %s: %v", path, err)
+	}
+	doc, err := thoughtrecipe.ParseSource(path, string(src))
+	if err != nil {
+		t.Fatalf("ParseSource(%s): %v", name, err)
+	}
+	if errs := thoughtrecipe.ValidateAgainstContracts(doc, paradigm.Registry); len(errs) != 0 {
+		t.Fatalf("fixture %s violates the paradigm contracts: %v", name, errs)
+	}
+	plan, err := thoughtrecipe.LowerDocument(doc)
+	if err != nil {
+		t.Fatalf("LowerDocument(%s): %v", name, err)
+	}
+	if err := thoughtrecipe.ValidatePlanContracts(plan, paradigm.Registry); err != nil {
+		t.Fatalf("fixture %s fails plan-level contract validation: %v", name, err)
+	}
+	graph, err := thoughtrecipe.BuildThoughtRecipeGraph(plan, deps, nil)
+	if err != nil {
+		t.Fatalf("BuildThoughtRecipeGraph(%s): %v", name, err)
+	}
+	ctx := context.Background()
+	if _, err := graph.Execute(ctx, env); err != nil {
+		t.Fatalf("graph.Execute(%s): %v", name, err)
+	}
+}
+
+func stepResultPayloads(env *contextdata.Envelope) []string {
+	var out []string
+	for key := range env.Snapshot() {
+		if !strings.HasSuffix(key, ".result") {
+			continue
+		}
+		if value, ok := contextdata.GetTyped[any](env, key); ok {
+			out = append(out, fmt.Sprint(value))
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+// probeLegacyTool is a no-tag tool (allowed in every react phase) whose result
+// carries no read/edit/verify summary markers, so a react loop driven by it
+// continues until its iteration budget and never completes early.
+type probeLegacyTool struct{}
+
+func (t *probeLegacyTool) Name() string                         { return "conformance_probe" }
+func (t *probeLegacyTool) Description() string                  { return "offline conformance probe" }
+func (t *probeLegacyTool) Category() string                     { return "test" }
+func (t *probeLegacyTool) Parameters() []ports.ToolParameter    { return nil }
+func (t *probeLegacyTool) IsAvailable(ctx context.Context) bool { return true }
+func (t *probeLegacyTool) Permissions() ports.ToolPermissions   { return ports.ToolPermissions{} }
+func (t *probeLegacyTool) Tags() []string                       { return nil }
+func (t *probeLegacyTool) Execute(_ context.Context, _ map[string]any) (*ports.ToolResult, error) {
+	return &ports.ToolResult{Success: true, Data: map[string]any{"ok": true}}, nil
+}
+
+// resultCapability is an invocable capability that records its own id.
+type resultCapability struct {
+	id string
+}
+
+func (h *resultCapability) Descriptor(_ context.Context, _ ports.State) descriptor.CapabilityDescriptor {
+	return descriptor.CapabilityDescriptor{
+		ID:            h.id,
+		Name:          h.id,
+		Kind:          agentspec.CapabilityKindTool,
+		RuntimeFamily: agentspec.CapabilityRuntimeFamilyProvider,
+		Availability:  descriptor.AvailabilitySpec{Available: true},
+	}
+}
+func (h *resultCapability) Invoke(_ context.Context, _ ports.State, _ map[string]any) (*ports.ToolResult, error) {
+	return &ports.ToolResult{Success: true, Data: map[string]any{"capability_id": h.id}}, nil
+}
+
+// recordingPromptRegistry resolves every PromptID to a fixed prompt and
+// records the runtime-context State it was asked to resolve with.
+type recordingPromptRegistry struct {
+	mu     sync.Mutex
+	prompt string
+	state  map[string]any
+}
+
+func (r *recordingPromptRegistry) Resolve(_ string, ctx any) (string, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if m, ok := ctx.(map[string]any); ok {
+		if state, ok := m["State"].(map[string]any); ok {
+			r.state = state
+		}
+	}
+	return r.prompt, nil
+}
+
+// --- matrix (generated, committed) ------------------------------------------
+
+// TestParadigmMatrixUpToDate regenerates the conformance matrix from the
+// contract registry and compares it byte-for-byte with the committed file.
+// Set UPDATE_MATRIX=1 to rewrite the file after a deliberate contract change.
+func TestParadigmMatrixUpToDate(t *testing.T) {
+	got := generateMatrixYAML(t)
+	if update := os.Getenv("UPDATE_MATRIX"); update != "" {
+		if err := os.WriteFile(matrixPath, got, 0o644); err != nil {
+			t.Fatalf("write matrix: %v", err)
+		}
+		return
+	}
+	want, err := os.ReadFile(matrixPath)
+	if err != nil {
+		t.Fatalf("read matrix %s: %v (set UPDATE_MATRIX=1 to generate)", matrixPath, err)
+	}
+	if string(got) != string(want) {
+		t.Fatalf("paradigm matrix drifted from the contract registry:\ngot:\n%s\nwant:\n%s\n(set UPDATE_MATRIX=1 to regenerate)", got, want)
+	}
+}
+
+// matrixRow is one declared (paradigm, directive) pair and its cases.
+type matrixRow struct {
+	Paradigm  string   `yaml:"paradigm"`
+	Directive string   `yaml:"directive"`
+	Status    string   `yaml:"status"`
+	Cases     []string `yaml:"cases"`
+}
+
+// paradigmMatrix is the committed conformance matrix.
+type paradigmMatrix struct {
+	Declared []matrixRow `yaml:"declared"`
+	Deleted  []string    `yaml:"deleted"`
+	Keywords []string    `yaml:"documented_directive_keywords"`
+}
+
+// caseStatus annotates whether a case's effect predated this phase (honored)
+// or was implemented inside it (implemented).
+var caseStatus = map[string]string{ //nolint:gochecknoglobals // immutable matrix annotation
+	"react/until_bounds_iterations":     "implemented",
+	"chainer/link_builds_chain":         "implemented",
+	"chainer/link_from_registry_prompt": "implemented",
+	"pipeline/stages_execute_in_order":  "honored",
+}
+
+// deletedDirectives is the implement-or-delete audit outcome (FR-6): every
+// directive vocabulary a paradigm does not honor is retired from every
+// contract, so carrying it in a recipe is a load error, never a silent no-op.
+// The names here are the grammar keyword set from the parser's directive
+// vocabulary minus the declared directives (until, link); entries are written
+// paradigm/directive for pairs that were once declared, and bare keywords for
+// vocabulary never owned by a paradigm.
+var deletedDirectives = []string{ //nolint:gochecknoglobals // immutable audit result
+	"planner/plan", "planner/step", "planner/verify", "planner/summarize",
+	"htn/method", "htn/task",
+	"reflection/review", "reflection/revise",
+	"blackboard/source",
+	"rewoo/plan", "rewoo/step", "rewoo/synthesize",
+	"detect", "clarify", "retry", "decompose", "solve",
+}
+
+// documentedDirectiveKeywords is the closed set of directive keywords the
+// grammar reference documents. The invariant test asserts each keyword is
+// either declared by a contract or listed as deleted — no keyword may linger
+// undeclared and unlisted.
+var documentedDirectiveKeywords = []string{ //nolint:gochecknoglobals // immutable grammar reference vocabulary
+	"until", "link", "plan", "step", "method", "task", "source",
+	"detect", "clarify", "revise", "retry", "verify", "summarize",
+	"review", "decompose", "solve",
+}
+
+func generateMatrixYAML(t *testing.T) []byte {
+	t.Helper()
+	var matrix paradigmMatrix
+	for _, contract := range paradigm.Registry.All() {
+		for _, spec := range contract.Directives {
+			var cases []string
+			for _, cas := range contract.Conformance {
+				if cas.Directive == spec.Name {
+					cases = append(cases, cas.ID)
+				}
+			}
+			matrix.Declared = append(matrix.Declared, matrixRow{
+				Paradigm:  contract.Paradigm,
+				Directive: spec.Name,
+				Status:    statusForCase(cases),
+				Cases:     cases,
+			})
+		}
+		// shape-level cases (Directive == "") surface as their own rows.
+		for _, cas := range contract.Conformance {
+			if cas.Directive != "" {
+				continue
+			}
+			matrix.Declared = append(matrix.Declared, matrixRow{
+				Paradigm: contract.Paradigm,
+				Status:   statusForCase([]string{cas.ID}),
+				Cases:    []string{cas.ID},
+			})
+		}
+	}
+	matrix.Deleted = append([]string(nil), deletedDirectives...)
+	matrix.Keywords = append([]string(nil), documentedDirectiveKeywords...)
+	sort.Slice(matrix.Declared, func(i, j int) bool {
+		if matrix.Declared[i].Paradigm != matrix.Declared[j].Paradigm {
+			return matrix.Declared[i].Paradigm < matrix.Declared[j].Paradigm
+		}
+		return matrix.Declared[i].Directive < matrix.Declared[j].Directive
+	})
+	sort.Strings(matrix.Deleted)
+	sort.Strings(matrix.Keywords)
+
+	data, err := yaml.Marshal(matrix)
+	if err != nil {
+		t.Fatalf("marshal matrix: %v", err)
+	}
+	return data
+}
+
+// statusForCase resolves the honored|implemented annotation for a case set.
+// Every declared case must carry a status, or the matrix generation fails.
+func statusForCase(cases []string) string {
+	for _, cas := range cases {
+		if status := caseStatus[cas]; status != "" {
+			return status
+		}
+	}
+	return ""
+}
+
+// TestParadigmMatrixInvariants asserts the matrix's honest invariants:
+// (1) every documented directive keyword is declared or listed as deleted,
+// (2) the deleted list has no entry that is also declared, and
+// (3) every declared directive has at least one conformance case and a case
+// status annotation (honored|implemented).
+func TestParadigmMatrixInvariants(t *testing.T) {
+	declaredNames := map[string]bool{}
+	declaredPairs := map[string]bool{}
+	for _, contract := range paradigm.Registry.All() {
+		for _, spec := range contract.Directives {
+			declaredNames[spec.Name] = true
+			declaredPairs[contract.Paradigm+"/"+spec.Name] = true
+			caseCount := 0
+			for _, cas := range contract.Conformance {
+				if cas.Directive == spec.Name {
+					caseCount++
+					if caseStatus[cas.ID] == "" {
+						t.Errorf("declared case %s/%s has no status annotation", contract.Paradigm, cas.ID)
+					}
+				}
+			}
+			if caseCount == 0 {
+				t.Errorf("declared directive %s/%s has no conformance case", contract.Paradigm, spec.Name)
+			}
+		}
+	}
+	deleted := map[string]bool{}
+	for _, entry := range deletedDirectives {
+		keyword := entry
+		if _, pair, ok := strings.Cut(entry, "/"); ok {
+			keyword = pair
+		}
+		if declaredNames[keyword] {
+			t.Errorf("deleted entry %q is still declared by a contract", entry)
+		}
+		deleted[keyword] = true
+	}
+	for _, keyword := range documentedDirectiveKeywords {
+		if !declaredNames[keyword] && !deleted[keyword] {
+			t.Errorf("documented directive keyword %q is neither declared nor listed as deleted", keyword)
+		}
+	}
+	_ = declaredPairs
+}

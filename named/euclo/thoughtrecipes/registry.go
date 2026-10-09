@@ -5,6 +5,7 @@ import (
 	"strings"
 	"sync"
 
+	"codeburg.org/lexbit/relurpify/cognitionzoo/paradigm"
 	"codeburg.org/lexbit/relurpify/named/euclo/surface"
 )
 
@@ -55,6 +56,14 @@ func (r *ThoughtRecipeRegistry) RegisterCompiledFirstWins(thoughtrecipe *surface
 func (r *ThoughtRecipeRegistry) registerThoughtRecipe(thoughtrecipe *surface.ThoughtRecipe, plan *ExecutionPlan, source string, firstWins bool) (bool, error) {
 	if thoughtrecipe == nil {
 		return false, fmt.Errorf("thoughtrecipe is nil")
+	}
+	// Programmatic and loader-fed plans must pass the same paradigm contract
+	// validation at registration (D3): the loader already validated the AST,
+	// so this is the belt that covers plans built in Go.
+	if plan != nil {
+		if err := ValidatePlanContracts(plan, paradigm.Registry); err != nil {
+			return false, err
+		}
 	}
 
 	r.mu.Lock()

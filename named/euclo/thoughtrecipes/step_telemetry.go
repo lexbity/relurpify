@@ -74,7 +74,7 @@ func (c *stepCore) stepMetadata() map[string]any {
 		metadata["execution_choice_source"] = c.step.ChoiceSource
 	}
 	if len(c.step.Directives) > 0 {
-		metadata["execution_directives"] = append([]string(nil), c.step.Directives...)
+		metadata["execution_directives"] = DirectiveNames(c.step.Directives)
 	}
 	if strings.TrimSpace(c.step.CapabilityID) != "" {
 		metadata[executionCapabilityIDKey] = c.step.CapabilityID
@@ -106,7 +106,7 @@ func (c *stepCore) writeStepMetadata(env *contextdata.Envelope) {
 		contextdata.SetTyped(env, base+".choice_source", c.step.ChoiceSource)
 	}
 	if len(c.step.Directives) > 0 {
-		contextdata.SetTyped(env, base+".directives", append([]string(nil), c.step.Directives...))
+		contextdata.SetTyped(env, base+".directives", DirectiveNames(c.step.Directives))
 	}
 	if strings.TrimSpace(c.step.CapabilityID) != "" {
 		contextdata.SetTyped(env, base+".capability_id", c.step.CapabilityID)

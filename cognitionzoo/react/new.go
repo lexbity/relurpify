@@ -41,6 +41,17 @@ func WithContextStreamMaxTokens(maxTokens int) Option {
 	}
 }
 
+// WithMaxIterations overrides the react loop iteration budget. The DSL's
+// `until` directive lowers to this option, capping the reason-act-observe loop
+// (contract: react/until_bounds_iterations).
+func WithMaxIterations(maxIterations int) Option {
+	return func(a *ReActAgent) {
+		if maxIterations > 0 {
+			a.maxIterations = maxIterations
+		}
+	}
+}
+
 func (a *ReActAgent) InitializeDeps(deps *paradigm.Deps) error {
 	if deps == nil {
 		return fmt.Errorf("react dependencies unavailable")

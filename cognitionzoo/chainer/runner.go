@@ -139,14 +139,20 @@ func taskInstruction(task *execution.Task) string {
 
 // resolveSystemPrompt returns the system prompt for a link, checking PromptID first.
 func resolveSystemPrompt(link Link, task *execution.Task, env *contextdata.Envelope, registry any) (string, error) {
+	// Build the `from`-key state once so BOTH prompt paths observe the same
+	// link inputs: FilterState honors link.InputKeys, which the DSL `link from`
+	// clause lowers to.
+	filtered := FilterState(env, link.InputKeys)
+
 	// Check for registry-based resolution first
 	if link.PromptID != "" && registry != nil {
 		// Type assert to prompt.Registry interface
 		if reg, ok := registry.(interface {
 			Resolve(id string, ctx any) (string, error)
 		}); ok {
-			// Build runtime context for chainer
-			rctx := buildChainerRuntimeContext(task, env)
+			// Build runtime context for chainer with the link's `from` keys
+			// injected into State so the resolved prompt can reference them.
+			rctx := buildChainerRuntimeContext(task, env, filtered)
 			if resolved, err := reg.Resolve(link.PromptID, rctx); err == nil {
 				return resolved, nil
 			}
@@ -155,19 +161,19 @@ func resolveSystemPrompt(link Link, task *execution.Task, env *contextdata.Envel
 	}
 
 	// Existing inline prompt path
-	filtered := FilterState(env, link.InputKeys)
 	return renderLinkPrompt(link.SystemPrompt, taskInstruction(task), filtered)
 }
 
-// buildChainerRuntimeContext creates a prompt.RuntimeContext for chainer links.
-func buildChainerRuntimeContext(task *execution.Task, env *contextdata.Envelope) any {
+// buildChainerRuntimeContext creates a prompt.RuntimeContext for chainer links
+// with the resolved `from`-key state available to the prompt.
+func buildChainerRuntimeContext(task *execution.Task, env *contextdata.Envelope, filteredState map[string]any) any {
 	// Return a map that matches the expected RuntimeContext structure
 	// Using interface{} to avoid import cycles with framework/prompt
 	return map[string]any{
 		"Variables": map[string]string{
 			"instruction": taskInstruction(task),
 		},
-		"State":        map[string]any{},
+		"State":        filteredState,
 		"Envelope":     env,
 		"Paradigm":     "chainer",
 		"ConsumerID":   "chainer",

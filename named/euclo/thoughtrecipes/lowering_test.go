@@ -93,8 +93,11 @@ run reviewer:
 	if got, ok := first.Config["goals"].([]string); !ok || len(got) != 1 || got[0] != "Review the codebase." {
 		t.Fatalf("first step config goals = %#v, want [Review the codebase.]", first.Config["goals"])
 	}
-	if got, ok := first.Config["execution_items"].([]map[string]any); ok && len(got) == 0 {
-		t.Fatalf("first step execution_items unexpectedly empty")
+	if _, ok := first.Config["directives"]; ok {
+		t.Fatal("directive payloads must not be carried in step Config (typed Directives only)")
+	}
+	if _, ok := first.Config["execution_items"]; ok {
+		t.Fatal("execution_items Config key must be gone (typed Directives only)")
 	}
 
 	second := plan.Steps[1]

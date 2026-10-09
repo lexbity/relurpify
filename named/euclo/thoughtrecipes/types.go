@@ -216,6 +216,19 @@ func (s *ResolvedToolScope) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// TypedDirective is the lowered, shape-validated form of a grammar directive
+// clause or block (D2). It replaces the stringly `[]string` payload: the
+// directive name validated against the bound paradigm's contract, its text
+// arguments, an optional `when` predicate, nested block directives, and the
+// source span for diagnostics and telemetry.
+type TypedDirective struct {
+	Name      string
+	TextArgs  []string         // raw text of the clause arguments, in source order
+	Predicate *PredicateExpr   // for predicate-bearing block directives (`revise when …`)
+	Body      []TypedDirective // nested block directives, validated for placement
+	Span      SourceSpan
+}
+
 // ExecutionStep carries the graph-time data for a single compiled thoughtrecipe step.
 type ExecutionStep struct {
 	ID                  string
@@ -228,7 +241,7 @@ type ExecutionStep struct {
 	PipelineStages      []PipelineStageSpec
 	Goal                string
 	Sources             []string
-	Directives          []string
+	Directives          []TypedDirective
 	CaptureBindings     []CaptureBinding
 	CapabilityID        string
 	Prompt              string
