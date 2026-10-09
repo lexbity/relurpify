@@ -76,6 +76,19 @@ func TestStatusRenderTextDegradedShowsDoctorHint(t *testing.T) {
 	}
 }
 
+func TestStatusRenderTextShowsKnowledgeDegraded(t *testing.T) {
+	snap := readySnapshot()
+	snap.KnowledgeDegraded = true
+	snap.KnowledgeReason = "store degraded: engine wedged"
+
+	var out bytes.Buffer
+	snap.RenderText(&out)
+	text := out.String()
+	if !strings.Contains(text, "knowledge:  degraded: store degraded: engine wedged") {
+		t.Fatalf("rendered status missing knowledge health line:\n%s", text)
+	}
+}
+
 func TestStatusRenderJSONSchema(t *testing.T) {
 	var out bytes.Buffer
 	if err := readySnapshot().RenderJSON(&out); err != nil {

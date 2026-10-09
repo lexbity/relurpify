@@ -189,6 +189,15 @@ func (a *Agent) BuildGraph(ctx context.Context, task *execution.Task) (*agentgra
 	if graph == nil {
 		return nil, fmt.Errorf("root graph is nil")
 	}
+	// Capture-as-bridge: the graph's epoch coordinator flushes recipe captures
+	// through the composition-owned grounding service and drains the
+	// invalidation subscriber at each barrier.
+	if a.deps != nil {
+		if a.deps.Grounder != nil {
+			graph.SetGrounder(a.deps.Grounder)
+		}
+		graph.SetDrain(a.deps.EpochDrain)
+	}
 
 	start := "euclo.intake"
 	switch {

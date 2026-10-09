@@ -51,15 +51,41 @@ type KnowledgeProduct struct {
 	Retriever       *retrieval.Retriever
 	Compiler        *compiler.Compiler
 	StreamTrigger   *contextstream.Trigger
+	// Grounding is the synchronous capture-as-bridge write path. Graph runs wire
+	// it as their epoch grounder.
+	Grounding *knowledge.GroundingService
+	// Invalidation consumes revision-drift events on the composition bus and
+	// marks affected chunks stale.
+	Invalidation *knowledge.InvalidationPass
+	// Drain is the invalidation subscriber's bounded drain the epoch barrier
+	// calls (nil when no pass is running).
+	Drain func(time.Duration)
+	// Health aggregates knowledge-domain degraded signals into one condition.
+	Health *knowledge.KnowledgeHealth
+	// CloseRetriever tears down the retriever's event subscription.
+	CloseRetriever func()
 }
 
-// Close stops the knowledge product's owned lifecycles (the compiler's
-// invalidation loop and event subscription). Safe to call more than once.
+// Close stops the knowledge product's owned lifecycles (the revision-drift
+// invalidation pass, the retriever's event subscription, the compiler's
+// invalidation loop and event subscription, and the health aggregator). Safe to
+// call more than once.
 func (k *KnowledgeProduct) Close() {
-	if k == nil || k.Compiler == nil {
+	if k == nil {
 		return
 	}
-	k.Compiler.Stop()
+	if k.Invalidation != nil {
+		_ = k.Invalidation.Stop()
+	}
+	if k.CloseRetriever != nil {
+		k.CloseRetriever()
+	}
+	if k.Compiler != nil {
+		k.Compiler.Stop()
+	}
+	if k.Health != nil {
+		k.Health.Close()
+	}
 }
 
 // CompiledPolicy captures policy metadata produced during agent bootstrap.

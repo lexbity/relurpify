@@ -358,8 +358,9 @@ func buildRuntime(ctx context.Context, cfg Config, secrets config.Secrets) (*Run
 		SearchEngine: capProduct.SearchEngine,
 	}
 	knowledgeRuntime, err := envcomposition.BuildKnowledgeRuntime(envcomposition.KnowledgeRuntimeInput{
-		GraphDB: capProduct.IndexManager.GraphDB,
-		Index:   capProduct.IndexManager,
+		GraphDB:       capProduct.IndexManager.GraphDB,
+		Index:         capProduct.IndexManager,
+		WorkspaceRoot: cfg.Workspace,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("compose knowledge runtime: %w", err)
@@ -370,6 +371,11 @@ func buildRuntime(ctx context.Context, cfg Config, secrets config.Secrets) (*Run
 		Retriever:       knowledgeRuntime.Retriever,
 		Compiler:        knowledgeRuntime.Compiler,
 		StreamTrigger:   knowledgeRuntime.StreamTrigger,
+		Grounding:       knowledgeRuntime.Grounding,
+		Invalidation:    knowledgeRuntime.Invalidation,
+		Drain:           knowledgeRuntime.Drain,
+		Health:          knowledgeRuntime.Health,
+		CloseRetriever:  knowledgeRuntime.CloseRetriever,
 	}
 	modelProduct, err = envcomposition.BuildModelRuntime(envcomposition.ModelRuntimeInput{
 		Provider:          cfg.InferenceProvider,
@@ -529,7 +535,13 @@ func buildRuntime(ctx context.Context, cfg Config, secrets config.Secrets) (*Run
 	rt.Agent = agent
 	emitAgentStartupEvent(ctx, env.EventLog, "local", registration.ID, cfg.AgentLabel(), agent)
 	emitContractResolvedEvent(ctx, env.EventLog, "local", registration.ID, cfg.AgentLabel(), docSnapshot)
-	if err := ayenitd.RegisterWorkspaceServices(ctx, ayenitd.WorkspaceConfig{Workspace: cfg.Workspace}, sess, rt.Tools, registration); err != nil {
+	if err := ayenitd.RegisterWorkspaceServices(ctx, ayenitd.WorkspaceConfig{Workspace: cfg.Workspace}, sess, rt.Tools, registration, ayenitd.WorkspaceServiceDeps{
+		WorkspaceRoot: cfg.Workspace,
+		EventBus:      env.KnowledgeEvents,
+		IndexManager:  env.IndexManager,
+		CommandPolicy: env.CommandPolicy,
+		Telemetry:     rt.Workspace.Telemetry,
+	}); err != nil {
 		_ = rt.Close(ctx)
 		return nil, fmt.Errorf("register workspace services: %w", err)
 	}
@@ -824,6 +836,8 @@ func (r *Runtime) paradigmDeps() *paradigm.Deps {
 		StreamTrigger:     r.Workspace.Environment.StreamTrigger,
 		OutputIngester:    r.Workspace.Environment.OutputIngester,
 		IngestOutputs:     r.Workspace.Environment.IngestOutputs,
+		Grounder:          r.Workspace.Environment.Grounding,
+		EpochDrain:        r.Workspace.Environment.KnowledgeDrain,
 		PromptRegistry:    r.Workspace.Environment.PromptRegistry,
 		AgentLifecycle:    r.AgentLifecycle,
 		Telemetry:         r.Workspace.Telemetry,

@@ -2,6 +2,7 @@ package knowledge
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -23,6 +24,7 @@ const (
 	EventChunkIngested        EventKind = "knowledge.chunk_ingested"
 	EventTombstonePreserved   EventKind = "knowledge.tombstone_preserved"
 	EventInvalidationDegraded EventKind = "knowledge.invalidation_degraded"
+	EventStoreDegraded        EventKind = "knowledge.store_degraded"
 	EventPatternConfirmed     EventKind = "knowledge.pattern_confirmed"
 	EventAnchorConfirmed      EventKind = "knowledge.anchor_confirmed"
 	EventIndexEntryProduced   EventKind = "knowledge.index_entry_produced"
@@ -84,6 +86,14 @@ type TombstonePreservedPayload struct {
 type InvalidationDegradedPayload struct {
 	WorkspaceRoot string `json:"workspace_root,omitempty"`
 	FailureCount  int    `json:"failure_count"`
+	Error         string `json:"error,omitempty"`
+}
+
+// StoreDegradedPayload reports a knowledge store that is wedged or otherwise
+// unable to serve writes, so operators see a named condition rather than a
+// mystery refusal.
+type StoreDegradedPayload struct {
+	WorkspaceRoot string `json:"workspace_root,omitempty"`
 	Error         string `json:"error,omitempty"`
 }
 
@@ -259,4 +269,23 @@ func (b *EventBus) EmitInvalidationDegraded(payload InvalidationDegradedPayload)
 		return
 	}
 	b.Publish(Event{Kind: EventInvalidationDegraded, Timestamp: time.Now().UTC(), Payload: payload})
+}
+
+// EmitStoreDegraded publishes a knowledge-store health event.
+func (b *EventBus) EmitStoreDegraded(payload StoreDegradedPayload) {
+	if b == nil {
+		return
+	}
+	b.Publish(Event{Kind: EventStoreDegraded, Timestamp: time.Now().UTC(), Payload: payload})
+}
+
+// AssertSameBus is the boot-time contract behind "one bus": every knowledge
+// consumer must subscribe to the composition-owned bus instance, or
+// invalidation silently diverges. It returns an error when the two references
+// are not the same instance (package-shared pointer identity, not equality).
+func AssertSameBus(a, b *EventBus) error {
+	if a != b {
+		return fmt.Errorf("knowledge composition: bus pointers diverge (%p != %p)", a, b)
+	}
+	return nil
 }

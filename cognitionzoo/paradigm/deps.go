@@ -3,6 +3,8 @@
 package paradigm
 
 import (
+	"time"
+
 	registry "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/context/contextstream"
@@ -36,7 +38,13 @@ type Deps struct {
 	StreamTrigger     *contextstream.Trigger
 	OutputIngester    *knowledge.OutputIngester
 	IngestOutputs     bool
-	PromptRegistry    prompt.Registry
-	AgentLifecycle    agentlifecycle.Repository
-	Telemetry         telemetry.Telemetry
+	// Grounder is the capture-as-bridge write path. Graph runs wire it as their
+	// epoch grounder so recipe captures land at the epoch barrier.
+	Grounder *knowledge.GroundingService
+	// EpochDrain is the invalidation subscriber's bounded drain the epoch
+	// barrier calls.
+	EpochDrain     func(time.Duration)
+	PromptRegistry prompt.Registry
+	AgentLifecycle agentlifecycle.Repository
+	Telemetry      telemetry.Telemetry
 }

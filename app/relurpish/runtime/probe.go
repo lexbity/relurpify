@@ -87,6 +87,11 @@ type StatusSnapshot struct {
 	DeprecationNotices    []string
 	RecipesReady          bool
 	RecipesError          string
+	// KnowledgeDegraded is the aggregated knowledge-domain health condition
+	// (invalidation/store degradation). It is additive: a degraded knowledge
+	// substrate remains serviceable.
+	KnowledgeDegraded bool
+	KnowledgeReason   string
 }
 
 // ProbeEnvironment inspects sandbox binaries, inference backend availability,
@@ -400,6 +405,9 @@ func (r *Runtime) Status(ctx context.Context) StatusSnapshot {
 	}
 	if ws := r.AgentWorkspace(); ws != nil {
 		snapshot.Ready = ws.Readiness.Ready()
+		if ws.Environment.KnowledgeHealth != nil {
+			snapshot.KnowledgeDegraded, snapshot.KnowledgeReason = ws.Environment.KnowledgeHealth.Degraded()
+		}
 	}
 	if r.registration != nil {
 		if ds, ok := r.registration.DocumentSnapshot.(*config.DocumentSnapshot); ok && ds != nil {
@@ -436,6 +444,9 @@ func (s StatusSnapshot) RenderText(w io.Writer) {
 		fmt.Fprintf(w, "            %s (run 'relurpish doctor --fix' to materialize starter recipes)\n", s.RecipesError)
 	}
 	fmt.Fprintf(w, "ready:      %t\n", s.Ready)
+	if s.KnowledgeDegraded {
+		fmt.Fprintf(w, "knowledge:  degraded: %s\n", s.KnowledgeReason)
+	}
 	for _, notice := range s.DeprecationNotices {
 		fmt.Fprintf(w, "notice:     %s\n", notice)
 	}

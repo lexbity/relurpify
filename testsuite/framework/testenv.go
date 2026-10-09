@@ -65,6 +65,19 @@ func (r *recordingTelemetrySink) Events() []telemetry.Event {
 	return copies
 }
 
+// count returns how many captured events match the given type.
+func (r *recordingTelemetrySink) count(kind telemetry.EventType) int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	n := 0
+	for _, ev := range r.events {
+		if ev.Type == kind {
+			n++
+		}
+	}
+	return n
+}
+
 // Clear removes all captured events.
 func (r *recordingTelemetrySink) Clear() {
 	r.mu.Lock()

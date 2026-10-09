@@ -107,3 +107,59 @@ func TestBuildKnowledgeRuntimeWiresOneBus(t *testing.T) {
 		return false
 	}, 2*time.Second, time.Millisecond, "retriever must consume the runtime bus")
 }
+
+// TestBuildKnowledgeRuntimeWiresGroundingInvalidationAndHealth proves the
+// Phase 6 composition wires the capture-as-bridge grounding service, the
+// revision-drift invalidation pass (with a drain), and the health aggregate
+// onto the one bus.
+func TestBuildKnowledgeRuntimeWiresGroundingInvalidationAndHealth(t *testing.T) {
+	ctx := context.Background()
+	engine, err := graphdb.Open(ctx, graphdb.DefaultOptions(t.TempDir()))
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, engine.Close(ctx)) })
+
+	runtime, err := BuildKnowledgeRuntime(KnowledgeRuntimeInput{GraphDB: engine, WorkspaceRoot: "ws"})
+	require.NoError(t, err)
+	t.Cleanup(runtime.Close)
+
+	require.NotNil(t, runtime.Grounding, "grounding service must be composed")
+	require.NotNil(t, runtime.Invalidation, "invalidation pass must be composed")
+	require.NotNil(t, runtime.Drain, "invalidation drain must be exposed to the barrier")
+	require.NotNil(t, runtime.Health, "health aggregate must be composed")
+
+	// A revision-drift event on the one bus must mark affected chunks stale.
+	_, err = runtime.KnowledgeStore.Save(ctx, knowledge.KnowledgeChunk{
+		ID:          "chunk:tracked",
+		WorkspaceID: "ws",
+		TrustClass:  agentspec.TrustClassBuiltinTrusted,
+		Freshness:   knowledge.FreshnessValid,
+		Provenance: knowledge.ChunkProvenance{
+			CodeStateRef: "rev-old",
+			CompiledBy:   knowledge.CompilerDeterministic,
+			Timestamp:    time.Now().UTC(),
+		},
+		Body: knowledge.ChunkBody{Raw: "tracked", Fields: map[string]any{"file_path": "tracked.go"}},
+	})
+	require.NoError(t, err)
+
+	runtime.KnowledgeEvents.EmitCodeRevisionChanged(knowledge.CodeRevisionChangedPayload{
+		WorkspaceRoot: "ws",
+		NewRevision:   "rev-new",
+		AffectedPaths: []string{"tracked.go"},
+	})
+	require.Eventually(t, func() bool {
+		fresh, err := runtime.KnowledgeStore.FindFreshByFilePath("tracked.go")
+		return err == nil && len(fresh) == 0
+	}, 2*time.Second, time.Millisecond, "revision event must stale the tracked chunk")
+
+	// The health aggregate must latch a degraded signal from the same bus.
+	runtime.KnowledgeEvents.EmitInvalidationDegraded(knowledge.InvalidationDegradedPayload{
+		WorkspaceRoot: "ws",
+		FailureCount:  5,
+		Error:         "store unavailable",
+	})
+	require.Eventually(t, func() bool {
+		degraded, _ := runtime.Health.Degraded()
+		return degraded
+	}, 2*time.Second, time.Millisecond, "health aggregate must consume the runtime bus")
+}

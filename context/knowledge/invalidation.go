@@ -51,7 +51,9 @@ type InvalidationPass struct {
 }
 
 // Start launches the invalidation loop in the background and returns as soon as
-// it is running. Stop cancels the loop and waits for the goroutine to exit.
+// it is running. The bus subscription is established synchronously before
+// Start returns, so an event published immediately after Start is never lost to
+// a subscribe race. Stop cancels the loop and waits for the goroutine to exit.
 // A second Start while running returns an error.
 func (p *InvalidationPass) Start(ctx context.Context) error {
 	if p == nil || p.Events == nil {
@@ -71,6 +73,8 @@ func (p *InvalidationPass) Start(ctx context.Context) error {
 	p.pendingReason = ""
 	p.pendingRevision = nil
 	p.kick = make(chan struct{}, 1)
+	ch, unsub := p.Events.Subscribe(invalidationEventBuffer)
+	p.eventCh = ch
 	p.stateMu.Unlock()
 
 	p.wg.Add(1)
@@ -78,7 +82,13 @@ func (p *InvalidationPass) Start(ctx context.Context) error {
 
 	go func() {
 		defer p.wg.Done()
-		p.run(runCtx)
+		defer unsub()
+		defer func() {
+			p.stateMu.Lock()
+			p.eventCh = nil
+			p.stateMu.Unlock()
+		}()
+		p.run(runCtx, ch)
 	}()
 	return nil
 }
@@ -143,20 +153,10 @@ func (p *InvalidationPass) Drain(d time.Duration) int {
 
 // run is the invalidation loop body. It returns only when the context is
 // cancelled or the event stream closes.
-func (p *InvalidationPass) run(ctx context.Context) {
+func (p *InvalidationPass) run(ctx context.Context, ch <-chan Event) {
 	if p == nil || p.Events == nil {
 		return
 	}
-	ch, unsub := p.Events.Subscribe(invalidationEventBuffer)
-	defer unsub()
-	p.stateMu.Lock()
-	p.eventCh = ch
-	p.stateMu.Unlock()
-	defer func() {
-		p.stateMu.Lock()
-		p.eventCh = nil
-		p.stateMu.Unlock()
-	}()
 
 	var (
 		timer  *time.Timer

@@ -97,6 +97,7 @@ type Graph struct {
 	maxNodeVisits     int
 	telemetry         telemetry.Telemetry
 	grounder          Grounder
+	drain             func(time.Duration)
 	execMu            sync.Mutex
 	visitCounts       map[string]int
 	executionPath     []string
@@ -140,6 +141,15 @@ func (g *Graph) SetGrounder(grounder Grounder) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	g.grounder = grounder
+}
+
+// SetDrain installs the invalidation subscriber's bounded drain, which the
+// epoch barrier calls after flushing grounding so the next node's context
+// compilation observes landed knowledge events. Nil disables the drain step.
+func (g *Graph) SetDrain(drain func(time.Duration)) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.drain = drain
 }
 
 func (g *Graph) invalidateStructureLocked() {
@@ -336,6 +346,7 @@ func (g *Graph) Execute(ctx context.Context, env *contextdata.Envelope) (result 
 	ownsCoordinator := false
 	if coord == nil && g.grounder != nil {
 		coord = NewEpochCoordinator(contextdata.WithEnvelope(ctx, env), g.grounder, g.telemetry)
+		coord.SetDrain(g.drain)
 		ctx = WithEpochCoordinator(ctx, coord)
 		ownsCoordinator = true
 	}

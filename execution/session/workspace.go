@@ -703,6 +703,23 @@ func OpenWorkspace(ctx context.Context, cfg WorkspaceConfig) (_ *Workspace, err 
 		env.Retriever = cfg.KnowledgeProduct.Retriever
 		env.Compiler = cfg.KnowledgeProduct.Compiler
 		env.StreamTrigger = cfg.KnowledgeProduct.StreamTrigger
+		// Capture-as-bridge and epoch drain wiring: the grounding service is the
+		// graph's durable write boundary, the invalidation pass's drain is the
+		// barrier's subscriber-side drain, and health aggregates degraded
+		// knowledge conditions.
+		env.Grounding = cfg.KnowledgeProduct.Grounding
+		env.KnowledgeDrain = cfg.KnowledgeProduct.Drain
+		env.KnowledgeHealth = cfg.KnowledgeProduct.Health
+		// The output ingester closes the write loop from runtime outputs back
+		// into knowledge. Boot-time contract (R-6): it MUST share the
+		// composition-owned bus, or invalidation silently diverges.
+		if cfg.KnowledgeProduct.KnowledgeStore != nil {
+			ingester := knowledge.NewOutputIngester(cfg.KnowledgeProduct.KnowledgeStore, cfg.KnowledgeProduct.KnowledgeEvents)
+			if err := knowledge.AssertSameBus(ingester.Events, cfg.KnowledgeProduct.KnowledgeEvents); err != nil {
+				return nil, fmt.Errorf("workspace output ingester: %w", err)
+			}
+			env.OutputIngester = ingester
+		}
 		// Phase H.6: Silent-domain bridging — the stream trigger emits
 		// compiler.* events and the event-bus bridge surfaces chunk lifecycle
 		// signals (committed/staled/invalidated) on the durable trail (FR-12,

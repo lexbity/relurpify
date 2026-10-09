@@ -1,6 +1,8 @@
 package session
 
 import (
+	"time"
+
 	registry "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/context/contextstream"
@@ -91,6 +93,14 @@ type agentEnv struct {
 	// Event infrastructure
 	EventLog        event.Log
 	KnowledgeEvents *knowledge.EventBus
+	// KnowledgeDrain is the invalidation subscriber's bounded drain the epoch
+	// barrier calls. Nil when the knowledge runtime is absent.
+	KnowledgeDrain func(time.Duration)
+	// KnowledgeHealth is the composition-owned knowledge health aggregate.
+	KnowledgeHealth *knowledge.KnowledgeHealth
+	// Grounding is the capture-as-bridge write path; graph runs wire it as their
+	// epoch grounder.
+	Grounding *knowledge.GroundingService
 
 	// Scheduling + services
 	Scheduler      *ServiceScheduler
