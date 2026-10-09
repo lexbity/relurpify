@@ -8,6 +8,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/context/knowledge/graphdb"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 	intentcontext "codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
 	"codeburg.org/lexbit/relurpify/named/euclo/state"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
@@ -107,7 +108,7 @@ func TestEmitRouteSelected_RecordsEventType(t *testing.T) {
 	sink := &captureTelemetry{}
 	ctx := telemetry.WithTelemetry(context.Background(), sink)
 
-	EmitRouteSelected(ctx, "task-1", "session-1", "query", "capability", "euclo:cap.ast_query", 3, false, "lattice:score")
+	EmitRouteSelected(ctx, "task-1", "session-1", "query", "capability", "euclo:cap.ast_query", 3, false, "lattice:score", "sha256:abcd", euclotypes.Tier2Info{Used: true, Outcome: "applied", Model: "test", LatencyMs: 12})
 
 	if len(sink.events) != 1 {
 		t.Fatalf("expected 1 event, got %d", len(sink.events))
@@ -127,6 +128,15 @@ func TestEmitRouteSelected_RecordsEventType(t *testing.T) {
 	}
 	if event.Metadata["decided_by"] != "lattice:score" {
 		t.Fatalf("expected decided_by metadata, got %#v", event.Metadata["decided_by"])
+	}
+	if event.Metadata["utterance_digest"] != "sha256:abcd" {
+		t.Fatalf("expected utterance_digest metadata, got %#v", event.Metadata["utterance_digest"])
+	}
+	if event.Metadata["tier2_outcome"] != "applied" {
+		t.Fatalf("expected tier2_outcome metadata, got %#v", event.Metadata["tier2_outcome"])
+	}
+	if event.Metadata["tier2_latency_ms"] != int64(12) {
+		t.Fatalf("expected tier2_latency_ms metadata, got %#v", event.Metadata["tier2_latency_ms"])
 	}
 }
 
@@ -213,7 +223,7 @@ func TestEmitRouteFallback_BothIDs(t *testing.T) {
 }
 
 func TestEmitRouteSelected_NilTelemetry_NoOp(t *testing.T) {
-	EmitRouteSelected(context.Background(), "task-1", "session-1", "query", "capability", "euclo:cap.ast_query", 1, false, "")
+	EmitRouteSelected(context.Background(), "task-1", "session-1", "query", "capability", "euclo:cap.ast_query", 1, false, "", "", euclotypes.Tier2Info{})
 }
 
 func TestEucloTelemetry_EmitsTypedEvents(t *testing.T) {

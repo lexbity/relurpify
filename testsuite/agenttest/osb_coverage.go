@@ -51,6 +51,7 @@ var EvaluatedBenchmarkAssertions = map[string]bool{ //nolint:gochecknoglobals //
 	"max_tool_calls_hint":         true,
 	"max_total_tool_time_hint_ms": true,
 	"token_budget":                true,
+	"selection":                   true,
 }
 
 // AdvisoryBenchmarkFields are BenchmarkSpec fields that are parsed but produce
@@ -90,6 +91,7 @@ func ValidateOSBCaseCoverage(c CaseSpec) []string {
 		assertField("benchmark", "max_tool_calls_hint", ben.MaxToolCallsHint > 0, &errs)
 		assertField("benchmark", "max_total_tool_time_hint_ms", ben.MaxTotalToolTimeHintMs > 0, &errs)
 		assertField("benchmark", "token_budget", ben.TokenBudget != nil, &errs)
+		assertField("benchmark", "selection", ben.Selection != nil, &errs)
 		assertField("benchmark", "llm_response_stable_hint", ben.LLMResponseStableHint, &errs)
 		assertField("benchmark", "determinism_score_hint", ben.DeterminismScoreHint != "", &errs)
 		// ben.Extensions is advisory by construction (euclo routing hints); it

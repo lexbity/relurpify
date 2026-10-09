@@ -25,6 +25,7 @@ type Dispatcher struct {
 	thoughtrecipeRegistry *thoughtrecipepkg.ThoughtRecipeRegistry
 	familyRegistry        *families.KeywordFamilyRegistry
 	tier2Model            model.LanguageModel
+	recorder              *SelectionRecorder
 	workspace             string
 }
 
@@ -69,6 +70,15 @@ func (d *Dispatcher) WithTier2Model(m model.LanguageModel) *Dispatcher {
 	return d
 }
 
+// WithSelectionRecorder wires the Selection Decision Record recorder (D11).
+// Nil (default) means dispatch proceeds without persisting a record.
+func (d *Dispatcher) WithSelectionRecorder(r *SelectionRecorder) *Dispatcher {
+	if d != nil {
+		d.recorder = r
+	}
+	return d
+}
+
 // selectionDeps is the dispatcher's selection dependency bundle.
 func (d *Dispatcher) selectionDeps() SelectionDeps {
 	if d == nil {
@@ -79,6 +89,7 @@ func (d *Dispatcher) selectionDeps() SelectionDeps {
 		ThoughtRecipes: d.thoughtrecipeRegistry,
 		Families:       d.familyRegistry,
 		Tier2Model:     d.tier2Model,
+		Recorder:       d.recorder,
 	}
 }
 

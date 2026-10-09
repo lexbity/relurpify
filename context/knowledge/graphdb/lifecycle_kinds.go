@@ -9,6 +9,7 @@ const (
 	NodeKindWorkflowEvent        NodeKind = "workflow_event"
 	NodeKindWorkflowArtifact     NodeKind = "workflow_artifact"
 	NodeKindLineageBinding       NodeKind = "lineage_binding"
+	NodeKindSelectionDecision    NodeKind = "selection_decision"
 )
 
 // Compiler node kinds for compiler-specific persistence.
@@ -29,4 +30,9 @@ const (
 	EdgeKindDelegationHasTransition   EdgeKind = "delegation_has_transition"
 	EdgeKindLineageBindingForRun      EdgeKind = "lineage_binding_for_run"
 	EdgeKindLineageBindingForWorkflow EdgeKind = "lineage_binding_for_workflow"
+	// EdgeKindWorkflowHasSelectionDecision links a workflow to its selection
+	// decision records (D11); EdgeKindRunHasSelectionDecision links the run
+	// whose dispatch produced the record.
+	EdgeKindWorkflowHasSelectionDecision EdgeKind = "workflow_has_selection_decision"
+	EdgeKindRunHasSelectionDecision      EdgeKind = "run_has_selection_decision"
 )

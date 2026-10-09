@@ -29,6 +29,7 @@ type ThoughtRecipeExecutorNode struct {
 	ingestionPipeline *frameworkingestion.Pipeline
 	workspace         string
 	stateReground     grounding.StateRegroundSource
+	recorder          *SelectionRecorder
 }
 
 // NewThoughtRecipeExecutorNode creates a new thoughtrecipe executor node.
@@ -77,6 +78,16 @@ func (n *ThoughtRecipeExecutorNode) WithWorkspace(workspace string) *ThoughtReci
 func (n *ThoughtRecipeExecutorNode) WithStateReground(src grounding.StateRegroundSource) *ThoughtRecipeExecutorNode {
 	if n != nil {
 		n.stateReground = src
+	}
+	return n
+}
+
+// WithSelectionRecorder wires the Selection Decision Record recorder whose
+// execution_state transition the node applies when the recipe route completes
+// (D11). Nil is a no-op.
+func (n *ThoughtRecipeExecutorNode) WithSelectionRecorder(r *SelectionRecorder) *ThoughtRecipeExecutorNode {
+	if n != nil {
+		n.recorder = r
 	}
 	return n
 }
@@ -196,6 +207,11 @@ func (n *ThoughtRecipeExecutorNode) Execute(ctx context.Context, env *contextdat
 		n.recordGraphLevelFailure(ctx, env, err)
 	}
 	n.attachRecipeOutcome(env, subResult, err)
+	// D11: transition the run's selection record to its final state now that
+	// the recipe route has completed (or failed).
+	if n.recorder != nil {
+		n.recorder.updateExecutionState(ctx, env, err == nil && subResult != nil && subResult.Success)
+	}
 	return subResult, err
 }
 

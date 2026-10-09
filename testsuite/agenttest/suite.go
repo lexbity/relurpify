@@ -292,6 +292,22 @@ type BenchmarkSpec struct {
 	// Token budget hints
 	TokenBudget *TokenBudgetHint `yaml:"token_budget,omitempty"`
 	Extensions  map[string]any   `yaml:"extensions,omitempty"`
+
+	// Selection is the Benchmark-axis route-selection assertion (FR-22). A
+	// declared field that mismatches the recorded euclo.route.selected event
+	// fails the case: route selection is observable, deterministic provenance,
+	// so a mismatch is a behavioral regression, not a soft observation.
+	Selection *SelectionAssertion `yaml:"selection,omitempty"`
+}
+
+// SelectionAssertion declares expected route-selection outcomes of the case,
+// evaluated against the telemetry-derived euclo.route.selected event
+// (chosen route, deciding lattice rule, and fallback flag). An absent field
+// leaves that dimension unasserted.
+type SelectionAssertion struct {
+	ChosenRoute   string `yaml:"chosen_route,omitempty"`
+	DecidedBy     string `yaml:"decided_by,omitempty"`
+	FallbackTaken *bool  `yaml:"fallback_taken,omitempty"`
 }
 
 // TokenBudgetHint captures advisory token usage expectations.

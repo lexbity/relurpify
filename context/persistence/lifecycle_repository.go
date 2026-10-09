@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
+	"strings"
 	"time"
 
 	"codeburg.org/lexbit/relurpify/context/knowledge/graphdb"
@@ -578,6 +580,122 @@ func (r *LifecycleRepository) FindLineageBindingsByTo(toEntityID string) ([]cont
 	return bindings, nil
 }
 
+// Selection decision operations
+
+// RecordSelectionDecision persists one selection decision record (D11). The
+// decision ID is workflow-scoped: sel_<workflowID>_<seq> where seq is one past
+// the workflow's existing record count, so concurrent dispatches for different
+// workflows can never collide and a workflow's records stay ordered by
+// creation. The record node is linked to its workflow and, when run_id is set,
+// to its run.
+func (r *LifecycleRepository) RecordSelectionDecision(ctx context.Context, record contextports.SelectionDecisionRecord) (string, error) {
+	if record.Schema == "" {
+		record.Schema = contextports.SelectionDecisionSchema
+	}
+	if record.DecisionID == "" {
+		scoped, _ := r.ListSelectionDecisions(record.WorkflowID, 0)
+		seq := uint64(len(scoped)) + 1
+		record.DecisionID = graphdb.GenerateSequenceID("sel_"+record.WorkflowID, seq)
+	}
+	if record.CreatedAt.IsZero() {
+		record.CreatedAt = time.Now().UTC()
+	}
+	if record.ExecutionState == "" {
+		record.ExecutionState = contextports.SelectionExecutionStateDispatched
+	}
+
+	props, err := r.marshalSelectionDecision(record)
+	if err != nil {
+		return "", err
+	}
+
+	node := graphdb.NodeRecord{
+		ID:     record.DecisionID,
+		Kind:   graphdb.NodeKindSelectionDecision,
+		Props:  props,
+		Labels: []string{"selection_decision"},
+	}
+
+	if err := r.db.UpsertNode(ctx, node); err != nil {
+		return "", err
+	}
+
+	if record.WorkflowID != "" {
+		if err := r.db.Link(ctx, record.WorkflowID, record.DecisionID, graphdb.EdgeKindWorkflowHasSelectionDecision, "", 0, nil); err != nil {
+			return "", err
+		}
+	}
+	if record.RunID != "" {
+		if err := r.db.Link(ctx, record.RunID, record.DecisionID, graphdb.EdgeKindRunHasSelectionDecision, "", 0, nil); err != nil {
+			return "", err
+		}
+	}
+	return record.DecisionID, nil
+}
+
+// UpdateSelectionExecutionState transitions a selection record between
+// "dispatched", "completed", and "failed". A record is written before route
+// execution begins, so a crash between leaves "dispatched" — truthful.
+func (r *LifecycleRepository) UpdateSelectionExecutionState(ctx context.Context, decisionID, executionState string) error {
+	if strings.TrimSpace(decisionID) == "" {
+		return fmt.Errorf("selection decision id required")
+	}
+	node, ok := r.db.GetNode(decisionID)
+	if !ok {
+		return fmt.Errorf("selection decision not found: %s", decisionID)
+	}
+	record, err := r.unmarshalSelectionDecision(node)
+	if err != nil {
+		return err
+	}
+	record.ExecutionState = executionState
+	props, err := r.marshalSelectionDecision(*record)
+	if err != nil {
+		return err
+	}
+	node.Props = props
+	return r.db.UpsertNode(ctx, node)
+}
+
+// ListSelectionDecisions returns the selection decision records of a workflow
+// in creation order (oldest first), scoped by the workflow boundary when a
+// workflowID is given. An empty workflowID lists every record.
+func (r *LifecycleRepository) ListSelectionDecisions(workflowID string, limit int) ([]contextports.SelectionDecisionRecord, error) {
+	var nodes []graphdb.NodeRecord
+	if workflowID == "" {
+		nodes = r.db.ListNodes(graphdb.NodeKindSelectionDecision)
+	} else {
+		edges := r.db.GetOutEdges(workflowID, graphdb.EdgeKindWorkflowHasSelectionDecision)
+		nodes = make([]graphdb.NodeRecord, 0, len(edges))
+		for _, edge := range edges {
+			if node, ok := r.db.GetNode(edge.TargetID); ok {
+				nodes = append(nodes, node)
+			}
+		}
+	}
+	records := make([]contextports.SelectionDecisionRecord, 0, len(nodes))
+	byID := make(map[string]struct{}, len(nodes))
+	for _, node := range nodes {
+		record, err := r.unmarshalSelectionDecision(node)
+		if err != nil {
+			continue
+		}
+		// Guard against duplicated linkage: a record linked twice must list once.
+		if _, ok := byID[record.DecisionID]; ok {
+			continue
+		}
+		byID[record.DecisionID] = struct{}{}
+		records = append(records, *record)
+	}
+	sort.SliceStable(records, func(i, j int) bool {
+		return records[i].DecisionID < records[j].DecisionID
+	})
+	if limit > 0 && len(records) > limit {
+		records = records[:limit]
+	}
+	return records, nil
+}
+
 // Marshal/unmarshal helpers
 
 func (r *LifecycleRepository) marshalWorkflow(w contextports.WorkflowRecord) (json.RawMessage, error) {
@@ -662,6 +780,18 @@ func (r *LifecycleRepository) unmarshalLineageBinding(node graphdb.NodeRecord) (
 		return nil, err
 	}
 	return &lb, nil
+}
+
+func (r *LifecycleRepository) marshalSelectionDecision(record contextports.SelectionDecisionRecord) (json.RawMessage, error) {
+	return json.Marshal(record)
+}
+
+func (r *LifecycleRepository) unmarshalSelectionDecision(node graphdb.NodeRecord) (*contextports.SelectionDecisionRecord, error) {
+	var record contextports.SelectionDecisionRecord
+	if err := json.Unmarshal(node.Props, &record); err != nil {
+		return nil, err
+	}
+	return &record, nil
 }
 
 func (r *LifecycleRepository) limitEvents(nodes []graphdb.NodeRecord, limit int) ([]contextports.WorkflowEventRecord, error) {

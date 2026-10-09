@@ -10,6 +10,7 @@ import (
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/context/contextstream"
 	"codeburg.org/lexbit/relurpify/context/persistence"
+	contextports "codeburg.org/lexbit/relurpify/context/ports"
 	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/execution/agentgraph"
 	"codeburg.org/lexbit/relurpify/execution/agentlifecycle"
@@ -47,6 +48,10 @@ type RootGraphDeps struct {
 	// Tier2Model is the model consulted by the bounded Tier-2 disambiguator
 	// (D10). Nil leaves Tier-2 unconfigured.
 	Tier2Model model.LanguageModel
+	// Lifecycle is the durable lifecycle repository that receives Selection
+	// Decision Records (D11). Nil is a declared degraded mode: dispatch
+	// proceeds and no records are persisted.
+	Lifecycle contextports.LifecycleRepository
 }
 
 // RootGraph wires together orchestration nodes using the agentgraph runtime.
@@ -95,6 +100,7 @@ func NewRootGraph(ctx context.Context, deps RootGraphDeps) (*RootGraph, error) {
 		persistenceWriter:    deps.Persistence,
 		stateReground:        deps.StateReground,
 		tier2Model:           deps.Tier2Model,
+		lifecycle:            deps.Lifecycle,
 	})
 	if err != nil {
 		return nil, err
@@ -173,6 +179,7 @@ type buildNodeInput struct {
 	persistenceWriter    *persistence.Writer
 	stateReground        grounding.StateRegroundSource
 	tier2Model           model.LanguageModel
+	lifecycle            contextports.LifecycleRepository
 }
 
 func buildNodes(ctx context.Context, in buildNodeInput) ([]agentgraph.Node, error) {
@@ -291,7 +298,8 @@ func buildNodes(ctx context.Context, in buildNodeInput) ([]agentgraph.Node, erro
 		WithCapabilityRegistry(dispatchCapReg).
 		WithThoughtRecipeRegistry(thoughtrecipeReg).
 		WithFamilyRegistry(in.famReg).
-		WithTier2Model(in.tier2Model)
+		WithTier2Model(in.tier2Model).
+		WithSelectionRecorder(selectionRecorder(in.lifecycle))
 
 	routeForkNode := NewRouteForkNode("euclo.route_fork")
 
@@ -299,10 +307,12 @@ func buildNodes(ctx context.Context, in buildNodeInput) ([]agentgraph.Node, erro
 		WithParadigmDeps(in.paradigmDeps).
 		WithIngestionPipeline(nil).
 		WithWorkspace(in.workspace).
-		WithStateReground(in.stateReground)
+		WithStateReground(in.stateReground).
+		WithSelectionRecorder(selectionRecorder(in.lifecycle))
 	thoughtrecipeExec.WithThoughtRecipeRegistry(thoughtrecipeReg)
 
-	capabilityExec := NewCapabilityExecutionNode("euclo.execute_capability")
+	capabilityExec := NewCapabilityExecutionNode("euclo.execute_capability").
+		WithSelectionRecorder(selectionRecorder(in.lifecycle))
 	if dispatchCapReg != nil {
 		capabilityExec.WithCapabilityRegistry(dispatchCapReg)
 	}
@@ -549,4 +559,14 @@ func (n *stageNode) ID() string                { return n.id }
 func (n *stageNode) Type() agentgraph.NodeType { return n.nodeType }
 func (n *stageNode) Execute(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 	return n.execFn(ctx, env)
+}
+
+// selectionRecorder constructs the D11 recorder for a node, or nil when no
+// lifecycle repository is composed (declared degraded mode: dispatch proceeds
+// without persisting selection records).
+func selectionRecorder(repo contextports.LifecycleRepository) *SelectionRecorder {
+	if repo == nil {
+		return nil
+	}
+	return NewSelectionRecorder(repo)
 }

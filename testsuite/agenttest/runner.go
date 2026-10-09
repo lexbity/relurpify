@@ -113,6 +113,20 @@ type CaseReport struct {
 	SecurityObservations  []SecurityObservation  `json:"security_observations,omitempty"`
 	BenchmarkObservations []BenchmarkObservation `json:"benchmark_observations,omitempty"`
 	AssertionResults      []AssertionResult      `json:"assertion_results,omitempty"`
+
+	// RouteSelection is the recorded route-selection outcome of the case,
+	// derived from the euclo.route.selected telemetry event (FR-22). It feeds
+	// the Benchmark-axis `selection:` assertion.
+	RouteSelection RouteSelectionReport `json:"route_selection,omitempty"`
+}
+
+// RouteSelectionReport records the deterministic route-selection outcome of one
+// case: the chosen route, the D8 lattice rule that decided it, and whether a
+// fallback was taken.
+type RouteSelectionReport struct {
+	ChosenRoute   string `json:"chosen_route,omitempty"`
+	DecidedBy     string `json:"decided_by,omitempty"`
+	FallbackTaken bool   `json:"fallback_taken,omitempty"`
 }
 
 // SecurityObservation records one security-relevant event observed during the run.

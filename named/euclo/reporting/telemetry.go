@@ -6,6 +6,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/context/knowledge/graphdb"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 	intentcontext "codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
 	"codeburg.org/lexbit/relurpify/named/euclo/state"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
@@ -351,14 +352,24 @@ func clarificationStateVersionFromEnv(env *contextdata.Envelope) uint64 {
 }
 
 // EmitRouteSelected reports the selected route and candidate metadata.
-func EmitRouteSelected(ctx context.Context, taskID, sessionID, family, routeKind, routeID string, candidateCount int, fallbackTaken bool, decidedBy string) {
+// It carries the utterance digest (never the raw utterance) and the bounded
+// Tier-2 outcome so selection telemetry is complete provenance alongside the
+// durable Selection Decision Record (D11).
+func EmitRouteSelected(ctx context.Context, taskID, sessionID, family, routeKind, routeID string, candidateCount int, fallbackTaken bool, decidedBy, utteranceDigest string, tier2 euclotypes.Tier2Info) {
 	emitRouteEvent(ctx, EventTypeRouteSelected, taskID, sessionID, map[string]any{
-		"family":          family,
-		"route_kind":      routeKind,
-		"route_id":        routeID,
-		"candidate_count": candidateCount,
-		"fallback_taken":  fallbackTaken,
-		"decided_by":      decidedBy,
+		"family":             family,
+		"route_kind":         routeKind,
+		"route_id":           routeID,
+		"candidate_count":    candidateCount,
+		"fallback_taken":     fallbackTaken,
+		"decided_by":         decidedBy,
+		"utterance_digest":   utteranceDigest,
+		"tier2_used":         tier2.Used,
+		"tier2_outcome":      tier2.Outcome,
+		"tier2_model":        tier2.Model,
+		"tier2_confidence":   tier2.Confidence,
+		"tier2_latency_ms":   tier2.LatencyMs,
+		"tier2_candidate_id": tier2.CandidateID,
 	})
 }
 
@@ -405,6 +416,16 @@ func EmitRouteTier2Unavailable(ctx context.Context, taskID, sessionID, routeID, 
 	emitRouteEvent(ctx, EventTypeRouteTier2Unavailable, taskID, sessionID, map[string]any{
 		"route_id": routeID,
 		"reason":   reason,
+	})
+}
+
+// EmitRouteSelectionPersistFailed reports that a Selection Decision Record
+// could not be persisted despite the 50 ms budget; the selection proceeds and
+// the record is simply absent (D11 provenance loss is loud, never blocking).
+func EmitRouteSelectionPersistFailed(ctx context.Context, taskID, sessionID, decisionID, errorClass string) {
+	emitRouteEvent(ctx, EventTypeRouteSelectionPersistFailed, taskID, sessionID, map[string]any{
+		"decision_id": decisionID,
+		"error_class": errorClass,
 	})
 }
 

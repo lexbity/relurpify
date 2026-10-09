@@ -85,6 +85,7 @@ const (
 	KeyRouteTelemetryOff   = euclokeys.KeyRouteTelemetryOff
 	KeySkillFilter         = euclokeys.KeySkillFilter
 	KeyRouteDecidedBy      = euclokeys.KeyRouteDecidedBy
+	KeySelectionRecordID   = euclokeys.KeySelectionRecordID
 )
 
 // Background job state keys — written and read by BackgroundJobNode.

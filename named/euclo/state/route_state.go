@@ -102,3 +102,15 @@ func GetRouteDecidedBy(env *contextdata.Envelope) string {
 func SetRouteDecidedBy(env *contextdata.Envelope, decidedBy string) {
 	contextdata.SetTyped(env, KeyRouteDecidedBy, decidedBy)
 }
+
+// GetSelectionRecordID returns the durable Selection Decision Record ID
+// written once the selection record has been persisted (D11). Empty means no
+// record was written for this dispatch (no lifecycle repository composed).
+func GetSelectionRecordID(env *contextdata.Envelope) (string, bool) {
+	return contextdata.GetTyped[string](env, KeySelectionRecordID)
+}
+
+// SetSelectionRecordID records the persisted selection decision record ID.
+func SetSelectionRecordID(env *contextdata.Envelope, decisionID string) {
+	contextdata.SetTyped(env, KeySelectionRecordID, decisionID)
+}

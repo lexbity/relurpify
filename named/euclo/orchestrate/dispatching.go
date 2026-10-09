@@ -32,6 +32,10 @@ type SelectionDeps struct {
 	// Nil means Tier-2 is not configured: the gate records no attempt, and if
 	// it would have fired the model is reported as unavailable.
 	Tier2Model model.LanguageModel
+	// Recorder persists the Selection Decision Record of every successful
+	// dispatch (D11). Nil means no record is written (declared degraded mode:
+	// provenance loss is surfaced only when persistence was expected).
+	Recorder *SelectionRecorder
 }
 
 // Dispatch resolves a route request and records route telemetry. The
@@ -50,6 +54,13 @@ func Dispatch(ctx context.Context, env *contextdata.Envelope, req RouteRequest, 
 		} else {
 			applyRouteSelectionToEnvelope(env, nil, nil)
 		}
+	}
+	// D11: persist the Selection Decision Record synchronously (50 ms budget,
+	// never blocking) — after selection, before route execution begins. The
+	// record id lands on the envelope; the executor transitions its
+	// execution_state on completion.
+	if ok && deps.Recorder != nil {
+		deps.Recorder.persist(ctx, env, req, report, selected, fallbackTaken)
 	}
 	if !ok {
 		if !req.TelemetryOff {
@@ -86,7 +97,7 @@ func Dispatch(ctx context.Context, env *contextdata.Envelope, req RouteRequest, 
 		}
 	}
 	if !req.TelemetryOff {
-		reporting.EmitRouteSelected(ctx, taskID(env), sessionID(env), req.FamilyID, result.RouteKind, result.RouteID, result.CandidateCount, result.FallbackTaken, result.DecidedBy)
+		reporting.EmitRouteSelected(ctx, taskID(env), sessionID(env), req.FamilyID, result.RouteKind, result.RouteID, result.CandidateCount, result.FallbackTaken, result.DecidedBy, utteranceDigestFor(env, req), result.Tier2)
 		if result.FallbackTaken && result.FallbackID != "" {
 			reporting.EmitRouteFallback(ctx, taskID(env), sessionID(env), primaryRouteID(req), result.FallbackID, "primary route unavailable")
 		}

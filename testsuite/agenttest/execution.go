@@ -20,6 +20,8 @@ import (
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/context/knowledge"
 	"codeburg.org/lexbit/relurpify/context/knowledge/memory"
+	"codeburg.org/lexbit/relurpify/context/persistence"
+	contextports "codeburg.org/lexbit/relurpify/context/ports"
 	"codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/execution/agentgraph"
 	"codeburg.org/lexbit/relurpify/execution/prompt"
@@ -367,12 +369,25 @@ func (e *PreparedRunExecutor) createAgent(deps *paradigm.Deps) error {
 		deps,
 		euclo.WithCheckpointRepository(deps.AgentLifecycle),
 		euclo.WithHITLBroker(e.hitlBroker),
+		euclo.WithLifecycleRepository(e.lifecycleRepository()),
 	)
 	if err := agent.Initialize(nil); err != nil {
 		return err
 	}
 	e.agent = agent
 	return nil
+}
+
+// lifecycleRepository exposes the workspace graph database as the durable
+// lifecycle repository that receives Selection Decision Records (D11). Without
+// one, agenttest dispatches would silently skip the phase's provenance
+// contract (AC-10). The engine is shared with the capability index and closed
+// by cleanup; the repository is a thin immutable adapter.
+func (e *PreparedRunExecutor) lifecycleRepository() contextports.LifecycleRepository {
+	if e == nil || e.capability == nil || e.capability.IndexManager == nil || e.capability.IndexManager.GraphDB == nil {
+		return nil
+	}
+	return persistence.NewLifecycleRepository(e.capability.IndexManager.GraphDB)
 }
 
 func (e *PreparedRunExecutor) currentExecutor() agentgraph.WorkflowExecutor {

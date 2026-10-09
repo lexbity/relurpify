@@ -44,6 +44,35 @@ func applyRecordedTelemetry(report *CaseReport, events []telemetry.Event) {
 	if observed := securityObservationsFromEvents(events); len(observed) > 0 {
 		report.SecurityObservations = append(report.SecurityObservations, observed...)
 	}
+	if selection := routeSelectionFromEvents(events); selection.ChosenRoute != "" || selection.DecidedBy != "" {
+		report.RouteSelection = selection
+	}
+}
+
+// routeSelectionFromEvents derives the case's route-selection outcome from the
+// euclo.route.selected telemetry event (FR-22). The event carries the chosen
+// route, the D8 deciding rule, the fallback flag, the utterance digest, and the
+// bounded Tier-2 outcome (D11), so the Benchmark-axis `selection:` assertion
+// reads real, recorded provenance.
+func routeSelectionFromEvents(events []telemetry.Event) RouteSelectionReport {
+	var selection RouteSelectionReport
+	for _, ev := range events {
+		if ev.Type != "euclo.route.selected" {
+			continue
+		}
+		if id, _ := ev.Metadata["route_id"].(string); id != "" {
+			selection.ChosenRoute = strings.TrimSpace(id)
+		}
+		if decidedBy, _ := ev.Metadata["decided_by"].(string); decidedBy != "" {
+			selection.DecidedBy = strings.TrimSpace(decidedBy)
+		}
+		if taken, ok := ev.Metadata["fallback_taken"].(bool); ok {
+			selection.FallbackTaken = taken
+		}
+		// The event set is ordered; the last euclo.route.selected is the
+		// dispatch that decided the case.
+	}
+	return selection
 }
 
 // extractPhaseMetrics attributes events to a running phase label and aggregates

@@ -183,8 +183,72 @@ func EvaluateBenchmark(report *CaseReport, spec *BenchmarkSpec, transcript *Tool
 		eval.Observations = append(eval.Observations, tokenBudgetObservation("total", budget.MaxTotal, report.TokenUsage.TotalTokens, &eval))
 	}
 
+	if spec.Selection != nil {
+		eval.Observations = append(eval.Observations, evaluateSelectionAssertions(spec.Selection, report, &eval)...)
+	}
+
 	sort.Strings(eval.Failures)
 	return eval
+}
+
+// evaluateSelectionAssertions checks the Benchmark-axis `selection:` assertion
+// against the recorded route-selection outcome (FR-22). A declared dimension
+// that mismatches the euclo.route.selected event is a behavioral regression:
+// route selection is deterministic, recorded provenance, so the mismatch fails
+// the case rather than being a soft observation.
+func evaluateSelectionAssertions(sel *SelectionAssertion, report *CaseReport, eval *BenchmarkEvaluation) []BenchmarkObservation {
+	if sel == nil {
+		return nil
+	}
+	actual := RouteSelectionReport{}
+	if report != nil {
+		actual = report.RouteSelection
+	}
+	var observations []BenchmarkObservation
+
+	if expected := strings.TrimSpace(sel.ChosenRoute); expected != "" {
+		matched := actual.ChosenRoute == expected
+		observations = append(observations, BenchmarkObservation{
+			Category: "euclo_routing",
+			Field:    "selection.chosen_route",
+			Expected: expected,
+			Actual:   actual.ChosenRoute,
+			Matched:  matched,
+		})
+		if !matched {
+			eval.Failures = append(eval.Failures, fmt.Sprintf("selection chose route %q, expected %q", actual.ChosenRoute, expected))
+		}
+	}
+
+	if expected := strings.TrimSpace(sel.DecidedBy); expected != "" {
+		matched := actual.DecidedBy == expected
+		observations = append(observations, BenchmarkObservation{
+			Category: "euclo_routing",
+			Field:    "selection.decided_by",
+			Expected: expected,
+			Actual:   actual.DecidedBy,
+			Matched:  matched,
+		})
+		if !matched {
+			eval.Failures = append(eval.Failures, fmt.Sprintf("selection decided by %q, expected %q", actual.DecidedBy, expected))
+		}
+	}
+
+	if sel.FallbackTaken != nil {
+		matched := actual.FallbackTaken == *sel.FallbackTaken
+		observations = append(observations, BenchmarkObservation{
+			Category: "euclo_routing",
+			Field:    "selection.fallback_taken",
+			Expected: strconv.FormatBool(*sel.FallbackTaken),
+			Actual:   strconv.FormatBool(actual.FallbackTaken),
+			Matched:  matched,
+		})
+		if !matched {
+			eval.Failures = append(eval.Failures, fmt.Sprintf("selection fallback_taken=%t, expected %t", actual.FallbackTaken, *sel.FallbackTaken))
+		}
+	}
+
+	return observations
 }
 
 func tokenBudgetObservation(metric string, max, actual int, eval *BenchmarkEvaluation) BenchmarkObservation {

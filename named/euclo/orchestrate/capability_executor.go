@@ -17,6 +17,7 @@ import (
 type CapabilityExecutionNode struct {
 	id       string
 	registry *registry.CapabilityRegistry
+	recorder *SelectionRecorder
 }
 
 // NewCapabilityExecutionNode creates a new capability execution node.
@@ -30,6 +31,16 @@ func NewCapabilityExecutionNode(id string) *CapabilityExecutionNode {
 func (n *CapabilityExecutionNode) WithCapabilityRegistry(reg *registry.CapabilityRegistry) *CapabilityExecutionNode {
 	if n != nil && reg != nil {
 		n.registry = reg
+	}
+	return n
+}
+
+// WithSelectionRecorder wires the Selection Decision Record recorder whose
+// execution_state transition the node applies when the capability route
+// completes (D11). Nil is a no-op.
+func (n *CapabilityExecutionNode) WithSelectionRecorder(r *SelectionRecorder) *CapabilityExecutionNode {
+	if n != nil {
+		n.recorder = r
 	}
 	return n
 }
@@ -90,6 +101,11 @@ func (n *CapabilityExecutionNode) Execute(ctx context.Context, env *contextdata.
 		result = &execution.Result{NodeID: n.id, Success: err == nil}
 	}
 	result.NodeID = n.id
+	// D11: transition the run's selection record to its final state now that
+	// the capability route has completed (or failed).
+	if n.recorder != nil {
+		n.recorder.updateExecutionState(ctx, env, result != nil && result.Success)
+	}
 	return result, err
 }
 

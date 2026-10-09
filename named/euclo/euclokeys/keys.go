@@ -87,6 +87,10 @@ const (
 	// KeyRouteDecidedBy records the D8 lattice rule that produced the
 	// selection ("explicit", "default_recipe", or "lattice:*").
 	KeyRouteDecidedBy = "euclo.route.decided_by"
+	// KeySelectionRecordID is the durable Selection Decision Record ID written
+	// by the dispatcher once the selection record has been persisted (D11).
+	// The executive nodes read it to transition the record's execution_state.
+	KeySelectionRecordID = "euclo.selection_record_id"
 )
 
 // Background job state keys.

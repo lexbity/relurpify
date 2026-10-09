@@ -11,6 +11,7 @@ import (
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/context/contextstream"
 	"codeburg.org/lexbit/relurpify/context/persistence"
+	contextports "codeburg.org/lexbit/relurpify/context/ports"
 	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/execution/agentgraph"
 	"codeburg.org/lexbit/relurpify/execution/agentlifecycle"
@@ -83,6 +84,14 @@ func WithPersistenceWriter(writer *persistence.Writer) Option {
 func WithHITLBroker(broker euclopolicy.HITLBroker) Option {
 	return func(a *Agent) {
 		a.config.HITLBroker = broker
+	}
+}
+
+// WithLifecycleRepository wires the durable lifecycle repository that receives
+// Selection Decision Records (D11). Nil is a declared degraded mode.
+func WithLifecycleRepository(repo contextports.LifecycleRepository) Option {
+	return func(a *Agent) {
+		a.config.LifecycleRepository = repo
 	}
 }
 
@@ -218,6 +227,7 @@ func (a *Agent) BuildGraph(ctx context.Context, task *execution.Task) (*agentgra
 		Telemetry:            a.deps.Telemetry,
 		StateReground:        a.config.StateReground,
 		Tier2Model:           tier2Model,
+		Lifecycle:            a.config.LifecycleRepository,
 	}
 	rootGraph, err := orchestrate.NewRootGraph(ctx, deps)
 	if err != nil {

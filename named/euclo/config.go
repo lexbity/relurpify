@@ -3,6 +3,7 @@ package euclo
 import (
 	"codeburg.org/lexbit/relurpify/context/contextstream"
 	"codeburg.org/lexbit/relurpify/context/persistence"
+	contextports "codeburg.org/lexbit/relurpify/context/ports"
 	"codeburg.org/lexbit/relurpify/execution/agentlifecycle"
 	"codeburg.org/lexbit/relurpify/model"
 	"codeburg.org/lexbit/relurpify/named/euclo/grounding"
@@ -62,6 +63,13 @@ type EucloConfig struct {
 
 	// PersistenceWriter mirrors checkpoint payloads into the generic persistence layer.
 	PersistenceWriter *persistence.Writer
+
+	// LifecycleRepository receives persistent lifecycle records, including the
+	// Selection Decision Record written for every dispatch (D11 §3.6.4). Nil is
+	// a declared degraded mode: dispatch proceeds and no decision records are
+	// persisted (provenance loss is surfaced by telemetry when persistence was
+	// expected).
+	LifecycleRepository contextports.LifecycleRepository
 
 	// DryRun indicates whether to execute in dry-run mode.
 	// When true, mutation-capable steps report intended actions without executing.

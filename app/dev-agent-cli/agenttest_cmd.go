@@ -231,12 +231,23 @@ func newAgentTestPromoteCmd() *cobra.Command {
 func newAgentTestReportCmd() *cobra.Command {
 	var suites []string
 	var agentName string
+	var runDir string
 
 	cmd := &cobra.Command{
 		Use:   agentTestReportName,
-		Short: "Report golden tape and baseline coverage",
+		Short: "Report golden tape and baseline coverage, or selection decision statistics",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ws := ensureWorkspace()
+			if strings.TrimSpace(runDir) != "" {
+				// FR-22: selection decision summary from a completed run's
+				// telemetry (chosen-route histogram, fallback rate, tier-2
+				// invocation and rejection rates).
+				summary, err := buildSelectionSummary(runDir)
+				if err != nil {
+					return err
+				}
+				return printSelectionSummary(cmd.OutOrStdout(), summary)
+			}
 			suitePaths, err := resolveTapeSuitePaths(ws, suites, agentName)
 			if err != nil {
 				return err
@@ -250,6 +261,7 @@ func newAgentTestReportCmd() *cobra.Command {
 	}
 	cmd.Flags().StringArrayVar(&suites, "suite", nil, "Path to a testsuite YAML (repeatable)")
 	cmd.Flags().StringVar(&agentName, "agent", "", "Report suites matching <agent> in testsuite/agenttests/")
+	cmd.Flags().StringVar(&runDir, "run", "", "Completed run directory: print the selection decision summary from its telemetry")
 	return cmd
 }
 
