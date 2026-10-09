@@ -702,6 +702,12 @@ func OpenWorkspace(ctx context.Context, cfg WorkspaceConfig) (_ *Workspace, err 
 		if cfg.KnowledgeProduct.StreamTrigger != nil {
 			cfg.KnowledgeProduct.StreamTrigger.SetTelemetry(tel)
 		}
+		// The composition root owns the compiler lifecycle; the workspace
+		// session tears it down (compiler stops before the bus bridge closes).
+		cleanup.Add(func(_ context.Context) error {
+			cfg.KnowledgeProduct.Close()
+			return nil
+		})
 		if cfg.KnowledgeProduct.KnowledgeEvents != nil {
 			bridge := knowledge.NewEventBusTelemetryBridge(cfg.KnowledgeProduct.KnowledgeEvents, tel)
 			cleanup.Add(func(_ context.Context) error {

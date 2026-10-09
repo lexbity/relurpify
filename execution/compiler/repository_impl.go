@@ -3,6 +3,7 @@ package compiler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"codeburg.org/lexbit/relurpify/context/knowledge"
@@ -41,10 +42,14 @@ func (r *CompilerRepositoryImpl) StoreCompilationRecord(ctx context.Context, rec
 	return r.db.UpsertNode(ctx, node)
 }
 
+// ErrCompilationRecordNotFound is the typed miss returned by
+// GetCompilationRecord; callers map it onto their not-found semantics.
+var ErrCompilationRecordNotFound = errors.New("compilation record not found")
+
 func (r *CompilerRepositoryImpl) GetCompilationRecord(ctx context.Context, requestID string) (*CompilationRecord, error) {
 	node, ok := r.db.GetNode(requestID)
 	if !ok {
-		return nil, fmt.Errorf("compilation record not found: %s", requestID)
+		return nil, fmt.Errorf("%w: %s", ErrCompilationRecordNotFound, requestID)
 	}
 	var record CompilationRecord
 	if err := json.Unmarshal(node.Props, &record); err != nil {

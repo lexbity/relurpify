@@ -132,12 +132,15 @@ type SubstitutionDifference struct {
 	NewSubstitute knowledge.ChunkID
 }
 
-// CacheKey uniquely identifies a compilable context.
+// CacheKey uniquely identifies a compilable context. Event-log sequence is
+// deliberately NOT part of cache identity: two compiles of the same logical
+// request (same query, manifest, policy) share an entry regardless of how
+// many events were appended between them. The sequence remains record
+// metadata (CompilationRecord.EventLogSeq) and digest input.
 type CacheKey struct {
 	QueryFingerprint        string
 	ManifestFingerprint     string
 	PolicyBundleFingerprint string
-	EventLogSeq             uint64
 }
 
 // String returns a string representation of the cache key.
