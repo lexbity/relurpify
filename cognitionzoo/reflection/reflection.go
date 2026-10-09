@@ -43,7 +43,9 @@ func (a *ReflectionAgent) Execute(ctx context.Context, task *execution.Task, env
 		return nil, err
 	}
 	if cfg := a.Config; cfg != nil && cfg.Telemetry != nil {
-		graph.SetTelemetry(cfg.Telemetry)
+		if err := graph.SetTelemetry(cfg.Telemetry); err != nil {
+			return nil, err
+		}
 	}
 	if env == nil {
 		env = contextdata.NewEnvelope("reflection", "session")

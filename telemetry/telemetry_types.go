@@ -8,6 +8,7 @@ type EventType string
 const (
 	EventGraphStart            EventType = "graph_start"
 	EventGraphFinish           EventType = "graph_finish"
+	EventGraphBranchMerged     EventType = "graph.branch_merged"
 	EventNodeStart             EventType = "node_start"
 	EventNodeFinish            EventType = "node_finish"
 	EventNodeError             EventType = "node_error"

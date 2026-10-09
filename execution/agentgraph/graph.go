@@ -65,12 +65,27 @@ type parallelBranchResult struct {
 	err   error
 }
 
+// ErrGraphSealed is returned by Graph mutators once Execute has begun. A Graph
+// has two phases: build (mutators legal) and sealed (Execute has started and the
+// structure is immutable). Sealing governs mutation, not execution: Execute may
+// be called again on a sealed graph, which re-runs it with reset visit counts.
+// Mid-run structure materialization is deliberately unsupported; a mutator on a
+// sealed graph fails loudly here instead of racing the run loop.
+var ErrGraphSealed = errors.New("agentgraph: graph is sealed (execution in progress or complete)")
+
 // Graph orchestrates a workflow of nodes. It behaves like a tiny, deterministic
 // state machine: nodes are registered ahead of time, edges describe transitions,
 // and Execute walks the graph while recording telemetry plus enforcing invariants
 // such as bounded node visits (to guard against accidental cycles).
+//
+// Graph is a two-phase artifact. AddNode/AddEdge/SetStart/SetTelemetry/
+// SetMaxNodeVisits/SetCapabilityCatalog are build-phase operations; once Execute
+// seals the graph they return ErrGraphSealed. Parallel branch subgraphs run
+// against an immutable structural snapshot, so no goroutine ever shares a
+// mutable map with the parent.
 type Graph struct {
 	mu                sync.RWMutex
+	sealed            bool
 	nodes             map[string]Node
 	nodeContracts     map[string]NodeContract
 	edges             map[string][]Edge
@@ -105,10 +120,14 @@ func NewGraph() *Graph {
 }
 
 // SetTelemetry wires a telemetry sink for execution traces.
-func (g *Graph) SetTelemetry(t telemetry.Telemetry) {
+func (g *Graph) SetTelemetry(t telemetry.Telemetry) error {
 	g.mu.Lock()
 	defer g.mu.Unlock()
+	if g.sealed {
+		return ErrGraphSealed
+	}
 	g.telemetry = t
+	return nil
 }
 
 func (g *Graph) invalidateStructureLocked() {
@@ -124,12 +143,21 @@ func (g *Graph) invalidatePreflightLocked() {
 }
 
 // SetMaxNodeVisits updates the cycle-guard visit cap.
-func (g *Graph) SetMaxNodeVisits(limit int) {
+//
+// The cap is enforced per traversal: every parallel branch subgraph keeps its
+// own visit counters, so a node visited once by the parent and once per branch
+// counts width+1 in total. The cap exists to catch accidental cycles, not to
+// budget aggregate work; per-branch counters are the intended semantics.
+func (g *Graph) SetMaxNodeVisits(limit int) error {
 	g.mu.Lock()
 	defer g.mu.Unlock()
+	if g.sealed {
+		return ErrGraphSealed
+	}
 	if limit > 0 {
 		g.maxNodeVisits = limit
 	}
+	return nil
 }
 
 // emit sends telemetry events when a sink is configured; a no-op otherwise.
@@ -159,6 +187,9 @@ func (g *Graph) extractTaskID(env *contextdata.Envelope) string {
 func (g *Graph) SetStart(id string) error {
 	g.mu.Lock()
 	defer g.mu.Unlock()
+	if g.sealed {
+		return ErrGraphSealed
+	}
 	if _, ok := g.nodes[id]; !ok {
 		return fmt.Errorf("start node %s not found", id)
 	}
@@ -219,6 +250,9 @@ func (g *Graph) OutgoingEdges(id string) []Edge {
 func (g *Graph) AddNode(node Node) error {
 	g.mu.Lock()
 	defer g.mu.Unlock()
+	if g.sealed {
+		return ErrGraphSealed
+	}
 	if _, exists := g.nodes[node.ID()]; exists {
 		return fmt.Errorf("node %s already exists", node.ID())
 	}
@@ -232,6 +266,9 @@ func (g *Graph) AddNode(node Node) error {
 func (g *Graph) AddEdge(from, to string, condition ConditionFunc, parallel bool) error {
 	g.mu.Lock()
 	defer g.mu.Unlock()
+	if g.sealed {
+		return ErrGraphSealed
+	}
 	if _, ok := g.nodes[from]; !ok {
 		return fmt.Errorf("node %s not defined", from)
 	}
@@ -248,8 +285,13 @@ func (g *Graph) AddEdge(from, to string, condition ConditionFunc, parallel bool)
 	return nil
 }
 
-// Execute runs the graph from its start node.
+// Execute runs the graph from its start node. The first call seals the graph:
+// subsequent build-phase mutations return ErrGraphSealed. Execute itself may be
+// called again; each call resets visit counts and runs the sealed structure.
 func (g *Graph) Execute(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
+	g.mu.Lock()
+	g.sealed = true
+	g.mu.Unlock()
 	if err := g.Validate(); err != nil {
 		return nil, err
 	}
@@ -298,10 +340,11 @@ func (g *Graph) run(ctx context.Context, env *contextdata.Envelope, current stri
 		g.visitCounts = make(map[string]int)
 		g.executionPath = make([]string, 0)
 	}
-	// NOTE: We intentionally do NOT hold g.mu.RLock across the entire loop.
-	// Nodes may mutate the graph during execution (adding nodes/edges
-	// dynamically). Holding a read lock here would deadlock against the write
-	// lock those mutations require.
+	// The graph is sealed by Execute before this loop begins, so the structure
+	// is immutable for the duration of the run. We therefore take g.mu only for
+	// short map reads and never hold it across node.Execute. Mid-run structure
+	// materialization is unsupported: a mutator called here returns
+	// ErrGraphSealed rather than racing this loop.
 
 	var lastResult *execution.Result
 	for current != "" {
@@ -410,8 +453,10 @@ func (g *Graph) extractTaskMeta(env *contextdata.Envelope) map[string]any {
 	return meta
 }
 
-// nextNodes evaluates the outgoing edges for a node. Parallel edges are
-// executed optimistically on cloned contexts while serial edges behave like a
+// nextNodes evaluates the outgoing edges for a node. Conditions are evaluated
+// against the pre-branch parent state before any fork. Parallel edges execute
+// on independent structural snapshots with cloned envelopes, collect results by
+// edge index, and merge in declaration order; serial edges behave like a
 // traditional state machine transition. Returning a single node ID keeps the
 // main Execute loop simple and debuggable.
 func (g *Graph) nextNodes(ctx context.Context, env *contextdata.Envelope, node Node, result *execution.Result) (string, string, error) {
@@ -434,41 +479,46 @@ func (g *Graph) nextNodes(ctx context.Context, env *contextdata.Envelope, node N
 			serialEdges = append(serialEdges, edge)
 		}
 	}
-	// Launch parallel branches, merging their updates into the shared state.
+	// Launch parallel branches. Condition evaluation above already ran against
+	// the pre-branch parent state (predicates route, branches compute). Each
+	// branch executes on a private structural snapshot of the sealed graph and
+	// its own cloned envelope; results land in a pre-sized slice by edge index
+	// so collection order is never goroutine completion order.
 	if len(parallelEdges) > 0 {
+		// The measurement spans the whole parallel section (snapshot + branch
+		// execution + index-ordered merge), not just the merge call.
+		branchSectionStarted := time.Now()
+		snapshot := g.snapshotGraph()
+		results := make([]parallelBranchResult, len(parallelEdges))
 		var wg sync.WaitGroup
-		results := make(chan parallelBranchResult, len(parallelEdges))
 		for edgeIndex, edge := range parallelEdges {
 			wg.Add(1)
-
-			go func(index int) {
+			go func(index int, edge Edge) {
 				defer wg.Done()
 				perfstats.IncBranchClone()
 				branchEnv := contextdata.CloneEnvelope(env)
-				_, err := g.executeBranch(ctx, edge.To, branchEnv)
-				results <- parallelBranchResult{
+				_, err := g.executeBranch(ctx, snapshot, edge.To, branchEnv)
+				results[index] = parallelBranchResult{
 					index: index,
 					edge:  edge,
 					env:   branchEnv,
 					delta: contextdata.ComputeBranchDelta(env, branchEnv),
 					err:   err,
 				}
-			}(edgeIndex)
+			}(edgeIndex, edge)
 		}
 		wg.Wait()
-		close(results)
-		branches := make([]parallelBranchResult, 0, len(parallelEdges))
-		for result := range results {
-			if result.err != nil {
-				return "", "", result.err
+		// Scan in edge-declaration order: the lowest-index error aborts before
+		// any merge, so failure handling is deterministic too.
+		for i := range results {
+			if results[i].err != nil {
+				return "", "", results[i].err
 			}
-			branches = append(branches, result)
 		}
-		mergeStarted := time.Now()
-		if err := mergeParallelBranchEnvelopes(env, branches); err != nil {
+		if err := g.mergeParallelBranchEnvelopes(ctx, env, results); err != nil {
 			return "", "", err
 		}
-		perfstats.ObserveBranchMerge(time.Since(mergeStarted))
+		perfstats.ObserveBranchMerge(time.Since(branchSectionStarted))
 	}
 	if len(serialEdges) == 0 {
 		if len(parallelEdges) > 0 {
@@ -488,20 +538,17 @@ func (g *Graph) nextNodes(ctx context.Context, env *contextdata.Envelope, node N
 	return serialEdges[0].To, reason, nil
 }
 
-func mergeParallelBranchEnvelopes(parent *contextdata.Envelope, branches []parallelBranchResult) error {
+// mergeParallelBranchEnvelopes applies the branch deltas to the parent in edge
+// declaration order and emits graph.branch_merged. branches[i] must belong to
+// edge index i (the fan-out assigns results by index before waiting), so the
+// slice is already the declaration order the merge requires.
+func (g *Graph) mergeParallelBranchEnvelopes(ctx context.Context, parent *contextdata.Envelope, branches []parallelBranchResult) error {
 	if parent == nil || len(branches) == 0 {
 		return nil
 	}
-	// Results arrive in completion order; the merge is defined in edge
-	// declaration order, so order by the branch's edge index. This is the only
-	// source of ordering: goroutine scheduling no longer affects the outcome.
-	ordered := make([]parallelBranchResult, len(branches))
-	copy(ordered, branches)
-	sort.Slice(ordered, func(i, j int) bool { return ordered[i].index < ordered[j].index })
-
-	envs := make([]*contextdata.Envelope, 0, len(ordered))
-	units := make([]contextdata.BranchMergeUnit, 0, len(ordered))
-	for _, branch := range ordered {
+	envs := make([]*contextdata.Envelope, 0, len(branches))
+	units := make([]contextdata.BranchMergeUnit, 0, len(branches))
+	for _, branch := range branches {
 		if branch.env == nil {
 			continue
 		}
@@ -519,27 +566,143 @@ func mergeParallelBranchEnvelopes(parent *contextdata.Envelope, branches []paral
 	if err := contextdata.ValidateBranchMerge(envs); err != nil {
 		return err
 	}
-	if _, err := parent.ApplyBranchMerges(units); err != nil {
+	stats, err := parent.ApplyBranchMerges(units)
+	if err != nil {
 		return err
 	}
+	g.emit(ctx, telemetry.Event{
+		Type:      telemetry.EventGraphBranchMerged,
+		TaskID:    g.extractTaskID(parent),
+		Timestamp: time.Now().UTC(),
+		Metadata: map[string]any{
+			"units_applied":   stats.UnitsApplied,
+			"keys_written":    stats.KeysWritten,
+			"keys_deleted":    stats.KeysDeleted,
+			"conflicted_keys": stats.Conflicts,
+			"winner_index":    conflictWinnerIndices(units, stats.Conflicts),
+			"refs_streamed":   stats.RefsStreamed,
+			"refs_retrieval":  stats.RefsRetrieval,
+		},
+	})
 	return nil
 }
 
-// executeBranch runs a detached sub-graph that starts at the provided node.
-// The parent graph shares the node/edge definitions but each branch receives a
-// cloned Envelope, which preserves determinism until Merge recombines updates.
-func (g *Graph) executeBranch(ctx context.Context, start string, env *contextdata.Envelope) (*execution.Result, error) {
-	// We reuse the same node/edge maps because branch graphs are read-only. The
-	// only mutable data lives inside the cloned Envelope passed to this function.
+// conflictWinnerIndices maps each conflicted key to the index of the last unit
+// that mentioned it — the declaration-order winner. Units are ascending by
+// Index, so the final match is the winner.
+func conflictWinnerIndices(units []contextdata.BranchMergeUnit, conflicts []string) map[string]int {
+	if len(conflicts) == 0 {
+		return nil
+	}
+	winners := make(map[string]int, len(conflicts))
+	for _, key := range conflicts {
+		winner := -1
+		for _, unit := range units {
+			if branchDeltaMentions(unit.Delta, key) {
+				winner = unit.Index
+			}
+		}
+		if winner >= 0 {
+			winners[key] = winner
+		}
+	}
+	return winners
+}
+
+func branchDeltaMentions(delta contextdata.BranchDelta, key string) bool {
+	return stringSliceContains(delta.WorkingMemoryAdded, key) ||
+		stringSliceContains(delta.WorkingMemoryModified, key) ||
+		stringSliceContains(delta.WorkingMemoryDeleted, key)
+}
+
+func stringSliceContains(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
+}
+
+// graphSnapshot is an immutable structural view of a sealed graph, taken under
+// the parent's lock and consumed by branch subgraphs. nodes and nodeContracts
+// are shallow-copied: Node and NodeContract are treated as immutable after
+// build (NodeContract's slices are shared read-only), and the subgraph's
+// Validate takes the cached-result fast path, so nodeContracts is never
+// written. edges are deep-copied per key so no subgraph aliases a parent edge
+// slice.
+type graphSnapshot struct {
+	nodes             map[string]Node
+	nodeContracts     map[string]NodeContract
+	edges             map[string][]Edge
+	maxNodeVisits     int
+	telemetry         telemetry.Telemetry
+	capabilityCatalog CapabilityCatalog
+	lastPreflight     *PreflightReport
+	lastPreflightErr  error
+	preflightDirty    bool
+	lastValidationErr error
+}
+
+// snapshotGraphLocked copies the graph structure into a snapshot. The caller
+// must hold g.mu for reading.
+func (g *Graph) snapshotGraphLocked() graphSnapshot {
+	snapshot := graphSnapshot{
+		nodes:             make(map[string]Node, len(g.nodes)),
+		nodeContracts:     make(map[string]NodeContract, len(g.nodeContracts)),
+		edges:             make(map[string][]Edge, len(g.edges)),
+		maxNodeVisits:     g.maxNodeVisits,
+		telemetry:         g.telemetry,
+		capabilityCatalog: g.capabilityCatalog,
+		lastPreflight:     g.lastPreflight,
+		lastPreflightErr:  g.lastPreflightErr,
+		preflightDirty:    g.preflightDirty,
+		lastValidationErr: g.lastValidationErr,
+	}
+	for id, node := range g.nodes {
+		snapshot.nodes[id] = node
+	}
+	for id, contract := range g.nodeContracts {
+		snapshot.nodeContracts[id] = contract
+	}
+	for id, edges := range g.edges {
+		copied := make([]Edge, len(edges))
+		copy(copied, edges)
+		snapshot.edges[id] = copied
+	}
+	return snapshot
+}
+
+// snapshotGraph takes a structural snapshot under the read lock. It is called
+// once per fan-out, before the branch goroutines are spawned.
+func (g *Graph) snapshotGraph() graphSnapshot {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+	return g.snapshotGraphLocked()
+}
+
+// executeBranch runs a detached subgraph starting at the provided node. The
+// subgraph executes against the immutable snapshot taken before the fan-out,
+// so it shares no mutable map with the parent and takes no parent lock while
+// running (its own g.mu guards only its private copies). Each branch receives
+// its own cloned envelope; the branch-final envelope is merged back in
+// edge-declaration order by mergeParallelBranchEnvelopes.
+func (g *Graph) executeBranch(ctx context.Context, snapshot graphSnapshot, start string, env *contextdata.Envelope) (*execution.Result, error) {
 	subGraph := &Graph{
-		nodes:           g.nodes,
-		nodeContracts:   g.nodeContracts,
-		edges:           g.edges,
-		startNodeID:     start,
-		maxNodeVisits:   g.maxNodeVisits,
-		telemetry:       g.telemetry,
-		preflightDirty:  g.preflightDirty,
-		validationDirty: g.validationDirty,
+		nodes:             snapshot.nodes,
+		nodeContracts:     snapshot.nodeContracts,
+		edges:             snapshot.edges,
+		startNodeID:       start,
+		maxNodeVisits:     snapshot.maxNodeVisits,
+		telemetry:         snapshot.telemetry,
+		capabilityCatalog: snapshot.capabilityCatalog,
+		lastPreflight:     snapshot.lastPreflight,
+		lastPreflightErr:  snapshot.lastPreflightErr,
+		preflightDirty:    snapshot.preflightDirty,
+		lastValidationErr: snapshot.lastValidationErr,
+		// The parent validated before the fan-out; the snapshot carries that
+		// result, so the subgraph never writes its nodeContracts map.
+		validationDirty: false,
 	}
 	return subGraph.Execute(ctx, env)
 }

@@ -118,7 +118,9 @@ func (a *BlackboardAgent) BuildGraph(ctx context.Context, task *execution.Task) 
 		}
 	}
 	if catalog := a.executionCapabilityCatalog(ctx); catalog != nil && len(catalog.InspectableCapabilities()) > 0 {
-		g.SetCapabilityCatalog(catalog)
+		if err := g.SetCapabilityCatalog(catalog); err != nil {
+			return nil, err
+		}
 	}
 	startNodeID := load.ID()
 	if stream != nil {
@@ -201,7 +203,9 @@ func (a *BlackboardAgent) Execute(ctx context.Context, task *execution.Task, env
 		return nil, err
 	}
 	if cfg := a.Config; cfg != nil && cfg.Telemetry != nil {
-		g.SetTelemetry(cfg.Telemetry)
+		if err := g.SetTelemetry(cfg.Telemetry); err != nil {
+			return nil, err
+		}
 	}
 	if _, err := g.Execute(ctx, env); err != nil {
 		return nil, fmt.Errorf("blackboard: graph execution failed: %w", err)

@@ -95,7 +95,9 @@ func NewRootGraph(ctx context.Context, deps RootGraphDeps) (*RootGraph, error) {
 		}
 	}
 	if deps.Telemetry != nil {
-		g.SetTelemetry(deps.Telemetry)
+		if err := g.SetTelemetry(deps.Telemetry); err != nil {
+			return nil, err
+		}
 	}
 	if err := wireEdges(g); err != nil {
 		return nil, err

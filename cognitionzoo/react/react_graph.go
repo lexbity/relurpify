@@ -33,7 +33,9 @@ func (a *ReActAgent) BuildGraph(ctx context.Context, task *execution.Task) (*gra
 	done := graph.NewTerminalNode("react_done")
 	g := graph.NewGraph()
 	if catalog := a.executionCapabilityCatalog(ctx); catalog != nil && len(catalog.InspectableCapabilities()) > 0 {
-		g.SetCapabilityCatalog(catalog)
+		if err := g.SetCapabilityCatalog(catalog); err != nil {
+			return nil, err
+		}
 	}
 	if err := g.AddNode(think); err != nil {
 		return nil, err

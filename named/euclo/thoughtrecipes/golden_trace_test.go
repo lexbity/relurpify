@@ -9,10 +9,10 @@ import (
 	"sync"
 	"testing"
 
-	regpkg "codeburg.org/lexbit/relurpify/capability/registry"
-	"codeburg.org/lexbit/relurpify/capability/descriptor"
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/capability/descriptor"
 	"codeburg.org/lexbit/relurpify/capability/ports"
+	regpkg "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/cognitionzoo/paradigm"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/execution"
@@ -87,15 +87,15 @@ run default:
 
 // traceResult captures the observable output of a single graph execution.
 type traceResult struct {
-	GraphValid   bool              `json:"graph_valid"`
-	StartNode    string            `json:"start_node"`
-	NodeCount    int               `json:"node_count"`
-	EdgeCount    int               `json:"edge_count"`
-	ExecPath     []string          `json:"exec_path"`
-	ExecSuccess  bool              `json:"exec_success"`
-	ExecError    string            `json:"exec_error,omitempty"`
-	EnvelopeKeys []string          `json:"envelope_keys"`
-	ResultKeys   []string          `json:"result_keys"`
+	GraphValid   bool     `json:"graph_valid"`
+	StartNode    string   `json:"start_node"`
+	NodeCount    int      `json:"node_count"`
+	EdgeCount    int      `json:"edge_count"`
+	ExecPath     []string `json:"exec_path"`
+	ExecSuccess  bool     `json:"exec_success"`
+	ExecError    string   `json:"exec_error,omitempty"`
+	EnvelopeKeys []string `json:"envelope_keys"`
+	ResultKeys   []string `json:"result_keys"`
 }
 
 type recordingTelemetrySink struct {
@@ -128,7 +128,9 @@ func captureTrace(t *testing.T, ctx context.Context, plan *ExecutionPlan, deps *
 	valid := graph.Validate() == nil
 
 	telemetrySink := &recordingTelemetrySink{}
-	graph.SetTelemetry(telemetrySink)
+	if err := graph.SetTelemetry(telemetrySink); err != nil {
+		t.Fatalf("set telemetry: %v", err)
+	}
 
 	env := contextdata.NewEnvelope("golden-task-"+plan.ThoughtRecipe.Name, "golden-session")
 	env.SetWorkingValueWithClass("euclo.execution.step_total", len(plan.Steps), contextdata.MemoryClassTask)

@@ -13,11 +13,17 @@
 //   - Retrieval results: references to knowledge store queries
 //
 // Parallel branches clone the envelope via contextdata.CloneEnvelope, execute
-// independently, and merge their deltas back into the parent envelope with
-// contextdata.ApplyBranchMerges when they converge. Branches merge in edge
-// declaration order; the branch later in declaration order wins a conflicting
-// key, and deletions propagate. The envelope owns the transition under its own
-// lock rather than exposing its fields to the graph.
+// independently against an immutable structural snapshot, and merge their
+// deltas back into the parent envelope with contextdata.ApplyBranchMerges when
+// they converge. Branches merge in edge declaration order; the branch later in
+// declaration order wins a conflicting key, and deletions propagate. The
+// envelope owns the transition under its own lock rather than exposing its
+// fields to the graph, and every merge emits a graph.branch_merged telemetry
+// event carrying the conflict set and declaration-order winners.
+//
+// A graph is sealed by its first Execute: from then on the structure is
+// immutable and build-phase mutators return ErrGraphSealed. Sealing governs
+// mutation, not execution; Execute may run again on a sealed graph.
 //
 // # Node types
 //

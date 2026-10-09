@@ -76,7 +76,9 @@ func (a *ReActAgent) Execute(ctx context.Context, task *execution.Task, env *con
 		return nil, err
 	}
 	if cfg := a.Config; cfg != nil && cfg.Telemetry != nil {
-		graph.SetTelemetry(cfg.Telemetry)
+		if err := graph.SetTelemetry(cfg.Telemetry); err != nil {
+			return nil, err
+		}
 	}
 	result, err := graph.Execute(ctx, env)
 	return result, err

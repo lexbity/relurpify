@@ -67,7 +67,9 @@ func (a *RewooAgent) Execute(ctx context.Context, task *execution.Task, env *con
 		return nil, err
 	}
 	if cfg := a.Config; cfg != nil && cfg.Telemetry != nil {
-		g.SetTelemetry(cfg.Telemetry)
+		if err := g.SetTelemetry(cfg.Telemetry); err != nil {
+			return nil, err
+		}
 	}
 	if env == nil {
 		env = contextdata.NewEnvelope(taskIDForRewoo(task), "session")

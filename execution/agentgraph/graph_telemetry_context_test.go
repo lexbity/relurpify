@@ -28,7 +28,9 @@ func (n *telemetryAwareTestNode) Execute(ctx context.Context, env *contextdata.E
 func TestGraph_InjectsTelemetryIntoContext(t *testing.T) {
 	sink := &coreTestTelemetrySink{}
 	graph := NewGraph()
-	graph.SetTelemetry(sink)
+	if err := graph.SetTelemetry(sink); err != nil {
+		t.Fatalf("set telemetry: %v", err)
+	}
 
 	node := &telemetryAwareTestNode{id: "node"}
 	done := NewTerminalNode("done")

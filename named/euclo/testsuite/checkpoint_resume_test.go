@@ -70,10 +70,14 @@ func TestEndToEndCheckpointResumeFromPersistedArtifact(t *testing.T) {
 		euclostate.SetIntentClassification(rehydrated, &classification)
 	}
 
-	if err := graph.SetStart("euclo.capability_classify"); err != nil {
+	resumeGraph, err := orchestrate.NewRootGraph(context.Background(), deps)
+	if err != nil {
+		t.Fatalf("resume NewRootGraph failed: %v", err)
+	}
+	if err := resumeGraph.SetStart("euclo.capability_classify"); err != nil {
 		t.Fatalf("set resume start failed: %v", err)
 	}
-	if err := graph.Execute(ctxWithTrigger(context.Background()), rehydrated); err != nil {
+	if err := resumeGraph.Execute(ctxWithTrigger(context.Background()), rehydrated); err != nil {
 		t.Fatalf("resume execute failed: %v", err)
 	}
 	if got := mustStringValue(t, rehydrated, "euclo.execution.kind"); got != "thoughtrecipe" {
@@ -154,10 +158,14 @@ func TestEndToEndCheckpointResumeThoughtRecipePath(t *testing.T) {
 		euclostate.SetThoughtRecipeID(rehydrated, thoughtrecipeID)
 	}
 
-	if err := graph.SetStart("euclo.capability_classify"); err != nil {
+	resumeGraph, err := orchestrate.NewRootGraph(context.Background(), deps)
+	if err != nil {
+		t.Fatalf("resume NewRootGraph failed: %v", err)
+	}
+	if err := resumeGraph.SetStart("euclo.capability_classify"); err != nil {
 		t.Fatalf("set resume start failed: %v", err)
 	}
-	if err := graph.Execute(ctxWithTrigger(context.Background()), rehydrated); err != nil {
+	if err := resumeGraph.Execute(ctxWithTrigger(context.Background()), rehydrated); err != nil {
 		t.Fatalf("resume execute failed: %v", err)
 	}
 	if got := mustStringValue(t, rehydrated, "euclo.execution.kind"); got != "thoughtrecipe" {

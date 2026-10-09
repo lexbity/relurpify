@@ -77,7 +77,9 @@ func (a *PlannerAgent) Execute(ctx context.Context, task *execution.Task, env *c
 		return nil, err
 	}
 	if cfg := a.Config; cfg != nil && cfg.Telemetry != nil {
-		graph.SetTelemetry(cfg.Telemetry)
+		if err := graph.SetTelemetry(cfg.Telemetry); err != nil {
+			return nil, err
+		}
 	}
 	a.planStarted(ctx, task)
 	result, err := graph.Execute(ctx, env)
@@ -233,7 +235,9 @@ func (a *PlannerAgent) BuildGraph(ctx context.Context, task *execution.Task) (*g
 	if a.Tools != nil {
 		catalog := a.Tools.CaptureExecutionCatalogSnapshot(ctx)
 		if catalog != nil && len(catalog.InspectableCapabilities()) > 0 {
-			g.SetCapabilityCatalog(catalog)
+			if err := g.SetCapabilityCatalog(catalog); err != nil {
+				return nil, err
+			}
 		}
 	}
 	nodes := make([]graph.Node, 0, 5)

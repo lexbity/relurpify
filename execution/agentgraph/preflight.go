@@ -48,11 +48,18 @@ func (r PreflightReport) HasBlockingIssues() bool {
 	return false
 }
 
-func (g *Graph) SetCapabilityCatalog(catalog CapabilityCatalog) {
+// SetCapabilityCatalog wires the capability catalog used for preflight
+// placement. It is a build-phase operation; once the graph is sealed it returns
+// ErrGraphSealed.
+func (g *Graph) SetCapabilityCatalog(catalog CapabilityCatalog) error {
 	g.mu.Lock()
 	defer g.mu.Unlock()
+	if g.sealed {
+		return ErrGraphSealed
+	}
 	g.capabilityCatalog = catalog
 	g.invalidatePreflightLocked()
+	return nil
 }
 
 func (g *Graph) LastPreflightReport() *PreflightReport {
