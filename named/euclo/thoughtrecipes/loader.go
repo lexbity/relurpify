@@ -152,11 +152,14 @@ func (l *Loader) loadThoughtRecipeSource(result *LoadResult, source SourceFile) 
 	if err := symbols.Resolve(); err != nil {
 		return err
 	}
-	plan, err := LowerDocument(doc)
+	plan, err := LowerDocumentWithRegistry(doc, l.CapabilityRegistry)
 	if err != nil {
 		return err
 	}
 
+	if err := validateCapabilityStepScopes(plan, source.Path); err != nil {
+		return err
+	}
 	if ok, err := result.Registry.RegisterCompiledFirstWins(plan.ThoughtRecipe, plan, source.Path); err != nil {
 		return err
 	} else if !ok {
@@ -164,6 +167,37 @@ func (l *Loader) loadThoughtRecipeSource(result *LoadResult, source SourceFile) 
 			Path:    source.Path,
 			Message: fmt.Sprintf("duplicate thoughtrecipe name %q ignored; first registration wins", plan.ThoughtRecipe.Name),
 		})
+	}
+	return nil
+}
+
+
+// validateCapabilityStepScopes is the belt-to-the-lowering's-suspenders load
+// invariant: every capability step MUST carry a resolved scope. The lowering
+// always sets one (the named capability), so a violation means a lowering
+// regression, not author error — fail the load naming file and position.
+func validateCapabilityStepScopes(plan *ExecutionPlan, sourcePath string) error {
+	if plan == nil {
+		return nil
+	}
+	var walk func(steps []ExecutionStep) error
+	walk = func(steps []ExecutionStep) error {
+		for _, step := range steps {
+			if step.Kind == StepKindCapability && !step.Scope.IsResolved() {
+				return fmt.Errorf("%s: capability_step_missing_scope: capability step %q has no resolved scope", sourcePath, step.ID)
+			}
+		}
+		return nil
+	}
+	if err := walk(plan.Steps); err != nil {
+		return err
+	}
+	for _, route := range plan.Routes {
+		for _, branch := range route.Branches {
+			if err := walk(branch.Steps); err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }

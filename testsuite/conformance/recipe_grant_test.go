@@ -94,3 +94,30 @@ func TestRecipeGrant_ExcludedCapabilityDeniedByPolicyWithoutEscalation(t *testin
 
 	require.Equal(t, "skipped", result.Metadata["on_error_resolved"])
 }
+
+// TestRecipeGrant_StandaloneCapabilityStepExecutes: the case the audit found
+// missing — a programmatic recipe with a standalone capability step and a
+// resolved scope executes end-to-end through a permissive registry view
+// (§5.8 lowering, AC-9 permissive path).
+func TestRecipeGrant_StandaloneCapabilityStepExecutes(t *testing.T) {
+	base := registry.NewRegistry()
+	handler := &grantRecordingCapability{id: "euclo:cap.allowed"}
+	require.NoError(t, base.RegisterInvocableCapability(context.Background(), handler))
+
+	env := contextdata.NewEnvelope("task-standalone", "session-standalone")
+	step := thoughtrecipepkg.ExecutionStep{
+		ID:           "standalone.step",
+		Kind:         thoughtrecipepkg.StepKindCapability,
+		CapabilityID: "euclo:cap.allowed",
+		Scope:        thoughtrecipepkg.AllowTools([]string{"euclo:cap.allowed"}),
+		Config:       map[string]any{},
+	}
+
+	node := thoughtrecipepkg.NewThoughtRecipeStepNode("standalone.step.execute", &paradigm.Deps{Registry: base}, step)
+	result, err := node.Execute(context.Background(), env)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.True(t, result.Success)
+	require.True(t, handler.called, "capability handler must have executed")
+}
