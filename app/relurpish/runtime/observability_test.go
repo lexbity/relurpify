@@ -12,7 +12,6 @@ import (
 
 	"codeburg.org/lexbit/relurpify/execution/workspace"
 	"codeburg.org/lexbit/relurpify/telemetry"
-	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
 func TestNewDegradedRuntime_EmitsBootDegraded(t *testing.T) {
@@ -22,7 +21,7 @@ func TestNewDegradedRuntime_EmitsBootDegraded(t *testing.T) {
 	defer log.SetOutput(prev)
 
 	cfg := Config{Workspace: t.TempDir()}
-	rt := newDegradedRuntime(nil, cfg, config.Secrets{}, &testDegradedErr{s: "sandbox unavailable"})
+	rt := newDegradedRuntime(nil, cfg, &testDegradedErr{s: "sandbox unavailable"})
 	require.NotNil(t, rt)
 
 	output := buf.String()
@@ -54,7 +53,7 @@ func TestNewDegradedRuntime_NonNilWorkspace(t *testing.T) {
 	defer log.SetOutput(prev)
 
 	cfg := Config{Workspace: t.TempDir()}
-	rt := newDegradedRuntime(nil, cfg, config.Secrets{}, &testDegradedErr{s: "test"})
+	rt := newDegradedRuntime(nil, cfg, &testDegradedErr{s: "test"})
 	require.NotNil(t, rt)
 	require.NotNil(t, rt.AgentWorkspace())
 	require.True(t, rt.AgentWorkspace().Readiness.Degraded)

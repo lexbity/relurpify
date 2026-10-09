@@ -64,6 +64,11 @@ const (
 	EventSandboxImagePinned           EventType = "sandbox.image_pinned"
 	EventSandboxImageUnpinned         EventType = "sandbox.image_unpinned"
 	EventBootDegraded                 EventType = "boot.degraded"
+	// EventTaskRejected reports a task submission refused because the runtime
+	// is degraded (D7). It carries the boot failure reason in metadata and is
+	// the only record a rejected task leaves behind: the guard in executeTask
+	// runs before envelope assembly and lifecycle bookkeeping.
+	EventTaskRejected EventType = "task.rejected"
 )
 
 // Paradigm lifecycle events emitted by the cognitionzoo paradigms (HTN,

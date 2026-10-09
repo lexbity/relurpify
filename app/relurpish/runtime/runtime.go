@@ -124,7 +124,7 @@ func (r *Runtime) Secrets() config.Secrets {
 func New(ctx context.Context, cfg Config, secrets config.Secrets) (*Runtime, error) {
 	rt, err := buildRuntime(ctx, cfg, secrets)
 	if err != nil {
-		return newDegradedRuntime(ctx, cfg, secrets, err), nil
+		return newDegradedRuntime(ctx, cfg, err), nil
 	}
 	return rt, nil
 }
@@ -553,7 +553,7 @@ func syncWorkspaceReadiness(rt *Runtime) {
 	}
 }
 
-func newDegradedRuntime(ctx context.Context, cfg Config, secrets config.Secrets, reason error) *Runtime {
+func newDegradedRuntime(ctx context.Context, cfg Config, reason error) *Runtime {
 	ws := session.DegradedWorkspace(reason.Error())
 	ws.Registration = &session.Registration{ID: "degraded"}
 
@@ -577,7 +577,6 @@ func newDegradedRuntime(ctx context.Context, cfg Config, secrets config.Secrets,
 	ws.Telemetry = degradedTelemetrySink(cfg)
 	emitBootDegraded(ctx, ws, reason)
 	log.Printf("runtime degraded: reason=%q degraded=true", reason.Error())
-	_ = secrets
 	return rt
 }
 
@@ -962,11 +961,68 @@ func (r *Runtime) clearActiveWorkflowID(id string) {
 	r.activeWorkflowMu.Unlock()
 }
 
+// ErrRuntimeDegraded reports a task submission against a runtime that failed to
+// build. It is errors.As/Is-compatible; Reason carries the boot failure text.
+// The error flows through the existing turn error channel so the user sees an
+// honest rejection instead of the nil-agent panic a degraded runtime would
+// otherwise produce.
+type ErrRuntimeDegraded struct{ Reason string }
+
+func (e *ErrRuntimeDegraded) Error() string {
+	return "runtime degraded, task rejected: " + e.Reason
+}
+
+// Is matches the degraded category, so a caller can classify a failure with
+// errors.Is(err, &ErrRuntimeDegraded{}) without holding the originating value.
+func (e *ErrRuntimeDegraded) Is(target error) bool {
+	_, ok := target.(*ErrRuntimeDegraded)
+	return ok
+}
+
+// degradationReason resolves the boot failure that produced a degraded
+// runtime. A degraded workspace stores the reason on Readiness (set by
+// session.DegradedWorkspace); a runtime assembled without one falls back to a
+// stable constant so ErrRuntimeDegraded.Error() is never bare.
+func (r *Runtime) degradationReason() string {
+	if r != nil && r.Workspace != nil {
+		if reason := strings.TrimSpace(r.Workspace.Readiness.Reason); reason != "" {
+			return reason
+		}
+	}
+	return "boot failed"
+}
+
+// emitTaskRejected records the rejection on the runtime's telemetry sink. The
+// guard in executeTask runs before envelope assembly and lifecycle
+// bookkeeping, so this event is the only record a rejected task leaves behind.
+func (r *Runtime) emitTaskRejected(ctx context.Context, taskID, reason string) {
+	if r == nil || r.Workspace == nil || r.Workspace.Telemetry == nil {
+		return
+	}
+	ev := telemetry.Event{
+		Type:      telemetry.EventTaskRejected,
+		Message:   "task rejected",
+		Timestamp: time.Now().UTC(),
+		TaskID:    strings.TrimSpace(taskID),
+		Metadata:  map[string]any{"reason": reason},
+	}
+	telemetry.StampCorrelation(ctx, &ev)
+	r.Workspace.Telemetry.Emit(ev)
+}
+
 // executeTask is the single turn-execution path shared by RunTask and
 // ResumeSession so the two cannot diverge: envelope assembly, lifecycle
 // bookkeeping (workflow + run records, active workflow ID tracking), agent
 // execution, and working-memory eviction.
 func (r *Runtime) executeTask(ctx context.Context, task *execution.Task) (*execution.Result, error) {
+	if r.Agent == nil {
+		// A degraded boot deliberately produces Agent == nil (newDegradedRuntime).
+		// Reject before envelope assembly and lifecycle bookkeeping so the task
+		// leaves no interaction envelope and no workflow/run records.
+		reason := r.degradationReason()
+		r.emitTaskRejected(ctx, task.ID, reason)
+		return nil, &ErrRuntimeDegraded{Reason: reason}
+	}
 	env := contextdata.NewEnvelope(task.ID, r.ensureSessionID())
 	env.SetNodeID("runtime")
 	if task.Context != nil {
@@ -1255,7 +1311,7 @@ func (r *Runtime) resumeInteractionTask(ctx context.Context, env *contextdata.En
 		return nil, fmt.Errorf("task input has unexpected type %T", value)
 	}
 	if r.Agent == nil {
-		return nil, fmt.Errorf("agent unavailable for resume")
+		return nil, &ErrRuntimeDegraded{Reason: r.degradationReason()}
 	}
 	return r.Agent.Execute(r.beginTurn(ctx, env), task, env)
 }
