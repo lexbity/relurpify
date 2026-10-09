@@ -106,7 +106,7 @@ func Run(ctx context.Context, runner ports.CommandRunner, spec RunSpec) (res *Ru
 	// SF-1 SSRF guard: screen target hosts against the mandatory denylist
 	// before the command runs. The scanner runs for network-access tools and,
 	// when container isolation is off, for every command.
-	egress := checkEgress(SandboxSpec{
+	egress := checkEgress(ctx, SandboxSpec{
 		NetworkAccess:     spec.NetworkAccess,
 		NetworkIsolation:  !spec.NetworkIsolationDisabled,
 		AllowHosts:        spec.AllowHosts,

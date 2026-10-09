@@ -61,6 +61,7 @@ const (
 	EventSandboxOrphanReaped          EventType = "sandbox.orphan_reaped"
 	EventSandboxOutputCeilingExceeded EventType = "sandbox.output_ceiling_exceeded"
 	EventSandboxProtectedPathEscaped  EventType = "sandbox.protected_path_escaped"
+	EventSandboxProtectedPathSelf     EventType = "sandbox.protected_path_self"
 	EventSandboxImagePinned           EventType = "sandbox.image_pinned"
 	EventSandboxImageUnpinned         EventType = "sandbox.image_unpinned"
 	EventBootDegraded                 EventType = "boot.degraded"

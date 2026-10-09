@@ -121,7 +121,7 @@ func BuildSecurityRuntime(ctx context.Context, in SecurityRuntimeInput) (*Securi
 			bashCfg.Default = decision
 		}
 		authPolicy := fauthorization.NewCommandAuthorizationPolicy(permManager, in.AgentID, bashCfg, "sandbox")
-		cmdPolicy = sandbox.CommandPolicyFunc(func(_ context.Context, req sandbox.CommandRequest) error {
+		cmdPolicy = sandbox.CommandPolicyFunc(func(ctx context.Context, req sandbox.CommandRequest) error {
 			return authPolicy.CheckCommand(ctx, req.Args, req.Env)
 		})
 	} else {

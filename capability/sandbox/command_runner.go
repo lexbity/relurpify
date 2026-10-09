@@ -485,6 +485,13 @@ func sortedLabelKeys(labels map[string]string) []string {
 // it read-only inside the container. A symlink that resolves OUTSIDE the
 // workspace is dropped and reported as sandbox.protected_path_escaped — a
 // config drift signal, not a silent skip (SBH-1 D-14).
+//
+// Deduplication is keyed on the RESOLVED location, not the configured path: two
+// aliases (a symlink and its target, or the same path spelled two ways) name
+// one source, and a second bind of the same source to the same container target
+// is rejected by the engine (D8). A protected path that resolves to the
+// workspace root itself cannot be enforced read-only over the rw workspace bind
+// and is reported as sandbox.protected_path_self and skipped.
 func (r *SandboxCommandRunner) protectedMounts(ctx context.Context) []string {
 	if r == nil || r.rt == nil {
 		return nil
@@ -500,13 +507,14 @@ func (r *SandboxCommandRunner) protectedMounts(ctx context.Context) []string {
 		if path == "" {
 			continue
 		}
-		if _, ok := seen[path]; ok {
-			continue
-		}
 		resolved, err := filepath.EvalSymlinks(path)
 		if err != nil {
 			continue // missing path → nothing to mount
 		}
+		if _, ok := seen[resolved]; ok {
+			continue // an earlier alias already produced this mount
+		}
+		seen[resolved] = struct{}{}
 		if !pathWithinWorkspace(resolved, r.workspace) {
 			emitCommandEvent(ctx, r.events, telemetry.EventSandboxProtectedPathEscaped,
 				"sandbox protected path resolved outside workspace",
@@ -523,8 +531,20 @@ func (r *SandboxCommandRunner) protectedMounts(ctx context.Context) []string {
 		if strings.HasPrefix(rel, "..") {
 			continue
 		}
+		if rel == "." {
+			// The protected path is the workspace root. Enforcing read-only
+			// over the rw workspace bind would duplicate the /workspace mount
+			// target and fail the run; surface the misconfiguration instead
+			// (D8).
+			emitCommandEvent(ctx, r.events, telemetry.EventSandboxProtectedPathSelf,
+				"sandbox protected path is the workspace root; read-only cannot be enforced over the workspace bind",
+				map[string]any{
+					"path":     path,
+					"resolved": resolved,
+				})
+			continue
+		}
 		containerPath := filepath.ToSlash(filepath.Join("/workspace", rel))
-		seen[resolved] = struct{}{}
 		mounts = append(mounts, fmt.Sprintf("%s:%s:ro", resolved, containerPath))
 	}
 	return mounts

@@ -149,6 +149,56 @@ func TestRunnerPosture_ProtectedPathSymlinkEscapeDropped(t *testing.T) {
 	}
 }
 
+// TestRunnerPosture_ProtectedMountsDedupeResolved: a symlink alias and its
+// target resolve to one source and must produce exactly one read-only mount —
+// duplicate source→target binds are rejected by the engine (D8).
+func TestRunnerPosture_ProtectedMountsDedupeResolved(t *testing.T) {
+	ws := t.TempDir()
+	target := filepath.Join(ws, "secrets")
+	require.NoError(t, os.MkdirAll(target, 0o750))
+	alias := filepath.Join(ws, "alias")
+	require.NoError(t, os.Symlink(target, alias))
+
+	rt := NewSandboxRuntime(SandboxConfig{})
+	require.NoError(t, rt.ApplyPolicy(context.Background(), SandboxPolicy{
+		// The same resolved source appears three times: the real path twice and
+		// a symlink alias once.
+		ProtectedPaths: []string{target, alias, target},
+	}))
+	runner, err := NewSandboxCommandRunner(&CommandRunnerConfig{Workspace: ws}, rt)
+	require.NoError(t, err)
+
+	mounts := runner.protectedMounts(context.Background())
+	require.Len(t, mounts, 1, "resolved aliases must dedupe to one mount: %v", mounts)
+	require.Equal(t, target+":/workspace/secrets:ro", mounts[0])
+}
+
+// TestRunnerPosture_ProtectedPathSelfSkipped: a protected path that resolves to
+// the workspace root cannot be enforced read-only over the rw workspace bind;
+// it is skipped and reported as sandbox.protected_path_self (D8).
+func TestRunnerPosture_ProtectedPathSelfSkipped(t *testing.T) {
+	ws := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(ws, ".git"), 0o750))
+
+	sink := &commandRecordingSink{}
+	rt := NewSandboxRuntime(SandboxConfig{})
+	require.NoError(t, rt.ApplyPolicy(context.Background(), SandboxPolicy{
+		ProtectedPaths: []string{ws, filepath.Join(ws, ".git")},
+	}))
+	runner, err := NewSandboxCommandRunner(&CommandRunnerConfig{Workspace: ws, Events: sink}, rt)
+	require.NoError(t, err)
+
+	mounts := runner.protectedMounts(context.Background())
+	require.Len(t, mounts, 1, "the workspace root must be skipped: %v", mounts)
+	require.True(t, strings.HasSuffix(mounts[0], ".git:/workspace/.git:ro"))
+	require.NotEqual(t, ws+":/workspace:ro", mounts[0],
+		"the workspace root must never be mounted read-only over its own rw bind")
+
+	ev, ok := sink.Find(telemetry.EventSandboxProtectedPathSelf)
+	require.True(t, ok, "a self-resolving protected path must emit sandbox.protected_path_self")
+	require.Equal(t, ws, ev.Metadata["resolved"])
+}
+
 // TestRunnerPosture_ImageDigestResolution covers D-13 precedence against the
 // fake docker daemon: explicit ref, configured digest, local inspect, unpinned.
 func TestRunnerPosture_ImageDigestResolution(t *testing.T) {

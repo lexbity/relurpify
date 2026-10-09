@@ -66,8 +66,10 @@ var proxyEnvKeys = map[string]struct{}{
 // allow_private_hosts, in which case it requires HITL approval. Public targets
 // in allow_hosts are granted; when isolation is off the allowlists are ignored
 // and every public target requires approval (the scanner is the only boundary).
-// An unresolved hostname is a denial (fail closed).
-func checkEgress(spec SandboxSpec, env, cmd []string) EgressDecision {
+// An unresolved hostname is a denial (fail closed), with one exception: a bare
+// single-label token (D10) is only a host if it resolves, so an unresolvable
+// bare token is ignored rather than denied.
+func checkEgress(ctx context.Context, spec SandboxSpec, env, cmd []string) EgressDecision {
 	if !spec.NetworkAccess && spec.NetworkIsolation {
 		return EgressDecision{Effect: EgressAllow}
 	}
@@ -84,34 +86,40 @@ func checkEgress(spec SandboxSpec, env, cmd []string) EgressDecision {
 	var denied []string
 	var pending []string
 
-	scan := func(host string) {
-		class, err := classifyEgressHost(host)
+	scan := func(candidate hostCandidate) {
+		class, err := classifyEgressHost(ctx, candidate.name)
 		if err != nil {
-			denied = append(denied, host)
-			return
-		}
-		key := strings.ToLower(host)
-		if class != netpolicy.ClassPublic {
-			if _, ok := allowPrivate[key]; ok {
-				pending = append(pending, host)
+			if candidate.bare {
+				// An unresolvable scheme-less label (e.g. an ordinary argv
+				// argument) is not a host claim: ignore it rather than failing
+				// closed, which would block every bare-word argument (D10).
 				return
 			}
-			denied = append(denied, host)
+			denied = append(denied, candidate.name)
+			return
+		}
+		key := strings.ToLower(candidate.name)
+		if class != netpolicy.ClassPublic {
+			if _, ok := allowPrivate[key]; ok {
+				pending = append(pending, candidate.name)
+				return
+			}
+			denied = append(denied, candidate.name)
 			return
 		}
 		if _, ok := allowHosts[key]; !ok && toolDefaultDenies {
-			pending = append(pending, host)
+			pending = append(pending, candidate.name)
 		}
 	}
 
 	for _, token := range cmd {
-		for _, host := range extractHostCandidates(token) {
-			scan(host)
+		for _, candidate := range extractHostCandidates(token) {
+			scan(candidate)
 		}
 	}
 	for _, entry := range env {
 		for _, host := range proxyEnvHosts(entry) {
-			scan(host)
+			scan(hostCandidate{name: host})
 		}
 	}
 
@@ -137,26 +145,41 @@ func checkEgress(spec SandboxSpec, env, cmd []string) EgressDecision {
 }
 
 // classifyEgressHost classifies a host token through the canonical netpolicy
-// classifier with the fail-closed resolution policy.
-func classifyEgressHost(host string) (netpolicy.HostClass, error) {
+// classifier with the fail-closed resolution policy. The caller's context
+// bounds and cancels resolution (D11).
+func classifyEgressHost(ctx context.Context, host string) (netpolicy.HostClass, error) {
 	if ip, ok := netpolicy.ParseHostToken(host); ok {
 		return netpolicy.ClassifyIP(ip), nil
 	}
-	target, err := netpolicy.ResolveTarget(context.Background(), host, netpolicy.DefaultResolveOptions())
+	target, err := netpolicy.ResolveTarget(ctx, host, netpolicy.DefaultResolveOptions())
 	if err != nil {
 		return "", err
 	}
 	return target.Class, nil
 }
 
+// hostCandidate is one host token extracted from an argv entry. bare marks a
+// scheme-less single-label token (D10): it is a host only if it resolves.
+// Dotted, scheme-qualified, and literal candidates are committed host claims
+// and fail closed on resolution failure.
+type hostCandidate struct {
+	name string
+	bare bool
+}
+
 // extractHostCandidates pulls zero or one host out of a single argv token. It
 // understands full URLs (scheme://host[:port]/...), host:port pairs, bracketed
 // IPv6, bare hosts, and config carriers of the form k=value where value is a
-// URL — e.g. `git -c http.proxy=http://127.0.0.1:9` or `--url=http://10.0.0.1/`.
+// URL or a dotted host — e.g. `git -c http.proxy=http://127.0.0.1:9` or
+// `--url=http://10.0.0.1/`.
 //
 // Tokens that are not host-like return nil. A scheme:// token is always
 // treated as a host (even single-label), because the scheme disambiguates it.
-func extractHostCandidates(token string) []string {
+// A standalone single-label token (RFC-1123 label, no scheme, not
+// flag-prefixed) is returned as a bare candidate: the scanner resolves it and
+// treats resolution failure as "not a host", so ordinary argv words are not
+// blocked (D10).
+func extractHostCandidates(token string) []hostCandidate {
 	token = strings.TrimSpace(token)
 	if token == "" {
 		return nil
@@ -164,19 +187,24 @@ func extractHostCandidates(token string) []string {
 	// A genuine URL parses as a whole (its query may contain '=').
 	if idx := strings.Index(token, "://"); idx >= 0 && !strings.Contains(token[:idx], "=") {
 		if u, err := url.Parse(token); err == nil && u.Hostname() != "" {
-			return []string{u.Hostname()}
+			return []hostCandidate{{name: u.Hostname()}}
 		}
 	}
 	// k=value carrier (flag/config): recurse on the value.
 	if i := strings.IndexByte(token, '='); i >= 0 {
 		value := strings.TrimSpace(token[i+1:])
 		if host := extractHost(value); host != "" && (strings.Contains(value, "://") || looksLikeHost(host)) {
-			return []string{host}
+			return []hostCandidate{{name: host}}
 		}
 	}
-	// Bare host or host:port.
-	if host := extractHost(token); host != "" && looksLikeHost(host) {
-		return []string{host}
+	// Bare host, host:port, or scheme-less single label.
+	if host := extractHost(token); host != "" {
+		if looksLikeHost(host) {
+			return []hostCandidate{{name: host}}
+		}
+		if looksLikeBareLabel(host) {
+			return []hostCandidate{{name: host, bare: true}}
+		}
 	}
 	return nil
 }
@@ -245,22 +273,49 @@ func looksLikeHostname(host string) bool {
 		return false
 	}
 	for _, label := range strings.Split(host, ".") {
-		if label == "" {
-			continue
-		}
-		for i := 0; i < len(label); i++ {
-			c := label[i]
-			switch {
-			case c >= 'a' && c <= 'z':
-			case c >= 'A' && c <= 'Z':
-			case c >= '0' && c <= '9':
-			case c == '-' || c == '_':
-			default:
-				return false
-			}
+		if !isHostnameLabel(label, true) {
+			return false
 		}
 	}
 	return true
+}
+
+// isHostnameLabel reports whether label contains only characters legal in a DNS
+// label under the scanner's syntax. allowUnderscore admits the legacy
+// underscore spelling that dotted hostnames tolerate; bare labels stay strict
+// RFC-1123 (D10).
+func isHostnameLabel(label string, allowUnderscore bool) bool {
+	for i := 0; i < len(label); i++ {
+		c := label[i]
+		switch {
+		case c >= 'a' && c <= 'z':
+		case c >= 'A' && c <= 'Z':
+		case c >= '0' && c <= '9':
+		case c == '-':
+		case allowUnderscore && c == '_':
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+// looksLikeBareLabel reports whether s is a scheme-less RFC-1123 single-label
+// token: 1-63 characters drawn from [A-Za-z0-9-], with no leading or trailing
+// hyphen and no dot, colon, or whitespace. Such a token is only a host
+// candidate if it resolves (D10); resolution failure means it is an ordinary
+// argv argument, not a host claim.
+func looksLikeBareLabel(s string) bool {
+	if s == "" || len(s) > 63 {
+		return false
+	}
+	if strings.ContainsAny(s, " \t.:") {
+		return false
+	}
+	if s[0] == '-' || s[len(s)-1] == '-' {
+		return false
+	}
+	return isHostnameLabel(s, false)
 }
 
 // extractHost pulls a hostname/IP out of a single CLI argument. It understands
