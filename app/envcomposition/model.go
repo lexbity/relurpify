@@ -92,7 +92,7 @@ func (a modelTelemetryAdapter) Emit(event observability.Event) {
 	// downstream model telemetry can re-stamp without losing fields.
 	ctx := context.Background()
 	if ev.SessionID != "" || ev.RunID != "" || ev.TraceID != "" || ev.AgentID != "" {
-		ctx = telemetry.WithRunContext(ctx, telemetry.RunContext{
+		ctx = observability.WithRunContext(ctx, observability.RunContext{
 			SessionID: ev.SessionID,
 			RunID:     ev.RunID,
 			TraceID:   ev.TraceID,
@@ -100,7 +100,7 @@ func (a modelTelemetryAdapter) Emit(event observability.Event) {
 		})
 	}
 	if ev.TraceID != "" || ev.SpanID != "" {
-		ctx = telemetry.WithTraceContext(ctx, telemetry.TraceContext{
+		ctx = observability.WithTraceContext(ctx, observability.TraceContext{
 			TraceID: ev.TraceID,
 			SpanID:  ev.SpanID,
 		})

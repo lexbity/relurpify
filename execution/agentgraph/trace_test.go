@@ -5,12 +5,12 @@ import (
 	"testing"
 
 	capresult "codeburg.org/lexbit/relurpify/capability/result"
+	"codeburg.org/lexbit/relurpify/platform/observability"
 
 	"codeburg.org/lexbit/relurpify/capability/descriptor"
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
-	"codeburg.org/lexbit/relurpify/telemetry"
 	"github.com/stretchr/testify/require"
 )
 
@@ -25,7 +25,7 @@ func TestToolNodeSetsTraceContext(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify that trace context was set on the context passed to InvokeCapability
-	tc, ok := telemetry.TraceContextFromContext(reg.lastCtx)
+	tc, ok := observability.TraceContextFromContext(reg.lastCtx)
 	require.True(t, ok, "InvokeCapability should receive context with trace context")
 	require.Equal(t, "root_trace_123", tc.TraceID)
 	require.NotEmpty(t, tc.SpanID)

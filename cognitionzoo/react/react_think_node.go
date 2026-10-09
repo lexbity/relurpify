@@ -29,10 +29,12 @@ func (n *reactThinkNode) Type() agentgraph.NodeType { return agentgraph.NodeType
 
 // Execute drives the "think" portion of the ReAct loop and either emits a tool
 // call or final answer instructions.
+//
+// Deterministic recovery probes travel under their own dedicated envelope
+// slot, which this node never reads or writes (S9 grep gate): think's
+// react.tool_calls reset must therefore never be extended to touch that slot.
 func (n *reactThinkNode) Execute(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 	env.SetWorkingValueWithClass("react.execution_phase", "planning", contextdata.MemoryClassTask)
-	n.agent.enforceBudget(env)
-	n.agent.manageContextSignals(env)
 	if summary := strings.TrimSpace(envGetString(env, "react.verification_latched_summary")); summary != "" {
 		decision := decisionPayload{
 			Thought:   "verification already succeeded",
@@ -87,7 +89,6 @@ func (n *reactThinkNode) Execute(ctx context.Context, env *contextdata.Envelope)
 		"content": resp.Text,
 		"node":    n.id,
 	})
-	n.agent.recordLatestInteraction(env)
 	decision, toolCalls, err := n.normalizeDecision(ctx, env, resp, useToolCalling, tools)
 	if err != nil {
 		return nil, err
@@ -274,15 +275,22 @@ func (n *reactThinkNode) buildRuntimeContext(env *contextdata.Envelope, tools []
 // Otherwise it falls back to a minimal inline prompt so the agent stays functional
 // before prompt files are authored.
 func (n *reactThinkNode) resolvePrompt(env *contextdata.Envelope, tools []ports.Tool) string {
+	text := ""
 	reg := n.agent.PromptRegistry
 	if reg != nil {
 		promptID := promptIDFromTask(n.task)
 		rctx := n.buildRuntimeContext(env, tools)
-		if text, err := reg.Resolve(promptID, rctx); err == nil && text != "" {
-			return text
+		if resolved, err := reg.Resolve(promptID, rctx); err == nil && resolved != "" {
+			text = resolved
 		}
 	}
-	return minimalReactUserPrompt(n.task, tools)
+	if text == "" {
+		text = minimalReactUserPrompt(n.task, tools)
+	}
+	if guidance := strings.TrimSpace(envGetString(env, loopGuidanceKey)); guidance != "" {
+		text += "\n\nSystem note: " + guidance
+	}
+	return text
 }
 
 // resolveSystemPrompt returns the system prompt for chat-based iterations.

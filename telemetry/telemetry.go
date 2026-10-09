@@ -13,6 +13,8 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+
+	"codeburg.org/lexbit/relurpify/platform/observability"
 )
 
 // MultiplexTelemetry broadcasts events to multiple sinks.
@@ -46,7 +48,7 @@ func StampCorrelation(ctx context.Context, ev *Event) {
 	if ev == nil {
 		return
 	}
-	c := CorrelationFromContext(ctx)
+	c := observability.CorrelationFromContext(ctx)
 	if c.SessionID != "" {
 		ev.SessionID = c.SessionID
 	}

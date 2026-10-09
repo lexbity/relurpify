@@ -54,10 +54,29 @@ func (n *reactActNode) Contract() agentgraph.NodeContract {
 	}
 }
 
+// queuedProbeKey holds at most one pending deterministic recovery probe.
+// Observe writes it, act consumes it destructively; the zero ToolCall is the
+// "no probe" sentinel.
+const queuedProbeKey = "react.queued_probe"
+
+// takeQueuedProbe reads and clears the pending recovery-probe slot.
+func takeQueuedProbe(env *contextdata.Envelope) (model.ToolCall, bool) {
+	probe, ok := contextdata.GetTyped[model.ToolCall](env, queuedProbeKey)
+	if !ok || probe.Name == "" {
+		return model.ToolCall{}, false
+	}
+	contextdata.SetTyped(env, queuedProbeKey, model.ToolCall{})
+	return probe, true
+}
+
 // Execute runs any pending tool calls or directly invokes the requested tool
 // referenced in the latest decision payload.
 func (n *reactActNode) Execute(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 	env.SetWorkingValueWithClass("react.execution_phase", "executing", contextdata.MemoryClassTask)
+	// Consume the recovery probe queued by observe before anything this think
+	// decided. Probes run first; if the decision completes the task the probe
+	// is obsolete and the destructive read above already cleared the slot.
+	queuedProbe, hasProbe := takeQueuedProbe(env)
 	activeTools := activeToolSet(env)
 	if pending, ok := contextdata.GetTyped[any](env, "react.tool_calls"); ok {
 		if calls, ok := pending.([]model.ToolCall); ok && len(calls) > 0 {
@@ -65,6 +84,10 @@ func (n *reactActNode) Execute(ctx context.Context, env *contextdata.Envelope) (
 			if len(calls) == 0 {
 				env.SetWorkingValueWithClass("react.tool_calls", []model.ToolCall{}, contextdata.MemoryClassTask)
 			} else {
+				if hasProbe {
+					queuedProbe.ID = NewUUID()
+					calls = append([]model.ToolCall{queuedProbe}, calls...)
+				}
 				results := make(map[string]any)
 				envelopes := make(map[string]*capresult.CapabilityResultEnvelope)
 				toolErrors := make([]string, 0)
@@ -109,6 +132,9 @@ func (n *reactActNode) Execute(ctx context.Context, env *contextdata.Envelope) (
 						envelope := n.capabilityEnvelope(ctx, env, nil, call, res)
 						envelopes[callID] = envelope
 						n.recordObservation(ctx, env, call, res, envelope)
+						if hasProbe && call.ID == queuedProbe.ID {
+							n.emitRecoveryProbeExecuted(ctx, env, call)
+						}
 						n.latchVerificationSuccess(env, call.Name, res)
 						n.refreshIndexesAfterMutation(ctx, call, res)
 						results[callID] = map[string]any{
@@ -183,6 +209,9 @@ func (n *reactActNode) Execute(ctx context.Context, env *contextdata.Envelope) (
 		env.SetWorkingValueWithClass("react.last_result", result, contextdata.MemoryClassTask)
 		return result, nil
 	}
+	if hasProbe {
+		n.runQueuedProbe(ctx, env, queuedProbe, activeTools)
+	}
 	res, err := n.agent.Tools.InvokeCapability(ctx, env.State(), toolName, decision.Arguments)
 	if err != nil {
 		return nil, err
@@ -210,6 +239,52 @@ func (n *reactActNode) Execute(ctx context.Context, env *contextdata.Envelope) (
 	n.refreshIndexesAfterMutation(ctx, call, res)
 	env.SetWorkingValueWithClass("react.last_result", result, contextdata.MemoryClassTask)
 	return result, nil
+}
+
+// runQueuedProbe executes a deterministic recovery probe ahead of the LLM's
+// own call, recording its observation so the next observe pass sees it.
+func (n *reactActNode) runQueuedProbe(ctx context.Context, env *contextdata.Envelope, probe model.ToolCall, activeTools map[string]struct{}) {
+	if probe.ID == "" {
+		probe.ID = NewUUID()
+	}
+	if !n.capabilityAllowed(probe.Name, activeTools) || !n.agent.Tools.HasCapability(probe.Name) {
+		errResult := &ports.ToolResult{Success: false, Error: fmt.Sprintf("recovery probe tool %q does not exist. Only use tools from the available list.", probe.Name)}
+		envelope := n.capabilityEnvelope(ctx, env, nil, probe, errResult)
+		n.recordObservation(ctx, env, probe, errResult, envelope)
+		return
+	}
+	if !n.agent.Tools.CapabilityAvailable(ctx, env.State(), probe.Name) {
+		errResult := &ports.ToolResult{Success: false, Error: fmt.Sprintf("recovery probe tool %q is unavailable right now.", probe.Name)}
+		envelope := n.capabilityEnvelope(ctx, env, nil, probe, errResult)
+		n.recordObservation(ctx, env, probe, errResult, envelope)
+		return
+	}
+	n.agent.debugf("%s recovery probe tool=%s args=%v", n.id, probe.Name, probe.Args)
+	res, err := n.agent.Tools.InvokeCapability(ctx, env.State(), probe.Name, probe.Args)
+	if err != nil {
+		res = &ports.ToolResult{Success: false, Error: err.Error()}
+	}
+	envelope := n.capabilityEnvelope(ctx, env, nil, probe, res)
+	n.recordObservation(ctx, env, probe, res, envelope)
+	n.emitRecoveryProbeExecuted(ctx, env, probe)
+}
+
+func (n *reactActNode) emitRecoveryProbeExecuted(ctx context.Context, env *contextdata.Envelope, call model.ToolCall) {
+	if n.agent == nil || n.agent.Config == nil || n.agent.Config.Telemetry == nil {
+		return
+	}
+	ev := telemetry.Event{
+		Type:      telemetry.EventToolCall,
+		TaskID:    strings.TrimSpace(envGetString(env, "task.id")),
+		Message:   "deterministic recovery probe executed",
+		Timestamp: time.Now().UTC(),
+		Metadata: map[string]any{
+			"security_event": "react.recovery_probe_executed",
+			"probe":          call.Name,
+		},
+	}
+	telemetry.StampCorrelation(ctx, &ev)
+	n.agent.Config.Telemetry.Emit(ev)
 }
 
 func (n *reactActNode) latchVerificationSuccess(env *contextdata.Envelope, toolName string, res *ports.ToolResult) {
@@ -353,6 +428,7 @@ func (n *reactActNode) recordObservation(ctx context.Context, env *contextdata.E
 	}
 	history := getToolObservations(env)
 	if visible {
+		observation.Seq = nextObservationSeq(history)
 		history = append(history, observation)
 		limit := toolSummaryBudgetForPhase(envGetString(env, "react.phase"))
 		if len(history) > limit {

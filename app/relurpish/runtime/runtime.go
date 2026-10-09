@@ -927,14 +927,14 @@ func (r *Runtime) ensureSessionID() string {
 	r.sessionIDMu.Lock()
 	defer r.sessionIDMu.Unlock()
 	if r.sessionID == "" {
-		r.sessionID = telemetry.NewSessionID()
+		r.sessionID = observability.NewSessionID()
 	}
 	return r.sessionID
 }
 
 // beginTurn starts a new correlation scope for one turn: it generates a fresh
 // RunID and TraceID, attaches them to ctx for every downstream emitter to read
-// via telemetry.RunContextFromContext, and mirrors the session identity onto
+// via observability.RunContextFromContext, and mirrors the session identity onto
 // the envelope. Called once per turn (including interaction resumes).
 func (r *Runtime) beginTurn(ctx context.Context, env *contextdata.Envelope) context.Context {
 	sessionID := r.ensureSessionID()
@@ -955,10 +955,10 @@ func (r *Runtime) beginTurn(ctx context.Context, env *contextdata.Envelope) cont
 	if env != nil {
 		ctx = contextdata.WithEnvelope(ctx, env)
 	}
-	return telemetry.WithRunContext(ctx, telemetry.RunContext{
+	return observability.WithRunContext(ctx, observability.RunContext{
 		SessionID: sessionID,
-		RunID:     telemetry.NewRunID(),
-		TraceID:   telemetry.NewTraceID(),
+		RunID:     observability.NewRunID(),
+		TraceID:   observability.NewTraceID(),
 		AgentID:   agentID,
 	})
 }

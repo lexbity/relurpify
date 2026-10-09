@@ -7,6 +7,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
+	"codeburg.org/lexbit/relurpify/platform/observability"
 	"codeburg.org/lexbit/relurpify/telemetry"
 )
 
@@ -72,7 +73,7 @@ func TestPlannerTelemetryEmitPath(t *testing.T) {
 	sink := &plannerSink{}
 	agent := &PlannerAgent{Config: &execution.Config{Telemetry: sink}}
 
-	ctx := telemetry.WithRunContext(context.Background(), telemetry.RunContext{
+	ctx := observability.WithRunContext(context.Background(), observability.RunContext{
 		SessionID: "sess-1",
 		RunID:     "run-1",
 		TraceID:   "trace-1",

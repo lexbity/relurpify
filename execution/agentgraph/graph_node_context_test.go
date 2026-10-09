@@ -13,7 +13,6 @@ import (
 	"codeburg.org/lexbit/relurpify/model"
 	"codeburg.org/lexbit/relurpify/platform/llm"
 	"codeburg.org/lexbit/relurpify/platform/observability"
-	"codeburg.org/lexbit/relurpify/telemetry"
 )
 
 // probeModel is a LanguageModel that records the context of every
@@ -111,7 +110,7 @@ func TestGraph_InjectsEnvelopeAndNodeIDIntoNodeContext(t *testing.T) {
 	require.NoError(t, graph.AddEdge(node.ID(), done.ID(), nil, false))
 
 	env := contextdata.NewEnvelope("task-ctx", "session-ctx")
-	ctx := telemetry.WithRunContext(context.Background(), telemetry.RunContext{
+	ctx := observability.WithRunContext(context.Background(), observability.RunContext{
 		SessionID: "session-ctx",
 		RunID:     "run-ctx",
 		TraceID:   "trace-ctx",
@@ -125,10 +124,10 @@ func TestGraph_InjectsEnvelopeAndNodeIDIntoNodeContext(t *testing.T) {
 	nodeEnv, ok := contextdata.EnvelopeFrom(node.ctx)
 	require.True(t, ok, "node context must carry the envelope")
 	require.Same(t, env, nodeEnv)
-	nodeID, ok := telemetry.NodeIDFromContext(node.ctx)
+	nodeID, ok := observability.NodeIDFromContext(node.ctx)
 	require.True(t, ok, "node context must carry the executing node ID")
 	require.Equal(t, "probe.node", nodeID)
-	rc, ok := telemetry.RunContextFromContext(node.ctx)
+	rc, ok := observability.RunContextFromContext(node.ctx)
 	require.True(t, ok, "node context must preserve the turn's run context")
 	require.Equal(t, "run-ctx", rc.RunID)
 }
@@ -147,7 +146,7 @@ func TestGraph_AttributesLLMEventsToNodeAndTask(t *testing.T) {
 	require.NoError(t, graph.AddEdge(node.ID(), done.ID(), nil, false))
 
 	env := contextdata.NewEnvelope("task-42", "session-42")
-	ctx := telemetry.WithRunContext(context.Background(), telemetry.RunContext{
+	ctx := observability.WithRunContext(context.Background(), observability.RunContext{
 		SessionID: "session-42",
 		RunID:     "run-42",
 		TraceID:   "trace-42",
@@ -249,7 +248,7 @@ func TestGraph_NodeContextSurvivesNestedGraphExecution(t *testing.T) {
 	require.NoError(t, outerGraph.AddEdge(outerNode.ID(), outerDone.ID(), nil, false))
 
 	env := contextdata.NewEnvelope("task-nested", "session-nested")
-	ctx := telemetry.WithRunContext(context.Background(), telemetry.RunContext{
+	ctx := observability.WithRunContext(context.Background(), observability.RunContext{
 		SessionID: "session-nested",
 		RunID:     "run-nested",
 		TraceID:   "trace-nested",

@@ -10,7 +10,6 @@ import (
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/model"
 	"codeburg.org/lexbit/relurpify/platform/observability"
-	"codeburg.org/lexbit/relurpify/telemetry"
 )
 
 // stampObservabilityCorrelation populates every correlation field on an
@@ -19,37 +18,16 @@ import (
 // construct correlation fields by hand, and must never smuggle them
 // through Metadata.
 //
-// Merge semantics come from telemetry.CorrelationFromContext (single source
-// of truth, mirroring telemetry.StampCorrelation). The fallbacks resolved
-// here are for the fields only the envelope knows — SessionID, NodeID, and
-// TaskID — because the envelope's private context key is only reachable
-// via the contextdata accessor, which keeps the platform/llm → execution
-// import cycle broken.
+// Merge semantics come from observability.StampCorrelation (single source
+// of truth). The fallbacks resolved here are for the fields only the
+// envelope knows — SessionID, NodeID, and TaskID — because the envelope's
+// private context key is only reachable via the contextdata accessor,
+// which keeps the platform/llm → execution import cycle broken.
 func stampObservabilityCorrelation(ctx context.Context, ev *observability.Event) {
 	if ev == nil {
 		return
 	}
-	c := telemetry.CorrelationFromContext(ctx)
-	if c.SessionID != "" {
-		ev.SessionID = c.SessionID
-	}
-	if c.RunID != "" {
-		ev.RunID = c.RunID
-	}
-	if c.TraceIDTurnScoped {
-		ev.TraceID = c.TraceID
-	} else if c.TraceID != "" && ev.TraceID == "" {
-		ev.TraceID = c.TraceID
-	}
-	if c.AgentID != "" {
-		ev.AgentID = c.AgentID
-	}
-	if c.SpanID != "" {
-		ev.SpanID = c.SpanID
-	}
-	if c.NodeID != "" && ev.NodeID == "" {
-		ev.NodeID = c.NodeID
-	}
+	observability.StampCorrelation(ctx, ev)
 	if env, ok := contextdata.EnvelopeFrom(ctx); ok {
 		if ev.NodeID == "" && env.NodeID != "" {
 			ev.NodeID = env.NodeID
