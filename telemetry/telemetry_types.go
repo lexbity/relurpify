@@ -116,6 +116,26 @@ const (
 	EventPlannerPlanFailed    EventType = "planner.plan.failed"
 )
 
+// Operational-failure and grounded-restore events (Wave 2 Phase 4). The
+// failure protocol classifies every runtime step failure into the §3.5
+// taxonomy; step.fallback_activated marks an authored fallback firing; and the
+// grounding.* events surface the Wave 1 port composition state honestly at
+// boot and at dispatch-time restore.
+const (
+	// EventStepOperationalFailure is emitted for every classified operational
+	// step failure. Metadata: step_id, paradigm, kind, on_error, action_taken.
+	EventStepOperationalFailure EventType = "step.operational_failure"
+	// EventStepFallbackActivated marks an authored fallback agent taking over a
+	// failed step.
+	EventStepFallbackActivated EventType = "step.fallback_activated"
+	// EventGroundingPortsUnwired is the single info-level boot event emitted
+	// when no StateReground source is composed (declared cold-start mode).
+	EventGroundingPortsUnwired EventType = "grounding.ports_unwired"
+	// EventGroundingRegroundFailed reports a dispatch-time reground query that
+	// failed; the run continues cold rather than silently restoring nothing.
+	EventGroundingRegroundFailed EventType = "grounding.reground_failed"
+)
+
 const (
 	EventBudgetSnapshot       = "budget.snapshot"
 	EventSessionResetRequired = "session.reset_required"

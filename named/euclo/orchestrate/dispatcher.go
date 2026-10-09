@@ -8,7 +8,9 @@ import (
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/execution/agentgraph"
+	"codeburg.org/lexbit/relurpify/model"
 	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
+	"codeburg.org/lexbit/relurpify/named/euclo/families"
 	intentcontext "codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
 	"codeburg.org/lexbit/relurpify/named/euclo/reporting"
 	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
@@ -21,6 +23,8 @@ type Dispatcher struct {
 	id                    string
 	capabilityRegistry    *registry.CapabilityRegistry
 	thoughtrecipeRegistry *thoughtrecipepkg.ThoughtRecipeRegistry
+	familyRegistry        *families.KeywordFamilyRegistry
+	tier2Model            model.LanguageModel
 	workspace             string
 }
 
@@ -37,12 +41,45 @@ func (d *Dispatcher) WithCapabilityRegistry(reg *registry.CapabilityRegistry) *D
 	return d
 }
 
-// WithThoughtRecipeRegistry wires the thoughtrecipe registry used for route selection.
+// WithThoughtRecipeRegistry wires the thoughtrecipe registry used for route
+// selection.
 func (d *Dispatcher) WithThoughtRecipeRegistry(reg *thoughtrecipepkg.ThoughtRecipeRegistry) *Dispatcher {
 	if d != nil && reg != nil {
 		d.thoughtrecipeRegistry = reg
 	}
 	return d
+}
+
+// WithFamilyRegistry wires the keyword-family registry whose vocabulary feeds
+// the family-affinity and intent-keyword score components (D9). Nil keeps the
+// family ID alone as the affinity signal.
+func (d *Dispatcher) WithFamilyRegistry(reg *families.KeywordFamilyRegistry) *Dispatcher {
+	if d != nil {
+		d.familyRegistry = reg
+	}
+	return d
+}
+
+// WithTier2Model wires the model consulted by the bounded Tier-2 disambiguator
+// (D10). Nil leaves Tier-2 unconfigured: the gate records no attempt.
+func (d *Dispatcher) WithTier2Model(m model.LanguageModel) *Dispatcher {
+	if d != nil {
+		d.tier2Model = m
+	}
+	return d
+}
+
+// selectionDeps is the dispatcher's selection dependency bundle.
+func (d *Dispatcher) selectionDeps() SelectionDeps {
+	if d == nil {
+		return SelectionDeps{}
+	}
+	return SelectionDeps{
+		Capabilities:   d.capabilityRegistry,
+		ThoughtRecipes: d.thoughtrecipeRegistry,
+		Families:       d.familyRegistry,
+		Tier2Model:     d.tier2Model,
+	}
 }
 
 // WithWorkspace wires the workspace root used for skill resolution.
@@ -73,14 +110,14 @@ func (d *Dispatcher) Execute(ctx context.Context, env *contextdata.Envelope) (*e
 		emitClarificationGateResult(ctx, env, nil, false, "clarify", "clarification lifecycle required")
 	}
 
-	caps := d.capabilityRegistry
+	deps := d.selectionDeps()
 
 	var (
 		result *RouteResult
 		err    error
 	)
 	if req.DryRun {
-		report, dryRunErr := DryRun(ctx, env, req, caps, d.thoughtrecipeRegistry)
+		report, dryRunErr := DryRun(ctx, env, req, deps)
 		err = dryRunErr
 		if err != nil {
 			return &execution.Result{NodeID: d.id, Success: false, Data: execution.NewErrorResultPayload(err.Error())}, err
@@ -95,9 +132,11 @@ func (d *Dispatcher) Execute(ctx context.Context, env *contextdata.Envelope) (*e
 			ArtifactKinds:       append([]string(nil), report.ExpectedArtifactKinds...),
 			Outcome:             string(reporting.RouteOutcomeDryRun),
 			TelemetrySuppressed: req.TelemetryOff,
+			DecidedBy:           report.DecidedBy,
+			Tier2:               report.Tier2,
 		}
 	} else {
-		result, err = Dispatch(ctx, env, req, caps, d.thoughtrecipeRegistry)
+		result, err = Dispatch(ctx, env, req, deps)
 		if err != nil {
 			return &execution.Result{NodeID: d.id, Success: false, Data: execution.NewErrorResultPayload(err.Error())}, err
 		}
@@ -190,6 +229,7 @@ func applyRouteSelectionToEnvelope(env *contextdata.Envelope, selection *eucloty
 		euclostate.SetRouteFallbackID(env, result.FallbackID)
 		euclostate.SetRouteSkillFilter(env, result.SkillFilterName)
 		euclostate.SetRouteOutcome(env, result.Outcome)
+		euclostate.SetRouteDecidedBy(env, result.DecidedBy)
 	}
 }
 

@@ -1,12 +1,17 @@
 package euclo
 
 import (
+	"context"
+	"sync"
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	registry "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/cognitionzoo/paradigm"
 	execution "codeburg.org/lexbit/relurpify/execution"
+	"codeburg.org/lexbit/relurpify/named/euclo/grounding"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
+	"codeburg.org/lexbit/relurpify/testsuite/testsupport"
 )
 
 var testRelurpicCapabilities = []string{ //nolint:gochecknoglobals // test fixture data
@@ -73,4 +78,96 @@ func TestAgentInitializeWithNilRegistry(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error when Registry is nil")
 	}
+}
+
+// TestGroundingPortsUnwiredEmittedOnceForColdStart is AC-20's nil mode at boot:
+// exactly one info-level grounding.ports_unwired event appears when no
+// StateReground source is composed, and Initialize emits it only once.
+func TestGroundingPortsUnwiredEmittedOnceForColdStart(t *testing.T) {
+	sink := &recordingTelemetrySink{}
+	deps := &paradigm.Deps{
+		Config: &execution.Config{
+			AgentSpec: &agentspec.AgentRuntimeSpec{
+				Capabilities: agentspec.AgentCapabilitiesSpec{Relurpic: append([]string{}, testRelurpicCapabilities...)},
+			},
+		},
+		Registry:  registry.NewRegistry(),
+		Telemetry: sink,
+	}
+	agent := New(deps, WithHITLBroker(testsupport.NewAutoApproveHITLBroker()))
+
+	if err := agent.Initialize(nil); err != nil {
+		t.Fatalf("Initialize: %v", err)
+	}
+	if err := agent.Initialize(nil); err != nil {
+		t.Fatalf("second Initialize: %v", err)
+	}
+
+	if got := sink.count(telemetry.EventGroundingPortsUnwired); got != 1 {
+		t.Fatalf("grounding.ports_unwired events = %d, want exactly 1", got)
+	}
+	if got := agent.GroundingComposition(); got != "cold_start" {
+		t.Fatalf("GroundingComposition = %q, want cold_start", got)
+	}
+}
+
+// TestGroundingPortsUnwiredAbsentWhenWired covers the composed source: no boot
+// event and the status surface reports wired.
+func TestGroundingPortsUnwiredAbsentWhenWired(t *testing.T) {
+	sink := &recordingTelemetrySink{}
+	deps := &paradigm.Deps{
+		Config: &execution.Config{
+			AgentSpec: &agentspec.AgentRuntimeSpec{
+				Capabilities: agentspec.AgentCapabilitiesSpec{Relurpic: append([]string{}, testRelurpicCapabilities...)},
+			},
+		},
+		Registry:  registry.NewRegistry(),
+		Telemetry: sink,
+	}
+	agent := New(deps,
+		WithConfig(EucloConfig{StateReground: &fakeRegroundSource{}}),
+		WithHITLBroker(testsupport.NewAutoApproveHITLBroker()),
+	)
+
+	if err := agent.Initialize(nil); err != nil {
+		t.Fatalf("Initialize: %v", err)
+	}
+	if got := sink.count(telemetry.EventGroundingPortsUnwired); got != 0 {
+		t.Fatalf("wired grounding must not emit ports_unwired, got %d", got)
+	}
+	if got := agent.GroundingComposition(); got != "wired" {
+		t.Fatalf("GroundingComposition = %q, want wired", got)
+	}
+}
+
+// fakeRegroundSource satisfies grounding.StateRegroundSource for boot-wiring
+// tests without touching the knowledge layer.
+type fakeRegroundSource struct{}
+
+func (fakeRegroundSource) Reground(context.Context, grounding.RegroundRequest) (grounding.RegroundResult, error) {
+	return grounding.RegroundResult{Grounded: false}, nil
+}
+
+// recordingTelemetrySink captures emitted telemetry in memory.
+type recordingTelemetrySink struct {
+	mu     sync.Mutex
+	events []telemetry.Event
+}
+
+func (s *recordingTelemetrySink) Emit(event telemetry.Event) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.events = append(s.events, event)
+}
+
+func (s *recordingTelemetrySink) count(eventType telemetry.EventType) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	count := 0
+	for _, event := range s.events {
+		if event.Type == eventType {
+			count++
+		}
+	}
+	return count
 }

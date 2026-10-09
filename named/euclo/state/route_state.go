@@ -90,3 +90,15 @@ func GetSkillFilter(env *contextdata.Envelope) string {
 func SetSkillFilter(env *contextdata.Envelope, filter string) {
 	contextdata.SetTyped(env, KeySkillFilter, filter)
 }
+
+// GetRouteDecidedBy returns the D8 lattice rule that produced the last
+// selection ("explicit", "default_recipe", or "lattice:*").
+func GetRouteDecidedBy(env *contextdata.Envelope) string {
+	v, _ := contextdata.GetTyped[string](env, KeyRouteDecidedBy)
+	return v
+}
+
+// SetRouteDecidedBy records the D8 lattice rule behind the selection.
+func SetRouteDecidedBy(env *contextdata.Envelope, decidedBy string) {
+	contextdata.SetTyped(env, KeyRouteDecidedBy, decidedBy)
+}

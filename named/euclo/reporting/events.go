@@ -27,12 +27,12 @@ const (
 	EventTypeFamilySelected         EventType = "euclo.family.selected"
 	EventTypeIngestionComplete      EventType = "euclo.ingestion.complete"
 	EventTypeStreamRequested        EventType = "euclo.stream.requested"
-	EventTypeCapabilityClassified   EventType = "euclo.capability.classified"
 	EventTypeRouteSelected          EventType = "euclo.route.selected"
 	EventTypeRouteCompleted         EventType = "euclo.route.completed"
 	EventTypeRouteUnavailable       EventType = "euclo.route.unavailable"
 	EventTypeRouteDryRun            EventType = "euclo.route.dry_run"
 	EventTypeRouteFallback          EventType = "euclo.route.fallback"
+	EventTypeRouteTier2Unavailable  EventType = "euclo.route.tier2_unavailable"
 	EventTypeGateResult             EventType = "euclo.gate.result"
 	EventTypeProjectionCompleted    EventType = "euclo.projection.completed"
 	EventTypeClarificationStarted   EventType = "euclo.clarification.started"
@@ -110,15 +110,6 @@ type EventStreamRequested struct {
 	Query     string `json:"query"`
 	MaxTokens int    `json:"max_tokens"`
 	Mode      string `json:"mode"`
-}
-
-// EventCapabilityClassified signals tier-2 classification.
-type EventCapabilityClassified struct {
-	EventHeader
-	FamilyID     string   `json:"family_id"`
-	Capabilities []string `json:"capabilities"`
-	Operator     string   `json:"operator"`
-	LLMCalls     int      `json:"llm_calls"`
 }
 
 // EventRouteSelected signals route selection.

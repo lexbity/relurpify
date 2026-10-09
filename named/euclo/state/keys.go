@@ -84,6 +84,7 @@ const (
 	KeyRouteOutcome        = euclokeys.KeyRouteOutcome
 	KeyRouteTelemetryOff   = euclokeys.KeyRouteTelemetryOff
 	KeySkillFilter         = euclokeys.KeySkillFilter
+	KeyRouteDecidedBy      = euclokeys.KeyRouteDecidedBy
 )
 
 // Background job state keys — written and read by BackgroundJobNode.
@@ -109,6 +110,14 @@ const (
 	KeyExecutionThoughtRecipe = euclokeys.KeyExecutionThoughtRecipe
 )
 
+// Operational failure keys — written by step nodes and aggregated by the recipe
+// executor. Callers should prefer the typed accessors in failure_state.go.
+const (
+	KeyStepFailure   = euclokeys.KeyStepFailure
+	KeyStepFailures  = euclokeys.KeyStepFailures
+	KeyFallbackTaken = euclokeys.KeyFallbackTaken
+)
+
 // Interaction frame state keys.
 // Callers should prefer the typed accessors in interaction_state.go.
 const (
@@ -128,13 +137,12 @@ const (
 
 // Miscellaneous execution control keys.
 const (
-	KeyDone                 = euclokeys.KeyDone
-	KeyForkBranch           = euclokeys.KeyForkBranch
-	KeyCapabilityClassified = euclokeys.KeyCapabilityClassified
-	KeyExecutionMerged      = euclokeys.KeyExecutionMerged
-	KeyFamilySelected       = euclokeys.KeyFamilySelected
-	KeyStreamRequested      = euclokeys.KeyStreamRequested
-	KeyCapabilityID         = euclokeys.KeyCapabilityID
+	KeyDone            = euclokeys.KeyDone
+	KeyForkBranch      = euclokeys.KeyForkBranch
+	KeyExecutionMerged = euclokeys.KeyExecutionMerged
+	KeyFamilySelected  = euclokeys.KeyFamilySelected
+	KeyStreamRequested = euclokeys.KeyStreamRequested
+	KeyCapabilityID    = euclokeys.KeyCapabilityID
 )
 
 // Policy defaults seeded before gate evaluation.

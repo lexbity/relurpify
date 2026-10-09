@@ -3,6 +3,7 @@ package orchestrate
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -224,7 +225,7 @@ func (h *clarificationCapabilityHandler) Invoke(ctx context.Context, st ports.St
 		}
 		result["requery"] = req
 	case clarificationActionHandoff:
-		nextThoughtRecipeID := clarificationThoughtRecipeForState(state, args, h.recipes)
+		nextThoughtRecipeID := clarificationThoughtRecipeForState(args, h.recipes)
 		if nextThoughtRecipeID != "" && env != nil {
 			state.ActiveThoughtRecipeID = nextThoughtRecipeID
 			state.LastUpdatedAt = time.Now().UTC()
@@ -237,7 +238,7 @@ func (h *clarificationCapabilityHandler) Invoke(ctx context.Context, st ports.St
 			routeKind := euclotypes.RouteKindForThoughtRecipeID(nextThoughtRecipeID)
 			setRouteSelectionContinuation(env, routeKind, nextThoughtRecipeID, euclotypes.RouteKindIntent, clarificationThoughtRecipeID)
 		}
-		unresolvedReason := h.handoffFailureReason(state, args, nextThoughtRecipeID)
+		unresolvedReason := h.handoffFailureReason(args, nextThoughtRecipeID)
 		if env != nil && nextThoughtRecipeID == "" {
 			euclostate.SetClarificationNextThoughtRecipeID(env, "")
 			euclostate.SetClarificationUnresolved(env, true)
@@ -326,7 +327,7 @@ func buildTraversalFromAnchors(anchors []retrieval.AnchorRef) *retrieval.Travers
 	}
 }
 
-func clarificationThoughtRecipeForState(state *intentcontext.ClarificationState, args map[string]any, recipes *thoughtrecipepkg.ThoughtRecipeRegistry) string {
+func clarificationThoughtRecipeForState(args map[string]any, recipes *thoughtrecipepkg.ThoughtRecipeRegistry) string {
 	if thoughtrecipeID := strings.TrimSpace(stringArg(args, "thoughtrecipe_id")); thoughtrecipeID != "" {
 		if recipeRegistered(recipes, thoughtrecipeID) {
 			return thoughtrecipeID
@@ -347,7 +348,7 @@ func clarificationThoughtRecipeForState(state *intentcontext.ClarificationState,
 // handoffFailureReason names why a handoff could not resolve: the explicit
 // miss or the family map naming its expected recipe (the actionable reason
 // text the interaction frame shows).
-func (h *clarificationCapabilityHandler) handoffFailureReason(state *intentcontext.ClarificationState, args map[string]any, resolved string) string {
+func (h *clarificationCapabilityHandler) handoffFailureReason(args map[string]any, resolved string) string {
 	if resolved != "" {
 		return ""
 	}
@@ -512,25 +513,60 @@ func stringArg(args map[string]any, key string) string {
 	}
 }
 
+// clarificationFamilyRecipeTable maps each classified family to the shipped
+// thoughtrecipe its clarification handoff targets (D9/FR-15). It is the single
+// source for the handoff resolution and the boot-time table assertion; the
+// table is shipped data reviewed like code.
+var clarificationFamilyRecipeTable = map[string]string{ //nolint:gochecknoglobals // immutable shipped handoff table
+	"review":         "euclo.thoughtrecipe.code_review",
+	"investigation":  "euclo.thoughtrecipe.investigation",
+	"debug":          "euclo.thoughtrecipe.debug_tdd_repair",
+	"migration":      "euclo.thoughtrecipe.dep_upgrade",
+	"implementation": "euclo.thoughtrecipe.test_synthesis",
+	"refactor":       "euclo.thoughtrecipe.extract_func",
+	"architecture":   "euclo.thoughtrecipe.investigation",
+}
+
 func clarificationThoughtRecipeForFamily(family string) string {
-	switch strings.ToLower(strings.TrimSpace(family)) {
-	case "review":
-		return "euclo.thoughtrecipe.code_review"
-	case "investigation":
-		return "euclo.thoughtrecipe.investigation"
-	case "debug":
-		return "euclo.thoughtrecipe.debug_tdd_repair"
-	case "migration":
-		return "euclo.thoughtrecipe.dep_upgrade"
-	case "implementation":
-		return "euclo.thoughtrecipe.test_synthesis"
-	case "refactor":
-		return "euclo.thoughtrecipe.extract_func"
-	case "architecture":
-		return "euclo.thoughtrecipe.investigation"
-	default:
-		return ""
+	return clarificationFamilyRecipeTable[strings.ToLower(strings.TrimSpace(family))]
+}
+
+// assertClarificationFamilyTable fails boot when a recipe present in the
+// registry declares a family whose shipped handoff target is not registered
+// (the dangling-ID class dies at boot, never mid-flight; FR-15). A registry
+// whose recipes declare no families exercises no handoff mapping, so its
+// dormant table entries are not asserted.
+func assertClarificationFamilyTable(thoughtrecipes *thoughtrecipepkg.ThoughtRecipeRegistry) error {
+	if thoughtrecipes == nil {
+		return nil
 	}
+	familiesInUse := make(map[string]struct{})
+	for _, entry := range thoughtrecipes.Entries() {
+		if entry.ThoughtRecipe == nil {
+			continue
+		}
+		for _, family := range entry.ThoughtRecipe.Metadata.Families {
+			familiesInUse[strings.ToLower(strings.TrimSpace(family))] = struct{}{}
+		}
+	}
+	familyIDs := make([]string, 0, len(clarificationFamilyRecipeTable))
+	for family := range clarificationFamilyRecipeTable {
+		if _, inUse := familiesInUse[family]; inUse {
+			familyIDs = append(familyIDs, family)
+		}
+	}
+	if len(familyIDs) == 0 {
+		return nil
+	}
+	sort.Strings(familyIDs)
+	for _, family := range familyIDs {
+		target := clarificationFamilyRecipeTable[family]
+		if recipeRegistered(thoughtrecipes, target) || isBuiltinRecipeID(target) {
+			continue
+		}
+		return fmt.Errorf("boot: clarification family %q maps to thoughtrecipe %q which is not registered", family, target)
+	}
+	return nil
 }
 
 func buildGroundingFromState(state *intentcontext.ClarificationState, args map[string]any) (map[string]any, []retrieval.AnchorRef, []string) {

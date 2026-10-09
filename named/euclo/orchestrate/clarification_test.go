@@ -11,9 +11,9 @@ import (
 	"codeburg.org/lexbit/relurpify/named/euclo/intake"
 	intentcontext "codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
+	"codeburg.org/lexbit/relurpify/named/euclo/state"
 	"codeburg.org/lexbit/relurpify/named/euclo/surface"
 	thoughtrecipepkg "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
-	"codeburg.org/lexbit/relurpify/named/euclo/state"
 )
 
 func TestClarificationCapability_RequestWritesClarificationRequest(t *testing.T) {

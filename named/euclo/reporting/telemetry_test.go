@@ -107,7 +107,7 @@ func TestEmitRouteSelected_RecordsEventType(t *testing.T) {
 	sink := &captureTelemetry{}
 	ctx := telemetry.WithTelemetry(context.Background(), sink)
 
-	EmitRouteSelected(ctx, "task-1", "session-1", "query", "capability", "euclo:cap.ast_query", 3, false)
+	EmitRouteSelected(ctx, "task-1", "session-1", "query", "capability", "euclo:cap.ast_query", 3, false, "lattice:score")
 
 	if len(sink.events) != 1 {
 		t.Fatalf("expected 1 event, got %d", len(sink.events))
@@ -124,6 +124,9 @@ func TestEmitRouteSelected_RecordsEventType(t *testing.T) {
 	}
 	if event.Metadata["candidate_count"] != 3 {
 		t.Fatalf("expected candidate_count metadata, got %#v", event.Metadata["candidate_count"])
+	}
+	if event.Metadata["decided_by"] != "lattice:score" {
+		t.Fatalf("expected decided_by metadata, got %#v", event.Metadata["decided_by"])
 	}
 }
 
@@ -210,7 +213,7 @@ func TestEmitRouteFallback_BothIDs(t *testing.T) {
 }
 
 func TestEmitRouteSelected_NilTelemetry_NoOp(t *testing.T) {
-	EmitRouteSelected(context.Background(), "task-1", "session-1", "query", "capability", "euclo:cap.ast_query", 1, false)
+	EmitRouteSelected(context.Background(), "task-1", "session-1", "query", "capability", "euclo:cap.ast_query", 1, false, "")
 }
 
 func TestEucloTelemetry_EmitsTypedEvents(t *testing.T) {
@@ -241,13 +244,6 @@ func TestEucloTelemetry_EmitsTypedEvents(t *testing.T) {
 		Query:       "summarize",
 		MaxTokens:   1024,
 		Mode:        "analysis",
-	})
-	tel.EmitCapabilityClassified(ctx, EventCapabilityClassified{
-		EventHeader:  EventHeader{TaskID: "task-1", SessionID: "session-1", Seq: 5},
-		FamilyID:     "analysis",
-		Capabilities: []string{"query"},
-		Operator:     "llm",
-		LLMCalls:     1,
 	})
 	tel.EmitRouteSelected(ctx, EventRouteSelected{
 		EventHeader:    EventHeader{TaskID: "task-1", SessionID: "session-1", Seq: 6},
@@ -304,14 +300,14 @@ func TestEucloTelemetry_EmitsTypedEvents(t *testing.T) {
 		TokenUsage:  128,
 	})
 
-	if got := len(sink.events); got != 13 {
-		t.Fatalf("expected 13 events, got %d", got)
+	if got := len(sink.events); got != 12 {
+		t.Fatalf("expected 12 events, got %d", got)
 	}
 	if sink.events[0].Type != telemetry.EventType(EventTypeIntakeComplete) {
 		t.Fatalf("unexpected first event type %q", sink.events[0].Type)
 	}
-	if sink.events[12].Metadata["outcome"] != "success" {
-		t.Fatalf("expected final outcome metadata, got %#v", sink.events[12].Metadata["outcome"])
+	if sink.events[11].Metadata["outcome"] != "success" {
+		t.Fatalf("expected final outcome metadata, got %#v", sink.events[11].Metadata["outcome"])
 	}
 }
 

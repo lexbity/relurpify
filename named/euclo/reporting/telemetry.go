@@ -55,10 +55,6 @@ func (t *EucloTelemetry) EmitStreamRequested(ctx context.Context, ev EventStream
 	t.emit(ctx, EventTypeStreamRequested, ev)
 }
 
-func (t *EucloTelemetry) EmitCapabilityClassified(ctx context.Context, ev EventCapabilityClassified) {
-	t.emit(ctx, EventTypeCapabilityClassified, ev)
-}
-
 func (t *EucloTelemetry) EmitRouteSelected(ctx context.Context, ev EventRouteSelected) {
 	t.emit(ctx, EventTypeRouteSelected, ev)
 }
@@ -355,13 +351,14 @@ func clarificationStateVersionFromEnv(env *contextdata.Envelope) uint64 {
 }
 
 // EmitRouteSelected reports the selected route and candidate metadata.
-func EmitRouteSelected(ctx context.Context, taskID, sessionID, family, routeKind, routeID string, candidateCount int, fallbackTaken bool) {
+func EmitRouteSelected(ctx context.Context, taskID, sessionID, family, routeKind, routeID string, candidateCount int, fallbackTaken bool, decidedBy string) {
 	emitRouteEvent(ctx, EventTypeRouteSelected, taskID, sessionID, map[string]any{
 		"family":          family,
 		"route_kind":      routeKind,
 		"route_id":        routeID,
 		"candidate_count": candidateCount,
 		"fallback_taken":  fallbackTaken,
+		"decided_by":      decidedBy,
 	})
 }
 
@@ -398,6 +395,16 @@ func EmitRouteFallback(ctx context.Context, taskID, sessionID, primaryID, fallba
 		"primary_id":  primaryID,
 		"fallback_id": fallbackID,
 		"reason":      reason,
+	})
+}
+
+// EmitRouteTier2Unavailable reports that the bounded Tier-2 disambiguator
+// could not be consulted (absent model, error, or timeout); the deterministic
+// winner stands.
+func EmitRouteTier2Unavailable(ctx context.Context, taskID, sessionID, routeID, reason string) {
+	emitRouteEvent(ctx, EventTypeRouteTier2Unavailable, taskID, sessionID, map[string]any{
+		"route_id": routeID,
+		"reason":   reason,
 	})
 }
 

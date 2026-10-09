@@ -74,7 +74,7 @@ func TestEndToEndCheckpointResumeFromPersistedArtifact(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resume NewRootGraph failed: %v", err)
 	}
-	if err := resumeGraph.SetStart("euclo.capability_classify"); err != nil {
+	if err := resumeGraph.SetStart("euclo.interaction_check"); err != nil {
 		t.Fatalf("set resume start failed: %v", err)
 	}
 	if err := resumeGraph.Execute(ctxWithTrigger(context.Background()), rehydrated); err != nil {
@@ -162,7 +162,7 @@ func TestEndToEndCheckpointResumeThoughtRecipePath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resume NewRootGraph failed: %v", err)
 	}
-	if err := resumeGraph.SetStart("euclo.capability_classify"); err != nil {
+	if err := resumeGraph.SetStart("euclo.interaction_check"); err != nil {
 		t.Fatalf("set resume start failed: %v", err)
 	}
 	if err := resumeGraph.Execute(ctxWithTrigger(context.Background()), rehydrated); err != nil {

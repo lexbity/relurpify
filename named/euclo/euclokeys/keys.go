@@ -84,6 +84,9 @@ const (
 	KeyRouteOutcome        = "euclo.route.outcome"
 	KeyRouteTelemetryOff   = "euclo.route.telemetry_off"
 	KeySkillFilter         = "euclo.skill_filter"
+	// KeyRouteDecidedBy records the D8 lattice rule that produced the
+	// selection ("explicit", "default_recipe", or "lattice:*").
+	KeyRouteDecidedBy = "euclo.route.decided_by"
 )
 
 // Background job state keys.
@@ -107,6 +110,15 @@ const (
 	KeyExecutionThoughtRecipe = "euclo.execution.thoughtrecipe_id"
 )
 
+// Operational failure keys written by step nodes and aggregated by the recipe
+// executor. KeyStepFailure holds the most recent typed failure; KeyStepFailures
+// holds every failure for the run in step order.
+const (
+	KeyStepFailure   = "euclo.step_failure"
+	KeyStepFailures  = "euclo.step_failures"
+	KeyFallbackTaken = "euclo.fallback_taken"
+)
+
 // Interaction frame state keys.
 const (
 	KeyInteractionFrameSeq           = "euclo.interaction.frame_seq"
@@ -125,13 +137,12 @@ const (
 
 // Miscellaneous execution control keys.
 const (
-	KeyDone                 = "euclo.done"
-	KeyForkBranch           = "euclo.fork.branch"
-	KeyCapabilityClassified = "euclo.capability.classified"
-	KeyExecutionMerged      = "euclo.execution.merged"
-	KeyFamilySelected       = "euclo.family.selected"
-	KeyStreamRequested      = "euclo.stream.requested"
-	KeyCapabilityID         = "euclo.capability_id"
+	KeyDone            = "euclo.done"
+	KeyForkBranch      = "euclo.fork.branch"
+	KeyExecutionMerged = "euclo.execution.merged"
+	KeyFamilySelected  = "euclo.family.selected"
+	KeyStreamRequested = "euclo.stream.requested"
+	KeyCapabilityID    = "euclo.capability_id"
 )
 
 // Policy defaults.

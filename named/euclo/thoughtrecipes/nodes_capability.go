@@ -39,5 +39,7 @@ func (n *CapabilityNode) Execute(ctx context.Context, env *contextdata.Envelope)
 		emitStepCompleted(ctx, env, n.step, success, dur)
 	}()
 
-	return n.executeCapability(ctx, env)
+	result, err := n.executeCapability(ctx, env)
+	n.markFallbackActivated(ctx, env, result)
+	return result, err
 }

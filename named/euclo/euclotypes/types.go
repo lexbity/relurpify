@@ -28,6 +28,25 @@ type RouteResolution struct {
 	FallbackTaken             bool
 	ClarificationStateVersion uint64
 	ReasonCodes               []string
+	// DecidedBy names the D8 lattice rule (or explicit/default) that produced
+	// the selection; it is the durable seed of the Selection Decision Record.
+	DecidedBy string
+	// Tier2 records the bounded Tier-2 disambiguation attempt, if the gate was
+	// consulted (D10).
+	Tier2 Tier2Info
+}
+
+// Tier2Info records the bounded Tier-2 disambiguation attempt for one
+// selection. Used=false means the gate was not consulted (strong/explicit
+// match). Outcome is one of applied|rejected|unparseable|low_confidence|
+// unavailable.
+type Tier2Info struct {
+	Used        bool    `json:"used"`
+	Outcome     string  `json:"outcome,omitempty"`
+	Model       string  `json:"model,omitempty"`
+	CandidateID string  `json:"candidate_id,omitempty"`
+	Confidence  float64 `json:"confidence,omitempty"`
+	LatencyMs   int64   `json:"latency_ms,omitempty"`
 }
 
 // Normalize trims route-resolution fields and preserves stable reason ordering.
@@ -39,6 +58,10 @@ func (r *RouteResolution) Normalize() {
 	r.ThoughtRecipeID = strings.TrimSpace(r.ThoughtRecipeID)
 	r.CapabilityID = strings.TrimSpace(r.CapabilityID)
 	r.ResolutionSource = strings.TrimSpace(r.ResolutionSource)
+	r.DecidedBy = strings.TrimSpace(r.DecidedBy)
+	r.Tier2.Outcome = strings.TrimSpace(r.Tier2.Outcome)
+	r.Tier2.Model = strings.TrimSpace(r.Tier2.Model)
+	r.Tier2.CandidateID = strings.TrimSpace(r.Tier2.CandidateID)
 	if len(r.ReasonCodes) == 0 {
 		r.ReasonCodes = nil
 		return

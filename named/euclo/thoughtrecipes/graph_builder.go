@@ -306,23 +306,15 @@ func addExecutionStep(graph *agentgraph.Graph, deps *paradigm.Deps, step Executi
 	var fallbackID string
 	if step.Fallback != nil {
 		fallbackID = step.ID + ".fallback"
-		agent := step.Fallback
-		fallbackStep := ExecutionStep{
-			ID:       fallbackID,
-			Kind:     step.Kind,
-			Scope:    step.Scope,
-			Paradigm: agent.Paradigm,
-			Prompt:   agent.Prompt,
-			Stream:   cloneStreamSpec(agent.Context.Stream),
-			Inherit:  append([]string(nil), agent.Context.Inherit...),
-			Capture:  append([]string(nil), agent.Context.Capture...),
-		}
+		fallbackStep := buildFallbackStep(step)
 		if err := graph.AddNode(newNodeForStep(fallbackID, deps, fallbackStep)); err != nil {
 			return stepArtifacts{}, err
 		}
+		// D7: the fallback fires only on a classified operational failure, never
+		// on a structured success or a non-operational degenerate result.
 		if err := graph.AddEdge(execNodeID, fallbackID, func(result *execution.Result, env *contextdata.Envelope) bool {
 			_ = env
-			return result != nil && !result.Success
+			return operationalFailureClass(result) != ""
 		}, false); err != nil {
 			return stepArtifacts{}, err
 		}
@@ -333,6 +325,30 @@ func addExecutionStep(graph *agentgraph.Graph, deps *paradigm.Deps, step Executi
 		tail:     tail,
 		fallback: fallbackID,
 	}, nil
+}
+
+// buildFallbackStep tightens the authored fallback into a real contract (D7).
+// The fallback completes the same step's obligation, so it inherits the
+// parent's Goal, Sources, Directives, CaptureBindings, Scope, Kind, and error
+// policy; only Paradigm, Prompt, the stream context, and Inherit/Capture may
+// differ. PromptID is cleared so the fallback cannot re-prefer a parent
+// registry prompt over its own prompt.
+func buildFallbackStep(parent ExecutionStep) ExecutionStep {
+	agent := parent.Fallback
+	fallbackStep := parent
+	fallbackStep.ID = parent.ID + ".fallback"
+	fallbackStep.FallbackFor = parent.ID
+	fallbackStep.Fallback = nil
+	if agent == nil {
+		return fallbackStep
+	}
+	fallbackStep.Paradigm = agent.Paradigm
+	fallbackStep.Prompt = agent.Prompt
+	fallbackStep.PromptID = ""
+	fallbackStep.Stream = cloneStreamSpec(agent.Context.Stream)
+	fallbackStep.Inherit = append([]string(nil), agent.Context.Inherit...)
+	fallbackStep.Capture = append([]string(nil), agent.Context.Capture...)
+	return fallbackStep
 }
 
 func addPipelineStep(graph *agentgraph.Graph, deps *paradigm.Deps, step ExecutionStep) (stepArtifacts, error) {
@@ -534,4 +550,3 @@ func routeConditionFalse(groupID, branchID string) agentgraph.ConditionFunc {
 		return !envBool(env, key)
 	}
 }
-

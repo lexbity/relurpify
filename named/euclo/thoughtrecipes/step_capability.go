@@ -8,6 +8,7 @@ import (
 	registry "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 	"codeburg.org/lexbit/relurpify/named/euclo/state"
 )
 
@@ -115,6 +116,7 @@ func (c *stepCore) executeCapability(ctx context.Context, env *contextdata.Envel
 	if err != nil {
 		data["error"] = err.Error()
 	}
+	failureDetected := !success
 	if err != nil {
 		switch policyAction {
 		case "skip":
@@ -129,6 +131,36 @@ func (c *stepCore) executeCapability(ctx context.Context, env *contextdata.Envel
 		default:
 			success = false
 		}
+	}
+
+	actionTaken := policyAction
+	if success {
+		actionTaken = string(policyContinue)
+	}
+
+	// The capability path shares the operational-failure taxonomy and telemetry
+	// with the run path: a classified failure is recorded on the envelope and
+	// emitted even when the policy resolves it (skip), so the degradation is
+	// observable rather than silent.
+	if failureDetected {
+		failureKind := euclotypes.FailureCapabilityUnavailable
+		if err != nil {
+			if classified := ClassifyFailure(err); classified != "" {
+				failureKind = classified
+			}
+		}
+		message, _ := data["error"].(string)
+		failure := &euclotypes.StepFailure{Kind: failureKind, Message: message, Cause: err}
+		rawAction := policyAction
+		if rawAction == "" {
+			rawAction = string(policyAbort)
+		}
+		if env != nil {
+			state.SetStepFailure(env, failure)
+			c.writeStepFailureMetadata(env, failureKind, policyActionKind(rawAction), policyActionKind(actionTaken))
+		}
+		c.emitOperationalFailure(ctx, env, failureKind, policyActionKind(rawAction), policyActionKind(actionTaken), policyActionKind(rawAction) == policyAsk)
+		data["failure_kind"] = string(failureKind)
 	}
 
 	if c.deps.IngestOutputs {
@@ -155,6 +187,12 @@ func (c *stepCore) executeCapability(ctx context.Context, env *contextdata.Envel
 		} else if !success {
 			result.Metadata["on_error_resolved"] = policyAction
 		}
+	}
+	if kind, ok := data["failure_kind"].(string); ok && kind != "" {
+		if result.Metadata == nil {
+			result.Metadata = map[string]any{}
+		}
+		result.Metadata[operationalFailureKindMetadata] = kind
 	}
 
 	if err := c.writeCaptures(ctx, env, result); err != nil {
