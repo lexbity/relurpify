@@ -97,7 +97,7 @@ type phase9StaticRanker struct {
 
 func (r *phase9StaticRanker) Name() string { return r.name }
 
-func (r *phase9StaticRanker) Rank(context.Context, retrieval.RetrievalQuery, *knowledge.ChunkStore) ([]knowledge.ChunkID, error) {
+func (r *phase9StaticRanker) Rank(context.Context, retrieval.RetrievalQuery, *retrieval.CorpusSnapshot) ([]knowledge.ChunkID, error) {
 	return append([]knowledge.ChunkID(nil), r.ids...), nil
 }
 

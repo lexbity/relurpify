@@ -16,18 +16,18 @@ type ASTProximityRanker struct {
 
 func (r *ASTProximityRanker) Name() string { return "ast_proximity" }
 
-func (r *ASTProximityRanker) Rank(ctx context.Context, query RetrievalQuery, store *knowledge.ChunkStore) ([]knowledge.ChunkID, error) {
+func (r *ASTProximityRanker) Rank(ctx context.Context, query RetrievalQuery, snap *CorpusSnapshot) ([]knowledge.ChunkID, error) {
 	_ = ctx
-	if r == nil || r.Index == nil || store == nil {
+	if r == nil || r.Index == nil || snap == nil {
 		return nil, nil
 	}
 	scope := strings.TrimSpace(query.Scope)
 	if scope == "" {
 		return nil, nil
 	}
-	chunks, err := loadRankerChunks(store)
-	if err != nil || len(chunks) == 0 {
-		return nil, err
+	chunks := snap.Chunks
+	if len(chunks) == 0 {
+		return nil, nil
 	}
 
 	activeFiles, importedFiles := r.relatedFiles(scope)

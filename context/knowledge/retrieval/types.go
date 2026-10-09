@@ -10,11 +10,14 @@ import (
 	contextports "codeburg.org/lexbit/relurpify/context/ports"
 )
 
-// Ranker produces an ordered list of chunk IDs for a query.
-// Rank position only; no scores (scores are not on the same scale across ranker types).
+// Ranker produces an ordered list of chunk IDs for a query over one corpus
+// snapshot generation (position only; scores are not on the same scale across
+// ranker types). Ranker input may lag the store by at most one snapshot TTL;
+// chunk content streamed into context still flows through the compile path,
+// whose admission re-checks chunk state by ID.
 type Ranker interface {
 	Name() string
-	Rank(ctx context.Context, query RetrievalQuery, store *knowledge.ChunkStore) ([]knowledge.ChunkID, error)
+	Rank(ctx context.Context, query RetrievalQuery, snap *CorpusSnapshot) ([]knowledge.ChunkID, error)
 }
 
 // RankerRegistry holds admitted rankers for a compilation.

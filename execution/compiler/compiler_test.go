@@ -25,7 +25,7 @@ type staticRanker struct {
 
 func (r *staticRanker) Name() string { return r.name }
 
-func (r *staticRanker) Rank(context.Context, retrieval.RetrievalQuery, *knowledge.ChunkStore) ([]knowledge.ChunkID, error) {
+func (r *staticRanker) Rank(context.Context, retrieval.RetrievalQuery, *retrieval.CorpusSnapshot) ([]knowledge.ChunkID, error) {
 	return append([]knowledge.ChunkID(nil), r.ids...), nil
 }
 

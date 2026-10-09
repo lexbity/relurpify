@@ -13,15 +13,15 @@ type TrustRanker struct{}
 
 func (r *TrustRanker) Name() string { return "trust" }
 
-func (r *TrustRanker) Rank(ctx context.Context, query RetrievalQuery, store *knowledge.ChunkStore) ([]knowledge.ChunkID, error) {
+func (r *TrustRanker) Rank(ctx context.Context, query RetrievalQuery, snap *CorpusSnapshot) ([]knowledge.ChunkID, error) {
 	_ = ctx
 	_ = query
-	if r == nil || store == nil {
+	if r == nil || snap == nil {
 		return nil, nil
 	}
-	chunks, err := loadRankerChunks(store)
-	if err != nil || len(chunks) == 0 {
-		return nil, err
+	chunks := snap.Chunks
+	if len(chunks) == 0 {
+		return nil, nil
 	}
 
 	scores := make(map[knowledge.ChunkID]float64, len(chunks))
@@ -30,8 +30,8 @@ func (r *TrustRanker) Rank(ctx context.Context, query RetrievalQuery, store *kno
 	}
 
 	ids := sortRankedIDs(scores, func(a, b knowledge.ChunkID) bool {
-		left, _ := chunkByID(chunks, a)
-		right, _ := chunkByID(chunks, b)
+		left, _ := snap.Lookup(a)
+		right, _ := snap.Lookup(b)
 		if trustMultiplier(left.TrustClass) == trustMultiplier(right.TrustClass) {
 			return strings.Compare(string(a), string(b)) < 0
 		}

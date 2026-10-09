@@ -2,26 +2,120 @@ package retrieval
 
 import (
 	"context"
+	"fmt"
 	"sync"
+	"time"
 
 	"codeburg.org/lexbit/relurpify/context/knowledge"
 	"codeburg.org/lexbit/relurpify/context/knowledge/graphdb"
 	contextports "codeburg.org/lexbit/relurpify/context/ports"
+	fwtelemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
-// Retriever performs scatter-gather retrieval using multiple rankers.
+// Retriever performs scatter-gather retrieval using multiple rankers over
+// one corpus snapshot per generation: a single store decode shared by every
+// ranker, refreshed by chunk lifecycle events, a 30 s TTL, and explicit
+// Invalidate calls. Snapshot failures degrade to serve-stale (≤2×TTL) with
+// telemetry before becoming a hard error.
 type Retriever struct {
-	registry *RankerRegistry
-	store    *knowledge.ChunkStore
-	policy   *contextports.PolicyBundle
+	registry  *RankerRegistry
+	store     *knowledge.ChunkStore
+	policy    *contextports.PolicyBundle
+	snapshots *snapshotState
+	telemetry fwtelemetry.Telemetry
+	nowFn     func() time.Time
+
+	invalidateMu sync.Mutex
+	subCancel    func()
 }
 
 // NewRetriever creates a new retriever.
 func NewRetriever(registry *RankerRegistry, store *knowledge.ChunkStore) *Retriever {
-	return &Retriever{
-		registry: registry,
-		store:    store,
+	nowFn := time.Now
+	r := &Retriever{
+		registry:  registry,
+		store:     store,
+		nowFn:     nowFn,
+		snapshots: newSnapshotState(nowFn),
 	}
+	return r
+}
+
+// SetTelemetry wires retrieval observability (ranker failures, snapshot
+// lifecycle). Counter emissions are the contract even without a sink.
+func (r *Retriever) SetTelemetry(tel fwtelemetry.Telemetry) {
+	r.telemetry = tel
+}
+
+// SetClock installs the retriever's time source (deterministic tests for the
+// snapshot TTL). Must be called before the first Retrieve.
+func (r *Retriever) SetClock(now func() time.Time) {
+	r.nowFn = now
+	r.snapshots.now = now
+}
+
+// SetEventBus subscribes the retriever to chunk lifecycle events
+// (ingested supersedes cached snapshots; staled removes chunks from
+// consideration). The returned cancel function unsubscribes and is owned by
+// the composition root.
+func (r *Retriever) SetEventBus(bus *knowledge.EventBus) func() {
+	if bus == nil {
+		return func() {}
+	}
+	events, cancel := bus.Subscribe(64)
+	r.subCancel = cancel
+	go r.consumeEvents(events)
+	return cancel
+}
+
+// consumeEvents invalidates the snapshot generation on chunk events until
+// the subscription closes.
+func (r *Retriever) consumeEvents(events <-chan knowledge.Event) {
+	for event := range events {
+		switch event.Kind {
+		case knowledge.EventChunkIngested:
+			if payload, ok := event.Payload.(knowledge.ChunkIngestedPayload); ok && payload.ChunkID != "" {
+				r.Invalidate()
+			}
+		case knowledge.EventChunkStaled:
+			if payload, ok := event.Payload.(knowledge.ChunkStaledPayload); ok && len(payload.ChunkIDs) > 0 {
+				r.Invalidate()
+			}
+		}
+	}
+}
+
+// Unsubscribe detaches the event subscription (idempotent).
+func (r *Retriever) Unsubscribe() {
+	r.invalidateMu.Lock()
+	cancel := r.subCancel
+	r.subCancel = nil
+	r.invalidateMu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
+}
+
+// Invalidate drops the current snapshot generation. Called by event
+// consumption and available to the ingester for explicit post-commit
+// invalidation.
+func (r *Retriever) Invalidate() {
+	r.snapshots.invalidate()
+	r.emitCounter("retrieval_snapshot_invalidated", nil)
+}
+
+// emitCounter surfaces a retrieval lifecycle transition as telemetry.
+func (r *Retriever) emitCounter(kind string, metadata map[string]any) {
+	if r.telemetry == nil {
+		return
+	}
+	ev := fwtelemetry.Event{
+		Type:      fwtelemetry.EventType(kind),
+		Message:   kind,
+		Timestamp: r.nowFn(),
+		Metadata:  metadata,
+	}
+	r.telemetry.Emit(ev)
 }
 
 // WithPolicy sets the context policy for ranker admission and filtering.
@@ -48,6 +142,25 @@ func (r *Retriever) Retrieve(ctx context.Context, query RetrievalQuery) (*Retrie
 		}, nil
 	}
 
+	// One snapshot per retrieval generation, shared by all rankers. Fresh
+	// snapshots are silent; a rebuild and a serve-stale fallback are each
+	// observable, never silent.
+	snap, outcome, err := r.snapshots.get(r.store)
+	if err != nil {
+		return nil, fmt.Errorf("build corpus snapshot: %w", err)
+	}
+	switch outcome {
+	case outcomeBuilt:
+		r.emitCounter("retrieval_snapshot_built", map[string]any{
+			"generation": snap.Generation,
+			"chunks":     len(snap.Chunks),
+		})
+	case outcomeServedStale:
+		r.emitCounter("retrieval_snapshot_served_stale", map[string]any{
+			"generation": snap.Generation,
+		})
+	}
+
 	traversal := r.traversalCandidates(ctx, query)
 	admitted := r.Admitted()
 	if len(admitted) == 0 && len(traversal) == 0 {
@@ -62,7 +175,7 @@ func (r *Retriever) Retrieve(ctx context.Context, query RetrievalQuery) (*Retrie
 
 	// Scatter: execute rankers in parallel
 	if len(admitted) > 0 {
-		scattered, scatteredWeights := r.scatter(ctx, query, admitted)
+		scattered, scatteredWeights := r.scatter(ctx, query, admitted, snap)
 		rankedLists = append(rankedLists, scattered...)
 		weights = append(weights, scatteredWeights...)
 	}
@@ -198,8 +311,10 @@ func (r *Retriever) Admitted() []AdmittedRanker {
 	return r.registry.Admitted(r.policy)
 }
 
-// scatter executes rankers in parallel and returns their ranked lists.
-func (r *Retriever) scatter(ctx context.Context, query RetrievalQuery, rankers []AdmittedRanker) ([][]knowledge.ChunkID, []float64) {
+// scatter executes rankers in parallel over the shared snapshot. A ranker
+// failure degrades to the remaining rankers with a retrieval_ranker_failed
+// event — a failed ranker never silently empties its list.
+func (r *Retriever) scatter(ctx context.Context, query RetrievalQuery, rankers []AdmittedRanker, snap *CorpusSnapshot) ([][]knowledge.ChunkID, []float64) {
 	results := make([][]knowledge.ChunkID, len(rankers))
 	weights := make([]float64, len(rankers))
 	var wg sync.WaitGroup
@@ -211,8 +326,12 @@ func (r *Retriever) scatter(ctx context.Context, query RetrievalQuery, rankers [
 		go func(index int, rnk Ranker) {
 			defer wg.Done()
 
-			chunkIDs, err := rnk.Rank(ctx, query, r.store)
+			chunkIDs, err := rnk.Rank(ctx, query, snap)
 			if err != nil {
+				r.emitCounter("retrieval_ranker_failed", map[string]any{
+					"ranker": rnk.Name(),
+					"error":  err.Error(),
+				})
 				return
 			}
 

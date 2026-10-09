@@ -18,7 +18,7 @@ func TestKeywordRanker_BM25Scoring(t *testing.T) {
 	saveRankerChunk(t, store, "chunk:3", "unrelated text", now, agentspec.TrustClassBuiltinTrusted, "/tmp/c.go")
 
 	ranker := &KeywordRanker{K1: 1.2, B: 0.75}
-	ids, err := ranker.Rank(context.Background(), RetrievalQuery{Text: "context streaming"}, store)
+	ids, err := ranker.Rank(context.Background(), RetrievalQuery{Text: "context streaming"}, buildTestSnapshot(t, store))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -33,7 +33,7 @@ func TestKeywordRanker_BM25Scoring(t *testing.T) {
 func TestKeywordRanker_EmptyQuery(t *testing.T) {
 	store := newRankerTestStore(t)
 	ranker := &KeywordRanker{}
-	ids, err := ranker.Rank(context.Background(), RetrievalQuery{Text: ""}, store)
+	ids, err := ranker.Rank(context.Background(), RetrievalQuery{Text: ""}, buildTestSnapshot(t, store))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -50,7 +50,7 @@ func TestRecencyRanker_HalfLife(t *testing.T) {
 	saveRankerChunk(t, store, "chunk:new", "new", now.Add(-time.Minute), agentspec.TrustClassBuiltinTrusted, "/tmp/new.go")
 
 	ranker := &RecencyRanker{HalfLifeHours: 24.0, Now: func() time.Time { return now }}
-	ids, err := ranker.Rank(context.Background(), RetrievalQuery{}, store)
+	ids, err := ranker.Rank(context.Background(), RetrievalQuery{}, buildTestSnapshot(t, store))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -101,7 +101,7 @@ func TestASTProximityRanker_SameFile(t *testing.T) {
 	saveRankerChunk(t, chunkStore, "chunk:unrelated", "unrelated", now, agentspec.TrustClassBuiltinTrusted, unrelatedFile)
 
 	ranker := &ASTProximityRanker{Index: manager}
-	ids, err := ranker.Rank(context.Background(), RetrievalQuery{Scope: activeFile}, chunkStore)
+	ids, err := ranker.Rank(context.Background(), RetrievalQuery{Scope: activeFile}, buildTestSnapshot(t, chunkStore))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -116,7 +116,7 @@ func TestASTProximityRanker_SameFile(t *testing.T) {
 func TestASTProximityRanker_NilIndex(t *testing.T) {
 	store := newRankerTestStore(t)
 	ranker := &ASTProximityRanker{}
-	ids, err := ranker.Rank(context.Background(), RetrievalQuery{Scope: "/tmp/x.go"}, store)
+	ids, err := ranker.Rank(context.Background(), RetrievalQuery{Scope: "/tmp/x.go"}, buildTestSnapshot(t, store))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -134,7 +134,7 @@ func TestTrustRanker_MultiplierApplied(t *testing.T) {
 	saveRankerChunk(t, store, "chunk:unknown", "unknown", now, "", "/tmp/d.go")
 
 	ranker := &TrustRanker{}
-	ids, err := ranker.Rank(context.Background(), RetrievalQuery{}, store)
+	ids, err := ranker.Rank(context.Background(), RetrievalQuery{}, buildTestSnapshot(t, store))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

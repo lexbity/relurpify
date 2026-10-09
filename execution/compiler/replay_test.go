@@ -20,7 +20,7 @@ type mutableRanker struct {
 
 func (r *mutableRanker) Name() string { return r.name }
 
-func (r *mutableRanker) Rank(context.Context, retrieval.RetrievalQuery, *knowledge.ChunkStore) ([]knowledge.ChunkID, error) {
+func (r *mutableRanker) Rank(context.Context, retrieval.RetrievalQuery, *retrieval.CorpusSnapshot) ([]knowledge.ChunkID, error) {
 	return append([]knowledge.ChunkID(nil), r.ids...), nil
 }
 
