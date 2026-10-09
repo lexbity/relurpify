@@ -74,6 +74,14 @@ type ChunkID string
 // EdgeID is a stable edge identifier.
 type EdgeID string
 
+// GroundingRecord identifies one grounding event that produced a chunk.
+type GroundingRecord struct {
+	TaskID   string `json:"task_id"`
+	NodeID   string `json:"node_id"`
+	Epoch    uint64 `json:"epoch"`
+	RecipeID string `json:"recipe_id,omitempty"`
+}
+
 // FreshnessState tracks semantic validity.
 type FreshnessState string
 
@@ -184,6 +192,11 @@ type KnowledgeChunk struct {
 	// Tombstoning fields
 	Tombstoned   bool    `json:"tombstoned,omitempty"`
 	SupersededBy ChunkID `json:"superseded_by,omitempty"`
+
+	// Capture provenance fields (schema v2)
+	OriginClass string            `json:"origin_class,omitempty"`
+	Epistemics  string            `json:"epistemics,omitempty"`
+	GroundedBy  []GroundingRecord `json:"grounded_by,omitempty"`
 
 	// Suspicion fields
 	SuspicionScore float64          `json:"suspicion_score,omitempty"`

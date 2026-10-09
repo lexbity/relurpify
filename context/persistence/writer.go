@@ -169,29 +169,23 @@ func (w *Writer) PromoteFromMemory(ctx context.Context, store WorkingMemoryStore
 
 // validateRequest performs structural validation on the request.
 func (w *Writer) validateRequest(req PersistenceRequest) error {
-	// Check required fields
-	if len(req.Content) == 0 {
-		return fmt.Errorf("content is required")
+	maxTokens := 0
+	if w.Policy != nil && w.Policy.MaxTokensPerWindow > 0 {
+		maxTokens = w.Policy.MaxTokensPerWindow
+	}
+	if err := knowledge.ValidateContentAdmission(knowledge.ContentAdmissionRequest{
+		Content:     req.Content,
+		ContentType: req.ContentType,
+		MaxTokens:   maxTokens,
+	}); err != nil {
+		return err
 	}
 	if !req.Kind.Valid() {
 		return fmt.Errorf("kind is required and must be one of the canonical chunk kinds")
 	}
-	if req.ContentType == "" {
-		return fmt.Errorf("content_type is required")
-	}
 	if req.SourcePrincipal.ID == "" {
 		return fmt.Errorf("source_principal is required")
 	}
-
-	// Check max content size from policy
-	if w.Policy != nil && w.Policy.MaxTokensPerWindow > 0 {
-		// Rough estimate: 1 token ≈ 4 bytes for text
-		estimatedTokens := len(req.Content) / 4
-		if estimatedTokens > w.Policy.MaxTokensPerWindow {
-			return fmt.Errorf("content exceeds max size: %d tokens estimated", estimatedTokens)
-		}
-	}
-
 	return nil
 }
 
@@ -205,28 +199,8 @@ func (w *Writer) determineTrustClass(principal identity.SubjectRef) agentspec.Tr
 
 // suspicionCheck performs lightweight suspicion detection.
 func (w *Writer) suspicionCheck(req PersistenceRequest) (bool, string) {
-	// Check for obviously suspicious patterns (lightweight version)
-	content := string(req.Content)
-
-	// Check for null bytes (binary content)
-	for _, b := range req.Content {
-		if b == 0 {
-			return true, "binary content detected"
-		}
-	}
-
-	// Check for non-printable character ratio
-	nonPrintable := 0
-	for _, r := range content {
-		if r < 32 && r != '\n' && r != '\r' && r != '\t' {
-			nonPrintable++
-		}
-	}
-	if len(content) > 0 && float64(nonPrintable)/float64(len(content)) > 0.1 {
-		return true, "high non-printable character ratio"
-	}
-
-	return false, ""
+	reason, suspicious := knowledge.SuspicionReason(req.Content)
+	return suspicious, reason
 }
 
 // computeContentHash computes a content hash for deduplication.

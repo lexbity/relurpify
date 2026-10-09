@@ -56,6 +56,12 @@ type edgeBatchOp struct {
 	Edges []EdgeRecord `json:"edges"`
 }
 
+// graphBatchOp carries nodes and edges committed together in one transaction.
+type graphBatchOp struct {
+	Nodes []NodeRecord `json:"nodes"`
+	Edges []EdgeRecord `json:"edges"`
+}
+
 type unlinkOp struct {
 	SourceID string   `json:"source_id"`
 	TargetID string   `json:"target_id"`
