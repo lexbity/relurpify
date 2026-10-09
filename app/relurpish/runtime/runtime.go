@@ -188,7 +188,7 @@ func buildRuntime(ctx context.Context, cfg Config, secrets config.Secrets) (*Run
 	}
 
 	// Load workspace YAML to get model/provider/sandbox preferences before
-	// calling ayenitd.Open. The V1 config format (relurpify/workspace/v1)
+	// composing the runtime. The V1 config format (relurpify/workspace/v1)
 	// is the canonical nested format. A missing file is non-blocking
 	// (uninitialized workspace); a present but invalid file is blocking.
 	var workspaceCfg config.RuntimeWorkspaceConfig

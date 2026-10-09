@@ -8,7 +8,8 @@ import (
 )
 
 // WorkspaceConfig is the resolved configuration produced from CLI flags, YAML
-// workspace config, and environment. It is the input to ayenitd.Open().
+// workspace config, and environment. It is the input to the workspace service
+// registration and startup functions.
 type WorkspaceConfig struct {
 	// Required
 	Workspace                  string // absolute path to workspace root

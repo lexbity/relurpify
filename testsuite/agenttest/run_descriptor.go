@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/platform/fs"
@@ -50,6 +51,7 @@ type PreparedRunDescriptor struct {
 	BackendBinary         string                       `json:"backend_binary,omitempty"`
 	BackendService        string                       `json:"backend_service,omitempty"`
 	BackendResetStrategy  string                       `json:"backend_reset_strategy,omitempty"`
+	BackendResetOn        []string                     `json:"backend_reset_on,omitempty"`
 	BackendMatrix         []PreparedBackendTarget      `json:"backend_matrix,omitempty"`
 	ModelName             string                       `json:"model_name,omitempty"`
 	RecordingMode         string                       `json:"recording_mode,omitempty"`
@@ -63,6 +65,11 @@ type PreparedRunDescriptor struct {
 	SeededState           map[string]any               `json:"seeded_state,omitempty"`
 	Verification          PreparedVerificationContract `json:"verification"`
 	ExpectedArtifacts     []string                     `json:"expected_artifacts,omitempty"`
+
+	// resetPatterns is the compiled form of BackendResetOn. It is derived in
+	// Normalize (the prepare path) and never persisted: an invalid pattern
+	// fails preparation rather than execution (D13).
+	resetPatterns []*regexp.Regexp
 }
 
 type PreparedBackendTarget struct {
@@ -183,6 +190,7 @@ func BuildPreparedRunDescriptor(suite *Suite, c CaseSpec, model ModelSpec, opts 
 		BackendBinary:         selected.Binary,
 		BackendService:        selected.Service,
 		BackendResetStrategy:  selected.ResetStrategy,
+		BackendResetOn:        append([]string(nil), opts.BackendResetOn...),
 		BackendMatrix:         backendTargets,
 		ModelName:             firstNonEmpty(exec.Model, model.Name, selected.Provider),
 		RecordingMode:         exec.RecordingMode,
@@ -232,6 +240,12 @@ func (d *PreparedRunDescriptor) Normalize() error {
 	d.BackendBinary = strings.TrimSpace(d.BackendBinary)
 	d.BackendService = strings.TrimSpace(d.BackendService)
 	d.BackendResetStrategy = strings.TrimSpace(d.BackendResetStrategy)
+	d.BackendResetOn = UniqueStrings(d.BackendResetOn)
+	resetPatterns, err := compileResetPatterns(d.BackendResetOn)
+	if err != nil {
+		return err
+	}
+	d.resetPatterns = resetPatterns
 	d.ServiceResetStrategy = strings.TrimSpace(d.ServiceResetStrategy)
 	d.ModelName = strings.TrimSpace(d.ModelName)
 	d.RecordingMode = strings.TrimSpace(d.RecordingMode)
@@ -330,6 +344,23 @@ func resolveCaseMaxIterations(opts RunOptions, c CaseSpec) int {
 		return opts.MaxIterations
 	}
 	return 8
+}
+
+// compileResetPatterns compiles the --backend-reset-on regexes during
+// preparation so an invalid pattern fails before any run starts (D13/FR-16).
+func compileResetPatterns(patterns []string) ([]*regexp.Regexp, error) {
+	if len(patterns) == 0 {
+		return nil, nil
+	}
+	compiled := make([]*regexp.Regexp, 0, len(patterns))
+	for _, pattern := range patterns {
+		re, err := regexp.Compile(pattern)
+		if err != nil {
+			return nil, fmt.Errorf("invalid backend-reset-on pattern %q: %w", pattern, err)
+		}
+		compiled = append(compiled, re)
+	}
+	return compiled, nil
 }
 
 func (d *PreparedRunDescriptor) Write(path string) error {
@@ -554,22 +585,22 @@ func uniquePreparedBackendTargets(in []PreparedBackendTarget) []PreparedBackendT
 
 // ArtifactPaths captures the canonical artifact file paths for a prepared run.
 type ArtifactPaths struct {
-	SetupLog          string
-	SetupTelemetry    string
-	ExecutionLog      string
+	SetupLog           string
+	SetupTelemetry     string
+	ExecutionLog       string
 	ExecutionTelemetry string
-	Report            string
-	Verification      string
+	Report             string
+	Verification       string
 }
 
 // ArtifactPaths returns the canonical artifact file paths for this run.
 func (d *PreparedRunDescriptor) ArtifactPaths() ArtifactPaths {
 	return ArtifactPaths{
-		SetupLog:          filepath.Join(d.SetupLogsDir, "agenttest.log"),
-		SetupTelemetry:    filepath.Join(d.SetupTelemetryDir, "agenttest.jsonl"),
-		ExecutionLog:      filepath.Join(d.ExecutionLogsDir, "agenttest.log"),
+		SetupLog:           filepath.Join(d.SetupLogsDir, "agenttest.log"),
+		SetupTelemetry:     filepath.Join(d.SetupTelemetryDir, "agenttest.jsonl"),
+		ExecutionLog:       filepath.Join(d.ExecutionLogsDir, "agenttest.log"),
 		ExecutionTelemetry: filepath.Join(d.ExecutionTelemetryDir, "agenttest.jsonl"),
-		Report:            filepath.Join(d.ExecutionDir, "report.json"),
-		Verification:      filepath.Join(d.VerificationDir, "verification.json"),
+		Report:             filepath.Join(d.ExecutionDir, "report.json"),
+		Verification:       filepath.Join(d.VerificationDir, "verification.json"),
 	}
 }

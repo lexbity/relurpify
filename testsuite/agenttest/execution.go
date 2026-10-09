@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -379,6 +381,13 @@ func (e *PreparedRunExecutor) currentExecutor() agentgraph.WorkflowExecutor {
 	return e.agent
 }
 
+// Backend reset strategies (D13).
+const (
+	resetStrategyNone   = "none"
+	resetStrategyModel  = "model"
+	resetStrategyServer = "server"
+)
+
 func (e *PreparedRunExecutor) executeWithRetry(ctx context.Context, desc *PreparedRunDescriptor, task *execution.Task, env *contextdata.Envelope, out io.Writer) (*execution.Result, int, []string, error) {
 	var (
 		result      *execution.Result
@@ -395,26 +404,54 @@ func (e *PreparedRunExecutor) executeWithRetry(ctx context.Context, desc *Prepar
 		if attempt >= desc.MaxRetries {
 			break
 		}
-		strategy := strings.TrimSpace(desc.BackendResetStrategy)
-		if strategy == "" || strategy == "none" {
-			break
+		if len(desc.resetPatterns) > 0 {
+			// Pattern mode (D13): a retry happens exactly when a configured
+			// regex matches the error, and a non-matching error does not spend
+			// the retry budget or trigger a reset.
+			if !anyResetPatternMatches(desc.resetPatterns, err.Error()) {
+				break
+			}
+		} else {
+			// Legacy mode: no patterns configured, so the reset strategy alone
+			// gates retries (unchanged pre-D13 behavior).
+			strategy := strings.TrimSpace(desc.BackendResetStrategy)
+			if strategy == "" || strategy == resetStrategyNone {
+				break
+			}
 		}
 		triggeredBy = append(triggeredBy, err.Error())
 		retryCount++
 		if rerr := e.resetBackend(ctx, desc); rerr != nil {
-			_ = rerr
+			log.Printf("agenttest: backend reset failed: %v", rerr)
 		}
 	}
 	return result, retryCount + 1, triggeredBy, err
 }
 
+// anyResetPatternMatches reports whether any compiled trigger pattern matches
+// the execution error text.
+func anyResetPatternMatches(patterns []*regexp.Regexp, message string) bool {
+	for _, re := range patterns {
+		if re.MatchString(message) {
+			return true
+		}
+	}
+	return false
+}
+
 func (e *PreparedRunExecutor) resetBackend(ctx context.Context, desc *PreparedRunDescriptor) error {
-	switch strings.TrimSpace(desc.BackendResetStrategy) {
-	case "", "none":
+	strategy := strings.TrimSpace(desc.BackendResetStrategy)
+	if strategy == "" && len(desc.resetPatterns) > 0 {
+		// Patterns are configured but no strategy was declared: a matched
+		// trigger is meant to reset, so default to the model strategy (D13).
+		strategy = resetStrategyModel
+	}
+	switch strategy {
+	case "", resetStrategyNone:
 		return nil
-	case "model":
-		return e.model.Backend.Reset(ctx, "model")
-	case "server":
+	case resetStrategyModel:
+		return e.model.Backend.Reset(ctx, resetStrategyModel)
+	case resetStrategyServer:
 		if strings.TrimSpace(desc.BackendService) == "" {
 			return fmt.Errorf("server reset requires backend_service")
 		}
@@ -424,7 +461,7 @@ func (e *PreparedRunExecutor) resetBackend(ctx context.Context, desc *PreparedRu
 		}
 		return nil
 	default:
-		return fmt.Errorf("unknown reset strategy: %s", desc.BackendResetStrategy)
+		return fmt.Errorf("unknown reset strategy: %s", strategy)
 	}
 }
 
