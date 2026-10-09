@@ -1,9 +1,11 @@
 package services
 
 import (
+	"path/filepath"
 	"sort"
 	"testing"
 
+	registry "codeburg.org/lexbit/relurpify/capability/registry"
 	euclocapabilities "codeburg.org/lexbit/relurpify/named/euclo/capabilities"
 	"codeburg.org/lexbit/relurpify/named/euclo/relurpicabilities"
 )
@@ -67,5 +69,67 @@ func TestFamilyCapabilitiesExistInBlueprint(t *testing.T) {
 				t.Errorf("family %s references capability %q with no blueprint entry", family.ID, id)
 			}
 		}
+	}
+}
+
+// TestEucloCapabilityIDsReturnsCopy proves the accessor hands out a defensive
+// copy: a caller mutating the slice must not corrupt the package vocabulary.
+func TestEucloCapabilityIDsReturnsCopy(t *testing.T) {
+	ids := EucloCapabilityIDs()
+	if len(ids) == 0 {
+		t.Fatal("expected capability IDs")
+	}
+	ids[0] = "mutated"
+	if EucloCapabilityIDs()[0] == "mutated" {
+		t.Fatal("EucloCapabilityIDs must return a defensive copy")
+	}
+}
+
+// TestCapabilityLookupAdapter covers both adapter branches: a nil registry maps
+// to a nil lookup, and the adapter reports unknown IDs as not found.
+func TestCapabilityLookupAdapter(t *testing.T) {
+	if got := CapabilityLookup(nil); got != nil {
+		t.Fatalf("CapabilityLookup(nil) = %v, want nil", got)
+	}
+	lookup := CapabilityLookup(registry.NewRegistry())
+	if lookup == nil {
+		t.Fatal("expected non-nil lookup for a registry")
+	}
+	if _, ok := lookup.Select("euclo:cap.does_not_exist"); ok {
+		t.Fatal("unknown capability must not be found")
+	}
+	adapter := capabilityLookupAdapter{reg: nil}
+	if _, ok := adapter.Select("anything"); ok {
+		t.Fatal("nil-inner adapter must report not found")
+	}
+}
+
+// TestWithCapabilityDepsRegistration exercises the deps option through the
+// default registrar path.
+func TestWithCapabilityDepsRegistration(t *testing.T) {
+	reg := NewRegistration(WithCapabilityDeps(CapabilityDeps{Workspace: t.TempDir()}))
+	if err := reg.RegisterCapabilities(registry.NewRegistry()); err != nil {
+		t.Fatalf("RegisterCapabilities with deps: %v", err)
+	}
+}
+
+// TestDefaultPromptRegistrarNilRegistry covers the nil-registry no-op branch.
+func TestDefaultPromptRegistrarNilRegistry(t *testing.T) {
+	var reg defaultPromptRegistrar
+	if err := reg.RegisterAll(nil); err != nil {
+		t.Fatalf("nil prompt registry must be a no-op: %v", err)
+	}
+}
+
+// TestDefaultThoughtRecipeLoaderMissingWorkspace covers the os.ErrNotExist
+// degradation branch: a missing workspace yields an empty registry, not an error.
+func TestDefaultThoughtRecipeLoaderMissingWorkspace(t *testing.T) {
+	var loader defaultThoughtRecipeLoader
+	result, err := loader.LoadAll(filepath.Join(t.TempDir(), "missing"), nil)
+	if err != nil {
+		t.Fatalf("missing workspace must degrade to an empty registry: %v", err)
+	}
+	if result == nil || result.Registry == nil {
+		t.Fatal("expected an empty registry result")
 	}
 }
