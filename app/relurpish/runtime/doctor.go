@@ -1,8 +1,10 @@
 package runtime
 
 import (
+	"codeburg.org/lexbit/relurpify/userconfig/config/model"
 	"context"
 	"fmt"
+	"golang.org/x/sync/errgroup"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -188,44 +190,7 @@ func BuildDoctorReport(ctx context.Context, cfg Config, secrets config.Secrets) 
 	if err == nil && bundle.Config != nil {
 		reg, _ := buildProviderRegistry(bundle.Config.Model.Providers)
 		if reg != nil {
-			var providerHealthList []ProviderHealth
-			for _, def := range bundle.Config.Model.Providers {
-				ph := ProviderHealth{
-					Name:      def.Name,
-					Kind:      def.Kind,
-					Endpoint:  def.Endpoint,
-					SetupHint: def.SetupHint,
-				}
-				// Check if this is the currently selected provider
-				if strings.EqualFold(def.Name, cfg.InferenceProvider) {
-					ph.Selected = true
-				}
-				// Probe the provider's health
-				pcfg := llm.ProviderConfig{
-					Provider: def.Name,
-					Kind:     def.Kind,
-					Endpoint: def.Endpoint,
-				}
-				if pbe, pberr := llm.New(pcfg, llm.ProviderSecrets{APIKey: secrets.LLMAPIKey}); pberr == nil {
-					if phState, phErr := pbe.Health(ctx); phState != nil {
-						ph.State = string(phState.State)
-					} else if phErr != nil {
-						ph.State = "unhealthy"
-						ph.Error = phErr.Error()
-					}
-					if models, modErr := pbe.ListModels(ctx); modErr == nil {
-						for _, m := range models {
-							ph.Models = append(ph.Models, m.Name)
-						}
-					}
-					_ = pbe.Close()
-				} else {
-					ph.State = "unhealthy"
-					ph.Error = pberr.Error()
-				}
-				providerHealthList = append(providerHealthList, ph)
-			}
-			report.Providers = providerHealthList
+			report.Providers = probeProviderCatalog(ctx, bundle.Config.Model.Providers, cfg, secrets)
 		}
 		// Model profile check using the same bundle.
 		regProfiles := modelselect.NewProfileRegistryFromProfiles(bundle.Config.Model.Profiles)
@@ -507,4 +472,93 @@ func errorString(err error) string {
 	return err.Error()
 }
 
+// Provider probe deadlines (FR-39): per-provider 2 s, catalog overall 10 s,
+// at most 4 providers probed concurrently. A probe that misses its deadline
+// is recorded as "timeout" — the report schema is unchanged.
+const (
+	providerProbeTimeout     = 2 * time.Second
+	providerCatalogDeadline  = 10 * time.Second
+	providerProbeConcurrency = 4
+)
 
+// probeProviderCatalog probes every configured provider's health and model
+// list concurrently (bounded), under a catalog-wide deadline. Ordering of
+// the returned list matches the config declaration order regardless of
+// probe completion order.
+func probeProviderCatalog(ctx context.Context, defs []*model.ResolvedProvider, cfg Config, secrets config.Secrets) []ProviderHealth {
+	if len(defs) == 0 {
+		return nil
+	}
+	catalogCtx, cancel := context.WithTimeout(ctx, providerCatalogDeadline)
+	defer cancel()
+
+	results := make([]ProviderHealth, len(defs))
+	g, gctx := errgroup.WithContext(catalogCtx)
+	g.SetLimit(providerProbeConcurrency)
+	for i := range defs {
+		i, def := i, defs[i]
+		g.Go(func() error {
+			ph := ProviderHealth{
+				Name:      def.Name,
+				Kind:      def.Kind,
+				Endpoint:  def.Endpoint,
+				SetupHint: def.SetupHint,
+			}
+			if strings.EqualFold(def.Name, cfg.InferenceProvider) {
+				ph.Selected = true
+			}
+			probeCtx, probeCancel := context.WithTimeout(gctx, providerProbeTimeout)
+			defer probeCancel()
+			applyProviderProbe(probeCtx, &ph, def, secrets)
+			results[i] = ph
+			return nil
+		})
+	}
+	// The catalog deadline is enforced by the per-probe contexts; a straggler
+	// past the overall deadline is recorded as timed out rather than blocking.
+	_ = g.Wait()
+	for i := range results {
+		if results[i].State == "" {
+			results[i].State = "timeout"
+		}
+	}
+	return results
+}
+
+// applyProviderProbe runs one provider's health and model-list probes under
+// the caller's (already bounded) context.
+func applyProviderProbe(ctx context.Context, ph *ProviderHealth, def *model.ResolvedProvider, secrets config.Secrets) {
+	pcfg := llm.ProviderConfig{
+		Provider: def.Name,
+		Kind:     def.Kind,
+		Endpoint: def.Endpoint,
+	}
+	pbe, pberr := llm.New(pcfg, llm.ProviderSecrets{APIKey: secrets.LLMAPIKey})
+	if pberr != nil {
+		ph.State = "unhealthy"
+		ph.Error = pberr.Error()
+		return
+	}
+	defer func() { _ = pbe.Close() }()
+	phState, phErr := pbe.Health(ctx)
+	// A probe cut down by its own deadline (or the catalog deadline) is a
+	// timeout regardless of how the backend spelled the failure — the
+	// deadline is this probe's verdict, not the backend's health.
+	if phErr != nil && ctx.Err() != nil {
+		ph.State = "timeout"
+		return
+	}
+	if phErr != nil {
+		ph.State = "unhealthy"
+		ph.Error = phErr.Error()
+		return
+	}
+	if phState != nil {
+		ph.State = string(phState.State)
+	}
+	if models, modErr := pbe.ListModels(ctx); modErr == nil {
+		for _, m := range models {
+			ph.Models = append(ph.Models, m.Name)
+		}
+	}
+}

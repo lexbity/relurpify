@@ -85,6 +85,7 @@ func (s *stubRuntimeAdapter) RestartAllServices(context.Context) error          
 func (s *stubRuntimeAdapter) AddFileToContext(string) error                                                 { return nil }
 func (s *stubRuntimeAdapter) DropFileFromContext(string) error                                              { return nil }
 func (s *stubRuntimeAdapter) ActiveWorkflowID() string                                                      { return "" }
+func (s *stubRuntimeAdapter) ProbeBackendHealth(ctx context.Context) string                                 { return "checking" }
 func (s *stubRuntimeAdapter) ResumeSession(context.Context, string) error                                   { return nil }
 func (s *stubRuntimeAdapter) ResolveInteractionFrame(context.Context, string, string, string, string) error { return nil }
 

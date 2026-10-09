@@ -544,6 +544,7 @@ func (m RootModel) Init() tea.Cmd {
 		m.restorePromptCmd(),
 		m.subscribeHITLCmd(),
 		m.subscribeExecEventsCmd(),
+		m.refreshBackendHealthCmd(),
 	}
 	if m.chat != nil {
 		cmds = append(cmds, m.chat.Init())
@@ -555,6 +556,23 @@ func (m RootModel) Init() tea.Cmd {
 		cmds = append(cmds, tick)
 	}
 	return tea.Batch(cmds...)
+}
+
+// backendHealthMsg carries the post-first-paint backend health result.
+type backendHealthMsg struct{ state string }
+
+// refreshBackendHealthCmd probes the model backend off the UI thread after
+// first paint (NFR-7: the boot path never blocks on the backend). The probe
+// is bounded inside the adapter; the initial session snapshot carries the
+// "checking" state until this lands.
+func (m RootModel) refreshBackendHealthCmd() tea.Cmd {
+	rt := m.runtime
+	if rt == nil {
+		return nil
+	}
+	return func() tea.Msg {
+		return backendHealthMsg{state: rt.ProbeBackendHealth(context.Background())}
+	}
 }
 
 // startupDoctorReportCmd builds the initial doctor report off the UI thread and
@@ -770,6 +788,12 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			delete(m2.taskRunIDs, msg.RunID)
 		}
 		return m2, tea.Batch(paneCmd, m2.dequeueNextTask())
+
+	case backendHealthMsg:
+		if m.sharedSess != nil {
+			m.sharedSess.BackendState = msg.state
+		}
+		return m, nil
 
 	// Startup session restore prompt.
 	case sessionFoundMsg:

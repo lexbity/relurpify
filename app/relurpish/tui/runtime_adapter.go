@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -71,6 +72,10 @@ type RuntimeAdapter interface {
 	AvailableAgents() []string
 	SwitchAgent(name string) error
 	SessionInfo() SessionInfo
+	// ProbeBackendHealth probes the model backend now (bounded: 2 s) and
+	// returns its state string, caching the result for SessionInfo. It is
+	// called off the UI thread — boot never probes synchronously.
+	ProbeBackendHealth(ctx context.Context) string
 	ResolveContextFiles(ctx context.Context, files []string) ContextFileResolution
 	SessionArtifacts() SessionArtifacts
 	InferenceModels(ctx context.Context) ([]string, error)
@@ -167,7 +172,9 @@ type RuntimeAdapter interface {
 }
 
 type runtimeAdapter struct {
-	rt *runtimesvc.Runtime
+	backendStateMu sync.Mutex
+	backendState   string
+	rt             *runtimesvc.Runtime
 }
 
 func newRuntimeAdapter(rt *runtimesvc.Runtime) RuntimeAdapter {
@@ -228,13 +235,10 @@ func (r *runtimeAdapter) SessionInfo() SessionInfo {
 	}
 	info.ProfileReason = ws.ProfileResolution.Reason
 	info.ProfileSource = ws.ProfileResolution.SourcePath
-	if be := ws.Backend; be != nil {
-		if mb, ok := be.(llm.ManagedBackend); ok {
-			if health, err := mb.Health(context.Background()); err == nil && health != nil {
-				info.BackendState = string(health.State)
-			}
-		}
-	}
+	// Backend state is the last probed value (initially "checking"): the
+	// boot path never probes synchronously — ProbeBackendHealth runs via a
+	// post-first-paint tea.Cmd.
+	info.BackendState = r.cachedBackendState()
 
 	if spec := ws.AgentSpec; spec != nil {
 		if spec.Model.Provider != "" {
@@ -253,6 +257,42 @@ func (r *runtimeAdapter) SessionInfo() SessionInfo {
 	info.Mode, info.Strategy = describeAgentRuntime(r.rt.Agent)
 	info.ExecutionMode = string(r.ExecutionMode())
 	return info
+}
+
+// defaultBackendState is the SessionInfo backend state before the first
+// probe lands (NFR-7: first paint never depends on the backend).
+const defaultBackendState = "checking"
+
+// probeTimeoutBounds bounds one backend health probe (FR-39).
+const probeTimeoutBounds = 2 * time.Second
+
+// ProbeBackendHealth probes the managed backend with a bounded deadline,
+// caches the resulting state, and returns it. Timeouts degrade to
+// "unknown(probe-timeout)" — the snapshot is still returned.
+func (r *runtimeAdapter) ProbeBackendHealth(ctx context.Context) string {
+	state := "unknown(probe-timeout)"
+	probeCtx, cancel := context.WithTimeout(ctx, probeTimeoutBounds)
+	defer cancel()
+	if ws := r.rt.AgentWorkspace(); ws != nil {
+		if mb, ok := ws.Backend.(llm.ManagedBackend); ok {
+			if health, err := mb.Health(probeCtx); err == nil && health != nil {
+				state = string(health.State)
+			}
+		}
+	}
+	r.backendStateMu.Lock()
+	r.backendState = state
+	r.backendStateMu.Unlock()
+	return state
+}
+
+func (r *runtimeAdapter) cachedBackendState() string {
+	r.backendStateMu.Lock()
+	defer r.backendStateMu.Unlock()
+	if r.backendState == "" {
+		return defaultBackendState
+	}
+	return r.backendState
 }
 
 func (r *runtimeAdapter) ContractSummary() *ContractSummary {

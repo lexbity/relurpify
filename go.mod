@@ -15,6 +15,7 @@ require (
 	github.com/yuin/goldmark v1.3.5
 	go.lsp.dev/protocol v0.12.0
 	go.uber.org/goleak v1.3.0
+	golang.org/x/sync v0.22.0
 	gopkg.in/yaml.v3 v3.0.1
 	mvdan.cc/sh/v3 v3.13.1
 )
