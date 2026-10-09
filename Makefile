@@ -9,7 +9,9 @@ GO_OFFLINE_ENV := GOPROXY=off GOSUMDB=off
 # Architecture invariant gates (GP-9).
 # governance-no-orch and no-bucket are now in enforce mode (Slice 7).
 # classification-ownership was deleted in Slice 4 -- EffectClass/CapabilityScope live in governance/classification.
-lint-arch: lint-class-normalization lint-no-permissive-hitl
+# envcheck/shimcheck/symcheck are the AST-based gates that replaced the
+# greppable half of grep-architecture-gates and no-dead.
+lint-arch: lint-class-normalization lint-no-permissive-hitl envcheck shimcheck symcheck
 	$(GO_OFFLINE_ENV) go run ./tooling/arch/cmd/archcheck; EXIT_CODE=$$?; \
 	$(GO_OFFLINE_ENV) go run ./tooling/arch/cmd/domaincheck -mode=enforce -check=governance-orch; \
 	$(GO_OFFLINE_ENV) go run ./tooling/arch/cmd/domaincheck -mode=enforce -check=context-ports; \
@@ -107,9 +109,31 @@ exception-count:
 	fi; \
 	echo "[PASS] exception-count: $$count entries (baseline $$baseline)"
 
-# Dead-code gate: asserts removed symbols never reappear.
+# AST-based architecture gates (see devdocs/plans/build-process-modernization-spec.md
+# §3.4). These parse the syntax tree rather than grepping text, so they cannot
+# be bypassed by aliasing an import, concatenating a forbidden string, or
+# renaming around a pattern. The grep gates they replace stay in place as the
+# secondary layer for what a syntax tree cannot express (grep-architecture-gates,
+# no-dead).
+.PHONY: envcheck shimcheck symcheck
+
+envcheck:
+	$(GO_OFFLINE_ENV) go run ./tooling/arch/cmd/envcheck
+
+shimcheck:
+	$(GO_OFFLINE_ENV) go run ./tooling/arch/cmd/shimcheck
+
+symcheck:
+	$(GO_OFFLINE_ENV) go run ./tooling/arch/cmd/symcheck
+
+# Dead-code gate: asserts removed symbols never reappear. The exact-path
+# filters below mirror the symcheck exemptions: GetWorkingValue survives there
+# as a live method on capability/ports.State. Basename filters would exempt any
+# state.go in the tree, so the paths are named in full. The AST gate (symcheck)
+# is the precise layer; this grep gate stays as the secondary layer for symbols
+# smuggled through as strings.
 no-dead:
-	@if grep -rn 'InvokeOnBestNode\|RegisterNodeProvider\|NodeSelectionCriteria\|RateLimiter\|GetWorkingValue\|executionStepFromAgent\|inheritExecutionStepScope\|summarizeCaptureBindings\|summarizeToolScopeFrames\|CompiledThoughtRecipe\|CompiledStep\b\|CompiledParallelGroup\|CompiledConditionalGroup\|buildParallelSection\|buildConditionalSection\|buildBranchSequence\|evaluateThoughtRecipeCondition\|emitParallelFanouts\|BackendModelProfileProvenance\|BackendProviderProvenance\|VerifyStepResult\|WriteBenchmarkBaseline\|BuildBenchmarkBaseline\|BuildPhaseMetrics\|ComparePerformanceBaseline\|WrapRegistryWithInterceptor\|ReadTelemetryJSONL\|LoadGoldenFingerprint\|LoadTape\|SetHandleScoped\|GetHandle\|LifecycleView' --include='*.go' . 2>/dev/null | grep -v '.gomodcache' | grep -v '.gocache' | grep -v 'tooling/arch' | grep -v '_test.go' | grep -v 'state.go' | grep -v 'state_adapter.go' | grep -v 'session_overlay.go' | grep -v 'edit_record.go' | grep -v 'runner_test.go'; then echo "[FAIL] no-dead: found removed symbols" ; exit 1 ; fi
+	@if grep -rn 'InvokeOnBestNode\|RegisterNodeProvider\|NodeSelectionCriteria\|RateLimiter\|GetWorkingValue\|executionStepFromAgent\|inheritExecutionStepScope\|summarizeCaptureBindings\|summarizeToolScopeFrames\|CompiledThoughtRecipe\|CompiledStep\b\|CompiledParallelGroup\|CompiledConditionalGroup\|buildParallelSection\|buildConditionalSection\|buildBranchSequence\|evaluateThoughtRecipeCondition\|emitParallelFanouts\|BackendModelProfileProvenance\|BackendProviderProvenance\|VerifyStepResult\|WriteBenchmarkBaseline\|BuildBenchmarkBaseline\|BuildPhaseMetrics\|ComparePerformanceBaseline\|WrapRegistryWithInterceptor\|ReadTelemetryJSONL\|LoadGoldenFingerprint\|LoadTape\|SetHandleScoped\|GetHandle\|LifecycleView' --include='*.go' . 2>/dev/null | grep -v '.gomodcache' | grep -v '.gocache' | grep -v 'tooling/arch' | grep -v '_test.go' | grep -v 'capability/ports/state.go' | grep -v 'capability/registry/edit_record.go' | grep -v 'capability/registry/session_overlay.go' | grep -v 'context/contextdata/state_adapter.go'; then echo "[FAIL] no-dead: found removed symbols" ; exit 1 ; fi
 	@echo "[PASS] no-dead: no removed symbols found"
 
 .PHONY: no-dead-packages
@@ -197,7 +221,10 @@ grep-architecture-gates:
 	@$(MAKE) check-contract-dissolution
 	@if rg -n "ResolveCallingMode|RenderToolsToPrompt|ParseToolCallsFromText" cognitionzoo capability/registry --glob '*.go' >/dev/null; then echo "[FAIL] grep-architecture-gates: legacy tool-calling wire symbols remain in cognitionzoo or capability/registry"; exit 1; fi
 	@if rg -n "return c\\.Chat\\(ctx, messages, options\\)" platform/llm/ollama/client.go >/dev/null; then echo "[FAIL] grep-architecture-gates: ollama client still drops tools in non-native mode"; exit 1; fi
-	@hits=$$(rg -n "os\\.(Getenv|LookupEnv|Environ)" --glob '*.go' --glob '!**/*_test.go' --glob '!.gomodcache/**' --glob '!.gocache/**' . 2>/dev/null | grep -v 'userconfig/' | head -20); \
+	@# tooling/arch is exempt from this grep layer only: the AST gate's own
+	@# sources name the os environment API they forbid, in comments grep cannot
+	@# tell apart from a call. `make envcheck` polices that tree on the tree.
+	@hits=$$(rg -n "os\\.(Getenv|LookupEnv|Environ)" --glob '*.go' --glob '!**/*_test.go' --glob '!.gomodcache/**' --glob '!.gocache/**' . 2>/dev/null | grep -v 'userconfig/' | grep -v 'tooling/arch' | head -20); \
 	if [ -n "$$hits" ]; then \
 		echo "[FAIL] grep-architecture-gates: direct env access remains outside userconfig"; \
 		echo "$$hits"; \
@@ -333,15 +360,33 @@ coverage-baseline:
 	@rm -f coverage.out
 
 # check-gates-honest verifies that gate patterns have not been weakened.
-# It checks that key grep patterns still exist in the Makefile and that
-# AST-based gate tools (when they exist) are present and wired in.
+# Each check expands the gate's own recipe with `make -n` and greps the command
+# that would actually run, so a pattern must live in the gate itself: the
+# patterns named below cannot satisfy their own test, and deleting a pattern,
+# an AST gate, or its wiring all fail here.
 .PHONY: check-gates-honest
 
 check-gates-honest:
-	@for pattern in 'Getenv|LookupEnv|Environ' 'shim|compatibility|stub' 'InvokeOnBestNode'; do \
-		if ! grep -qF "$$pattern" Makefile; then \
-			echo "[FAIL] check-gates-honest: pattern '$$pattern' missing from Makefile"; \
+	@if ! make -n grep-architecture-gates | grep -qF 'Getenv|LookupEnv|Environ'; then \
+		echo "[FAIL] check-gates-honest: the env fence lost its os.Getenv/os.LookupEnv/os.Environ pattern"; \
+		exit 1; \
+	fi
+	@if ! make -n grep-architecture-gates | grep -qF 'shim|compatibility|stub'; then \
+		echo "[FAIL] check-gates-honest: the compatibility-language fence lost its pattern"; \
+		exit 1; \
+	fi
+	@if ! make -n no-dead | grep -qF 'InvokeOnBestNode'; then \
+		echo "[FAIL] check-gates-honest: no-dead lost its removed-symbol patterns"; \
+		exit 1; \
+	fi
+	@for tool in envcheck shimcheck symcheck; do \
+		if [ ! -f "tooling/arch/cmd/$$tool/main.go" ]; then \
+			echo "[FAIL] check-gates-honest: AST gate $$tool/main.go is missing from the tree"; \
+			exit 1; \
+		fi; \
+		if ! make -n lint-arch | grep -q "go run ./tooling/arch/cmd/$$tool"; then \
+			echo "[FAIL] check-gates-honest: AST gate $$tool is not run by lint-arch"; \
 			exit 1; \
 		fi; \
 	done
-	@echo "[PASS] check-gates-honest: all gate patterns present"
+	@echo "[PASS] check-gates-honest: all gate patterns and AST gates present"

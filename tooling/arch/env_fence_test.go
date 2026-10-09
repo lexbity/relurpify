@@ -30,7 +30,14 @@ func TestEnvFencePassesOnCleanTree(t *testing.T) {
 		if line == "" {
 			continue
 		}
+		// userconfig is the one tree allowed to read the environment.
 		if strings.Contains(line, "userconfig/") {
+			continue
+		}
+		// tooling/arch is the tree that polices the fence: its sources name
+		// the API they forbid, in comments the grep layer cannot tell apart
+		// from a call. The AST gate (envcheck) still covers that tree.
+		if strings.Contains(line, "tooling/arch/") {
 			continue
 		}
 		violations = append(violations, line)

@@ -290,7 +290,7 @@ packages:
     floor: 38
     reason: partial unit coverage; floor recorded from current coverage, raise as tests land
   codeburg.org/lexbit/relurpify/tooling/arch:
-    floor: 63
+    floor: 66
     reason: partial unit coverage; floor recorded from current coverage, raise as tests land
   codeburg.org/lexbit/relurpify/tooling/arch/cmd/archcheck:
     floor: 0

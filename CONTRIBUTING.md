@@ -10,15 +10,29 @@ Relurpify uses DCO sign-off on pull requests.
 
 ## Recommended local checks
 
-- `make lint-arch` — architecture invariant gates (domain DAG, class normalization, HITL, env access, shim language)
+- `make lint-arch` — architecture invariant gates (domain DAG, class normalization, HITL, plus the AST-based gates `envcheck`, `shimcheck`, `symcheck`)
 - `make lint-all` — structural gates (layering, invariants, dead code, ghost schemas, euclo gates)
-- `make check-gates-honest` — verify gate patterns have not been weakened
+- `make check-gates-honest` — verify the gates have not been weakened (grep patterns, AST gate presence, and wiring into `lint-arch`)
 - `make check-contract-dissolution` — manifest spine removed
 - `make grep-architecture-gates` — architecture grep fences
 - `make check-gates-slice10` — dead code and forbidden patterns
 - `make test-coverage` — per-package coverage floor (70% minimum)
 - `make test-dev-agent` — dev-agent build and test baseline
 - `make test-tape-fidelity` — LLM tape replay fidelity
+
+## Gate layers
+
+Architecture fences run in two layers. The AST-based gates (`envcheck`,
+`shimcheck`, `symcheck` in `tooling/arch/cmd/`) parse the syntax tree, so they
+cannot be bypassed by aliasing an import, concatenating a forbidden string, or
+renaming around a pattern. The grep gates are kept as the secondary layer for
+what a syntax tree cannot express — a string assembled by concatenation, for
+example, is not a literal.
+
+Each AST gate that accepts anything does so through an explicit exemption table
+in its command file, naming exact paths rather than filenames. Every entry is
+load-bearing: the gates' own tests fail if an exemption stops being needed, so
+a hole cannot quietly grow a comment.
 
 ## Coverage requirements
 
