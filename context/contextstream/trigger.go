@@ -67,6 +67,7 @@ func (t *Trigger) RequestBlocking(ctx context.Context, req Request) (*Result, er
 		Err:         err,
 	}
 	if compilation != nil {
+		res.Record = &compilation.Record
 		res.Trim = trimMetadataFromCompilation(req, compilation)
 	}
 	t.emitCompilerOutcome(ctx, req, res, started)
@@ -76,15 +77,18 @@ func (t *Trigger) RequestBlocking(ctx context.Context, req Request) (*Result, er
 	return res, nil
 }
 
-// RequestBackground starts a background streaming job.
-func (t *Trigger) RequestBackground(ctx context.Context, req Request) (*Job, error) {
+// RequestBackground starts a background streaming job that runs on the
+// caller-supplied run-lifetime context. The context MUST outlive the node that
+// registers the job; the epoch coordinator owns it and cancels it only at run
+// completion or quiesce.
+func (t *Trigger) RequestBackground(runCtx context.Context, req Request) (*Job, error) {
 	if t == nil || t.Compiler == nil {
 		return nil, errors.New("contextstream: missing compiler")
 	}
 	job := NewJob(req)
 	job.StartedAt = time.Now().UTC()
 	go func() {
-		res, err := t.RequestBlocking(ctx, req)
+		res, err := t.RequestBlocking(runCtx, req)
 		job.complete(res, err)
 	}()
 	return job, nil
@@ -95,6 +99,8 @@ func toCompilationRequest(req Request) contextports.CompilationRequest {
 		BaseContext:  req.Query.Text,
 		BudgetTokens: req.MaxTokens,
 		Mode:         string(req.Mode),
+		EventLogSeq:  req.EventLogSeq,
+		Metadata:     req.Metadata,
 	}
 }
 

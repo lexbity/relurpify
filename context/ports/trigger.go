@@ -12,6 +12,10 @@ type CompilationRequest struct {
 	BudgetTokens int
 	Mode         string
 	Priority     int
+	// EventLogSeq and Metadata round-trip the caller's request attributes so
+	// compilation records stay attributable to their creating run.
+	EventLogSeq uint64
+	Metadata    map[string]any
 }
 
 // CompilationResult is the context-owned view of a compilation result.

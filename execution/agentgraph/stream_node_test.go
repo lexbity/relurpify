@@ -3,12 +3,12 @@ package agentgraph
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/context/contextstream"
+	"codeburg.org/lexbit/relurpify/context/knowledge"
 	"codeburg.org/lexbit/relurpify/context/knowledge/retrieval"
 	contextports "codeburg.org/lexbit/relurpify/context/ports"
 	execution "codeburg.org/lexbit/relurpify/execution"
@@ -22,6 +22,13 @@ type streamCompilerStub struct {
 func (s *streamCompilerStub) Compile(ctx context.Context, request contextports.CompilationRequest) (*contextports.CompilationResult, error) {
 	s.request = request
 	return s.result, nil
+}
+
+// noopGrounder is a Grounder that accepts everything without storage.
+type noopGrounder struct{}
+
+func (noopGrounder) Ground(_ context.Context, _ []knowledge.GroundingItem) (knowledge.GroundingReport, error) {
+	return knowledge.GroundingReport{}, nil
 }
 
 func TestContextStreamNodeBlockingAppliesRefsToEnvelope(t *testing.T) {
@@ -50,28 +57,58 @@ func TestContextStreamNodeBlockingAppliesRefsToEnvelope(t *testing.T) {
 	require.Equal(t, 9, shortfall)
 }
 
-func TestContextStreamNodeBackgroundAppliesEventually(t *testing.T) {
+func TestContextStreamNodeBackgroundLandsAtBarrier(t *testing.T) {
 	compilerStub := &streamCompilerStub{
 		result: &contextports.CompilationResult{
 			StreamedRefs: []string{"chunk-2"},
+			Record:       contextports.CompilationRecord{ID: "compilation-bg"},
 		},
 	}
 	node := NewContextStreamNode("stream-node-bg", retrieval.RetrievalQuery{Text: "background query"}, 64)
 	node.Mode = contextstream.ModeBackground
 
 	env := contextdata.NewEnvelope("task-2", "session-2")
-	ctx := contextstream.WithTrigger(context.Background(), contextstream.NewTrigger(compilerStub))
+	env.AssemblyMetadata.EventLogSeq = 7
+	env.AssemblyMetadata.BudgetTokens = 64
+	coord := NewEpochCoordinator(contextdata.WithEnvelope(context.Background(), env), &noopGrounder{}, nil)
+	ctx := contextstream.WithTrigger(WithEpochCoordinator(context.Background(), coord), contextstream.NewTrigger(compilerStub))
 	result, err := node.Execute(ctx, env)
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	require.Equal(t, "stream-node-bg", result.NodeID)
-	mode, _ := execution.ResultField(result.Data, "mode")
-	require.Equal(t, "background", mode)
+	requested, _ := execution.ResultField(result.Data, "contextstream_background_requested")
+	require.Equal(t, true, requested)
 	jobID, _ := execution.ResultField(result.Data, "contextstream_job_id")
 	require.Equal(t, "stream-node-bg.stream", jobID)
 
-	require.Eventually(t, func() bool {
-		ids := env.StreamedChunkIDs()
-		return len(ids) == 1 && ids[0] == "chunk-2"
-	}, time.Second, 10*time.Millisecond)
+	// The job is applied by the epoch barrier, not a detached goroutine.
+	captures, jobs := coord.Pending()
+	require.Zero(t, captures)
+	require.Equal(t, 1, jobs)
+
+	require.NoError(t, coord.CloseEpochIfPending("stream-node-bg"))
+	require.Equal(t, []contextdata.ChunkID{"chunk-2"}, env.StreamedChunkIDs())
+	meta := env.AssemblyMetadataSnapshot()
+	require.Equal(t, "compilation-bg", meta.CompilationID)
+	require.Equal(t, uint64(7), meta.EventLogSeq, "ApplyResult must merge, not replace")
+	require.Equal(t, 64, meta.BudgetTokens, "ApplyResult must merge, not replace")
+	require.Equal(t, uint64(2), meta.EpochID)
+
+	captures, jobs = coord.Pending()
+	require.Zero(t, captures)
+	require.Zero(t, jobs, "barrier must drain tracked jobs")
+}
+
+func TestContextStreamNodeBackgroundRequiresCoordinator(t *testing.T) {
+	compilerStub := &streamCompilerStub{
+		result: &contextports.CompilationResult{StreamedRefs: []string{"chunk-2"}},
+	}
+	node := NewContextStreamNode("stream-node-bg", retrieval.RetrievalQuery{Text: "background query"}, 64)
+	node.Mode = contextstream.ModeBackground
+
+	env := contextdata.NewEnvelope("task-2", "session-2")
+	ctx := contextstream.WithTrigger(context.Background(), contextstream.NewTrigger(compilerStub))
+	_, err := node.Execute(ctx, env)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "background stream requires an epoch coordinator")
 }

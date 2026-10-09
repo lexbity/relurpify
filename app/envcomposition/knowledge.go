@@ -97,8 +97,10 @@ func (a *compilerTriggerAdapter) Compile(ctx context.Context, req contextports.C
 		Text: req.BaseContext,
 	}
 	innerReq := compiler.CompilationRequest{
-		Query:     query,
-		MaxTokens: req.BudgetTokens,
+		Query:       query,
+		MaxTokens:   req.BudgetTokens,
+		EventLogSeq: req.EventLogSeq,
+		Metadata:    req.Metadata,
 	}
 	result, record, err := a.inner.Compile(ctx, innerReq)
 	if err != nil {

@@ -76,6 +76,7 @@ type Graph struct {
 	startNodeID       string
 	maxNodeVisits     int
 	telemetry         telemetry.Telemetry
+	grounder          Grounder
 	execMu            sync.Mutex
 	visitCounts       map[string]int
 	executionPath     []string
@@ -108,6 +109,15 @@ func (g *Graph) SetTelemetry(t telemetry.Telemetry) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	g.telemetry = t
+}
+
+// SetGrounder wires the durable grounding boundary the epoch coordinator flushes
+// through. Without a grounder the run carries no coordinator and recipe captures
+// degrade to the explicit capture.sink_absent event.
+func (g *Graph) SetGrounder(grounder Grounder) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.grounder = grounder
 }
 
 func (g *Graph) invalidateStructureLocked() {
@@ -248,7 +258,7 @@ func (g *Graph) AddEdge(from, to string, condition ConditionFunc, parallel bool)
 }
 
 // Execute runs the graph from its start node.
-func (g *Graph) Execute(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
+func (g *Graph) Execute(ctx context.Context, env *contextdata.Envelope) (result *execution.Result, err error) {
 	if err := g.Validate(); err != nil {
 		return nil, err
 	}
@@ -264,30 +274,50 @@ func (g *Graph) Execute(ctx context.Context, env *contextdata.Envelope) (*execut
 		Timestamp: time.Now().UTC(),
 		Metadata:  taskMeta,
 	})
-	var execErr error
 	defer func() {
-		status := "success"
-		if execErr != nil {
-			status = "error"
-		}
 		g.emit(ctx, telemetry.Event{
 			Type:      telemetry.EventGraphFinish,
 			TaskID:    taskID,
 			Timestamp: time.Now().UTC(),
 			Metadata: map[string]any{
-				"status": status,
+				"status": statusFor(err),
 			},
 		})
 	}()
 
-	if g.startNodeID == "" {
-		execErr = errors.New("graph has no start node")
-		return nil, execErr
+	// Epoch lifecycle: the top-level Execute owns the coordinator. Nested
+	// executions (parallel branches) share the parent coordinator from ctx and
+	// never finalize it.
+	coord := EpochCoordinatorFromContext(ctx)
+	ownsCoordinator := false
+	if coord == nil && g.grounder != nil {
+		coord = NewEpochCoordinator(contextdata.WithEnvelope(ctx, env), g.grounder, g.telemetry)
+		ctx = WithEpochCoordinator(ctx, coord)
+		ownsCoordinator = true
+	}
+	if ownsCoordinator {
+		// Safety net: flush what exists even on panic paths (idempotent).
+		defer func() { _ = coord.FinalEpoch("") }()
 	}
 
-	lastResult, err := g.run(ctx, env, g.startNodeID, true, taskID)
-	execErr = err
-	return lastResult, err
+	if g.startNodeID == "" {
+		return nil, errors.New("graph has no start node")
+	}
+
+	result, err = g.run(ctx, env, g.startNodeID, true, taskID)
+	if err == nil && ownsCoordinator {
+		if finalErr := coord.FinalEpoch(""); finalErr != nil {
+			err = finalErr
+		}
+	}
+	return result, err
+}
+
+func statusFor(err error) string {
+	if err != nil {
+		return "error"
+	}
+	return "success"
 }
 
 func (g *Graph) run(ctx context.Context, env *contextdata.Envelope, current string, reset bool, taskID string) (*execution.Result, error) {
@@ -358,6 +388,13 @@ func (g *Graph) run(ctx context.Context, env *contextdata.Envelope, current stri
 		lastResult = result
 		for key, value := range execution.ResultFields(result.Data) {
 			env.SetWorkingValueWithClass(fmt.Sprintf("%s.%s", current, key), value, contextdata.MemoryClassTask)
+		}
+		// Epoch barrier: flush the node's grounding and land background stream
+		// jobs so the next node's context compilation sees read-your-writes.
+		if coord := EpochCoordinatorFromContext(ctx); coord != nil {
+			if err := coord.CloseEpochIfPending(current); err != nil {
+				return nil, fmt.Errorf("agentgraph: %w", err)
+			}
 		}
 		g.emit(ctx, telemetry.Event{
 			Type:      telemetry.EventNodeFinish,

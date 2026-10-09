@@ -28,6 +28,7 @@ type AssemblyMeta struct {
 	BudgetTokens    int
 	ShortfallTokens int
 	AssembledAt     time.Time
+	EpochID         uint64
 }
 
 type contextKey struct{}

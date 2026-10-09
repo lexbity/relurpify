@@ -55,6 +55,17 @@ func (e *Envelope) SetAssemblyMetadata(meta AssemblyMeta) {
 	e.AssemblyMetadata = meta
 }
 
+// UpdateAssemblyMetadata applies a functional update to the assembly metadata
+// under the envelope lock. Fields the caller does not touch are preserved.
+func (e *Envelope) UpdateAssemblyMetadata(update func(AssemblyMeta) AssemblyMeta) {
+	if e == nil || update == nil {
+		return
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.AssemblyMetadata = update(e.AssemblyMetadata)
+}
+
 // Clone returns a deep copy of the envelope.
 func (e *Envelope) Clone() *Envelope {
 	workingData := e.WorkingDataSnapshot()

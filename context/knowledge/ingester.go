@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"log"
 	"strings"
 	"time"
 
@@ -150,34 +149,6 @@ func (ing *OutputIngester) IngestObservation(ctx context.Context, observation st
 			"observation": observation,
 		},
 	})
-}
-
-// IngestToolResultAsync schedules tool result ingestion without blocking the caller.
-func IngestToolResultAsync(ctx context.Context, ing *OutputIngester, toolName string, result []byte) {
-	if ing == nil || len(result) == 0 {
-		return
-	}
-	go func() {
-		timeoutCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-		defer cancel()
-		if _, err := ing.IngestToolResult(timeoutCtx, toolName, result); err != nil {
-			log.Printf("knowledge: async tool result ingestion failed (tool=%s): %v", toolName, err)
-		}
-	}()
-}
-
-// IngestObservationAsync schedules observation ingestion without blocking the caller.
-func IngestObservationAsync(ctx context.Context, ing *OutputIngester, observation string) {
-	if ing == nil || strings.TrimSpace(observation) == "" {
-		return
-	}
-	go func() {
-		timeoutCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-		defer cancel()
-		if _, err := ing.IngestObservation(timeoutCtx, observation); err != nil {
-			log.Printf("knowledge: async observation ingestion failed: %v", err)
-		}
-	}()
 }
 
 type ingestTextInput struct {

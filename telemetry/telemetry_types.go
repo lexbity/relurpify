@@ -58,6 +58,8 @@ const (
 	EventCaptureEpistemicsDowngraded  EventType = "capture.epistemics_downgraded"
 	EventCaptureGroundFailed          EventType = "capture.ground_failed"
 	EventCaptureSinkAbsent            EventType = "capture.sink_absent"
+	EventEpochClosed                  EventType = "epoch.closed"
+	EventStreamAbandoned              EventType = "contextstream.stream_abandoned"
 	EventSchedulerJobStarted          EventType = "scheduler.job_started"
 	EventSchedulerJobCompleted        EventType = "scheduler.job_completed"
 	EventSchedulerJobFailed           EventType = "scheduler.job_failed"
