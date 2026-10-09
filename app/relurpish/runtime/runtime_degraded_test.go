@@ -28,7 +28,7 @@ func buildDegradedRuntime(t *testing.T, reason string) *Runtime {
 func TestDegradedRunTask(t *testing.T) {
 	rt := buildDegradedRuntime(t, "compose failed: test")
 	require.NotNil(t, rt)
-	require.Nil(t, rt.Agent, "degraded runtime has no agent by construction")
+	require.Nil(t, rt.ActiveAgent(), "degraded runtime has no agent by construction")
 
 	sink := &recordingTelemetry{}
 	rt.Workspace.Telemetry = sink

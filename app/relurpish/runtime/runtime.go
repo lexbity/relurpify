@@ -58,7 +58,6 @@ type Runtime struct {
 	Session          *session.WorkspaceSession
 	Tools            *registry.CapabilityRegistry
 	Memory           *memory.WorkingMemoryStore
-	Agent            agentgraph.WorkflowExecutor
 	Model            model.LanguageModel
 	Compiler         *compiler.Compiler
 	IndexManager     *ast.IndexManager
@@ -71,6 +70,14 @@ type Runtime struct {
 	secrets          config.Secrets
 	registration     *fauthorization.AgentRegistration
 	modelBackend     llm.ManagedBackend
+
+	// agent is the workflow executor serving turns. It is mutex-guarded so
+	// SwitchAgent can hot-swap it without racing an executing turn (D10).
+	agentMu sync.RWMutex
+	agent   agentgraph.WorkflowExecutor
+	// coordinator is the run quiesce unit: Runtime.Close drains/cancels/reaps
+	// every registered run through it before tearing down stores and sinks.
+	coordinator *RunCoordinator
 
 	// sessionID is the process-scoped correlation session created with the
 	// runtime. It is stamped onto every turn's RunContext and mirrored onto the
@@ -495,6 +502,7 @@ func buildRuntime(ctx context.Context, cfg Config, secrets config.Secrets) (*Run
 		SearchEngine:         env.SearchEngine,
 		AgentLifecycle:       env.AgentLifecycle,
 		WorkspaceConfig:      workspaceCfg,
+		coordinator:          newRunCoordinator(ws.Telemetry),
 		documentSnapshot:     docSnapshot,
 		Delegations:          fauthorization.NewDelegationManager(),
 		interactionEnvelopes: make(map[string]*contextdata.Envelope),
@@ -532,7 +540,7 @@ func buildRuntime(ctx context.Context, cfg Config, secrets config.Secrets) (*Run
 		env.Registry.UseAgentSpec(registration.ID, env.Config.AgentSpec)
 	}
 
-	rt.Agent = agent
+	rt.setAgent(agent)
 	emitAgentStartupEvent(ctx, env.EventLog, "local", registration.ID, cfg.AgentLabel(), agent)
 	emitContractResolvedEvent(ctx, env.EventLog, "local", registration.ID, cfg.AgentLabel(), docSnapshot)
 	if err := ayenitd.RegisterWorkspaceServices(ctx, ayenitd.WorkspaceConfig{Workspace: cfg.Workspace}, sess, rt.Tools, registration, ayenitd.WorkspaceServiceDeps{
@@ -576,10 +584,11 @@ func newDegradedRuntime(ctx context.Context, cfg Config, reason error) *Runtime 
 	}
 
 	rt := &Runtime{
-		Config:    cfg,
-		Workspace: ws,
-		Session:   sess,
-		Tools:     registry.NewRegistry(),
+		Config:      cfg,
+		Workspace:   ws,
+		Session:     sess,
+		Tools:       registry.NewRegistry(),
+		coordinator: newRunCoordinator(nil),
 	}
 
 	// Emit boot.degraded as a structured telemetry event (FR-16 / AC-10). A
@@ -636,13 +645,29 @@ func emitBootDegraded(ctx context.Context, ws *session.Workspace, reason error) 
 	ws.Telemetry.Emit(ev)
 }
 
-// Close releases resources managed by fruntime.
+// Close releases resources managed by fruntime. The order is quiesce-first:
+// the run intake is closed and every registered run is drained, cancelled,
+// and reaped (bounded by D10) before any store, sink, or log file is torn
+// down, so teardown never races an active writer. Safe to call more than once.
 func (r *Runtime) Close(ctx context.Context) error {
 	if r == nil {
 		return nil
 	}
 	var errs []error
 
+	// 1. Quiesce registered runs (intake close → drain → cancel → reap).
+	if r.coordinator != nil {
+		r.coordinator.DrainAndStop()
+	}
+
+	// 2. Execution-event broadcast closes before providers, so no provider
+	// teardown event races an ordering-dependent subscriber.
+	if r.execSink != nil {
+		r.execSink.Close()
+		r.execSink = nil
+	}
+
+	// 3. Providers close before the stores they feed.
 	providers := r.registeredProviders()
 	for i := len(providers) - 1; i >= 0; i-- {
 		if err := providers[i].Close(); err != nil {
@@ -650,12 +675,7 @@ func (r *Runtime) Close(ctx context.Context) error {
 		}
 	}
 
-	if r.execSink != nil {
-		r.execSink.Close()
-		r.execSink = nil
-	}
-
-	// Close workspace (handles backend, services, logs, etc.)
+	// 4. Workspace (services, backend, Badger last).
 	if r.Workspace != nil {
 		if err := r.Workspace.Close(ctx); err != nil {
 			errs = append(errs, err)
@@ -771,7 +791,7 @@ func (r *Runtime) applyResolvedAgentState(name string, effectiveContract *config
 	}
 	r.Tools.UseAgentSpec(r.Workspace.Registration.ID, agentSpecCap)
 	r.Workspace.Registration.Policy = nil
-	r.Agent = agent
+	r.setAgent(agent)
 	r.Workspace.AgentSpec = agentSpecCap
 	r.Workspace.EffectiveContract = effectiveContract
 	r.Workspace.CompiledPolicy = compiledPolicy
@@ -935,12 +955,15 @@ func (r *Runtime) resolveEffectiveContractForAgent(name string) (*config.Effecti
 }
 
 // RunTask executes a task against the configured agent while preserving shared
-// context state for future status screens.
+// context state for future status screens. The run is registered with the
+// runtime's quiesce coordinator so Close can drain/cancel it.
 func (r *Runtime) RunTask(ctx context.Context, task *execution.Task) (*execution.Result, error) {
 	if task == nil {
 		return nil, errors.New("task required")
 	}
-	return r.executeTask(ctx, task)
+	return r.runCoordinated(ctx, task.ID, func(runCtx context.Context) (*execution.Result, error) {
+		return r.executeTask(runCtx, task)
+	})
 }
 
 // ActiveWorkflowID returns the lifecycle workflow ID of the run currently
@@ -973,6 +996,49 @@ func (r *Runtime) clearActiveWorkflowID(id string) {
 		r.activeWorkflowID = ""
 	}
 	r.activeWorkflowMu.Unlock()
+}
+
+// ActiveAgent returns the workflow executor serving turns, or nil on a
+// degraded boot. Reads go through the mutex so a hot-swap (SwitchAgent) never
+// races an executing turn.
+func (r *Runtime) ActiveAgent() agentgraph.WorkflowExecutor {
+	if r == nil {
+		return nil
+	}
+	r.agentMu.RLock()
+	defer r.agentMu.RUnlock()
+	return r.agent
+}
+
+// setAgent installs the workflow executor under the agent mutex.
+func (r *Runtime) setAgent(a agentgraph.WorkflowExecutor) {
+	r.agentMu.Lock()
+	r.agent = a
+	r.agentMu.Unlock()
+}
+
+// runCoordinated executes one run under the runtime's quiesce coordinator: the
+// run context derives from the coordinator-owned parent (never the caller's
+// bare context), is additionally cancelled when the caller's context is, and
+// is deregistered when the run finishes. A run attempted during shutdown is
+// refused with ErrRuntimeShuttingDown rather than tearing stores down
+// underneath it.
+func (r *Runtime) runCoordinated(ctx context.Context, taskID string, run func(context.Context) (*execution.Result, error)) (*execution.Result, error) {
+	if r.coordinator == nil {
+		return run(ctx)
+	}
+	base, done, ok := r.coordinator.Register(taskID)
+	if !ok {
+		return nil, fmt.Errorf("%w: intake closed", ErrRuntimeShuttingDown)
+	}
+	runCtx, cancel := context.WithCancel(base)
+	stopCaller := context.AfterFunc(ctx, cancel)
+	defer func() {
+		stopCaller()
+		cancel()
+		done()
+	}()
+	return run(runCtx)
 }
 
 // ErrRuntimeDegraded reports a task submission against a runtime that failed to
@@ -1029,7 +1095,8 @@ func (r *Runtime) emitTaskRejected(ctx context.Context, taskID, reason string) {
 // bookkeeping (workflow + run records, active workflow ID tracking), agent
 // execution, and working-memory eviction.
 func (r *Runtime) executeTask(ctx context.Context, task *execution.Task) (*execution.Result, error) {
-	if r.Agent == nil {
+	agent := r.ActiveAgent()
+	if agent == nil {
 		// A degraded boot deliberately produces Agent == nil (newDegradedRuntime).
 		// Reject before envelope assembly and lifecycle bookkeeping so the task
 		// leaves no interaction envelope and no workflow/run records.
@@ -1050,11 +1117,11 @@ func (r *Runtime) executeTask(ctx context.Context, task *execution.Task) (*execu
 		}
 	}
 	r.trackInteractionEnvelope(task.ID, env)
-	if err := r.Agent.Initialize(&execution.Config{Workspace: r.Config.Workspace}); err != nil {
+	if err := agent.Initialize(&execution.Config{Workspace: r.Config.Workspace}); err != nil {
 		return nil, fmt.Errorf("initialize agent: %w", err)
 	}
 	workflowID, runID := r.beginWorkflow(task)
-	result, err := r.Agent.Execute(r.beginTurn(ctx, env), task, env)
+	result, err := agent.Execute(r.beginTurn(ctx, env), task, env)
 	// Task completion ends the task's working-memory lifetime: the result is
 	// in hand, so the per-task entries are released (idempotent no-op when
 	// the checkpoint boundary already evicted them).
@@ -1324,10 +1391,11 @@ func (r *Runtime) resumeInteractionTask(ctx context.Context, env *contextdata.En
 	if !ok || task == nil {
 		return nil, fmt.Errorf("task input has unexpected type %T", value)
 	}
-	if r.Agent == nil {
+	agent := r.ActiveAgent()
+	if agent == nil {
 		return nil, &ErrRuntimeDegraded{Reason: r.degradationReason()}
 	}
-	return r.Agent.Execute(r.beginTurn(ctx, env), task, env)
+	return agent.Execute(r.beginTurn(ctx, env), task, env)
 }
 
 func findInteractionFrame(env *contextdata.Envelope, frameID string) (*interaction.InteractionFrame, bool) {

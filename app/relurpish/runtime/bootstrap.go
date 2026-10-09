@@ -111,7 +111,11 @@ func BootstrapAgentRuntime(workspace string, opts AgentBootstrapOptions) (*Boots
 }
 
 // ReloadRuntimeForWorkspace rebuilds the runtime against a new workspace root
-// and closes the previous runtime only after the replacement succeeds.
+// and closes the previous runtime only after the replacement succeeds. The
+// previous runtime's Close quiesces its registered runs (drain → cancel →
+// reap) before closing stores, and the process-wide stdlib log writer is
+// repointed at the new runtime's workspace log file first so no log line can
+// land in the old file after it closes.
 func ReloadRuntimeForWorkspace(ctx context.Context, current *Runtime, workspace string) (*Runtime, error) {
 	if current == nil {
 		return New(ctx, ConfigForWorkspace(Config{}, workspace), config.Secrets{})
@@ -121,6 +125,7 @@ func ReloadRuntimeForWorkspace(ctx context.Context, current *Runtime, workspace 
 	if err != nil {
 		return nil, err
 	}
+	RepointStdlibLog(newRT)
 	if err := current.Close(ctx); err != nil {
 		_ = newRT.Close(ctx)
 		return nil, err

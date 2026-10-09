@@ -61,6 +61,10 @@ func main() {
 	cfg.Editor = envOverrides.Editor
 	cfg.SharedRoot = config.ResolveSharedRoot(envOverrides.XDGDataHome)
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	// The stdlib logger writes through the process-wide swappable writer so a
+	// workspace reload retargets it instead of leaving it pointed at a closed
+	// log file.
+	log.SetOutput(runtimesvc.StdlibLogWriter())
 	root := newRootCmd()
 	err := root.ExecuteContext(ctx)
 	cancel()
@@ -185,16 +189,13 @@ func runWithRuntime(cmd *cobra.Command, fn func(context.Context, *runtimesvc.Run
 	if err != nil {
 		return err
 	}
+	runtimesvc.RepointStdlibLog(rt)
 	defer func() { _ = rt.Close(context.Background()) }()
 	return fn(ctx, rt)
 }
 
 // runTUI launches the Bubble Tea program.
 func runTUI(ctx context.Context, rt *runtimesvc.Runtime) error {
-	// Prevent stdlib logger output (used by some debug paths) from drawing over the TUI.
-	if rt != nil && rt.AgentWorkspace() != nil && rt.AgentWorkspace().Logger != nil {
-		log.SetOutput(rt.AgentWorkspace().Logger.Writer())
-	}
 	if rt != nil {
 		tui.SetEditor(rt.Config.Editor)
 	}

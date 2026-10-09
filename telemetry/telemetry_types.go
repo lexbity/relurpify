@@ -82,6 +82,20 @@ const (
 	EventTaskRejected EventType = "task.rejected"
 )
 
+// Runtime-lifecycle events emitted by the relurpish runtime's quiesce path
+// (Phase 7): shutdown accounting surfaces what Close waited for, cancelled,
+// and abandoned so "the store closed under an active writer" is observable
+// instead of silent.
+const (
+	// EventShutdownDrain reports one Runtime.Close quiesce outcome.
+	EventShutdownDrain EventType = "runtime.shutdown_drain"
+	// EventShutdownAbandoned names a run that outlived its shutdown wait.
+	EventShutdownAbandoned EventType = "runtime.shutdown_abandoned"
+	// EventCheckpointMirrorFailed reports a durable checkpoint mirror write
+	// failure: a mirror error is never reported as a successful checkpoint.
+	EventCheckpointMirrorFailed EventType = "checkpoint.mirror_failed"
+)
+
 // Paradigm lifecycle events emitted by the cognitionzoo paradigms (HTN,
 // reflection, planner) through the standard telemetry.Telemetry +
 // StampCorrelation path (spec §1.7). They use the same dot-qualified spelling

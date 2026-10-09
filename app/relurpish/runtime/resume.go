@@ -65,7 +65,9 @@ func (r *Runtime) ResumeSession(ctx context.Context, workflowID, followUp string
 		Type:        string(execution.TaskTypeExecute),
 		Metadata:    map[string]any{"resume_workflow": seed.workflowID},
 	}
-	if _, err := r.executeTask(ctx, task); err != nil {
+	if _, err := r.runCoordinated(ctx, task.ID, func(runCtx context.Context) (*execution.Result, error) {
+		return r.executeTask(runCtx, task)
+	}); err != nil {
 		return nil, err
 	}
 	return &ResumeOutcome{TaskID: task.ID, WorkflowID: seed.workflowID}, nil

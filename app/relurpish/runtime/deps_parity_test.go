@@ -64,8 +64,8 @@ func TestSwitchAgentPathBuildsEuclo(t *testing.T) {
 	if err := rt.applyResolvedAgentState("euclo", rt.Workspace.EffectiveContract, rt.Workspace.CompiledPolicy); err != nil {
 		t.Fatalf("apply resolved agent state: %v", err)
 	}
-	if _, ok := rt.Agent.(*euclo.Agent); !ok {
-		t.Fatalf("rt.Agent is %T, want *euclo.Agent", rt.Agent)
+	if _, ok := rt.ActiveAgent().(*euclo.Agent); !ok {
+		t.Fatalf("rt.Agent is %T, want *euclo.Agent", rt.ActiveAgent())
 	}
 }
 

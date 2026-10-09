@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -176,35 +177,49 @@ type RuntimeAdapter interface {
 type runtimeAdapter struct {
 	backendStateMu sync.Mutex
 	backendState   string
-	rt             *runtimesvc.Runtime
+	// rt is the live runtime, held atomically so a workspace reload can swap
+	// it without racing TUI reads of the adapter (the interface-two-word
+	// hazard the designers warn about: the adapter stores the concrete
+	// *runtimesvc.Runtime pointer atomically, never a two-word value).
+	rt atomic.Pointer[runtimesvc.Runtime]
 }
 
 func newRuntimeAdapter(rt *runtimesvc.Runtime) RuntimeAdapter {
 	if rt == nil {
 		return nil
 	}
-	return &runtimeAdapter{rt: rt}
+	a := &runtimeAdapter{}
+	a.rt.Store(rt)
+	return a
+}
+
+// currentRuntime returns the live runtime or nil when none is set.
+func (r *runtimeAdapter) currentRuntime() *runtimesvc.Runtime {
+	if r == nil {
+		return nil
+	}
+	return r.rt.Load()
 }
 
 func (r *runtimeAdapter) ExecuteInstruction(ctx context.Context, instruction string, taskType execution.TaskType, metadata map[string]any) (*execution.Result, error) {
-	if r == nil || r.rt == nil {
+	if r == nil || r.currentRuntime() == nil {
 		return nil, fmt.Errorf("runtime unavailable")
 	}
-	return r.rt.ExecuteInstruction(ctx, instruction, taskType, metadata)
+	return r.currentRuntime().ExecuteInstruction(ctx, instruction, taskType, metadata)
 }
 
 func (r *runtimeAdapter) AvailableAgents() []string {
-	if r == nil || r.rt == nil {
+	if r == nil || r.currentRuntime() == nil {
 		return nil
 	}
-	return r.rt.AvailableAgents()
+	return r.currentRuntime().AvailableAgents()
 }
 
 func (r *runtimeAdapter) SwitchAgent(name string) error {
-	if r == nil || r.rt == nil {
+	if r == nil || r.currentRuntime() == nil {
 		return fmt.Errorf("runtime unavailable")
 	}
-	return r.rt.SwitchAgent(name)
+	return r.currentRuntime().SwitchAgent(name)
 }
 
 func (r *runtimeAdapter) SessionInfo() SessionInfo {
@@ -218,16 +233,16 @@ func (r *runtimeAdapter) SessionInfo() SessionInfo {
 		Strategy:      "",
 		MaxTokens:     100000,
 	}
-	if r == nil || r.rt == nil {
+	if r == nil || r.currentRuntime() == nil {
 		return info
 	}
-	cfg := r.rt.Config
+	cfg := r.currentRuntime().Config
 	info.Workspace = cfg.Workspace
 	info.Provider = cfg.InferenceProvider
 	info.Model = cfg.InferenceModel
 	info.Agent = cfg.AgentLabel()
 
-	ws := r.rt.AgentWorkspace()
+	ws := r.currentRuntime().AgentWorkspace()
 	if ws == nil {
 		return info
 	}
@@ -256,7 +271,7 @@ func (r *runtimeAdapter) SessionInfo() SessionInfo {
 			info.MaxTokens = spec.Context.MaxTokens
 		}
 	}
-	info.Mode, info.Strategy = describeAgentRuntime(r.rt.Agent)
+	info.Mode, info.Strategy = describeAgentRuntime(r.currentRuntime().ActiveAgent())
 	info.ExecutionMode = string(r.ExecutionMode())
 	return info
 }
@@ -275,7 +290,7 @@ func (r *runtimeAdapter) ProbeBackendHealth(ctx context.Context) string {
 	state := "unknown(probe-timeout)"
 	probeCtx, cancel := context.WithTimeout(ctx, probeTimeoutBounds)
 	defer cancel()
-	if ws := r.rt.AgentWorkspace(); ws != nil {
+	if ws := r.currentRuntime().AgentWorkspace(); ws != nil {
 		if mb, ok := ws.Backend.(llm.ManagedBackend); ok {
 			if health, err := mb.Health(probeCtx); err == nil && health != nil {
 				state = string(health.State)
@@ -298,10 +313,10 @@ func (r *runtimeAdapter) cachedBackendState() string {
 }
 
 func (r *runtimeAdapter) ContractSummary() *ContractSummary {
-	if r == nil || r.rt == nil {
+	if r == nil || r.currentRuntime() == nil {
 		return nil
 	}
-	ws := r.rt.AgentWorkspace()
+	ws := r.currentRuntime().AgentWorkspace()
 	if ws == nil || ws.EffectiveContract == nil {
 		return nil
 	}
@@ -314,8 +329,8 @@ func (r *runtimeAdapter) ContractSummary() *ContractSummary {
 		FailedSkills:    nil,
 		AdmissionCount:  len(ws.CapabilityAdmissions),
 	}
-	if r.rt.Tools != nil {
-		summary.CapabilityCount = len(r.rt.Tools.AllCapabilities())
+	if r.currentRuntime().Tools != nil {
+		summary.CapabilityCount = len(r.currentRuntime().Tools.AllCapabilities())
 	}
 	for _, admission := range ws.CapabilityAdmissions {
 		if !admission.Admitted {
@@ -329,10 +344,10 @@ func (r *runtimeAdapter) ContractSummary() *ContractSummary {
 }
 
 func (r *runtimeAdapter) CapabilityAdmissions() []CapabilityAdmissionInfo {
-	if r == nil || r.rt == nil {
+	if r == nil || r.currentRuntime() == nil {
 		return nil
 	}
-	ws := r.rt.AgentWorkspace()
+	ws := r.currentRuntime().AgentWorkspace()
 	if ws == nil {
 		return nil
 	}
@@ -367,12 +382,12 @@ func (r *runtimeAdapter) ResolveContextFiles(ctx context.Context, files []string
 		Contents: make([]ContextFileContent, 0, len(paths)),
 		Denied:   make(map[string]string),
 	}
-	if r == nil || r.rt == nil {
+	if r == nil || r.currentRuntime() == nil {
 		res.Allowed = paths
 		return res
 	}
-	workspace := r.rt.Config.Workspace
-	ws := r.rt.AgentWorkspace()
+	workspace := r.currentRuntime().Config.Workspace
+	ws := r.currentRuntime().AgentWorkspace()
 	var perm permissions.PermissionManager
 	if ws != nil && ws.Registration != nil {
 		perm = ws.Registration.Permissions
@@ -429,25 +444,25 @@ func (r *runtimeAdapter) ResolveContextFiles(ctx context.Context, files []string
 }
 
 func (r *runtimeAdapter) ExecuteInstructionStream(ctx context.Context, instruction string, taskType execution.TaskType, metadata map[string]any, callback func(string)) (*execution.Result, error) {
-	if r == nil || r.rt == nil {
+	if r == nil || r.currentRuntime() == nil {
 		return nil, fmt.Errorf("runtime unavailable")
 	}
-	return r.rt.ExecuteInstructionStream(ctx, instruction, taskType, metadata, callback)
+	return r.currentRuntime().ExecuteInstructionStream(ctx, instruction, taskType, metadata, callback)
 }
 
 func (r *runtimeAdapter) SubmitTurn(ctx context.Context, instruction string, taskType execution.TaskType, metadata map[string]any, callback func(string)) (*execution.Result, error) {
-	if r == nil || r.rt == nil {
+	if r == nil || r.currentRuntime() == nil {
 		return nil, fmt.Errorf("runtime unavailable")
 	}
-	return r.rt.SubmitTurn(ctx, instruction, taskType, metadata, callback)
+	return r.currentRuntime().SubmitTurn(ctx, instruction, taskType, metadata, callback)
 }
 
 func (r *runtimeAdapter) InferenceModels(ctx context.Context) ([]string, error) {
-	if r == nil || r.rt == nil {
+	if r == nil || r.currentRuntime() == nil {
 		return nil, fmt.Errorf("runtime unavailable")
 	}
 	var models []string
-	ws := r.rt.AgentWorkspace()
+	ws := r.currentRuntime().AgentWorkspace()
 	if ws != nil && ws.Backend != nil {
 		if mb, ok := ws.Backend.(llm.ManagedBackend); ok {
 			backendModels, err := mb.ListModels(ctx)
@@ -460,7 +475,7 @@ func (r *runtimeAdapter) InferenceModels(ctx context.Context) ([]string, error) 
 			return models, nil
 		}
 	}
-	backend, err := llm.New(llm.ProviderConfigFromRuntimeConfig(r.rt.Config), r.rt.ProviderSecrets())
+	backend, err := llm.New(llm.ProviderConfigFromRuntimeConfig(r.currentRuntime().Config), r.currentRuntime().ProviderSecrets())
 	if err != nil {
 		return nil, err
 	}
@@ -476,28 +491,28 @@ func (r *runtimeAdapter) InferenceModels(ctx context.Context) ([]string, error) 
 }
 
 func (r *runtimeAdapter) RecordingMode() string {
-	if r == nil || r.rt == nil {
+	if r == nil || r.currentRuntime() == nil {
 		return "off"
 	}
-	if r.rt.Config.RecordingMode != "" {
-		return r.rt.Config.RecordingMode
+	if r.currentRuntime().Config.RecordingMode != "" {
+		return r.currentRuntime().Config.RecordingMode
 	}
 	return "off"
 }
 
 func (r *runtimeAdapter) SetRecordingMode(mode string) error {
-	if r == nil || r.rt == nil {
+	if r == nil || r.currentRuntime() == nil {
 		return fmt.Errorf("runtime unavailable")
 	}
-	r.rt.Config.RecordingMode = mode
+	r.currentRuntime().Config.RecordingMode = mode
 	return nil
 }
 
 func (r *runtimeAdapter) SaveModel(model string) error {
-	if r == nil || r.rt == nil {
+	if r == nil || r.currentRuntime() == nil {
 		return fmt.Errorf("runtime unavailable")
 	}
-	workspace := strings.TrimSpace(r.rt.Config.Workspace)
+	workspace := strings.TrimSpace(r.currentRuntime().Config.Workspace)
 	if workspace == "" {
 		return fmt.Errorf("workspace not set")
 	}
@@ -507,14 +522,14 @@ func (r *runtimeAdapter) SaveModel(model string) error {
 		profile = config.RuntimeProviderConfig{}
 	}
 	if profile.Provider == "" {
-		profile.Provider = strings.TrimSpace(r.rt.Config.InferenceProvider)
+		profile.Provider = strings.TrimSpace(r.currentRuntime().Config.InferenceProvider)
 	}
 	if profile.Provider == "" {
 		profile.Provider = strings.TrimSpace(r.SessionInfo().Provider)
 	}
-	profile.Endpoint = strings.TrimSpace(r.rt.Config.InferenceEndpoint)
+	profile.Endpoint = strings.TrimSpace(r.currentRuntime().Config.InferenceEndpoint)
 	profile.Model = strings.TrimSpace(model)
-	profile.NativeToolCalling = r.rt.Config.InferenceNativeToolCalling
+	profile.NativeToolCalling = r.currentRuntime().Config.InferenceNativeToolCalling
 	if profile.Timeout == "" {
 		profile.Timeout = "30s"
 	}
@@ -522,12 +537,12 @@ func (r *runtimeAdapter) SaveModel(model string) error {
 	if _, err := config.SaveRuntimeProviderConfigWithBackup(path, profile); err != nil {
 		return err
 	}
-	r.rt.Config.InferenceProvider = profile.Provider
-	r.rt.Config.InferenceEndpoint = profile.Endpoint
-	r.rt.Config.InferenceModel = model
-	r.rt.Config.InferenceNativeToolCalling = profile.NativeToolCalling
-	r.rt.WorkspaceConfig.Provider = profile.Provider
-	r.rt.WorkspaceConfig.Model = model
+	r.currentRuntime().Config.InferenceProvider = profile.Provider
+	r.currentRuntime().Config.InferenceEndpoint = profile.Endpoint
+	r.currentRuntime().Config.InferenceModel = model
+	r.currentRuntime().Config.InferenceNativeToolCalling = profile.NativeToolCalling
+	r.currentRuntime().WorkspaceConfig.Provider = profile.Provider
+	r.currentRuntime().WorkspaceConfig.Model = model
 	return nil
 }
 
@@ -544,11 +559,11 @@ func (r *runtimeAdapter) CancelWorkflow(workflowID string) error {
 }
 
 func (r *runtimeAdapter) InvokeCapability(ctx context.Context, name string, args map[string]any) (*ports.ToolResult, error) {
-	if r == nil || r.rt == nil || r.rt.Tools == nil {
+	if r == nil || r.currentRuntime() == nil || r.currentRuntime().Tools == nil {
 		return nil, fmt.Errorf("capability registry unavailable")
 	}
 	env := contextdata.NewEnvelope("", "")
-	return r.rt.Tools.InvokeCapability(ctx, env.State(), name, args)
+	return r.currentRuntime().Tools.InvokeCapability(ctx, env.State(), name, args)
 }
 
 func (r *runtimeAdapter) getWorkflowResourceDetail(uri string) (*ResourceDetail, error) {
@@ -556,10 +571,10 @@ func (r *runtimeAdapter) getWorkflowResourceDetail(uri string) (*ResourceDetail,
 }
 
 func (r *runtimeAdapter) ListApprovals() []ApprovalInfo {
-	if r == nil || r.rt == nil {
+	if r == nil || r.currentRuntime() == nil {
 		return nil
 	}
-	requests := r.rt.PendingHITL()
+	requests := r.currentRuntime().PendingHITL()
 	infos := make([]ApprovalInfo, 0, len(requests))
 	for _, request := range requests {
 		if request == nil {
@@ -596,10 +611,10 @@ func (r *runtimeAdapter) ListApprovals() []ApprovalInfo {
 }
 
 func (r *runtimeAdapter) ListCapabilities() []CapabilityInfo {
-	if r == nil || r.rt == nil || r.rt.Tools == nil {
+	if r == nil || r.currentRuntime() == nil || r.currentRuntime().Tools == nil {
 		return nil
 	}
-	caps := r.rt.Tools.AllCapabilities()
+	caps := r.currentRuntime().Tools.AllCapabilities()
 	out := make([]CapabilityInfo, 0, len(caps))
 	for _, cap := range caps {
 		out = append(out, CapabilityInfo{
@@ -612,10 +627,10 @@ func (r *runtimeAdapter) ListCapabilities() []CapabilityInfo {
 }
 
 func (r *runtimeAdapter) PromptRegistry() prompt.Registry {
-	if r == nil || r.rt == nil || r.rt.AgentWorkspace() == nil {
+	if r == nil || r.currentRuntime() == nil || r.currentRuntime().AgentWorkspace() == nil {
 		return nil
 	}
-	return r.rt.AgentWorkspace().Environment.PromptRegistry
+	return r.currentRuntime().AgentWorkspace().Environment.PromptRegistry
 }
 
 func (r *runtimeAdapter) ListPrompts() []PromptInfo {
@@ -693,7 +708,7 @@ func (r *runtimeAdapter) ListResources(workflowRefs []string) []ResourceInfo {
 }
 
 func (r *runtimeAdapter) GetCapabilityDetail(id string) (*CapabilityDetail, error) {
-	if r == nil || r.rt == nil || r.rt.Tools == nil {
+	if r == nil || r.currentRuntime() == nil || r.currentRuntime().Tools == nil {
 		return nil, fmt.Errorf("runtime unavailable")
 	}
 	id = strings.TrimSpace(id)
@@ -722,7 +737,7 @@ func (r *runtimeAdapter) GetCapabilityDetail(id string) (*CapabilityDetail, erro
 }
 
 func (r *runtimeAdapter) GetPromptDetail(id string) (*PromptDetail, error) {
-	if r == nil || r.rt == nil {
+	if r == nil || r.currentRuntime() == nil {
 		return nil, fmt.Errorf("runtime unavailable")
 	}
 	id = strings.TrimSpace(id)
@@ -781,7 +796,7 @@ func (r *runtimeAdapter) GetPromptDetail(id string) (*PromptDetail, error) {
 }
 
 func (r *runtimeAdapter) GetResourceDetail(idOrURI string) (*ResourceDetail, error) {
-	if r == nil || r.rt == nil {
+	if r == nil || r.currentRuntime() == nil {
 		return nil, fmt.Errorf("runtime unavailable")
 	}
 	idOrURI = strings.TrimSpace(idOrURI)
@@ -860,14 +875,14 @@ func (r *runtimeAdapter) ListLiveSessions() []LiveProviderSessionInfo {
 }
 
 func (r *runtimeAdapter) GetApprovalDetail(id string) (*ApprovalDetail, error) {
-	if r == nil || r.rt == nil {
+	if r == nil || r.currentRuntime() == nil {
 		return nil, fmt.Errorf("runtime unavailable")
 	}
 	id = strings.TrimSpace(id)
 	if id == "" {
 		return nil, fmt.Errorf("approval id required")
 	}
-	for _, request := range r.rt.PendingHITL() {
+	for _, request := range r.currentRuntime().PendingHITL() {
 		if request == nil || request.ID != id {
 			continue
 		}
@@ -896,31 +911,31 @@ func (r *runtimeAdapter) GetApprovalDetail(id string) (*ApprovalDetail, error) {
 }
 
 func (r *runtimeAdapter) GetClassPolicies() map[string]agentspec.AgentPermissionLevel {
-	if r == nil || r.rt == nil || r.rt.Tools == nil {
+	if r == nil || r.currentRuntime() == nil || r.currentRuntime().Tools == nil {
 		return nil
 	}
-	return r.rt.Tools.GetClassPolicies()
+	return r.currentRuntime().Tools.GetClassPolicies()
 }
 
 func (r *runtimeAdapter) SetToolPolicyLive(name string, level agentspec.AgentPermissionLevel) {
-	if r == nil || r.rt == nil || r.rt.Tools == nil {
+	if r == nil || r.currentRuntime() == nil || r.currentRuntime().Tools == nil {
 		return
 	}
-	r.rt.Tools.UpdateToolPolicy(name, agentspec.ToolPolicy{Execute: level})
+	r.currentRuntime().Tools.UpdateToolPolicy(name, agentspec.ToolPolicy{Execute: level})
 }
 
 func (r *runtimeAdapter) SetClassPolicyLive(class string, level agentspec.AgentPermissionLevel) {
-	if r == nil || r.rt == nil || r.rt.Tools == nil {
+	if r == nil || r.currentRuntime() == nil || r.currentRuntime().Tools == nil {
 		return
 	}
-	r.rt.Tools.UpdateClassPolicy(class, level)
+	r.currentRuntime().Tools.UpdateClassPolicy(class, level)
 }
 
 func (r *runtimeAdapter) SaveToolPolicy(toolName string, level agentspec.AgentPermissionLevel) error {
-	if r == nil || r.rt == nil {
+	if r == nil || r.currentRuntime() == nil {
 		return fmt.Errorf("runtime unavailable")
 	}
-	workspace := r.rt.Config.Workspace
+	workspace := r.currentRuntime().Config.Workspace
 	localtoolPath := security.LocalToolPolicyPath(workspace)
 	policy, err := security.LoadLocalToolPolicy("", workspace, config.StrictDecode)
 	if err != nil {
@@ -934,10 +949,10 @@ func (r *runtimeAdapter) SaveToolPolicy(toolName string, level agentspec.AgentPe
 }
 
 func (r *runtimeAdapter) LoadSandboxDocument() (*config.Document, error) {
-	if r == nil || r.rt == nil {
+	if r == nil || r.currentRuntime() == nil {
 		return nil, fmt.Errorf("runtime unavailable")
 	}
-	ws := r.rt.AgentWorkspace()
+	ws := r.currentRuntime().AgentWorkspace()
 	if ws == nil || ws.EffectiveContract == nil {
 		return &config.Document{}, nil
 	}
@@ -964,13 +979,13 @@ func (r *runtimeAdapter) LoadSandboxDocument() (*config.Document, error) {
 }
 
 func (r *runtimeAdapter) SaveSandboxDocument(doc *config.Document) (string, error) {
-	if r == nil || r.rt == nil {
+	if r == nil || r.currentRuntime() == nil {
 		return "", fmt.Errorf("runtime unavailable")
 	}
 	if doc == nil {
 		return "", fmt.Errorf("document required")
 	}
-	workspace := r.rt.Config.Workspace
+	workspace := r.currentRuntime().Config.Workspace
 
 	// Write tool execution policy changes to security/localtool.policy.yaml.
 	if agentNode, ok := doc.Section("agent"); ok {
@@ -996,25 +1011,25 @@ func (r *runtimeAdapter) SaveSandboxDocument(doc *config.Document) (string, erro
 }
 
 func (r *runtimeAdapter) SandboxBackend() string {
-	if r == nil || r.rt == nil {
+	if r == nil || r.currentRuntime() == nil {
 		return ""
 	}
-	return strings.TrimSpace(r.rt.Config.SandboxBackend)
+	return strings.TrimSpace(r.currentRuntime().Config.SandboxBackend)
 }
 
 func (r *runtimeAdapter) ExecutionMode() config.ExecutionMode {
-	if r == nil || r.rt == nil {
+	if r == nil || r.currentRuntime() == nil {
 		return config.ExecutionModeStaged
 	}
-	mode := config.NormalizeExecutionMode(r.rt.WorkspaceConfig.ExecutionMode)
-	if mode == config.ExecutionModeStaged && strings.TrimSpace(r.rt.WorkspaceConfig.ExecutionMode) == "" {
+	mode := config.NormalizeExecutionMode(r.currentRuntime().WorkspaceConfig.ExecutionMode)
+	if mode == config.ExecutionModeStaged && strings.TrimSpace(r.currentRuntime().WorkspaceConfig.ExecutionMode) == "" {
 		return config.ExecutionModeStaged
 	}
 	return mode
 }
 
 func (r *runtimeAdapter) SaveSandboxBackend(backend string) (string, error) {
-	if r == nil || r.rt == nil {
+	if r == nil || r.currentRuntime() == nil {
 		return "", fmt.Errorf("runtime unavailable")
 	}
 	backend = strings.ToLower(strings.TrimSpace(backend))
@@ -1023,21 +1038,21 @@ func (r *runtimeAdapter) SaveSandboxBackend(backend string) (string, error) {
 	default:
 		return "", fmt.Errorf("unsupported sandbox backend %q", backend)
 	}
-	r.rt.Config.SandboxBackend = backend
-	r.rt.WorkspaceConfig.SandboxBackend = backend
-	path := r.rt.Config.ConfigPath
+	r.currentRuntime().Config.SandboxBackend = backend
+	r.currentRuntime().WorkspaceConfig.SandboxBackend = backend
+	path := r.currentRuntime().Config.ConfigPath
 	if path == "" {
 		return "", fmt.Errorf("config path not set")
 	}
 	return config.SaveRuntimeWorkspaceConfigWithBackup(path, config.RuntimeWorkspaceConfig{
-		Model:               r.rt.Config.InferenceModel,
-		Provider:            r.rt.Config.InferenceProvider,
-		TapePath:            r.rt.Config.InferenceTapePath,
+		Model:               r.currentRuntime().Config.InferenceModel,
+		Provider:            r.currentRuntime().Config.InferenceProvider,
+		TapePath:            r.currentRuntime().Config.InferenceTapePath,
 		SandboxBackend:      backend,
 		ExecutionMode:       string(r.ExecutionMode()),
-		Agents:              append([]string(nil), r.rt.WorkspaceConfig.Agents...),
-		AllowedCapabilities: append([]config.RuntimeCapabilitySelector(nil), r.rt.WorkspaceConfig.AllowedCapabilities...),
-		NodeRegistration:    r.rt.WorkspaceConfig.NodeRegistration,
+		Agents:              append([]string(nil), r.currentRuntime().WorkspaceConfig.Agents...),
+		AllowedCapabilities: append([]config.RuntimeCapabilitySelector(nil), r.currentRuntime().WorkspaceConfig.AllowedCapabilities...),
+		NodeRegistration:    r.currentRuntime().WorkspaceConfig.NodeRegistration,
 		LastUpdated:         time.Now().Unix(),
 	})
 }
@@ -1068,61 +1083,61 @@ func inferApprovalKind(request fauthorization.PermissionRequest) string {
 }
 
 func (r *runtimeAdapter) SessionArtifacts() SessionArtifacts {
-	if r == nil || r.rt == nil {
+	if r == nil || r.currentRuntime() == nil {
 		return SessionArtifacts{}
 	}
 	return SessionArtifacts{
-		TelemetryPath: r.rt.Config.TelemetryPath,
-		LogPath:       r.rt.Config.LogPath,
+		TelemetryPath: r.currentRuntime().Config.TelemetryPath,
+		LogPath:       r.currentRuntime().Config.LogPath,
 	}
 }
 
 func (r *runtimeAdapter) PendingHITL() []*fauthorization.PermissionRequest {
-	if r == nil || r.rt == nil {
+	if r == nil || r.currentRuntime() == nil {
 		return nil
 	}
-	return r.rt.PendingHITL()
+	return r.currentRuntime().PendingHITL()
 }
 
 func (r *runtimeAdapter) ApproveHITL(requestID, approver string, scope policy.GrantScope, duration time.Duration) error {
-	if r == nil || r.rt == nil {
+	if r == nil || r.currentRuntime() == nil {
 		return fmt.Errorf("runtime unavailable")
 	}
-	return r.rt.ApproveHITL(requestID, approver, scope, duration)
+	return r.currentRuntime().ApproveHITL(requestID, approver, scope, duration)
 }
 
 func (r *runtimeAdapter) DenyHITL(requestID, reason string) error {
-	if r == nil || r.rt == nil {
+	if r == nil || r.currentRuntime() == nil {
 		return fmt.Errorf("runtime unavailable")
 	}
-	return r.rt.DenyHITL(requestID, reason)
+	return r.currentRuntime().DenyHITL(requestID, reason)
 }
 
 func (r *runtimeAdapter) SubscribeHITL() (<-chan fauthorization.HITLEvent, func()) {
-	if r == nil || r.rt == nil {
+	if r == nil || r.currentRuntime() == nil {
 		return nil, func() {}
 	}
-	return r.rt.SubscribeHITL()
+	return r.currentRuntime().SubscribeHITL()
 }
 
 func (r *runtimeAdapter) SubscribeExecutionEvents() (<-chan telemetry.Event, func()) {
-	if r == nil || r.rt == nil {
+	if r == nil || r.currentRuntime() == nil {
 		ch := make(chan telemetry.Event)
 		close(ch)
 		return ch, func() {}
 	}
-	return r.rt.SubscribeExecutionEvents()
+	return r.currentRuntime().SubscribeExecutionEvents()
 }
 
 func (r *runtimeAdapter) Diagnostics() DiagnosticsInfo {
-	if r == nil || r.rt == nil {
+	if r == nil || r.currentRuntime() == nil {
 		return DiagnosticsInfo{}
 	}
 	d := DiagnosticsInfo{}
 
 	// Capabilities.
-	if r.rt.Tools != nil {
-		d.CapabilitiesTotal = len(r.rt.Tools.AllCapabilities())
+	if r.currentRuntime().Tools != nil {
+		d.CapabilitiesTotal = len(r.currentRuntime().Tools.AllCapabilities())
 	}
 
 	// Pending approvals and live providers.
@@ -1135,12 +1150,12 @@ func (r *runtimeAdapter) Diagnostics() DiagnosticsInfo {
 	d.ActiveProfile = info.Profile
 	d.ProfileReason = info.ProfileReason
 	d.ProfileSource = info.ProfileSource
-	d.ManifestFingerprint = r.rt.ManifestFingerprint()
-	if r.rt.Config.Workspace != "" {
-		d.ProtectedPaths = config.New(r.rt.Config.Workspace).GovernanceRoots()
+	d.ManifestFingerprint = r.currentRuntime().ManifestFingerprint()
+	if r.currentRuntime().Config.Workspace != "" {
+		d.ProtectedPaths = config.New(r.currentRuntime().Config.Workspace).GovernanceRoots()
 	}
-	d.DeprecationNotices = r.rt.ManifestDeprecationNotices()
-	if ws := r.rt.AgentWorkspace(); ws != nil {
+	d.DeprecationNotices = r.currentRuntime().ManifestDeprecationNotices()
+	if ws := r.currentRuntime().AgentWorkspace(); ws != nil {
 		d.ManifestPolicy = agentSpecPolicySummary(ws.AgentSpec)
 	}
 
@@ -1165,7 +1180,7 @@ func agentSpecPolicySummary(spec *agentspec.AgentRuntimeSpec) string {
 }
 
 func (r *runtimeAdapter) ApplyChatPolicy(subtab SubTabID) error {
-	if r == nil || r.rt == nil {
+	if r == nil || r.currentRuntime() == nil {
 		return nil
 	}
 	// The policy is a TUI hint; no runtime enforcement needed beyond
@@ -1176,10 +1191,10 @@ func (r *runtimeAdapter) ApplyChatPolicy(subtab SubTabID) error {
 
 // Service management methods
 func (r *runtimeAdapter) ListServices() []ServiceInfo {
-	if r == nil || r.rt == nil || r.rt.AgentWorkspace() == nil || r.rt.AgentWorkspace().ServiceManager == nil {
+	if r == nil || r.currentRuntime() == nil || r.currentRuntime().AgentWorkspace() == nil || r.currentRuntime().AgentWorkspace().ServiceManager == nil {
 		return nil
 	}
-	snapshots := r.rt.AgentWorkspace().ServiceManager.Snapshot()
+	snapshots := r.currentRuntime().AgentWorkspace().ServiceManager.Snapshot()
 	infos := make([]ServiceInfo, 0, len(snapshots))
 	for _, snapshot := range snapshots {
 		status := ServiceStatusStopped
@@ -1203,39 +1218,39 @@ func (r *runtimeAdapter) ListServices() []ServiceInfo {
 }
 
 func (r *runtimeAdapter) StopService(id string) error {
-	if r == nil || r.rt == nil || r.rt.AgentWorkspace() == nil || r.rt.AgentWorkspace().ServiceManager == nil {
+	if r == nil || r.currentRuntime() == nil || r.currentRuntime().AgentWorkspace() == nil || r.currentRuntime().AgentWorkspace().ServiceManager == nil {
 		return fmt.Errorf("runtime unavailable")
 	}
-	return r.rt.AgentWorkspace().ServiceManager.Stop(id)
+	return r.currentRuntime().AgentWorkspace().ServiceManager.Stop(id)
 }
 
 func (r *runtimeAdapter) RestartService(ctx context.Context, id string) error {
-	if r == nil || r.rt == nil || r.rt.AgentWorkspace() == nil || r.rt.AgentWorkspace().ServiceManager == nil {
+	if r == nil || r.currentRuntime() == nil || r.currentRuntime().AgentWorkspace() == nil || r.currentRuntime().AgentWorkspace().ServiceManager == nil {
 		return fmt.Errorf("runtime unavailable")
 	}
-	return r.rt.AgentWorkspace().ServiceManager.Restart(ctx, id)
+	return r.currentRuntime().AgentWorkspace().ServiceManager.Restart(ctx, id)
 }
 
 func (r *runtimeAdapter) RestartAllServices(ctx context.Context) error {
-	if r == nil || r.rt == nil || r.rt.AgentWorkspace() == nil || r.rt.AgentWorkspace().ServiceManager == nil {
+	if r == nil || r.currentRuntime() == nil || r.currentRuntime().AgentWorkspace() == nil || r.currentRuntime().AgentWorkspace().ServiceManager == nil {
 		return fmt.Errorf("runtime unavailable")
 	}
-	if err := r.rt.AgentWorkspace().ServiceManager.StopAll(); err != nil {
+	if err := r.currentRuntime().AgentWorkspace().ServiceManager.StopAll(); err != nil {
 		return fmt.Errorf("stop all: %w", err)
 	}
-	return r.rt.AgentWorkspace().ServiceManager.StartAll(ctx)
+	return r.currentRuntime().AgentWorkspace().ServiceManager.StartAll(ctx)
 }
 
 // Context file management
 func (r *runtimeAdapter) AddFileToContext(path string) error {
-	if r == nil || r.rt == nil {
+	if r == nil || r.currentRuntime() == nil {
 		return fmt.Errorf("runtime unavailable")
 	}
 	return nil
 }
 
 func (r *runtimeAdapter) DropFileFromContext(path string) error {
-	if r == nil || r.rt == nil {
+	if r == nil || r.currentRuntime() == nil {
 		return fmt.Errorf("runtime unavailable")
 	}
 	return nil
@@ -1252,14 +1267,14 @@ func (r *runtimeAdapter) QueryConfirmedPatterns(scope string) ([]PatternRecordIn
 }
 
 func (r *runtimeAdapter) QueryIntentGaps(filePath, scope string) ([]IntentGapInfo, error) {
-	if r == nil || r.rt == nil {
+	if r == nil || r.currentRuntime() == nil {
 		return nil, errors.New("runtime not initialized")
 	}
 	return nil, errors.New("QueryIntentGaps not implemented")
 }
 
 func (r *runtimeAdapter) QueryTensions(scope string) ([]TensionInfo, error) {
-	if r == nil || r.rt == nil {
+	if r == nil || r.currentRuntime() == nil {
 		return nil, errors.New("runtime not initialized")
 	}
 	return nil, errors.New("QueryTensions not implemented")
@@ -1293,50 +1308,50 @@ func (r *runtimeAdapter) GetLatestTrace() (TraceInfo, error) {
 
 // ActiveWorkflowID satisfies RuntimeAdapter.
 func (r *runtimeAdapter) ActiveWorkflowID() string {
-	if r == nil || r.rt == nil {
+	if r == nil || r.currentRuntime() == nil {
 		return ""
 	}
-	return r.rt.ActiveWorkflowID()
+	return r.currentRuntime().ActiveWorkflowID()
 }
 
 // ResumeSession satisfies RuntimeAdapter.
 func (r *runtimeAdapter) ResumeSession(ctx context.Context, workflowID, followUp string) error {
-	if r == nil || r.rt == nil {
+	if r == nil || r.currentRuntime() == nil {
 		return fmt.Errorf("runtime unavailable")
 	}
-	_, err := r.rt.ResumeSession(ctx, workflowID, followUp)
+	_, err := r.currentRuntime().ResumeSession(ctx, workflowID, followUp)
 	return err
 }
 
 func (r *runtimeAdapter) ResolveInteractionFrame(ctx context.Context, taskID, frameID, choice, freetext string) error {
-	if r == nil || r.rt == nil {
+	if r == nil || r.currentRuntime() == nil {
 		return fmt.Errorf("runtime unavailable")
 	}
-	return r.rt.ResolveInteractionFrame(ctx, taskID, frameID, choice, freetext)
+	return r.currentRuntime().ResolveInteractionFrame(ctx, taskID, frameID, choice, freetext)
 }
 
 func (r *runtimeAdapter) BuildDoctorReport(ctx context.Context) DoctorReport {
-	if r == nil || r.rt == nil {
+	if r == nil || r.currentRuntime() == nil {
 		return DoctorReport{}
 	}
-	return runtimesvc.BuildDoctorReport(ctx, r.rt.Config, r.rt.Secrets())
+	return runtimesvc.BuildDoctorReport(ctx, r.currentRuntime().Config, r.currentRuntime().Secrets())
 }
 
 func (r *runtimeAdapter) ReloadWorkspace(ctx context.Context, workspace string) error {
-	if r == nil || r.rt == nil {
+	if r == nil || r.currentRuntime() == nil {
 		return fmt.Errorf("runtime unavailable")
 	}
-	newRT, err := runtimesvc.ReloadRuntimeForWorkspace(ctx, r.rt, workspace)
+	newRT, err := runtimesvc.ReloadRuntimeForWorkspace(ctx, r.currentRuntime(), workspace)
 	if err != nil {
 		return err
 	}
-	r.rt = newRT
+	r.rt.Store(newRT)
 	return nil
 }
 
 func (r *runtimeAdapter) InitializeWorkspaceFromTemplates(overwrite bool) error {
-	if r == nil || r.rt == nil {
+	if r == nil || r.currentRuntime() == nil {
 		return fmt.Errorf("runtime unavailable")
 	}
-	return runtimesvc.InitializeWorkspaceFromTemplates(r.rt.Config, overwrite)
+	return runtimesvc.InitializeWorkspaceFromTemplates(r.currentRuntime().Config, overwrite)
 }

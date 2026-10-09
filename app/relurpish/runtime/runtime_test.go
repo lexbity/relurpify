@@ -144,9 +144,9 @@ func TestResolveInteractionFrameResumesClarificationTask(t *testing.T) {
 
 	executor := &recordingExecutor{}
 	rt := &Runtime{
-		Agent:                executor,
 		interactionEnvelopes: map[string]*contextdata.Envelope{"task-1": env},
 	}
+	rt.setAgent(executor)
 
 	if err := rt.ResolveInteractionFrame(context.Background(), "task-1", frame.ID, "implement", ""); err != nil {
 		t.Fatalf("resolve interaction frame failed: %v", err)
@@ -182,9 +182,9 @@ func TestResolveInteractionFrameDoesNotResumeOutcomeFeedback(t *testing.T) {
 
 	executor := &recordingExecutor{}
 	rt := &Runtime{
-		Agent:                executor,
 		interactionEnvelopes: map[string]*contextdata.Envelope{"task-2": env},
 	}
+	rt.setAgent(executor)
 
 	if err := rt.ResolveInteractionFrame(context.Background(), "task-2", frame.ID, "negative", ""); err != nil {
 		t.Fatalf("resolve interaction frame failed: %v", err)
@@ -202,10 +202,8 @@ func TestResolveInteractionFrameDoesNotResumeOutcomeFeedback(t *testing.T) {
 
 func TestSubmitTurnUsesTheCanonicalTaskPath(t *testing.T) {
 	executor := &recordingExecutor{}
-	rt := &Runtime{
-		Config: Config{Workspace: "/workspace"},
-		Agent:  executor,
-	}
+	rt := &Runtime{Config: Config{Workspace: "/workspace"}}
+	rt.setAgent(executor)
 
 	callback := func(string) {}
 	result, err := rt.SubmitTurn(context.Background(), "summarize the workspace", execution.TaskTypeCodeGeneration, map[string]any{

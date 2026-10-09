@@ -225,8 +225,20 @@ func (n *CheckpointNode) Execute(ctx context.Context, env *contextdata.Envelope)
 		n.memoryEvictor.Evict(env.TaskIDSnapshot())
 	}
 
+	resultData := map[string]any{
+		"checkpoint_created": true,
+		"checkpoint_id":      ref.ArtifactID,
+		"workflow_id":        snapshot.WorkflowID,
+		"run_id":             snapshot.RunID,
+	}
 	if n.writer != nil {
-		n.persistMirroredCheckpoint(ctx, env, snapshot)
+		if err := n.persistMirroredCheckpoint(ctx, env, snapshot); err != nil {
+			// Honesty: the primary checkpoint is durable, but the durable
+			// mirror failed — surface the failure instead of reporting a
+			// fully-clean write.
+			n.emitMirrorFailed(ctx, env.TaskIDSnapshot(), err)
+			resultData["checkpoint_mirror_failed"] = err.Error()
+		}
 	}
 	if tel, ok := telemetry.TelemetryFromContext(ctx).(telemetry.CheckpointTelemetry); ok {
 		tel.OnCheckpointCreated(env.TaskIDSnapshot(), ref.ArtifactID, n.id)
@@ -250,12 +262,7 @@ func (n *CheckpointNode) Execute(ctx context.Context, env *contextdata.Envelope)
 	return &execution.Result{
 		NodeID:  n.id,
 		Success: true,
-		Data: execution.NewToolResultPayload(map[string]any{
-			"checkpoint_created": true,
-			"checkpoint_id":      ref.ArtifactID,
-			"workflow_id":        snapshot.WorkflowID,
-			"run_id":             snapshot.RunID,
-		}),
+		Data:    execution.NewToolResultPayload(resultData),
 	}, nil
 }
 
@@ -343,9 +350,9 @@ func reqPriority(req *contextdata.CheckpointRequest) int {
 	return req.Priority
 }
 
-func (n *CheckpointNode) persistMirroredCheckpoint(ctx context.Context, env *contextdata.Envelope, snapshot persistence.CheckpointSnapshot) {
+func (n *CheckpointNode) persistMirroredCheckpoint(ctx context.Context, env *contextdata.Envelope, snapshot persistence.CheckpointSnapshot) error {
 	if n == nil || n.writer == nil || env == nil {
-		return
+		return nil
 	}
 	principal := identity.SubjectRef{}
 	ok := false
@@ -353,13 +360,13 @@ func (n *CheckpointNode) persistMirroredCheckpoint(ctx context.Context, env *con
 		principal, ok = n.principalResolver(env)
 	}
 	if !ok || strings.TrimSpace(principal.ID) == "" {
-		return
+		return nil
 	}
 	payload, err := json.Marshal(snapshot)
 	if err != nil {
-		return
+		return fmt.Errorf("marshal mirrored checkpoint: %w", err)
 	}
-	_, _ = n.writer.Persist(ctx, persistence.PersistenceRequest{
+	_, err = n.writer.Persist(ctx, persistence.PersistenceRequest{
 		Content:         payload,
 		Kind:            knowledge.ChunkKindDerivation,
 		ContentType:     "application/json",
@@ -368,6 +375,27 @@ func (n *CheckpointNode) persistMirroredCheckpoint(ctx context.Context, env *con
 		Reason:          "checkpoint materialization",
 		Tags:            []string{"checkpoint", "graph"},
 	})
+	if err != nil {
+		return fmt.Errorf("persist mirrored checkpoint: %w", err)
+	}
+	return nil
+}
+
+// emitMirrorFailed surfaces a checkpoint mirror failure on the durable trail.
+func (n *CheckpointNode) emitMirrorFailed(ctx context.Context, taskID string, err error) {
+	if n == nil || n.telemetry == nil || err == nil {
+		return
+	}
+	ev := telemetry.Event{
+		Type:      telemetry.EventCheckpointMirrorFailed,
+		Message:   "checkpoint mirror failed",
+		NodeID:    n.id,
+		TaskID:    taskID,
+		Timestamp: time.Now().UTC(),
+		Metadata:  map[string]any{"error": err.Error()},
+	}
+	telemetry.StampCorrelation(ctx, &ev)
+	n.telemetry.Emit(ev)
 }
 
 func checkpointRequester(env *contextdata.Envelope) string {

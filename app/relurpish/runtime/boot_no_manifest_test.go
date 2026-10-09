@@ -38,8 +38,8 @@ func TestBootNoManifest_EucloAgent(t *testing.T) {
 		_ = rt.Close(context.Background())
 	})
 
-	if _, ok := rt.Agent.(*euclo.Agent); !ok {
-		t.Fatalf("rt.Agent is %T, want *euclo.Agent", rt.Agent)
+	if _, ok := rt.ActiveAgent().(*euclo.Agent); !ok {
+		t.Fatalf("rt.Agent is %T, want *euclo.Agent", rt.ActiveAgent())
 	}
 }
 

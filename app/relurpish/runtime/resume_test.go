@@ -80,7 +80,8 @@ func TestResumeExecutesARealTurnFromTheRecordedTask(t *testing.T) {
 	repo := newFakeLifecycleRepo()
 	repo.seedWorkflow("wf-1", "fix the failing test in pkg/x")
 	executor := &recordingExecutor{}
-	rt := &Runtime{Config: Config{Workspace: "/workspace"}, Agent: executor, AgentLifecycle: repo}
+	rt := &Runtime{Config: Config{Workspace: "/workspace"}, AgentLifecycle: repo}
+	rt.setAgent(executor)
 
 	outcome, err := rt.ResumeSession(context.Background(), "wf-1", "")
 	if err != nil {
@@ -118,7 +119,8 @@ func TestResumeFollowUpOverridesRegrounding(t *testing.T) {
 	repo := newFakeLifecycleRepo()
 	repo.seedWorkflow("wf-2", "original task")
 	executor := &recordingExecutor{}
-	rt := &Runtime{Config: Config{Workspace: "/workspace"}, Agent: executor, AgentLifecycle: repo}
+	rt := &Runtime{Config: Config{Workspace: "/workspace"}, AgentLifecycle: repo}
+	rt.setAgent(executor)
 
 	if _, err := rt.ResumeSession(context.Background(), "wf-2", "now also update the docs"); err != nil {
 		t.Fatalf("ResumeSession: %v", err)
@@ -130,7 +132,8 @@ func TestResumeFollowUpOverridesRegrounding(t *testing.T) {
 
 func TestResumeRefusedWhileRunActive(t *testing.T) {
 	executor := &recordingExecutor{}
-	rt := &Runtime{Config: Config{Workspace: "/workspace"}, Agent: executor, AgentLifecycle: newFakeLifecycleRepo()}
+	rt := &Runtime{Config: Config{Workspace: "/workspace"}, AgentLifecycle: newFakeLifecycleRepo()}
+	rt.setAgent(executor)
 	rt.setActiveWorkflowID("wf-active")
 
 	_, err := rt.ResumeSession(context.Background(), "wf-1", "")
@@ -141,7 +144,8 @@ func TestResumeRefusedWhileRunActive(t *testing.T) {
 
 func TestResumeTranscriptOnlyPathRequiresFollowUp(t *testing.T) {
 	executor := &recordingExecutor{}
-	rt := &Runtime{Config: Config{Workspace: "/workspace"}, Agent: executor, AgentLifecycle: newFakeLifecycleRepo()}
+	rt := &Runtime{Config: Config{Workspace: "/workspace"}, AgentLifecycle: newFakeLifecycleRepo()}
+	rt.setAgent(executor)
 
 	if _, err := rt.ResumeSession(context.Background(), "", ""); err == nil || !strings.Contains(err.Error(), "follow-up") {
 		t.Fatalf("err = %v, want follow-up requirement", err)
@@ -157,7 +161,8 @@ func TestResumeTranscriptOnlyPathRequiresFollowUp(t *testing.T) {
 
 func TestResumeUnknownWorkflowFailsLoudly(t *testing.T) {
 	executor := &recordingExecutor{}
-	rt := &Runtime{Config: Config{Workspace: "/workspace"}, Agent: executor, AgentLifecycle: newFakeLifecycleRepo()}
+	rt := &Runtime{Config: Config{Workspace: "/workspace"}, AgentLifecycle: newFakeLifecycleRepo()}
+	rt.setAgent(executor)
 
 	if _, err := rt.ResumeSession(context.Background(), "wf-missing", ""); err == nil || !strings.Contains(err.Error(), "not found") {
 		t.Fatalf("err = %v, want workflow-not-found", err)
@@ -170,7 +175,8 @@ func TestResumeUnknownWorkflowFailsLoudly(t *testing.T) {
 func TestRunTaskCreatesResumableWorkflowRecord(t *testing.T) {
 	repo := newFakeLifecycleRepo()
 	executor := &recordingExecutor{}
-	rt := &Runtime{Config: Config{Workspace: "/workspace"}, Agent: executor, AgentLifecycle: repo}
+	rt := &Runtime{Config: Config{Workspace: "/workspace"}, AgentLifecycle: repo}
+	rt.setAgent(executor)
 
 	result, err := rt.RunTask(context.Background(), &execution.Task{ID: "task-9", Instruction: "implement the feature", Type: string(execution.TaskTypeExecute)})
 	if err != nil {

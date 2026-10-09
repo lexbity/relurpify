@@ -34,32 +34,43 @@ func TestSessionInfo_NilAdapterNoPanic(t *testing.T) {
 }
 
 func TestSessionInfo_NilRuntimeNoPanic(t *testing.T) {
-	ad := &runtimeAdapter{rt: nil}
+	var ad *runtimeAdapter
 	info := ad.SessionInfo()
+	require.NotZero(t, info.MaxTokens)
+	require.Equal(t, "", info.Workspace)
+	ad = &runtimeAdapter{}
+	info = ad.SessionInfo()
 	require.NotZero(t, info.MaxTokens)
 	require.Equal(t, "", info.Workspace)
 }
 
+// adapterWithRuntime constructs an adapter holding the given runtime atomically.
+func adapterWithRuntime(rt *runtimesvc.Runtime) *runtimeAdapter {
+	ad := &runtimeAdapter{}
+	ad.rt.Store(rt)
+	return ad
+}
+
 func TestContractSummary_NilWorkspaceNoPanic(t *testing.T) {
-	ad := &runtimeAdapter{rt: &runtimesvc.Runtime{}}
+	ad := adapterWithRuntime(&runtimesvc.Runtime{})
 	summary := ad.ContractSummary()
 	require.Nil(t, summary, "ContractSummary must return nil when workspace is nil")
 }
 
 func TestCapabilityAdmissions_NilWorkspaceNoPanic(t *testing.T) {
-	ad := &runtimeAdapter{rt: &runtimesvc.Runtime{}}
+	ad := adapterWithRuntime(&runtimesvc.Runtime{})
 	admissions := ad.CapabilityAdmissions()
 	require.Nil(t, admissions)
 }
 
 func TestDiagnostics_NilWorkspaceNoPanic(t *testing.T) {
-	ad := &runtimeAdapter{rt: &runtimesvc.Runtime{}}
+	ad := adapterWithRuntime(&runtimesvc.Runtime{})
 	diag := ad.Diagnostics()
 	require.Empty(t, diag.ManifestPolicy)
 }
 
 func TestListServices_NilWorkspaceNoPanic(t *testing.T) {
-	ad := &runtimeAdapter{rt: &runtimesvc.Runtime{}}
+	ad := adapterWithRuntime(&runtimesvc.Runtime{})
 	services := ad.ListServices()
 	require.Nil(t, services)
 }
