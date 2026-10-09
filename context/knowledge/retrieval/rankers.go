@@ -24,7 +24,7 @@ func (r *BM25Ranker) Name() string {
 }
 
 // Rank performs BM25 ranking using the search engine.
-func (r *BM25Ranker) Rank(ctx context.Context, query RetrievalQuery, store *knowledge.ChunkStore) ([]knowledge.ChunkID, error) {
+func (r *BM25Ranker) Rank(ctx context.Context, query RetrievalQuery, snap *CorpusSnapshot) ([]knowledge.ChunkID, error) {
 	if r.engine == nil {
 		return nil, nil
 	}
@@ -68,16 +68,12 @@ func (r *FreshnessRanker) Name() string {
 }
 
 // Rank filters by freshness and sorts by freshness state (valid > stale > unverified).
-func (r *FreshnessRanker) Rank(ctx context.Context, query RetrievalQuery, store *knowledge.ChunkStore) ([]knowledge.ChunkID, error) {
-	if store == nil {
+func (r *FreshnessRanker) Rank(ctx context.Context, query RetrievalQuery, snap *CorpusSnapshot) ([]knowledge.ChunkID, error) {
+	if snap == nil {
 		return nil, nil
 	}
 
-	// Get all chunks
-	chunks, err := store.FindAll()
-	if err != nil {
-		return nil, fmt.Errorf("failed to list chunks: %w", err)
-	}
+	chunks := snap.Chunks
 
 	// Collect chunks by freshness
 	validChunks := make([]knowledge.ChunkID, 0)

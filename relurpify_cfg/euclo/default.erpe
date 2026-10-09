@@ -1,0 +1,19 @@
+thoughtrecipe euclo.thoughtrecipe.default
+"Canonical default execution recipe: clarify-first intake, then one react run bounded to the workspace. Family defaults: verification via test_run after edits; HITL required for file writes."
+
+trigger as capability:
+  may read workspace
+  may write workspace
+  may invoke ["file_read", "grep"]
+  family ["review", "investigation", "debug", "migration", "implementation", "refactor", "architecture"]
+
+input workspace: "**/*"
+input prompt: user.request
+
+agent worker uses react
+
+run worker:
+  may invoke ["file_read", "grep", "file_write", "test_run"]
+  from input.prompt
+  goal "Complete the user's task against the workspace, verifying changes before reporting."
+  capture result -> state.summary

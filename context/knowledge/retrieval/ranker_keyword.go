@@ -15,18 +15,18 @@ type KeywordRanker struct {
 
 func (r *KeywordRanker) Name() string { return "keyword" }
 
-func (r *KeywordRanker) Rank(ctx context.Context, query RetrievalQuery, store *knowledge.ChunkStore) ([]knowledge.ChunkID, error) {
+func (r *KeywordRanker) Rank(ctx context.Context, query RetrievalQuery, snap *CorpusSnapshot) ([]knowledge.ChunkID, error) {
 	_ = ctx
-	if r == nil || store == nil {
+	if r == nil || snap == nil {
 		return nil, nil
 	}
 	queryTerms := tokenizeRankerText(query.Text)
 	if len(queryTerms) == 0 {
 		return nil, nil
 	}
-	chunks, err := loadRankerChunks(store)
-	if err != nil || len(chunks) == 0 {
-		return nil, err
+	chunks := snap.Chunks
+	if len(chunks) == 0 {
+		return nil, nil
 	}
 
 	k1 := r.K1

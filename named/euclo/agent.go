@@ -105,7 +105,14 @@ func (a *Agent) Initialize(config *execution.Config) error {
 		return fmt.Errorf("failed to register capabilities: %w", err)
 	}
 
-	// Load the thoughtrecipe registry from the DSL source tree.
+	// Load the thoughtrecipe registry from the DSL source tree. Production
+	// recipe loading always wires the capability registry: `do relurpic:X`
+	// references resolve at load time (FR-28), which is only possible with
+	// the registry present. A nil registry here is a wiring bug, not a
+	// degraded mode.
+	if a.deps == nil || a.deps.Registry == nil {
+		return fmt.Errorf("agent capability registry is required to load thoughtrecipes")
+	}
 	workspace := ""
 	if config != nil {
 		workspace = config.Workspace

@@ -185,12 +185,18 @@ func (s *Streamer) ArchaeologySeed(chunkIDs []string) StreamSeed {
 	return s.PlanningSeed(chunkIDs)
 }
 
-func (s *Streamer) DebugSeed(files []string, tensionRefs []string) (StreamSeed, error) {
+// DebugSeed builds a debug seed from file paths plus chunks whose
+// provenance references any of tensionRefs, scoped to workspaceID. The
+// workspace-scoped lookup replaces the full-store scan.
+func (s *Streamer) DebugSeed(workspaceID string, files []string, tensionRefs []string) (StreamSeed, error) {
 	seed, err := s.ChatSeed(files)
 	if err != nil {
 		return StreamSeed{}, err
 	}
-	chunks, err := s.Store.FindAll()
+	if workspaceID == "" || len(tensionRefs) == 0 {
+		return seed, nil
+	}
+	chunks, err := s.Store.FindByWorkspace(workspaceID)
 	if err != nil {
 		return StreamSeed{}, err
 	}

@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/platform/observability"
 	"github.com/stretchr/testify/require"
 )
 
@@ -23,8 +24,8 @@ func TestTelemetryDecisionSink_PolicyEvaluated(t *testing.T) {
 	sink := &decisionEventSink{}
 	ds := TelemetryDecisionSink{Telemetry: sink}
 
-	rc := RunContext{SessionID: "sess-1", RunID: "run-1", TraceID: "trace-1", AgentID: "agent-1"}
-	ctx := WithRunContext(context.Background(), rc)
+	rc := observability.RunContext{SessionID: "sess-1", RunID: "run-1", TraceID: "trace-1", AgentID: "agent-1"}
+	ctx := observability.WithRunContext(context.Background(), rc)
 
 	ds.PolicyEvaluated(ctx, PolicyDecision{
 		Rule:   "file_write:deny",

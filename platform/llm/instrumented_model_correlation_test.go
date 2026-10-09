@@ -11,7 +11,6 @@ import (
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/model"
 	"codeburg.org/lexbit/relurpify/platform/observability"
-	"codeburg.org/lexbit/relurpify/telemetry"
 )
 
 type correlationSink struct {
@@ -34,7 +33,7 @@ func (s *correlationSink) Snapshot() []observability.Event {
 }
 
 func llmCorrelationContext() (context.Context, *contextdata.Envelope) {
-	rc := telemetry.RunContext{
+	rc := observability.RunContext{
 		SessionID: "session-1",
 		RunID:     "run-1",
 		TraceID:   "trace-1",
@@ -42,7 +41,7 @@ func llmCorrelationContext() (context.Context, *contextdata.Envelope) {
 	}
 	env := contextdata.NewEnvelope("task-1", "session-1")
 	env.NodeID = "node-1"
-	ctx := telemetry.WithRunContext(
+	ctx := observability.WithRunContext(
 		contextdata.WithEnvelope(context.Background(), env),
 		rc,
 	)
@@ -77,9 +76,9 @@ func requireLLMCorrelated(t *testing.T, events []observability.Event) {
 func TestInstrumentedModel_NodeContextStampsNodeID(t *testing.T) {
 	sink := &correlationSink{}
 	instrumented := NewInstrumentedModel(&profileAwareStubModel{}, sink, false)
-	rc := telemetry.RunContext{SessionID: "session-n", RunID: "run-n", TraceID: "trace-n", AgentID: "agent-n"}
-	ctx := telemetry.WithNodeContext(
-		telemetry.WithRunContext(context.Background(), rc),
+	rc := observability.RunContext{SessionID: "session-n", RunID: "run-n", TraceID: "trace-n", AgentID: "agent-n"}
+	ctx := observability.WithNodeContext(
+		observability.WithRunContext(context.Background(), rc),
 		"node-ctx",
 	)
 
@@ -100,7 +99,7 @@ func TestInstrumentedModel_NodeContextPreferredOverEnvelopeNodeID(t *testing.T) 
 	instrumented := NewInstrumentedModel(&profileAwareStubModel{}, sink, false)
 	env := contextdata.NewEnvelope("task-p", "session-p")
 	env.NodeID = "node-env"
-	ctx := telemetry.WithNodeContext(
+	ctx := observability.WithNodeContext(
 		contextdata.WithEnvelope(context.Background(), env),
 		"node-ctx",
 	)
@@ -124,13 +123,13 @@ func TestInstrumentedModel_TaskIDAndNodeIDFromGraphContext(t *testing.T) {
 	// RunContext, the task envelope, and the active node via node context.
 	env := contextdata.NewEnvelope("task-graph", "session-graph")
 	ctx := contextdata.WithEnvelope(context.Background(), env)
-	ctx = telemetry.WithRunContext(ctx, telemetry.RunContext{
+	ctx = observability.WithRunContext(ctx, observability.RunContext{
 		SessionID: "session-graph",
 		RunID:     "run-graph",
 		TraceID:   "trace-graph",
 		AgentID:   "agent-graph",
 	})
-	ctx = telemetry.WithNodeContext(ctx, "euclo.think")
+	ctx = observability.WithNodeContext(ctx, "euclo.think")
 
 	_, err := instrumented.ChatWithTools(ctx, []model.Message{{Role: "user", Content: "ping"}}, nil, nil)
 	require.NoError(t, err)
@@ -199,8 +198,8 @@ func stampOnce(ctx context.Context) observability.Event {
 }
 
 func TestInstrumentedModel_TaskIDFallsBackWithoutEnvelope(t *testing.T) {
-	rc := telemetry.RunContext{RunID: "run-2", TraceID: "trace-2"}
-	ev := stampOnce(telemetry.WithRunContext(context.Background(), rc))
+	rc := observability.RunContext{RunID: "run-2", TraceID: "trace-2"}
+	ev := stampOnce(observability.WithRunContext(context.Background(), rc))
 
 	require.Empty(t, ev.TaskID, "no envelope means no task attribution — it must stay empty, not wrong")
 	require.Equal(t, "run-2", ev.RunID)
@@ -208,12 +207,12 @@ func TestInstrumentedModel_TaskIDFallsBackWithoutEnvelope(t *testing.T) {
 }
 
 func TestInstrumentedModel_TraceContextFallbackWhenNoTurnScope(t *testing.T) {
-	ev := stampOnce(telemetry.WithTraceContext(
+	ev := stampOnce(observability.WithTraceContext(
 		contextdata.WithEnvelope(
 			context.Background(),
 			contextdata.NewEnvelope("task-3", "session-3"),
 		),
-		telemetry.TraceContext{TraceID: "trace-3", SpanID: "span-3"},
+		observability.TraceContext{TraceID: "trace-3", SpanID: "span-3"},
 	))
 
 	require.Equal(t, "task-3", ev.TaskID)
@@ -226,7 +225,7 @@ func TestInstrumentedModel_EnvelopeFieldsNeverDowngraded(t *testing.T) {
 	env := contextdata.NewEnvelope("", "session-env")
 	env.NodeID = "node-env"
 	ctx := contextdata.WithEnvelope(context.Background(), env)
-	ctx = telemetry.WithRunContext(ctx, telemetry.RunContext{
+	ctx = observability.WithRunContext(ctx, observability.RunContext{
 		RunID:     "run-4",
 		TraceID:   "trace-4",
 		AgentID:   "agent-4",

@@ -33,10 +33,6 @@ type AgentSurface interface {
 	// Theme returns the surface's preferred theme. When nil the host default
 	// is used. Surfaces may call WithAccent to tint the shared structure.
 	Theme() *theme.Theme
-
-	// ResumeSession rehydrates a previously-saved session from a session ID.
-	// Returning nil means the surface does not support resume (default).
-	ResumeSession(ctx context.Context, sessionID string) tea.Cmd
 }
 
 // SurfaceFactory resolves the active surface for a given agent name.
@@ -190,8 +186,6 @@ func (genericSurface) InitialTab() TabID { return TabWelcome }
 func (genericSurface) InitialSubTab(tab TabID) SubTabID { return "" }
 
 func (genericSurface) Theme() *theme.Theme { return nil }
-
-func (genericSurface) ResumeSession(_ context.Context, _ string) tea.Cmd { return nil }
 
 func (genericSurface) RenderNotification(item NotificationItem) string {
 	return renderGenericNotification(theme.Default(), item)

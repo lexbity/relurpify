@@ -36,7 +36,11 @@ func Dispatch(ctx context.Context, env *contextdata.Envelope, req RouteRequest, 
 				}
 			}
 		}
-		return nil, &RouteResolutionError{PrimaryID: primaryRouteID(req), Reason: unresolvedRouteReason(report, selected, resolution)}
+		return nil, &RouteResolutionError{
+			PrimaryID:       primaryRouteID(req),
+			Reason:          unresolvedRouteReason(report, selected, resolution),
+			MissingRecipeID: missingRecipeIDFromCandidates(report.Candidates),
+		}
 	}
 
 	if fallbackTaken {
@@ -52,7 +56,11 @@ func Dispatch(ctx context.Context, env *contextdata.Envelope, req RouteRequest, 
 		if !req.TelemetryOff {
 			reporting.EmitRouteUnavailable(ctx, taskID(env), sessionID(env), string(selected.RouteID), string(selected.Availability), reason)
 		}
-		return nil, &RouteResolutionError{PrimaryID: string(selected.RouteID), Reason: reason}
+		return nil, &RouteResolutionError{
+			PrimaryID:       string(selected.RouteID),
+			Reason:          reason,
+			MissingRecipeID: missingRecipeIDFromCandidates(report.Candidates),
+		}
 	}
 	if !req.TelemetryOff {
 		reporting.EmitRouteSelected(ctx, taskID(env), sessionID(env), req.FamilyID, result.RouteKind, result.RouteID, result.CandidateCount, result.FallbackTaken)
@@ -106,7 +114,11 @@ func dryRun(ctx context.Context, env *contextdata.Envelope, req RouteRequest, ca
 	}
 
 	if !ok {
-		return report, &RouteResolutionError{PrimaryID: primaryRouteID(req), Reason: unresolvedRouteReason(report, selected, resolution)}
+		return report, &RouteResolutionError{
+			PrimaryID:       primaryRouteID(req),
+			Reason:          unresolvedRouteReason(report, selected, resolution),
+			MissingRecipeID: missingRecipeIDFromCandidates(report.Candidates),
+		}
 	}
 	if env != nil {
 		if result := routeResultFromSelection(report, selected, fallbackTaken, true, req.TelemetryOff); result != nil {
@@ -161,27 +173,46 @@ func resolveRoute(env *contextdata.Envelope, req RouteRequest, caps *registry.Ca
 	return report, selected, fallbackTaken, ok
 }
 
-// defaultExecutionRecipeCandidate offers the built-in default execution
-// thoughtrecipe when it is registered and no workspace recipe matched.
-func defaultExecutionRecipeCandidate(reg *thoughtrecipepkg.ThoughtRecipeRegistry) (CandidateRouteInfo, bool) {
+// availableRecipeCandidate is the ONLY constructor of an
+// Availability: RouteAvailable recipe candidate. Every code path that offers
+// a thoughtrecipe route — explicit, clarification, metadata, and default
+// fallback — must pass through it: an unregistered recipe is never offered,
+// so selection can no longer succeed on a route that execution cannot run.
+func availableRecipeCandidate(reg *thoughtrecipepkg.ThoughtRecipeRegistry, id string, kind string, score int, reasons []string) (CandidateRouteInfo, bool) {
 	if reg == nil {
 		return CandidateRouteInfo{}, false
 	}
-	id := defaultThoughtRecipeID
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return CandidateRouteInfo{}, false
+	}
 	if _, ok := reg.Get(id); !ok {
 		return CandidateRouteInfo{}, false
 	}
 	return CandidateRouteInfo{
 		RouteID:      RouteID(id),
-		RouteKind:    euclotypes.RouteKindForThoughtRecipeID(id),
+		RouteKind:    kind,
 		Availability: RouteAvailable,
-		RankScore:    0,
-		RankReasons:  []string{"no deterministic route; falling back to default execution recipe"},
+		RankScore:    score,
+		RankReasons:  reasons,
 	}, true
 }
 
+// defaultExecutionRecipeCandidate offers the built-in default execution
+// thoughtrecipe when it is registered and no workspace recipe matched.
+func defaultExecutionRecipeCandidate(reg *thoughtrecipepkg.ThoughtRecipeRegistry) (CandidateRouteInfo, bool) {
+	id := defaultThoughtRecipeID
+	candidate, ok := availableRecipeCandidate(reg, id,
+		euclotypes.RouteKindForThoughtRecipeID(id), 0,
+		[]string{"no deterministic route; falling back to default execution recipe"})
+	if !ok {
+		return CandidateRouteInfo{}, false
+	}
+	return candidate, true
+}
+
 func deterministicRouteCandidates(env *contextdata.Envelope, req RouteRequest, caps *registry.CapabilityRegistry, thoughtrecipes *thoughtrecipepkg.ThoughtRecipeRegistry) []CandidateRouteInfo {
-	clarificationCandidate := clarificationRouteCandidate(env, req)
+	clarificationCandidate := clarificationRouteCandidate(env, req, thoughtrecipes)
 	if explicit := explicitRouteCandidate(req, caps, thoughtrecipes); explicit != nil {
 		if clarificationCandidate != nil && candidateRouteID(*explicit) == candidateRouteID(*clarificationCandidate) {
 			return []CandidateRouteInfo{*explicit}
@@ -203,23 +234,19 @@ func explicitRouteCandidate(req RouteRequest, caps *registry.CapabilityRegistry,
 	case strings.TrimSpace(req.ThoughtRecipeID) != "":
 		id := strings.TrimSpace(req.ThoughtRecipeID)
 		if id == clarificationThoughtRecipeID {
-			return &CandidateRouteInfo{
-				RouteID:      RouteID(id),
-				RouteKind:    euclotypes.RouteKindIntent,
-				Availability: RouteAvailable,
-				RankScore:    1000,
-				RankReasons:  []string{"explicit clarification route"},
+			// The clarification interaction is built in: it is always
+			// registered by graph construction (ensureClarificationThoughtRecipe).
+			if candidate, ok := availableRecipeCandidate(thoughtrecipes, id,
+				euclotypes.RouteKindIntent, 1000,
+				[]string{"explicit clarification route"}); ok {
+				return &candidate
 			}
 		}
 		if thoughtrecipes != nil {
-			if recipe, ok := thoughtrecipes.Get(id); ok && recipe != nil {
-				return &CandidateRouteInfo{
-					RouteID:      RouteID(recipe.ID),
-					RouteKind:    euclotypes.RouteKindForThoughtRecipeID(recipe.ID),
-					Availability: RouteAvailable,
-					RankScore:    1000,
-					RankReasons:  []string{"explicit thoughtrecipe"},
-				}
+			if candidate, ok := availableRecipeCandidate(thoughtrecipes, id,
+				euclotypes.RouteKindForThoughtRecipeID(id), 1000,
+				[]string{"explicit thoughtrecipe"}); ok {
+				return &candidate
 			}
 		}
 		return &CandidateRouteInfo{
@@ -259,7 +286,7 @@ func explicitRouteCandidate(req RouteRequest, caps *registry.CapabilityRegistry,
 	}
 }
 
-func clarificationRouteCandidate(env *contextdata.Envelope, req RouteRequest) *CandidateRouteInfo {
+func clarificationRouteCandidate(env *contextdata.Envelope, req RouteRequest, thoughtrecipes *thoughtrecipepkg.ThoughtRecipeRegistry) *CandidateRouteInfo {
 	needsClarify := needsClarificationRoute(env)
 	hasDirectGrounding := strings.TrimSpace(req.Instruction) != "" || strings.TrimSpace(req.FamilyID) != "" || strings.TrimSpace(req.SkillFilter) != ""
 	if !needsClarify && !hasDirectGrounding && strings.TrimSpace(req.ThoughtRecipeID) != clarificationThoughtRecipeID {
@@ -270,13 +297,13 @@ func clarificationRouteCandidate(env *contextdata.Envelope, req RouteRequest) *C
 	if !needsClarify && strings.TrimSpace(req.ThoughtRecipeID) != clarificationThoughtRecipeID {
 		return nil
 	}
-	return &CandidateRouteInfo{
-		RouteID:      RouteID(clarificationThoughtRecipeID),
-		RouteKind:    euclotypes.RouteKindIntent,
-		Availability: RouteAvailable,
-		RankScore:    900,
-		RankReasons:  []string{"clarification route"},
+	candidate, ok := availableRecipeCandidate(thoughtrecipes, clarificationThoughtRecipeID,
+		euclotypes.RouteKindIntent, 900,
+		[]string{"clarification route"})
+	if !ok {
+		return nil
 	}
+	return &candidate
 }
 
 func metadataThoughtRecipeCandidates(env *contextdata.Envelope, req RouteRequest, thoughtrecipes *thoughtrecipepkg.ThoughtRecipeRegistry) []CandidateRouteInfo {
@@ -297,13 +324,12 @@ func metadataThoughtRecipeCandidates(env *contextdata.Envelope, req RouteRequest
 		if score <= 0 {
 			continue
 		}
-		candidates = append(candidates, CandidateRouteInfo{
-			RouteID:      RouteID(routeID),
-			RouteKind:    euclotypes.RouteKindForThoughtRecipeID(routeID),
-			Availability: RouteAvailable,
-			RankScore:    score,
-			RankReasons:  reasons,
-		})
+		candidate, ok := availableRecipeCandidate(thoughtrecipes, routeID,
+			euclotypes.RouteKindForThoughtRecipeID(routeID), score, reasons)
+		if !ok {
+			continue
+		}
+		candidates = append(candidates, candidate)
 	}
 	return candidates
 }
@@ -656,6 +682,30 @@ func routeKindFromRequest(req RouteRequest) string {
 		return euclotypes.RouteKindCapability
 	}
 	return ""
+}
+
+// missingRecipeIDFromCandidates names the thoughtrecipe the gate rejected
+// when every unavailable candidate was rejected for not being registered.
+// Empty when the failure is not a missing-recipe failure.
+func missingRecipeIDFromCandidates(candidates []CandidateRouteInfo) string {
+	missing := ""
+	for _, candidate := range candidates {
+		if candidate.Availability == RouteAvailable {
+			return ""
+		}
+		if candidate.RouteKind == euclotypes.RouteKindCapability {
+			continue
+		}
+		if candidate.SuppressReason != "explicit thoughtrecipe not found" &&
+			candidate.SuppressReason != "thoughtrecipe not registered" {
+			continue
+		}
+		if missing != "" && missing != string(candidate.RouteID) {
+			return ""
+		}
+		missing = string(candidate.RouteID)
+	}
+	return missing
 }
 
 func unresolvedRouteReason(report *DryRunReport, selected CandidateRouteInfo, resolution *euclotypes.RouteResolution) string {

@@ -93,7 +93,9 @@ func (c *stepCore) streamOptionsPipeline() []pipelineagent.Option {
 }
 
 func (c *stepCore) rewooOptions() rewooagent.RewooOptions {
-	opts := rewooagent.RewooOptions{}
+	opts := rewooagent.RewooOptions{
+		PermissionChecker: c.deps.PermissionChecker,
+	}
 	if c.step.Stream != nil {
 		if mode := strings.TrimSpace(c.step.Stream.Mode); mode != "" {
 			opts.StreamMode = contextstream.Mode(mode)

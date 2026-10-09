@@ -1,0 +1,23 @@
+thoughtrecipe euclo.thoughtrecipe.dep_upgrade
+"Repair-family recipe for dependency upgrades: discover the manifest, apply the upgrade with writes confined to the upgrade run, then verify with the test suite. Family defaults: the upgrade is HITL-gated; tests must pass before the upgrade is reported complete."
+
+trigger as capability:
+  may read workspace
+  may write workspace
+  may invoke ["file_read", "grep", "test_run"]
+  family ["migration"]
+
+input workspace: "**/*"
+input prompt: user.request
+
+agent upgrader uses react
+
+run upgrader:
+  may invoke ["file_read", "grep", "test_run", "file_write"]
+  from input.workspace
+  goal "Locate the dependency manifest, apply the requested upgrade, and run the test suite to verify it."
+  capture result -> state.upgrade
+
+route:
+  otherwise:
+    do relurpic:test_run on state.upgrade

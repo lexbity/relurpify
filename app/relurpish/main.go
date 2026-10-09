@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"cmp"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -122,17 +123,42 @@ func newDoctorCmd() *cobra.Command {
 	return cmd
 }
 
-// newStatusCmd renders diagnostics for the workspace.
+// newStatusCmd renders runtime diagnostics as text (default) or JSON. It is
+// script-safe: it never constructs a Bubble Tea program, touches the
+// alternate screen, or requires a TTY, and it exits non-zero when the
+// workspace is not ready.
 func newStatusCmd() *cobra.Command {
+	var format string
 	cmd := &cobra.Command{
 		Use:   "status",
 		Short: "Show workspace diagnostics",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runWithRuntime(cmd, runTUI)
+			return runWithRuntime(cmd, func(ctx context.Context, rt *runtimesvc.Runtime) error {
+				snapshot := rt.Status(ctx)
+				switch format {
+				case "text":
+					snapshot.RenderText(cmd.OutOrStdout())
+				case "json":
+					if err := snapshot.RenderJSON(cmd.OutOrStdout()); err != nil {
+						return err
+					}
+				default:
+					return fmt.Errorf("unknown --format %q (want text or json)", format)
+				}
+				if !snapshot.Ready {
+					return errStatusNotReady
+				}
+				return nil
+			})
 		},
 	}
+	cmd.Flags().StringVar(&format, "format", "text", "output format: text or json")
 	return cmd
 }
+
+// errStatusNotReady makes `relurpish status` exit non-zero on a degraded
+// workspace so scripts and CI can gate on it.
+var errStatusNotReady = errors.New("workspace not ready")
 
 // newChatCmd starts the chat-first TUI.
 func newChatCmd() *cobra.Command {

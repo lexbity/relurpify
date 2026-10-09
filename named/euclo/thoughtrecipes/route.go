@@ -64,7 +64,7 @@ func predicatePercentValue(v ValueExpr) int {
 	return n
 }
 
-func lowerRouteDecl(decl *RouteDecl, agents map[string]AgentBinding, runIndex *int, plan *ExecutionPlan, inheritedToolScopes []ToolScopeFrame) (*CompiledRouteGroup, error) {
+func lowerRouteDecl(decl *RouteDecl, agents map[string]AgentBinding, runIndex *int, plan *ExecutionPlan, inheritedToolScopes []ToolScopeFrame, lookup capabilityScopeLookup) (*CompiledRouteGroup, error) {
 	if decl == nil {
 		return nil, fmt.Errorf("route declaration is nil")
 	}
@@ -93,7 +93,7 @@ func lowerRouteDecl(decl *RouteDecl, agents map[string]AgentBinding, runIndex *i
 			compiled.Predicate = pred
 		}
 
-		steps, err := lowerRouteExecutionItems(branch.Body, agents, runIndex, plan, inheritedToolScopes)
+		steps, err := lowerRouteExecutionItems(branch.Body, agents, runIndex, plan, inheritedToolScopes, lookup)
 		if err != nil {
 			return nil, err
 		}
@@ -117,7 +117,7 @@ func lowerRouteDecl(decl *RouteDecl, agents map[string]AgentBinding, runIndex *i
 	return group, nil
 }
 
-func lowerRouteExecutionItems(items []ExecutionItem, agents map[string]AgentBinding, runIndex *int, plan *ExecutionPlan, inheritedToolScopes []ToolScopeFrame) ([]ExecutionStep, error) {
+func lowerRouteExecutionItems(items []ExecutionItem, agents map[string]AgentBinding, runIndex *int, plan *ExecutionPlan, inheritedToolScopes []ToolScopeFrame, lookup capabilityScopeLookup) ([]ExecutionStep, error) {
 	type executionFrame struct {
 		items []ExecutionItem
 		index int
@@ -150,7 +150,7 @@ func lowerRouteExecutionItems(items []ExecutionItem, agents map[string]AgentBind
 			}
 			steps = append(steps, step)
 		case *RouteDecl:
-			group, err := lowerRouteDecl(node, agents, runIndex, plan, inheritedToolScopes)
+			group, err := lowerRouteDecl(node, agents, runIndex, plan, inheritedToolScopes, lookup)
 			if err != nil {
 				return nil, err
 			}
@@ -171,7 +171,7 @@ func lowerRouteExecutionItems(items []ExecutionItem, agents map[string]AgentBind
 			}
 			steps = append(steps, step)
 		case *CapabilityInvocation:
-			step, err := lowerCapabilityExecutionDecl(node, runIndex)
+			step, err := lowerCapabilityExecutionDecl(node, runIndex, lookup)
 			if err != nil {
 				return nil, err
 			}
@@ -238,7 +238,7 @@ func lowerAgentExecutionDecl(kind StepKind, agent Identifier, items []ExecutionI
 	return step, nil
 }
 
-func lowerCapabilityExecutionDecl(inv *CapabilityInvocation, index *int) (ExecutionStep, error) {
+func lowerCapabilityExecutionDecl(inv *CapabilityInvocation, index *int, lookup capabilityScopeLookup) (ExecutionStep, error) {
 	if index == nil {
 		return ExecutionStep{}, fmt.Errorf("execution index is nil")
 	}
@@ -253,6 +253,7 @@ func lowerCapabilityExecutionDecl(inv *CapabilityInvocation, index *int) (Execut
 		Paradigm:     "euclo",
 		CapabilityID: plan.CapabilityID,
 		Prompt:       fmt.Sprintf("do relurpic:%s", strings.TrimSpace(inv.Capability.Value)),
+		Scope:        capabilityStepScope(plan.CapabilityID, lookup),
 		Config:       map[string]any{},
 	}
 	step.Config["capability_id"] = plan.CapabilityID
@@ -269,4 +270,52 @@ func lowerCapabilityExecutionDecl(inv *CapabilityInvocation, index *int) (Execut
 func routeGroupID(decl *RouteDecl) string {
 	span := decl.GetSpan()
 	return fmt.Sprintf("route.%d.%d", span.Start.Line, span.Start.Column)
+}
+
+// coordinationTargetsAnnotation is the framework-owned descriptor annotation
+// listing the capability IDs a handler may invoke internally. The lowering
+// unions them into the step scope so a nesting handler's declared targets
+// are invocable and nothing else is.
+const coordinationTargetsAnnotation = "euclo.coordination.capabilities"
+
+// capabilityStepScope builds the step scope for a capability step: the named
+// capability, plus the manifest-declared coordination targets when a lookup
+// is wired (§5.8/Q7). Nil lookup yields exactly the named capability.
+func capabilityStepScope(capabilityID string, lookup capabilityScopeLookup) ResolvedToolScope {
+	scope := AllowTools([]string{capabilityID})
+	if lookup == nil {
+		return scope
+	}
+	desc, ok := lookup.Select(capabilityID)
+	if !ok || len(desc.Annotations) == 0 {
+		return scope
+	}
+	raw, ok := desc.Annotations[coordinationTargetsAnnotation]
+	if !ok {
+		return scope
+	}
+	extra := coordinationTargetIDs(raw)
+	if len(extra) == 0 {
+		return scope
+	}
+	return AllowTools(append(scope.AllowedToolNames(), extra...))
+}
+
+// coordinationTargetIDs extracts capability IDs from the annotation value
+// (accepts []string and []any of strings; other shapes are ignored).
+func coordinationTargetIDs(raw any) []string {
+	switch typed := raw.(type) {
+	case []string:
+		return typed
+	case []any:
+		out := make([]string, 0, len(typed))
+		for _, item := range typed {
+			if s, ok := item.(string); ok && strings.TrimSpace(s) != "" {
+				out = append(out, strings.TrimSpace(s))
+			}
+		}
+		return out
+	default:
+		return nil
+	}
 }

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	capresult "codeburg.org/lexbit/relurpify/capability/result"
+	"codeburg.org/lexbit/relurpify/platform/observability"
 
 	"codeburg.org/lexbit/relurpify/capability/descriptor"
 
@@ -333,7 +334,7 @@ func (g *Graph) run(ctx context.Context, env *contextdata.Envelope, current stri
 		// attribute their events to this task and node without importing
 		// the execution packages (telemetry correlation, FR-3).
 		nodeCtx := contextdata.WithEnvelope(ctx, env)
-		nodeCtx = telemetry.WithNodeContext(nodeCtx, current)
+		nodeCtx = observability.WithNodeContext(nodeCtx, current)
 		nodeCtx = execution.WithTaskContext(nodeCtx, execution.TaskContext{ID: taskID, Type: taskType, Instruction: instruction})
 		if g.telemetry != nil {
 			nodeCtx = telemetry.WithTelemetry(nodeCtx, g.telemetry)
@@ -616,12 +617,12 @@ func (n *ToolNode) traceIDValue() string {
 
 // nextSpanID generates a unique child span ID for each tool call.
 func (n *ToolNode) nextSpanID() string {
-	return telemetry.NewSpanID()
+	return observability.NewSpanID()
 }
 
 // nextTraceContext derives a child trace context for a tool invocation.
-func (n *ToolNode) nextTraceContext() telemetry.TraceContext {
-	return telemetry.TraceContext{
+func (n *ToolNode) nextTraceContext() observability.TraceContext {
+	return observability.TraceContext{
 		TraceID: n.traceIDValue(),
 		SpanID:  n.nextSpanID(),
 	}
@@ -670,11 +671,11 @@ func (n *ToolNode) Execute(ctx context.Context, env *contextdata.Envelope) (*exe
 	}
 	// Attach trace context for child span generation in instrumentedTool.
 	if n.traceID.Load() == nil {
-		traceID := telemetry.NewTraceID()
+		traceID := observability.NewTraceID()
 		n.traceID.Store(&traceID)
 	}
 	tc := n.nextTraceContext()
-	ctx = telemetry.WithTraceContext(ctx, tc)
+	ctx = observability.WithTraceContext(ctx, tc)
 	res, err := n.Registry.InvokeCapability(ctx, env, n.Tool.Name(), n.Args)
 	if err != nil {
 		return nil, err

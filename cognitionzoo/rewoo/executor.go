@@ -95,15 +95,34 @@ func (e *rewooExecutor) Execute(ctx context.Context, plan *RewooPlan, env *conte
 	return results, nil
 }
 
-// ExecutePlan runs a ReWOO plan mechanically without any LLM involvement.
+// newExecutor constructs a governed executor. Construction refuses without a
+// permission checker: ReWOO tool steps are never ungoverned, so the nil-skip
+// inside executeStep is an unreachable state by construction.
+func newExecutor(registry *capability.CapabilityRegistry, opts RewooOptions) (*rewooExecutor, error) {
+	if registry == nil {
+		return nil, fmt.Errorf("rewoo: executor registry unavailable")
+	}
+	if opts.PermissionChecker == nil {
+		return nil, ErrNoPermissionChecker
+	}
+	return &rewooExecutor{
+		Registry:           registry,
+		PermissionChecker:  opts.PermissionChecker,
+		OnFailure:          opts.OnFailure,
+		MaxSteps:           opts.MaxSteps,
+		OnPermissionDenied: opts.OnPermissionDenied,
+		StreamMode:         opts.StreamMode,
+		StreamQuery:        opts.StreamQuery,
+		StreamMaxTokens:    opts.StreamMaxTokens,
+	}, nil
+}
+
+// ExecutePlan runs a ReWOO plan mechanically — governed tool execution with
+// no LLM involvement in the execute phase.
 func ExecutePlan(ctx context.Context, registry *capability.CapabilityRegistry, plan *RewooPlan, env *contextdata.Envelope, opts RewooOptions) ([]RewooStepResult, error) {
-	executor := &rewooExecutor{
-		Registry:        registry,
-		OnFailure:       opts.OnFailure,
-		MaxSteps:        opts.MaxSteps,
-		StreamMode:      opts.StreamMode,
-		StreamQuery:     opts.StreamQuery,
-		StreamMaxTokens: opts.StreamMaxTokens,
+	executor, err := newExecutor(registry, opts)
+	if err != nil {
+		return nil, err
 	}
 	return executor.Execute(ctx, plan, env)
 }
@@ -123,26 +142,25 @@ func (e *rewooExecutor) executeStep(ctx context.Context, env *contextdata.Envelo
 		}()
 	}
 
-	// Check permissions before execution
-	if e.PermissionChecker != nil {
-		if err := e.PermissionChecker.CheckCapability(ctx, "rewoo", step.Tool); err != nil {
-			result.Success = false
-			result.Error = fmt.Sprintf("permission denied: %v", err)
+	// Check permissions before execution. The constructor guarantees a
+	// non-nil checker; a nil here is a construction bug, not a skip.
+	if err := e.PermissionChecker.CheckCapability(ctx, "rewoo", step.Tool); err != nil {
+		result.Success = false
+		result.Error = fmt.Sprintf("permission denied: %v", err)
 
-			// Handle permission denial based on configured policy
-			denyPolicy := e.OnPermissionDenied
-			if denyPolicy == "" {
-				denyPolicy = StepOnFailureAbort
-			}
-			switch denyPolicy {
-			case StepOnFailureAbort:
-				return result, fmt.Errorf("rewoo: permission denied for tool %s: %w", step.Tool, err)
-			case StepOnFailureReplan:
-				return result, errReplanRequired
-			default:
-				// Skip: record failure but continue
-				return result, nil
-			}
+		// Handle permission denial based on configured policy
+		denyPolicy := e.OnPermissionDenied
+		if denyPolicy == "" {
+			denyPolicy = StepOnFailureAbort
+		}
+		switch denyPolicy {
+		case StepOnFailureAbort:
+			return result, fmt.Errorf("rewoo: permission denied for tool %s: %w", step.Tool, err)
+		case StepOnFailureReplan:
+			return result, errReplanRequired
+		default:
+			// Skip: record failure but continue
+			return result, nil
 		}
 	}
 
@@ -225,7 +243,13 @@ func (e *rewooExecutor) streamTriggerNode(plan *RewooPlan) *graph.StreamTriggerN
 }
 
 // executeStreamingTrigger runs the streaming trigger before plan execution.
+// When the execution context carries no compiler trigger, context streaming
+// is disabled for this run and the trigger is skipped — a missing trigger is
+// a disabled feature, not a plan failure.
 func (e *rewooExecutor) executeStreamingTrigger(ctx context.Context, plan *RewooPlan, env *contextdata.Envelope) error {
+	if contextstream.TriggerFromContext(ctx) == nil {
+		return nil
+	}
 	node := e.streamTriggerNode(plan)
 	if node == nil {
 		return nil

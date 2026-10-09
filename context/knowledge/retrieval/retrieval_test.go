@@ -21,7 +21,7 @@ func (m *mockRanker) Name() string {
 	return m.name
 }
 
-func (m *mockRanker) Rank(ctx context.Context, query RetrievalQuery, store *knowledge.ChunkStore) ([]knowledge.ChunkID, error) {
+func (m *mockRanker) Rank(ctx context.Context, query RetrievalQuery, snap *CorpusSnapshot) ([]knowledge.ChunkID, error) {
 	return m.results, nil
 }
 
@@ -382,10 +382,10 @@ type sleepRanker struct {
 
 func (s *sleepRanker) Name() string { return s.name }
 
-func (s *sleepRanker) Rank(ctx context.Context, query RetrievalQuery, store *knowledge.ChunkStore) ([]knowledge.ChunkID, error) {
+func (s *sleepRanker) Rank(ctx context.Context, query RetrievalQuery, snap *CorpusSnapshot) ([]knowledge.ChunkID, error) {
 	_ = ctx
 	_ = query
-	_ = store
+	_ = snap
 	time.Sleep(s.delay)
 	return append([]knowledge.ChunkID(nil), s.results...), nil
 }

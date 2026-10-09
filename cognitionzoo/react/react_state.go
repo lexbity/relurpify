@@ -17,6 +17,21 @@ type ToolObservation struct {
 	Data      map[string]any `json:"data,omitempty"`
 	Success   bool           `json:"success"`
 	Timestamp time.Time      `json:"timestamp"`
+	// Seq is a run-monotonic sequence number. The loop detector uses it to
+	// find the actions executed since its last pass, so observation-history
+	// trimming never hides executed actions from detection.
+	Seq int `json:"seq,omitempty"`
+}
+
+// nextObservationSeq returns the sequence number for the next observation.
+func nextObservationSeq(history []ToolObservation) int {
+	seq := 0
+	for _, observation := range history {
+		if observation.Seq > seq {
+			seq = observation.Seq
+		}
+	}
+	return seq + 1
 }
 
 func activeToolSet(env *contextdata.Envelope) map[string]struct{} {
@@ -47,13 +62,4 @@ func recordActiveToolNames(env *contextdata.Envelope, tools []ports.Tool) {
 		names = append(names, tool.Name())
 	}
 	env.SetWorkingValueWithClass("react.active_tools", names, contextdata.MemoryClassTask)
-}
-
-func (a *ReActAgent) enforceBudget(env *contextdata.Envelope) {
-}
-
-func (a *ReActAgent) recordLatestInteraction(env *contextdata.Envelope) {
-}
-
-func (a *ReActAgent) manageContextSignals(env *contextdata.Envelope) {
 }

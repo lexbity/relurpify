@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -74,6 +75,7 @@ type EnvironmentReport struct {
 // StatusSnapshot enriches the environment report with live runtime details.
 type StatusSnapshot struct {
 	Environment           EnvironmentReport
+	Ready                 bool
 	PendingHITL           []*authorization.PermissionRequest
 	ServerActive          bool
 	ProtectedPaths        []string
@@ -83,6 +85,8 @@ type StatusSnapshot struct {
 	ProfileReason         string
 	ProfileSource         string
 	DeprecationNotices    []string
+	RecipesReady          bool
+	RecipesError          string
 }
 
 // ProbeEnvironment inspects sandbox binaries, inference backend availability,
@@ -394,11 +398,19 @@ func (r *Runtime) Status(ctx context.Context) StatusSnapshot {
 	if env.Workspace != "" {
 		snapshot.ProtectedPaths = config.New(env.Workspace).GovernanceRoots()
 	}
+	if ws := r.AgentWorkspace(); ws != nil {
+		snapshot.Ready = ws.Readiness.Ready()
+	}
 	if r.registration != nil {
 		if ds, ok := r.registration.DocumentSnapshot.(*config.DocumentSnapshot); ok && ds != nil {
 			snapshot.ManifestFingerprint = fmt.Sprintf("%x", ds.Fingerprint)
 			snapshot.DeprecationNotices = append([]string(nil), ds.Warnings...)
 		}
+	}
+	if snapshot.Environment.Workspace != "" {
+		recipes := checkCanonicalRecipes(snapshot.Environment.Workspace)
+		snapshot.RecipesReady = recipes.ready
+		snapshot.RecipesError = recipes.errText
 	}
 	if r.AgentWorkspace().ProfileResolution.Profile != nil {
 		snapshot.SelectedProfile = strings.TrimSpace(r.AgentWorkspace().ProfileResolution.Profile.Pattern)
@@ -406,4 +418,56 @@ func (r *Runtime) Status(ctx context.Context) StatusSnapshot {
 	snapshot.ProfileReason = r.AgentWorkspace().ProfileResolution.Reason
 	snapshot.ProfileSource = r.AgentWorkspace().ProfileResolution.SourcePath
 	return snapshot
+}
+
+// RenderText writes the snapshot as aligned diagnostic sections — the same
+// data doctor shows, without booting a TUI.
+func (s StatusSnapshot) RenderText(w io.Writer) {
+	inference := s.Environment.Inference
+	fmt.Fprintf(w, "workspace:  %s\n", s.Environment.Workspace)
+	fmt.Fprintf(w, "agent:      %s\n", s.Environment.Agent)
+	fmt.Fprintf(w, "config:     %s\n", fingerprintOrNone(s.ManifestFingerprint))
+	fmt.Fprintf(w, "provider:   %s (%s)\n", providerOrNone(inference.Provider), inference.Endpoint)
+	fmt.Fprintf(w, "model:      %s state=%s\n", modelOrNone(inference.SelectedModel), inference.State)
+	fmt.Fprintf(w, "sandbox:    verified=%t\n", s.Environment.Sandbox.Verified)
+	fmt.Fprintf(w, "services:   server-active=%t pending-hitl=%d\n", s.ServerActive, len(s.PendingHITL))
+	fmt.Fprintf(w, "recipes:    ready=%t\n", s.RecipesReady)
+	if s.RecipesError != "" {
+		fmt.Fprintf(w, "            %s (run 'relurpish doctor --fix' to materialize starter recipes)\n", s.RecipesError)
+	}
+	fmt.Fprintf(w, "ready:      %t\n", s.Ready)
+	for _, notice := range s.DeprecationNotices {
+		fmt.Fprintf(w, "notice:     %s\n", notice)
+	}
+}
+
+// RenderJSON writes the snapshot as indented JSON for CI consumption.
+func (s StatusSnapshot) RenderJSON(w io.Writer) error {
+	encoded, err := json.MarshalIndent(s, "", "  ")
+	if err != nil {
+		return err
+	}
+	_, err = fmt.Fprintln(w, string(encoded))
+	return err
+}
+
+func fingerprintOrNone(v string) string {
+	if strings.TrimSpace(v) == "" {
+		return "none"
+	}
+	return v
+}
+
+func providerOrNone(v string) string {
+	if strings.TrimSpace(v) == "" {
+		return "none"
+	}
+	return v
+}
+
+func modelOrNone(v string) string {
+	if strings.TrimSpace(v) == "" {
+		return "none"
+	}
+	return v
 }

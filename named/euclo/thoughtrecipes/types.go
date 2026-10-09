@@ -96,31 +96,57 @@ type AgentBinding struct {
 
 // ResolvedToolScope is the resolved tool scope for a step.
 // The zero value denies every tool (fail-closed, A-6).
+//
+// Permits truth table (single source of truth — empty never means open):
+//
+//	resolved  denyAll  allowed   =>  Permits
+//	false     *        *         =>  false
+//	true      true     *         =>  false
+//	true      false    empty     =>  false
+//	true      false    [t]       =>  t ∈ allowed
 type ResolvedToolScope struct {
 	allowed  []string
 	resolved bool
 	denyAll  bool
+	allowAll bool
 }
+
+// scopeSentinelDenyAll is the JSON wire sentinel for an explicit deny-all
+// scope. Round-trip pinned by the tool-scope golden.
+const scopeSentinelDenyAll = "__deny_all__"
+
+// scopeSentinelAllowAll is the JSON wire sentinel for an explicit
+// unrestricted scope. Only AllowAll() constructs that state.
+const scopeSentinelAllowAll = "__allow_all__"
 
 // DenyAllToolScope returns a ResolvedToolScope that denies every tool.
 func DenyAllToolScope() ResolvedToolScope {
 	return ResolvedToolScope{resolved: true, denyAll: true}
 }
 
-// AllowTools returns a ResolvedToolScope allowing the given tool names.
-// A nil/empty slice means unrestricted (the runtime defaults to allow-all).
+// AllowTools returns a ResolvedToolScope allowing exactly the given tool
+// names. Empty never means unrestricted: a resolved-but-empty scope denies
+// every tool. Programmatic construction that genuinely means unrestricted
+// MUST use AllowAll.
 func AllowTools(names []string) ResolvedToolScope {
 	return ResolvedToolScope{allowed: names, resolved: true}
+}
+
+// AllowAll returns the explicit unrestricted scope — the only writer of that
+// state.
+func AllowAll() ResolvedToolScope {
+	return ResolvedToolScope{resolved: true, allowAll: true}
 }
 
 // IsResolved reports whether the scope has been explicitly set.
 // An unresolved scope (zero value) denies every tool (A-6).
 func (s ResolvedToolScope) IsResolved() bool { return s.resolved }
 
-// AllowedToolNames returns the list of allowed tool names.
-// Nil means deny-all when IsDenyAll() is true, or unrestricted otherwise.
+// AllowedToolNames returns the allowed tool names. Nil means unrestricted
+// only for the explicit AllowAll scope; deny-all and empty scopes return nil
+// and permit nothing.
 func (s ResolvedToolScope) AllowedToolNames() []string {
-	if !s.resolved || s.denyAll {
+	if !s.resolved || s.denyAll || s.allowAll {
 		return nil
 	}
 	return append([]string(nil), s.allowed...)
@@ -131,13 +157,22 @@ func (s ResolvedToolScope) IsDenyAll() bool {
 	return s.denyAll || !s.resolved
 }
 
-// Permits reports whether the given tool is allowed by this scope.
+// IsAllowAll reports whether this scope is the explicit unrestricted scope.
+func (s ResolvedToolScope) IsAllowAll() bool {
+	return s.allowAll
+}
+
+// Permits implements the truth table: !resolved ∨ denyAll ∨ empty-allowed
+// all deny; only membership or explicit AllowAll permits.
 func (s ResolvedToolScope) Permits(toolName string) bool {
 	if !s.resolved || s.denyAll {
 		return false
 	}
+	if s.allowAll {
+		return true
+	}
 	if len(s.allowed) == 0 {
-		return true // nil/empty = unrestricted
+		return false
 	}
 	for _, a := range s.allowed {
 		if a == toolName {
@@ -148,13 +183,16 @@ func (s ResolvedToolScope) Permits(toolName string) bool {
 }
 
 func (s ResolvedToolScope) MarshalJSON() ([]byte, error) {
-	if s.denyAll {
-		return json.Marshal([]string{"__deny_all__"})
-	}
-	if !s.resolved || len(s.allowed) == 0 {
+	switch {
+	case s.denyAll:
+		return json.Marshal([]string{scopeSentinelDenyAll})
+	case s.allowAll:
+		return json.Marshal([]string{scopeSentinelAllowAll})
+	case !s.resolved || len(s.allowed) == 0:
 		return json.Marshal(nil)
+	default:
+		return json.Marshal(s.allowed)
 	}
-	return json.Marshal(s.allowed)
 }
 
 func (s *ResolvedToolScope) UnmarshalJSON(data []byte) error {
@@ -162,20 +200,19 @@ func (s *ResolvedToolScope) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &names); err != nil {
 		return err
 	}
-	switch {
-	case names == nil:
-		s.resolved = true
-		s.allowed = nil
-		s.denyAll = false
-	case len(names) == 1 && names[0] == "__deny_all__":
-		s.resolved = true
-		s.allowed = nil
-		s.denyAll = true
-	default:
-		s.resolved = true
-		s.allowed = names
-		s.denyAll = false
+	*s = ResolvedToolScope{resolved: true}
+	if names == nil {
+		return nil
 	}
+	if len(names) == 1 && names[0] == scopeSentinelDenyAll {
+		s.denyAll = true
+		return nil
+	}
+	if len(names) == 1 && names[0] == scopeSentinelAllowAll {
+		s.allowAll = true
+		return nil
+	}
+	s.allowed = names
 	return nil
 }
 

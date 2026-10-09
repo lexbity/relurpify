@@ -18,13 +18,6 @@ func tokenizeRankerText(text string) []string {
 	})
 }
 
-func loadRankerChunks(store *knowledge.ChunkStore) ([]knowledge.KnowledgeChunk, error) {
-	if store == nil {
-		return nil, nil
-	}
-	return store.FindAll()
-}
-
 func sortRankedIDs(scores map[knowledge.ChunkID]float64, tiebreak func(a, b knowledge.ChunkID) bool) []knowledge.ChunkID {
 	if len(scores) == 0 {
 		return nil

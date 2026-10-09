@@ -182,7 +182,7 @@ func TestExecutePlanPassesEnvelopeStateToSessionCapability(t *testing.T) {
 		}},
 	}
 
-	results, err := ExecutePlan(context.Background(), reg, plan, env, RewooOptions{})
+	results, err := ExecutePlan(context.Background(), reg, plan, env, RewooOptions{PermissionChecker: allowAllChecker()})
 	if err != nil {
 		t.Fatalf("ExecutePlan returned error: %v", err)
 	}

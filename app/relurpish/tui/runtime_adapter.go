@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -71,6 +72,10 @@ type RuntimeAdapter interface {
 	AvailableAgents() []string
 	SwitchAgent(name string) error
 	SessionInfo() SessionInfo
+	// ProbeBackendHealth probes the model backend now (bounded: 2 s) and
+	// returns its state string, caching the result for SessionInfo. It is
+	// called off the UI thread — boot never probes synchronously.
+	ProbeBackendHealth(ctx context.Context) string
 	ResolveContextFiles(ctx context.Context, files []string) ContextFileResolution
 	SessionArtifacts() SessionArtifacts
 	InferenceModels(ctx context.Context) ([]string, error)
@@ -152,9 +157,11 @@ type RuntimeAdapter interface {
 	// ActiveWorkflowID returns the current active workflow ID (empty if none).
 	ActiveWorkflowID() string
 
-	// ResumeSession rehydrates a session from a workflow ID, returning
-	// a non-nil error when the workflow cannot be resumed.
-	ResumeSession(ctx context.Context, workflowID string) error
+	// ResumeSession continues a previous session by executing a real turn:
+	// the follow-up instruction when supplied, else a re-grounding seed from
+	// the recorded prior task. Returns a non-nil error when the workflow
+	// cannot be resumed or a run is already active.
+	ResumeSession(ctx context.Context, workflowID, followUp string) error
 	// ResolveInteractionFrame writes a resolved interaction response back into
 	// the live runtime envelope for the given task.
 	ResolveInteractionFrame(ctx context.Context, taskID, frameID, choice, freetext string) error
@@ -167,7 +174,9 @@ type RuntimeAdapter interface {
 }
 
 type runtimeAdapter struct {
-	rt *runtimesvc.Runtime
+	backendStateMu sync.Mutex
+	backendState   string
+	rt             *runtimesvc.Runtime
 }
 
 func newRuntimeAdapter(rt *runtimesvc.Runtime) RuntimeAdapter {
@@ -228,13 +237,10 @@ func (r *runtimeAdapter) SessionInfo() SessionInfo {
 	}
 	info.ProfileReason = ws.ProfileResolution.Reason
 	info.ProfileSource = ws.ProfileResolution.SourcePath
-	if be := ws.Backend; be != nil {
-		if mb, ok := be.(llm.ManagedBackend); ok {
-			if health, err := mb.Health(context.Background()); err == nil && health != nil {
-				info.BackendState = string(health.State)
-			}
-		}
-	}
+	// Backend state is the last probed value (initially "checking"): the
+	// boot path never probes synchronously — ProbeBackendHealth runs via a
+	// post-first-paint tea.Cmd.
+	info.BackendState = r.cachedBackendState()
 
 	if spec := ws.AgentSpec; spec != nil {
 		if spec.Model.Provider != "" {
@@ -253,6 +259,42 @@ func (r *runtimeAdapter) SessionInfo() SessionInfo {
 	info.Mode, info.Strategy = describeAgentRuntime(r.rt.Agent)
 	info.ExecutionMode = string(r.ExecutionMode())
 	return info
+}
+
+// defaultBackendState is the SessionInfo backend state before the first
+// probe lands (NFR-7: first paint never depends on the backend).
+const defaultBackendState = "checking"
+
+// probeTimeoutBounds bounds one backend health probe (FR-39).
+const probeTimeoutBounds = 2 * time.Second
+
+// ProbeBackendHealth probes the managed backend with a bounded deadline,
+// caches the resulting state, and returns it. Timeouts degrade to
+// "unknown(probe-timeout)" — the snapshot is still returned.
+func (r *runtimeAdapter) ProbeBackendHealth(ctx context.Context) string {
+	state := "unknown(probe-timeout)"
+	probeCtx, cancel := context.WithTimeout(ctx, probeTimeoutBounds)
+	defer cancel()
+	if ws := r.rt.AgentWorkspace(); ws != nil {
+		if mb, ok := ws.Backend.(llm.ManagedBackend); ok {
+			if health, err := mb.Health(probeCtx); err == nil && health != nil {
+				state = string(health.State)
+			}
+		}
+	}
+	r.backendStateMu.Lock()
+	r.backendState = state
+	r.backendStateMu.Unlock()
+	return state
+}
+
+func (r *runtimeAdapter) cachedBackendState() string {
+	r.backendStateMu.Lock()
+	defer r.backendStateMu.Unlock()
+	if r.backendState == "" {
+		return defaultBackendState
+	}
+	return r.backendState
 }
 
 func (r *runtimeAdapter) ContractSummary() *ContractSummary {
@@ -1250,13 +1292,19 @@ func (r *runtimeAdapter) GetLatestTrace() (TraceInfo, error) {
 }
 
 // ActiveWorkflowID satisfies RuntimeAdapter.
-func (r *runtimeAdapter) ActiveWorkflowID() string { return r.activeWorkflowID() }
-
-func (r *runtimeAdapter) ResumeSession(ctx context.Context, workflowID string) error {
+func (r *runtimeAdapter) ActiveWorkflowID() string {
 	if r == nil || r.rt == nil {
-		return nil
+		return ""
 	}
-	_, err := r.rt.ResumeSession(ctx, workflowID)
+	return r.rt.ActiveWorkflowID()
+}
+
+// ResumeSession satisfies RuntimeAdapter.
+func (r *runtimeAdapter) ResumeSession(ctx context.Context, workflowID, followUp string) error {
+	if r == nil || r.rt == nil {
+		return fmt.Errorf("runtime unavailable")
+	}
+	_, err := r.rt.ResumeSession(ctx, workflowID, followUp)
 	return err
 }
 
@@ -1291,8 +1339,4 @@ func (r *runtimeAdapter) InitializeWorkspaceFromTemplates(overwrite bool) error 
 		return fmt.Errorf("runtime unavailable")
 	}
 	return runtimesvc.InitializeWorkspaceFromTemplates(r.rt.Config, overwrite)
-}
-
-func (r *runtimeAdapter) activeWorkflowID() string {
-	return ""
 }

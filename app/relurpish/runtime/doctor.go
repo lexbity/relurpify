@@ -1,8 +1,10 @@
 package runtime
 
 import (
+	"codeburg.org/lexbit/relurpify/userconfig/config/model"
 	"context"
 	"fmt"
+	"golang.org/x/sync/errgroup"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -11,9 +13,14 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/ayenitd"
+	capabilityagentspec "codeburg.org/lexbit/relurpify/capability/agentspec"
+	capabilitydescriptor "codeburg.org/lexbit/relurpify/capability/descriptor"
+	capabilityregistry "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/governance/policy"
 	"codeburg.org/lexbit/relurpify/named/euclo/euclocontract"
+	eucloservices "codeburg.org/lexbit/relurpify/named/euclo/services"
+	thoughtrecipes "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
 	platformfs "codeburg.org/lexbit/relurpify/platform/fs"
 	"codeburg.org/lexbit/relurpify/platform/llm"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
@@ -57,6 +64,12 @@ type DoctorReport struct {
 	ManifestError         string
 	ModelProfilesError    string
 	StarterTemplatesError string
+	// Recipes reports the canonical thoughtrecipe set state (Q6: missing
+	// recipes are reported, not hidden).
+	RecipesReady          bool
+	RecipesError          string
+	RecipesFound          []string
+	RecipesMissing        []string
 	ManifestWarnings      []string
 	DeprecationNotices    []string
 	ProtectedPaths        []string
@@ -169,6 +182,11 @@ func BuildDoctorReport(ctx context.Context, cfg Config, secrets config.Secrets) 
 	if !report.StarterTemplatesReady {
 		report.StarterTemplatesError = fmt.Errorf("embedded templates not found").Error()
 	}
+	recipesCheck := checkCanonicalRecipes(cfg.Workspace)
+	report.RecipesReady = recipesCheck.ready
+	report.RecipesError = recipesCheck.errText
+	report.RecipesFound = recipesCheck.found
+	report.RecipesMissing = recipesCheck.missing
 
 	var env EnvironmentReport
 	backend, err := llm.New(llm.ProviderConfigFromRuntimeConfig(cfg), llm.ProviderSecrets{
@@ -191,44 +209,7 @@ func BuildDoctorReport(ctx context.Context, cfg Config, secrets config.Secrets) 
 	case err == nil && bundle.Config != nil:
 		reg, _ := buildProviderRegistry(bundle.Config.Model.Providers)
 		if reg != nil {
-			var providerHealthList []ProviderHealth
-			for _, def := range bundle.Config.Model.Providers {
-				ph := ProviderHealth{
-					Name:      def.Name,
-					Kind:      def.Kind,
-					Endpoint:  def.Endpoint,
-					SetupHint: def.SetupHint,
-				}
-				// Check if this is the currently selected provider
-				if strings.EqualFold(def.Name, cfg.InferenceProvider) {
-					ph.Selected = true
-				}
-				// Probe the provider's health
-				pcfg := llm.ProviderConfig{
-					Provider: def.Name,
-					Kind:     def.Kind,
-					Endpoint: def.Endpoint,
-				}
-				if pbe, pberr := llm.New(pcfg, llm.ProviderSecrets{APIKey: secrets.LLMAPIKey}); pberr == nil {
-					if phState, phErr := pbe.Health(ctx); phState != nil {
-						ph.State = string(phState.State)
-					} else if phErr != nil {
-						ph.State = "unhealthy"
-						ph.Error = phErr.Error()
-					}
-					if models, modErr := pbe.ListModels(ctx); modErr == nil {
-						for _, m := range models {
-							ph.Models = append(ph.Models, m.Name)
-						}
-					}
-					_ = pbe.Close()
-				} else {
-					ph.State = "unhealthy"
-					ph.Error = pberr.Error()
-				}
-				providerHealthList = append(providerHealthList, ph)
-			}
-			report.Providers = providerHealthList
+			report.Providers = probeProviderCatalog(ctx, bundle.Config.Model.Providers, cfg, secrets)
 		}
 		// Model profile check using the same bundle.
 		regProfiles := modelselect.NewProfileRegistryFromProfiles(bundle.Config.Model.Profiles)
@@ -618,4 +599,166 @@ func shortDigest(digest string) string {
 		return d[:12] + "…"
 	}
 	return d
+}
+
+// Provider probe deadlines (FR-39): per-provider 2 s, catalog overall 10 s,
+// at most 4 providers probed concurrently. A probe that misses its deadline
+// is recorded as "timeout" — the report schema is unchanged.
+const (
+	providerProbeTimeout     = 2 * time.Second
+	providerCatalogDeadline  = 10 * time.Second
+	providerProbeConcurrency = 4
+)
+
+// probeProviderCatalog probes every configured provider's health and model
+// list concurrently (bounded), under a catalog-wide deadline. Ordering of
+// the returned list matches the config declaration order regardless of
+// probe completion order.
+func probeProviderCatalog(ctx context.Context, defs []*model.ResolvedProvider, cfg Config, secrets config.Secrets) []ProviderHealth {
+	if len(defs) == 0 {
+		return nil
+	}
+	catalogCtx, cancel := context.WithTimeout(ctx, providerCatalogDeadline)
+	defer cancel()
+
+	results := make([]ProviderHealth, len(defs))
+	g, gctx := errgroup.WithContext(catalogCtx)
+	g.SetLimit(providerProbeConcurrency)
+	for i := range defs {
+		i, def := i, defs[i]
+		g.Go(func() error {
+			ph := ProviderHealth{
+				Name:      def.Name,
+				Kind:      def.Kind,
+				Endpoint:  def.Endpoint,
+				SetupHint: def.SetupHint,
+			}
+			if strings.EqualFold(def.Name, cfg.InferenceProvider) {
+				ph.Selected = true
+			}
+			probeCtx, probeCancel := context.WithTimeout(gctx, providerProbeTimeout)
+			defer probeCancel()
+			applyProviderProbe(probeCtx, &ph, def, secrets)
+			results[i] = ph
+			return nil
+		})
+	}
+	// The catalog deadline is enforced by the per-probe contexts; a straggler
+	// past the overall deadline is recorded as timed out rather than blocking.
+	_ = g.Wait()
+	for i := range results {
+		if results[i].State == "" {
+			results[i].State = "timeout"
+		}
+	}
+	return results
+}
+
+// applyProviderProbe runs one provider's health and model-list probes under
+// the caller's (already bounded) context.
+func applyProviderProbe(ctx context.Context, ph *ProviderHealth, def *model.ResolvedProvider, secrets config.Secrets) {
+	pcfg := llm.ProviderConfig{
+		Provider: def.Name,
+		Kind:     def.Kind,
+		Endpoint: def.Endpoint,
+	}
+	pbe, pberr := llm.New(pcfg, llm.ProviderSecrets{APIKey: secrets.LLMAPIKey})
+	if pberr != nil {
+		ph.State = "unhealthy"
+		ph.Error = pberr.Error()
+		return
+	}
+	defer func() { _ = pbe.Close() }()
+	phState, phErr := pbe.Health(ctx)
+	// A probe cut down by its own deadline (or the catalog deadline) is a
+	// timeout regardless of how the backend spelled the failure — the
+	// deadline is this probe's verdict, not the backend's health.
+	if phErr != nil && ctx.Err() != nil {
+		ph.State = "timeout"
+		return
+	}
+	if phErr != nil {
+		ph.State = "unhealthy"
+		ph.Error = phErr.Error()
+		return
+	}
+	if phState != nil {
+		ph.State = string(phState.State)
+	}
+	if models, modErr := pbe.ListModels(ctx); modErr == nil {
+		for _, m := range models {
+			ph.Models = append(ph.Models, m.Name)
+		}
+	}
+}
+
+// canonicalRecipeIDs is the seven-recipe canonical set (§5.7) plus the
+// built-in clarification target: every family handoff must resolve to one of
+// these, and doctor reports any that a workspace lacks.
+var canonicalRecipeIDs = []string{
+	"euclo.thoughtrecipe.default",
+	"euclo.thoughtrecipe.code_review",
+	"euclo.thoughtrecipe.investigation",
+	"euclo.thoughtrecipe.debug_tdd_repair",
+	"euclo.thoughtrecipe.dep_upgrade",
+	"euclo.thoughtrecipe.test_synthesis",
+	"euclo.thoughtrecipe.extract_func",
+}
+
+type recipesCheckResult struct {
+	ready   bool
+	errText string
+	found   []string
+	missing []string
+}
+
+// checkCanonicalRecipes reports the workspace's canonical recipe state:
+// directory present, files parseable, every canonical ID registered. A
+// workspace initialized before the canonical set ships fails closed with an
+// actionable message (re-init), never silently.
+func checkCanonicalRecipes(workspace string) recipesCheckResult {
+	result := recipesCheckResult{}
+	// Diagnostics have no live runtime registry; seed a static capability
+	// view from the self-declared euclo set so `do relurpic:` references in
+	// the canonical recipes resolve exactly as they would at run time.
+	caps := capabilityregistry.NewRegistry()
+	for _, capID := range eucloservices.EucloCapabilityIDs() {
+		desc := capabilitydescriptor.CapabilityDescriptor{
+			ID:           capID,
+			Name:         capID,
+			Kind:         capabilityagentspec.CapabilityKindTool,
+			Availability: capabilitydescriptor.AvailabilitySpec{Available: true},
+		}
+		if err := caps.RegisterCapability(context.Background(), desc); err != nil {
+			result.errText = fmt.Sprintf("seed capability view: %v", err)
+			result.missing = append(result.missing, canonicalRecipeIDs...)
+			return result
+		}
+	}
+	loader := thoughtrecipes.NewLoader().WithCapabilityRegistry(eucloservices.CapabilityLookup(caps))
+	loadResult, err := loader.LoadWorkspace(workspace)
+	if err != nil {
+		// Sources unreadable (missing directory, unreadable file): nothing
+		// registered, so every canonical ID is missing.
+		result.errText = fmt.Sprintf("read thoughtrecipe sources: %v (run 'relurpish doctor --fix' to materialize starter recipes)", err)
+		result.missing = append(result.missing, canonicalRecipeIDs...)
+		return result
+	}
+	if loadResult == nil || loadResult.Registry == nil {
+		result.errText = "thoughtrecipe registry unavailable (run 'relurpish doctor --fix' to materialize starter recipes)"
+		return result
+	}
+	for _, id := range canonicalRecipeIDs {
+		if _, ok := loadResult.Registry.Get(id); ok {
+			result.found = append(result.found, id)
+		} else {
+			result.missing = append(result.missing, id)
+		}
+	}
+	if len(result.missing) > 0 {
+		result.errText = fmt.Sprintf("missing canonical thoughtrecipes: %s (run 'relurpish doctor --fix' to materialize starter recipes)", strings.Join(result.missing, ", "))
+		return result
+	}
+	result.ready = true
+	return result
 }

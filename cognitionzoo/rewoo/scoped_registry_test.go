@@ -58,7 +58,7 @@ func TestExecutePlanUsesScopedRegistryDirectly(t *testing.T) {
 			},
 		}},
 	}
-	results, err := ExecutePlan(context.Background(), scoped, plan, contextdata.NewEnvelope("rewoo-task", "session"), RewooOptions{})
+	results, err := ExecutePlan(context.Background(), scoped, plan, contextdata.NewEnvelope("rewoo-task", "session"), RewooOptions{PermissionChecker: allowAllChecker()})
 	if err != nil {
 		t.Fatalf("ExecutePlan failed: %v", err)
 	}

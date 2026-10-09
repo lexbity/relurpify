@@ -16,15 +16,15 @@ type RecencyRanker struct {
 
 func (r *RecencyRanker) Name() string { return "recency" }
 
-func (r *RecencyRanker) Rank(ctx context.Context, query RetrievalQuery, store *knowledge.ChunkStore) ([]knowledge.ChunkID, error) {
+func (r *RecencyRanker) Rank(ctx context.Context, query RetrievalQuery, snap *CorpusSnapshot) ([]knowledge.ChunkID, error) {
 	_ = ctx
 	_ = query
-	if r == nil || store == nil {
+	if r == nil || snap == nil {
 		return nil, nil
 	}
-	chunks, err := loadRankerChunks(store)
-	if err != nil || len(chunks) == 0 {
-		return nil, err
+	chunks := snap.Chunks
+	if len(chunks) == 0 {
+		return nil, nil
 	}
 	halfLife := r.HalfLifeHours
 	if halfLife <= 0 {
@@ -52,22 +52,15 @@ func (r *RecencyRanker) Rank(ctx context.Context, query RetrievalQuery, store *k
 		scores[chunk.ID] = score
 	}
 
+	// Tiebreak on recency via the snapshot's O(1) ID index — the comparator
+	// no longer rescans the corpus per comparison.
 	ids := sortRankedIDs(scores, func(a, b knowledge.ChunkID) bool {
-		left, lOk := chunkByID(chunks, a)
-		right, rOk := chunkByID(chunks, b)
+		left, lOk := snap.Lookup(a)
+		right, rOk := snap.Lookup(b)
 		if lOk && rOk {
 			return left.UpdatedAt.After(right.UpdatedAt)
 		}
 		return a < b
 	})
 	return ids, nil
-}
-
-func chunkByID(chunks []knowledge.KnowledgeChunk, id knowledge.ChunkID) (knowledge.KnowledgeChunk, bool) {
-	for _, chunk := range chunks {
-		if chunk.ID == id {
-			return chunk, true
-		}
-	}
-	return knowledge.KnowledgeChunk{}, false
 }

@@ -6,12 +6,14 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 
 	relurpctx "codeburg.org/lexbit/relurpify/context"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/execution/agentgraph"
 	"codeburg.org/lexbit/relurpify/model"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 type reactObserveNode struct {
@@ -64,6 +66,7 @@ func (n *reactObserveNode) Execute(ctx context.Context, env *contextdata.Envelop
 		diagnostic.WriteRune('\n')
 	}
 	n.advancePhase(env, decision, lastMap)
+	n.observeLoopStall(ctx, env)
 	if n.scheduleRecoveryProbe(env, lastMap) {
 		env.SetWorkingValueWithClass("react.done", false, contextdata.MemoryClassTask)
 		result := &execution.Result{
@@ -89,23 +92,10 @@ func (n *reactObserveNode) Execute(ctx context.Context, env *contextdata.Envelop
 	if summary, ok := analysisSummaryFromFailure(n.task, env, lastMap); ok {
 		return n.applyCompletionSummary(env, summary, lastMap, &diagnostic), nil
 	}
-	repeated, repeatReason := detectRepeatedToolLoop(env, n.task)
 	completed := decision.Complete
 	if res, ok := contextdata.GetTyped[any](env, "react.tool_calls"); ok {
 		if calls, ok := res.([]model.ToolCall); ok && len(calls) > 0 {
 			completed = false
-		}
-	}
-	if repeated {
-		if summary, ok := completionSummaryFromState(n.agent, n.task, env, lastMap); ok {
-			completed = true
-			setSynthesizedConclusion(env, summary, &diagnostic)
-		} else if summary, ok := repeatedFailureAnalysis(n.task, env, lastMap); ok {
-			completed = true
-			setSynthesizedConclusion(env, summary, &diagnostic)
-		} else {
-			completed = true
-			env.SetWorkingValueWithClass("react.incomplete_reason", repeatReason, contextdata.MemoryClassTask)
 		}
 	}
 	if !completed && iter >= n.agent.maxIterations {
@@ -195,6 +185,11 @@ func (n *reactObserveNode) scheduleRecoveryProbe(env *contextdata.Envelope, last
 			return false
 		}
 	}
+	// The probe slot holds at most one pending probe; never overwrite one
+	// the act node has not consumed yet.
+	if queued, ok := contextdata.GetTyped[model.ToolCall](env, queuedProbeKey); ok && queued.Name != "" {
+		return false
+	}
 	probes := n.agent.recoveryProbeTools()
 	if len(probes) == 0 {
 		return false
@@ -213,11 +208,77 @@ func (n *reactObserveNode) scheduleRecoveryProbe(env *contextdata.Envelope, last
 		if args == nil {
 			continue
 		}
-		env.SetWorkingValueWithClass("react.tool_calls", []model.ToolCall{{Name: probe, Args: args}}, contextdata.MemoryClassTask)
+		contextdata.SetTyped(env, queuedProbeKey, model.ToolCall{Name: probe, Args: args})
 		recordRecoveryProbeUsage(env, signature, probe)
 		return true
 	}
 	return false
+}
+
+// observeLoopStall feeds the actions executed since the previous observation
+// into the intent-space loop detector. On stall it emits react.loop_stall
+// telemetry and leaves advisory guidance for the next think prompt; detection
+// never terminates the loop — the iteration budget remains the hard stop.
+func (n *reactObserveNode) observeLoopStall(ctx context.Context, env *contextdata.Envelope) {
+	if env == nil {
+		return
+	}
+	observations := getToolObservations(env)
+	detector := loadLoopDetector(env)
+	stallTool, stallPhase, stallCount := "", "", 0
+	for _, observation := range observations {
+		if observation.Seq <= detector.recorded {
+			continue
+		}
+		stalled, sig := detector.record(observation.Tool, rawArgsForSignature(observation.Args), observation.Phase)
+		if observation.Seq > detector.recorded {
+			detector.recorded = observation.Seq
+		}
+		if stalled {
+			stallTool, stallPhase, stallCount = observation.Tool, observation.Phase, detector.count(sig)
+		}
+	}
+	saveLoopState(env, detector)
+	if stallTool == "" {
+		env.SetWorkingValueWithClass(loopGuidanceKey, "", contextdata.MemoryClassTask)
+		return
+	}
+	guidance := fmt.Sprintf(
+		"You have invoked %s with identical arguments %d times and the result has not changed. Choose a different approach or complete the task.",
+		stallTool, stallCount)
+	env.SetWorkingValueWithClass(loopGuidanceKey, guidance, contextdata.MemoryClassTask)
+	n.emitLoopStall(ctx, env, stallTool, stallPhase, stallCount)
+}
+
+func (n *reactObserveNode) emitLoopStall(ctx context.Context, env *contextdata.Envelope, tool, phase string, count int) {
+	if n.agent == nil || n.agent.Config == nil || n.agent.Config.Telemetry == nil {
+		return
+	}
+	ev := telemetry.Event{
+		Type:      telemetry.EventStateChange,
+		TaskID:    strings.TrimSpace(envGetString(env, "task.id")),
+		Message:   "react loop stall detected",
+		Timestamp: time.Now().UTC(),
+		Metadata: map[string]any{
+			"security_event": "react.loop_stall",
+			"tool":           tool,
+			"phase":          phase,
+			"count":          count,
+		},
+	}
+	telemetry.StampCorrelation(ctx, &ev)
+	n.agent.Config.Telemetry.Emit(ev)
+}
+
+func rawArgsForSignature(args map[string]any) json.RawMessage {
+	if len(args) == 0 {
+		return json.RawMessage("{}")
+	}
+	raw, err := json.Marshal(args)
+	if err != nil {
+		return json.RawMessage("{}")
+	}
+	return raw
 }
 
 func (n *reactObserveNode) advancePhase(env *contextdata.Envelope, decision decisionPayload, lastMap map[string]any) {
@@ -387,38 +448,6 @@ func taskNeedsEditing(task *execution.Task) bool {
 	return editPattern.MatchString(text)
 }
 
-func detectRepeatedToolLoop(env *contextdata.Envelope, task *execution.Task) (bool, string) {
-	observations := getToolObservations(env)
-	if len(observations) == 0 {
-		return false, ""
-	}
-	current := observationSignature(observations[len(observations)-1])
-	count := 1
-	for i := len(observations) - 2; i >= 0; i-- {
-		if observationSignature(observations[i]) != current {
-			break
-		}
-		count++
-	}
-	env.SetWorkingValueWithClass("react.repeat_signature", current, contextdata.MemoryClassTask)
-	env.SetWorkingValueWithClass("react.repeat_count", count, contextdata.MemoryClassTask)
-	if count < stallThresholdForTask(task) {
-		return false, ""
-	}
-	last := observations[len(observations)-1]
-	return true, fmt.Sprintf("stuck repeating %s with the same inputs/results", last.Tool)
-}
-
-func stallThresholdForTask(task *execution.Task) int {
-	if task == nil {
-		return 3
-	}
-	if strings.EqualFold(task.Type, "analysis") {
-		return 6 // analysis tasks legitimately re-read the same files before converging
-	}
-	return 3
-}
-
 func repeatedReadTarget(state *contextdata.Envelope) string {
 	observations := getToolObservations(state)
 	if len(observations) < 2 {
@@ -438,18 +467,6 @@ func repeatedReadTarget(state *contextdata.Envelope) string {
 		return ""
 	}
 	return lastPath
-}
-
-func observationSignature(observation ToolObservation) string {
-	args, err := json.Marshal(observation.Args)
-	if err != nil {
-		args = []byte("{}")
-	}
-	data, err := json.Marshal(observation.Data)
-	if err != nil {
-		data = []byte("{}")
-	}
-	return fmt.Sprintf("%s|%s|%s|%t", observation.Tool, string(args), string(data), observation.Success)
 }
 
 func iterationExhaustionReason(task *execution.Task, env *contextdata.Envelope) string {

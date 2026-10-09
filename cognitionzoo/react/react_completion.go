@@ -121,10 +121,10 @@ func repeatedReadCompletionSummary(task *execution.Task, state *contextdata.Enve
 	if !last.Success || last.Tool != "file_read" {
 		return "", false
 	}
-	signature := observationSignature(last)
+	signature := observationActionSig(last)
 	repeatCount := 1
 	for i := len(observations) - 2; i >= 0; i-- {
-		if observationSignature(observations[i]) != signature {
+		if observationActionSig(observations[i]) != signature {
 			break
 		}
 		repeatCount++

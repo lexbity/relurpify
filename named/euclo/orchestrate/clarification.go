@@ -21,6 +21,7 @@ import (
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	"codeburg.org/lexbit/relurpify/named/euclo/reporting"
 	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
+	thoughtrecipepkg "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
@@ -63,17 +64,24 @@ func needsClarificationRoute(env *contextdata.Envelope) bool {
 	return false
 }
 
-func registerClarificationCapability(ctx context.Context, reg *registry.CapabilityRegistry) error {
+func registerClarificationCapability(ctx context.Context, reg *registry.CapabilityRegistry, recipes *thoughtrecipepkg.ThoughtRecipeRegistry) error {
 	if reg == nil {
 		return nil
 	}
 	if _, ok := reg.GetCapability(clarificationCapabilityID); ok {
 		return nil
 	}
-	return reg.RegisterInvocableCapability(ctx, &clarificationCapabilityHandler{})
+	return reg.RegisterInvocableCapability(ctx, &clarificationCapabilityHandler{recipes: recipes})
 }
 
-type clarificationCapabilityHandler struct{}
+// clarificationCapabilityHandler implements the clarification interaction
+// capability. It carries the thoughtrecipe registry so family→recipe handoffs
+// resolve against what is actually registered (Q6: the registry is the
+// single gatekeeper — a handoff to an unregistered recipe degrades to an
+// interaction frame, never to a dispatch that will fail mid-flight).
+type clarificationCapabilityHandler struct {
+	recipes *thoughtrecipepkg.ThoughtRecipeRegistry
+}
 
 func (h *clarificationCapabilityHandler) Descriptor(context.Context, ports.State) descriptor.CapabilityDescriptor {
 	return descriptor.CapabilityDescriptor{
@@ -216,7 +224,7 @@ func (h *clarificationCapabilityHandler) Invoke(ctx context.Context, st ports.St
 		}
 		result["requery"] = req
 	case clarificationActionHandoff:
-		nextThoughtRecipeID := clarificationThoughtRecipeForState(state, args)
+		nextThoughtRecipeID := clarificationThoughtRecipeForState(state, args, h.recipes)
 		if nextThoughtRecipeID != "" && env != nil {
 			state.ActiveThoughtRecipeID = nextThoughtRecipeID
 			state.LastUpdatedAt = time.Now().UTC()
@@ -229,22 +237,24 @@ func (h *clarificationCapabilityHandler) Invoke(ctx context.Context, st ports.St
 			routeKind := euclotypes.RouteKindForThoughtRecipeID(nextThoughtRecipeID)
 			setRouteSelectionContinuation(env, routeKind, nextThoughtRecipeID, euclotypes.RouteKindIntent, clarificationThoughtRecipeID)
 		}
+		unresolvedReason := h.handoffFailureReason(state, args, nextThoughtRecipeID)
 		if env != nil && nextThoughtRecipeID == "" {
 			euclostate.SetClarificationNextThoughtRecipeID(env, "")
 			euclostate.SetClarificationUnresolved(env, true)
-			euclostate.SetClarificationUnresolvedReason(env, "missing handoff target")
+			euclostate.SetClarificationUnresolvedReason(env, unresolvedReason)
 			env.SetWorkingValueWithClass(intentcontext.ClarificationActiveThoughtRecipeKey, clarificationThoughtRecipeID, contextdata.MemoryClassTask)
 			setRouteSelectionContinuation(env, euclotypes.RouteKindIntent, clarificationThoughtRecipeID, euclotypes.RouteKindIntent, clarificationThoughtRecipeID)
 		}
 		if nextThoughtRecipeID == "" {
-			emitClarificationGateResult(ctx, env, state, false, "unresolved", "missing handoff target")
+			emitClarificationGateResult(ctx, env, state, false, "unresolved", unresolvedReason)
 			result["next_thoughtrecipe_id"] = ""
 			result["unresolved"] = true
+			result["unresolved_reason"] = unresolvedReason
 			return &ports.ToolResult{
 				Success: false,
-				Error:   "clarification handoff requires a next thoughtrecipe id",
+				Error:   unresolvedReason,
 				Data:    result,
-			}, fmt.Errorf("clarification handoff requires a next thoughtrecipe id")
+			}, fmt.Errorf("%s", unresolvedReason)
 		}
 		emitClarificationCompleted(ctx, env, state, nextThoughtRecipeID)
 		result["next_thoughtrecipe_id"] = nextThoughtRecipeID
@@ -316,16 +326,64 @@ func buildTraversalFromAnchors(anchors []retrieval.AnchorRef) *retrieval.Travers
 	}
 }
 
-func clarificationThoughtRecipeForState(state *intentcontext.ClarificationState, args map[string]any) string {
+func clarificationThoughtRecipeForState(state *intentcontext.ClarificationState, args map[string]any, recipes *thoughtrecipepkg.ThoughtRecipeRegistry) string {
 	if thoughtrecipeID := strings.TrimSpace(stringArg(args, "thoughtrecipe_id")); thoughtrecipeID != "" {
-		return thoughtrecipeID
+		if recipeRegistered(recipes, thoughtrecipeID) {
+			return thoughtrecipeID
+		}
+		return ""
 	}
 	if familyID := strings.TrimSpace(stringArg(args, "family_id")); familyID != "" {
 		if thoughtrecipeID := clarificationThoughtRecipeForFamily(familyID); thoughtrecipeID != "" {
-			return thoughtrecipeID
+			if recipeRegistered(recipes, thoughtrecipeID) {
+				return thoughtrecipeID
+			}
+			return ""
 		}
 	}
 	return ""
+}
+
+// handoffFailureReason names why a handoff could not resolve: the explicit
+// miss or the family map naming its expected recipe (the actionable reason
+// text the interaction frame shows).
+func (h *clarificationCapabilityHandler) handoffFailureReason(state *intentcontext.ClarificationState, args map[string]any, resolved string) string {
+	if resolved != "" {
+		return ""
+	}
+	if thoughtrecipeID := strings.TrimSpace(stringArg(args, "thoughtrecipe_id")); thoughtrecipeID != "" {
+		return fmt.Sprintf("no thoughtrecipe registered for handoff target %q (run 'relurpish doctor' to materialize starter recipes)", thoughtrecipeID)
+	}
+	if familyID := strings.TrimSpace(stringArg(args, "family_id")); familyID != "" {
+		expected := clarificationThoughtRecipeForFamily(familyID)
+		if expected == "" {
+			return fmt.Sprintf("no thoughtrecipe mapped for family %q", familyID)
+		}
+		return fmt.Sprintf("no thoughtrecipe registered for family %q (expected %s; run 'relurpish doctor' to materialize starter recipes)", familyID, expected)
+	}
+	return "missing handoff target"
+}
+
+// recipeRegistered reports whether the handoff target exists in the
+// registry. A nil registry (tests, degraded construction) cannot confirm any
+// target; built-in recipe IDs registered by graph construction are the
+// exception the built-in map knows about.
+func recipeRegistered(recipes *thoughtrecipepkg.ThoughtRecipeRegistry, id string) bool {
+	if recipes == nil {
+		return isBuiltinRecipeID(id)
+	}
+	_, ok := recipes.Get(id)
+	return ok
+}
+
+// isBuiltinRecipeID reports whether id is one of the recipe IDs graph
+// construction registers unconditionally.
+func isBuiltinRecipeID(id string) bool {
+	switch strings.TrimSpace(id) {
+	case clarificationThoughtRecipeID, defaultThoughtRecipeID:
+		return true
+	}
+	return false
 }
 
 func setRouteSelectionContinuation(env *contextdata.Envelope, targetRouteKind, targetRouteID, sourceRouteKind, sourceRouteID string) {

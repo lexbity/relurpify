@@ -21,15 +21,22 @@ type KnowledgeRuntime struct {
 	Retriever       *retrieval.Retriever
 	Compiler        *compiler.Compiler
 	StreamTrigger   *contextstream.Trigger
+
+	closeRetriever func()
 }
 
 // Close stops the knowledge runtime's owned lifecycles (the compiler's
 // invalidation loop and event subscription). Safe to call more than once.
 func (k *KnowledgeRuntime) Close() {
-	if k == nil || k.Compiler == nil {
+	if k == nil {
 		return
 	}
-	k.Compiler.Stop()
+	if k.closeRetriever != nil {
+		k.closeRetriever()
+	}
+	if k.Compiler != nil {
+		k.Compiler.Stop()
+	}
 }
 
 // KnowledgeRuntimeInput carries parameters for BuildKnowledgeRuntime.

@@ -1,0 +1,27 @@
+thoughtrecipe euclo.thoughtrecipe.extract_func
+"Repair-family recipe for function extraction: anchor the code with ast_query, perform the extraction in a react edit pass, then verify. Family defaults: edits confined to the extraction; verification is mandatory."
+
+trigger as capability:
+  may read workspace
+  may write workspace
+  may invoke ["file_read", "grep", "ast_query"]
+  family ["refactor"]
+
+input workspace: "**/*"
+input prompt: user.request
+
+agent refactorer uses react
+
+route:
+  when missing state.summary:
+    do relurpic:ast_query on input.workspace
+  otherwise:
+    run refactorer:
+      may invoke ["file_read", "grep", "test_run", "file_write"]
+      from state.summary
+      goal "Extract the anchored code into its own function and verify the build and tests still pass."
+      capture result -> state.refactor
+
+route:
+  otherwise:
+    do relurpic:test_run on state.refactor

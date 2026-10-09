@@ -61,14 +61,14 @@ func (p *Parser) parseHeader() (ThoughtRecipeHeader, error) {
 	if err != nil {
 		return ThoughtRecipeHeader{}, err
 	}
-	nameTok, err := p.expectName("thoughtrecipe name")
+	nameTok, nameValue, err := p.parseDottedDefinitionName("thoughtrecipe name")
 	if err != nil {
 		return ThoughtRecipeHeader{}, err
 	}
 
 	header := ThoughtRecipeHeader{
 		positioned: positioned{Span: spanFromTokens(thoughtrecipeTok, nameTok)},
-		Name:       Identifier{positioned: positioned{Span: spanFromToken(nameTok)}, Value: nameTok.Lexeme},
+		Name:       Identifier{positioned: positioned{Span: spanFromTokens(thoughtrecipeTok, nameTok)}, Value: nameValue},
 	}
 
 	if !p.atEOF() && p.peek().Kind == TokenString {
@@ -1389,6 +1389,34 @@ func (p *Parser) expectName(context string) (Token, error) {
 	default:
 		return Token{}, p.unexpectedToken(tok, "expected "+context)
 	}
+}
+
+// parseDottedDefinitionName reads a definition name composed of dot-joined
+// segments (e.g. "euclo.thoughtrecipe.code_review"). The registry keys
+// thoughtrecipes by their declared name verbatim, and the canonical recipe
+// IDs are dotted; a plain single-segment name parses unchanged. The span
+// covers the full dotted sequence.
+func (p *Parser) parseDottedDefinitionName(context string) (Token, string, error) {
+	first, err := p.expectName(context)
+	if err != nil {
+		return Token{}, "", err
+	}
+	last := first
+	value := first.Lexeme
+	for p.peek().Kind == TokenPunctuation && p.peek().Lexeme == "." {
+		_ = p.next()
+		segment, segErr := p.expectName(context)
+		if segErr != nil {
+			return Token{}, "", segErr
+		}
+		last = segment
+		value += "." + segment.Lexeme
+	}
+	// The synthesized token carries the dotted lexeme with a span covering
+	// the full sequence.
+	end := last
+	end.Lexeme = value
+	return end, value, nil
 }
 
 func (p *Parser) expectStringLiteral(context string) (*StringLiteral, error) {

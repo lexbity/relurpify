@@ -11,6 +11,8 @@ import (
 	"codeburg.org/lexbit/relurpify/named/euclo/intake"
 	intentcontext "codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
+	"codeburg.org/lexbit/relurpify/named/euclo/surface"
+	thoughtrecipepkg "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
 	"codeburg.org/lexbit/relurpify/named/euclo/state"
 )
 
@@ -111,7 +113,7 @@ func TestClarificationCapability_HandoffSelectsNormalThoughtRecipe(t *testing.T)
 		t.Fatalf("write state: %v", err)
 	}
 
-	handler := &clarificationCapabilityHandler{}
+	handler := &clarificationCapabilityHandler{recipes: testRecipeRegistryWith("euclo.thoughtrecipe.code_review")}
 	result, err := handler.Invoke(context.Background(), env.State(), map[string]any{
 		clarificationActionKey: clarificationActionHandoff,
 		"family_id":            "review",
@@ -190,4 +192,14 @@ func mustEnvelopeString(t *testing.T, env *contextdata.Envelope, key string) str
 		t.Fatalf("missing envelope value %q", key)
 	}
 	return s
+}
+
+// testRecipeRegistryWith builds a registry holding recipe IDs declared as
+// bare IDs (mirrors what production registration stores).
+func testRecipeRegistryWith(ids ...string) *thoughtrecipepkg.ThoughtRecipeRegistry {
+	reg := thoughtrecipepkg.NewThoughtRecipeRegistry()
+	for _, id := range ids {
+		_, _ = reg.RegisterCompiledFirstWins(&surface.ThoughtRecipe{ID: id, Name: id}, nil, "test")
+	}
+	return reg
 }

@@ -10,7 +10,19 @@ import (
 
 // LowerDocument converts a source-level Euclo thoughtrecipe document into an
 // execution plan that can be consumed by the existing thoughtrecipe runtime.
+// capabilityScopeLookup resolves coordination metadata during lowering.
+// Nil means the step scope is exactly the named capability.
+type capabilityScopeLookup = CapabilityRegistryLookup
+
+// LowerDocument lowers a document without a capability registry: standalone
+// capability steps scope to exactly the named capability.
 func LowerDocument(doc *ThoughtRecipeDocument) (*ExecutionPlan, error) {
+	return LowerDocumentWithRegistry(doc, nil)
+}
+
+// LowerDocumentWithRegistry lowers a document with a capability lookup so
+// manifest-declared coordination targets union into capability step scopes.
+func LowerDocumentWithRegistry(doc *ThoughtRecipeDocument, lookup CapabilityRegistryLookup) (*ExecutionPlan, error) {
 	if doc == nil {
 		return nil, fmt.Errorf("thoughtrecipe document is nil")
 	}
@@ -64,7 +76,7 @@ func LowerDocument(doc *ThoughtRecipeDocument) (*ExecutionPlan, error) {
 
 	var runIndex int
 	for _, decl := range doc.Declarations {
-		if err := gatherLoweredFromDeclaration(decl, plan, &runIndex); err != nil {
+		if err := gatherLoweredFromDeclaration(decl, plan, &runIndex, lookup); err != nil {
 			return nil, err
 		}
 	}
@@ -274,7 +286,7 @@ func askChoiceText(expr ValueExpr) string {
 	}
 }
 
-func lowerPipelineDecl(decl *PipelineDecl, agents map[string]AgentBinding, runIndex *int, plan *ExecutionPlan) (ExecutionStep, error) {
+func lowerPipelineDecl(decl *PipelineDecl, agents map[string]AgentBinding, runIndex *int, plan *ExecutionPlan, lookup capabilityScopeLookup) (ExecutionStep, error) {
 	if decl == nil {
 		return ExecutionStep{}, fmt.Errorf("pipeline declaration is nil")
 	}
@@ -286,7 +298,7 @@ func lowerPipelineDecl(decl *PipelineDecl, agents map[string]AgentBinding, runIn
 	stages := make([]PipelineStageSpec, 0, len(decl.Stages))
 	var totalSteps int
 	for idx, stage := range decl.Stages {
-		stageSteps, err := lowerPipelineExecutionItems(stage.Body, agents, runIndex, plan)
+		stageSteps, err := lowerPipelineExecutionItems(stage.Body, agents, runIndex, plan, lookup)
 		if err != nil {
 			return ExecutionStep{}, err
 		}
@@ -337,7 +349,7 @@ func lowerPipelineDecl(decl *PipelineDecl, agents map[string]AgentBinding, runIn
 	return step, nil
 }
 
-func lowerPipelineExecutionItems(items []ExecutionItem, agents map[string]AgentBinding, runIndex *int, plan *ExecutionPlan) ([]ExecutionStep, error) {
+func lowerPipelineExecutionItems(items []ExecutionItem, agents map[string]AgentBinding, runIndex *int, plan *ExecutionPlan, lookup capabilityScopeLookup) ([]ExecutionStep, error) {
 	steps := make([]ExecutionStep, 0)
 	for _, item := range items {
 		switch node := item.(type) {
@@ -354,7 +366,7 @@ func lowerPipelineExecutionItems(items []ExecutionItem, agents map[string]AgentB
 			}
 			steps = append(steps, step)
 		case *RouteDecl:
-			group, err := lowerRouteDecl(node, agents, runIndex, plan, plan.ToolScopes)
+			group, err := lowerRouteDecl(node, agents, runIndex, plan, plan.ToolScopes, lookup)
 			if err != nil {
 				return nil, err
 			}
@@ -366,19 +378,19 @@ func lowerPipelineExecutionItems(items []ExecutionItem, agents map[string]AgentB
 			}
 			steps = append(steps, step)
 		case *PipelineDecl:
-			step, err := lowerPipelineDecl(node, agents, runIndex, plan)
+			step, err := lowerPipelineDecl(node, agents, runIndex, plan, lookup)
 			if err != nil {
 				return nil, err
 			}
 			steps = append(steps, step)
 		case *CapabilityInvocation:
-			step, err := lowerCapabilityExecutionDecl(node, runIndex)
+			step, err := lowerCapabilityExecutionDecl(node, runIndex, lookup)
 			if err != nil {
 				return nil, err
 			}
 			steps = append(steps, step)
 		case *DirectiveBlock:
-			nested, err := lowerPipelineExecutionItems(node.Body, agents, runIndex, plan)
+			nested, err := lowerPipelineExecutionItems(node.Body, agents, runIndex, plan, lookup)
 			if err != nil {
 				return nil, err
 			}
@@ -428,7 +440,7 @@ func pipelineGroupID(decl *PipelineDecl) string {
 	return fmt.Sprintf("pipeline.%d.%d", span.Start.Line, span.Start.Column)
 }
 
-func gatherLoweredFromDeclaration(node Declaration, plan *ExecutionPlan, runIndex *int) error {
+func gatherLoweredFromDeclaration(node Declaration, plan *ExecutionPlan, runIndex *int, lookup capabilityScopeLookup) error {
 	switch v := node.(type) {
 	case *RunDecl:
 		step, err := lowerAgentExecutionDecl(StepKindRun, v.Agent, v.Items, plan.Agents, runIndex, plan.ToolScopes)
@@ -443,7 +455,7 @@ func gatherLoweredFromDeclaration(node Declaration, plan *ExecutionPlan, runInde
 		}
 		plan.Steps = append(plan.Steps, step)
 	case *RouteDecl:
-		group, err := lowerRouteDecl(v, plan.Agents, runIndex, plan, plan.ToolScopes)
+		group, err := lowerRouteDecl(v, plan.Agents, runIndex, plan, plan.ToolScopes, lookup)
 		if err != nil {
 			return err
 		}
@@ -455,7 +467,7 @@ func gatherLoweredFromDeclaration(node Declaration, plan *ExecutionPlan, runInde
 		}
 		plan.Steps = append(plan.Steps, step)
 	case *PipelineDecl:
-		step, err := lowerPipelineDecl(v, plan.Agents, runIndex, plan)
+		step, err := lowerPipelineDecl(v, plan.Agents, runIndex, plan, lookup)
 		if err != nil {
 			return err
 		}

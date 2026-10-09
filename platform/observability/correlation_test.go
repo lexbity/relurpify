@@ -1,4 +1,4 @@
-package telemetry
+package observability
 
 import (
 	"context"
@@ -71,12 +71,12 @@ func TestRunContextFromEmptyContext(t *testing.T) {
 func TestStampCorrelationPopulatesFields(t *testing.T) {
 	rc := RunContext{SessionID: "sess-1", RunID: "run-1", TraceID: "trace-1", AgentID: "agent-1"}
 	ctx := WithRunContext(context.Background(), rc)
-	
+
 	ev := &Event{
 		Type: EventAgentStart,
 	}
 	StampCorrelation(ctx, ev)
-	
+
 	require.Equal(t, "sess-1", ev.SessionID)
 	require.Equal(t, "run-1", ev.RunID)
 	require.Equal(t, "trace-1", ev.TraceID)
@@ -86,14 +86,14 @@ func TestStampCorrelationPopulatesFields(t *testing.T) {
 func TestStampCorrelationOverwritesWithRunContext(t *testing.T) {
 	rc := RunContext{SessionID: "sess-1", RunID: "run-1", TraceID: "trace-1", AgentID: "agent-1"}
 	ctx := WithRunContext(context.Background(), rc)
-	
+
 	ev := &Event{
 		Type:      EventAgentStart,
 		SessionID: "existing-sess",
 		RunID:     "existing-run",
 	}
 	StampCorrelation(ctx, ev)
-	
+
 	// RunContext should win (per NFR-6: emitters must never construct those fields by hand)
 	require.Equal(t, "sess-1", ev.SessionID)
 	require.Equal(t, "run-1", ev.RunID)

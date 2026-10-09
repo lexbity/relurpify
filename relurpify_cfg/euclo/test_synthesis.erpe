@@ -1,0 +1,27 @@
+thoughtrecipe euclo.thoughtrecipe.test_synthesis
+"Review-family recipe for test synthesis: anchor the symbol or file via ast_query, author tests in a react pass, then run them. Family defaults: writes confined to test authoring; the synthesized tests must pass."
+
+trigger as capability:
+  may read workspace
+  may write workspace
+  may invoke ["file_read", "grep", "ast_query"]
+  family ["implementation"]
+
+input workspace: "**/*"
+input prompt: user.request
+
+agent author uses react
+
+route:
+  when missing state.summary:
+    do relurpic:ast_query on input.workspace
+  otherwise:
+    run author:
+      may invoke ["file_read", "grep", "test_run", "file_write"]
+      from state.summary
+      goal "Author tests for the anchored symbol or file, then run them to confirm they pass."
+      capture result -> state.tests
+
+route:
+  otherwise:
+    do relurpic:test_run on state.tests

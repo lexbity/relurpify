@@ -1,6 +1,9 @@
 package rewoo
 
-import "codeburg.org/lexbit/relurpify/context/contextstream"
+import (
+	"codeburg.org/lexbit/relurpify/context/contextstream"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
+)
 
 // StepOnFailure defines how executor failures are handled.
 type StepOnFailure string
@@ -86,6 +89,16 @@ type RewooOptions struct {
 	MaxReplanAttempts int
 	OnFailure         StepOnFailure
 	MaxSteps          int
+	// PermissionChecker gates every tool step. It is mandatory: executing a
+	// plan without one fails with ErrNoPermissionChecker (fail-closed).
+	PermissionChecker permissions.CapabilityChecker
+	// OnPermissionDenied selects the policy applied when the checker denies a
+	// step; empty means StepOnFailureAbort.
+	OnPermissionDenied StepOnFailure
+	// Synthesize controls the post-aggregation LLM synthesis phase. nil means
+	// true; false skips synthesis and produces the mechanical summary instead
+	// (a documented feature for mechanical pipelines, not a stub).
+	Synthesize *bool
 	// ContextConfig controls context budgeting and management
 	ContextConfig RewooContextConfig
 	// PermConfig controls permissions and authorization
@@ -96,4 +109,9 @@ type RewooOptions struct {
 	StreamMode      contextstream.Mode
 	StreamQuery     string
 	StreamMaxTokens int
+}
+
+// SynthesizeEnabled reports whether the LLM synthesis phase should run.
+func (o RewooOptions) SynthesizeEnabled() bool {
+	return o.Synthesize == nil || *o.Synthesize
 }

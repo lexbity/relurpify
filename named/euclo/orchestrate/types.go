@@ -71,6 +71,10 @@ type CandidateRouteInfo struct {
 type RouteResolutionError struct {
 	PrimaryID string
 	Reason    string
+	// MissingRecipeID is set when the gate rejected the only candidate
+	// because the thoughtrecipe is not registered: the named-missing recipe
+	// is the actionable signal (re-init / doctor).
+	MissingRecipeID string
 }
 
 func (e *RouteResolutionError) Error() string {

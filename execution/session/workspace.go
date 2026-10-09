@@ -768,10 +768,11 @@ func resolveRuntimeModelSettings(inferenceModel string, debugLLM bool, registrat
 	return inferenceModel, debugLLM
 }
 
-// setupTelemetry opens the log file, creates a logger, and assembles the
-// telemetry sink chain (logger + optional JSON file). Returns the log file
-// (which must be closed by the caller), the logger, and the assembled telemetry.
-func setupTelemetry(cfg WorkspaceConfig) (*os.File, *log.Logger, telemetry.Telemetry, error) {
+// setupTelemetry opens the (rotating) log file, creates a logger, and
+// assembles the telemetry sink chain (logger + optional JSON file). Returns
+// the log writer (an io.Closer the caller must close), the logger, and the
+// assembled telemetry.
+func setupTelemetry(cfg WorkspaceConfig) (io.Closer, *log.Logger, telemetry.Telemetry, error) {
 	logPath := cfg.LogPath
 	if logPath == "" {
 		if cfg.StateDir != "" {
@@ -791,9 +792,9 @@ func setupTelemetry(cfg WorkspaceConfig) (*os.File, *log.Logger, telemetry.Telem
 	if err := os.MkdirAll(filepath.Dir(logPath), 0o700); err != nil { // public: workspace log directory
 		return nil, nil, nil, fmt.Errorf("create log directory: %w", err)
 	}
-	logFile, err := os.OpenFile(filepath.Clean(logPath), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+	logFile, err := NewRotatingWriter(logPath)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("open log: %w", err)
+		return nil, nil, nil, err
 	}
 	logger := log.New(logFile, "workspace ", log.LstdFlags|log.Lmicroseconds)
 

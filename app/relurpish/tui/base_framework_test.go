@@ -45,7 +45,6 @@ func (f *baseSurfaceFake) InitialSubTab(TabID) SubTabID                         
 func (f *baseSurfaceFake) RenderNotification(item NotificationItem) string                { return item.Msg }
 func (f *baseSurfaceFake) HandleFrame(_ context.Context, _ *RootModel, _ SurfaceFrameMsg) {}
 func (fake *baseSurfaceFake) Theme() *theme.Theme                                         { return nil }
-func (fake *baseSurfaceFake) ResumeSession(_ context.Context, _ string) tea.Cmd           { return nil }
 
 func (f *baseSurfaceFake) SetSize(int, int)                             {}
 func (f *baseSurfaceFake) SetStore(*SessionStore)                       {}
