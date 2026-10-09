@@ -19,7 +19,7 @@ func newDecisionSinkPermissionManager(t *testing.T) (*PermissionManager, *fwtele
 			{Capability: "test-cap"},
 		},
 	}
-	pm, err := NewPermissionManager("/tmp", declared, policy.NewInMemoryAuditLogger(100), nil)
+	pm, err := NewPermissionManager("/tmp", declared, newTestAuditLogger(t), nil)
 	require.NoError(t, err)
 	sink := &fwtelemetry.SnapshotDecisionSink{}
 	pm.SetDecisionSink(sink)
@@ -91,6 +91,30 @@ type correlatingEventSink struct {
 
 func (s *correlatingEventSink) Emit(ev fwtelemetry.Event) {
 	s.events = append(s.events, ev)
+}
+
+// TestManifestPolicyEngine_EmitsShadowedConflict verifies the deny-wins lattice
+// reports a shadowed allow through the decision sink.
+func TestManifestPolicyEngine_EmitsShadowedConflict(t *testing.T) {
+	pm, sink := newDecisionSinkPermissionManager(t)
+	engine := &ManifestPolicyEngine{
+		agentID: "agent:euclo",
+		manager: pm,
+		rules: []policy.PolicyRule{
+			testRule("tool:allow", 300, "allow"),
+			testRule("global:deny", 100, "deny"),
+		},
+	}
+	decision, err := engine.Evaluate(context.Background(), policy.PolicyRequest{})
+	require.NoError(t, err)
+	require.Equal(t, "deny", decision.Effect)
+
+	conflicts := sink.Conflicts()
+	require.Len(t, conflicts, 1)
+	require.Equal(t, "global:deny", conflicts[0].Winner)
+	require.Equal(t, "tool:allow", conflicts[0].Shadowed)
+	require.Equal(t, "allow", conflicts[0].Effect)
+	require.Equal(t, "agent:euclo", conflicts[0].Actor)
 }
 
 // TestHITLBroker_EmitsLifecycleEvents verifies the full HITL lifecycle is

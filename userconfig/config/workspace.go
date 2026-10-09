@@ -54,9 +54,10 @@ type WorkspaceLogging struct {
 	Format *string `yaml:"format"`
 }
 
-// WorkspaceAudit configures audit retention defaults.
+// WorkspaceAudit configures audit retention and enforcement defaults.
 type WorkspaceAudit struct {
-	RetentionDays *int `yaml:"retention_days"`
+	RetentionDays *int    `yaml:"retention_days"`
+	Enforcement   *string `yaml:"enforcement"`
 }
 
 // WorkspaceTelemetry configures state telemetry behavior.

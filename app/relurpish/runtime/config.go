@@ -4,10 +4,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
-	fsandbox "codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/capability/ports"
+	fsandbox "codeburg.org/lexbit/relurpify/capability/sandbox"
 	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
 	"codeburg.org/lexbit/relurpify/model"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
@@ -46,6 +47,7 @@ type Config struct {
 	SandboxBackendFactory      fauthorization.SandboxBackendFactory
 	CommandPolicy              fsandbox.CommandPolicy
 	AuditLimit                 int
+	AuditEnforcement           string // "strict" (default) | "best_effort"
 	HITLTimeout                time.Duration
 	Editor                     string
 	SubprocessToolFactory      func(ports.ToolManifest) any
@@ -60,18 +62,19 @@ func DefaultConfig() Config {
 		cwd = "."
 	}
 	return Config{
-		Workspace:      cwd,
-		AgentsDir:      "relurpify_cfg/agents",
-		MemoryPath:     ".relurpify_state/memory",
-		LogPath:        ".relurpify_state/logs/relurpish.log",
-		TelemetryPath:  ".relurpify_state/telemetry/telemetry.jsonl",
-		EventsPath:     ".relurpify_state/events.db",
-		ConfigPath:     "relurpify_cfg/workspace.yaml",
-		AgentName:      AgentLabelEuclo,
-		ServerAddr:     ":8080",
-		AuditLimit:     512,
-		HITLTimeout:    45 * time.Second,
-		SandboxBackend: "",
+		Workspace:        cwd,
+		AgentsDir:        "relurpify_cfg/agents",
+		MemoryPath:       ".relurpify_state/memory",
+		LogPath:          ".relurpify_state/logs/relurpish.log",
+		TelemetryPath:    ".relurpify_state/telemetry/telemetry.jsonl",
+		EventsPath:       ".relurpify_state/events.db",
+		ConfigPath:       "relurpify_cfg/workspace.yaml",
+		AgentName:        AgentLabelEuclo,
+		ServerAddr:       ":8080",
+		AuditLimit:       512,
+		AuditEnforcement: "strict",
+		HITLTimeout:      45 * time.Second,
+		SandboxBackend:   "",
 		Sandbox: fsandbox.SandboxConfig{
 			RunscPath:        "runsc",
 			ContainerRuntime: "docker",
@@ -147,6 +150,9 @@ func (c *Config) Normalize() error {
 	}
 	if c.AuditLimit <= 0 {
 		c.AuditLimit = 256
+	}
+	if strings.TrimSpace(c.AuditEnforcement) == "" {
+		c.AuditEnforcement = "strict"
 	}
 	if c.HITLTimeout <= 0 {
 		c.HITLTimeout = 30 * time.Second

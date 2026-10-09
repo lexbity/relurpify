@@ -12,10 +12,12 @@ import (
 
 	"codeburg.org/lexbit/relurpify/ayenitd"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
+	"codeburg.org/lexbit/relurpify/governance/policy"
 	"codeburg.org/lexbit/relurpify/named/euclo/euclocontract"
 	platformfs "codeburg.org/lexbit/relurpify/platform/fs"
 	"codeburg.org/lexbit/relurpify/platform/llm"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
+	cfgsecurity "codeburg.org/lexbit/relurpify/userconfig/config/security"
 	"codeburg.org/lexbit/relurpify/userconfig/modelselect"
 	templatesembed "codeburg.org/lexbit/relurpify/userconfig/templates/embedfs"
 )
@@ -328,6 +330,10 @@ func BuildDoctorReport(ctx context.Context, cfg Config, secrets config.Secrets) 
 	// inference_backend is shown in the dedicated "Inference backend:" block,
 	// not duplicated here as a dependency entry (FR-8).
 	deps = append(deps, detectChromiumStatus(ctx, cfg.CommandPolicy))
+	deps = append(deps, probeAuditChain(cfg))
+	if bundle.Config != nil {
+		deps = append(deps, probeRuntimeImage(bundle.Config.Security.Sandbox))
+	}
 	report.Dependencies = deps
 
 	report.SandboxReady = computeSandboxReady(report)
@@ -508,4 +514,108 @@ func errorString(err error) string {
 		return ""
 	}
 	return err.Error()
+}
+
+// probeAuditChain reports audit-chain readiness: dir writability and chain
+// integrity across every agent chain under <state>/audit. In strict
+// enforcement (the default) a broken chain or unwritable state dir is
+// BLOCKING — governed actions fail closed without durable audit (SBH-1 D-10).
+// In best_effort the same conditions degrade to warnings.
+func probeAuditChain(cfg Config) DependencyStatus {
+	auditRoot := filepath.Join(config.DefaultWorkspaceStateDir(cfg.Workspace), "audit")
+	strict := !strings.EqualFold(strings.TrimSpace(cfg.AuditEnforcement), "best_effort")
+	writable := probeWritableDir(auditRoot)
+
+	// Aggregate over every agent chain subdirectory. A single broken chain is
+	// a broken chain; the probe result carries the worst finding.
+	var probe policy.ChainProbe
+	present := false
+	broken := false
+	entries, err := os.ReadDir(auditRoot)
+	if err == nil {
+		for _, e := range entries {
+			if !e.IsDir() || strings.HasPrefix(e.Name(), ".") {
+				continue
+			}
+			p := policy.ProbeChainDir(filepath.Join(auditRoot, e.Name()))
+			if p.Present {
+				present = true
+			}
+			if p.Broken {
+				broken = true
+				probe = p
+			} else if !present {
+				probe = p
+			}
+		}
+	}
+
+	detail := ""
+	switch {
+	case !present && !writable:
+		detail = "audit dir missing and not writable — governed actions will fail closed"
+	case !present:
+		detail = "no audit chain yet (created on first agent run)"
+	case broken:
+		detail = "audit chain integrity FAILED (" + probe.Failure + ")"
+		detail = strings.TrimSpace(detail) + " — tamper detected, chain rotated on next boot"
+	default:
+		detail = fmt.Sprintf("audit chain ok (last sequence %d)", probe.LastSeq)
+	}
+	return DependencyStatus{
+		Name:      "audit_chain",
+		Required:  true,
+		Available: !broken && writable,
+		Degraded:  !strict && (broken || !writable),
+		Blocking:  strict && (broken || !writable),
+		Details:   detail,
+	}
+}
+
+// probeWritableDir verifies the directory exists and can host a fresh file.
+func probeWritableDir(dir string) bool {
+	if dir == "" {
+		return false
+	}
+	if err := os.MkdirAll(dir, platformfs.PublicDirMode); err != nil {
+		return false
+	}
+	probe := filepath.Join(dir, ".doctor-write-probe")
+	f, err := os.OpenFile(probe, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+	if err != nil {
+		return false
+	}
+	_ = f.Close()
+	_ = os.Remove(probe)
+	return true
+}
+
+// probeRuntimeImage surfaces the sandbox runtime image pin posture (SBH-1
+// D-13): a stated image_digest is pinned short-form; its absence reads as
+// "unpinned/tag-based with boot-time daemon resolution" and is a warning, not
+// a block.
+func probeRuntimeImage(sbox *cfgsecurity.SandboxPolicy) DependencyStatus {
+	if sbox == nil {
+		return DependencyStatus{Name: "runtime_image", Required: true, Available: false, Details: "sandbox policy unavailable"}
+	}
+	digest := strings.TrimSpace(sbox.ImageDigest)
+	detail := "unpinned (tag-based; resolved from the local daemon at boot — set security.sandbox.image_digest to pin)"
+	if digest != "" {
+		detail = "pinned by digest " + shortDigest(digest)
+	}
+	return DependencyStatus{
+		Name:      "runtime_image",
+		Required:  true,
+		Available: true,
+		Degraded:  digest == "",
+		Details:   detail,
+	}
+}
+
+func shortDigest(digest string) string {
+	d := strings.TrimPrefix(strings.TrimSpace(digest), "sha256:")
+	if len(d) > 12 {
+		return d[:12] + "…"
+	}
+	return d
 }

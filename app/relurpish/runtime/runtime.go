@@ -32,6 +32,7 @@ import (
 	"codeburg.org/lexbit/relurpify/execution/session"
 	"codeburg.org/lexbit/relurpify/execution/workspace"
 	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/governance/policy"
 	"codeburg.org/lexbit/relurpify/model"
 	"codeburg.org/lexbit/relurpify/named/euclo"
@@ -202,6 +203,9 @@ func buildRuntime(ctx context.Context, cfg Config, secrets config.Secrets) (*Run
 			if v1Cfg.Sandbox.Backend != "" && preSandboxBackend == "" {
 				cfg.SandboxBackend = v1Cfg.Sandbox.Backend
 			}
+			if strings.TrimSpace(v1Cfg.Audit.Enforcement) != "" && strings.EqualFold(strings.TrimSpace(cfg.AuditEnforcement), "strict") {
+				cfg.AuditEnforcement = v1Cfg.Audit.Enforcement
+			}
 		}
 		// Also inspect the flat RuntimeWorkspaceConfig for fields still
 		// honored from older workspace files (TapePath, Agents,
@@ -280,18 +284,19 @@ func buildRuntime(ctx context.Context, cfg Config, secrets config.Secrets) (*Run
 			ReadOnlyRoot:    contract.Security.ReadOnlyRoot,
 			NoNewPrivileges: contract.Security.NoNewPrivileges,
 		},
-		Image:          "",
-		Runtime:        "",
-		ProtectedPaths: securityBundle.Sandbox.ProtectedPaths,
-		ConfigPath:     cfg.ConfigPath,
-		Backend:        cfg.SandboxBackend,
-		BackendFactory: backendFactory,
-		AuditLimit:     cfg.AuditLimit,
-		BaseFS:         cfg.Workspace,
-		StateDir:       config.DefaultWorkspaceStateDir(cfg.Workspace),
-		HITLTimeout:    cfg.HITLTimeout,
-		WorkspaceID:    filepath.Base(cfg.Workspace),
-		AgentName:      contract.AgentID,
+		Image:            "",
+		Runtime:          "",
+		ProtectedPaths:   securityBundle.Sandbox.ProtectedPaths,
+		ConfigPath:       cfg.ConfigPath,
+		Backend:          cfg.SandboxBackend,
+		BackendFactory:   backendFactory,
+		AuditLimit:       cfg.AuditLimit,
+		AuditEnforcement: cfg.AuditEnforcement,
+		BaseFS:           cfg.Workspace,
+		StateDir:         config.DefaultWorkspaceStateDir(cfg.Workspace),
+		HITLTimeout:      cfg.HITLTimeout,
+		WorkspaceID:      filepath.Base(cfg.Workspace),
+		AgentName:        contract.AgentID,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("compose authorization registration: %w", err)
@@ -312,6 +317,10 @@ func buildRuntime(ctx context.Context, cfg Config, secrets config.Secrets) (*Run
 		Security:          contract.Security,
 		PermissionManager: registration.Permissions,
 		ExistingRunner:    cfg.SecurityRunner,
+		// Sandbox posture events (ceiling exceed, protected-path escape, image
+		// pin status) ride the workspace log sink until the full telemetry
+		// chain is assembled at workspace open (SBH-1 D-12/13/14).
+		Events: telemetry.LoggerTelemetry{Logger: log.Default()},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("compose security runtime: %w", err)
@@ -330,6 +339,8 @@ func buildRuntime(ctx context.Context, cfg Config, secrets config.Secrets) (*Run
 		ProtectedPaths:    securityBundle.Sandbox.ProtectedPaths,
 		InferenceEndpoint: cfg.InferenceEndpoint,
 		InferenceModel:    cfg.InferenceModel,
+		PrivateEgress:     envcomposition.NewPrivateEgressApprover(registration.Permissions),
+		NetworkIsolation:  &cfg.Sandbox.NetworkIsolation,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("compose capability runtime: %w", err)
@@ -422,12 +433,16 @@ func buildRuntime(ctx context.Context, cfg Config, secrets config.Secrets) (*Run
 	logger := ws.Logger
 	baseTelemetry := ws.Telemetry
 	if registration != nil && registration.Permissions != nil {
-		var bashCfg *fauthorization.BashConfig
+		bashCfg := &fauthorization.BashConfig{Default: permissions.DecisionAsk}
 		if spec, ok := registration.AgentSpec.(*config.AgentSpec); ok && spec != nil {
+			decision, derr := permissions.DecisionOr(string(spec.Bash.Default), permissions.DecisionAsk)
+			if derr != nil {
+				return nil, fmt.Errorf("agent bash default: %w", derr)
+			}
 			bashCfg = &fauthorization.BashConfig{
 				AllowPatterns: spec.Bash.AllowPatterns,
 				DenyPatterns:  spec.Bash.DenyPatterns,
-				Default:       string(spec.Bash.Default),
+				Default:       decision,
 			}
 		}
 		authPolicy := fauthorization.NewCommandAuthorizationPolicy(registration.Permissions, registration.ID, bashCfg, "runtime")

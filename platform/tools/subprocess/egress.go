@@ -1,68 +1,266 @@
 package subprocess
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"net/url"
+	"sort"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/capability/ports"
-	"codeburg.org/lexbit/relurpify/capability/sandbox"
+	"codeburg.org/lexbit/relurpify/governance/netpolicy"
 )
 
-// checkEgress returns an error if the command args reference a blocked
-// network host. allowHosts is an optional per-tool allowlist; hosts in
-// this list bypass the mandatory denylist. Returns nil when no network
-// target is blocked.
-func checkEgress(allowHosts []string, cmd []string) error {
-	if host := firstBlockedEgressHost(cmd, allowHosts); host != "" {
-		return fmt.Errorf(
-			"network egress to %q denied: private, loopback, and link-local addresses are blocked (SSRF protection)",
-			host,
-		)
+// Egress effect values returned by checkEgress.
+const (
+	EgressAllow           = "allow"
+	EgressDeny            = "deny"
+	EgressRequireApproval = "require_approval"
+)
+
+// SandboxSpec is the egress-relevant slice of a tool manifest's sandbox plus
+// the effective container isolation. It is the input to checkEgress.
+type SandboxSpec struct {
+	// NetworkAccess mirrors manifest execution.sandbox.network_access.
+	NetworkAccess bool
+	// NetworkIsolation is the effective container isolation. When false the
+	// scanner runs for every command with no allowlist bypass (D-15).
+	NetworkIsolation bool
+	// AllowHosts are public egress targets granted without prompting.
+	AllowHosts []string
+	// AllowPrivateHosts are non-public egress targets that require HITL.
+	AllowPrivateHosts []string
+}
+
+// EgressDecision is the typed result of the egress scan.
+type EgressDecision struct {
+	Effect string   // EgressAllow | EgressDeny | EgressRequireApproval
+	Hosts  []string // offending hosts, or hosts needing approval
+	Reason string
+}
+
+// PrivateEgressApprover resolves a private-egress (or unisolated public-egress)
+// approval through the governance HITL broker. Implementations are wired at the
+// composition root over governance/authorization.PermissionManager.
+type PrivateEgressApprover interface {
+	ApprovePrivateEgress(ctx context.Context, agentID string, hosts []string) error
+}
+
+// proxyEnvKeys are the environment variables whose values carry an egress
+// carrier (a proxy URL or, for NO_PROXY, a bypass host list).
+var proxyEnvKeys = map[string]struct{}{
+	"http_proxy":  {},
+	"https_proxy": {},
+	"all_proxy":   {},
+	"ftp_proxy":   {},
+	"ws_proxy":    {},
+	"wss_proxy":   {},
+	"no_proxy":    {},
+}
+
+// checkEgress scans every command token and proxy environment value for network
+// targets and returns a typed decision.
+//
+// Evaluation order (D-4): the mandatory denylist is evaluated before any
+// allowlist. A non-public target is denied unless it is declared in
+// allow_private_hosts, in which case it requires HITL approval. Public targets
+// in allow_hosts are granted; when isolation is off the allowlists are ignored
+// and every public target requires approval (the scanner is the only boundary).
+// An unresolved hostname is a denial (fail closed).
+func checkEgress(spec SandboxSpec, env, cmd []string) EgressDecision {
+	if !spec.NetworkAccess && spec.NetworkIsolation {
+		return EgressDecision{Effect: EgressAllow}
+	}
+
+	allowHosts := hostSet(spec.AllowHosts)
+	allowPrivate := hostSet(spec.AllowPrivateHosts)
+	toolDefaultDenies := false
+	if !spec.NetworkIsolation {
+		allowHosts = nil
+		allowPrivate = nil
+		toolDefaultDenies = true
+	}
+
+	var denied []string
+	var pending []string
+
+	scan := func(host string) {
+		class, err := classifyEgressHost(host)
+		if err != nil {
+			denied = append(denied, host)
+			return
+		}
+		key := strings.ToLower(host)
+		if class != netpolicy.ClassPublic {
+			if _, ok := allowPrivate[key]; ok {
+				pending = append(pending, host)
+				return
+			}
+			denied = append(denied, host)
+			return
+		}
+		if _, ok := allowHosts[key]; !ok && toolDefaultDenies {
+			pending = append(pending, host)
+		}
+	}
+
+	for _, token := range cmd {
+		for _, host := range extractHostCandidates(token) {
+			scan(host)
+		}
+	}
+	for _, entry := range env {
+		for _, host := range proxyEnvHosts(entry) {
+			scan(host)
+		}
+	}
+
+	if len(denied) > 0 {
+		hosts := dedupeSorted(denied)
+		return EgressDecision{
+			Effect: EgressDeny,
+			Hosts:  hosts,
+			Reason: fmt.Sprintf(
+				"network egress to %s denied: private, loopback, link-local, unspecified, reserved, and unresolved hosts are blocked (SSRF protection)",
+				strings.Join(hosts, ", ")),
+		}
+	}
+	if len(pending) > 0 {
+		hosts := dedupeSorted(pending)
+		return EgressDecision{
+			Effect: EgressRequireApproval,
+			Hosts:  hosts,
+			Reason: fmt.Sprintf("network egress to %s requires approval", strings.Join(hosts, ", ")),
+		}
+	}
+	return EgressDecision{Effect: EgressAllow}
+}
+
+// classifyEgressHost classifies a host token through the canonical netpolicy
+// classifier with the fail-closed resolution policy.
+func classifyEgressHost(host string) (netpolicy.HostClass, error) {
+	if ip, ok := netpolicy.ParseHostToken(host); ok {
+		return netpolicy.ClassifyIP(ip), nil
+	}
+	target, err := netpolicy.ResolveTarget(context.Background(), host, netpolicy.DefaultResolveOptions())
+	if err != nil {
+		return "", err
+	}
+	return target.Class, nil
+}
+
+// extractHostCandidates pulls zero or one host out of a single argv token. It
+// understands full URLs (scheme://host[:port]/...), host:port pairs, bracketed
+// IPv6, bare hosts, and config carriers of the form k=value where value is a
+// URL — e.g. `git -c http.proxy=http://127.0.0.1:9` or `--url=http://10.0.0.1/`.
+//
+// Tokens that are not host-like return nil. A scheme:// token is always
+// treated as a host (even single-label), because the scheme disambiguates it.
+func extractHostCandidates(token string) []string {
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return nil
+	}
+	// A genuine URL parses as a whole (its query may contain '=').
+	if idx := strings.Index(token, "://"); idx >= 0 && !strings.Contains(token[:idx], "=") {
+		if u, err := url.Parse(token); err == nil && u.Hostname() != "" {
+			return []string{u.Hostname()}
+		}
+	}
+	// k=value carrier (flag/config): recurse on the value.
+	if i := strings.IndexByte(token, '='); i >= 0 {
+		value := strings.TrimSpace(token[i+1:])
+		if host := extractHost(value); host != "" && (strings.Contains(value, "://") || looksLikeHost(host)) {
+			return []string{host}
+		}
+	}
+	// Bare host or host:port.
+	if host := extractHost(token); host != "" && looksLikeHost(host) {
+		return []string{host}
 	}
 	return nil
 }
 
-// isNetworkTool reports whether a manifest declares network access and must
-// therefore have its target hosts screened against the SSRF denylist.
-func isNetworkTool(manifest ports.ToolManifest) bool {
-	return manifest.Execution.Sandbox != nil && manifest.Execution.Sandbox.NetworkAccess
+// proxyEnvHosts extracts zero or more hosts from an environment entry whose key
+// is a proxy variable. NO_PROXY-style comma lists are split.
+func proxyEnvHosts(entry string) []string {
+	key, value, ok := strings.Cut(entry, "=")
+	if !ok {
+		return nil
+	}
+	if _, isProxy := proxyEnvKeys[strings.ToLower(strings.TrimSpace(key))]; !isProxy {
+		return nil
+	}
+	var hosts []string
+	for _, part := range strings.Split(value, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		if host := extractHost(part); host != "" && (strings.Contains(part, "://") || looksLikeHost(host)) {
+			hosts = append(hosts, host)
+		}
+	}
+	return hosts
 }
 
-// firstBlockedEgressHost scans CLI arguments for a network target (a URL or a
-// bare host[:port]) that resolves to a private, loopback, or link-local address
-// and returns it. An empty string means no blocked host was found.
-//
-// allowHosts is an optional allowlist: hosts that match any entry here are
-// never blocked even if they would otherwise be denied by the mandatory
-// denylist (sandbox.IsPrivateOrLoopbackHost).
-func firstBlockedEgressHost(args []string, allowHosts []string) string {
-	allowSet := make(map[string]struct{}, len(allowHosts))
-	for _, h := range allowHosts {
-		h = strings.TrimSpace(strings.ToLower(h))
-		if h != "" {
-			allowSet[h] = struct{}{}
+// hostSet lowercases and trims an allowlist into a set.
+func hostSet(hosts []string) map[string]struct{} {
+	if len(hosts) == 0 {
+		return nil
+	}
+	set := make(map[string]struct{}, len(hosts))
+	for _, host := range hosts {
+		host = strings.ToLower(strings.TrimSpace(host))
+		if host != "" {
+			set[host] = struct{}{}
 		}
 	}
+	return set
+}
 
-	for _, arg := range args {
-		if arg == "" || strings.HasPrefix(arg, "-") {
-			continue // skip flags; flag values are handled as their own args
-		}
-		host := extractHost(arg)
-		if host == "" {
+// looksLikeHost reports whether host is an IP literal or a plausible hostname.
+func looksLikeHost(host string) bool {
+	if host == "" {
+		return false
+	}
+	if _, ok := netpolicy.ParseHostToken(host); ok {
+		return true
+	}
+	return looksLikeHostname(host)
+}
+
+// looksLikeHostname is a syntactic gate that keeps arbitrary argv tokens (flag
+// values, header snippets) from being treated as hostnames and resolved. A
+// token must carry a DNS label separator and contain no whitespace or leftover
+// port colon to be considered a hostname candidate.
+func looksLikeHostname(host string) bool {
+	if host == "" || strings.ContainsAny(host, " \t") || strings.Contains(host, ":") {
+		return false
+	}
+	if host == "localhost" {
+		return true
+	}
+	if !strings.Contains(host, ".") {
+		return false
+	}
+	for _, label := range strings.Split(host, ".") {
+		if label == "" {
 			continue
 		}
-		// Check allowlist first.
-		if _, allowed := allowSet[strings.ToLower(host)]; allowed {
-			continue
-		}
-		if sandbox.IsPrivateOrLoopbackHost(host) {
-			return host
+		for i := 0; i < len(label); i++ {
+			c := label[i]
+			switch {
+			case c >= 'a' && c <= 'z':
+			case c >= 'A' && c <= 'Z':
+			case c >= '0' && c <= '9':
+			case c == '-' || c == '_':
+			default:
+				return false
+			}
 		}
 	}
-	return ""
+	return true
 }
 
 // extractHost pulls a hostname/IP out of a single CLI argument. It understands
@@ -93,4 +291,21 @@ func extractHost(arg string) string {
 	candidate = strings.TrimPrefix(candidate, "[")
 	candidate = strings.TrimSuffix(candidate, "]")
 	return candidate
+}
+
+func dedupeSorted(items []string) []string {
+	seen := make(map[string]struct{}, len(items))
+	out := make([]string, 0, len(items))
+	for _, item := range items {
+		if item == "" {
+			continue
+		}
+		if _, ok := seen[item]; ok {
+			continue
+		}
+		seen[item] = struct{}{}
+		out = append(out, item)
+	}
+	sort.Strings(out)
+	return out
 }

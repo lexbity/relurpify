@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+# Fake docker CLI for hermetic sandbox lifecycle tests (SBH-1 D-11).
+#
+# All behaviors are driven by environment variables so tests never touch a
+# real daemon:
+#   FAKE_DOCKER_LOG            append "cmd <argv>" lines here (argv assertion)
+#   FAKE_DOCKER_MODE           echo | stdin | hang
+#   FAKE_DOCKER_ATTACH_OUTPUT  bytes attach emits in echo mode (default "hello")
+#   FAKE_DOCKER_STDIN_CAPTURE  file attach writes stdin to in stdin mode
+#   FAKE_DOCKER_HANG_SECONDS   how long attach/wait block in hang mode
+#   FAKE_DOCKER_WAIT_EXIT      exit code wait prints (default 0)
+#   FAKE_DOCKER_WAIT_SLEEP     brief settle before wait prints (default 0.05)
+#   FAKE_DOCKER_STOP_FAIL      "1" makes `stop` exit non-zero (rm must still run)
+#   FAKE_DOCKER_PS_CONTENT     scripted `ps -a` output
+set -u
+
+LOG="${FAKE_DOCKER_LOG:-/dev/null}"
+printf 'cmd %s\n' "$*" >> "$LOG"
+
+cmd="$1"
+shift || true
+
+case "$cmd" in
+  run)
+    # docker run -d ... → print a container ID; the NAME is the lifecycle key.
+    printf 'fake-container-id-%s\n' "$(date +%s%N)"
+    ;;
+  attach)
+    case "${FAKE_DOCKER_MODE:-echo}" in
+      stdin)
+        # Stream stdin to the capture file and exit 0.
+        cat > "${FAKE_DOCKER_STDIN_CAPTURE:-/dev/null}"
+        ;;
+      hang)
+        sleep "${FAKE_DOCKER_HANG_SECONDS:-60}"
+        ;;
+      spam)
+        # Emit FAKE_DOCKER_SPAM_BYTES of payload so ceiling enforcement has
+        # something to truncate.
+        yes "x" | head -c "${FAKE_DOCKER_SPAM_BYTES:-2097152}"
+        ;;
+      echo|*)
+        printf '%s' "${FAKE_DOCKER_ATTACH_OUTPUT:-hello}"
+        ;;
+    esac
+    exit "${FAKE_DOCKER_ATTACH_EXIT:-0}"
+    ;;
+  wait)
+    if [ "${FAKE_DOCKER_MODE:-echo}" = "hang" ]; then
+      sleep "${FAKE_DOCKER_HANG_SECONDS:-60}"
+    else
+      sleep "${FAKE_DOCKER_WAIT_SLEEP:-0.05}"
+    fi
+    printf '%s\n' "${FAKE_DOCKER_WAIT_EXIT:-0}"
+    ;;
+  stop)
+    [ "${FAKE_DOCKER_STOP_FAIL:-0}" = "1" ] && exit 1
+    exit 0
+    ;;
+  rm)
+    exit 0
+    ;;
+  ps)
+    [ "${FAKE_DOCKER_PS_FAIL:-0}" = "1" ] && { printf 'ps failed\n' >&2; exit 1; }
+    printf '%s' "${FAKE_DOCKER_PS_CONTENT:-}"
+    ;;
+  image)
+    # docker image inspect --format ... <ref>
+    if [ "${1:-}" = "inspect" ]; then
+      printf '%s' "${FAKE_DOCKER_INSPECT_OUTPUT:-}"
+    fi
+    ;;
+  info)
+    printf 'fake docker info\n'
+    ;;
+  inspect)
+    printf '%s' "${FAKE_DOCKER_INSPECT_OUTPUT:-}"
+    ;;
+  *)
+    # Unknown subcommand: recorded in the log, harmless no-op.
+    exit 0
+    ;;
+esac

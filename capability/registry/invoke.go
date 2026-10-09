@@ -21,6 +21,7 @@ import (
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/governance/policy"
 	"codeburg.org/lexbit/relurpify/governance/risk"
+	fwtelemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 const (
@@ -56,10 +57,14 @@ func (r *CapabilityRegistry) InvokeCapability(ctx context.Context, state ports.S
 	if !ok {
 		return nil, fmt.Errorf("capability %s is not invocable", entry.descriptor.ID)
 	}
-	// Redact sensitive argument values before any logging or telemetry.
+	// Redact sensitive argument values before any logging or telemetry. The
+	// redacted surface is what gets persisted (result metadata); raw args
+	// reach only the handler and the bounded rollback ring (INV-7).
+	var toolParams []ports.ToolParameter
 	if entry.legacyTool != nil {
-		_ = ports.RedactArgs(args, entry.legacyTool.Parameters())
+		toolParams = entry.legacyTool.Parameters()
 	}
+	redactedArgs := ports.RedactArgs(args, toolParams)
 	startTime := time.Now()
 	var result *ports.ToolResult
 	result, err = recoverToolPanic(func() (*ports.ToolResult, error) {
@@ -83,13 +88,19 @@ func (r *CapabilityRegistry) InvokeCapability(ctx context.Context, state ports.S
 			callDuration,
 		)
 	}
-	// Store rollback token for revertible tools
-	if err == nil && result != nil && result.Success {
-		if tok := r.storeRollbackTokenLocked(idOrName, args, result); tok != "" {
-			if result.Metadata == nil {
-				result.Metadata = make(map[string]any)
+	if result != nil {
+		// Result metadata carries the redacted argument surface so downstream
+		// audit / telemetry consumers never see secret-shaped values
+		// (SBH-1 D-9). Tool-provided metadata keys are left untouched.
+		if result.Metadata == nil {
+			result.Metadata = make(map[string]any)
+		}
+		result.Metadata["args"] = redactedArgs
+		// Store rollback token for revertible tools.
+		if err == nil && result.Success {
+			if tok := r.storeRollbackToken(ctx, entry.legacyTool, args, result); tok != "" {
+				result.Metadata["rollback_token"] = tok
 			}
-			result.Metadata["rollback_token"] = tok
 		}
 	}
 	return result, err
@@ -138,19 +149,26 @@ func newRollbackID() string {
 	return "rbk-" + hex.EncodeToString(b)
 }
 
-// storeRollbackTokenLocked records a rollback token for the invocation if the
-// underlying tool implements RevertibleTool. Returns the token ID or empty
-// string if rollback is not supported.
-func (r *CapabilityRegistry) storeRollbackTokenLocked(toolName string, args map[string]any, result *ports.ToolResult) string {
-	r.rollbackMu.Lock()
-	defer r.rollbackMu.Unlock()
+// storeRollbackToken records a rollback token for the invocation if and only
+// if the underlying tool implements RevertibleTool (checked on the unwrapped
+// tool — the registry always wraps legacy tools in an instrumentedTool that
+// would otherwise claim revertibility for every tool). Returns the token ID or
+// the empty string when rollback is not supported.
+func (r *CapabilityRegistry) storeRollbackToken(ctx context.Context, tool ports.Tool, args map[string]any, result *ports.ToolResult) string {
+	if !isRevertibleTool(tool) || r.rollbacks == nil {
+		return ""
+	}
 	tok := newRollbackID()
-	r.rollbackTokens[tok] = ports.RollbackToken{
+	ttl := ports.RollbackToken{
 		InvocationID: tok,
-		ToolName:     toolName,
+		ToolName:     tool.Name(),
 		Args:         cloneArgs(args),
 		Result:       result,
 	}
+	r.rollbacks.store(ttl)
+	// Telemetry carries the token ID and tool name only — never the raw args
+	// the token references (SBH-1 D-9).
+	r.emitRollbackEvent(ctx, fwtelemetry.EventRollbackTokenStored, tok, tool.Name())
 	return tok
 }
 
@@ -166,17 +184,20 @@ func cloneArgs(args map[string]any) map[string]any {
 }
 
 // RollbackCapability undoes a previous tool invocation identified by the
-// rollback token. Returns an error if the token is not found, the underlying
-// tool does not support rollback, or the rollback itself fails.
+// rollback token. Returns an error if the token is not found, has expired (its
+// raw Args were scrubbed), the underlying tool does not support rollback, or
+// the rollback itself fails.
 func (r *CapabilityRegistry) RollbackCapability(ctx context.Context, tokenID string) error {
-	r.rollbackMu.Lock()
-	token, ok := r.rollbackTokens[tokenID]
-	if ok {
-		delete(r.rollbackTokens, tokenID)
-	}
-	r.rollbackMu.Unlock()
-	if !ok {
+	if r == nil || r.rollbacks == nil {
 		return fmt.Errorf("rollback token %q not found", tokenID)
+	}
+	token, err := r.rollbacks.take(tokenID)
+	if err != nil {
+		var expired *rollbackExpiredError
+		if errors.As(err, &expired) {
+			r.emitRollbackEvent(ctx, fwtelemetry.EventRollbackTokenExpired, tokenID, expired.tool)
+		}
+		return err
 	}
 	entry, err := r.capabilityEntry(token.ToolName)
 	if err != nil {
@@ -248,7 +269,8 @@ func (r *CapabilityRegistry) prepareCapabilityInvocation(ctx context.Context, st
 	return entry, nil
 }
 
-func (r *CapabilityRegistry) enforceCapabilityPolicy(ctx context.Context, entry *capabilityEntry) error {	desc := entry.descriptor
+func (r *CapabilityRegistry) enforceCapabilityPolicy(ctx context.Context, entry *capabilityEntry) error {
+	desc := entry.descriptor
 	r.mu.RLock()
 	policyEngine := r.policyEngine
 	agentID := r.registeredAgentID

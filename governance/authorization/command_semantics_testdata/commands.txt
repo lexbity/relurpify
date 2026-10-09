@@ -1,0 +1,114 @@
+# Real-world command corpus for the lifting ask-rate budget (R-5, Phase 5).
+# One command per line; lines starting with '#' are ignored.
+git status
+git diff
+git diff --staged
+git log --oneline -10
+git log --graph --decorate
+git add .
+git add src/main.go
+git commit -m fix
+git commit --amend
+git pull
+git push origin main
+git push --force
+git branch
+git branch -a
+git checkout -b feature
+git checkout main
+git stash
+git stash pop
+git remote -v
+git tag
+git fetch
+git merge main
+git rebase main
+git cherry-pick abc123
+git reset --hard
+ls
+ls -la
+ls src
+cat README.md
+cat go.mod
+cat src/main.go
+head -n 20 main.go
+tail -n 50 log.txt
+grep -rn TODO .
+grep -r pattern src
+wc -l main.go
+pwd
+whoami
+date
+echo hello
+echo done
+go build ./...
+go test ./...
+go test -run TestFoo ./...
+go vet ./...
+go fmt ./...
+go mod tidy
+go run main.go
+go generate ./...
+npm install
+npm test
+npm run build
+npm ci
+yarn install
+pnpm install
+cargo build
+cargo test
+cargo run
+cargo fmt
+cargo clippy
+make build
+make test
+make lint
+python3 main.py
+python3 -m pytest
+pip install requests
+pip list
+docker ps
+docker images
+docker build -t app .
+docker run app
+docker logs app
+kubectl get pods
+kubectl describe pod foo
+kubectl apply -f deploy.yaml
+curl http://example.com
+curl -s https://api.github.com
+curl -o out.txt http://example.com
+wget http://example.com/file
+tar -czf out.tar.gz src
+tar -xzf out.tar.gz
+zip -r out.zip src
+unzip out.zip
+cp a b
+mv a b
+rm file
+rm -rf build
+mkdir -p src/utils
+touch file
+chmod +x script.sh
+sed -i s/a/b/ file
+sort file
+uniq file
+cut -d, -f1 file
+tr a b
+jq .foo file.json
+rg pattern
+fd name
+du -sh .
+df -h
+free -m
+which go
+git shortlog -sn
+# --- dynamic / opaque constructors (must escalate) ---
+eval echo hi
+sudo rm -rf /
+xargs rm
+find . -exec rm {} ;
+perl -e print
+python3 -c import os
+node -e process.exit
+awk BEGIN{system(sh)}

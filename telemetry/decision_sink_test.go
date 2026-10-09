@@ -48,6 +48,28 @@ func TestTelemetryDecisionSink_PolicyEvaluated(t *testing.T) {
 	require.GreaterOrEqual(t, ev.Timestamp.Unix(), int64(0))
 }
 
+// TestTelemetryDecisionSink_PolicyConflictShadowed verifies the
+// policy.conflict_shadowed event shape.
+func TestTelemetryDecisionSink_PolicyConflictShadowed(t *testing.T) {
+	sink := &decisionEventSink{}
+	ds := TelemetryDecisionSink{Telemetry: sink}
+
+	ds.PolicyConflictShadowed(context.Background(), PolicyConflict{
+		Winner:   "global:deny",
+		Shadowed: "tool:allow",
+		Effect:   "allow",
+		Actor:    "agent:euclo",
+	})
+
+	require.Len(t, sink.events, 1)
+	ev := sink.events[0]
+	require.Equal(t, EventPolicyConflictShadowed, ev.Type)
+	require.Equal(t, "global:deny", ev.Metadata["winner_rule"])
+	require.Equal(t, "tool:allow", ev.Metadata["shadowed_rule"])
+	require.Equal(t, "allow", ev.Metadata["shadowed_effect"])
+	require.Equal(t, "agent:euclo", ev.Actor)
+}
+
 // TestTelemetryDecisionSink_HITLLifecycle verifies hitl.requested and
 // hitl.resolved events with matching request IDs (AC-3).
 func TestTelemetryDecisionSink_HITLLifecycle(t *testing.T) {

@@ -385,7 +385,11 @@ func (s *BrowserService) authorizeNavigation(ctx context.Context, args map[strin
 	default:
 		portNum = 80
 	}
-	if err := s.permissionManager.CheckNetwork(ctx, s.agentID(), "egress", parsed.Scheme, host, portNum); err != nil {
+	target, err := s.permissionManager.ResolveTarget(ctx, host)
+	if err != nil {
+		return err
+	}
+	if err := s.permissionManager.CheckNetwork(ctx, s.agentID(), "egress", parsed.Scheme, target, portNum); err != nil {
 		return err
 	}
 	return nil

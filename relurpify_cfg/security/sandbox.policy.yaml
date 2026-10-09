@@ -8,3 +8,14 @@ seccomp_profile: ""
 allowed_env_keys: []
 denied_env_keys: []
 network_rules: []
+
+# Container lifecycle ownership (SBH-1 D-11): reaping orphans of crashed
+# sessions at boot, and the absolute age cap beyond which ANY managed
+# container is reclaimed.
+reap_orphans: true
+orphan_max_age: 24h
+
+# Digest-pin the sandbox runtime image (SBH-1 D-13). Leave empty to resolve
+# the ref digest from the local daemon at boot; set sha256:… to state it.
+image_digest: ""
+

@@ -10,6 +10,7 @@ import (
 	fsandbox "codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/execution/session"
 	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
@@ -26,11 +27,15 @@ func registerBrowserWorkspaceService(cfg WorkspaceConfig, registration *fauthori
 		return fmt.Errorf("browser registry unavailable")
 	}
 	fileScope := fsandbox.NewFileScopePolicy(cfg.Workspace, nil)
-	bashCfg := &fauthorization.BashConfig{}
+	bashCfg := &fauthorization.BashConfig{Default: permissions.DecisionAsk}
 	if spec != nil {
 		bashCfg.AllowPatterns = spec.Bash.AllowPatterns
 		bashCfg.DenyPatterns = spec.Bash.DenyPatterns
-		bashCfg.Default = string(spec.Bash.Default)
+		decision, err := permissions.DecisionOr(string(spec.Bash.Default), permissions.DecisionAsk)
+		if err != nil {
+			return fmt.Errorf("browser bash default: %w", err)
+		}
+		bashCfg.Default = decision
 	}
 	authPolicy := fauthorization.NewCommandAuthorizationPolicy(registration.Permissions, registration.ID, bashCfg, "browser")
 	cmdPolicy := fsandbox.CommandPolicyFunc(func(ctx context.Context, req fsandbox.CommandRequest) error {

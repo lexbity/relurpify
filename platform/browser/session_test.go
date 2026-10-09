@@ -16,7 +16,7 @@ import (
 func TestSessionNavigateChecksNetworkPermissions(t *testing.T) {
 	perms := &permissions.PermissionSet{
 		Network: []permissions.NetworkPermission{
-			{Direction: "egress", Protocol: "tcp", Host: "allowed.example", Port: 443},
+			{Direction: "egress", Protocol: "tcp", Host: "8.8.8.8", Port: 443},
 		},
 	}
 	manager, err := authorization.NewPermissionManager("", perms, nil, nil)
@@ -30,7 +30,7 @@ func TestSessionNavigateChecksNetworkPermissions(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	err = session.Navigate(context.Background(), "https://denied.example")
+	err = session.Navigate(context.Background(), "https://1.1.1.1")
 
 	require.Error(t, err)
 	require.True(t, IsErrorCode(err, ErrNavigationBlocked))
@@ -40,7 +40,7 @@ func TestSessionNavigateChecksNetworkPermissions(t *testing.T) {
 func TestSessionNavigateAllowsDeclaredDomain(t *testing.T) {
 	perms := &permissions.PermissionSet{
 		Network: []permissions.NetworkPermission{
-			{Direction: "egress", Protocol: "tcp", Host: "allowed.example", Port: 443},
+			{Direction: "egress", Protocol: "tcp", Host: "8.8.8.8", Port: 443},
 		},
 	}
 	manager, err := authorization.NewPermissionManager("", perms, nil, nil)
@@ -54,8 +54,8 @@ func TestSessionNavigateAllowsDeclaredDomain(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	require.NoError(t, session.Navigate(context.Background(), "https://allowed.example/path"))
-	require.Equal(t, "https://allowed.example/path", backend.currentURL)
+	require.NoError(t, session.Navigate(context.Background(), "https://8.8.8.8/path"))
+	require.Equal(t, "https://8.8.8.8/path", backend.currentURL)
 }
 
 func TestSessionNavigateRejectsNonNetworkSchemes(t *testing.T) {

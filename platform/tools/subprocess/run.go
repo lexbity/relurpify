@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/capability/ports"
+	governanceports "codeburg.org/lexbit/relurpify/governance/ports"
 )
 
 // RunSpec is the minimal execution contract for running a subprocess command.
@@ -31,8 +32,27 @@ type RunSpec struct {
 	// NetworkAccess triggers SSRF host screening against Command arguments.
 	NetworkAccess bool
 
-	// AllowHosts is an optional allowlist for egress screening.
+	// AllowHosts are public egress targets granted without prompting.
 	AllowHosts []string
+
+	// AllowPrivateHosts are non-public egress targets that require HITL
+	// approval. They do not bypass the mandatory denylist; they gate it.
+	AllowPrivateHosts []string
+
+	// NetworkIsolationDisabled records that the container runs without network
+	// isolation. It is fail-safe: the zero value means isolation is on, so a
+	// caller that forgets to set it never accidentally enables the isolation-off
+	// scanner mode. When true the egress scanner runs for every command with no
+	// allowlist bypass.
+	NetworkIsolationDisabled bool
+
+	// Env is the environment that will be handed to the child. It is scanned
+	// for proxy carriers (HTTP_PROXY et al.).
+	Env []string
+
+	// PrivateEgress resolves private/unisolated egress approvals through HITL.
+	// A nil approver denies the approval path (fail closed).
+	PrivateEgress PrivateEgressApprover
 
 	// SourcePath is the manifest source path, used for cargo workspace
 	// detection.
@@ -53,6 +73,7 @@ type RunResult struct {
 	ExitCode  int
 	StdoutRef string
 	StderrRef string
+	Truncated bool
 	Error     string
 	Success   bool
 	Command   []string
@@ -82,11 +103,25 @@ func Run(ctx context.Context, runner ports.CommandRunner, spec RunSpec) (res *Ru
 		workdir = "."
 	}
 
-	// SF-1 SSRF guard: for network-access tools, screen target hosts against
-	// the sandbox denylist before the command runs.
-	if spec.NetworkAccess {
-		if e := checkEgress(spec.AllowHosts, cmd); e != nil {
-			return &RunResult{Success: false, Error: e.Error()}, nil
+	// SF-1 SSRF guard: screen target hosts against the mandatory denylist
+	// before the command runs. The scanner runs for network-access tools and,
+	// when container isolation is off, for every command.
+	egress := checkEgress(SandboxSpec{
+		NetworkAccess:     spec.NetworkAccess,
+		NetworkIsolation:  !spec.NetworkIsolationDisabled,
+		AllowHosts:        spec.AllowHosts,
+		AllowPrivateHosts: spec.AllowPrivateHosts,
+	}, spec.Env, cmd)
+	switch egress.Effect {
+	case EgressDeny:
+		return &RunResult{Success: false, Error: egress.Reason}, nil
+	case EgressRequireApproval:
+		if spec.PrivateEgress == nil {
+			return &RunResult{Success: false, Error: "network egress requires approval but no approver is configured"}, nil
+		}
+		agentID := governanceports.PrincipalFromContext(ctx).AgentID
+		if err := spec.PrivateEgress.ApprovePrivateEgress(ctx, agentID, egress.Hosts); err != nil {
+			return &RunResult{Success: false, Error: "network egress approval denied: " + err.Error()}, nil
 		}
 	}
 
@@ -108,6 +143,7 @@ func Run(ctx context.Context, runner ports.CommandRunner, spec RunSpec) (res *Ru
 		Args:    cmd,
 		Workdir: workdir,
 		Input:   spec.Stdin,
+		Env:     spec.Env,
 	}
 	if spec.Sandbox.TimeoutSeconds > 0 {
 		request.Timeout = time.Duration(spec.Sandbox.TimeoutSeconds) * time.Second
@@ -121,6 +157,12 @@ func Run(ctx context.Context, runner ports.CommandRunner, spec RunSpec) (res *Ru
 	if spec.Sandbox.CPUs > 0 {
 		request.CPUs = spec.Sandbox.CPUs
 	}
+	if spec.Sandbox.OutputCeiling > 0 {
+		request.OutputCeiling = spec.Sandbox.OutputCeiling
+	}
+	if spec.Sandbox.GracePeriod > 0 {
+		request.GracePeriod = spec.Sandbox.GracePeriod
+	}
 
 	r, runErr := runner.Run(ctx, request)
 	if runErr != nil {
@@ -133,6 +175,7 @@ func Run(ctx context.Context, runner ports.CommandRunner, spec RunSpec) (res *Ru
 		ExitCode:  r.ExitCode,
 		StdoutRef: r.StdoutRef,
 		StderrRef: r.StderrRef,
+		Truncated: r.Truncated,
 		Command:   cmd,
 		Workdir:   workdir,
 	}

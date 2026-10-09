@@ -36,16 +36,17 @@ func (r *blockedEgressRunner) Run(_ context.Context, req ports.CommandRequest) (
 }
 
 func newNetworkTool(runner ports.CommandRunner) ports.Tool {
+	return newManifestTool(runner, ports.ToolManifestSandbox{AllowFlags: true, NetworkAccess: true})
+}
+
+func newManifestTool(runner ports.CommandRunner, sandbox ports.ToolManifestSandbox) ports.Tool {
 	return NewTool(ports.ToolManifest{
 		Name:   cli_curl,
 		Family: network,
 		Execution: ports.ToolManifestExecution{
 			Backend: ports.ToolBackendSubprocess,
 			Command: &ports.ToolManifestCommand{Base: []string{curl}},
-			Sandbox: &ports.ToolManifestSandbox{
-				AllowFlags:    true,
-				NetworkAccess: true,
-			},
+			Sandbox: &sandbox,
 		},
 		Capability: ports.ToolManifestCapability{
 			TrustClass:  builtin_trusted,
@@ -55,13 +56,189 @@ func newNetworkTool(runner ports.CommandRunner) ports.Tool {
 	}, runner)
 }
 
+func TestCheckEgressDecisionTable(t *testing.T) {
+	tests := []struct {
+		name string
+		spec SandboxSpec
+		env  []string
+		cmd  []string
+		want string
+	}{
+		{
+			name: "private literal denied",
+			spec: SandboxSpec{NetworkAccess: true, NetworkIsolation: true},
+			cmd:  []string{curl, _10_0_0_5},
+			want: EgressDeny,
+		},
+		{
+			name: "inet-aton loopback denied",
+			spec: SandboxSpec{NetworkAccess: true, NetworkIsolation: true},
+			cmd:  []string{curl, "http://2130706433/"},
+			want: EgressDeny,
+		},
+		{
+			name: "unspecified denied",
+			spec: SandboxSpec{NetworkAccess: true, NetworkIsolation: true},
+			cmd:  []string{curl, "http://0.0.0.0/"},
+			want: EgressDeny,
+		},
+		{
+			name: "flag-embedded URL denied",
+			spec: SandboxSpec{NetworkAccess: true, NetworkIsolation: true},
+			cmd:  []string{"-XPOST", "http://127.0.0.1:6379"},
+			want: EgressDeny,
+		},
+		{
+			name: "config carrier URL denied",
+			spec: SandboxSpec{NetworkAccess: true, NetworkIsolation: true},
+			cmd:  []string{"git", "-c", "http.proxy=http://127.0.0.1:9", "clone", "https://8.8.8.8/x"},
+			want: EgressDeny,
+		},
+		{
+			name: "equals flag URL denied",
+			spec: SandboxSpec{NetworkAccess: true, NetworkIsolation: true},
+			cmd:  []string{curl, "--url=http://10.0.0.1/x"},
+			want: EgressDeny,
+		},
+		{
+			name: "env proxy denied",
+			spec: SandboxSpec{NetworkAccess: true, NetworkIsolation: true},
+			env:  []string{"HTTP_PROXY=http://169.254.169.254:80"},
+			cmd:  []string{curl, "https://8.8.8.8/"},
+			want: EgressDeny,
+		},
+		{
+			name: "env proxy lowercase denied",
+			spec: SandboxSpec{NetworkAccess: true, NetworkIsolation: true},
+			env:  []string{"https_proxy=http://127.0.0.1:3128"},
+			cmd:  []string{curl, "https://8.8.8.8/"},
+			want: EgressDeny,
+		},
+		{
+			name: "noonproxy entry denied",
+			spec: SandboxSpec{NetworkAccess: true, NetworkIsolation: true},
+			env:  []string{"NO_PROXY=localhost,example.com"},
+			cmd:  []string{curl, "https://8.8.8.8/"},
+			want: EgressDeny,
+		},
+		{
+			name: "allow_hosts does not bypass denylist",
+			spec: SandboxSpec{NetworkAccess: true, NetworkIsolation: true, AllowHosts: []string{_127_0_0_1}},
+			cmd:  []string{curl, "http://127.0.0.1:8080/health"},
+			want: EgressDeny,
+		},
+		{
+			name: "public host allowed",
+			spec: SandboxSpec{NetworkAccess: true, NetworkIsolation: true},
+			cmd:  []string{curl, "https://8.8.8.8/"},
+			want: EgressAllow,
+		},
+		{
+			name: "flagged non-host tokens ignored",
+			spec: SandboxSpec{NetworkAccess: true, NetworkIsolation: true},
+			cmd:  []string{curl, header, "Content-Type: text", "https://8.8.8.8/"},
+			want: EgressAllow,
+		},
+		{
+			name: "allow_private_hosts requires approval",
+			spec: SandboxSpec{NetworkAccess: true, NetworkIsolation: true, AllowPrivateHosts: []string{_10_0_0_5}},
+			cmd:  []string{curl, "https://10.0.0.5/"},
+			want: EgressRequireApproval,
+		},
+		{
+			name: "non-network tool with isolation is unscreened",
+			spec: SandboxSpec{NetworkAccess: false, NetworkIsolation: true},
+			cmd:  []string{curl, "http://127.0.0.1:8080/"},
+			want: EgressAllow,
+		},
+		{
+			name: "isolation off screens every command",
+			spec: SandboxSpec{NetworkAccess: false, NetworkIsolation: false},
+			cmd:  []string{curl, "http://10.0.0.1/"},
+			want: EgressDeny,
+		},
+		{
+			name: "isolation off makes public ask",
+			spec: SandboxSpec{NetworkAccess: true, NetworkIsolation: false},
+			cmd:  []string{curl, "https://8.8.8.8/"},
+			want: EgressRequireApproval,
+		},
+		{
+			name: "isolation off ignores allowlists",
+			spec: SandboxSpec{NetworkAccess: true, NetworkIsolation: false, AllowHosts: []string{_8_8_8_8}},
+			cmd:  []string{curl, "https://8.8.8.8/"},
+			want: EgressRequireApproval,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := checkEgress(tc.spec, tc.env, tc.cmd)
+			require.Equal(t, tc.want, got.Effect, "decision=%+v", got)
+		})
+	}
+}
+
+// TestCheckEgressUnresolvableFailsClosed is the P-1 fail-closed red-line.
+func TestCheckEgressUnresolvableFailsClosed(t *testing.T) {
+	got := checkEgress(SandboxSpec{NetworkAccess: true, NetworkIsolation: true}, nil, []string{curl, "http://no-such-host.invalid/"})
+	require.Equal(t, EgressDeny, got.Effect)
+}
+
+// TestCheckEgressReportsAllOffendingHosts proves the scanner no longer stops at
+// the first blocked host.
+func TestCheckEgressReportsAllOffendingHosts(t *testing.T) {
+	got := checkEgress(SandboxSpec{NetworkAccess: true, NetworkIsolation: true}, nil,
+		[]string{curl, "http://10.0.0.1/", "http://169.254.169.254/"})
+	require.Equal(t, EgressDeny, got.Effect)
+	require.ElementsMatch(t, []string{"10.0.0.1", "169.254.169.254"}, got.Hosts)
+}
+
+func TestExtractHostCandidates(t *testing.T) {
+	tests := []struct {
+		token string
+		want  []string
+	}{
+		{http_169_254_169_254_latest_meta_data, []string{"169.254.169.254"}},
+		{"https://127.0.0.1:6443/healthz", []string{_127_0_0_1}},
+		{"http://[::1]/", []string{"::1"}},
+		{_10_0_0_5, []string{_10_0_0_5}},
+		{"192.168.1.1:8080", []string{"192.168.1.1"}},
+		{"https://8.8.8.8/", []string{_8_8_8_8}},
+		{"https://example.com/path", []string{"example.com"}},
+		{"user:pass@host.com:8080/path", []string{"host.com"}},
+		{"--url=http://10.0.0.1/x", []string{"10.0.0.1"}},
+		{"http.proxy=http://127.0.0.1:9", []string{_127_0_0_1}},
+		{"-XPOST", nil},
+		{"--header", nil},
+		{"Content-Type: text", nil},
+		{"-", nil},
+		{"", nil},
+		{"localhost", []string{"localhost"}},
+		{"[::1]", []string{"::1"}},
+	}
+	for _, tc := range tests {
+		require.Equal(t, tc.want, extractHostCandidates(tc.token), "token=%q", tc.token)
+	}
+}
+
+func TestProxyEnvHosts(t *testing.T) {
+	require.Equal(t, []string{"169.254.169.254"}, proxyEnvHosts("HTTP_PROXY=http://169.254.169.254:80"))
+	require.Equal(t, []string{"127.0.0.1"}, proxyEnvHosts("http_proxy=http://127.0.0.1:3128"))
+	require.Equal(t, []string{"localhost", "example.com"}, proxyEnvHosts("NO_PROXY=localhost,example.com"))
+	require.Empty(t, proxyEnvHosts("PATH=/usr/bin"))
+	require.Empty(t, proxyEnvHosts("HTTP_PROXY"))
+}
+
 func TestNetworkToolBlocksPrivateAndMetadataHosts(t *testing.T) {
 	blocked := []string{
-		http_169_254_169_254_latest_meta_data, // cloud metadata URL
-		"https://127.0.0.1:6443/healthz",      // loopback service
-		"http://[::1]/",                       // IPv6 loopback URL
-		_10_0_0_5,                             // bare RFC-1918 IP (nc/ping style)
-		"192.168.1.1:8080",                    // host:port
+		http_169_254_169_254_latest_meta_data,
+		"https://127.0.0.1:6443/healthz",
+		"http://[::1]/",
+		_10_0_0_5,
+		"192.168.1.1:8080",
+		"http://2130706433/",
+		"http://0x7f000001/",
+		"http://0.0.0.0/",
 	}
 	for _, target := range blocked {
 		r := &blockedEgressRunner{}
@@ -83,19 +260,30 @@ func TestNetworkToolAllowsPublicHost(t *testing.T) {
 	require.True(t, r.called, "runner should execute for a public host")
 }
 
+// TestNetworkToolAllowHostsDoesNotBypassDenylist is the P-2 headline: a private
+// literal in allow_hosts must not bypass the mandatory denylist.
+func TestNetworkToolAllowHostsDoesNotBypassDenylist(t *testing.T) {
+	r := &blockedEgressRunner{}
+	tool := newManifestTool(r, ports.ToolManifestSandbox{
+		AllowFlags:    true,
+		NetworkAccess: true,
+		AllowHosts:    []string{_127_0_0_1},
+	})
+	result, err := tool.Execute(context.Background(), map[string]any{args: []any{"http://127.0.0.1:8080/health"}})
+	require.NoError(t, err)
+	require.False(t, result.Success, "allow_hosts must not bypass the private denylist")
+	require.False(t, r.called)
+}
+
 func TestNonNetworkToolNotScreened(t *testing.T) {
 	r := &blockedEgressRunner{}
-	// rg has no network_access, so the egress screen should not trigger
 	tool := NewTool(ports.ToolManifest{
 		Name:   "cli_rg",
 		Family: "fileops",
 		Execution: ports.ToolManifestExecution{
 			Backend: ports.ToolBackendSubprocess,
 			Command: &ports.ToolManifestCommand{Base: []string{"rg"}},
-			Sandbox: &ports.ToolManifestSandbox{
-				AllowFlags:    true,
-				NetworkAccess: false,
-			},
+			Sandbox: &ports.ToolManifestSandbox{AllowFlags: true, NetworkAccess: false},
 		},
 		Capability: ports.ToolManifestCapability{
 			TrustClass:  builtin_trusted,
@@ -106,171 +294,8 @@ func TestNonNetworkToolNotScreened(t *testing.T) {
 
 	result, err := tool.Execute(context.Background(), map[string]any{args: []any{_10_0_0_1}})
 	require.NoError(t, err)
-	require.True(t, result.Success, "non-network tool must run unscreened (success=%v called=%v err=%s)", result.Success, r.called, result.Error)
-	require.True(t, r.called, "non-network tool runner should execute")
-}
-
-func TestNetworkToolWithAllowHostsBypassesBlock(t *testing.T) {
-	r := &blockedEgressRunner{}
-	tool := NewTool(ports.ToolManifest{
-		Name:   cli_curl,
-		Family: network,
-		Execution: ports.ToolManifestExecution{
-			Backend: ports.ToolBackendSubprocess,
-			Command: &ports.ToolManifestCommand{Base: []string{curl}},
-			Sandbox: &ports.ToolManifestSandbox{
-				AllowFlags:    true,
-				NetworkAccess: true,
-				AllowHosts:    []string{_127_0_0_1},
-			},
-		},
-		Capability: ports.ToolManifestCapability{
-			TrustClass:  builtin_trusted,
-			RiskClass:   []string{execute, network},
-			EffectClass: []string{process_spawn},
-		},
-	}, r)
-
-	result, err := tool.Execute(context.Background(), map[string]any{args: []any{"http://127.0.0.1:8080/health"}})
-	require.NoError(t, err)
-	require.True(t, result.Success, "allow_hosts should bypass SSRF block")
-	require.True(t, r.called, "runner should execute when host is allowed")
-}
-
-func TestNetworkToolAllowHostsOnlyExactMatches(t *testing.T) {
-	// A host not in allow_hosts should still be blocked
-	r := &blockedEgressRunner{}
-	tool := NewTool(ports.ToolManifest{
-		Name:   cli_curl,
-		Family: network,
-		Execution: ports.ToolManifestExecution{
-			Backend: ports.ToolBackendSubprocess,
-			Command: &ports.ToolManifestCommand{Base: []string{curl}},
-			Sandbox: &ports.ToolManifestSandbox{
-				AllowFlags:    true,
-				NetworkAccess: true,
-				AllowHosts:    []string{"10.0.0.2"}, // different from the target
-			},
-		},
-		Capability: ports.ToolManifestCapability{
-			TrustClass:  builtin_trusted,
-			RiskClass:   []string{execute, network},
-			EffectClass: []string{process_spawn},
-		},
-	}, r)
-
-	result, err := tool.Execute(context.Background(), map[string]any{args: []any{_10_0_0_1}})
-	require.NoError(t, err)
-	require.False(t, result.Success, "host not in allow_hosts should be blocked")
-	require.False(t, r.called, "runner must not execute for blocked host")
-}
-
-// --- isNetworkTool / extractHost unit tests ---
-
-func TestIsNetworkTool(t *testing.T) {
-	// Tool with NetworkAccess = true
-	netManifest := ports.ToolManifest{
-		Execution: ports.ToolManifestExecution{
-			Sandbox: &ports.ToolManifestSandbox{NetworkAccess: true},
-		},
-	}
-	require.True(t, isNetworkTool(netManifest))
-
-	// Tool with NetworkAccess = false
-	noNetManifest := ports.ToolManifest{
-		Execution: ports.ToolManifestExecution{
-			Sandbox: &ports.ToolManifestSandbox{NetworkAccess: false},
-		},
-	}
-	require.False(t, isNetworkTool(noNetManifest))
-
-	// Tool with no sandbox at all
-	noSandboxManifest := ports.ToolManifest{
-		Execution: ports.ToolManifestExecution{},
-	}
-	require.False(t, isNetworkTool(noSandboxManifest))
-}
-
-func TestExtractHost(t *testing.T) {
-	tests := []struct {
-		arg      string
-		expected string
-	}{
-		{http_169_254_169_254_latest_meta_data, "169.254.169.254"},
-		{"https://127.0.0.1:6443/healthz", _127_0_0_1},
-		{"http://[::1]/", "::1"},
-		{_10_0_0_5, _10_0_0_5},
-		{"192.168.1.1:8080", "192.168.1.1"},
-		{"https://8.8.8.8/", _8_8_8_8},
-		{"https://example.com/path", "example.com"},
-		{"user:pass@host.com:8080/path", "host.com"},
-		{"-H", "-H"},     // extractHost does not filter flags; firstBlockedEgressHost does
-		{header, header}, // same
-		{"", ""},         // empty
-		{"localhost", "localhost"},
-		{"[::1]", "::1"},
-	}
-	for _, tc := range tests {
-		got := extractHost(tc.arg)
-		require.Equal(t, tc.expected, got, "extractHost(%q)", tc.arg)
-	}
-}
-
-func TestFirstBlockedEgressHost(t *testing.T) {
-	tests := []struct {
-		name       string
-		args       []string
-		allowHosts []string
-		want       string // empty means no blocked host
-	}{
-		{
-			name: "block private IP",
-			args: []string{_10_0_0_1},
-			want: _10_0_0_1,
-		},
-		{
-			name: "block loopback URL",
-			args: []string{"http://127.0.0.1:8080/"},
-			want: _127_0_0_1,
-		},
-		{
-			name: "allow public IP",
-			args: []string{_8_8_8_8},
-			want: "",
-		},
-		{
-			name: "skip flags",
-			args: []string{header, "Content-Type: text", _8_8_8_8},
-			want: "",
-		},
-		{
-			name:       "allowlisted host bypasses block",
-			args:       []string{_127_0_0_1},
-			allowHosts: []string{_127_0_0_1},
-			want:       "",
-		},
-		{
-			name:       "non-allowlisted host still blocked",
-			args:       []string{_127_0_0_1},
-			allowHosts: []string{_10_0_0_1},
-			want:       _127_0_0_1,
-		},
-		{
-			name: "block metadata endpoint",
-			args: []string{http_169_254_169_254_latest_meta_data},
-			want: "169.254.169.254",
-		},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			got := firstBlockedEgressHost(tc.args, tc.allowHosts)
-			if tc.want == "" {
-				require.Empty(t, got, "firstBlockedEgressHost(%v, %v)", tc.args, tc.allowHosts)
-			} else {
-				require.Equal(t, tc.want, got, "firstBlockedEgressHost(%v, %v)", tc.args, tc.allowHosts)
-			}
-		})
-	}
+	require.True(t, result.Success, "non-network tool must run unscreened")
+	require.True(t, r.called)
 }
 
 func TestNetworkToolNoSandboxNoScreen(t *testing.T) {
@@ -292,4 +317,20 @@ func TestNetworkToolNoSandboxNoScreen(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, result.Success, "tool without sandbox should not be screened")
 	require.True(t, r.called)
+}
+
+// BenchmarkCheckEgressScanAll exercises the every-token scanner with a wide
+// argv and a warm cache. NFR-5 budget: ≤ 10 ms p99 uncached, ≤ 1 ms cached.
+func BenchmarkCheckEgressScanAll(b *testing.B) {
+	cmd := []string{"curl", "-XPOST", "-H", "Content-Type: application/json"}
+	for i := 0; i < 22; i++ {
+		cmd = append(cmd, "https://8.8.8.8/path/"+string(rune('a'+i)))
+	}
+	spec := SandboxSpec{NetworkAccess: true, NetworkIsolation: true}
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		if d := checkEgress(spec, nil, cmd); d.Effect != EgressAllow {
+			b.Fatalf("unexpected decision: %+v", d)
+		}
+	}
 }

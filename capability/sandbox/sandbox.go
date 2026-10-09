@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/capability/sandbox/safeexec"
+	"codeburg.org/lexbit/relurpify/governance/netpolicy"
 )
 
 // Validate/Supports methods live on the sandbox types.
@@ -82,13 +83,17 @@ func validateBackendPolicy(name string, caps Capabilities, policy SandboxPolicy)
 	if err := policy.Validate(); err != nil {
 		return err
 	}
-	// Mandatory egress denylist: declared network rules must not target private,
-	// loopback, or link-local hosts. Enforcing this in the sandbox policy path
-	// makes network egress a sandbox-owned security boundary (SSRF and cloud
-	// metadata protection) that no agent configuration can relax.
+	// Mandatory egress denylist: declared network rules must not target a
+	// non-public IP literal. Hostnames are not resolved here (no I/O at policy
+	// validation); they are classified per-invocation by the egress scanner.
+	// This makes network egress a sandbox-owned security boundary (SSRF and
+	// cloud metadata protection) that no agent configuration can relax.
 	for i, rule := range policy.NetworkRules {
-		if rule.Host != "" && IsPrivateOrLoopbackHost(rule.Host) {
-			return fmt.Errorf("%s backend: network rule %d targets blocked host %q (private, loopback, and link-local addresses are denied)", name, i, rule.Host)
+		if !strings.EqualFold(strings.TrimSpace(rule.Direction), "egress") {
+			continue // the denylist governs egress dial targets, not bind addresses
+		}
+		if class, literal := netpolicy.ClassifyToken(rule.Host); literal && class != netpolicy.ClassPublic {
+			return fmt.Errorf("%s backend: network rule %d targets blocked host %q (%s addresses are denied)", name, i, rule.Host, class)
 		}
 	}
 	if (len(policy.AllowedEnvKeys) > 0 || len(policy.DeniedEnvKeys) > 0) && !caps.EnvFiltering {

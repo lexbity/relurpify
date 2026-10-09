@@ -70,8 +70,7 @@ type CapabilityRegistry struct {
 	modelProfile        *model.ModelProfile
 	toolAdmission       *ToolAdmissionPolicy
 
-	rollbackTokens  map[string]ports.RollbackToken
-	rollbackMu      sync.Mutex
+	rollbacks       *rollbackRing
 	metrics         *fwtelemetry.ToolCallMetrics
 	delegate        *CapabilityRegistry
 	toolIDAllowlist map[string]struct{}
@@ -87,7 +86,7 @@ func NewRegistry() *CapabilityRegistry {
 		toolPolicies:        make(map[string]agentspec.ToolPolicy),
 		sandboxScope:        permissions.NewDenyAllFileScopePolicy(),
 		safety:              runtime.NewRuntimeSafetyController(),
-		rollbackTokens:      make(map[string]ports.RollbackToken),
+		rollbacks:           newRollbackRing(),
 	}
 }
 

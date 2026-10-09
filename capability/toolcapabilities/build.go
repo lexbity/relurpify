@@ -71,6 +71,19 @@ func Build(workspace string, runner ports.CommandRunner, manifests []*ToolManife
 			continue
 		}
 
+		// Egress allowlist admission: a manifest that declares a non-public
+		// literal in allow_hosts (or a host in both lists) is rejected here.
+		// The blocking config diagnostic is surfaced by configcheck/relurplint;
+		// this is the runtime guard so an invalid tool never becomes invocable.
+		allowlist := ValidateNetworkAllowlists(m)
+		if len(allowlist.Errors) > 0 {
+			log.Printf("tool build: rejecting %q: invalid egress allowlist: %s", name, strings.Join(allowlist.Errors, "; "))
+			continue
+		}
+		for _, warning := range allowlist.Warnings {
+			log.Printf("tool build: %q egress allowlist warning: %s", name, warning)
+		}
+
 		tool, err := buildOne(workspace, runner, *m, cfg)
 		if err != nil {
 			log.Printf("tool build: skipping %q: %v", name, err)

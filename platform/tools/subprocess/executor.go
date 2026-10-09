@@ -14,15 +14,31 @@ import (
 // The returned tool constructs every argument as a discrete token via
 // ExpandCommand and never shells out through string interpolation.
 func NewTool(manifest ports.ToolManifest, runner ports.CommandRunner) ports.Tool {
+	return newTool(manifest, runner, nil, false)
+}
+
+// NewToolWithEgress builds a subprocess tool with the egress approval port and
+// the effective container isolation. networkIsolationDisabled must be true only
+// when the container is known to run with networking enabled; the scanner then
+// screens every command.
+func NewToolWithEgress(manifest ports.ToolManifest, runner ports.CommandRunner, approver PrivateEgressApprover, networkIsolationDisabled bool) ports.Tool {
+	return newTool(manifest, runner, approver, networkIsolationDisabled)
+}
+
+func newTool(manifest ports.ToolManifest, runner ports.CommandRunner, approver PrivateEgressApprover, networkIsolationDisabled bool) ports.Tool {
 	return &subprocessTool{
-		manifest: manifest,
-		runner:   runner,
+		manifest:                 manifest,
+		runner:                   runner,
+		approver:                 approver,
+		networkIsolationDisabled: networkIsolationDisabled,
 	}
 }
 
 type subprocessTool struct {
-	manifest ports.ToolManifest
-	runner   ports.CommandRunner
+	manifest                 ports.ToolManifest
+	runner                   ports.CommandRunner
+	approver                 PrivateEgressApprover
+	networkIsolationDisabled bool
 }
 
 func (t *subprocessTool) Name() string        { return t.manifest.Name }
@@ -102,7 +118,10 @@ func (t *subprocessTool) Execute(ctx context.Context, args map[string]any) (res 
 	if execSpec.Sandbox != nil {
 		spec.Sandbox = *execSpec.Sandbox
 		spec.AllowHosts = execSpec.Sandbox.AllowHosts
+		spec.AllowPrivateHosts = execSpec.Sandbox.AllowPrivateHosts
 	}
+	spec.NetworkIsolationDisabled = t.networkIsolationDisabled
+	spec.PrivateEgress = t.approver
 
 	result, runErr := Run(ctx, t.runner, spec)
 	if runErr != nil {
@@ -115,6 +134,7 @@ func (t *subprocessTool) Execute(ctx context.Context, args map[string]any) (res 
 		"exit_code":  result.ExitCode,
 		"stdout_ref": result.StdoutRef,
 		"stderr_ref": result.StderrRef,
+		"truncated":  result.Truncated,
 	}
 
 	if !result.Success {

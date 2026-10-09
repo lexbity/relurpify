@@ -3,8 +3,8 @@ package authorization
 import (
 	"context"
 	"fmt"
-	"net"
 
+	"codeburg.org/lexbit/relurpify/governance/netpolicy"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	governanceports "codeburg.org/lexbit/relurpify/governance/ports"
 )
@@ -16,55 +16,45 @@ const (
 	directionDNS     = "dns"
 )
 
-// isPrivateOrLoopbackHost checks if the host is a private/loopback address.
-func isPrivateOrLoopbackHost(host string) bool {
-	ip := net.ParseIP(host)
-	if ip != nil {
-		return isPrivateIP(ip)
-	}
-	ips, err := net.LookupIP(host)
-	if err != nil || len(ips) == 0 {
-		return false
-	}
-	for _, ip := range ips {
-		if isPrivateIP(ip) {
-			return true
-		}
-	}
-	return false
+// ResolveTarget resolves a host token into a policy-layer target using the
+// canonical netpolicy budgets. The manager (not the pure Enforcer) owns this
+// I/O, so a hostname is classified before it reaches the decision layer.
+func (m *PermissionManager) ResolveTarget(ctx context.Context, token string) (netpolicy.Target, error) {
+	return netpolicy.ResolveTarget(ctx, token, netpolicy.DefaultResolveOptions())
 }
 
-func isPrivateIP(ip net.IP) bool {
-	if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() {
-		return true
+// networkDescriptor builds the audit/policy descriptor for a network target.
+func networkDescriptor(direction, protocol, host string, port int) permissions.PermissionDescriptor {
+	return permissions.PermissionDescriptor{
+		Type:     permissions.PermissionTypeNetwork,
+		Action:   fmt.Sprintf("net:%s:%s:%s:%d", direction, protocol, host, port),
+		Resource: host,
 	}
-	return false
 }
 
-// CheckNetwork validates network access.
-func (m *PermissionManager) CheckNetwork(ctx context.Context, agentID string, direction string, protocol string, host string, port int) error {
-	// Hard mandatory block: private, loopback, and link-local IPs are never
-	// reachable regardless of agent configuration. This prevents SSRF to
-	// cloud metadata services, localhost services, and internal networks.
-	// The denylist is owned and enforced by the sandbox package.
-	if isPrivateOrLoopbackHost(host) {
-		return m.deny(ctx, agentID, permissions.PermissionDescriptor{
-			Type:     permissions.PermissionTypeNetwork,
-			Action:   fmt.Sprintf("net:%s:%s:%s:%d", direction, protocol, host, port),
-			Resource: host,
-		}, "private, loopback, or link-local addresses are blocked")
+// networkBlockReason names the class that triggered the mandatory denylist.
+func networkBlockReason(class netpolicy.HostClass) string {
+	return fmt.Sprintf("%s addresses are blocked (ssrf protection)", class)
+}
+
+// CheckNetwork validates network access against an already-classified target.
+//
+// A non-public class is a hard mandatory block: private, loopback, link-local,
+// unspecified, and reserved targets are never reachable regardless of agent
+// configuration or allowlists. The class is produced by netpolicy, either
+// directly from an IP literal or by explicit resolution in the caller.
+func (m *PermissionManager) CheckNetwork(ctx context.Context, agentID string, direction string, protocol string, target netpolicy.Target, port int) error {
+	host := target.Token
+	if target.Class != netpolicy.ClassPublic {
+		return m.deny(ctx, agentID, networkDescriptor(direction, protocol, host, port), networkBlockReason(target.Class))
 	}
 	perm := m.findNetworkPermission(direction, protocol, host, port)
 	if perm == nil {
-		desc := permissions.PermissionDescriptor{
-			Type:     permissions.PermissionTypeNetwork,
-			Action:   fmt.Sprintf("net:%s:%s:%s:%d", direction, protocol, host, port),
-			Resource: host,
-		}
-		switch m.effectiveDefaultPolicy() {
-		case "deny":
+		desc := networkDescriptor(direction, protocol, host, port)
+		switch m.effectiveDefaultDecision() {
+		case permissions.DecisionDeny:
 			return m.deny(ctx, agentID, desc, "network scope missing")
-		default: // AgentPermissionAsk (Allow is rejected at registration time)
+		default: // DecisionAsk (allow is rejected at registration time)
 			desc.RequiresHITL = true
 			return m.ensureGrant(ctx, agentID, desc)
 		}
@@ -79,11 +69,13 @@ func (m *PermissionManager) CheckNetwork(ctx context.Context, agentID string, di
 			return err
 		}
 	}
-	m.log(ctx, agentID, permissions.PermissionDescriptor{
+	if err := m.log(ctx, agentID, permissions.PermissionDescriptor{
 		Type:     permissions.PermissionTypeNetwork,
 		Action:   fmt.Sprintf("net:%s", direction),
 		Resource: fmt.Sprintf("%s:%d", host, port),
-	}, "granted", nil)
+	}, "granted", nil); err != nil {
+		return err
+	}
 	m.recordNetworkRule(ctx, direction, protocol, host, port)
 	return nil
 }

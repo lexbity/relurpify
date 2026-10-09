@@ -2,12 +2,16 @@ package authorization
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
 	"codeburg.org/lexbit/relurpify/governance/ports"
 )
+
+// policyEngineUnavailable is the fail-closed reason for a missing engine.
+const policyEngineUnavailable = "policy engine unavailable"
 
 // PolicyEngine evaluates whether a capability invocation is permitted.
 type PolicyEngine interface {
@@ -40,18 +44,31 @@ func FromAgentSpecWithConfig(spec ports.PolicyInput, agentID string, manager *Pe
 //     Allow → pass through; Deny → hard block; Ask (default) → require approval.
 func (e *ManifestPolicyEngine) Evaluate(ctx context.Context, req policy.PolicyRequest) (policy.PolicyDecision, error) {
 	if e == nil {
-		return policy.PolicyDecisionAllow("no policy manager"), nil
+		return policy.PolicyDecisionDeny(policyEngineUnavailable), errors.New(policyEngineUnavailable)
 	}
-	if decision := evaluateCompiledRules(e.rules, req); decision != nil {
+	if decision, shadowed := evaluateCompiledRules(e.rules, req); decision != nil {
 		e.emitDecision(ctx, req, *decision)
+		e.emitShadowedConflicts(ctx, shadowed)
 		return *decision, nil
 	}
 	if e.manager == nil {
-		return policy.PolicyDecisionAllow("no policy manager"), nil
+		return policy.PolicyDecisionDeny(policyEngineUnavailable), errors.New(policyEngineUnavailable)
 	}
 	decision := e.fallbackDecision(req)
 	e.emitDecision(ctx, req, decision)
 	return decision, nil
+}
+
+// emitShadowedConflicts forwards every allow rule that lost to a stronger
+// effect to the decision sink so operators can find policy pairs whose
+// effective meaning changed under deny-wins.
+func (e *ManifestPolicyEngine) emitShadowedConflicts(ctx context.Context, shadowed []shadowedRule) {
+	if e == nil || e.manager == nil {
+		return
+	}
+	for _, conflict := range shadowed {
+		e.manager.emitPolicyConflict(ctx, e.agentID, conflict)
+	}
 }
 
 func (e *ManifestPolicyEngine) fallbackDecision(req policy.PolicyRequest) policy.PolicyDecision {
@@ -92,10 +109,10 @@ func (e *ManifestPolicyEngine) capabilityFallbackDecision(req policy.PolicyReque
 	case "builtin-trusted", "workspace-trusted":
 		return policy.PolicyDecisionAllow("workspace trusted")
 	default:
-		switch e.manager.DefaultPolicy() {
-		case "allow":
+		switch e.manager.effectiveDefaultDecision() {
+		case permissions.DecisionAllow:
 			return policy.PolicyDecisionAllow("default policy: allow")
-		case "deny":
+		case permissions.DecisionDeny:
 			return policy.PolicyDecisionDeny(
 				fmt.Sprintf("capability %q denied by default policy for agent %s", req.CapabilityName, e.agentID),
 			)

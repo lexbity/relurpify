@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/governance/permissions"
-	policy "codeburg.org/lexbit/relurpify/governance/policy"
 )
 
 type mockHITLProvider struct {
@@ -48,7 +47,7 @@ func TestAuthorizeCommand_SemanticInterception(t *testing.T) {
 		},
 	}
 
-	audit := policy.NewInMemoryAuditLogger(10)
+	audit := newTestAuditLogger(t)
 	hitl := &mockHITLProvider{}
 	pm, err := NewPermissionManager("/home/workspace", declared, audit, hitl)
 	if err != nil {
@@ -56,7 +55,7 @@ func TestAuthorizeCommand_SemanticInterception(t *testing.T) {
 	}
 
 	// Default policy for undeclared operations is Deny so we can assert on hard failures
-	pm.SetDefaultPolicy("deny")
+	_ = pm.SetDefaultDecision(permissions.DecisionDeny)
 
 	spec := &BashConfig{
 		Default: "allow",
@@ -103,7 +102,7 @@ func TestAuthorizeCommand_SemanticInterception(t *testing.T) {
 		Source:  "test",
 	}
 	// For HITL check, we set default policy to Ask
-	pm.SetDefaultPolicy("ask")
+	_ = pm.SetDefaultDecision(permissions.DecisionAsk)
 	err4 := AuthorizeCommand(ctx, pm, "test-agent", spec, req4)
 	if err4 != nil {
 		t.Errorf("expected dynamic command to request HITL and pass successfully, got error: %v", err4)

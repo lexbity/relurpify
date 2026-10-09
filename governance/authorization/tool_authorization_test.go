@@ -10,9 +10,9 @@ import (
 	governanceports "codeburg.org/lexbit/relurpify/governance/ports"
 )
 
-func newToolAuthManager(t *testing.T) (*PermissionManager, *policy.InMemoryAuditLogger) {
+func newToolAuthManager(t *testing.T) (*PermissionManager, *policy.FileChainAuditLogger) {
 	t.Helper()
-	audit := policy.NewInMemoryAuditLogger(32)
+	audit := newTestAuditLogger(t)
 	pm, err := NewPermissionManager("/tmp", &permissions.PermissionSet{}, audit, nil)
 	if err != nil {
 		t.Fatalf("NewPermissionManager: %v", err)
@@ -36,7 +36,7 @@ func TestAuthorizeToolByNameFailsClosedWithoutHITL(t *testing.T) {
 
 func TestAuthorizeToolByNameDenyPolicy(t *testing.T) {
 	pm, _ := newToolAuthManager(t)
-	pm.SetDefaultPolicy("deny")
+	_ = pm.SetDefaultDecision(permissions.DecisionDeny)
 	if err := pm.AuthorizeToolByName(context.Background(), "agent-1", "file_read"); err == nil {
 		t.Fatal("expected a deny error")
 	}
@@ -45,7 +45,7 @@ func TestAuthorizeToolByNameDenyPolicy(t *testing.T) {
 func TestAuthorizeToolByNameAskPolicyWithHITL(t *testing.T) {
 	broker := NewHITLBroker(time.Minute, nil)
 	broker.AutoApprove = true
-	pm, err := NewPermissionManager("/tmp", &permissions.PermissionSet{}, policy.NewInMemoryAuditLogger(32), broker)
+	pm, err := NewPermissionManager("/tmp", &permissions.PermissionSet{}, newTestAuditLogger(t), broker)
 	if err != nil {
 		t.Fatalf("NewPermissionManager: %v", err)
 	}
@@ -59,7 +59,7 @@ func TestAuthorizeToolByNameAskPolicyWithHITL(t *testing.T) {
 // instead of dropping it.
 func TestEnforcerCheckToolInvokeCarriesToolName(t *testing.T) {
 	pm, audit := newToolAuthManager(t)
-	pm.SetDefaultPolicy("deny")
+	_ = pm.SetDefaultDecision(permissions.DecisionDeny)
 	e := NewEnforcer(pm)
 
 	decision := e.Check(context.Background(), governanceports.AccessRequest{

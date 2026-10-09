@@ -16,7 +16,10 @@ logging:
   format: json
 
 audit:
+  # strict: governed actions that cannot be durably recorded fail closed.
+  # best_effort: audit drops are counted, never block (availability escape hatch).
   retention_days: 7
+  enforcement: strict
 
 telemetry:
   enabled: false

@@ -276,10 +276,10 @@ func (m *PermissionManager) CheckFileAccess(ctx context.Context, agentID string,
 			Action:   string(action),
 			Resource: clean,
 		}
-		switch m.effectiveDefaultPolicy() {
-		case "deny":
+		switch m.effectiveDefaultDecision() {
+		case permissions.DecisionDeny:
 			return m.deny(ctx, agentID, desc, "not declared")
-		default: // AgentPermissionAsk (Allow is rejected at registration time)
+		default: // DecisionAsk (allow is rejected at registration time)
 			desc.RequiresHITL = true
 			return m.ensureGrant(ctx, agentID, desc)
 		}
@@ -294,13 +294,19 @@ func (m *PermissionManager) CheckFileAccess(ctx context.Context, agentID string,
 			return err
 		}
 	}
-	m.log(ctx, agentID, permissions.PermissionDescriptor{
+	if err := m.log(ctx, agentID, permissions.PermissionDescriptor{
 		Type:     permissions.PermissionTypeFilesystem,
 		Action:   string(action),
 		Resource: clean,
 	}, "granted", map[string]any{
 		"pattern": perm.Path,
-	})
+		// fs_action makes the record's enforcement class total: mutating
+		// filesystem grants (write/execute/delete/…) are strict, read/list
+		// are best-effort (SBH-1 D-10).
+		"fs_action": string(action),
+	}); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -344,16 +350,16 @@ func (m *PermissionManager) CheckFilePermission(ctx context.Context, agentID, ba
 	if perm.DocumentationOnly && !strings.HasSuffix(strings.ToLower(rel), ".md") {
 		return fmt.Errorf("file %s blocked: documentation_only enabled", rel)
 	}
-	decision, _ := DecideByPatterns(rel, perm.AllowPatterns, perm.DenyPatterns, permissions.AgentPermissionLevel(perm.Default))
+	decision, _ := DecideByPatterns(rel, perm.AllowPatterns, perm.DenyPatterns, permissions.Decision(perm.Default))
 	if perm.RequireApproval {
-		decision = permissions.AgentPermissionAsk
+		decision = permissions.DecisionAsk
 	}
 	switch decision {
-	case permissions.AgentPermissionAllow:
+	case permissions.DecisionAllow:
 		return nil
-	case permissions.AgentPermissionDeny:
+	case permissions.DecisionDeny:
 		return fmt.Errorf("file %s blocked: denied by file_permissions", rel)
-	case permissions.AgentPermissionAsk:
+	case permissions.DecisionAsk:
 		if m == nil {
 			return fmt.Errorf("file %s blocked: approval required but permission manager missing", rel)
 		}

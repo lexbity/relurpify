@@ -21,10 +21,10 @@ func (m *PermissionManager) CheckExecutable(ctx context.Context, agentID, binary
 			Action:   fmt.Sprintf("exec:binary:%s", binary),
 			Resource: binary,
 		}
-		switch m.effectiveDefaultPolicy() {
-		case "deny":
+		switch m.effectiveDefaultDecision() {
+		case permissions.DecisionDeny:
 			return m.deny(ctx, agentID, desc, "binary not declared")
-		default: // AgentPermissionAsk (Allow is rejected at registration time)
+		default: // DecisionAsk (allow is rejected at registration time)
 			desc.RequiresHITL = true
 			return m.ensureGrant(ctx, agentID, desc)
 		}
@@ -53,14 +53,20 @@ func (m *PermissionManager) CheckExecutable(ctx context.Context, agentID, binary
 			return err
 		}
 	}
-	m.log(ctx, agentID, permissions.PermissionDescriptor{
+	if err := m.log(ctx, agentID, permissions.PermissionDescriptor{
 		Type:     permissions.PermissionTypeExecutable,
 		Action:   fmt.Sprintf("exec:%s", binary),
 		Resource: binary,
 	}, "granted", map[string]any{
-		"args": args,
-		"env":  env,
-	})
+		// P-7: audit metadata must not carry secret-shaped argument or env
+		// values verbatim. Args are shape-redacted; env entries are handled
+		// pair-aware so API_KEY=sk-abc cannot leak through as one opaque
+		// string (SBH-1 D-9, INV-7).
+		"args": RedactStrings(args),
+		"env":  RedactEnvPairs(env),
+	}); err != nil {
+		return err
+	}
 	return nil
 }
 

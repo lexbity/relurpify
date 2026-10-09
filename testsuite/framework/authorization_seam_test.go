@@ -200,7 +200,7 @@ func TestNetworkAccessAllowDeny(t *testing.T) {
 		}
 
 		// Check network access - should be allowed
-		err = manager.CheckNetwork(context.Background(), "test-agent", "egress", "tcp", "example.com", 443)
+		err = manager.CheckNetwork(context.Background(), "test-agent", "egress", "tcp", networkTargetFor("example.com"), 443)
 		if err != nil {
 			t.Errorf("expected network access to be allowed, got error: %v", err)
 		}
@@ -226,7 +226,7 @@ func TestNetworkAccessAllowDeny(t *testing.T) {
 		}
 
 		// Check network access - should be denied
-		err = manager.CheckNetwork(context.Background(), "test-agent", "egress", "tcp", "example.com", 443)
+		err = manager.CheckNetwork(context.Background(), "test-agent", "egress", "tcp", networkTargetFor("example.com"), 443)
 		if err == nil {
 			t.Error("expected network access to be denied, got success")
 		}
@@ -255,7 +255,7 @@ func TestNetworkAccessAllowDeny(t *testing.T) {
 		}
 
 		// Try to access different host
-		err = manager.CheckNetwork(context.Background(), "test-agent", "egress", "tcp", "malicious.com", 443)
+		err = manager.CheckNetwork(context.Background(), "test-agent", "egress", "tcp", networkTargetFor("malicious.com"), 443)
 		if err == nil {
 			t.Error("expected network access to different host to be denied, got success")
 		}
@@ -275,7 +275,7 @@ func TestNetworkAccessAllowDeny(t *testing.T) {
 		}
 
 		// Try to access different port
-		err = manager.CheckNetwork(context.Background(), "test-agent", "egress", "tcp", "example.com", 8080)
+		err = manager.CheckNetwork(context.Background(), "test-agent", "egress", "tcp", networkTargetFor("example.com"), 8080)
 		if err == nil {
 			t.Error("expected network access to different port to be denied, got success")
 		}
@@ -295,7 +295,7 @@ func TestNetworkAccessAllowDeny(t *testing.T) {
 		}
 
 		// Try to access with different protocol
-		err = manager.CheckNetwork(context.Background(), "test-agent", "egress", "udp", "example.com", 443)
+		err = manager.CheckNetwork(context.Background(), "test-agent", "egress", "udp", networkTargetFor("example.com"), 443)
 		if err == nil {
 			t.Error("expected network access with different protocol to be denied, got success")
 		}
@@ -354,7 +354,7 @@ func TestHITLRequiredPath(t *testing.T) {
 		}
 
 		// Check network access - should be denied (no HITL provider)
-		err = manager.CheckNetwork(context.Background(), "test-agent", "egress", "tcp", "api.example.com", 443)
+		err = manager.CheckNetwork(context.Background(), "test-agent", "egress", "tcp", networkTargetFor("api.example.com"), 443)
 		if err == nil {
 			t.Error("expected HITL-required network access to be denied without provider, got success")
 		}
@@ -464,7 +464,7 @@ func TestAuditOnDeny(t *testing.T) {
 		}
 
 		// Check network access - should be denied
-		err = manager.CheckNetwork(context.Background(), "test-agent", "egress", "tcp", "example.com", 443)
+		err = manager.CheckNetwork(context.Background(), "test-agent", "egress", "tcp", networkTargetFor("example.com"), 443)
 		if err == nil {
 			t.Error("expected network access to be denied")
 		}

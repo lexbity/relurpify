@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/governance/classification"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
 	governanceports "codeburg.org/lexbit/relurpify/governance/ports"
@@ -150,10 +149,16 @@ func TestACDELEG_DelegatedInvoke(t *testing.T) {
 	if !reg.invokeCalled {
 		t.Fatal("InvokeCapability was not called")
 	}
-	// Verify the state passed through the InvocationState interface
-	ps, ok := reg.invokeState.(ports.State)
+	// Verify the state passed through the InvocationState interface retains
+	// its state semantics. (Capability/ports.State is intentionally not
+	// imported here: capability/ports composes governance/authorization
+	// redaction, which would close an import cycle via this test file.)
+	ps, ok := reg.invokeState.(interface {
+		TaskID() string
+		SessionID() string
+	})
 	if !ok {
-		t.Fatal("invokeState does not implement ports.State")
+		t.Fatal("invokeState does not carry state semantics")
 	}
 	if ps.TaskID() != "task-1" {
 		t.Errorf("expected TaskID task-1, got %s", ps.TaskID())

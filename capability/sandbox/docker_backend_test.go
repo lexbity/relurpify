@@ -89,7 +89,7 @@ func TestDockerSandboxBackendCommandRunnerArgs(t *testing.T) {
 		t.Fatalf("runner type = %T, want *SandboxCommandRunner", runner)
 	}
 
-	args := sr.runArgs("container", "/workspace", CommandRequest{Args: []string{"echo", "hi"}})
+	args := sr.runArgs(context.Background(), "container", containerLabels("ws"), "/workspace", CommandRequest{Args: []string{"echo", "hi"}})
 	joined := strings.Join(args, " ")
 	for _, want := range []string{
 		"--cap-drop ALL",
@@ -114,7 +114,7 @@ func TestGVisorCommandRunnerArgsUseRunsc(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewSandboxCommandRunner: %v", err)
 	}
-	args := runner.runArgs("container", "/workspace", CommandRequest{Args: []string{"echo"}})
+	args := runner.runArgs(context.Background(), "container", containerLabels("ws"), "/workspace", CommandRequest{Args: []string{"echo"}})
 	joined := strings.Join(args, " ")
 	if !strings.Contains(joined, "--runtime runsc") {
 		t.Errorf("gvisor args must set --runtime runsc: %s", joined)

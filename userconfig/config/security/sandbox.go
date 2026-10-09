@@ -1,9 +1,11 @@
 package security
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // SandboxPolicyPath returns the canonical security sandbox policy location.
@@ -19,6 +21,9 @@ type sandboxPolicyFile struct {
 	AllowedEnvKeys  []string      `yaml:"allowed_env_keys,omitempty"`
 	DeniedEnvKeys   []string      `yaml:"denied_env_keys,omitempty"`
 	NetworkRules    []NetworkRule `yaml:"network_rules,omitempty"`
+	ReapOrphans     *bool         `yaml:"reap_orphans,omitempty"`
+	OrphanMaxAge    string        `yaml:"orphan_max_age,omitempty"`
+	ImageDigest     string        `yaml:"image_digest,omitempty"`
 }
 
 // LoadSandboxPolicy loads and validates the sandbox policy file.
@@ -31,6 +36,21 @@ func LoadSandboxPolicy(path, workspace string, decode Decoder) (*SandboxPolicy, 
 	if err != nil {
 		return nil, fmt.Errorf("resolve workspace: %w", err)
 	}
+	reapOrphans := true // boot-time orphan reaping is on by default
+	if file.ReapOrphans != nil {
+		reapOrphans = *file.ReapOrphans
+	}
+	orphanMaxAge := 24 * time.Hour
+	if s := strings.TrimSpace(file.OrphanMaxAge); s != "" {
+		d, parseErr := time.ParseDuration(s)
+		if parseErr != nil {
+			return nil, fmt.Errorf("orphan_max_age invalid: %w", parseErr)
+		}
+		if d <= 0 {
+			return nil, errors.New("orphan_max_age must be positive")
+		}
+		orphanMaxAge = d
+	}
 	policy := &SandboxPolicy{
 		ReadOnlyRoot:    file.ReadOnlyRoot,
 		ProtectedPaths:  normalizeProtectedPaths(absWorkspace, file.ProtectedPaths),
@@ -39,6 +59,9 @@ func LoadSandboxPolicy(path, workspace string, decode Decoder) (*SandboxPolicy, 
 		AllowedEnvKeys:  append([]string(nil), file.AllowedEnvKeys...),
 		DeniedEnvKeys:   append([]string(nil), file.DeniedEnvKeys...),
 		NetworkRules:    append([]NetworkRule(nil), file.NetworkRules...),
+		ReapOrphans:     reapOrphans,
+		OrphanMaxAge:    orphanMaxAge,
+		ImageDigest:     strings.TrimSpace(file.ImageDigest),
 	}
 	for i, rule := range policy.NetworkRules {
 		if strings.TrimSpace(rule.Direction) == "" {

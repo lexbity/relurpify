@@ -22,7 +22,7 @@ func TestPermissionManagerBlocksWorkspaceMetadataAndStateByDefault(t *testing.T)
 
 	pm, err := NewPermissionManager(workspace, declared, nil, nil)
 	require.NoError(t, err)
-	pm.SetDefaultPolicy("deny")
+	_ = pm.SetDefaultDecision(permissions.DecisionDeny)
 	pm.SetFilesystemGuardRoots(
 		[]string{
 			filepath.Join(workspace, "relurpify_cfg"),
@@ -47,7 +47,7 @@ func TestPermissionManagerAllowsExplicitStateDirDeclaration(t *testing.T) {
 
 	pm, err := NewPermissionManager(workspace, declared, nil, nil)
 	require.NoError(t, err)
-	pm.SetDefaultPolicy("deny")
+	_ = pm.SetDefaultDecision(permissions.DecisionDeny)
 	pm.SetFilesystemGuardRoots(
 		[]string{
 			filepath.Join(workspace, "relurpify_cfg"),

@@ -42,22 +42,27 @@ const (
 // the same dot-qualified spelling as the decision-forensics events so the JSONL
 // namespace is consistent: compiler.*, scheduler.*, chunk.*, sandbox.*.
 const (
-	EventCompilerStarted            EventType = "compiler.started"
-	EventCompilerCompleted          EventType = "compiler.completed"
-	EventCompilerCacheHit           EventType = "compiler.cache_hit"
-	EventCompilerCacheMiss          EventType = "compiler.cache_miss"
-	EventCompilerBudgetExceeded     EventType = "compiler.budget_exceeded"
-	EventCompilerSummarySubstituted EventType = "compiler.summary_substituted"
-	EventChunkStaled                EventType = "chunk.staled"
-	EventChunkInvalidated           EventType = "chunk.invalidated"
-	EventSchedulerJobStarted        EventType = "scheduler.job_started"
-	EventSchedulerJobCompleted      EventType = "scheduler.job_completed"
-	EventSchedulerJobFailed         EventType = "scheduler.job_failed"
-	EventSchedulerJobSkipped        EventType = "scheduler.job_skipped"
-	EventSandboxCommandDenied       EventType = "sandbox.command_denied"
-	EventSandboxCommandExecuted     EventType = "sandbox.command_executed"
-	EventSandboxFailure             EventType = "sandbox.failure"
-	EventBootDegraded               EventType = "boot.degraded"
+	EventCompilerStarted              EventType = "compiler.started"
+	EventCompilerCompleted            EventType = "compiler.completed"
+	EventCompilerCacheHit             EventType = "compiler.cache_hit"
+	EventCompilerCacheMiss            EventType = "compiler.cache_miss"
+	EventCompilerBudgetExceeded       EventType = "compiler.budget_exceeded"
+	EventCompilerSummarySubstituted   EventType = "compiler.summary_substituted"
+	EventChunkStaled                  EventType = "chunk.staled"
+	EventChunkInvalidated             EventType = "chunk.invalidated"
+	EventSchedulerJobStarted          EventType = "scheduler.job_started"
+	EventSchedulerJobCompleted        EventType = "scheduler.job_completed"
+	EventSchedulerJobFailed           EventType = "scheduler.job_failed"
+	EventSchedulerJobSkipped          EventType = "scheduler.job_skipped"
+	EventSandboxCommandDenied         EventType = "sandbox.command_denied"
+	EventSandboxCommandExecuted       EventType = "sandbox.command_executed"
+	EventSandboxFailure               EventType = "sandbox.failure"
+	EventSandboxOrphanReaped          EventType = "sandbox.orphan_reaped"
+	EventSandboxOutputCeilingExceeded EventType = "sandbox.output_ceiling_exceeded"
+	EventSandboxProtectedPathEscaped  EventType = "sandbox.protected_path_escaped"
+	EventSandboxImagePinned           EventType = "sandbox.image_pinned"
+	EventSandboxImageUnpinned         EventType = "sandbox.image_unpinned"
+	EventBootDegraded                 EventType = "boot.degraded"
 )
 
 // Paradigm lifecycle events emitted by the cognitionzoo paradigms (HTN,
@@ -83,6 +88,14 @@ const (
 const (
 	EventBudgetSnapshot       = "budget.snapshot"
 	EventSessionResetRequired = "session.reset_required"
+)
+
+// Rollback token lifecycle events emitted by the capability registry
+// (SBH-1 D-9). The stored event carries the token ID and the tool name only —
+// never the raw invocation args those tokens reference.
+const (
+	EventRollbackTokenStored  EventType = "rollback.token_stored"
+	EventRollbackTokenExpired EventType = "rollback.token_expired"
 )
 
 // Event captures structured telemetry data.

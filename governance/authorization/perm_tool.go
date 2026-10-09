@@ -36,8 +36,9 @@ func (a *toolAdapter) Permissions() ToolPermissions {
 }
 
 // AuthorizeTool ensures the tool requirements fit the declared permissions.
-// Undeclared permissions are handled according to the configured defaultPolicy:
-// Ask (default) routes to HITL, Allow proceeds, Deny returns an error.
+// Undeclared permissions are handled according to the configured default
+// decision: ask (the terminal default) routes to HITL, deny returns an error.
+// Allow is rejected at registration and cannot be configured.
 func (m *PermissionManager) AuthorizeTool(ctx context.Context, agentID string, tool any, args map[string]any) error {
 	if m == nil || tool == nil {
 		return errors.New("permission manager or tool missing")
@@ -51,7 +52,9 @@ func (m *PermissionManager) AuthorizeTool(ctx context.Context, agentID string, t
 		t = &toolAdapter{inner: pt}
 	}
 	if m.toolAllowedByTaskGrant(ctx, t) {
-		m.log(ctx, agentID, toolDescriptor(t.Name(), agentID), "tool_allowed_task_grant", map[string]any{"tags": t.Tags()})
+		if err := m.log(ctx, agentID, toolDescriptor(t.Name(), agentID), "tool_allowed_task_grant", map[string]any{"tags": t.Tags()}); err != nil {
+			return err
+		}
 		return nil
 	}
 	requirements := t.Permissions()
@@ -63,7 +66,9 @@ func (m *PermissionManager) AuthorizeTool(ctx context.Context, agentID string, t
 			return err
 		}
 	}
-	m.log(ctx, agentID, toolDescriptor(t.Name(), agentID), "tool_allowed", nil)
+	if err := m.log(ctx, agentID, toolDescriptor(t.Name(), agentID), "tool_allowed", nil); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -84,7 +89,9 @@ func (m *PermissionManager) AuthorizeToolByName(ctx context.Context, agentID, to
 	if err := m.handleUndeclaredTool(ctx, agentID, name, []string{"tool permissions unknown"}); err != nil {
 		return err
 	}
-	m.log(ctx, agentID, toolDescriptor(name, agentID), "tool_allowed", nil)
+	if err := m.log(ctx, agentID, toolDescriptor(name, agentID), "tool_allowed", nil); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -92,10 +99,10 @@ func (m *PermissionManager) AuthorizeToolByName(ctx context.Context, agentID, to
 // permissions are not covered by the agent's declared set.
 func (m *PermissionManager) handleUndeclaredTool(ctx context.Context, agentID, name string, undeclared []string) error {
 	desc := toolDescriptor(name, agentID)
-	switch m.effectiveDefaultPolicy() {
-	case defaultPolicyDeny:
+	switch m.effectiveDefaultDecision() {
+	case permissions.DecisionDeny:
 		return m.deny(ctx, agentID, desc, "tool exceeds declared permissions")
-	default: // defaultPolicyAsk
+	default: // DecisionAsk
 		desc.RequiresHITL = true
 		m.emitPolicyDecision(ctx, agentID, desc, fwtelemetry.PolicyEffectRequireApproval, "undeclared permissions require approval", map[string]any{"undeclared": undeclared})
 		return m.RequireApproval(ctx, agentID, desc,

@@ -3,6 +3,7 @@
 .PHONY: lint-config generate-config check-config-tree-drift
 .PHONY: lint-all lint-arch lint-go lint-go-fix check-makefile-phonys check-no-dead-resolver check-no-ghost-schemas lint-class-normalization lint-no-permissive-hitl
 .PHONY: domain-check domain-cycles no-bucket no-dead exception-count
+.PHONY: grep-security-gates
 
 GO_OFFLINE_ENV := GOPROXY=off GOSUMDB=off
 
@@ -216,6 +217,26 @@ test-tape-fidelity:
 test-euclo-golden:
 	@mkdir -p /tmp/relurpify-go-cache
 	$(GO_OFFLINE_ENV) GOCACHE=/tmp/relurpify-go-cache go test ./named/euclo/thoughtrecipes/ -run 'TestGolden' -count=1 -v
+
+# grep-security-gates enforces the SBH-1 security invariants that are cheap to
+# check textually. INV-1 (purity): the authorization decision layer must never
+# perform network I/O. INV-2 (one classifier): no divergent private-host
+# classification may reappear.
+grep-security-gates:
+	@hits=$$(grep -rEn "net\.(LookupIP|Dial|DefaultResolver|Resolver)" governance/authorization/ --include='*.go' 2>/dev/null | grep -v _test); \
+	if [ -n "$$hits" ]; then \
+		echo "[FAIL] grep-security-gates: network I/O in governance/authorization (INV-1)"; \
+		echo "$$hits"; \
+		exit 1; \
+	fi; \
+	echo "[PASS] grep-security-gates: authorization layer performs no network I/O"
+	@hits=$$(grep -rn "isPrivateOrLoopbackHost\|IsPrivateOrLoopbackHost" --include='*.go' . 2>/dev/null | grep -v '.gomodcache' | grep -v '.gocache'); \
+	if [ -n "$$hits" ]; then \
+		echo "[FAIL] grep-security-gates: divergent private-host classifiers present"; \
+		echo "$$hits"; \
+		exit 1; \
+	fi; \
+	echo "[PASS] grep-security-gates: single canonical host classifier"
 
 grep-architecture-gates:
 	@$(MAKE) check-contract-dissolution

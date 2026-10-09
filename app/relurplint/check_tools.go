@@ -19,6 +19,11 @@ type toolsCheck struct{}
 // command/sandbox config (configcheck.DeriveExpectedCapability).
 const codeToolUnderdeclared = "tool.underdeclared"
 
+// codeToolEgressAllowlist is the diagnostic code for a manifest whose egress
+// allowlists violate the mandatory-denylist policy (a non-public literal in
+// allow_hosts, or a host present in both allow_hosts and allow_private_hosts).
+const codeToolEgressAllowlist = "tool.egress_allowlist"
+
 func init() {
 	registerCheck(toolsCheck{})
 }
@@ -75,13 +80,8 @@ func runEmbeddedSEC2Check() []Diagnostic {
 		return nil
 	}
 
-	results := configcheck.CheckAllManifests(manifests)
-	if len(results) == 0 {
-		return nil
-	}
-
 	var diags []Diagnostic
-	for name, issues := range results {
+	for name, issues := range configcheck.CheckAllManifests(manifests) {
 		for _, issue := range issues {
 			sourcePath := "embedded:" + manifestRelPath(manifests, name)
 			diags = append(diags, Diagnostic{
@@ -93,6 +93,9 @@ func runEmbeddedSEC2Check() []Diagnostic {
 			})
 		}
 	}
+	diags = append(diags, egressDiagnostics(manifests, func(name string) string {
+		return "embedded:" + manifestRelPath(manifests, name)
+	})...)
 	return diags
 }
 
@@ -103,19 +106,35 @@ func runSEC2Check(workspace string) []Diagnostic {
 		return nil
 	}
 
-	results := configcheck.CheckAllManifests(manifests)
-	if len(results) == 0 {
-		return nil
-	}
-
 	var diags []Diagnostic
-	for name, issues := range results {
+	for name, issues := range configcheck.CheckAllManifests(manifests) {
 		for _, issue := range issues {
 			diags = append(diags, Diagnostic{
 				Check:    "tools",
 				Code:     codeToolUnderdeclared,
 				Severity: SeverityError,
 				Loc:      SourceLoc{File: manifestRelPath(manifests, name)},
+				Message:  name + ": " + issue,
+			})
+		}
+	}
+	diags = append(diags, egressDiagnostics(manifests, func(name string) string {
+		return manifestRelPath(manifests, name)
+	})...)
+	return diags
+}
+
+// egressDiagnostics reports blocking egress-allowlist violations for a
+// manifest set. manifestLoc resolves a tool name to a display location.
+func egressDiagnostics(manifests []*toolcapabilities.ToolManifest, manifestLoc func(string) string) []Diagnostic {
+	var diags []Diagnostic
+	for name, issues := range configcheck.CheckNetworkAllowlists(manifests) {
+		for _, issue := range issues {
+			diags = append(diags, Diagnostic{
+				Check:    "tools",
+				Code:     codeToolEgressAllowlist,
+				Severity: SeverityError,
+				Loc:      SourceLoc{File: manifestLoc(name)},
 				Message:  name + ": " + issue,
 			})
 		}

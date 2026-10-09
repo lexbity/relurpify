@@ -2,11 +2,41 @@ package authorization
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	governanceports "codeburg.org/lexbit/relurpify/governance/ports"
 )
+
+// TestRegisterAgentFailClosedWhenAuditDirUnwritable proves registration fails
+// (rather than silently proceeding audit-less) when the audit chain cannot be
+// initialized (SBH-1 D-10).
+func TestRegisterAgentFailClosedWhenAuditDirUnwritable(t *testing.T) {
+	// StateDir points AT a regular file: MkdirAll for audit/<agentID> must
+	// fail regardless of euid, so the fail-closed path is deterministic.
+	notADir := filepath.Join(t.TempDir(), "state-file")
+	require.NoError(t, os.WriteFile(notADir, []byte("occupied"), 0o600))
+
+	cfg := RuntimeConfig{
+		DocumentSnapshot: struct{}{},
+		Permissions:      permissions.PermissionSet{},
+		Backend:          "unit",
+		BackendFactory: func(_ context.Context, backend string, _ governanceports.SandboxConfig, _, _ string) (governanceports.SandboxRuntime, error) {
+			return &fakeSandboxRuntime{name: backend}, nil
+		},
+		BaseFS:      t.TempDir(),
+		StateDir:    notADir,
+		WorkspaceID: "ws-1",
+		AgentName:   "reviewer",
+	}
+	_, err := RegisterAgent(context.Background(), cfg)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "audit chain init")
+}
 
 func TestGenerateAgentID(t *testing.T) {
 	if got := generateAgentID("myworkspace", "euclo"); got != "agent-myworkspace-euclo" {

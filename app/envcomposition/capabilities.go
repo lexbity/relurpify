@@ -59,6 +59,11 @@ type CapabilityRuntimeOptions struct {
 	InferenceEndpoint string
 	InferenceModel    string
 	SkipASTIndex      bool
+	// PrivateEgress resolves non-public egress approvals. nil denies them.
+	PrivateEgress subprocess.PrivateEgressApprover
+	// NetworkIsolation is the effective container isolation. nil means
+	// isolated; a pointer to false enables the isolation-off scanner mode.
+	NetworkIsolation *bool
 }
 
 // PermissionManager is the permission surface consumed during capability construction.
@@ -109,15 +114,16 @@ func BuildCapabilityRuntime(ctx context.Context, workspace string, runner *fsand
 	// Skipping this leaves tools with no scope at all, which denies every
 	// filesystem operation (deny-by-default registry invariant).
 	registry.UseSandboxScope(fsandbox.NewFileScopePolicy(workspace, cfg.ProtectedPaths))
-	manifestTools := toolcapabilities.Build(workspace, fsandbox.CommandRunnerAdapter{Runner: runner}, toolManifests,
+	networkIsolationDisabled := cfg.NetworkIsolation != nil && !*cfg.NetworkIsolation
+	manifestTools := toolcapabilities.Build(workspace, runner, toolManifests,
 		toolcapabilities.StrictMode(),
-		toolcapabilities.WithBackendBuilder("subprocess", subprocess.BackendBuilder()),
+		toolcapabilities.WithBackendBuilder("subprocess", subprocess.BackendBuilderWithEgress(cfg.PrivateEgress, networkIsolationDisabled)),
 		toolcapabilities.WithBackendBuilder("composite", composite.BackendBuilder(registry.Get)),
 	)
 
 	for _, tool := range manifestTools {
 		if setter, ok := tool.(interface{ SetCommandRunner(ports.CommandRunner) }); ok {
-			setter.SetCommandRunner(fsandbox.CommandRunnerAdapter{Runner: runner})
+			setter.SetCommandRunner(runner)
 		}
 	}
 
@@ -214,7 +220,7 @@ func BuildMinimalToolRegistry(ctx context.Context, workspace string, runner fsan
 	if err != nil {
 		return nil, fmt.Errorf("load tool manifests: %w", err)
 	}
-	tools := toolcapabilities.Build(workspace, fsandbox.CommandRunnerAdapter{Runner: runner}, manifests,
+	tools := toolcapabilities.Build(workspace, runner, manifests,
 		toolcapabilities.StrictMode(),
 		toolcapabilities.WithBackendBuilder("subprocess", subprocess.BackendBuilder()),
 		toolcapabilities.WithBackendBuilder("composite", composite.BackendBuilder(capReg.Get)),
@@ -222,7 +228,7 @@ func BuildMinimalToolRegistry(ctx context.Context, workspace string, runner fsan
 
 	for _, tool := range tools {
 		if setter, ok := tool.(interface{ SetCommandRunner(ports.CommandRunner) }); ok {
-			setter.SetCommandRunner(fsandbox.CommandRunnerAdapter{Runner: runner})
+			setter.SetCommandRunner(runner)
 		}
 	}
 

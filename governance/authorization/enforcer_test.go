@@ -2,10 +2,10 @@ package authorization
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/governance/permissions"
-	policy "codeburg.org/lexbit/relurpify/governance/policy"
 	governanceports "codeburg.org/lexbit/relurpify/governance/ports"
 )
 
@@ -44,7 +44,7 @@ func TestEnforcer_Check_fileRead_allowed(t *testing.T) {
 
 func TestEnforcer_Check_fileRead_denied(t *testing.T) {
 	pm := newTestPermissionManager(t)
-	pm.SetDefaultPolicy("deny")
+	_ = pm.SetDefaultDecision(permissions.DecisionDeny)
 	e := NewEnforcer(pm)
 	d := e.Check(context.Background(), governanceports.AccessRequest{
 		Principal: governanceports.Principal{AgentID: "test-agent"},
@@ -95,6 +95,76 @@ func TestEnforcer_Check_actionCapability(t *testing.T) {
 	}
 }
 
+// TestEnforcer_Check_netEgressPrivateLiteralDenied proves the pure Enforcer
+// classifies an IP literal directly and enforces the mandatory denylist.
+func TestEnforcer_Check_netEgressPrivateLiteralDenied(t *testing.T) {
+	pm := newTestPermissionManager(t)
+	e := NewEnforcer(pm)
+	d := e.Check(context.Background(), governanceports.AccessRequest{
+		Principal: governanceports.Principal{AgentID: "test-agent"},
+		Action:    governanceports.ActionNetEgress,
+		Resource:  governanceports.Resource{Kind: "host", ID: "127.0.0.1"},
+	})
+	if d.Allow {
+		t.Fatal("expected deny for loopback literal")
+	}
+	if !strings.Contains(d.Reason, "loopback") {
+		t.Fatalf("deny reason = %q, want it to name the loopback class", d.Reason)
+	}
+}
+
+// TestEnforcer_Check_netEgressPublicLiteralAllowed proves a public literal
+// routes through CheckNetwork (declared permission granted).
+func TestEnforcer_Check_netEgressPublicLiteralAllowed(t *testing.T) {
+	declared := &permissions.PermissionSet{
+		Network: []permissions.NetworkPermission{
+			{Direction: "egress", Protocol: "tcp", Host: "8.8.8.8", Port: 0},
+		},
+	}
+	audit := newTestAuditLogger(t)
+	pm, err := NewPermissionManager("/tmp", declared, audit, nil)
+	if err != nil {
+		t.Fatalf("NewPermissionManager: %v", err)
+	}
+	e := NewEnforcer(pm)
+	d := e.Check(context.Background(), governanceports.AccessRequest{
+		Principal: governanceports.Principal{AgentID: "test-agent"},
+		Action:    governanceports.ActionNetEgress,
+		Resource:  governanceports.Resource{Kind: "host", ID: "8.8.8.8"},
+	})
+	if !d.Allow {
+		t.Fatalf("expected allow for declared public literal, got: %s", d.Reason)
+	}
+}
+
+// TestEnforcer_Check_netEgressNameDeniedUnresolved proves INV-1: the Enforcer
+// never resolves. A hostname is denied with an actionable reason instead of
+// being silently dialed after a TOCTOU re-resolution in the child.
+func TestEnforcer_Check_netEgressNameDeniedUnresolved(t *testing.T) {
+	declared := &permissions.PermissionSet{
+		Network: []permissions.NetworkPermission{
+			{Direction: "egress", Protocol: "tcp", Host: "example.com", Port: 0},
+		},
+	}
+	audit := newTestAuditLogger(t)
+	pm, err := NewPermissionManager("/tmp", declared, audit, nil)
+	if err != nil {
+		t.Fatalf("NewPermissionManager: %v", err)
+	}
+	e := NewEnforcer(pm)
+	d := e.Check(context.Background(), governanceports.AccessRequest{
+		Principal: governanceports.Principal{AgentID: "test-agent"},
+		Action:    governanceports.ActionNetEgress,
+		Resource:  governanceports.Resource{Kind: "host", ID: "example.com"},
+	})
+	if d.Allow {
+		t.Fatal("expected deny for unresolved hostname through the pure Enforcer path")
+	}
+	if !strings.Contains(d.Reason, "unresolved network target") {
+		t.Fatalf("deny reason = %q, want the actionable resolve-first message", d.Reason)
+	}
+}
+
 func TestPrincipalContext_roundTrip(t *testing.T) {
 	p := governanceports.Principal{AgentID: "test-agent"}
 	ctx := governanceports.ContextWithPrincipal(context.Background(), p)
@@ -130,7 +200,7 @@ func newTestPermissionManager(t *testing.T) *PermissionManager {
 			{Capability: "test-cap"},
 		},
 	}
-	audit := policy.NewInMemoryAuditLogger(100)
+	audit := newTestAuditLogger(t)
 	pm, err := NewPermissionManager("/tmp", declared, audit, nil)
 	if err != nil {
 		t.Fatalf("NewPermissionManager: %v", err)

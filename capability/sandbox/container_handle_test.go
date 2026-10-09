@@ -2,54 +2,63 @@ package sandbox
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
-// TestContainerHandleTeardownIdempotent verifies that calling Teardown multiple
-// times does not panic or hang. Since no real container exists, each call is a
-// no-op that fails silently (command not found or container not found).
 func TestContainerHandleTeardownIdempotent(t *testing.T) {
-	h := NewContainerHandle("test-container-nonexistent", "docker", "nonexistent-binary")
+	logPath := fakeDockerEnv(t)
+	h := NewContainerHandle("relurpify-test-00001", map[string]string{LabelManaged: "true"}, "docker")
 
-	// First call should not panic.
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	h.Teardown(ctx, 2*time.Second)
+	h.Teardown(ctx, 2*time.Second) // second call no-ops
+
+	log := readLog(t, logPath)
+	require.Equal(t, 1, strings.Count(log, "cmd stop "), "teardown must run stop exactly once:\n%s", log)
+	require.Equal(t, 1, strings.Count(log, "cmd rm -f"), "teardown must run rm -f exactly once:\n%s", log)
+}
+
+func TestContainerHandleStopFailureStillRemoves(t *testing.T) {
+	logPath := fakeDockerEnv(t)
+	t.Setenv("FAKE_DOCKER_STOP_FAIL", "1")
+	h := NewContainerHandle("relurpify-test-stopfail", nil, "docker")
+
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	h.Teardown(ctx, 1*time.Second)
 
-	// Second call — idempotent.
-	ctx2, cancel2 := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel2()
-	h.Teardown(ctx2, 1*time.Second)
+	log := readLog(t, logPath)
+	require.Contains(t, log, "cmd stop ")
+	if !strings.Contains(log, "cmd rm -f") {
+		t.Fatalf("rm -f must run even when stop fails:\n%s", log)
+	}
 }
 
 func TestContainerHandleNilHandle(t *testing.T) {
 	var h *ContainerHandle
-	ctx := context.Background()
-	// Nil handle must not panic.
-	h.Teardown(ctx, 1*time.Second)
+	h.Teardown(context.Background(), time.Second) // must not panic
 }
 
 func TestContainerHandleEmptyName(t *testing.T) {
-	h := NewContainerHandle("", "docker", "docker")
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	h := NewContainerHandle("", nil, "docker")
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	// Empty name must not panic.
-	h.Teardown(ctx, 1*time.Second)
+	h.Teardown(ctx, time.Second) // must not panic
 }
 
-func TestContainerHandleRunscRuntime(t *testing.T) {
-	h := NewContainerHandle("test-runsc-nonexistent", "runsc", "nonexistent-binary")
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+func TestContainerHandleEmptyBinaryDefaultsToDocker(t *testing.T) {
+	logPath := fakeDockerEnv(t)
+	h := NewContainerHandle("relurpify-test-default-bin", nil, "")
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	// Should not panic even though runsc doesn't exist.
-	h.Teardown(ctx, 1*time.Second)
-}
+	h.Teardown(ctx, time.Second)
 
-func TestContainerHandleUnknownRuntime(t *testing.T) {
-	h := NewContainerHandle("test-unknown", "unknown-runtime", "binary")
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	// Unknown runtime is a no-op.
-	h.Teardown(ctx, 1*time.Second)
+	log := readLog(t, logPath)
+	require.Contains(t, log, "cmd stop ")
+	require.Contains(t, log, "cmd rm -f")
 }

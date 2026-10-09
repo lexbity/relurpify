@@ -1077,6 +1077,7 @@ func TestEnforceFileMatrix_AllowMdForDocumentationOnly(t *testing.T) {
 	matrix := agentspec.AgentFileMatrix{
 		Write: agentspec.AgentFilePermissionSet{
 			DocumentationOnly: true,
+			Default:           agentspec.AgentPermissionAllow,
 		},
 	}
 

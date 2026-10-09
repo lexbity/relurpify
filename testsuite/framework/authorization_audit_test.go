@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/governance/authorization"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
@@ -82,7 +81,7 @@ func TestAllowDecisionAudit(t *testing.T) {
 // with clear denial reasons and distinguishable from allow decisions.
 func TestDenyDecisionAudit(t *testing.T) {
 	env := NewTestEnvironment(t)
-	env.PermissionManager.SetDefaultPolicy(string(agentspec.AgentPermissionDeny))
+	_ = env.PermissionManager.SetDefaultDecision(permissions.DecisionDeny)
 
 	agentID := "test-agent"
 
@@ -191,7 +190,7 @@ func TestHITLAudit(t *testing.T) {
 
 	// Perform a network access that requires HITL approval
 	ctx := context.Background()
-	err = permManager.CheckNetwork(ctx, agentID, "egress", "tcp", "api.service.local", 443)
+	err = permManager.CheckNetwork(ctx, agentID, "egress", "tcp", networkTargetFor("api.service.local"), 443)
 	if err != nil {
 		t.Fatalf("expected network access to be allowed via HITL, got error: %v", err)
 	}
@@ -407,7 +406,7 @@ func TestAuditQueryFiltering(t *testing.T) {
 // decisions are clearly distinguishable in the audit surface.
 func TestDenyAndHITLDistinguishability(t *testing.T) {
 	env := NewTestEnvironment(t)
-	env.PermissionManager.SetDefaultPolicy(string(agentspec.AgentPermissionDeny))
+	_ = env.PermissionManager.SetDefaultDecision(permissions.DecisionDeny)
 
 	agentID := "test-agent"
 
@@ -447,7 +446,7 @@ func TestDenyAndHITLDistinguishability(t *testing.T) {
 
 	env.AuditSink.Clear()
 	env.PermissionManager = permManager
-	if err := permManager.CheckNetwork(ctx, agentID, "egress", "tcp", "api.service.local", 443); err != nil {
+	if err := permManager.CheckNetwork(ctx, agentID, "egress", "tcp", networkTargetFor("api.service.local"), 443); err != nil {
 		t.Fatalf("expected HITL-approved network access to succeed: %v", err)
 	}
 	hitlRecords := env.AuditSink.Records()

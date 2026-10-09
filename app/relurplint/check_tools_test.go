@@ -103,6 +103,48 @@ func TestToolsCheckExcludesConfigIssues(t *testing.T) {
 	}
 }
 
+func TestToolsCheckInvalidEgressAllowlist(t *testing.T) {
+	workspace := writeValidWorkspace(t)
+	toolsDir := filepath.Join(workspace, "relurpify_cfg", "tools")
+	content := `schema: relurpify/tool/v1
+name: cli_egress_bad
+version: "1"
+family: network
+description: "egress with a private allow_host"
+execution:
+  backend: subprocess
+  command:
+    base: [curl]
+  sandbox:
+    network_access: true
+    allow_hosts: ["169.254.169.254"]
+capability:
+  trust_class: builtin_trusted
+  risk_class: [execute, network]
+  effect_class: [process_spawn, network_egress, external_state]
+`
+	testhelper.MustWrite(t, filepath.Join(toolsDir, "egressbad.tool.yaml"), content)
+
+	c := toolsCheck{}
+	diags := c.Run(workspace)
+	found := false
+	for _, d := range diags {
+		if d.Code != codeToolEgressAllowlist {
+			continue
+		}
+		found = true
+		if d.Severity != SeverityError {
+			t.Fatalf("expected error severity, got %v", d.Severity)
+		}
+		if !strings.Contains(d.Message, "allow_private_hosts") {
+			t.Fatalf("expected rename hint in message, got %q", d.Message)
+		}
+	}
+	if !found {
+		t.Fatalf("expected %s diagnostic, got: %+v", codeToolEgressAllowlist, diags)
+	}
+}
+
 func addUnderdeclaredManifest(t *testing.T, workspace string) {
 	t.Helper()
 	toolsDir := filepath.Join(workspace, "relurpify_cfg", "tools")
