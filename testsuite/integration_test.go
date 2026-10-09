@@ -2,7 +2,6 @@ package testsuite
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"sync"
 	"testing"
@@ -130,6 +129,10 @@ func TestCompilationReplay_Determinism(t *testing.T) {
 	})
 	comp.SetTimeFunc(func() time.Time { return now })
 
+	// Records persist through the O(1) graph repository keyed by request ID.
+	repo := compiler.NewCompilerRepository(engine)
+	comp.SetRepository(repo)
+
 	result, record, err := comp.Compile(context.Background(), compiler.CompilationRequest{
 		Query:     retrieval.RetrievalQuery{Text: "source"},
 		MaxTokens: 32,
@@ -138,23 +141,13 @@ func TestCompilationReplay_Determinism(t *testing.T) {
 	require.NotNil(t, result)
 	require.Len(t, result.RankedChunks, 1)
 
-	data, err := json.Marshal(record)
-	require.NoError(t, err)
-	_, err = store.Save(context.TODO(), knowledge.KnowledgeChunk{
-		ID:           knowledge.ChunkID(record.RequestID),
-		SourceOrigin: knowledge.SourceOrigin("compilation_record"),
-		Body:         knowledge.ChunkBody{Raw: string(data), Fields: map[string]any{"content": string(data)}},
-		Freshness:    knowledge.FreshnessValid,
-		Provenance:   knowledge.ChunkProvenance{CompiledBy: knowledge.CompilerDeterministic, Timestamp: now},
-	})
-	require.NoError(t, err)
-
 	replayComp := compiler.NewCompiler(retriever, nil, store)
 	replayComp.SetIDGenerator(func() string {
 		seq++
 		return fmt.Sprintf("id-%d", seq)
 	})
 	replayComp.SetTimeFunc(func() time.Time { return now })
+	replayComp.SetRepository(repo)
 
 	replayed, replayRecord, diff, err := replayComp.Replay(context.Background(), record.RequestID, compiler.StrictReplay)
 	require.NoError(t, err)

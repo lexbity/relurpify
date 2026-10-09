@@ -1,4 +1,4 @@
-.PHONY: test-unit test-integ test-scenario test-conformance test-all
+.PHONY: test-unit test-integ test-scenario test-conformance test-all check-stream-contract
 .PHONY: test-contract-migration test-dev-agent test-tape-fidelity test-euclo-golden check-contract-dissolution grep-architecture-gates
 .PHONY: lint-config generate-config check-config-tree-drift
 .PHONY: lint-all lint-arch lint-go lint-go-fix check-makefile-phonys check-no-dead-resolver check-no-ghost-schemas lint-class-normalization lint-no-permissive-hitl
@@ -176,9 +176,17 @@ test-unit: lint-config
 	@mkdir -p /tmp/relurpify-go-cache /tmp/relurpify-go-tmp
 	$(GO_OFFLINE_ENV) GOCACHE=/tmp/relurpify-go-cache GOTMPDIR=/tmp/relurpify-go-tmp go test ./... -count=1 -timeout 60s
 
-test-conformance: lint-config
+test-conformance: lint-config check-stream-contract
 	@mkdir -p /tmp/relurpify-go-cache /tmp/relurpify-go-tmp
 	$(GO_OFFLINE_ENV) GOCACHE=/tmp/relurpify-go-cache GOTMPDIR=/tmp/relurpify-go-tmp go test ./testsuite/conformance -count=1 -timeout 60s
+
+# check-stream-contract enforces the LanguageModel streaming contract (R1-R6,
+# stated on model.LanguageModel.GenerateStream) for every offline-constructible
+# provider kind: cancel-to-stop, graceful channel close, and leak-freedom
+# under -race with goleak.
+check-stream-contract:
+	@mkdir -p /tmp/relurpify-go-cache /tmp/relurpify-go-tmp
+	$(GO_OFFLINE_ENV) GOCACHE=/tmp/relurpify-go-cache GOTMPDIR=/tmp/relurpify-go-tmp go test -race ./testsuite/conformance -run TestStreamLifecycle -count=1
 
 test-integ:
 	$(GO_OFFLINE_ENV) go test ./... -tags integration -count=1 -timeout 120s

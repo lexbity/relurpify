@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -26,22 +27,42 @@ const (
 	PinRefTokenBudget = 64
 )
 
+// UnlimitedBudget is the explicit "no budget" sentinel: a request with
+// MaxTokens <= 0 admits ranked content in order, and the opt-in is logged at
+// request assembly so it can never be silent.
+const UnlimitedBudget = 0
+
+// ErrCompilerStopped is returned by Start after the compiler has been
+// stopped: a stopped compiler owns no invalidation loop and is not
+// restartable (no zombie loops).
+var ErrCompilerStopped = errors.New("compiler stopped")
+
+// ErrReplayMismatch is returned by StrictReplay when recomputing the
+// compilation (cache bypassed) yields a different deterministic digest than
+// the recorded one — the only honest proof of non-determinism.
+var ErrReplayMismatch = errors.New("replay digest mismatch")
+
 // Compiler performs live context assembly with caching and event-driven invalidation.
 type Compiler struct {
-	retriever         *retrieval.Retriever
-	streamer          *knowledge.Streamer
-	policy            *execctx.ContextPolicyBundle
-	chunkStore        *knowledge.ChunkStore
-	cache             map[CacheKey]*CacheEntry
-	cacheMu           sync.RWMutex
-	invalidatedChunks map[knowledge.ChunkID]struct{}
-	invalidatedMu     sync.RWMutex
-	eventLog          EventLog
-	telemetry         telemetry.Telemetry
-	newID             func() string
-	now               func() time.Time
-	started           bool
-	stopCh            chan struct{}
+	retriever  *retrieval.Retriever
+	streamer   *knowledge.Streamer
+	policy     *execctx.ContextPolicyBundle
+	chunkStore *knowledge.ChunkStore
+	cache      compilationCache
+	eventBus   *knowledge.EventBus
+	repository Repository
+	telemetry  telemetry.Telemetry
+	newID      func() string
+	now        func() time.Time
+
+	// Lifecycle: Start is once-only, Start-after-Stop is an error, and the
+	// invalidation loop exits exactly once on Stop.
+	lifecycleMu sync.Mutex
+	started     bool
+	stopped     bool
+	stopCh      chan struct{}
+	loopDone    chan struct{}
+	unsubscribe func()
 
 	// Write direction components
 	summarizers       []summarization.Summarizer
@@ -50,28 +71,22 @@ type Compiler struct {
 	autoSummarize     bool // Auto-summarize on budget pressure
 }
 
-// EventLog interface for subscribing to events.
-type EventLog interface {
-	Subscribe(eventType string, handler func(event any))
-}
-
 // NewCompiler creates a new compiler instance.
 func NewCompiler(retriever *retrieval.Retriever, policy *execctx.ContextPolicyBundle, store *knowledge.ChunkStore, streamer ...*knowledge.Streamer) *Compiler {
 	var stream *knowledge.Streamer
 	if len(streamer) > 0 {
 		stream = streamer[0]
 	}
-	return &Compiler{
-		retriever:         retriever,
-		streamer:          stream,
-		policy:            policy,
-		chunkStore:        store,
-		cache:             make(map[CacheKey]*CacheEntry),
-		invalidatedChunks: make(map[knowledge.ChunkID]struct{}),
-		stopCh:            make(chan struct{}),
-		newID:             generateID,
-		now:               time.Now,
+	c := &Compiler{
+		retriever:  retriever,
+		streamer:   stream,
+		policy:     policy,
+		chunkStore: store,
+		newID:      generateID,
+		now:        time.Now,
 	}
+	c.cache = newCompilationCache(c.now)
+	return c
 }
 
 // SetStreamer wires the dependency-ordered streaming path used for compile seeding.
@@ -79,9 +94,17 @@ func (c *Compiler) SetStreamer(streamer *knowledge.Streamer) {
 	c.streamer = streamer
 }
 
-// SetEventLog sets the event log for subscription.
-func (c *Compiler) SetEventLog(log EventLog) {
-	c.eventLog = log
+// SetEventBus wires the knowledge event bus whose chunk events drive cache
+// invalidation (chunk ingested supersedes prior chunks; chunk staled removes
+// them from consideration).
+func (c *Compiler) SetEventBus(bus *knowledge.EventBus) {
+	c.eventBus = bus
+}
+
+// SetRepository wires the O(1) compilation-record repository. Records are
+// persisted and loaded exclusively through it.
+func (c *Compiler) SetRepository(repo Repository) {
+	c.repository = repo
 }
 
 // SetTelemetry wires structured compiler warnings and observability events.
@@ -94,9 +117,11 @@ func (c *Compiler) SetIDGenerator(fn func() string) {
 	c.newID = fn
 }
 
-// SetTimeFunc sets the time function.
+// SetTimeFunc sets the time function (deterministic tests). Installs the
+// same clock on the compilation cache so TTL semantics follow.
 func (c *Compiler) SetTimeFunc(fn func() time.Time) {
 	c.now = fn
+	c.cache.setClock(fn)
 }
 
 // Compile performs context assembly with 7 pipeline stages:
@@ -108,26 +133,44 @@ func (c *Compiler) SetTimeFunc(fn func() time.Time) {
 // 6. Budget fitting (tail-drop)
 // 7. Emission + CompilationRecord construction
 func (c *Compiler) Compile(ctx context.Context, request CompilationRequest) (*CompilationResult, *CompilationRecord, error) {
+	return c.compile(ctx, request, compileOpts{})
+}
+
+// compileOpts carries internal compile switches. noCache bypasses the cache
+// read AND write: replay verification must recompute, because a cache hit
+// proves nothing.
+type compileOpts struct {
+	noCache bool
+}
+
+func (c *Compiler) compile(ctx context.Context, request CompilationRequest, opts compileOpts) (*CompilationResult, *CompilationRecord, error) {
+	// A non-positive budget is an explicit unlimited opt-in; it is logged so
+	// the absence of a budget can never be silent.
+	if request.MaxTokens <= UnlimitedBudget {
+		c.emitWarning(ctx, "unlimited_budget", map[string]any{"max_tokens": request.MaxTokens})
+	}
+
 	// Build cache key
 	cacheKey := c.buildCacheKey(request)
 
 	// Check cache first
-	if cached := c.getFromCache(cacheKey); cached != nil {
-		cachedResult := cached.Record.Result
-		result := &CompilationResult{
-			Chunks:       cachedResult.Chunks,
-			RankedChunks: cachedResult.RankedChunks,
-			TotalTokens:  cachedResult.TotalTokens,
+	if !opts.noCache {
+		if cached := c.cache.get(cacheKey); cached != nil {
+			result := &CompilationResult{
+				Chunks:       cached.record.Result.Chunks,
+				RankedChunks: cached.record.Result.RankedChunks,
+				TotalTokens:  cached.record.Result.TotalTokens,
+			}
+			record := &CompilationRecord{
+				RequestID:   c.newID(),
+				Timestamp:   c.now(),
+				Request:     request,
+				Result:      *result,
+				CacheHit:    true,
+				EventLogSeq: request.EventLogSeq,
+			}
+			return result, record, nil
 		}
-		record := &CompilationRecord{
-			RequestID:   c.newID(),
-			Timestamp:   c.now(),
-			Request:     request,
-			Result:      *result,
-			CacheHit:    true,
-			EventLogSeq: request.EventLogSeq,
-		}
-		return result, record, nil
 	}
 
 	streamedChunks, skippedStaleChunks, err := c.streamCandidates(ctx, request)
@@ -178,9 +221,15 @@ func (c *Compiler) Compile(ctx context.Context, request CompilationRequest) (*Co
 	}
 	filteredChunks := c.applyFilters(rankedChunks)
 
-	// Stage 6: Budget fitting (tail-drop) with pin reservation.
-	contentBudget := applyPinReservedBudget(request.MaxTokens, len(pinRefs))
-	finalChunks, contentShortfall := c.applyBudget(filteredChunks, contentBudget)
+	// Stage 6: Budget fitting (tail-drop) with pin reservation. Pins keep
+	// their floor; content fits into max(0, maxTokens-reserved). Content and
+	// pins together never exceed maxTokens unless the pins alone do, in
+	// which case the pins win and the overflow is counted.
+	contentBudget, pinOverflow := applyPinReservedBudget(request.MaxTokens, len(pinRefs))
+	if pinOverflow > 0 {
+		c.emitWarning(ctx, "pin_reserved_overflow", map[string]any{"overflow_tokens": pinOverflow})
+	}
+	finalChunks, contentShortfall := c.applyBudget(ctx, filteredChunks, contentBudget)
 
 	// Track content chunks evicted by budget for pinned files.
 	var pinContentIDs map[knowledge.ChunkID]struct{}
@@ -212,7 +261,7 @@ func (c *Compiler) Compile(ctx context.Context, request CompilationRequest) (*Co
 		substitutedChunks, subs := c.trySummarySubstitution(ctx, finalChunks, contentBudget)
 		finalChunks = substitutedChunks
 		substitutions = subs
-		_, contentShortfall = c.applyBudget(finalChunks, contentBudget)
+		_, contentShortfall = c.applyBudget(ctx, finalChunks, contentBudget)
 	}
 
 	// Build result
@@ -275,8 +324,15 @@ func (c *Compiler) Compile(ctx context.Context, request CompilationRequest) (*Co
 	// Compute deterministic digest
 	record.DeterministicDigest = c.computeDigest(record)
 
-	// Add to cache
-	c.addToCache(cacheKey, record)
+	// Add to cache (skipped when the compile bypasses it: replay verification
+	// results are not reusable answers).
+	if !opts.noCache {
+		c.cache.put(cacheKey, &cacheEntry{
+			record:     *record,
+			deps:       dependencySet(dependencies),
+			insertedAt: c.now(),
+		})
+	}
 
 	if !isSpeculativeCompilation(request.Metadata) {
 		if err := c.persistCompilationRecord(ctx, record); err != nil {
@@ -303,16 +359,22 @@ func (c *Compiler) Replay(ctx context.Context, compilationID string, mode Replay
 
 	switch mode {
 	case StrictReplay:
-		// Reconstruct state at original EventLogSeq and re-run
+		// Reconstruct state at original EventLogSeq and re-run with the
+		// cache bypassed: only recomputation can fail, a cache hit proves
+		// nothing.
 		request := originalRecord.Request
 		request.EventLogSeq = originalRecord.EventLogSeq
-		result, newRecord, err := c.Compile(ctx, request)
+		result, newRecord, err := c.compile(ctx, request, compileOpts{noCache: true})
 		if err != nil {
 			return nil, nil, nil, err
 		}
+		if newRecord.DeterministicDigest != originalRecord.DeterministicDigest {
+			return nil, nil, nil, fmt.Errorf("%w: record %s recomputed to %s (recorded %s)",
+				ErrReplayMismatch, originalRecord.RequestID, newRecord.DeterministicDigest, originalRecord.DeterministicDigest)
+		}
 
 		diff := c.computeDiff(&originalRecord.Result, result)
-		diff.DeterminismMatch = newRecord.DeterministicDigest == originalRecord.DeterministicDigest
+		diff.DeterminismMatch = true
 		return result, newRecord, diff, nil
 
 	case CurrentReplay:
@@ -329,79 +391,126 @@ func (c *Compiler) Replay(ctx context.Context, compilationID string, mode Replay
 	}
 }
 
-// Start begins the invalidation loop and subscribes to events.
-func (c *Compiler) Start(ctx context.Context) error {
+// Start begins the invalidation loop and subscribes to knowledge events.
+// Start is once-only; Start after Stop returns ErrCompilerStopped (a stopped
+// compiler owns no loop and is not restartable).
+func (c *Compiler) Start(_ context.Context) error {
+	c.lifecycleMu.Lock()
+	defer c.lifecycleMu.Unlock()
+	if c.stopped {
+		return ErrCompilerStopped
+	}
 	if c.started {
 		return fmt.Errorf("compiler already started")
 	}
-
 	c.started = true
+	c.stopCh = make(chan struct{})
+	c.loopDone = make(chan struct{})
 
-	// Subscribe to events
-	if c.eventLog != nil {
-		c.eventLog.Subscribe("EventChunkCommitted", func(event any) {
-			if e, ok := event.(ChunkCommittedEvent); ok {
-				c.handleChunkCommitted(e)
-			}
-		})
-
-		c.eventLog.Subscribe("EventContextPolicyReloaded", func(event any) {
-			c.handlePolicyReloaded()
-		})
+	// Subscribe to chunk lifecycle events. The bus is lossy by design; the
+	// invalidated-set recheck, TTL, and capacity bounds backstop dropped
+	// events.
+	if c.eventBus != nil {
+		events, cancel := c.eventBus.Subscribe(64)
+		c.unsubscribe = cancel
+		go c.consumeEvents(events)
 	}
 
-	// Run invalidation loop
 	go c.invalidationLoop()
 
 	return nil
 }
 
-// Stop stops the compiler.
+// Stop halts event consumption and the invalidation loop, and waits
+// (bounded) for the loop's exit. Safe to call more than once.
 func (c *Compiler) Stop() {
-	if !c.started {
+	c.lifecycleMu.Lock()
+	if !c.started || c.stopped {
+		c.lifecycleMu.Unlock()
 		return
 	}
-	close(c.stopCh)
-	c.started = false
+	c.stopped = true
+	stopCh := c.stopCh
+	unsubscribe := c.unsubscribe
+	c.lifecycleMu.Unlock()
+
+	if unsubscribe != nil {
+		unsubscribe()
+	}
+	close(stopCh)
+	// Deterministic join (bounded): the loop's select observes the closed
+	// stop channel immediately.
+	select {
+	case <-c.loopDone:
+	case <-time.After(time.Second):
+	}
 }
 
-// handleChunkCommitted processes chunk committed events.
-func (c *Compiler) handleChunkCommitted(event ChunkCommittedEvent) {
-	c.invalidatedMu.Lock()
-	c.invalidatedChunks[event.ChunkID] = struct{}{}
-	c.invalidatedMu.Unlock()
-
-	// Evict cache entries that depend on this chunk
-	c.evictDependentEntries(event.ChunkID)
+// consumeEvents translates knowledge events into cache invalidation until
+// the subscription closes.
+func (c *Compiler) consumeEvents(events <-chan knowledge.Event) {
+	for event := range events {
+		switch event.Kind {
+		case knowledge.EventChunkIngested:
+			if payload, ok := event.Payload.(knowledge.ChunkIngestedPayload); ok && payload.ChunkID != "" {
+				c.handleChunkInvalidated(knowledge.ChunkID(payload.ChunkID))
+			}
+		case knowledge.EventChunkStaled:
+			if payload, ok := event.Payload.(knowledge.ChunkStaledPayload); ok {
+				for _, id := range payload.ChunkIDs {
+					if id != "" {
+						c.handleChunkInvalidated(knowledge.ChunkID(id))
+					}
+				}
+			}
+		}
+	}
 }
 
-// handlePolicyReloaded processes policy reload events.
+// handleChunkInvalidated records a superseded or staled chunk and evicts
+// every cached compilation that depends on it.
+func (c *Compiler) handleChunkInvalidated(chunkID knowledge.ChunkID) {
+	c.cache.markInvalidated(chunkID)
+	c.emitCacheEvent("compilation_cache_invalidated", map[string]any{"chunk_id": string(chunkID)})
+}
+
+// handlePolicyReloaded voids every cached compilation: verdicts computed
+// under the old policy are stale wholesale.
 func (c *Compiler) handlePolicyReloaded() {
-	// Evict all cache entries
-	c.cacheMu.Lock()
-	c.cache = make(map[CacheKey]*CacheEntry)
-	c.cacheMu.Unlock()
+	c.cache.reset()
+	c.emitCacheEvent("compilation_cache_invalidated", map[string]any{"reason": "policy_reloaded"})
 }
 
-// invalidationLoop runs periodically to clean up invalidated chunks.
+// invalidationLoop periodically sweeps TTL-expired entries. Push invalidation
+// already removed live staleness; the sweep is the backstop.
 func (c *Compiler) invalidationLoop() {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
-
+	defer close(c.loopDone)
 	for {
 		select {
 		case <-c.stopCh:
 			return
 		case <-ticker.C:
-			c.cleanupCache()
+			c.cache.entries.Sweep()
 		}
 	}
 }
 
-// ChunkCommittedEvent represents a chunk committed event.
-type ChunkCommittedEvent struct {
-	ChunkID knowledge.ChunkID
-	Seq     uint64
+// emitCacheEvent surfaces cache lifecycle transitions as telemetry; each is
+// counted on the compiler even without a telemetry sink (the counter is the
+// contract).
+func (c *Compiler) emitCacheEvent(kind string, metadata map[string]any) {
+	if c.telemetry == nil {
+		return
+	}
+	ev := telemetry.Event{
+		Type:      telemetry.EventType(kind),
+		Message:   kind,
+		Timestamp: c.now(),
+		Metadata:  metadata,
+	}
+	c.telemetry.Emit(ev)
 }
 
 // Private helper methods
@@ -411,7 +520,6 @@ func (c *Compiler) buildCacheKey(request CompilationRequest) CacheKey {
 		QueryFingerprint:        c.fingerprint(mustJSON(request.Query)),
 		ManifestFingerprint:     c.fingerprint(request.ManifestID),
 		PolicyBundleFingerprint: c.fingerprint(request.PolicyBundleID),
-		EventLogSeq:             request.EventLogSeq,
 	}
 }
 
@@ -427,84 +535,6 @@ func (c *Compiler) fingerprint(s string) string {
 	h := sha256.New()
 	h.Write([]byte(s))
 	return hex.EncodeToString(h.Sum(nil))[:16]
-}
-
-func (c *Compiler) getFromCache(key CacheKey) *CacheEntry {
-	c.cacheMu.RLock()
-	defer c.cacheMu.RUnlock()
-
-	entry, ok := c.cache[key]
-	if !ok {
-		return nil
-	}
-
-	// Check if entry is still valid
-	c.invalidatedMu.RLock()
-	invalidated := make(map[knowledge.ChunkID]struct{})
-	for k, v := range c.invalidatedChunks {
-		invalidated[k] = v
-	}
-	c.invalidatedMu.RUnlock()
-
-	if !entry.IsValid(invalidated) {
-		return nil
-	}
-
-	// Update access stats
-	entry.AccessedAt = c.now()
-	entry.AccessCount++
-
-	return entry
-}
-
-func (c *Compiler) addToCache(key CacheKey, record *CompilationRecord) {
-	c.cacheMu.Lock()
-	defer c.cacheMu.Unlock()
-
-	// Build dependency set
-	deps := make(map[knowledge.ChunkID]struct{})
-	for _, chunkID := range record.Dependencies {
-		deps[chunkID] = struct{}{}
-	}
-
-	c.cache[key] = &CacheEntry{
-		Key:          key,
-		Record:       *record,
-		Dependencies: deps,
-		CreatedAt:    c.now(),
-		AccessedAt:   c.now(),
-		AccessCount:  1,
-	}
-}
-
-func (c *Compiler) evictDependentEntries(chunkID knowledge.ChunkID) {
-	c.cacheMu.Lock()
-	defer c.cacheMu.Unlock()
-
-	for key, entry := range c.cache {
-		if _, depends := entry.Dependencies[chunkID]; depends {
-			delete(c.cache, key)
-		}
-	}
-}
-
-func (c *Compiler) cleanupCache() {
-	c.cacheMu.Lock()
-	defer c.cacheMu.Unlock()
-
-	// Evict entries that depend on invalidated chunks
-	c.invalidatedMu.RLock()
-	invalidated := make(map[knowledge.ChunkID]struct{})
-	for k, v := range c.invalidatedChunks {
-		invalidated[k] = v
-	}
-	c.invalidatedMu.RUnlock()
-
-	for key, entry := range c.cache {
-		if !entry.IsValid(invalidated) {
-			delete(c.cache, key)
-		}
-	}
 }
 
 func (c *Compiler) admitRankers() []retrieval.AdmittedRanker {
@@ -681,8 +711,9 @@ func (c *Compiler) applyFilters(ranked []retrieval.RankedChunk) []retrieval.Rank
 	return filtered
 }
 
-func (c *Compiler) applyBudget(ranked []retrieval.RankedChunk, maxTokens int) ([]retrieval.RankedChunk, int) {
-	if maxTokens <= 0 {
+func (c *Compiler) applyBudget(ctx context.Context, ranked []retrieval.RankedChunk, maxTokens int) ([]retrieval.RankedChunk, int) {
+	if maxTokens <= UnlimitedBudget {
+		// Explicit no-budget opt-in: admit ranked content in order.
 		return ranked, 0
 	}
 
@@ -691,6 +722,16 @@ func (c *Compiler) applyBudget(ranked []retrieval.RankedChunk, maxTokens int) ([
 
 	for _, rc := range ranked {
 		chunkTokens := c.estimateChunkTokens(rc.ChunkID)
+		if chunkTokens == 0 {
+			// Empty-content chunks are excluded from the budget and the
+			// context: they carry nothing and would otherwise ride along
+			// uncounted.
+			c.emitWarning(ctx, "content_gap", map[string]any{
+				"chunk_id": string(rc.ChunkID),
+				"reason":   "empty_content",
+			})
+			continue
+		}
 		if totalTokens+chunkTokens <= maxTokens {
 			result = append(result, rc)
 			totalTokens += chunkTokens
@@ -716,13 +757,46 @@ func (c *Compiler) estimateTokens(chunks []knowledge.KnowledgeChunk) int {
 	return total
 }
 
+// estimateChunkTokens estimates a chunk's token cost. Content comes from
+// Body.Fields["content"] when present and from Body.Raw otherwise (Raw-only
+// chunks previously estimated as the literal "<nil>" — one token — silently
+// voiding the budget). Empty content estimates zero: the budget path
+// excludes such chunks with a gap message. Otherwise ceil(chars/4), minimum 1.
 func (c *Compiler) estimateChunkTokens(chunkID knowledge.ChunkID) int {
-	// Simple estimation: 1 token per 4 characters
-	if chunk, ok, err := c.chunkStore.Load(chunkID); ok && err == nil && chunk != nil {
-		content := fmt.Sprint(chunk.Body.Fields["content"])
-		return len(content) / 4
+	chunk, ok, err := c.chunkStore.Load(chunkID)
+	if !ok || err != nil || chunk == nil {
+		return 0
 	}
-	return 0
+	content := chunkContent(chunk)
+	if len(content) == 0 {
+		return 0
+	}
+	tokens := (len(content) + 3) / 4
+	if tokens < 1 {
+		tokens = 1
+	}
+	return tokens
+}
+
+// chunkContent resolves a chunk's estimable content: the typed content
+// field when it is a string, else the raw body.
+func chunkContent(chunk *knowledge.KnowledgeChunk) string {
+	if chunk == nil {
+		return ""
+	}
+	if content, ok := chunk.Body.Fields["content"].(string); ok && content != "" {
+		return content
+	}
+	return chunk.Body.Raw
+}
+
+// dependencySet builds the dependency set for a compilation's chunk IDs.
+func dependencySet(dependencies []knowledge.ChunkID) map[knowledge.ChunkID]struct{} {
+	deps := make(map[knowledge.ChunkID]struct{}, len(dependencies))
+	for _, chunkID := range dependencies {
+		deps[chunkID] = struct{}{}
+	}
+	return deps
 }
 
 func (c *Compiler) computeDigest(record *CompilationRecord) string {
@@ -990,31 +1064,15 @@ func (c *Compiler) DiffByID(ctx context.Context, idA, idB string) (*CompilationD
 	return c.Diff(recordA, recordB), nil
 }
 
-// persistCompilationRecord persists a compilation record to the knowledge store.
+// persistCompilationRecord persists a compilation record through the O(1)
+// repository, keyed by its request ID.
 func (c *Compiler) persistCompilationRecord(ctx context.Context, record *CompilationRecord) error {
-	if c.persistenceWriter == nil {
-		return fmt.Errorf("persistence writer not configured")
+	if c.repository == nil {
+		return fmt.Errorf("repository not configured")
 	}
-
-	// Serialize record to JSON
-	content, err := json.Marshal(record)
-	if err != nil {
-		return fmt.Errorf("marshal record: %w", err)
-	}
-
-	req := persistence.PersistenceRequest{
-		Content:      content,
-		ContentType:  "compilation_record",
-		SourceOrigin: "compilation_record",
-		Tags:         []string{"compilation", "replayable"},
-		Reason:       fmt.Sprintf("Compilation %s at seq %d", record.RequestID, record.EventLogSeq),
-	}
-
-	_, err = c.persistenceWriter.Persist(ctx, req)
-	if err != nil {
+	if err := c.repository.StoreCompilationRecord(ctx, *record); err != nil {
 		return fmt.Errorf("persist record: %w", err)
 	}
-
 	return nil
 }
 
@@ -1130,14 +1188,15 @@ func pinPathsFromAnchors(pins []retrieval.AnchorRef) map[string]struct{} {
 	return paths
 }
 
-// applyPinReservedBudget subtracts pin-reference token budget from maxTokens
-// and returns the adjusted budget for content chunks.
-func applyPinReservedBudget(maxTokens int, pinCount int) int {
+// applyPinReservedBudget subtracts the pin-reference floor from maxTokens
+// and returns the content budget plus the overflow when the pins alone
+// exceed the budget (pins win; the excess is the caller's to count).
+func applyPinReservedBudget(maxTokens int, pinCount int) (contentBudget int, overflow int) {
 	reserved := pinCount * PinRefTokenBudget
-	if maxTokens <= reserved {
-		return maxTokens
+	if reserved <= maxTokens {
+		return maxTokens - reserved, 0
 	}
-	return maxTokens - reserved
+	return 0, reserved - maxTokens
 }
 
 func containsString(slice []string, s string) bool {
@@ -1175,90 +1234,24 @@ func (c *Compiler) emitWarning(ctx context.Context, message string, metadata map
 	c.telemetry.Emit(ev)
 }
 
-// ListCompilationRecords returns all compilation records from the knowledge store.
+// ListCompilationRecords returns the persisted compilation records.
 func (c *Compiler) ListCompilationRecords(ctx context.Context) ([]CompilationRecord, error) {
-	if c.chunkStore == nil {
-		return nil, fmt.Errorf("chunk store not configured")
+	if c.repository == nil {
+		return nil, fmt.Errorf("repository not configured")
 	}
-
-	chunks, err := c.chunkStore.FindAll()
-	if err != nil {
-		return nil, fmt.Errorf("find chunks: %w", err)
-	}
-
-	var records []CompilationRecord
-	for _, chunk := range chunks {
-		if chunk.SourceOrigin != "compilation_record" {
-			continue
-		}
-
-		var record CompilationRecord
-		content, ok := chunk.Body.Fields["content"]
-		if !ok {
-			content = chunk.Body.Raw
-		}
-
-		var data []byte
-		switch v := content.(type) {
-		case string:
-			data = []byte(v)
-		case []byte:
-			data = v
-		default:
-			continue
-		}
-
-		if err := json.Unmarshal(data, &record); err != nil {
-			continue
-		}
-		records = append(records, record)
-	}
-	return records, nil
+	return c.repository.ListCompilationRecords(ctx, 0)
 }
 
-// LoadCompilationRecord loads a compilation record by ID from the knowledge store.
+// LoadCompilationRecord loads a compilation record by ID through the O(1)
+// repository path. Non-ID locators are a compile-time error by construction:
+// callers hold request IDs.
 func (c *Compiler) LoadCompilationRecord(ctx context.Context, compilationID string) (*CompilationRecord, error) {
-	if c.chunkStore == nil {
-		return nil, fmt.Errorf("chunk store not configured")
+	if c.repository == nil {
+		return nil, fmt.Errorf("repository not configured")
 	}
-
-	// Search for chunks with compilation_record source origin and matching request ID
-	chunks, err := c.chunkStore.FindAll()
+	record, err := c.repository.GetCompilationRecord(ctx, compilationID)
 	if err != nil {
-		return nil, fmt.Errorf("find chunks: %w", err)
+		return nil, fmt.Errorf("load compilation record: %w", err)
 	}
-
-	for _, chunk := range chunks {
-		if chunk.SourceOrigin != "compilation_record" {
-			continue
-		}
-
-		// Parse the record
-		var record CompilationRecord
-		content, ok := chunk.Body.Fields["content"]
-		if !ok {
-			// Try Raw field
-			content = chunk.Body.Raw
-		}
-
-		var data []byte
-		switch v := content.(type) {
-		case string:
-			data = []byte(v)
-		case []byte:
-			data = v
-		default:
-			continue
-		}
-
-		if err := json.Unmarshal(data, &record); err != nil {
-			continue // Skip malformed records
-		}
-
-		if record.RequestID == compilationID {
-			return &record, nil
-		}
-	}
-
-	return nil, fmt.Errorf("compilation record not found: %s", compilationID)
+	return record, nil
 }

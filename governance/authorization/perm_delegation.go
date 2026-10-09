@@ -76,7 +76,7 @@ func (m *PermissionManager) GrantPermission(desc permissions.PermissionDescripto
 	grant := GrantManual(desc, approvedBy, scope, duration)
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.grants[desc.Action+":"+desc.Resource] = grant
+	m.putGrant(desc.Action+":"+desc.Resource, grant)
 }
 
 func (m *PermissionManager) toolAllowedByTaskGrant(ctx context.Context, tool Tool) bool {
@@ -113,15 +113,11 @@ func (m *PermissionManager) toolAllowedByTaskGrant(ctx context.Context, tool Too
 // ensureGrant obtains a HITL approval when a permission requires human review.
 func (m *PermissionManager) ensureGrant(ctx context.Context, agentID string, desc permissions.PermissionDescriptor) error {
 	key := desc.Action + ":" + desc.Resource
-	m.mu.Lock()
-	if grant, ok := m.grants[key]; ok {
-		if !grant.Expired(m.grantClock()) {
-			m.mu.Unlock()
-			return nil
-		}
-		delete(m.grants, key)
+	if grant, ok := m.grants.Get(key); ok && !grant.Expired(m.grantClock()) {
+		return nil
+	} else if ok {
+		m.grants.Delete(key)
 	}
-	m.mu.Unlock()
 	if m.hitl == nil {
 		return m.deny(ctx, agentID, desc, "hitl approval required")
 	}
@@ -134,9 +130,8 @@ func (m *PermissionManager) ensureGrant(ctx context.Context, agentID string, des
 	if err != nil {
 		return err
 	}
-	m.mu.Lock()
-	m.grants[key] = grant
-	m.mu.Unlock()
+	grant.SessionID = governanceports.PrincipalFromContext(ctx).AgentID
+	m.putGrant(key, grant)
 	return nil
 }
 
@@ -146,9 +141,9 @@ func (m *PermissionManager) checkHITLRateLimit(key string) error {
 	now := m.grantClock()
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	bucket, ok := m.hitlRateLimits[key]
+	bucket, ok := m.hitlRateLimits.Get(key)
 	if !ok || now.Sub(bucket.windowAt) >= hitlRateWindow {
-		m.hitlRateLimits[key] = &hitlRateBucket{count: 1, windowAt: now}
+		m.hitlRateLimits.Put(key, &hitlRateBucket{count: 1, windowAt: now})
 		return nil
 	}
 	bucket.count++
@@ -166,15 +161,11 @@ func (m *PermissionManager) RequireApproval(ctx context.Context, agentID string,
 	}
 	desc.RequiresHITL = true
 	key := desc.Action + ":" + desc.Resource
-	m.mu.Lock()
-	if grant, ok := m.grants[key]; ok {
-		if !grant.Expired(m.grantClock()) {
-			m.mu.Unlock()
-			return nil
-		}
-		delete(m.grants, key)
+	if grant, ok := m.grants.Get(key); ok && !grant.Expired(m.grantClock()) {
+		return nil
+	} else if ok {
+		m.grants.Delete(key)
 	}
-	m.mu.Unlock()
 	if err := m.checkHITLRateLimit(key); err != nil {
 		m.emitPolicyDecision(ctx, agentID, desc, fwtelemetry.PolicyEffectDeny, err.Error(), nil)
 		return err
@@ -198,9 +189,8 @@ func (m *PermissionManager) RequireApproval(ctx context.Context, agentID string,
 	if err != nil {
 		return err
 	}
-	m.mu.Lock()
-	m.grants[key] = grant
-	m.mu.Unlock()
+	grant.SessionID = governanceports.PrincipalFromContext(ctx).AgentID
+	m.putGrant(key, grant)
 	return nil
 }
 

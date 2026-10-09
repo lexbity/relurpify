@@ -76,12 +76,9 @@ func (m *PermissionManager) findExecutablePermission(binary string) *permissions
 		return nil
 	}
 	cacheKey := strings.TrimSpace(binary)
-	m.mu.RLock()
-	if perm, ok := m.execPermCache[cacheKey]; ok {
-		m.mu.RUnlock()
+	if perm, ok := m.execPermCache.Get(cacheKey); ok {
 		return perm
 	}
-	m.mu.RUnlock()
 	var matched *permissions.ExecutablePermission
 	for _, perm := range m.declared.Executables {
 		if perm.Binary == binary {
@@ -90,9 +87,7 @@ func (m *PermissionManager) findExecutablePermission(binary string) *permissions
 			break
 		}
 	}
-	m.mu.Lock()
-	m.execPermCache[cacheKey] = matched
-	m.mu.Unlock()
+	m.execPermCache.Put(cacheKey, matched)
 	return matched
 }
 

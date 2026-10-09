@@ -44,6 +44,7 @@ func TestAuthorizeToolByNameDenyPolicy(t *testing.T) {
 
 func TestAuthorizeToolByNameAskPolicyWithHITL(t *testing.T) {
 	broker := NewHITLBroker(time.Minute, nil)
+	defer broker.Stop()
 	broker.AutoApprove = true
 	pm, err := NewPermissionManager("/tmp", &permissions.PermissionSet{}, newTestAuditLogger(t), broker)
 	if err != nil {

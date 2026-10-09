@@ -1,16 +1,19 @@
 package euclotui
 
 import (
+	"context"
 	"testing"
+	"time"
 
 	"github.com/charmbracelet/bubbles/spinner"
+	tea "github.com/charmbracelet/bubbletea"
 
 	"codeburg.org/lexbit/relurpify/app/relurpish/tui"
 	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
 )
 
 func TestChatPaneSidebarWidthCollapsesAndExpands(t *testing.T) {
-	pane := NewChatPane(nil, &tui.AgentContext{}, &tui.Session{}, &tui.NotificationQueue{}, nil, nil, nil)
+	pane := NewChatPane(context.Background(), nil, &tui.AgentContext{}, &tui.Session{}, &tui.NotificationQueue{}, nil, nil, nil)
 
 	if got := pane.sidebarWidth(89); got != 0 {
 		t.Fatalf("sidebarWidth(89) = %d, want 0", got)
@@ -38,7 +41,7 @@ func TestChatPaneSidebarWidthCollapsesAndExpands(t *testing.T) {
 }
 
 func TestChatPaneWorkspaceSelectionWritesEnvelope(t *testing.T) {
-	pane := NewChatPane(nil, &tui.AgentContext{}, &tui.Session{ID: "session-1"}, &tui.NotificationQueue{}, nil, nil, nil)
+	pane := NewChatPane(context.Background(), nil, &tui.AgentContext{}, &tui.Session{ID: "session-1"}, &tui.NotificationQueue{}, nil, nil, nil)
 
 	if err := pane.AddFileToSidebar("alpha.go"); err != nil {
 		t.Fatalf("AddFileToSidebar: %v", err)
@@ -65,7 +68,7 @@ func TestChatPaneWorkspaceSelectionWritesEnvelope(t *testing.T) {
 }
 
 func TestChatPaneMilestoneFiltering(t *testing.T) {
-	pane := NewChatPane(nil, &tui.AgentContext{}, &tui.Session{}, &tui.NotificationQueue{}, nil, nil, nil)
+	pane := NewChatPane(context.Background(), nil, &tui.AgentContext{}, &tui.Session{}, &tui.NotificationQueue{}, nil, nil, nil)
 
 	pane.AppendMessage(tui.Message{
 		Role: tui.RoleAgent,
@@ -99,7 +102,7 @@ func TestChatPaneMilestoneFiltering(t *testing.T) {
 }
 
 func TestChatPaneSpinnerNotReArmedWhenIdle(t *testing.T) {
-	pane := NewChatPane(nil, nil, &tui.Session{}, &tui.NotificationQueue{}, nil, nil, nil)
+	pane := NewChatPane(context.Background(), nil, nil, &tui.Session{}, &tui.NotificationQueue{}, nil, nil, nil)
 
 	// With no active runs, Init should not return a spinner tick.
 	initCmd := pane.Init()
@@ -118,10 +121,10 @@ func TestChatPaneSpinnerNotReArmedWhenIdle(t *testing.T) {
 }
 
 func TestChatPaneSpinnerReArmedWhenActive(t *testing.T) {
-	pane := NewChatPane(nil, nil, &tui.Session{}, &tui.NotificationQueue{}, nil, nil, nil)
+	pane := NewChatPane(context.Background(), nil, nil, &tui.Session{}, &tui.NotificationQueue{}, nil, nil, nil)
 
 	// Simulate an active run.
-	pane.runStates["run-1"] = &tui.RunState{ID: "run-1"}
+	pane.registerFakeRun("run-1")
 
 	// Init with active runs should return a tick.
 	initCmd := pane.Init()
@@ -140,7 +143,7 @@ func TestChatPaneSpinnerReArmedWhenActive(t *testing.T) {
 }
 
 func TestChatPaneSpinnerKickstartsOnStartRun(t *testing.T) {
-	pane := NewChatPane(nil, nil, &tui.Session{}, &tui.NotificationQueue{}, nil, nil, nil)
+	pane := NewChatPane(context.Background(), nil, nil, &tui.Session{}, &tui.NotificationQueue{}, nil, nil, nil)
 
 	// Init should not return a tick (no active runs).
 	initCmd := pane.Init()
@@ -156,10 +159,10 @@ func TestChatPaneSpinnerKickstartsOnStartRun(t *testing.T) {
 }
 
 func TestChatPaneSpinnerStopsAfterRunCompletes(t *testing.T) {
-	pane := NewChatPane(nil, nil, &tui.Session{}, &tui.NotificationQueue{}, nil, nil, nil)
+	pane := NewChatPane(context.Background(), nil, nil, &tui.Session{}, &tui.NotificationQueue{}, nil, nil, nil)
 
 	// Add active run.
-	pane.runStates["run-1"] = &tui.RunState{ID: "run-1"}
+	pane.registerFakeRun("run-1")
 	if !pane.HasActiveRuns() {
 		t.Fatal("expected HasActiveRuns() true")
 	}
@@ -171,7 +174,7 @@ func TestChatPaneSpinnerStopsAfterRunCompletes(t *testing.T) {
 	}
 
 	// Remove the run (simulate completion).
-	delete(pane.runStates, "run-1")
+	pane.removeFakeRun("run-1")
 	if pane.HasActiveRuns() {
 		t.Fatal("expected HasActiveRuns() false after deletion")
 	}
@@ -181,4 +184,35 @@ func TestChatPaneSpinnerStopsAfterRunCompletes(t *testing.T) {
 	if cmd != nil {
 		t.Error("expected nil cmd (no re-arm) after run completes")
 	}
+}
+
+// registerFakeRun inserts a run with no work goroutine for spinner tests.
+func (p *ChatPane) registerFakeRun(id string) {
+	run := &chatRun{
+		id:      id,
+		started: time.Now(),
+		ch:      make(chan tea.Msg, 1),
+	}
+	run.ctx, run.cancel = context.WithCancel(context.Background())
+	p.runsMu.Lock()
+	p.runs[id] = run
+	p.runsMu.Unlock()
+}
+
+// peekFinishedRun returns a finished-but-unhandled run by ID (test helper).
+func (p *ChatPane) peekFinishedRun(id string) (*chatRun, bool) {
+	p.runsMu.Lock()
+	defer p.runsMu.Unlock()
+	for _, run := range p.finishedRuns {
+		if run.id == id {
+			return run, true
+		}
+	}
+	return nil, false
+}
+
+func (p *ChatPane) removeFakeRun(id string) {
+	p.runsMu.Lock()
+	delete(p.runs, id)
+	p.runsMu.Unlock()
 }

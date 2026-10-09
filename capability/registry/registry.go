@@ -78,7 +78,7 @@ type CapabilityRegistry struct {
 
 // NewRegistry builds a capability registry instance.
 func NewRegistry() *CapabilityRegistry {
-	return &CapabilityRegistry{
+	r := &CapabilityRegistry{
 		capabilities:        make(map[string]descriptor.CapabilityDescriptor),
 		entries:             make(map[string]*capabilityEntry),
 		capabilityNameIndex: make(map[string][]string),
@@ -88,6 +88,7 @@ func NewRegistry() *CapabilityRegistry {
 		safety:              runtime.NewRuntimeSafetyController(),
 		rollbacks:           newRollbackRing(),
 	}
+	return r
 }
 
 // SetMetrics attaches a metrics collector to the registry. A nil value is a

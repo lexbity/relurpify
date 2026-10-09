@@ -223,6 +223,9 @@ func buildNodes(ctx context.Context, in buildNodeInput) ([]agentgraph.Node, erro
 	checkpointNode := agentgraph.NewCheckpointNode("euclo.checkpoint").
 		WithRepository(in.checkpointRepository).
 		WithWriter(in.persistenceWriter)
+	if in.paradigmDeps != nil && in.paradigmDeps.WorkingMemory != nil {
+		checkpointNode = checkpointNode.WithWorkingMemoryEvictor(in.paradigmDeps.WorkingMemory)
+	}
 
 	capClassifyNode := newStageNode("euclo.capability_classify", agentgraph.NodeTypeSystem, func(_ context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 		if env != nil {

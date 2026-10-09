@@ -43,6 +43,7 @@ const (
 	EventBootstrapComplete     EventType = "bootstrap_complete"
 	EventBudgetSnapshot                  = "budget.snapshot"
 	EventSessionResetRequired            = "session.reset_required"
+	EventTapeRecordFailed                = "tape.record_failed"
 )
 
 // Actor identifies the origin of an event.

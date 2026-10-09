@@ -54,12 +54,26 @@ func (c *Client) Generate(ctx context.Context, prompt string, options *LLMOption
 }
 
 func (c *Client) GenerateStream(ctx context.Context, prompt string, options *LLMOptions) (<-chan string, error) {
+	return c.streamChat(ctx, []Message{{Role: "user", Content: prompt}}, nil, options, false)
+}
+
+// streamChat is the single pump for both streaming entry points. The
+// goroutine owns the output channel (closed exactly once via the helper) and
+// the HTTP response body (closed inside doChatStream). Token sends select on
+// ctx.Done(); the call-time ctx is the only stop signal (contract R1-R6).
+func (c *Client) streamChat(ctx context.Context, messages []Message, tools []LLMToolSpec, options *LLMOptions, includeTools bool) (<-chan string, error) {
 	out := make(chan string)
 	go func() {
 		defer close(out)
-		_, _ = c.chat(ctx, []Message{{Role: "user", Content: prompt}}, nil, options, false, true, func(token string) {
-			out <- token
-		})
+		sink := func(token string) error {
+			select {
+			case out <- token:
+				return nil
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+		_, _ = c.chat(ctx, messages, tools, options, includeTools, true, sink)
 	}()
 	return out, nil
 }
@@ -70,7 +84,11 @@ func (c *Client) Chat(ctx context.Context, messages []Message, options *LLMOptio
 
 func (c *Client) ChatWithTools(ctx context.Context, messages []Message, tools []LLMToolSpec, options *LLMOptions) (*LLMResponse, error) {
 	if options != nil && options.StreamCallback != nil {
-		return c.chat(ctx, messages, tools, options, c.nativeToolCallingEnabled(), true, options.StreamCallback)
+		callback := options.StreamCallback
+		return c.chat(ctx, messages, tools, options, c.nativeToolCallingEnabled(), true, func(token string) error {
+			callback(token)
+			return nil
+		})
 	}
 	return c.chat(ctx, messages, tools, options, c.nativeToolCallingEnabled(), false, nil)
 }
@@ -110,18 +128,14 @@ func (c *Client) ContextSize() int {
 }
 
 func (c *Client) ChatStream(ctx context.Context, messages []Message, tools []LLMToolSpec, options *LLMOptions) (<-chan string, error) {
-	out := make(chan string)
-	go func() {
-		defer close(out)
-		_, err := c.chat(ctx, messages, tools, options, c.nativeToolCallingEnabled(), true, func(token string) {
-			out <- token
-		})
-		_ = err
-	}()
-	return out, nil
+	return c.streamChat(ctx, messages, tools, options, c.nativeToolCallingEnabled())
 }
 
-func (c *Client) chat(ctx context.Context, messages []Message, tools []LLMToolSpec, options *LLMOptions, includeTools bool, stream bool, tokenSink func(string)) (*LLMResponse, error) {
+// chat performs one chat-completion round trip. When stream is true, sink
+// (when non-nil) receives each content delta; a sink error aborts the read
+// loop and is returned, which is how the streaming pump propagates ctx
+// cancellation into body teardown.
+func (c *Client) chat(ctx context.Context, messages []Message, tools []LLMToolSpec, options *LLMOptions, includeTools bool, stream bool, sink func(string) error) (*LLMResponse, error) {
 	reqBody := map[string]any{
 		"model":    modelFromOptions(options),
 		"messages": convertMessages(messages),
@@ -132,7 +146,7 @@ func (c *Client) chat(ctx context.Context, messages []Message, tools []LLMToolSp
 		reqBody["tools"] = convertTools(tools)
 	}
 	if stream {
-		return c.doChatStream(ctx, reqBody, tokenSink)
+		return c.doChatStream(ctx, reqBody, sink)
 	}
 	return c.doChat(ctx, reqBody)
 }
@@ -189,7 +203,7 @@ func (c *Client) doChat(ctx context.Context, payload map[string]any) (*LLMRespon
 	return decodeChatResponse(raw, promptTokens)
 }
 
-func (c *Client) doChatStream(ctx context.Context, payload map[string]any, tokenSink func(string)) (*LLMResponse, error) {
+func (c *Client) doChatStream(ctx context.Context, payload map[string]any, tokenSink func(string) error) (*LLMResponse, error) {
 	promptTokens := estimatePromptTokensFromPayload(payload)
 	req, err := c.newRequest(ctx, http.MethodPost, "/v1/chat/completions", payload)
 	if err != nil {
@@ -232,7 +246,9 @@ func (c *Client) doChatStream(ctx context.Context, payload map[string]any, token
 		if delta.Content != "" {
 			fullText.WriteString(delta.Content)
 			if tokenSink != nil {
-				tokenSink(delta.Content)
+				if err := tokenSink(delta.Content); err != nil {
+					return nil, err
+				}
 			}
 		}
 		for _, tc := range delta.ToolCalls {

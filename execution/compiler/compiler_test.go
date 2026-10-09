@@ -2,10 +2,13 @@ package compiler
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"go.uber.org/goleak"
 
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/context/knowledge"
@@ -26,32 +29,11 @@ func (r *staticRanker) Rank(context.Context, retrieval.RetrievalQuery, *knowledg
 	return append([]knowledge.ChunkID(nil), r.ids...), nil
 }
 
-// mockEventLog is a test event log.
-type mockEventLog struct {
-	subscribers map[string][]func(event any)
-}
-
-func (m *mockEventLog) Subscribe(eventType string, handler func(event any)) {
-	if m.subscribers == nil {
-		m.subscribers = make(map[string][]func(event any))
-	}
-	m.subscribers[eventType] = append(m.subscribers[eventType], handler)
-}
-
-func (m *mockEventLog) Emit(eventType string, event any) {
-	if handlers, ok := m.subscribers[eventType]; ok {
-		for _, handler := range handlers {
-			handler(event)
-		}
-	}
-}
-
 func TestCacheKeyString(t *testing.T) {
 	key := CacheKey{
 		QueryFingerprint:        "abc123",
 		ManifestFingerprint:     "def456",
 		PolicyBundleFingerprint: "ghi789",
-		EventLogSeq:             42,
 	}
 
 	s := key.String()
@@ -103,11 +85,14 @@ func TestCompilerBuildCacheKey(t *testing.T) {
 
 	key := c.buildCacheKey(request)
 
-	if key.EventLogSeq != 100 {
-		t.Errorf("expected EventLogSeq 100, got %d", key.EventLogSeq)
-	}
 	if key.QueryFingerprint == "" {
 		t.Error("expected non-empty QueryFingerprint")
+	}
+	// The event-log sequence is record metadata, never cache identity:
+	// bumping it must not mint a new key.
+	request.EventLogSeq = 101
+	if c.buildCacheKey(request) != key {
+		t.Error("EventLogSeq must not participate in the cache key")
 	}
 }
 
@@ -169,23 +154,19 @@ func TestNewCompiler(t *testing.T) {
 		t.Error("retriever not set correctly")
 	}
 
-	if c.cache == nil {
+	if c.cache.entries == nil || c.cache.invalidated == nil {
 		t.Error("cache not initialized")
-	}
-
-	if c.invalidatedChunks == nil {
-		t.Error("invalidatedChunks not initialized")
 	}
 }
 
-func TestCompilerSetEventLog(t *testing.T) {
+func TestCompilerSetEventBus(t *testing.T) {
 	c := NewCompiler(nil, nil, nil)
-	log := &mockEventLog{}
+	bus := &knowledge.EventBus{}
 
-	c.SetEventLog(log)
+	c.SetEventBus(bus)
 
-	if c.eventLog != log {
-		t.Error("event log not set correctly")
+	if c.eventBus != bus {
+		t.Error("event bus not set correctly")
 	}
 }
 
@@ -235,28 +216,26 @@ func TestCompilerCacheOperations(t *testing.T) {
 
 	key := c.buildCacheKey(request)
 
-	// Add to cache
-	c.addToCache(key, record)
+	c.cache.put(key, &cacheEntry{
+		record:     *record,
+		deps:       dependencySet(record.Dependencies),
+		insertedAt: c.now(),
+	})
 
-	// Retrieve from cache
-	entry := c.getFromCache(key)
+	entry := c.cache.get(key)
 	if entry == nil {
 		t.Fatal("expected cached entry")
 	}
-
-	if entry.Record.RequestID != "req-123" {
-		t.Errorf("expected RequestID req-123, got %s", entry.Record.RequestID)
+	if entry.record.RequestID != "req-123" {
+		t.Errorf("expected RequestID req-123, got %s", entry.record.RequestID)
 	}
-
-	// Access count should be incremented (set to 1 in addToCache, then incremented in getFromCache)
-	if entry.AccessCount != 2 {
-		t.Errorf("expected AccessCount 2, got %d", entry.AccessCount)
+	// Hit counters are atomic and increment on every read.
+	if entry.hits.Load() != 1 {
+		t.Errorf("expected 1 hit, got %d", entry.hits.Load())
 	}
-
-	// Retrieve again - should increment access count
-	entry = c.getFromCache(key)
-	if entry.AccessCount != 3 {
-		t.Errorf("expected AccessCount 3, got %d", entry.AccessCount)
+	entry = c.cache.get(key)
+	if entry == nil || entry.hits.Load() != 2 {
+		t.Errorf("expected 2 hits, got %d", entry.hits.Load())
 	}
 }
 
@@ -264,23 +243,19 @@ func TestCompilerEvictDependentEntries(t *testing.T) {
 	c := NewCompiler(nil, nil, nil)
 	c.SetTimeFunc(func() time.Time { return time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC) })
 
-	// Add entry with dependencies
 	record := &CompilationRecord{
 		Dependencies: []knowledge.ChunkID{"chunk1", "chunk2"},
 	}
 	key := CacheKey{QueryFingerprint: "test"}
-	c.addToCache(key, record)
+	c.cache.put(key, &cacheEntry{record: *record, deps: dependencySet(record.Dependencies)})
 
-	// Verify entry exists
-	if c.getFromCache(key) == nil {
+	if c.cache.get(key) == nil {
 		t.Fatal("expected entry in cache")
 	}
 
-	// Evict dependent entries
-	c.evictDependentEntries("chunk1")
+	c.cache.markInvalidated("chunk1")
 
-	// Entry should be evicted
-	if c.getFromCache(key) != nil {
+	if c.cache.get(key) != nil {
 		t.Error("expected entry to be evicted")
 	}
 }
@@ -289,28 +264,21 @@ func TestCompilerHandleChunkCommitted(t *testing.T) {
 	c := NewCompiler(nil, nil, nil)
 	c.SetTimeFunc(func() time.Time { return time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC) })
 
-	// Add entry with dependency
 	record := &CompilationRecord{
 		Dependencies: []knowledge.ChunkID{"chunk1"},
 	}
 	key := CacheKey{QueryFingerprint: "test"}
-	c.addToCache(key, record)
+	c.cache.put(key, &cacheEntry{record: *record, deps: dependencySet(record.Dependencies)})
 
-	// Handle chunk committed event
-	event := ChunkCommittedEvent{ChunkID: "chunk1", Seq: 1}
-	c.handleChunkCommitted(event)
+	c.handleChunkInvalidated("chunk1")
 
-	// Verify chunk is in invalidated set
-	c.invalidatedMu.RLock()
-	_, ok := c.invalidatedChunks["chunk1"]
-	c.invalidatedMu.RUnlock()
-
-	if !ok {
+	// The invalidated-set backstop must also reject future entries touching
+	// the chunk (recheck on hit).
+	if _, ok := c.cache.invalidated.Get(knowledge.ChunkID("chunk1")); !ok {
 		t.Error("expected chunk1 to be in invalidated set")
 	}
 
-	// Cache entry should be evicted
-	if c.getFromCache(key) != nil {
+	if c.cache.get(key) != nil {
 		t.Error("expected cache entry to be evicted")
 	}
 }
@@ -319,18 +287,13 @@ func TestCompilerHandlePolicyReloaded(t *testing.T) {
 	c := NewCompiler(nil, nil, nil)
 	c.SetTimeFunc(func() time.Time { return time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC) })
 
-	// Add entries
-	record1 := &CompilationRecord{}
-	record2 := &CompilationRecord{}
-	c.addToCache(CacheKey{QueryFingerprint: "test1"}, record1)
-	c.addToCache(CacheKey{QueryFingerprint: "test2"}, record2)
+	c.cache.put(CacheKey{QueryFingerprint: "test1"}, &cacheEntry{record: CompilationRecord{}})
+	c.cache.put(CacheKey{QueryFingerprint: "test2"}, &cacheEntry{record: CompilationRecord{}})
 
-	// Handle policy reloaded
 	c.handlePolicyReloaded()
 
-	// All entries should be evicted
-	if len(c.cache) != 0 {
-		t.Errorf("expected empty cache, got %d entries", len(c.cache))
+	if c.cache.entries.Len() != 0 {
+		t.Errorf("expected empty cache, got %d entries", c.cache.entries.Len())
 	}
 }
 
@@ -411,7 +374,19 @@ func TestCompilerComputeDigest(t *testing.T) {
 }
 
 func TestCompilerApplyBudget(t *testing.T) {
-	c := NewCompiler(nil, nil, nil)
+	store := newCompilerTestStore(t)
+	c := NewCompiler(nil, nil, store)
+	// Five chunks of 40 chars each: 10 tokens apiece with ceil(len/4).
+	for i := 1; i <= 5; i++ {
+		id := knowledge.ChunkID(fmt.Sprintf("chunk%d", i))
+		content := strings.Repeat("x", 40)
+		_, err := store.Save(context.Background(), knowledge.KnowledgeChunk{
+			ID:         id,
+			TrustClass: agentspec.TrustClassBuiltinTrusted,
+			Body:       knowledge.ChunkBody{Raw: content, Fields: map[string]any{"content": content}},
+		})
+		require.NoError(t, err)
+	}
 
 	chunks := []retrieval.RankedChunk{
 		{ChunkID: "chunk1"},
@@ -421,28 +396,26 @@ func TestCompilerApplyBudget(t *testing.T) {
 		{ChunkID: "chunk5"},
 	}
 
-	// With maxTokens 0, should return all chunks
-	result, shortfall := c.applyBudget(chunks, 0)
-	if len(result) != 5 {
-		t.Errorf("expected 5 chunks, got %d", len(result))
-	}
-	if shortfall != 0 {
-		t.Errorf("expected shortfall 0, got %d", shortfall)
+	// Unlimited budget admits ranked content in order.
+	result, shortfall := c.applyBudget(context.Background(), chunks, UnlimitedBudget)
+	if len(result) != 5 || shortfall != 0 {
+		t.Errorf("unlimited: got %d chunks, shortfall %d", len(result), shortfall)
 	}
 
-	// With limited budget, should tail-drop
-	// Note: actual results depend on estimateChunkTokens which is stubbed
-	result, _ = c.applyBudget(chunks, 100)
-	// Since estimateChunkTokens returns 0 for nil store, all chunks should fit
-	if len(result) != 5 {
-		t.Errorf("expected 5 chunks (all fit with 0 token estimate), got %d", len(result))
+	// 25 tokens fit exactly two 10-token chunks; the rest tail-drop.
+	result, shortfall = c.applyBudget(context.Background(), chunks, 25)
+	if len(result) != 2 {
+		t.Errorf("expected 2 chunks, got %d", len(result))
+	}
+	if shortfall != 5 {
+		t.Errorf("expected shortfall 5, got %d", shortfall)
 	}
 }
 
 func TestCompilerStartStop(t *testing.T) {
+	defer goleak.VerifyNone(t)
 	c := NewCompiler(nil, nil, nil)
-	log := &mockEventLog{}
-	c.SetEventLog(log)
+	c.SetEventBus(&knowledge.EventBus{})
 
 	ctx := context.Background()
 
@@ -797,10 +770,15 @@ func TestCompiler_FallbackToFlatRankWhenNoAnchors(t *testing.T) {
 
 func newCompilerTestStore(t *testing.T) *knowledge.ChunkStore {
 	t.Helper()
+	return &knowledge.ChunkStore{Graph: newCompilerTestEngine(t)}
+}
+
+func newCompilerTestEngine(t *testing.T) *graphdb.Engine {
+	t.Helper()
 	engine, err := graphdb.Open(context.Background(), graphdb.DefaultOptions(t.TempDir()))
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, engine.Close(context.Background())) })
-	return &knowledge.ChunkStore{Graph: engine}
+	return engine
 }
 
 func TestCompilerGenerateAndPersistSummary(t *testing.T) {
@@ -851,16 +829,14 @@ func TestCompilerReplayStrict(t *testing.T) {
 		DeterministicDigest: "original-digest",
 	}
 
-	// Store the record in cache for replay to find it
 	key := c.buildCacheKey(originalRecord.Request)
-	c.addToCache(key, originalRecord)
+	c.cache.put(key, &cacheEntry{record: *originalRecord, deps: dependencySet(originalRecord.Dependencies)})
 
 	// Test Replay with StrictReplay mode
 	// Note: Since we don't have a real chunk store or retriever, this will use cache
 	_ = context.Background()
 
-	// First, test that the record is cached
-	cached := c.getFromCache(key)
+	cached := c.cache.get(key)
 	if cached == nil {
 		t.Fatal("expected record to be cached")
 	}
@@ -900,11 +876,10 @@ func TestCompilerDiffByID(t *testing.T) {
 		},
 	}
 
-	// Add to cache
 	keyA := c.buildCacheKey(recordA.Request)
 	keyB := c.buildCacheKey(recordB.Request)
-	c.addToCache(keyA, recordA)
-	c.addToCache(keyB, recordB)
+	c.cache.put(keyA, &cacheEntry{record: *recordA})
+	c.cache.put(keyB, &cacheEntry{record: *recordB})
 
 	// Test Diff method (not DiffByID which requires loading from store)
 	diff := c.Diff(recordA, recordB)

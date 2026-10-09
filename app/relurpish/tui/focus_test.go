@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -57,7 +58,7 @@ func newFocusTestModel() (RootModel, *recordingChatPane) {
 	chat := &recordingChatPane{}
 	surface := &fakeSurface{name: "guest", chat: chat}
 	factory := &countingFactory{shared: surface}
-	m := newRootModel(nil, factory)
+	m := newRootModel(context.Background(), nil, factory)
 	return m, chat
 }
 

@@ -56,21 +56,102 @@ type HITLBroker struct {
 	clock       func() time.Time
 	AutoApprove bool
 	decisions   fwtelemetry.DecisionSink
+
+	// The sweeper expires async entries past the broker TTL so a request
+	// that nobody answers cannot hold the stale-consent window open.
+	sweepStop  chan struct{}
+	sweepDone  chan struct{}
+	sweepOnce  sync.Once
+	sweepEvery time.Duration
 }
 
+// hitlSweepInterval is how often the broker's sweeper reaps expired async
+// requests.
+const hitlSweepInterval = 30 * time.Second
+
 // NewHITLBroker builds a broker with the supplied timeout and the decision
-// sink that receives the structured HITL lifecycle forensics (FR-6).
+// sink that receives the structured HITL lifecycle forensics (FR-6). The
+// expiry sweeper starts with the broker; Stop releases it.
 func NewHITLBroker(timeout time.Duration, decisions fwtelemetry.DecisionSink) *HITLBroker {
 	if timeout == 0 {
 		timeout = 5 * time.Minute
 	}
-	return &HITLBroker{
-		timeout:   timeout,
-		requests:  make(map[string]*PermissionRequest),
-		waiters:   make(map[string]chan PermissionDecision),
-		subs:      make(map[int]chan HITLEvent),
-		clock:     time.Now,
-		decisions: decisions,
+	h := &HITLBroker{
+		timeout:    timeout,
+		requests:   make(map[string]*PermissionRequest),
+		waiters:    make(map[string]chan PermissionDecision),
+		subs:       make(map[int]chan HITLEvent),
+		clock:      time.Now,
+		decisions:  decisions,
+		sweepStop:  make(chan struct{}),
+		sweepDone:  make(chan struct{}),
+		sweepEvery: hitlSweepInterval,
+	}
+	go h.sweepLoop()
+	return h
+}
+
+// Stop halts the expiry sweeper and waits (bounded) for its exit. Safe to
+// call more than once; the broker must not be used for new requests after
+// Stop.
+func (h *HITLBroker) Stop() {
+	if h == nil {
+		return
+	}
+	h.sweepOnce.Do(func() {
+		close(h.sweepStop)
+		select {
+		case <-h.sweepDone:
+		case <-time.After(time.Second):
+		}
+	})
+}
+
+func (h *HITLBroker) sweepLoop() {
+	ticker := time.NewTicker(h.sweepEvery)
+	defer ticker.Stop()
+	defer close(h.sweepDone)
+	for {
+		select {
+		case <-h.sweepStop:
+			return
+		case <-ticker.C:
+			h.expireDue()
+		}
+	}
+}
+
+// expireDue reaps async entries whose TTL elapsed without a human decision.
+// Blocking requests are untouched: their own timeout arms the select in
+// RequestPermission.
+func (h *HITLBroker) expireDue() {
+	now := h.clock()
+	var expired []*PermissionRequest
+	h.mu.Lock()
+	for id, req := range h.requests {
+		if req.State != "pending" {
+			continue
+		}
+		if _, hasWaiter := h.waiters[id]; hasWaiter {
+			continue
+		}
+		ttl := h.timeout
+		if req.Timeout > 0 {
+			ttl = req.Timeout
+		}
+		if now.Sub(req.RequestedAt) < ttl {
+			continue
+		}
+		req.State = "expired"
+		delete(h.requests, id)
+		expired = append(expired, req)
+	}
+	h.mu.Unlock()
+	for _, req := range expired {
+		// The request is gone from the registry: a late Approve finds
+		// nothing and fails — approval cannot land after expiry.
+		h.emitResolved(context.Background(), req, nil)
+		h.broadcast(HITLEvent{Type: HITLEventExpired, Request: req, Error: "expired"})
 	}
 }
 
@@ -207,6 +288,12 @@ func (h *HITLBroker) RequestPermission(ctx context.Context, req PermissionReques
 	waitCh := make(chan PermissionDecision, 1)
 
 	h.mu.Lock()
+	// Duplicate-ID guard (same contract as SubmitAsync): a clock-tick
+	// collision must not silently replace an in-flight request.
+	if _, exists := h.requests[req.ID]; exists {
+		h.mu.Unlock()
+		return nil, fmt.Errorf("request %s already registered", req.ID)
+	}
 	h.requests[req.ID] = &req
 	h.waiters[req.ID] = waitCh
 	h.mu.Unlock()
@@ -317,7 +404,9 @@ func (h *HITLBroker) resolve(requestID string, approved bool, decision Permissio
 	req, ok := h.requests[requestID]
 	if !ok {
 		h.mu.Unlock()
-		return fmt.Errorf("request %s not found", requestID)
+		// Requests are removed on resolution and on expiry; either way the
+		// approval window is closed — say so rather than a bare "not found".
+		return fmt.Errorf("request %s not found or expired", requestID)
 	}
 	if req.State != "pending" {
 		h.mu.Unlock()

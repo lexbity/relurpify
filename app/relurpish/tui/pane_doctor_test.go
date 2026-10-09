@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"testing"
 
 	runtimesvc "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
@@ -9,7 +10,7 @@ import (
 func TestDoctorStartupLocksWhenReportIsBlocked(t *testing.T) {
 	surface := &fakeSurface{name: "none", chat: &fakeChatPane{}}
 	factory := &countingFactory{shared: surface}
-	m := newRootModel(nil, factory)
+	m := newRootModel(context.Background(), nil, factory)
 	controller, ok := m.baseSurface.(StartupGateController)
 	if !ok {
 		t.Fatal("expected base surface to expose startup gate controller")
@@ -38,7 +39,7 @@ func TestDoctorStartupPromotesToGuestWhenReportIsReady(t *testing.T) {
 			"guest": guestSurface,
 		},
 	}
-	m := newRootModel(nil, factory)
+	m := newRootModel(context.Background(), nil, factory)
 	controller, ok := m.baseSurface.(StartupGateController)
 	if !ok {
 		t.Fatal("expected base surface to expose startup gate controller")

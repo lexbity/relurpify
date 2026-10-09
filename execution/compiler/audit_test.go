@@ -2,7 +2,6 @@ package compiler
 
 import (
 	"context"
-	"encoding/json"
 	"testing"
 	"time"
 
@@ -32,23 +31,13 @@ func TestCompilationAuditor_ReportAndDigest(t *testing.T) {
 	compiler := NewCompiler(retriever, nil, store)
 	compiler.SetIDGenerator(func() string { return "req-1" })
 	compiler.SetTimeFunc(func() time.Time { return now })
+	compiler.SetRepository(NewCompilerRepository(newCompilerTestEngine(t)))
 	result, record, err := compiler.Compile(context.Background(), CompilationRequest{
 		Query:     retrieval.RetrievalQuery{Text: "alpha"},
 		MaxTokens: 64,
 	})
 	require.NoError(t, err)
 	require.NotNil(t, result)
-
-	data, err := json.Marshal(record)
-	require.NoError(t, err)
-	_, err = store.Save(context.TODO(), knowledge.KnowledgeChunk{
-		ID:           knowledge.ChunkID(record.RequestID),
-		SourceOrigin: knowledge.SourceOrigin("compilation_record"),
-		Body:         knowledge.ChunkBody{Raw: string(data), Fields: map[string]any{"content": string(data)}},
-		Freshness:    knowledge.FreshnessValid,
-		Provenance:   knowledge.ChunkProvenance{CompiledBy: knowledge.CompilerDeterministic, Timestamp: now},
-	})
-	require.NoError(t, err)
 
 	auditor := NewCompilationAuditor(compiler)
 	report, err := auditor.Audit(context.Background(), record.RequestID)

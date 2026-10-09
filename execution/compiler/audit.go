@@ -2,7 +2,6 @@ package compiler
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -39,40 +38,10 @@ func NewCompilationAuditor(compiler *Compiler) *CompilationAuditor {
 
 // LoadCompilationRecord loads a compilation record by ID.
 func (a *CompilationAuditor) LoadCompilationRecord(ctx context.Context, compilationID string) (*CompilationRecord, error) {
-	if a != nil && a.Compiler != nil {
-		return a.Compiler.LoadCompilationRecord(ctx, compilationID)
+	if a == nil || a.Compiler == nil {
+		return nil, fmt.Errorf("compiler auditor: compiler not configured")
 	}
-	if a == nil || a.Store == nil {
-		return nil, fmt.Errorf("compiler auditor: chunk store not configured")
-	}
-	chunks, err := a.Store.FindAll()
-	if err != nil {
-		return nil, err
-	}
-	for _, chunk := range chunks {
-		if chunk.SourceOrigin != "compilation_record" {
-			continue
-		}
-		var record CompilationRecord
-		var content any
-		if chunk.Body.Fields != nil {
-			content = chunk.Body.Fields["content"]
-		}
-		if content == nil {
-			content = chunk.Body.Raw
-		}
-		data, ok := contentBytes(content)
-		if !ok {
-			continue
-		}
-		if err := json.Unmarshal(data, &record); err != nil {
-			continue
-		}
-		if record.RequestID == compilationID {
-			return &record, nil
-		}
-	}
-	return nil, fmt.Errorf("compilation record not found: %s", compilationID)
+	return a.Compiler.LoadCompilationRecord(ctx, compilationID)
 }
 
 // Audit loads a record, reconstructs the chunk set, and renders a provenance report.

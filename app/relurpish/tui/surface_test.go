@@ -83,7 +83,7 @@ func (s *fakeSurface) RegisterCommands(reg *CommandRegistry) {
 	}})
 }
 
-func (s *fakeSurface) NewChat(RuntimeAdapter, *AgentContext, *Session, *NotificationQueue) ChatPaner {
+func (s *fakeSurface) NewChat(context.Context, RuntimeAdapter, *AgentContext, *Session, *NotificationQueue) ChatPaner {
 	if s.chat != nil {
 		return s.chat
 	}
@@ -191,7 +191,7 @@ func (f *countingFactory) AvailableAgents() []string {
 func TestRootModelResizeAllocatesChromeRows(t *testing.T) {
 	surface := &fakeSurface{name: "guest", chat: &fakeChatPane{}}
 	factory := &countingFactory{shared: surface}
-	m := newRootModel(nil, factory)
+	m := newRootModel(context.Background(), nil, factory)
 	q := &NotificationQueue{}
 	m.notifQ = q
 	m.notifBar = NewNotificationBar(q)
@@ -227,7 +227,7 @@ func TestReservedChordsBypassSurfaceOwnedInput(t *testing.T) {
 		nav:         &hostileNavSurface{},
 	}
 	factory := &countingFactory{shared: surface}
-	m := newRootModel(nil, factory)
+	m := newRootModel(context.Background(), nil, factory)
 
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlA, Alt: false})
 	rm := updated.(RootModel)

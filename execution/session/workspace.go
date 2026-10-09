@@ -96,6 +96,18 @@ type Workspace struct {
 func (w *Workspace) Close(ctx context.Context) error {
 	var errs []error
 
+	// Session teardown: grants issued under this workspace's registration
+	// must not survive the session, and the HITL broker's expiry sweeper
+	// must not outlive it.
+	if w.Registration != nil {
+		if releaser, ok := w.Registration.Permissions.(interface{ ReleaseSession(string) int }); ok {
+			_ = releaser.ReleaseSession(w.Registration.ID)
+		}
+		if stopper, ok := w.Registration.HITL.(interface{ Stop() }); ok {
+			stopper.Stop()
+		}
+	}
+
 	// Stop all registered services first, but keep closing owned resources even
 	// if service shutdown fails.
 	if w.ServiceManager != nil {
@@ -688,6 +700,12 @@ func OpenWorkspace(ctx context.Context, cfg WorkspaceConfig) (_ *Workspace, err 
 		if cfg.KnowledgeProduct.StreamTrigger != nil {
 			cfg.KnowledgeProduct.StreamTrigger.SetTelemetry(tel)
 		}
+		// The composition root owns the compiler lifecycle; the workspace
+		// session tears it down (compiler stops before the bus bridge closes).
+		cleanup.Add(func(_ context.Context) error {
+			cfg.KnowledgeProduct.Close()
+			return nil
+		})
 		if cfg.KnowledgeProduct.KnowledgeEvents != nil {
 			bridge := knowledge.NewEventBusTelemetryBridge(cfg.KnowledgeProduct.KnowledgeEvents, tel)
 			cleanup.Add(func(_ context.Context) error {

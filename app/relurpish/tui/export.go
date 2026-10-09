@@ -2,6 +2,7 @@ package tui
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -292,7 +293,7 @@ func redactExportString(value string) string {
 
 // NewTestRootModel exposes the internal newRootModel constructor for integration and golden view testing in the testsuite package.
 func NewTestRootModel(rt RuntimeAdapter, factory SurfaceFactory) RootModel {
-	return newRootModel(rt, factory)
+	return newRootModel(context.Background(), rt, factory)
 }
 
 // NewRuntimeAdapter exposes the internal newRuntimeAdapter constructor for test use.

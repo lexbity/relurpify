@@ -14,12 +14,22 @@ import (
 )
 
 // KnowledgeRuntime bundles the knowledge, retrieval, and compilation products.
+// The composition root owns the compiler's lifecycle: Close stops it.
 type KnowledgeRuntime struct {
 	KnowledgeStore  *knowledge.ChunkStore
 	KnowledgeEvents *knowledge.EventBus
 	Retriever       *retrieval.Retriever
 	Compiler        *compiler.Compiler
 	StreamTrigger   *contextstream.Trigger
+}
+
+// Close stops the knowledge runtime's owned lifecycles (the compiler's
+// invalidation loop and event subscription). Safe to call more than once.
+func (k *KnowledgeRuntime) Close() {
+	if k == nil || k.Compiler == nil {
+		return
+	}
+	k.Compiler.Stop()
 }
 
 // KnowledgeRuntimeInput carries parameters for BuildKnowledgeRuntime.
@@ -44,6 +54,14 @@ func BuildKnowledgeRuntime(input KnowledgeRuntimeInput) (*KnowledgeRuntime, erro
 	rankerRegistry.Register(&retrieval.TrustRanker{})
 	retriever := retrieval.NewRetriever(rankerRegistry, knowledgeStore)
 	comp := compiler.NewCompiler(retriever, nil, knowledgeStore)
+	// Record persistence and invalidation events are owned by the
+	// composition root: records go through the O(1) graph repository, and
+	// chunk events on the knowledge bus drive cache invalidation.
+	comp.SetRepository(compiler.NewCompilerRepository(input.GraphDB))
+	comp.SetEventBus(bkcEvents)
+	if err := comp.Start(context.Background()); err != nil {
+		return nil, fmt.Errorf("start compiler: %w", err)
+	}
 	return &KnowledgeRuntime{
 		KnowledgeStore:  knowledgeStore,
 		KnowledgeEvents: bkcEvents,

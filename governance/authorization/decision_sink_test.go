@@ -122,6 +122,7 @@ func TestManifestPolicyEngine_EmitsShadowedConflict(t *testing.T) {
 func TestHITLBroker_EmitsLifecycleEvents(t *testing.T) {
 	sink := &fwtelemetry.SnapshotDecisionSink{}
 	broker := NewHITLBroker(50*time.Millisecond, sink)
+	defer broker.Stop()
 
 	go func() {
 		// Wait for the pending request to be recorded, then approve it.
@@ -156,6 +157,7 @@ func TestHITLBroker_EmitsLifecycleEvents(t *testing.T) {
 func TestHITLBroker_EmitsExpiredEvent(t *testing.T) {
 	sink := &fwtelemetry.SnapshotDecisionSink{}
 	broker := NewHITLBroker(30*time.Millisecond, sink)
+	defer broker.Stop()
 
 	_, err := broker.RequestPermission(context.Background(), PermissionRequest{
 		Permission: permissions.PermissionDescriptor{Action: "fs:write:/tmp/x"},
@@ -174,6 +176,7 @@ func TestHITLBroker_EmitsExpiredEvent(t *testing.T) {
 func TestHITLBroker_EmitsAsyncResolution(t *testing.T) {
 	sink := &fwtelemetry.SnapshotDecisionSink{}
 	broker := NewHITLBroker(5*time.Minute, sink)
+	defer broker.Stop()
 
 	ctx := context.Background()
 	requestID, err := broker.SubmitAsync(ctx, PermissionRequest{

@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -9,7 +10,7 @@ import (
 func TestChromeLayoutReservesNoExtraRowWhenNoHITLOrNotifications(t *testing.T) {
 	surface := &fakeSurface{name: "guest", chat: &fakeChatPane{}}
 	factory := &countingFactory{shared: surface}
-	m := newRootModel(nil, factory)
+	m := newRootModel(context.Background(), nil, factory)
 
 	updated, _ := m.handleResize(tea.WindowSizeMsg{Width: 120, Height: 40})
 	rm := updated.(RootModel)
@@ -25,7 +26,7 @@ func TestChromeLayoutReservesNoExtraRowWhenNoHITLOrNotifications(t *testing.T) {
 func TestChromeLayoutReservesRowForActiveHITLRow(t *testing.T) {
 	surface := &fakeSurface{name: "guest", chat: &fakeChatPane{}}
 	factory := &countingFactory{shared: surface}
-	m := newRootModel(nil, factory)
+	m := newRootModel(context.Background(), nil, factory)
 	m.hitlRow.Open("frame-1", "Question?", []string{"one"}, []string{"One"})
 
 	updated, _ := m.handleResize(tea.WindowSizeMsg{Width: 120, Height: 40})

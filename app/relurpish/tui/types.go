@@ -538,3 +538,26 @@ type MessageMetadata struct {
 	TokensUsed  int
 	TokensTotal int
 }
+
+// RunOutcome is the terminal state of a chat run.
+type RunOutcome string
+
+const (
+	RunSucceeded RunOutcome = "succeeded"
+	RunFailed    RunOutcome = "failed"
+	RunCancelled RunOutcome = "cancelled"
+)
+
+// RunFinishedMsg is the single terminal message of a chat run. It is emitted
+// exactly once per run by the run's owner (the chat pane's finishRun),
+// synchronously through the Bubble Tea message channel — never from a
+// fire-and-forget goroutine. Downstream queue advancement keys off this
+// message alone: no other message means "run over".
+type RunFinishedMsg struct {
+	RunID          string
+	Outcome        RunOutcome
+	Err            error
+	Duration       time.Duration
+	TokensUsed     int
+	DroppedUpdates int64
+}

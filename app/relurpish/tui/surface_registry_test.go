@@ -29,7 +29,7 @@ func (s *registrySurface) RegisterTabs(reg *TabRegistry) {
 
 func (s *registrySurface) RegisterCommands(*CommandRegistry) {}
 
-func (s *registrySurface) NewChat(RuntimeAdapter, *AgentContext, *Session, *NotificationQueue) ChatPaner {
+func (s *registrySurface) NewChat(context.Context, RuntimeAdapter, *AgentContext, *Session, *NotificationQueue) ChatPaner {
 	if s.chat != nil {
 		return s.chat
 	}
@@ -147,7 +147,7 @@ func TestActivateSurfaceCachesPerAgent(t *testing.T) {
 		},
 	}
 
-	m := newRootModel(nil, factory)
+	m := newRootModel(context.Background(), nil, factory)
 	if got := m.activeAgentName(); got != "none" {
 		t.Fatalf("initial agent = %q, want none", got)
 	}
@@ -210,7 +210,7 @@ func TestAgentPickerOpensFromRegion2Click(t *testing.T) {
 			"guest": &registrySurface{name: "guest", tabs: []TabDefinition{{ID: TabChat, Label: "chat"}}},
 		},
 	}
-	m := newRootModel(nil, factory)
+	m := newRootModel(context.Background(), nil, factory)
 	m.width = 120
 	m.height = 40
 	m.ready = true

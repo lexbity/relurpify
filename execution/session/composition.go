@@ -53,6 +53,15 @@ type KnowledgeProduct struct {
 	StreamTrigger   *contextstream.Trigger
 }
 
+// Close stops the knowledge product's owned lifecycles (the compiler's
+// invalidation loop and event subscription). Safe to call more than once.
+func (k *KnowledgeProduct) Close() {
+	if k == nil || k.Compiler == nil {
+		return
+	}
+	k.Compiler.Stop()
+}
+
 // CompiledPolicy captures policy metadata produced during agent bootstrap.
 type CompiledPolicy struct {
 	AgentID string

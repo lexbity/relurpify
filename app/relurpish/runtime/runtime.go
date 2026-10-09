@@ -925,7 +925,14 @@ func (r *Runtime) RunTask(ctx context.Context, task *execution.Task) (*execution
 	if err := r.Agent.Initialize(&execution.Config{Workspace: r.Config.Workspace}); err != nil {
 		return nil, fmt.Errorf("initialize agent: %w", err)
 	}
-	return r.Agent.Execute(r.beginTurn(ctx, env), task, env)
+	result, err := r.Agent.Execute(r.beginTurn(ctx, env), task, env)
+	// Task completion ends the task's working-memory lifetime: the result is
+	// in hand, so the per-task entries are released (idempotent no-op when
+	// the checkpoint boundary already evicted them).
+	if r.Memory != nil {
+		r.Memory.Evict(task.ID)
+	}
+	return result, err
 }
 
 // ensureSessionID returns the runtime-scoped correlation session ID, generating

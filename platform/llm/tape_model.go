@@ -13,10 +13,12 @@ import (
 	"runtime/debug"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"codeburg.org/lexbit/relurpify/model"
 	"codeburg.org/lexbit/relurpify/platform/fs"
+	"codeburg.org/lexbit/relurpify/platform/observability"
 )
 
 type TapeMode string
@@ -60,6 +62,10 @@ type TapeModel struct {
 	mode  TapeMode
 	path  string
 
+	// Telemetry, when set, receives the one-shot tape.record_failed event on
+	// the first record-write failure. When nil, the failure is logged once.
+	Telemetry observability.Telemetry
+
 	mu                   sync.Mutex
 	file                 *os.File
 	enc                  *json.Encoder
@@ -67,7 +73,25 @@ type TapeModel struct {
 	next                 int
 	header               *TapeHeader
 	firstReplayValidated bool
+	recordFailedEmitted  bool
+	closeOnce            sync.Once
+	closeErr             error
+	degraded             atomic.Bool
+	droppedRecords       atomic.Int64
+	droppedStreamTokens  atomic.Int64
 }
+
+// Degraded reports whether the recorder entered degraded mode (a record
+// write failed; all subsequent records are dropped and counted).
+func (t *TapeModel) Degraded() bool { return t.degraded.Load() }
+
+// DroppedRecords returns the number of tape entries dropped after the
+// recorder degraded.
+func (t *TapeModel) DroppedRecords() int64 { return t.droppedRecords.Load() }
+
+// DroppedStreamTokens returns the number of stream tokens dropped because
+// the consumer cancelled the stream (contract R6).
+func (t *TapeModel) DroppedStreamTokens() int64 { return t.droppedStreamTokens.Load() }
 
 type TapeInspection struct {
 	Path            string
@@ -118,16 +142,19 @@ func NewTapeModel(inner LanguageModel, path string, mode string) (*TapeModel, er
 	}
 }
 
+// Close flushes and closes the tape file. Safe to call more than once; the
+// first call's result is sticky.
 func (t *TapeModel) Close() error {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	if t.file != nil {
-		err := t.file.Close()
-		t.file = nil
-		t.enc = nil
-		return err
-	}
-	return nil
+	t.closeOnce.Do(func() {
+		t.mu.Lock()
+		defer t.mu.Unlock()
+		if t.file != nil {
+			t.closeErr = t.file.Close()
+			t.file = nil
+			t.enc = nil
+		}
+	})
+	return t.closeErr
 }
 
 func (t *TapeModel) ConfigureHeader(header TapeHeader) error {
@@ -166,13 +193,13 @@ func (t *TapeModel) GenerateStream(ctx context.Context, prompt string, options *
 		if err != nil {
 			return nil, err
 		}
+		src := make(chan string, 1)
+		if entry.Response != nil && entry.Response.Text != "" {
+			src <- entry.Response.Text
+		}
+		close(src)
 		out := make(chan string, 1)
-		go func() {
-			defer close(out)
-			if entry.Response != nil && entry.Response.Text != "" {
-				out <- entry.Response.Text
-			}
-		}()
+		go pumpStream(ctx, src, out, &t.droppedStreamTokens)
 		return out, nil
 	}
 	if t.mode == TapeOff {
@@ -200,12 +227,7 @@ func (t *TapeModel) GenerateStream(ctx context.Context, prompt string, options *
 		Request:     req,
 	})
 	out := make(chan string)
-	go func() {
-		defer close(out)
-		for token := range stream {
-			out <- token
-		}
-	}()
+	go pumpStream(ctx, stream, out, &t.droppedStreamTokens)
 	return out, nil
 }
 
@@ -263,15 +285,50 @@ func (t *TapeModel) roundTrip(ctx context.Context, kind string, req tapeRequest,
 	return resp, err
 }
 
+// append records one tape entry. A write failure degrades the recorder: the
+// failure is reported once (telemetry event when configured, log otherwise),
+// and every subsequent entry is dropped and counted. Recording is
+// observability — it must never take the process down (contract R5).
 func (t *TapeModel) append(entry tapeEntry) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if t.enc == nil {
 		return
 	}
-	if err := t.enc.Encode(entry); err != nil {
-		panic(err)
+	if t.degraded.Load() {
+		t.droppedRecords.Add(1)
+		return
 	}
+	if err := t.enc.Encode(entry); err != nil {
+		t.degraded.Store(true)
+		t.notifyRecordFailed(err)
+	}
+}
+
+func (t *TapeModel) notifyRecordFailed(err error) {
+	// Called with t.mu held; recordFailedEmitted guards the one-shot emit.
+	if t.recordFailedEmitted {
+		return
+	}
+	t.recordFailedEmitted = true
+	class := "encode_failed"
+	var pathErr *os.PathError
+	if errors.As(err, &pathErr) {
+		class = pathErr.Op + "_" + pathErr.Err.Error()
+	}
+	if t.Telemetry != nil {
+		t.Telemetry.Emit(observability.Event{
+			Type:      observability.EventTapeRecordFailed,
+			Timestamp: time.Now().UTC(),
+			Message:   "tape record write failed; recorder degraded",
+			Metadata: map[string]any{
+				"error_class": class,
+				"path":        t.path,
+			},
+		})
+		return
+	}
+	log.Printf("tape.record_failed: path=%s error_class=%s err=%v; recorder degraded, further entries dropped", t.path, class, err)
 }
 
 func (t *TapeModel) writeHeader() error {

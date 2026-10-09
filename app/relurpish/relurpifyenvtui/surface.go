@@ -41,7 +41,7 @@ func (s *Surface) RegisterCommands(reg *tui.CommandRegistry) {
 	_ = reg
 }
 
-func (s *Surface) NewChat(tui.RuntimeAdapter, *tui.AgentContext, *tui.Session, *tui.NotificationQueue) tui.ChatPaner {
+func (s *Surface) NewChat(context.Context, tui.RuntimeAdapter, *tui.AgentContext, *tui.Session, *tui.NotificationQueue) tui.ChatPaner {
 	return nil
 }
 

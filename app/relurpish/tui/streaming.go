@@ -3,11 +3,11 @@ package tui
 import (
 	"strings"
 	"time"
-
-	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 // StreamTokenMsg represents a streamed token from the agent pipeline.
+// Tokens are intermediate UI projections: they may be dropped under
+// backpressure (the run's terminal RunFinishedMsg reports the drop count).
 type StreamTokenMsg struct {
 	RunID     string
 	Token     string
@@ -24,20 +24,6 @@ const (
 	TokenPlan     TokenType = "plan"
 	TokenChange   TokenType = "change"
 )
-
-// StreamCompleteMsg signals that streaming has finished.
-type StreamCompleteMsg struct {
-	RunID      string
-	Duration   time.Duration
-	TokensUsed int
-	Result     *execution.Result
-}
-
-// StreamErrorMsg wraps runtime failures for display.
-type StreamErrorMsg struct {
-	RunID string
-	Error error
-}
 
 // MessageBuilder accumulates streaming state until completion.
 type MessageBuilder struct {
