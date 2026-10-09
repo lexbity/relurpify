@@ -1,5 +1,7 @@
 package orchestrate
 
+import "codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
+
 // RouteID is the canonical route identifier type used by route reporting.
 type RouteID string
 
@@ -42,6 +44,9 @@ type RouteResult struct {
 	// DecidedBy names the D8 lattice rule (or explicit/default) that produced
 	// the selection, e.g. "lattice:family_affinity" or "explicit".
 	DecidedBy string
+	// Tier2 records the bounded Tier-2 disambiguation attempt when the gate was
+	// consulted (D10).
+	Tier2 euclotypes.Tier2Info
 }
 
 // DryRunReport captures the selected route plus the candidate set considered.
@@ -59,6 +64,9 @@ type DryRunReport struct {
 	PreflightErrors       []string
 	// DecidedBy names the D8 lattice rule that produced the selection.
 	DecidedBy string
+	// Tier2 records the bounded Tier-2 disambiguation attempt when the gate was
+	// consulted (D10).
+	Tier2 euclotypes.Tier2Info
 }
 
 // CandidateRouteInfo describes one candidate route in the ranking set.
@@ -74,6 +82,13 @@ type CandidateRouteInfo struct {
 	// selection_config component names; the values cap at the per-component
 	// ceiling. RankScore is the sum of the components the candidate earned.
 	Components map[string]int
+	// Description is the one-line candidate description used by the Tier-2
+	// prompt (D10) and the selection record.
+	Description string
+	// MatchedKeywords are the candidate-side vocabulary tokens that matched the
+	// utterance (public registry data — never raw user text). They feed the
+	// Tier-2 prompt and, from Phase 7, the selection record.
+	MatchedKeywords []string
 }
 
 // RouteResolutionError indicates that no route could be selected.

@@ -66,17 +66,6 @@ func SetDone(env *contextdata.Envelope, done bool) {
 	contextdata.SetTyped(env, KeyDone, done)
 }
 
-// GetCapabilityClassified reports whether capability classification has been performed.
-func GetCapabilityClassified(env *contextdata.Envelope) bool {
-	v, _ := contextdata.GetTyped[bool](env, KeyCapabilityClassified)
-	return v
-}
-
-// SetCapabilityClassified records whether capability classification was performed.
-func SetCapabilityClassified(env *contextdata.Envelope, classified bool) {
-	contextdata.SetTyped(env, KeyCapabilityClassified, classified)
-}
-
 // GetForkBranch returns the active fork branch identifier.
 func GetForkBranch(env *contextdata.Envelope) string {
 	v, _ := contextdata.GetTyped[string](env, KeyForkBranch)

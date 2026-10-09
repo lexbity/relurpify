@@ -44,7 +44,7 @@ func TestAvailableRecipeCandidateGate(t *testing.T) {
 // not a mid-flight "thoughtrecipe not found" (the D2/D3 defect class).
 func TestUnregisteredRecipeNotSelected(t *testing.T) {
 	reg := newGateTestRegistry() // empty
-	report, selected, _, ok := resolveRoute(nil, RouteRequest{Instruction: "review the diff"}, nil, reg, nil)
+	report, selected, _, ok := resolveRoute(nil, RouteRequest{Instruction: "review the diff"}, SelectionDeps{ThoughtRecipes: reg})
 	if ok {
 		t.Fatalf("empty registry selected %q", selected.RouteID)
 	}
@@ -63,7 +63,7 @@ func TestUnregisteredRecipeNotSelected(t *testing.T) {
 func TestRegisteredRecipeSelected(t *testing.T) {
 	reg := newGateTestRegistry("euclo.thoughtrecipe.code_review")
 	env := contextdata.NewEnvelope("task-gate-2", "session-gate-2")
-	_, err := Dispatch(context.Background(), env, RouteRequest{ThoughtRecipeID: "euclo.thoughtrecipe.code_review"}, nil, reg, nil)
+	_, err := Dispatch(context.Background(), env, RouteRequest{ThoughtRecipeID: "euclo.thoughtrecipe.code_review"}, SelectionDeps{ThoughtRecipes: reg})
 	if err != nil {
 		t.Fatalf("registered recipe rejected: %v", err)
 	}
@@ -101,7 +101,7 @@ func TestClarificationRouteRequiresRegistration(t *testing.T) {
 func TestMissingRecipeIDOnExplicitMiss(t *testing.T) {
 	reg := newGateTestRegistry()
 	env := contextdata.NewEnvelope("task-gate", "session-gate")
-	_, err := Dispatch(context.Background(), env, RouteRequest{ThoughtRecipeID: "euclo.thoughtrecipe.debug_tdd_repair"}, nil, reg, nil)
+	_, err := Dispatch(context.Background(), env, RouteRequest{ThoughtRecipeID: "euclo.thoughtrecipe.debug_tdd_repair"}, SelectionDeps{ThoughtRecipes: reg})
 	rerr, isRouteErr := err.(*RouteResolutionError)
 	if !isRouteErr {
 		t.Fatalf("expected RouteResolutionError, got %T (%v)", err, err)

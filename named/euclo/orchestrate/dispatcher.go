@@ -8,6 +8,7 @@ import (
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/execution/agentgraph"
+	"codeburg.org/lexbit/relurpify/model"
 	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 	"codeburg.org/lexbit/relurpify/named/euclo/families"
 	intentcontext "codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
@@ -23,6 +24,7 @@ type Dispatcher struct {
 	capabilityRegistry    *registry.CapabilityRegistry
 	thoughtrecipeRegistry *thoughtrecipepkg.ThoughtRecipeRegistry
 	familyRegistry        *families.KeywordFamilyRegistry
+	tier2Model            model.LanguageModel
 	workspace             string
 }
 
@@ -58,6 +60,28 @@ func (d *Dispatcher) WithFamilyRegistry(reg *families.KeywordFamilyRegistry) *Di
 	return d
 }
 
+// WithTier2Model wires the model consulted by the bounded Tier-2 disambiguator
+// (D10). Nil leaves Tier-2 unconfigured: the gate records no attempt.
+func (d *Dispatcher) WithTier2Model(m model.LanguageModel) *Dispatcher {
+	if d != nil {
+		d.tier2Model = m
+	}
+	return d
+}
+
+// selectionDeps is the dispatcher's selection dependency bundle.
+func (d *Dispatcher) selectionDeps() SelectionDeps {
+	if d == nil {
+		return SelectionDeps{}
+	}
+	return SelectionDeps{
+		Capabilities:   d.capabilityRegistry,
+		ThoughtRecipes: d.thoughtrecipeRegistry,
+		Families:       d.familyRegistry,
+		Tier2Model:     d.tier2Model,
+	}
+}
+
 // WithWorkspace wires the workspace root used for skill resolution.
 func (d *Dispatcher) WithWorkspace(workspace string) *Dispatcher {
 	if d != nil {
@@ -86,14 +110,14 @@ func (d *Dispatcher) Execute(ctx context.Context, env *contextdata.Envelope) (*e
 		emitClarificationGateResult(ctx, env, nil, false, "clarify", "clarification lifecycle required")
 	}
 
-	caps := d.capabilityRegistry
+	deps := d.selectionDeps()
 
 	var (
 		result *RouteResult
 		err    error
 	)
 	if req.DryRun {
-		report, dryRunErr := DryRun(ctx, env, req, caps, d.thoughtrecipeRegistry, d.familyRegistry)
+		report, dryRunErr := DryRun(ctx, env, req, deps)
 		err = dryRunErr
 		if err != nil {
 			return &execution.Result{NodeID: d.id, Success: false, Data: execution.NewErrorResultPayload(err.Error())}, err
@@ -109,9 +133,10 @@ func (d *Dispatcher) Execute(ctx context.Context, env *contextdata.Envelope) (*e
 			Outcome:             string(reporting.RouteOutcomeDryRun),
 			TelemetrySuppressed: req.TelemetryOff,
 			DecidedBy:           report.DecidedBy,
+			Tier2:               report.Tier2,
 		}
 	} else {
-		result, err = Dispatch(ctx, env, req, caps, d.thoughtrecipeRegistry, d.familyRegistry)
+		result, err = Dispatch(ctx, env, req, deps)
 		if err != nil {
 			return &execution.Result{NodeID: d.id, Success: false, Data: execution.NewErrorResultPayload(err.Error())}, err
 		}

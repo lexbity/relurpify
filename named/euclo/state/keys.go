@@ -137,13 +137,12 @@ const (
 
 // Miscellaneous execution control keys.
 const (
-	KeyDone                 = euclokeys.KeyDone
-	KeyForkBranch           = euclokeys.KeyForkBranch
-	KeyCapabilityClassified = euclokeys.KeyCapabilityClassified
-	KeyExecutionMerged      = euclokeys.KeyExecutionMerged
-	KeyFamilySelected       = euclokeys.KeyFamilySelected
-	KeyStreamRequested      = euclokeys.KeyStreamRequested
-	KeyCapabilityID         = euclokeys.KeyCapabilityID
+	KeyDone            = euclokeys.KeyDone
+	KeyForkBranch      = euclokeys.KeyForkBranch
+	KeyExecutionMerged = euclokeys.KeyExecutionMerged
+	KeyFamilySelected  = euclokeys.KeyFamilySelected
+	KeyStreamRequested = euclokeys.KeyStreamRequested
+	KeyCapabilityID    = euclokeys.KeyCapabilityID
 )
 
 // Policy defaults seeded before gate evaluation.

@@ -13,6 +13,7 @@ import (
 	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/execution/agentgraph"
 	"codeburg.org/lexbit/relurpify/execution/agentlifecycle"
+	"codeburg.org/lexbit/relurpify/model"
 	"codeburg.org/lexbit/relurpify/named/euclo/families"
 	"codeburg.org/lexbit/relurpify/named/euclo/grounding"
 	"codeburg.org/lexbit/relurpify/named/euclo/intake"
@@ -43,6 +44,9 @@ type RootGraphDeps struct {
 	// StateReground is the optional Wave 1 restart query (IF-2). Nil is a
 	// declared cold-start mode.
 	StateReground grounding.StateRegroundSource
+	// Tier2Model is the model consulted by the bounded Tier-2 disambiguator
+	// (D10). Nil leaves Tier-2 unconfigured.
+	Tier2Model model.LanguageModel
 }
 
 // RootGraph wires together orchestration nodes using the agentgraph runtime.
@@ -90,6 +94,7 @@ func NewRootGraph(ctx context.Context, deps RootGraphDeps) (*RootGraph, error) {
 		checkpointRepository: deps.Checkpoints,
 		persistenceWriter:    deps.Persistence,
 		stateReground:        deps.StateReground,
+		tier2Model:           deps.Tier2Model,
 	})
 	if err != nil {
 		return nil, err
@@ -167,6 +172,7 @@ type buildNodeInput struct {
 	checkpointRepository agentlifecycle.Repository
 	persistenceWriter    *persistence.Writer
 	stateReground        grounding.StateRegroundSource
+	tier2Model           model.LanguageModel
 }
 
 func buildNodes(ctx context.Context, in buildNodeInput) ([]agentgraph.Node, error) {
@@ -241,17 +247,6 @@ func buildNodes(ctx context.Context, in buildNodeInput) ([]agentgraph.Node, erro
 		checkpointNode = checkpointNode.WithWorkingMemoryEvictor(in.paradigmDeps.WorkingMemory)
 	}
 
-	capClassifyNode := newStageNode("euclo.capability_classify", agentgraph.NodeTypeSystem, func(_ context.Context, env *contextdata.Envelope) (*execution.Result, error) {
-		if env != nil {
-			euclostate.SetCapabilityClassified(env, true)
-		}
-		return &execution.Result{
-			NodeID:  "euclo.capability_classify",
-			Success: true,
-			Data:    execution.NewToolResultPayload(map[string]any{"classified": true}),
-		}, nil
-	})
-
 	interactionCheckNode := newStageNode("euclo.interaction_check", agentgraph.NodeTypeConditional, func(_ context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 		needsInteraction := false
 		if cls, ok := euclostate.GetIntentClassification(env); ok && cls != nil {
@@ -295,7 +290,8 @@ func buildNodes(ctx context.Context, in buildNodeInput) ([]agentgraph.Node, erro
 		WithWorkspace(in.workspace).
 		WithCapabilityRegistry(dispatchCapReg).
 		WithThoughtRecipeRegistry(thoughtrecipeReg).
-		WithFamilyRegistry(in.famReg)
+		WithFamilyRegistry(in.famReg).
+		WithTier2Model(in.tier2Model)
 
 	routeForkNode := NewRouteForkNode("euclo.route_fork")
 
@@ -337,7 +333,6 @@ func buildNodes(ctx context.Context, in buildNodeInput) ([]agentgraph.Node, erro
 		ingestionNode,
 		streamNode,
 		checkpointNode,
-		capClassifyNode,
 		interactionCheckNode,
 		interactionFrameNode,
 		policyGateNode,
@@ -361,8 +356,7 @@ func wireEdges(g *agentgraph.Graph) error {
 		{"euclo.family_select", "euclo.ingest", nil},
 		{"euclo.ingest", "euclo.stream", nil},
 		{"euclo.stream", "euclo.checkpoint", nil},
-		{"euclo.checkpoint", "euclo.capability_classify", nil},
-		{"euclo.capability_classify", "euclo.interaction_check", nil},
+		{"euclo.checkpoint", "euclo.interaction_check", nil},
 		{"euclo.interaction_check", "euclo.interaction_frame", func(result *execution.Result, _ *contextdata.Envelope) bool {
 			if result == nil {
 				return false

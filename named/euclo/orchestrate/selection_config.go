@@ -34,9 +34,22 @@ const (
 	capDescription    = 10
 )
 
-// The Tier-2 disambiguation gate numbers (D10: StrongMatchFloor, TieBand,
-// TopK, confidence floor) are introduced with the Phase 6 gate that consumes
-// them. Declaring them before that gate exists would be dead code.
+// The Tier-2 disambiguation gate (D10). The deterministic winner is consulted
+// only inside the weak/tie band below; the model sees only the top-K candidate
+// refs, and its answer is adopted only above the confidence floor.
+const (
+	// strongMatchFloor is the deterministic score at or above which the
+	// Tier-2 model is never consulted.
+	strongMatchFloor = 60
+	// tieBand is the top1−top2 gap at or below which the Tier-2 model may be
+	// asked to disambiguate.
+	tieBand = 10
+	// tier2TopK bounds the candidate refs the Tier-2 prompt may carry.
+	tier2TopK = 5
+	// tier2ConfidenceFloor is the model confidence below which its answer is
+	// rejected and the deterministic winner stands.
+	tier2ConfidenceFloor = 0.5
+)
 
 // decidedBy reason vocabulary recorded on RouteResult, DryRunReport, the
 // euclo.route.decided_by envelope key, and (Phase 7) the selection record.
@@ -48,6 +61,7 @@ const (
 	decidedByUserOverBuiltin = "lattice:user_over_builtin"
 	decidedByRecipeOverCap   = "lattice:thoughtrecipe_over_capability"
 	decidedByRouteID         = "lattice:route_id"
+	decidedByTier2           = "tier2"
 )
 
 // builtinRecipePrefix is the ID prefix that marks a builtin thoughtrecipe

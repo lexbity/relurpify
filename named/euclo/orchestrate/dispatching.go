@@ -9,6 +9,7 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/descriptor"
 	registry "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
+	"codeburg.org/lexbit/relurpify/model"
 	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 	"codeburg.org/lexbit/relurpify/named/euclo/families"
 	intentcontext "codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
@@ -17,12 +18,30 @@ import (
 	thoughtrecipepkg "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
 )
 
-// Dispatch resolves a route request and records route telemetry. famReg is the
-// keyword-family registry whose vocabulary feeds the family-affinity and
-// intent-keyword score components (D9); nil keeps the classified family ID as
-// the sole affinity signal.
-func Dispatch(ctx context.Context, env *contextdata.Envelope, req RouteRequest, caps *registry.CapabilityRegistry, thoughtrecipes *thoughtrecipepkg.ThoughtRecipeRegistry, famReg *families.KeywordFamilyRegistry) (*RouteResult, error) {
-	report, selected, fallbackTaken, ok := resolveRoute(env, req, caps, thoughtrecipes, famReg)
+// SelectionDeps is the explicit dependency contract for deterministic route
+// selection and bounded Tier-2 disambiguation (D8/D10).
+type SelectionDeps struct {
+	Capabilities *registry.CapabilityRegistry
+	// ThoughtRecipes is the recipe registry whose entries form the recipe side
+	// of the candidate pool.
+	ThoughtRecipes *thoughtrecipepkg.ThoughtRecipeRegistry
+	// Families is the keyword-family registry whose vocabulary feeds the
+	// family-affinity and intent-keyword score components (D9).
+	Families *families.KeywordFamilyRegistry
+	// Tier2Model is the model consulted by the bounded disambiguator (D10).
+	// Nil means Tier-2 is not configured: the gate records no attempt, and if
+	// it would have fired the model is reported as unavailable.
+	Tier2Model model.LanguageModel
+}
+
+// Dispatch resolves a route request and records route telemetry. The
+// deterministic lattice selects first; the bounded Tier-2 gate may then
+// disambiguate within that candidate set only (D8/D10).
+func Dispatch(ctx context.Context, env *contextdata.Envelope, req RouteRequest, deps SelectionDeps) (*RouteResult, error) {
+	report, selected, fallbackTaken, ok := resolveRoute(env, req, deps)
+	if ok {
+		selected, report.DecidedBy, report.Tier2 = applyTier2Gate(ctx, env, req, report, selected, report.DecidedBy, deps)
+	}
 	resolution := buildRouteResolution(env, req, report, selected, ok, fallbackTaken)
 	if env != nil {
 		applyRouteResolutionToEnvelope(env, resolution)
@@ -80,10 +99,13 @@ func Dispatch(ctx context.Context, env *contextdata.Envelope, req RouteRequest, 
 }
 
 // DryRun resolves a route request without executing it and returns the ranked
-// candidate set. It shares the live dispatch's selection context, including the
-// family registry, so preflight and execution select identically.
-func DryRun(ctx context.Context, env *contextdata.Envelope, req RouteRequest, caps *registry.CapabilityRegistry, thoughtrecipes *thoughtrecipepkg.ThoughtRecipeRegistry, famReg *families.KeywordFamilyRegistry) (*DryRunReport, error) {
-	report, selected, fallbackTaken, ok := resolveRoute(env, req, caps, thoughtrecipes, famReg)
+// candidate set. It shares the live dispatch's selection context and Tier-2
+// gate, so preflight and execution select identically.
+func DryRun(ctx context.Context, env *contextdata.Envelope, req RouteRequest, deps SelectionDeps) (*DryRunReport, error) {
+	report, selected, fallbackTaken, ok := resolveRoute(env, req, deps)
+	if ok {
+		selected, report.DecidedBy, report.Tier2 = applyTier2Gate(ctx, env, req, report, selected, report.DecidedBy, deps)
+	}
 	resolution := buildRouteResolution(env, req, report, selected, ok, fallbackTaken)
 	if env != nil {
 		applyRouteResolutionToEnvelope(env, resolution)
@@ -159,6 +181,7 @@ func routeResultFromSelection(report *DryRunReport, selected CandidateRouteInfo,
 		Outcome:             string(outcome),
 		TelemetrySuppressed: telemetrySuppressed,
 		DecidedBy:           report.DecidedBy,
+		Tier2:               report.Tier2,
 	}
 	return result
 }
@@ -166,18 +189,18 @@ func routeResultFromSelection(report *DryRunReport, selected CandidateRouteInfo,
 // resolveRoute builds the deterministic candidate pool, applies the D8
 // lattice, and applies the default-recipe degradation when no candidate
 // scored above zero.
-func resolveRoute(env *contextdata.Envelope, req RouteRequest, caps *registry.CapabilityRegistry, thoughtrecipes *thoughtrecipepkg.ThoughtRecipeRegistry, famReg *families.KeywordFamilyRegistry) (*DryRunReport, CandidateRouteInfo, bool, bool) {
+func resolveRoute(env *contextdata.Envelope, req RouteRequest, deps SelectionDeps) (*DryRunReport, CandidateRouteInfo, bool, bool) {
 	report := &DryRunReport{Request: req}
-	ctx := selectionContextFor(env, req, famReg)
-	report.Candidates = deterministicRouteCandidates(env, req, caps, thoughtrecipes, ctx)
+	ctx := selectionContextFor(env, req, deps.Families)
+	report.Candidates = deterministicRouteCandidates(env, req, deps, ctx)
 	selected, ok, decidedBy := selectByLattice(req, report.Candidates)
 	fallbackTaken := false
-	if !ok && strings.TrimSpace(req.ThoughtRecipeID) == "" && strings.TrimSpace(req.CapabilityID) == "" && thoughtrecipes != nil {
+	if !ok && strings.TrimSpace(req.ThoughtRecipeID) == "" && strings.TrimSpace(req.CapabilityID) == "" && deps.ThoughtRecipes != nil {
 		// No deterministic candidate is available (recipes absent, capability
 		// matches suppressed). Fall back to the built-in default execution
 		// recipe so general tasks still run through a paradigm instead of
 		// failing route resolution.
-		if candidate, okFallback := defaultExecutionRecipeCandidate(thoughtrecipes); okFallback {
+		if candidate, okFallback := defaultExecutionRecipeCandidate(deps.ThoughtRecipes); okFallback {
 			report.Candidates = append(report.Candidates, candidate)
 			selected, ok, fallbackTaken, decidedBy = candidate, true, true, decidedByDefaultRecipe
 		}
@@ -224,9 +247,9 @@ func defaultExecutionRecipeCandidate(reg *thoughtrecipepkg.ThoughtRecipeRegistry
 	return candidate, true
 }
 
-func deterministicRouteCandidates(env *contextdata.Envelope, req RouteRequest, caps *registry.CapabilityRegistry, thoughtrecipes *thoughtrecipepkg.ThoughtRecipeRegistry, ctx selectionContext) []CandidateRouteInfo {
-	clarificationCandidate := clarificationRouteCandidate(env, req, thoughtrecipes)
-	if explicit := explicitRouteCandidate(req, caps, thoughtrecipes); explicit != nil {
+func deterministicRouteCandidates(env *contextdata.Envelope, req RouteRequest, deps SelectionDeps, ctx selectionContext) []CandidateRouteInfo {
+	clarificationCandidate := clarificationRouteCandidate(env, req, deps.ThoughtRecipes)
+	if explicit := explicitRouteCandidate(req, deps); explicit != nil {
 		if clarificationCandidate != nil && candidateRouteID(*explicit) == candidateRouteID(*clarificationCandidate) {
 			return []CandidateRouteInfo{*explicit}
 		}
@@ -237,26 +260,26 @@ func deterministicRouteCandidates(env *contextdata.Envelope, req RouteRequest, c
 	if clarificationCandidate != nil {
 		candidates = append(candidates, *clarificationCandidate)
 	}
-	candidates = append(candidates, metadataThoughtRecipeCandidates(thoughtrecipes, ctx)...)
-	candidates = append(candidates, metadataCapabilityCandidates(req, caps, ctx)...)
+	candidates = append(candidates, metadataThoughtRecipeCandidates(deps.ThoughtRecipes, ctx)...)
+	candidates = append(candidates, metadataCapabilityCandidates(req, deps.Capabilities, ctx)...)
 	return dedupeAndSortRouteCandidates(candidates)
 }
 
-func explicitRouteCandidate(req RouteRequest, caps *registry.CapabilityRegistry, thoughtrecipes *thoughtrecipepkg.ThoughtRecipeRegistry) *CandidateRouteInfo {
+func explicitRouteCandidate(req RouteRequest, deps SelectionDeps) *CandidateRouteInfo {
 	switch {
 	case strings.TrimSpace(req.ThoughtRecipeID) != "":
 		id := strings.TrimSpace(req.ThoughtRecipeID)
 		if id == clarificationThoughtRecipeID {
 			// The clarification interaction is built in: it is always
 			// registered by graph construction (ensureClarificationThoughtRecipe).
-			if candidate, ok := availableRecipeCandidate(thoughtrecipes, id,
+			if candidate, ok := availableRecipeCandidate(deps.ThoughtRecipes, id,
 				euclotypes.RouteKindIntent, scoreExplicit,
 				[]string{"explicit clarification route"}); ok {
 				return markExplicit(candidate)
 			}
 		}
-		if thoughtrecipes != nil {
-			if candidate, ok := availableRecipeCandidate(thoughtrecipes, id,
+		if deps.ThoughtRecipes != nil {
+			if candidate, ok := availableRecipeCandidate(deps.ThoughtRecipes, id,
 				euclotypes.RouteKindForThoughtRecipeID(id), scoreExplicit,
 				[]string{"explicit thoughtrecipe"}); ok {
 				return markExplicit(candidate)
@@ -271,8 +294,8 @@ func explicitRouteCandidate(req RouteRequest, caps *registry.CapabilityRegistry,
 		})
 	case strings.TrimSpace(req.CapabilityID) != "":
 		id := strings.TrimSpace(req.CapabilityID)
-		if caps != nil {
-			if snapshot, ok := capabilitySnapshotByID(caps, id); ok {
+		if deps.Capabilities != nil {
+			if snapshot, ok := capabilitySnapshotByID(deps.Capabilities, id); ok {
 				availability, reason := routeAvailabilityFromSnapshot(snapshot)
 				return markExplicit(CandidateRouteInfo{
 					RouteID:        RouteID(snapshot.Descriptor.ID),
@@ -341,16 +364,18 @@ func metadataThoughtRecipeCandidates(thoughtrecipes *thoughtrecipepkg.ThoughtRec
 		if routeID == "" {
 			continue
 		}
-		score, components, reasons := scoreThoughtRecipeCandidate(entry, ctx)
-		if score <= 0 {
+		s := scoreThoughtRecipeCandidate(entry, ctx)
+		if s.total <= 0 {
 			continue
 		}
 		candidate, ok := availableRecipeCandidate(thoughtrecipes, routeID,
-			euclotypes.RouteKindForThoughtRecipeID(routeID), score, reasons)
+			euclotypes.RouteKindForThoughtRecipeID(routeID), s.total, s.reasons)
 		if !ok {
 			continue
 		}
-		candidate.Components = components
+		candidate.Components = s.components
+		candidate.MatchedKeywords = s.matchedKeywords
+		candidate.Description = strings.TrimSpace(entry.ThoughtRecipe.Description)
 		candidates = append(candidates, candidate)
 	}
 	return candidates
@@ -376,6 +401,7 @@ func metadataCapabilityCandidates(req RouteRequest, caps *registry.CapabilityReg
 				Availability:   availability,
 				RankScore:      priority + availabilityScore(availability),
 				Components:     map[string]int{compPriority: priority},
+				Description:    capabilityDescription(snapshot.Descriptor),
 				Suppressed:     availability == RouteUnavailablePolicyDenied,
 				SuppressReason: reason,
 			})
@@ -384,8 +410,8 @@ func metadataCapabilityCandidates(req RouteRequest, caps *registry.CapabilityReg
 	}
 	candidates := make([]CandidateRouteInfo, 0, len(snapshots))
 	for _, snapshot := range snapshots {
-		score, components, reasons := scoreCapabilityCandidate(snapshot.Descriptor, ctx)
-		if score <= 0 {
+		s := scoreCapabilityCandidate(snapshot.Descriptor, ctx)
+		if s.total <= 0 {
 			continue
 		}
 		availability, reason := routeAvailabilityFromSnapshot(snapshot)
@@ -398,17 +424,35 @@ func metadataCapabilityCandidates(req RouteRequest, caps *registry.CapabilityReg
 			reason = "capability requires arguments; no argument source for direct capability routes"
 		}
 		candidates = append(candidates, CandidateRouteInfo{
-			RouteID:        RouteID(snapshot.Descriptor.ID),
-			RouteKind:      euclotypes.RouteKindCapability,
-			Availability:   availability,
-			RankScore:      score,
-			RankReasons:    reasons,
-			Components:     components,
-			Suppressed:     availability == RouteUnavailablePolicyDenied,
-			SuppressReason: reason,
+			RouteID:         RouteID(snapshot.Descriptor.ID),
+			RouteKind:       euclotypes.RouteKindCapability,
+			Availability:    availability,
+			RankScore:       s.total,
+			RankReasons:     s.reasons,
+			Components:      s.components,
+			MatchedKeywords: s.matchedKeywords,
+			Description:     capabilityDescription(snapshot.Descriptor),
+			Suppressed:      availability == RouteUnavailablePolicyDenied,
+			SuppressReason:  reason,
 		})
 	}
 	return candidates
+}
+
+// capabilityDescription renders the one-line candidate description used by the
+// Tier-2 prompt and the selection record.
+func capabilityDescription(desc descriptor.CapabilityDescriptor) string {
+	parts := make([]string, 0, 3)
+	if name := strings.TrimSpace(desc.Name); name != "" {
+		parts = append(parts, name)
+	}
+	if category := strings.TrimSpace(desc.Category); category != "" {
+		parts = append(parts, "category="+category)
+	}
+	if description := strings.TrimSpace(desc.Description); description != "" {
+		parts = append(parts, description)
+	}
+	return strings.Join(parts, "; ")
 }
 
 // capabilityRequiresArgs reports whether the capability declares required
@@ -855,6 +899,7 @@ func buildRouteResolution(env *contextdata.Envelope, req RouteRequest, report *D
 	}
 	if report != nil {
 		resolution.DecidedBy = strings.TrimSpace(report.DecidedBy)
+		resolution.Tier2 = report.Tier2
 	}
 	if state := routeClarificationState(env); state != nil {
 		resolution.ClarificationStateVersion = state.StateVersion
@@ -1040,29 +1085,37 @@ func intentKeywordHits(ctx selectionContext, candidateVocabulary ...string) int 
 	return boundedComponent(hits, scorePerIntentKeyword, capIntentKeyword)
 }
 
-func scoreThoughtRecipeCandidate(entry thoughtrecipepkg.ThoughtRecipeEntry, ctx selectionContext) (int, map[string]int, []string) {
-	if entry.ThoughtRecipe == nil {
-		return 0, nil, nil
-	}
-	total := 0
-	components := make(map[string]int)
-	reasons := make([]string, 0, 6)
+// candidateScore is the deterministic evidence a scorer produced for one
+// candidate: the capped total, the per-component split, the reason codes, and
+// the matched candidate-side vocabulary tokens (public registry data).
+type candidateScore struct {
+	total           int
+	components      map[string]int
+	reasons         []string
+	matchedKeywords []string
+}
 
+func scoreThoughtRecipeCandidate(entry thoughtrecipepkg.ThoughtRecipeEntry, ctx selectionContext) candidateScore {
+	score := candidateScore{components: make(map[string]int), reasons: make([]string, 0, 6)}
+	if entry.ThoughtRecipe == nil {
+		return score
+	}
 	addComponent := func(name string, value int, reason string) {
 		if value <= 0 {
 			return
 		}
-		components[name] = value
-		total += value
-		reasons = append(reasons, reason)
+		score.components[name] = value
+		score.total += value
+		score.reasons = append(score.reasons, reason)
 	}
 
 	// Keyword hit: the utterance names the recipe (its declared keyword
 	// vocabulary plus its name and ID) (+10 each, cap 30).
 	keywordVocabulary := append([]string(nil), entry.ThoughtRecipe.Metadata.Keywords...)
 	keywordVocabulary = append(keywordVocabulary, entry.ThoughtRecipe.Name, entry.ThoughtRecipe.ID, entry.Name)
-	hits := tokenIntersectionCount(ctx.tokens, keywordVocabulary)
-	addComponent(compKeyword, boundedComponent(hits, scorePerKeyword, capKeyword), "keyword")
+	keywordMatches := tokenIntersectionTokens(ctx.tokens, keywordVocabulary)
+	addComponent(compKeyword, boundedComponent(len(keywordMatches), scorePerKeyword, capKeyword), "keyword")
+	score.matchedKeywords = append(score.matchedKeywords, keywordMatches...)
 
 	// Handoff-context match (+100, cap 100): the utterance names a handoff
 	// target of the recipe.
@@ -1074,6 +1127,7 @@ func scoreThoughtRecipeCandidate(entry thoughtrecipepkg.ThoughtRecipeEntry, ctx 
 	// Family affinity (+50): the recipe declares the classified family.
 	if ctx.family != "" && stringSliceContainsFold(entry.ThoughtRecipe.Metadata.Families, ctx.family) {
 		addComponent(compFamilyAffinity, boundedComponent(1, scoreFamilyAffinity, capFamilyAffinity), "family_affinity")
+		score.matchedKeywords = append(score.matchedKeywords, ctx.family)
 	}
 
 	// Intent-keyword evidence: family intent vocabulary shared by the utterance
@@ -1082,24 +1136,23 @@ func scoreThoughtRecipeCandidate(entry thoughtrecipepkg.ThoughtRecipeEntry, ctx 
 
 	// Description-token overlap (+1 each, cap 10): shared vocabulary between the
 	// utterance and the recipe description.
-	descriptionOverlap := tokenIntersectionCount(ctx.tokens, []string{entry.ThoughtRecipe.Description})
-	addComponent(compDescription, boundedComponent(descriptionOverlap, scorePerDescription, capDescription), "description")
+	descriptionMatches := tokenIntersectionTokens(ctx.tokens, []string{entry.ThoughtRecipe.Description})
+	addComponent(compDescription, boundedComponent(len(descriptionMatches), scorePerDescription, capDescription), "description")
+	score.matchedKeywords = append(score.matchedKeywords, descriptionMatches...)
 
-	return total, components, reasons
+	score.matchedKeywords = normalizedKeywords(score.matchedKeywords)
+	return score
 }
 
-func scoreCapabilityCandidate(desc descriptor.CapabilityDescriptor, ctx selectionContext) (int, map[string]int, []string) {
-	total := 0
-	components := make(map[string]int)
-	reasons := make([]string, 0, 6)
-
+func scoreCapabilityCandidate(desc descriptor.CapabilityDescriptor, ctx selectionContext) candidateScore {
+	score := candidateScore{components: make(map[string]int), reasons: make([]string, 0, 6)}
 	addComponent := func(name string, value int, reason string) {
 		if value <= 0 {
 			return
 		}
-		components[name] = value
-		total += value
-		reasons = append(reasons, reason)
+		score.components[name] = value
+		score.total += value
+		score.reasons = append(score.reasons, reason)
 	}
 
 	// Keyword hit: the utterance matches the capability vocabulary — its name,
@@ -1111,12 +1164,14 @@ func scoreCapabilityCandidate(desc descriptor.CapabilityDescriptor, ctx selectio
 			keywordVocabulary = append(keywordVocabulary, family)
 		}
 	}
-	hits := tokenIntersectionCount(ctx.tokens, keywordVocabulary)
-	addComponent(compKeyword, boundedComponent(hits, scorePerKeyword, capKeyword), "keyword")
+	keywordMatches := tokenIntersectionTokens(ctx.tokens, keywordVocabulary)
+	addComponent(compKeyword, boundedComponent(len(keywordMatches), scorePerKeyword, capKeyword), "keyword")
+	score.matchedKeywords = append(score.matchedKeywords, keywordMatches...)
 
 	// Family affinity (+50): the capability belongs to the classified family.
 	if ctx.family != "" && familyMatchBonus(desc, ctx.family) {
 		addComponent(compFamilyAffinity, boundedComponent(1, scoreFamilyAffinity, capFamilyAffinity), "family_affinity")
+		score.matchedKeywords = append(score.matchedKeywords, ctx.family)
 	}
 
 	// Intent-keyword evidence: family intent vocabulary shared by the utterance
@@ -1125,10 +1180,12 @@ func scoreCapabilityCandidate(desc descriptor.CapabilityDescriptor, ctx selectio
 
 	// Description-token overlap (+1 each, cap 10): shared vocabulary between
 	// the utterance and the capability name/category/description.
-	descriptionOverlap := tokenIntersectionCount(ctx.tokens, []string{desc.Name}) +
-		tokenIntersectionCount(ctx.tokens, []string{desc.Category}) +
-		tokenIntersectionCount(ctx.tokens, []string{desc.Description})
-	addComponent(compDescription, boundedComponent(descriptionOverlap, scorePerDescription, capDescription), "description")
+	descriptionMatches := append([]string(nil),
+		tokenIntersectionTokens(ctx.tokens, []string{desc.Name})...)
+	descriptionMatches = append(descriptionMatches, tokenIntersectionTokens(ctx.tokens, []string{desc.Category})...)
+	descriptionMatches = append(descriptionMatches, tokenIntersectionTokens(ctx.tokens, []string{desc.Description})...)
+	addComponent(compDescription, boundedComponent(len(descriptionMatches), scorePerDescription, capDescription), "description")
+	score.matchedKeywords = append(score.matchedKeywords, descriptionMatches...)
 
 	// Priority: the shipped euclo.priority annotation (shipped data, not a
 	// config surface) contributes directly to the deterministic score.
@@ -1137,7 +1194,8 @@ func scoreCapabilityCandidate(desc descriptor.CapabilityDescriptor, ctx selectio
 		addComponent(compPriority, priority, "priority")
 	}
 
-	return total, components, reasons
+	score.matchedKeywords = normalizedKeywords(score.matchedKeywords)
+	return score
 }
 
 // capabilityFamilyVocabulary is the closed family vocabulary used to map
@@ -1177,25 +1235,55 @@ func tokenNormalizedSet(tokens []string) map[string]struct{} {
 	return normalized
 }
 
-// tokenIntersectionCount counts the distinct normalized tokens shared by two
-// token lists. Both lists are expanded into their split sub-tokens, so a
-// candidate whose name is also its ID counts once, never twice.
-func tokenIntersectionCount(a, b []string) int {
+// tokenIntersectionTokens returns the distinct normalized tokens shared by two
+// token lists, sorted for determinism. Both lists are expanded into their split
+// sub-tokens, so a candidate whose name is also its ID counts once.
+func tokenIntersectionTokens(a, b []string) []string {
 	if len(a) == 0 || len(b) == 0 {
-		return 0
+		return nil
 	}
 	setA := tokenNormalizedSet(a)
 	setB := tokenNormalizedSet(b)
 	if len(setB) < len(setA) {
 		setA, setB = setB, setA
 	}
-	count := 0
+	shared := make([]string, 0, len(setA))
 	for token := range setA {
 		if _, ok := setB[token]; ok {
-			count++
+			shared = append(shared, token)
 		}
 	}
-	return count
+	sort.Strings(shared)
+	return shared
+}
+
+// tokenIntersectionCount counts the distinct normalized tokens shared by two
+// token lists.
+func tokenIntersectionCount(a, b []string) int {
+	return len(tokenIntersectionTokens(a, b))
+}
+
+// normalizedKeywords lowercases, trims, de-duplicates, and sorts a matched
+// keyword list so the record is deterministic and whitespace-free.
+func normalizedKeywords(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(values))
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		trimmed := strings.ToLower(strings.TrimSpace(value))
+		if trimmed == "" {
+			continue
+		}
+		if _, ok := seen[trimmed]; ok {
+			continue
+		}
+		seen[trimmed] = struct{}{}
+		out = append(out, trimmed)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // stringSliceContainsFold reports whether value matches any element of values

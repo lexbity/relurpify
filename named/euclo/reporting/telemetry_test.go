@@ -245,13 +245,6 @@ func TestEucloTelemetry_EmitsTypedEvents(t *testing.T) {
 		MaxTokens:   1024,
 		Mode:        "analysis",
 	})
-	tel.EmitCapabilityClassified(ctx, EventCapabilityClassified{
-		EventHeader:  EventHeader{TaskID: "task-1", SessionID: "session-1", Seq: 5},
-		FamilyID:     "analysis",
-		Capabilities: []string{"query"},
-		Operator:     "llm",
-		LLMCalls:     1,
-	})
 	tel.EmitRouteSelected(ctx, EventRouteSelected{
 		EventHeader:    EventHeader{TaskID: "task-1", SessionID: "session-1", Seq: 6},
 		FamilyID:       "analysis",
@@ -307,14 +300,14 @@ func TestEucloTelemetry_EmitsTypedEvents(t *testing.T) {
 		TokenUsage:  128,
 	})
 
-	if got := len(sink.events); got != 13 {
-		t.Fatalf("expected 13 events, got %d", got)
+	if got := len(sink.events); got != 12 {
+		t.Fatalf("expected 12 events, got %d", got)
 	}
 	if sink.events[0].Type != telemetry.EventType(EventTypeIntakeComplete) {
 		t.Fatalf("unexpected first event type %q", sink.events[0].Type)
 	}
-	if sink.events[12].Metadata["outcome"] != "success" {
-		t.Fatalf("expected final outcome metadata, got %#v", sink.events[12].Metadata["outcome"])
+	if sink.events[11].Metadata["outcome"] != "success" {
+		t.Fatalf("expected final outcome metadata, got %#v", sink.events[11].Metadata["outcome"])
 	}
 }
 

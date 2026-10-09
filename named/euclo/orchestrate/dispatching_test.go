@@ -68,7 +68,7 @@ func TestDispatch_ExplicitCapabilityRoute_SelectsRequestedCapability(t *testing.
 	env := contextdata.NewEnvelope("task-1", "session-1")
 	req := RouteRequest{CapabilityID: desc.ID}
 
-	result, err := Dispatch(context.Background(), env, req, reg, nil, nil)
+	result, err := Dispatch(context.Background(), env, req, SelectionDeps{Capabilities: reg})
 	if err != nil {
 		t.Fatalf("Dispatch failed: %v", err)
 	}
@@ -100,7 +100,7 @@ func TestDispatch_ExplicitThoughtRecipeRoute_SelectsRequestedThoughtRecipe(t *te
 	env := contextdata.NewEnvelope("task-1", "session-1")
 	req := RouteRequest{ThoughtRecipeID: thoughtrecipe.ID}
 
-	result, err := Dispatch(context.Background(), env, req, nil, thoughtrecipes, nil)
+	result, err := Dispatch(context.Background(), env, req, SelectionDeps{ThoughtRecipes: thoughtrecipes})
 	if err != nil {
 		t.Fatalf("Dispatch failed: %v", err)
 	}
@@ -125,7 +125,7 @@ func TestDispatch_AmbiguousClassificationRoutesToClarificationThoughtRecipe(t *t
 	if got := routeKindFromRequest(req); got != euclotypes.RouteKindIntent {
 		t.Fatalf("route kind from request = %q, want intent; request=%+v", got, req)
 	}
-	directResult, directErr := Dispatch(context.Background(), env, req, nil, testRecipeRegistryWith(clarificationThoughtRecipeID), nil)
+	directResult, directErr := Dispatch(context.Background(), env, req, SelectionDeps{ThoughtRecipes: testRecipeRegistryWith(clarificationThoughtRecipeID)})
 	if directErr != nil {
 		t.Fatalf("direct Dispatch failed: %v", directErr)
 	}
@@ -176,7 +176,7 @@ func TestDispatch_FamilyRoute_SelectsBestCandidate(t *testing.T) {
 	env := contextdata.NewEnvelope("task-1", "session-1")
 	state.SetFamilySelection(env, "query")
 
-	result, err := Dispatch(context.Background(), env, RouteRequest{FamilyID: "query"}, reg, nil, nil)
+	result, err := Dispatch(context.Background(), env, RouteRequest{FamilyID: "query"}, SelectionDeps{Capabilities: reg})
 	if err != nil {
 		t.Fatalf("Dispatch failed: %v", err)
 	}
@@ -230,7 +230,7 @@ func TestDryRun_EmitsRouteDryRunEvent(t *testing.T) {
 	sink := &telemetrySink{}
 	ctx := telemetry.WithTelemetry(context.Background(), sink)
 
-	report, err := DryRun(ctx, contextdata.NewEnvelope("task-1", "session-1"), RouteRequest{FamilyID: "query", DryRun: true}, reg, nil, nil)
+	report, err := DryRun(ctx, contextdata.NewEnvelope("task-1", "session-1"), RouteRequest{FamilyID: "query", DryRun: true}, SelectionDeps{Capabilities: reg})
 	if err != nil {
 		t.Fatalf("DryRun failed: %v", err)
 	}
@@ -264,7 +264,7 @@ func TestDispatch_EmitsRouteSelectedEvent(t *testing.T) {
 	ctx := telemetry.WithTelemetry(context.Background(), sink)
 
 	env := contextdata.NewEnvelope("task-1", "session-1")
-	if _, err := Dispatch(ctx, env, RouteRequest{CapabilityID: desc.ID}, reg, nil, nil); err != nil {
+	if _, err := Dispatch(ctx, env, RouteRequest{CapabilityID: desc.ID}, SelectionDeps{Capabilities: reg}); err != nil {
 		t.Fatalf("Dispatch failed: %v", err)
 	}
 
@@ -294,7 +294,7 @@ func TestDispatch_UnavailableRoute_ReturnsError(t *testing.T) {
 		t.Fatalf("register capability: %v", err)
 	}
 
-	_, err := Dispatch(context.Background(), contextdata.NewEnvelope("task-1", "session-1"), RouteRequest{CapabilityID: desc.ID}, reg, nil, nil)
+	_, err := Dispatch(context.Background(), contextdata.NewEnvelope("task-1", "session-1"), RouteRequest{CapabilityID: desc.ID}, SelectionDeps{Capabilities: reg})
 	if err == nil {
 		t.Fatal("expected error for unavailable route")
 	}
@@ -317,7 +317,7 @@ func TestDispatch_UnavailableCapability_RemainsUnresolved(t *testing.T) {
 	env := contextdata.NewEnvelope("task-1", "session-1")
 	req := RouteRequest{CapabilityID: primary.ID, FallbackID: fallback.ID}
 
-	result, err := Dispatch(context.Background(), env, req, reg, nil, nil)
+	result, err := Dispatch(context.Background(), env, req, SelectionDeps{Capabilities: reg})
 	if err != nil {
 		var routeResolutionError *RouteResolutionError
 		if !errors.As(err, &routeResolutionError) {
@@ -341,7 +341,7 @@ func TestDispatch_AllUnavailable_HardFailure(t *testing.T) {
 		t.Fatalf("register capability: %v", err)
 	}
 
-	_, err := Dispatch(context.Background(), contextdata.NewEnvelope("task-1", "session-1"), RouteRequest{CapabilityID: desc.ID}, reg, nil, nil)
+	_, err := Dispatch(context.Background(), contextdata.NewEnvelope("task-1", "session-1"), RouteRequest{CapabilityID: desc.ID}, SelectionDeps{Capabilities: reg})
 	if err == nil {
 		t.Fatal("expected hard failure when no route is available")
 	}
@@ -365,7 +365,7 @@ func TestDispatch_RecordsDecidedByOnEnvelope(t *testing.T) {
 	}
 
 	env := contextdata.NewEnvelope("task-decided-by", "session-decided-by")
-	result, err := Dispatch(context.Background(), env, RouteRequest{FamilyID: "query"}, reg, nil, nil)
+	result, err := Dispatch(context.Background(), env, RouteRequest{FamilyID: "query"}, SelectionDeps{Capabilities: reg})
 	if err != nil {
 		t.Fatalf("Dispatch failed: %v", err)
 	}

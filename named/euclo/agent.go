@@ -200,6 +200,10 @@ func (a *Agent) BuildGraph(ctx context.Context, task *execution.Task) (*agentgra
 	}
 
 	resumeClassification, resumeRouteSelection := a.resumeStateSnapshot()
+	tier2Model := a.config.CapabilityClassifierModel
+	if tier2Model == nil {
+		tier2Model = a.deps.Model
+	}
 	deps := orchestrate.RootGraphDeps{
 		Workspace:            workspaceRootPath(a.deps),
 		DispatchCapabilities: a.deps.Registry,
@@ -213,6 +217,7 @@ func (a *Agent) BuildGraph(ctx context.Context, task *execution.Task) (*agentgra
 		Persistence:          a.config.PersistenceWriter,
 		Telemetry:            a.deps.Telemetry,
 		StateReground:        a.config.StateReground,
+		Tier2Model:           tier2Model,
 	}
 	rootGraph, err := orchestrate.NewRootGraph(ctx, deps)
 	if err != nil {

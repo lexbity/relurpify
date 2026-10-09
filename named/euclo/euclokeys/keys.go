@@ -137,13 +137,12 @@ const (
 
 // Miscellaneous execution control keys.
 const (
-	KeyDone                 = "euclo.done"
-	KeyForkBranch           = "euclo.fork.branch"
-	KeyCapabilityClassified = "euclo.capability.classified"
-	KeyExecutionMerged      = "euclo.execution.merged"
-	KeyFamilySelected       = "euclo.family.selected"
-	KeyStreamRequested      = "euclo.stream.requested"
-	KeyCapabilityID         = "euclo.capability_id"
+	KeyDone            = "euclo.done"
+	KeyForkBranch      = "euclo.fork.branch"
+	KeyExecutionMerged = "euclo.execution.merged"
+	KeyFamilySelected  = "euclo.family.selected"
+	KeyStreamRequested = "euclo.stream.requested"
+	KeyCapabilityID    = "euclo.capability_id"
 )
 
 // Policy defaults.

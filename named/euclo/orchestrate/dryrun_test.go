@@ -54,7 +54,7 @@ func TestDryRun_ReturnsReport_NoExecution(t *testing.T) {
 		t.Fatalf("register handler: %v", err)
 	}
 
-	report, err := DryRun(context.Background(), contextdata.NewEnvelope("task-1", "session-1"), RouteRequest{CapabilityID: handler.id, DryRun: true}, reg, nil, nil)
+	report, err := DryRun(context.Background(), contextdata.NewEnvelope("task-1", "session-1"), RouteRequest{CapabilityID: handler.id, DryRun: true}, SelectionDeps{Capabilities: reg})
 	if err != nil {
 		t.Fatalf("DryRun failed: %v", err)
 	}
@@ -77,7 +77,7 @@ func TestDryRun_IncludesAllCandidates(t *testing.T) {
 		t.Fatalf("register two: %v", err)
 	}
 
-	report, err := DryRun(context.Background(), contextdata.NewEnvelope("task-1", "session-1"), RouteRequest{FamilyID: "query", DryRun: true}, reg, nil, nil)
+	report, err := DryRun(context.Background(), contextdata.NewEnvelope("task-1", "session-1"), RouteRequest{FamilyID: "query", DryRun: true}, SelectionDeps{Capabilities: reg})
 	if err != nil {
 		t.Fatalf("DryRun failed: %v", err)
 	}
@@ -104,7 +104,7 @@ func TestDryRun_PolicyDenied_InCandidateList(t *testing.T) {
 	report, err := DryRun(context.Background(), contextdata.NewEnvelope("task-1", "session-1"), RouteRequest{
 		Instruction: "review the code",
 		DryRun:      true,
-	}, reg, nil, nil)
+	}, SelectionDeps{Capabilities: reg})
 	if report == nil {
 		t.Fatal("expected dry-run report")
 	}
@@ -138,11 +138,11 @@ func TestDryRun_SamePreflightAsLiveExecution(t *testing.T) {
 	env := contextdata.NewEnvelope("task-1", "session-1")
 	req := RouteRequest{CapabilityID: primary.id}
 
-	live, err := Dispatch(context.Background(), env, req, reg, nil, nil)
+	live, err := Dispatch(context.Background(), env, req, SelectionDeps{Capabilities: reg})
 	if err != nil {
 		t.Fatalf("Dispatch failed: %v", err)
 	}
-	report, err := DryRun(context.Background(), contextdata.NewEnvelope("task-1", "session-1"), req, reg, nil, nil)
+	report, err := DryRun(context.Background(), contextdata.NewEnvelope("task-1", "session-1"), req, SelectionDeps{Capabilities: reg})
 	if err != nil {
 		t.Fatalf("DryRun failed: %v", err)
 	}
@@ -160,7 +160,7 @@ func TestDryRun_EmitsDryRunEvent(t *testing.T) {
 
 	sink := &telemetrySink{}
 	ctx := telemetry.WithTelemetry(context.Background(), sink)
-	if _, err := DryRun(ctx, contextdata.NewEnvelope("task-1", "session-1"), RouteRequest{CapabilityID: primary.id, DryRun: true}, reg, nil, nil); err != nil {
+	if _, err := DryRun(ctx, contextdata.NewEnvelope("task-1", "session-1"), RouteRequest{CapabilityID: primary.id, DryRun: true}, SelectionDeps{Capabilities: reg}); err != nil {
 		t.Fatalf("DryRun failed: %v", err)
 	}
 
