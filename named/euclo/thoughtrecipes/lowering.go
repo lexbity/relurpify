@@ -96,8 +96,7 @@ func firstTriggerDecl(doc *ThoughtRecipeDocument) *TriggerDecl {
 	return nil
 }
 
-func lowerRunItems(items []ExecutionItem) (sources []string, goals []string, directives []string, captures []CaptureBinding, toolScopes []ToolScopeFrame, promptID string, capabilityPlan *CapabilityInvocationPlan, streamSpec *surface.ThoughtRecipeStreamSpec, config map[string]any, err error) {
-	var directiveConfigs []map[string]any
+func lowerRunItems(items []ExecutionItem) (sources []string, goals []string, directives []TypedDirective, captures []CaptureBinding, toolScopes []ToolScopeFrame, promptID string, capabilityPlan *CapabilityInvocationPlan, streamSpec *surface.ThoughtRecipeStreamSpec, config map[string]any, err error) {
 	for _, item := range items {
 		switch node := item.(type) {
 		case *FromClause:
@@ -116,27 +115,15 @@ func lowerRunItems(items []ExecutionItem) (sources []string, goals []string, dir
 			if text := strings.TrimSpace(node.Text.Value); text != "" {
 				goals = append(goals, text)
 			}
-		case *DirectiveClause:
-			if raw := strings.TrimSpace(node.Raw); raw != "" {
-				directives = append(directives, raw)
-			}
-			directiveConfigs = append(directiveConfigs, map[string]any{
-				"name": node.Name.Value,
-				"raw":  node.Raw,
-			})
-		case *DirectiveBlock:
-			if raw := strings.TrimSpace(node.Raw); raw != "" {
-				directives = append(directives, raw)
-			}
-			directiveConfigs = append(directiveConfigs, map[string]any{
-				"name": node.Name.Value,
-				"raw":  node.Raw,
-			})
+		case *DirectiveClause, *DirectiveBlock:
+			// Directives lower to typed values (D2). Nested directive children
+			// of a block are carried in the typed Body; non-directive children
+			// (do/capture/goal/from/run/delegate) are not part of the typed
+			// directive tree — the route flattening that processes block
+			// bodies lowers them to steps.
+			directives = append(directives, lowerTypedDirective(item))
 		case *CaptureBlock:
 			captures = append(captures, LowerCaptureBindings(node)...)
-			directiveConfigs = append(directiveConfigs, map[string]any{
-				"type": "capture",
-			})
 		case *CapabilityInvocation:
 			plan, err := LowerCapabilityInvocation(node)
 			if err != nil {
@@ -161,7 +148,10 @@ func lowerRunItems(items []ExecutionItem) (sources []string, goals []string, dir
 			streamSpec = spec
 		}
 	}
-	if len(sources) > 0 || len(goals) > 0 || len(directives) > 0 || len(captures) > 0 || len(directiveConfigs) > 0 || len(toolScopes) > 0 || strings.TrimSpace(promptID) != "" {
+	// Config carries only the pre-existing explicit non-directive options
+	// (clause-borne from/goal/prompt and tool-scope data). Directive payloads
+	// travel in the typed Directives field, never in Config (D2).
+	if len(sources) > 0 || len(goals) > 0 || len(toolScopes) > 0 || strings.TrimSpace(promptID) != "" {
 		config = map[string]any{}
 	}
 	if len(sources) > 0 {
@@ -173,12 +163,6 @@ func lowerRunItems(items []ExecutionItem) (sources []string, goals []string, dir
 	if strings.TrimSpace(promptID) != "" {
 		config["prompt_id"] = strings.TrimSpace(promptID)
 	}
-	if len(directives) > 0 {
-		config["directives"] = append([]string(nil), directives...)
-	}
-	if len(directiveConfigs) > 0 {
-		config["execution_items"] = directiveConfigs
-	}
 	if len(toolScopes) > 0 {
 		config["effective_tool_names"] = effectiveToolNames(toolScopes)
 	}
@@ -186,6 +170,122 @@ func lowerRunItems(items []ExecutionItem) (sources []string, goals []string, dir
 		config = nil
 	}
 	return sources, goals, directives, captures, toolScopes, promptID, capabilityPlan, streamSpec, config, nil
+}
+
+// lowerTypedDirective lowers one directive clause or block into its typed
+// form. Block children lower into Body as clause-tagged typed directives:
+// nested directive clauses keep their own names, while structural children
+// (from, goal, do, capture, run, delegate, stream) are tagged by their clause
+// name so block payloads such as chainer `link from`/`capture` survive
+// lowering. The typed Body is a faithful mirror of the block content.
+func lowerTypedDirective(item ExecutionItem) TypedDirective {
+	switch node := item.(type) {
+	case *DirectiveClause:
+		return TypedDirective{
+			Name:     strings.TrimSpace(node.Name.Value),
+			TextArgs: textArgsFromValueExprs(node.Arguments),
+			Span:     node.GetSpan(),
+		}
+	case *DirectiveBlock:
+		typed := TypedDirective{
+			Name:      strings.TrimSpace(node.Name.Value),
+			TextArgs:  textArgsFromValueExprs(node.Arguments),
+			Predicate: node.Predicate,
+			Span:      node.GetSpan(),
+		}
+		for _, child := range node.Body {
+			typed.Body = append(typed.Body, lowerTypedBlockItem(child))
+		}
+		return typed
+	default:
+		return TypedDirective{}
+	}
+}
+
+// lowerTypedBlockItem lowers one child execution item of a directive block
+// into a clause-tagged TypedDirective inside the parent's Body.
+func lowerTypedBlockItem(item ExecutionItem) TypedDirective {
+	switch node := item.(type) {
+	case *DirectiveClause, *DirectiveBlock:
+		return lowerTypedDirective(item)
+	case *FromClause:
+		return TypedDirective{
+			Name:     "from",
+			TextArgs: []string{strings.TrimSpace(valueExprRaw(node.Source))},
+			Span:     node.GetSpan(),
+		}
+	case *GoalClause:
+		return TypedDirective{
+			Name:     "goal",
+			TextArgs: []string{strings.TrimSpace(node.Text.Value)},
+			Span:     node.GetSpan(),
+		}
+	case *StreamClause:
+		text := ""
+		if node.Query != nil {
+			text = strings.TrimSpace(node.Query.Value)
+		}
+		return TypedDirective{
+			Name:     "stream",
+			TextArgs: []string{text},
+			Span:     node.GetSpan(),
+		}
+	case *CapabilityInvocation:
+		return TypedDirective{
+			Name:     "do",
+			TextArgs: []string{strings.TrimSpace(node.Namespace.Value) + ":" + strings.TrimSpace(node.Capability.Value)},
+			Span:     node.GetSpan(),
+		}
+	case *CaptureBlock:
+		var args []string
+		for _, binding := range node.Bindings {
+			args = append(args, captureBindingRaw(binding))
+		}
+		return TypedDirective{
+			Name:     "capture",
+			TextArgs: args,
+			Span:     node.GetSpan(),
+		}
+	case *RunDecl:
+		return TypedDirective{
+			Name:     "run",
+			TextArgs: []string{strings.TrimSpace(node.Agent.Value)},
+			Span:     node.GetSpan(),
+		}
+	case *DelegateDecl:
+		return TypedDirective{
+			Name:     "delegate",
+			TextArgs: []string{strings.TrimSpace(node.Agent.Value)},
+			Span:     node.GetSpan(),
+		}
+	default:
+		return TypedDirective{}
+	}
+}
+
+func captureBindingRaw(binding CaptureBinding) string {
+	source := strings.TrimSpace(valueExprRaw(binding.Source))
+	dest := strings.TrimSpace(valueExprRaw(binding.Destination))
+	if source == "" && dest == "" {
+		return ""
+	}
+	if dest == "" {
+		return source
+	}
+	return source + " -> " + dest
+}
+
+func textArgsFromValueExprs(args []ValueExpr) []string {
+	if len(args) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(args))
+	for _, arg := range args {
+		if raw := strings.TrimSpace(valueExprRaw(arg)); raw != "" {
+			out = append(out, raw)
+		}
+	}
+	return out
 }
 
 func lowerAskDecl(decl *AskDecl, runIndex *int) (ExecutionStep, error) {

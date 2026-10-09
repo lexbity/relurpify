@@ -1,0 +1,12 @@
+thoughtrecipe react_until
+"React `until` caps the iteration budget at the declared integer; the conformance harness drives a non-completing model loop and asserts the envelope observes the cap."
+
+trigger as capability:
+  may read workspace
+
+agent reviewer uses react
+
+run reviewer:
+  from input.prompt
+  goal "Probe repeatedly until the budget is reached."
+  until 2

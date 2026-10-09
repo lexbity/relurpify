@@ -93,7 +93,13 @@ func (c *stepCore) buildAgent(task *execution.Task) (agentgraph.WorkflowExecutor
 
 	switch strings.ToLower(strings.TrimSpace(c.step.Paradigm)) {
 	case "react":
-		return reactagent.New(deps, c.streamOptions()...), nil
+		opts := c.streamOptions()
+		if cap, err := untilIterationCap(c.step.Directives); err != nil {
+			return nil, err
+		} else if cap > 0 {
+			opts = append(opts, reactagent.WithMaxIterations(cap))
+		}
+		return reactagent.New(deps, opts...), nil
 	case "planner":
 		return planneragent.New(deps), nil
 	case "htn":
@@ -107,7 +113,11 @@ func (c *stepCore) buildAgent(task *execution.Task) (agentgraph.WorkflowExecutor
 	case "blackboard":
 		return blackboardagent.New(deps, c.streamOptionsBlackboard()...), nil
 	case "chainer":
-		return chaineragent.New(deps, c.streamOptionsChainer()...), nil
+		chainBuilder := func(*execution.Task) (*chaineragent.Chain, error) {
+			return buildChainerChain(c.step.Directives)
+		}
+		opts := append([]chaineragent.Option{chaineragent.WithChainBuilder(chainBuilder)}, c.streamOptionsChainer()...)
+		return chaineragent.New(deps, opts...), nil
 	case "pipeline":
 		return pipelineagent.New(deps, c.streamOptionsPipeline()...), nil
 	case "rewoo":
@@ -115,7 +125,11 @@ func (c *stepCore) buildAgent(task *execution.Task) (agentgraph.WorkflowExecutor
 		agent.Options = c.rewooOptions()
 		return agent, nil
 	default:
-		return nil, fmt.Errorf("thoughtrecipe step %q has unsupported paradigm %q", c.step.ID, c.step.Paradigm)
+		// Defense-in-depth: the loader and RegisterCompiled validate every
+		// paradigm against the contract registry, so this branch is reachable
+		// only when a caller constructs an ExecutionStep bypassing both. Return
+		// the typed contract-violation guard instead of a plain-text error.
+		return nil, &paradigm.ErrContractViolation{Step: c.step.ID, Paradigm: c.step.Paradigm}
 	}
 }
 
@@ -161,7 +175,7 @@ func thoughtrecipeTemplateData(env *contextdata.Envelope, step ExecutionStep) ma
 		data["RunSources"] = append([]string(nil), step.Sources...)
 	}
 	if len(step.Directives) > 0 {
-		data["RunDirectives"] = append([]string(nil), step.Directives...)
+		data["RunDirectives"] = DirectiveNames(step.Directives)
 	}
 	if env != nil {
 		data["TaskID"] = env.TaskID
@@ -218,13 +232,6 @@ func newNodeForStep(id string, deps *paradigm.Deps, step ExecutionStep) agentgra
 	default:
 		return NewRunNode(id, deps, step)
 	}
-}
-
-// NewThoughtRecipeStepNode creates the appropriate node type for the step.
-//
-// Deprecated: use per-kind constructors (NewRunNode, NewDelegateNode, etc.).
-func NewThoughtRecipeStepNode(id string, deps *paradigm.Deps, step ExecutionStep) agentgraph.Node {
-	return newNodeForStep(id, deps, step)
 }
 
 func askFrameKey(stepID string) string {

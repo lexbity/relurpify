@@ -2,11 +2,13 @@ package thoughtrecipe
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/capability/descriptor"
+	"codeburg.org/lexbit/relurpify/cognitionzoo/paradigm"
 
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/execution/prompt"
@@ -57,18 +59,23 @@ type SymbolTable struct {
 	tools       ToolRegistryLookup
 	prompts     PromptRegistryLookup
 	recipes     ThoughtRecipeRegistryLookup
+	paradigms   *paradigm.ContractRegistry
 	Warnings    []SemanticWarning
 }
 
-// NewSymbolTable creates a symbol table for the provided document.
+// NewSymbolTable creates a symbol table for the provided document. Contract
+// validation defaults to the process-wide paradigm registry (populated by the
+// cognitionzoo paradigm packages' init()s); callers that need a scoped
+// registry use WithParadigmRegistry.
 func NewSymbolTable(doc *ThoughtRecipeDocument) *SymbolTable {
 	return &SymbolTable{
-		Document: doc,
-		agents:   make(map[string]*AgentDecl),
-		inputs:   make(map[string]*InputDecl),
-		types:    make(map[string]*TypeDecl),
-		imports:  make(map[string]*ImportDecl),
-		declared: make(map[string]SourceSpan),
+		Document:  doc,
+		agents:    make(map[string]*AgentDecl),
+		inputs:    make(map[string]*InputDecl),
+		types:     make(map[string]*TypeDecl),
+		imports:   make(map[string]*ImportDecl),
+		declared:  make(map[string]SourceSpan),
+		paradigms: paradigm.Registry,
 	}
 }
 
@@ -99,6 +106,13 @@ func (s *SymbolTable) WithRecipeRegistry(reg ThoughtRecipeRegistryLookup) *Symbo
 	return s
 }
 
+// WithParadigmRegistry wires a scoped paradigm contract registry into contract
+// validation. Defaults to the process-wide registry.
+func (s *SymbolTable) WithParadigmRegistry(reg *paradigm.ContractRegistry) *SymbolTable {
+	s.paradigms = reg
+	return s
+}
+
 // Resolve validates names, namespaces, and references in the document.
 func (s *SymbolTable) Resolve() error {
 	if s == nil {
@@ -120,7 +134,20 @@ func (s *SymbolTable) Resolve() error {
 	if err := s.resolveDeclarations(); err != nil {
 		return err
 	}
+	if err := s.validateContracts(); err != nil {
+		return err
+	}
 	return s.validateCapabilityPolicy()
+}
+
+// validateContracts runs the paradigm contract pass over the whole document:
+// unknown `uses X` bindings and every (paradigm, directive) shape violation are
+// load errors with spans, aggregated so one file reports every breach.
+func (s *SymbolTable) validateContracts() error {
+	if s == nil {
+		return nil
+	}
+	return errors.Join(ValidateAgainstContracts(s.Document, s.paradigms)...)
 }
 
 func (s *SymbolTable) collectTopLevelSymbols() error {
@@ -217,7 +244,7 @@ func (s *SymbolTable) resolveDeclarations() error {
 				return err
 			}
 		case *AgentDecl:
-			if err := validateAgentParadigm(node); err != nil {
+			if err := s.validateAgentParadigmBinding(node); err != nil {
 				return err
 			}
 		case *RunDecl:
@@ -836,16 +863,24 @@ func writeSuffix(req TriggerPolicyRequirements) string {
 	return ""
 }
 
-func validateAgentParadigm(agent *AgentDecl) error {
+func (s *SymbolTable) validateAgentParadigmBinding(agent *AgentDecl) error {
 	if agent == nil {
 		return nil
 	}
-	paradigm := strings.TrimSpace(agent.AgentType.Value)
-	if paradigm == "" {
+	paradigmName := strings.TrimSpace(agent.AgentType.Value)
+	if paradigmName == "" {
 		return fmt.Errorf("%s:%d:%d: agent type is required", agent.GetSpan().Start.File, agent.GetSpan().Start.Line, agent.GetSpan().Start.Column)
 	}
-	if !surface.IsSupported(surface.Paradigm(paradigm)) {
-		return fmt.Errorf("%s:%d:%d: unsupported agent paradigm %q", agent.GetSpan().Start.File, agent.GetSpan().Start.Line, agent.GetSpan().Start.Column, paradigm)
+	reg := s.paradigms
+	if reg == nil {
+		reg = paradigm.Registry
+	}
+	if _, ok := reg.Lookup(paradigmName); !ok {
+		return &paradigm.ErrUnknownParadigm{
+			Paradigm: paradigmName,
+			Valid:    reg.Names(),
+			At:       locationFromSpan(agent.GetSpan()),
+		}
 	}
 	return nil
 }

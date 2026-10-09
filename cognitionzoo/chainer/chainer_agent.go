@@ -26,6 +26,7 @@ type ChainerAgent struct {
 	Config          *execution.Config
 	Chain           *Chain
 	ChainBuilder    func(*execution.Task) (*Chain, error)
+	PromptRegistry  any // prompt.Registry; injected into the chain runner for PromptID links
 	StreamMode      contextstream.Mode
 	StreamQuery     string
 	StreamMaxTokens int
@@ -102,7 +103,7 @@ func (a *ChainerAgent) Execute(ctx context.Context, task *execution.Task, env *c
 
 // executeChain runs the chain using the envelope-native chainRunner.
 func (a *ChainerAgent) executeChain(ctx context.Context, task *execution.Task, env *contextdata.Envelope, chain *Chain) (*execution.Result, error) {
-	if err := (&chainRunner{Model: a.Model}).Run(ctx, task, chain, env); err != nil {
+	if err := (&chainRunner{Model: a.Model, Registry: a.PromptRegistry}).Run(ctx, task, chain, env); err != nil {
 		return nil, err
 	}
 	env.SetWorkingValueWithClass("chainer.links_executed", len(chain.Links), contextdata.MemoryClassTask)

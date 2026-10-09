@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"codeburg.org/lexbit/relurpify/cognitionzoo/paradigm"
 	thoughtrecipe "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
 )
 
@@ -61,40 +62,70 @@ func (c recipesCheck) Run(workspace string) []Diagnostic {
 
 func validateRecipe(workspace, path, src string) []Diagnostic {
 	rel := relPath(workspace, path)
+	var diags []Diagnostic
 
 	doc, err := thoughtrecipe.ParseSource(path, src)
 	if err != nil {
-		return []Diagnostic{{
+		diags = append(diags, Diagnostic{
 			Check:    "recipes",
 			Code:     "recipes.parse",
 			Severity: SeverityError,
 			Loc:      SourceLoc{File: rel, Line: extractLine(err.Error())},
 			Message:  err.Error(),
-		}}
+		})
+		return diags
+	}
+
+	// Contract-aware check (Wave 2 Phase 3): every recipe is validated
+	// against the paradigm contract registry so a retired directive or an
+	// unknown paradigm surfaces at lint time with the same errors the loader
+	// would surface at boot.
+	for _, contractErr := range thoughtrecipe.ValidateAgainstContracts(doc, paradigm.Registry) {
+		diags = append(diags, contractDiagnostic(rel, contractErr))
 	}
 
 	plan, err := thoughtrecipe.LowerDocument(doc)
 	if err != nil {
-		return []Diagnostic{{
+		return append(diags, Diagnostic{
 			Check:    "recipes",
 			Code:     "recipes.lower",
 			Severity: SeverityError,
 			Loc:      SourceLoc{File: rel, Line: extractLine(err.Error())},
 			Message:  err.Error(),
-		}}
+		})
+	}
+
+	if err := thoughtrecipe.ValidatePlanContracts(plan, paradigm.Registry); err != nil {
+		diags = append(diags, Diagnostic{
+			Check:    "recipes",
+			Code:     "recipes.contract",
+			Severity: SeverityError,
+			Loc:      SourceLoc{File: rel},
+			Message:  err.Error(),
+		})
 	}
 
 	if err := plan.ThoughtRecipe.Validate(); err != nil {
-		return []Diagnostic{{
+		diags = append(diags, Diagnostic{
 			Check:    "recipes",
 			Code:     "recipes.validate",
 			Severity: SeverityError,
 			Loc:      SourceLoc{File: rel},
 			Message:  err.Error(),
-		}}
+		})
 	}
 
-	return nil
+	return diags
+}
+
+func contractDiagnostic(rel string, contractErr error) Diagnostic {
+	return Diagnostic{
+		Check:    "recipes",
+		Code:     "recipes.contract",
+		Severity: SeverityError,
+		Loc:      SourceLoc{File: rel, Line: extractLine(contractErr.Error())},
+		Message:  contractErr.Error(),
+	}
 }
 
 func relPath(workspace, path string) string {

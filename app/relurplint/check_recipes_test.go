@@ -93,3 +93,35 @@ func TestRecipesCheckCleanRepo(t *testing.T) {
 		t.Fatalf("expected no diagnostics for clean repo, got %d: %+v", len(diags), diags)
 	}
 }
+
+// TestRecipesCheckFlagsRetiredDirective: a recipe carrying a directive no
+// paradigm honors (here: `method` on a planner agent — retired by the contract
+// audit) is a load error at lint time, not a silent no-op.
+func TestRecipesCheckFlagsRetiredDirective(t *testing.T) {
+	workspace := t.TempDir()
+	recipesDir := filepath.Join(workspace, "relurpify_cfg", "euclo")
+	_ = os.MkdirAll(recipesDir, fs.PublicDirMode) // public: test dir
+	testhelper.MustWrite(t, filepath.Join(recipesDir, "retired.erpe"), `thoughtrecipe retired
+
+trigger as capability:
+  may read workspace
+
+agent planner uses planner
+
+run planner:
+  method "decompose"
+`)
+
+	c := recipesCheck{}
+	diags := c.Run(workspace)
+	found := false
+	for _, d := range diags {
+		if d.Code == "recipes.contract" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected recipes.contract diagnostic for retired directive, got: %+v", diags)
+	}
+}

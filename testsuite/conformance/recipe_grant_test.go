@@ -113,7 +113,7 @@ func TestRecipeGrant_StandaloneCapabilityStepExecutes(t *testing.T) {
 		Config:       map[string]any{},
 	}
 
-	node := thoughtrecipepkg.NewThoughtRecipeStepNode("standalone.step.execute", &paradigm.Deps{Registry: base}, step)
+	node := thoughtrecipepkg.NewCapabilityNode("standalone.step.execute", &paradigm.Deps{Registry: base}, step)
 	result, err := node.Execute(context.Background(), env)
 
 	require.NoError(t, err)

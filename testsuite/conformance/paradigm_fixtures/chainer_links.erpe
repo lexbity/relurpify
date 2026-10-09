@@ -1,0 +1,17 @@
+thoughtrecipe chainer_links
+"Chainer `link` blocks build and run a real chain: each link reads its `from` keys, prompts the model, and writes its capture target."
+
+trigger as capability:
+  may read workspace
+
+agent summarizer uses chainer
+
+run summarizer:
+  link first:
+    from state.input_a
+    prompt "Summarize input A."
+    capture result -> state.out_a
+  link second:
+    from state.out_a
+    prompt "Summarize input B."
+    capture result -> state.out_b

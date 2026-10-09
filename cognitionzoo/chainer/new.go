@@ -63,5 +63,6 @@ func (a *ChainerAgent) InitializeDeps(deps *paradigm.Deps) error {
 	a.Model = deps.Model
 	a.Tools = deps.Registry
 	a.Config = deps.Config
+	a.PromptRegistry = deps.PromptRegistry
 	return a.Initialize(deps.Config)
 }
