@@ -23,6 +23,7 @@ type sandboxPolicyFile struct {
 	NetworkRules    []NetworkRule `yaml:"network_rules,omitempty"`
 	ReapOrphans     *bool         `yaml:"reap_orphans,omitempty"`
 	OrphanMaxAge    string        `yaml:"orphan_max_age,omitempty"`
+	ImageDigest     string        `yaml:"image_digest,omitempty"`
 }
 
 // LoadSandboxPolicy loads and validates the sandbox policy file.
@@ -60,6 +61,7 @@ func LoadSandboxPolicy(path, workspace string, decode Decoder) (*SandboxPolicy, 
 		NetworkRules:    append([]NetworkRule(nil), file.NetworkRules...),
 		ReapOrphans:     reapOrphans,
 		OrphanMaxAge:    orphanMaxAge,
+		ImageDigest:     strings.TrimSpace(file.ImageDigest),
 	}
 	for i, rule := range policy.NetworkRules {
 		if strings.TrimSpace(rule.Direction) == "" {

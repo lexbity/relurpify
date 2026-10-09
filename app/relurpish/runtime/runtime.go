@@ -317,6 +317,10 @@ func buildRuntime(ctx context.Context, cfg Config, secrets config.Secrets) (*Run
 		Security:          contract.Security,
 		PermissionManager: registration.Permissions,
 		ExistingRunner:    cfg.SecurityRunner,
+		// Sandbox posture events (ceiling exceed, protected-path escape, image
+		// pin status) ride the workspace log sink until the full telemetry
+		// chain is assembled at workspace open (SBH-1 D-12/13/14).
+		Events: telemetry.LoggerTelemetry{Logger: log.Default()},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("compose security runtime: %w", err)

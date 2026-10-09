@@ -14,3 +14,8 @@ network_rules: []
 # container is reclaimed.
 reap_orphans: true
 orphan_max_age: 24h
+
+# Digest-pin the sandbox runtime image (SBH-1 D-13). Leave empty to resolve
+# the ref digest from the local daemon at boot; set sha256:… to state it.
+image_digest: ""
+

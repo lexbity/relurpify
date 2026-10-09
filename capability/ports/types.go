@@ -105,6 +105,11 @@ type CommandResult struct {
 	StderrBytes int64         `json:"stderr_bytes,omitempty"`
 	StdoutRef   string        `json:"stdout_ref,omitempty"`
 	StderrRef   string        `json:"stderr_ref,omitempty"`
+	// Truncated reports that the output ceiling was hit and the process group
+	// was torn down as a result. Set together with TornDown when the cause is
+	// the ceiling (vs. a timeout); the retained prefix is spilled to
+	// StdoutRef/StderrRef when the runner is configured with a SpillDir.
+	Truncated bool `json:"truncated,omitempty"`
 }
 
 // CommandRunner executes a command request and returns a result.

@@ -134,6 +134,7 @@ func (t *subprocessTool) Execute(ctx context.Context, args map[string]any) (res 
 		"exit_code":  result.ExitCode,
 		"stdout_ref": result.StdoutRef,
 		"stderr_ref": result.StderrRef,
+		"truncated":  result.Truncated,
 	}
 
 	if !result.Success {

@@ -34,6 +34,11 @@ case "$cmd" in
       hang)
         sleep "${FAKE_DOCKER_HANG_SECONDS:-60}"
         ;;
+      spam)
+        # Emit FAKE_DOCKER_SPAM_BYTES of payload so ceiling enforcement has
+        # something to truncate.
+        yes "x" | head -c "${FAKE_DOCKER_SPAM_BYTES:-2097152}"
+        ;;
       echo|*)
         printf '%s' "${FAKE_DOCKER_ATTACH_OUTPUT:-hello}"
         ;;
@@ -58,6 +63,12 @@ case "$cmd" in
   ps)
     [ "${FAKE_DOCKER_PS_FAIL:-0}" = "1" ] && { printf 'ps failed\n' >&2; exit 1; }
     printf '%s' "${FAKE_DOCKER_PS_CONTENT:-}"
+    ;;
+  image)
+    # docker image inspect --format ... <ref>
+    if [ "${1:-}" = "inspect" ]; then
+      printf '%s' "${FAKE_DOCKER_INSPECT_OUTPUT:-}"
+    fi
     ;;
   info)
     printf 'fake docker info\n'

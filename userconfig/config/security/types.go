@@ -25,6 +25,9 @@ type SandboxPolicy struct {
 	// OrphanMaxAge is the absolute age cap that reaps a managed container
 	// regardless of owner liveness (default 24h).
 	OrphanMaxAge time.Duration `yaml:"-"`
+	// ImageDigest pins the sandbox runtime image by digest
+	// (security/sandbox.policy.yaml `image_digest: sha256:…`).
+	ImageDigest string `yaml:"image_digest,omitempty"`
 }
 
 // ShellBlacklist stores forbidden shell patterns.

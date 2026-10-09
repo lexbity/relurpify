@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
+	"codeburg.org/lexbit/relurpify/telemetry"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 	cfgsecurity "codeburg.org/lexbit/relurpify/userconfig/config/security"
 )
@@ -32,6 +34,9 @@ type SecurityRuntimeInput struct {
 	Permissions       permissions.PermissionSet
 	ExistingRunner    sandbox.CommandRunner
 	Strict            bool
+	// Events receives sandbox posture telemetry (ceiling exceed, protected-path
+	// escape, image pin status). Nil is a silent no-op.
+	Events telemetry.Telemetry
 }
 
 // SecurityRuntime bundles the result of the non-bypassable security foundation.
@@ -143,9 +148,9 @@ func BuildSecurityRuntime(ctx context.Context, in SecurityRuntimeInput) (*Securi
 }
 
 // buildRunnerConfig constructs a CommandRunnerConfig from manifest-derived
-// hardening fields. Returns a minimal config with just Workspace when the
-// spec is nil.
-func buildRunnerConfig(workspace string, image string, security config.SecuritySpec) *sandbox.CommandRunnerConfig {
+// hardening fields plus the sandbox bundle. Returns a minimal config with just
+// Workspace when the bundle is nil.
+func buildRunnerConfig(workspace string, image string, security config.SecuritySpec, bundle *cfgsecurity.SandboxPolicy, events telemetry.Telemetry) *sandbox.CommandRunnerConfig {
 	cfg := &sandbox.CommandRunnerConfig{
 		Workspace: workspace,
 	}
@@ -153,6 +158,11 @@ func buildRunnerConfig(workspace string, image string, security config.SecurityS
 	cfg.RunAsUser = security.RunAsUser
 	cfg.ReadOnlyRoot = security.ReadOnlyRoot
 	cfg.NoNewPrivileges = security.NoNewPrivileges
+	if bundle != nil {
+		cfg.Events = events
+		// D-12: ceiling-truncated output spills under the workspace state dir.
+		cfg.SpillDir = filepath.Join(config.DefaultWorkspaceStateDir(workspace), "spill")
+	}
 	return cfg
 }
 
@@ -166,13 +176,33 @@ func buildRunnerImpl(in SecurityRuntimeInput) (sandbox.CommandRunner, *sandbox.C
 	if err != nil {
 		return nil, nil, fmt.Errorf("select sandbox runtime: %w", err)
 	}
-	runnerConfig := buildRunnerConfig(in.Workspace, in.Image, in.Security)
+	runnerConfig := buildRunnerConfig(in.Workspace, in.Image, in.Security, in.SecurityBundle.Sandbox, in.Events)
+	// D-13: resolve the runtime image to a digest at boot (5s bound, never
+	// pulls). The resolved ref stays on the runner config; an unpinned boot is
+	// loud via the pin event + doctor image-pin status.
+	runnerConfig.Image = resolveRunnerImage(in.Context, in.Image, in.SecurityBundle.Sandbox, in.Events)
 	sboxPolicy := newSandboxPolicy(in.Security, in.SecurityBundle.Sandbox.ProtectedPaths)
 	runner, err := sandbox.NewVerifiedCommandRunner(in.Context, sboxRuntime, sboxPolicy, runnerConfig)
 	if err != nil {
 		return nil, nil, fmt.Errorf("build verified runner: %w", err)
 	}
 	return runner, runnerConfig, nil
+}
+
+// resolveRunnerImage applies digest pinning to the configured runtime image
+// and surfaces sandbox.image_pinned / sandbox.image_unpinned.
+func resolveRunnerImage(ctx context.Context, configuredImage string, bundle *cfgsecurity.SandboxPolicy, events telemetry.Telemetry) string {
+	ref := configuredImage
+	if strings.TrimSpace(ref) == "" {
+		ref = sandbox.DefaultRuntimeImage
+	}
+	digest := ""
+	if bundle != nil {
+		digest = bundle.ImageDigest
+	}
+	pin := sandbox.ResolveImageRef(ctx, "docker", ref, digest)
+	sandbox.EmitImagePinEvent(ctx, events, pin)
+	return pin.Ref
 }
 
 // defaultDenyPolicy returns a CommandPolicy that denies all tool execution.

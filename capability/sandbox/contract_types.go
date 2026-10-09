@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/telemetry"
 )
 
 // NetworkRule defines network access rules for sandbox policies.
@@ -40,6 +40,15 @@ type CommandRunnerConfig struct {
 	ReadOnlyRoot    bool
 	NoNewPrivileges bool
 	Workspace       string
+	// SpillDir is the directory the runner spills ceiling-truncated output to
+	// (<SpillDir>/<name>.stdout / .stderr, 0600). Absolute file paths land in
+	// CommandResult.StdoutRef/StderrRef. Empty disables spilling (callers that
+	// want refs must configure it).
+	SpillDir string
+	// Events receives sandbox posture events (output-ceiling exceeded,
+	// protected-path escape, image pin status). Nil is a silent no-op; tests
+	// inject a recorder and composition roots may wire a telemetry sink.
+	Events telemetry.Telemetry
 }
 
 // SandboxConfig exposes runtime knobs for a sandbox backend.
@@ -160,32 +169,6 @@ func (p SandboxPolicy) Validate() error {
 		}
 	}
 	return nil
-}
-
-// NewCommandResult constructs a CommandResult from raw command output,
-// error, and lifecycle state.
-func NewCommandResult(stdout, stderr string, runErr error, elapsed time.Duration, tornDown bool) *ports.CommandResult {
-	res := &ports.CommandResult{
-		Stdout:      stdout,
-		Stderr:      stderr,
-		StdoutBytes: int64(len(stdout)),
-		StderrBytes: int64(len(stderr)),
-		Duration:    elapsed,
-		TornDown:    tornDown,
-	}
-	if tornDown {
-		res.ExitCode = -1
-		res.TimedOut = true
-		res.Signaled = true
-	} else if runErr != nil {
-		var exitErr interface{ ExitCode() int }
-		if errors.As(runErr, &exitErr) {
-			res.ExitCode = exitErr.ExitCode()
-		} else {
-			res.ExitCode = -1
-		}
-	}
-	return res
 }
 
 // GracePeriodOrDefault returns the effective grace period, defaulting to 3s.

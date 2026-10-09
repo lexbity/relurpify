@@ -7,6 +7,7 @@ package manifest
 
 import (
 	"strings"
+	"time"
 	"unicode"
 )
 
@@ -88,14 +89,19 @@ type ToolManifest struct {
 
 // ToolManifestSandbox captures execution sandbox constraints for a tool.
 type ToolManifestSandbox struct {
-	AllowedRoot    string   `yaml:"allowed_root,omitempty" json:"allowed_root,omitempty"`
-	TimeoutSeconds int      `yaml:"timeout_seconds,omitempty" json:"timeout_seconds,omitempty"`
-	NetworkAccess  bool     `yaml:"network_access,omitempty" json:"network_access,omitempty"`
-	AllowFlags     bool     `yaml:"allow_flags,omitempty" json:"allow_flags,omitempty"`
-	MemoryMB       int64    `yaml:"memory_mb,omitempty" json:"memory_mb,omitempty"`
-	PidsLimit      int64    `yaml:"pids_limit,omitempty" json:"pids_limit,omitempty"`
-	CPUs           float64  `yaml:"cpus,omitempty" json:"cpus,omitempty"`
-	AllowHosts     []string `yaml:"allow_hosts,omitempty" json:"allow_hosts,omitempty"`
+	AllowedRoot    string  `yaml:"allowed_root,omitempty" json:"allowed_root,omitempty"`
+	TimeoutSeconds int     `yaml:"timeout_seconds,omitempty" json:"timeout_seconds,omitempty"`
+	NetworkAccess  bool    `yaml:"network_access,omitempty" json:"network_access,omitempty"`
+	AllowFlags     bool    `yaml:"allow_flags,omitempty" json:"allow_flags,omitempty"`
+	MemoryMB       int64   `yaml:"memory_mb,omitempty" json:"memory_mb,omitempty"`
+	PidsLimit      int64   `yaml:"pids_limit,omitempty" json:"pids_limit,omitempty"`
+	CPUs           float64 `yaml:"cpus,omitempty" json:"cpus,omitempty"`
+	// OutputCeiling bounds the command's captured output in bytes; exceeding it
+	// kills the process group and spills the retained prefix (SBH-1 D-12).
+	OutputCeiling int64 `yaml:"output_ceiling,omitempty" json:"output_ceiling,omitempty"`
+	// GracePeriod is the SIGTERM→SIGKILL grace granted to a torn-down command.
+	GracePeriod time.Duration `yaml:"grace_period,omitempty" json:"grace_period,omitempty"`
+	AllowHosts  []string      `yaml:"allow_hosts,omitempty" json:"allow_hosts,omitempty"`
 	// AllowPrivateHosts declares non-public egress targets that a tool may
 	// reach after an explicit HITL approval. It is the only supported way to
 	// reach a private/loopback/link-local address; the mandatory denylist

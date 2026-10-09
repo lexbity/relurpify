@@ -26,7 +26,7 @@ func buildVerifyToolIndex(workspace string, runner sandbox.CommandRunner) map[st
 		tool, ok := byNormalized[ports.NormalizeToolName(name)]
 		return tool, ok
 	}
-	tools := toolcapabilities.Build(workspace, sandbox.CommandRunnerAdapter{Runner: runner}, manifests,
+	tools := toolcapabilities.Build(workspace, runner, manifests,
 		toolcapabilities.WithBackendBuilder("subprocess", subprocess.BackendBuilder()),
 		toolcapabilities.WithBackendBuilder("composite", composite.BackendBuilder(resolver)),
 	)
@@ -86,7 +86,7 @@ func runVerifyScript(ctx context.Context, scriptPath, workspace string, runner s
 		Command: []string{"bash", absScript},
 		Workdir: workspace,
 	}
-	runResult, err := subprocess.Run(ctx, sandbox.CommandRunnerAdapter{Runner: runner}, spec)
+	runResult, err := subprocess.Run(ctx, runner, spec)
 	passed := err == nil && runResult != nil && runResult.Success
 
 	var msg string

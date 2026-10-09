@@ -19,7 +19,15 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/telemetry"
 )
+
+// DefaultRuntimeImage is the fallback sandbox runtime image ref. Pinning is
+// performed at boot (ResolveImageRef): the digest is resolved from the local
+// daemon or from security.sandbox.image_digest; an unpinned boot emits
+// sandbox.image_unpinned. Adopting a pinned digest into this constant is the
+// documented conscious step (SBH-1 D-13): the tag is retained for humans.
+const DefaultRuntimeImage = "ghcr.io/lexcodex/relurpify/runtime:0.4.1"
 
 type (
 	CommandRequest = ports.CommandRequest
@@ -50,6 +58,10 @@ type SandboxCommandRunner struct {
 	// nativeDocker selects Docker's native isolation (no `--runtime runsc`).
 	// It is set by the docker backend's CommandRunnerProvider.
 	nativeDocker bool
+	// spillDir is where ceiling-truncated output lands (CommandResult refs).
+	spillDir string
+	// events receives sandbox posture telemetry; nil is a silent no-op.
+	events telemetry.Telemetry
 }
 
 // NewSandboxCommandRunner wires the config/runtime metadata into a runner that
@@ -83,6 +95,8 @@ func newSandboxCommandRunner(config *CommandRunnerConfig, runtime SandboxRuntime
 		readOnlyRoot:    config.ReadOnlyRoot,
 		noNewPrivileges: config.NoNewPrivileges,
 		nativeDocker:    nativeDocker,
+		spillDir:        config.SpillDir,
+		events:          config.Events,
 	}, nil
 }
 
@@ -117,7 +131,7 @@ func (r *SandboxCommandRunner) Run(ctx context.Context, req CommandRequest) (*po
 	// Container identity: deterministic, DNS-safe, owner-labeled.
 	name := newContainerName(r.workspace)
 	labels := containerLabels(r.workspace)
-	args := r.runArgs(name, labels, containerWorkdir, req)
+	args := r.runArgs(ctx, name, labels, containerWorkdir, req)
 
 	// 1. Start detached: `docker run -d -i`. The container ID is cosmetic;
 	// the NAME is the lifecycle key.
@@ -179,9 +193,19 @@ func (r *SandboxCommandRunner) Run(ctx context.Context, req CommandRequest) (*po
 		close(waitDone)
 	}()
 
-	// 4. Watchdog: timeout/cancel tears the container down and unblocks the
-	// local docker CLI children (attach/wait process groups).
+	// 4. Watchdog: timeout / context-cancel / output-ceiling exceed all tear
+	// the container down and unblock the local docker CLI children (attach/wait
+	// process groups). The ceiling path reuses the same teardown sequence —
+	// SIGTERM→grace→SIGKILL via docker stop, then rm -f (SBH-1 D-12).
 	tornDown := atomic.Bool{}
+	terminate := func() {
+		tornDown.Store(true)
+		// Teardown must NOT inherit the cancelled ctx — the stop/rm commands
+		// would fail before spawning.
+		handle.Teardown(context.Background(), grace)
+		killProcessGroup(attachCmd.Process)
+		killProcessGroup(waitCmd.Process)
+	}
 	go func() {
 		var timerC <-chan time.Time
 		if req.Timeout > 0 {
@@ -194,13 +218,10 @@ func (r *SandboxCommandRunner) Run(ctx context.Context, req CommandRequest) (*po
 		case <-timerC:
 		case <-waitDone:
 			return
+		case <-attachStdout.WaitExceeded():
+		case <-attachStderr.WaitExceeded():
 		}
-		tornDown.Store(true)
-		// Teardown must NOT inherit the cancelled ctx — the stop/rm commands
-		// would fail before spawning.
-		handle.Teardown(context.Background(), grace)
-		killProcessGroup(attachCmd.Process)
-		killProcessGroup(waitCmd.Process)
+		terminate()
 	}()
 
 	<-waitDone
@@ -216,15 +237,93 @@ func (r *SandboxCommandRunner) Run(ctx context.Context, req CommandRequest) (*po
 		Duration:    elapsed,
 		TornDown:    tornDown.Load(),
 	}
-	if res.TornDown {
-		res.ExitCode = -1
-		res.TimedOut = true
+	truncated := attachStdout.Exceeded() || attachStderr.Exceeded()
+	res.Truncated = truncated
+	if truncated {
+		// Ceiling reached: report truncation whether the watchdog killed the
+		// group or the process finished first (SBH-1 D-12).
 		res.Signaled = true
-	} else {
+		spillErr := r.spillTruncatedOutput(name, attachStdout, attachStderr, res)
+		emitCommandEvent(ctx, r.events, telemetry.EventSandboxOutputCeilingExceeded,
+			"sandbox output ceiling exceeded",
+			map[string]any{
+				"command": commandHead(req.Args),
+				"stream":  exceededStreamName(attachStdout, attachStderr),
+				"bytes":   int64(attachStdout.Len()) + int64(attachStderr.Len()),
+				"spilled": spillErr == nil && res.StdoutRef != "",
+			})
+	}
+	switch {
+	case res.TornDown:
+		// Teardown cause discriminates: ceiling → Truncated, timeout → TimedOut.
+		res.ExitCode = -1
+		if !truncated {
+			res.TimedOut = true
+		}
+	default:
 		res.ExitCode = waitExitCode(waitOut.String(), waitErr)
 	}
 	markOOM(res)
 	return res, nil
+}
+
+// spillTruncatedOutput writes each exceeded stream's retained prefix to
+// <SpillDir>/<name>.stdout / .stderr (0600) and points the result at them.
+// Absolute paths are documented; spilling is best-effort (an unwritable dir
+// logs, the refs stay empty).
+func (r *SandboxCommandRunner) spillTruncatedOutput(name string, out, errw *spillWriter, res *ports.CommandResult) error {
+	if strings.TrimSpace(r.spillDir) == "" {
+		return nil // callers wanting refs must configure SpillDir
+	}
+	if err := os.MkdirAll(r.spillDir, 0o700); err != nil {
+		return fmt.Errorf("spill dir: %w", err)
+	}
+	if out != nil && out.Exceeded() {
+		path := filepath.Join(r.spillDir, name+".stdout")
+		if err := os.WriteFile(filepath.Clean(path), []byte(out.String()), 0o600); err != nil {
+			return err
+		}
+		res.StdoutRef = path
+	}
+	if errw != nil && errw.Exceeded() {
+		path := filepath.Join(r.spillDir, name+".stderr")
+		if err := os.WriteFile(filepath.Clean(path), []byte(errw.String()), 0o600); err != nil {
+			return err
+		}
+		res.StderrRef = path
+	}
+	return nil
+}
+
+// commandHead bounds the command identifier carried on posture events (the
+// full argv is already redacted upstream; events carry the head only).
+func commandHead(args []string) string {
+	if len(args) == 0 {
+		return ""
+	}
+	head := strings.Join(args, " ")
+	const max = 120
+	if len(head) > max {
+		return head[:max] + "..."
+	}
+	return head
+}
+
+// exceededStreamName reports which stream crossed the ceiling (stdout wins on
+// a tie; the pair name is used when both did).
+func exceededStreamName(out, errw *spillWriter) string {
+	outX := out != nil && out.Exceeded()
+	errX := errw != nil && errw.Exceeded()
+	switch {
+	case outX && errX:
+		return "stdout+stderr"
+	case outX:
+		return "stdout"
+	case errX:
+		return "stderr"
+	default:
+		return ""
+	}
 }
 
 // waitExitCode parses the exit code `docker wait` prints, falling back to the
@@ -305,7 +404,7 @@ func newContainerName(workspace string) string {
 // runArgs builds the container-engine argument vector for a command. It is a
 // pure function of the runner's configuration so the exact isolation flags can
 // be asserted without launching a container.
-func (r *SandboxCommandRunner) runArgs(containerName string, labels map[string]string, containerWorkdir string, req CommandRequest) []string {
+func (r *SandboxCommandRunner) runArgs(ctx context.Context, containerName string, labels map[string]string, containerWorkdir string, req CommandRequest) []string {
 	args := []string{"run", "-d", "-i", "--name", containerName}
 	if !r.nativeDocker {
 		runtimeName := filepath.Base(r.config.RunscPath)
@@ -318,7 +417,7 @@ func (r *SandboxCommandRunner) runArgs(containerName string, labels map[string]s
 		args = append(args, "--label", key+"="+labels[key])
 	}
 	args = append(args, "-v", fmt.Sprintf("%s:/workspace", r.workspace), "-w", containerWorkdir)
-	for _, mount := range r.protectedMounts() {
+	for _, mount := range r.protectedMounts(ctx) {
 		args = append(args, "-v", mount)
 	}
 	if r.user > 0 {
@@ -364,7 +463,7 @@ func (r *SandboxCommandRunner) runArgs(containerName string, labels map[string]s
 	}
 	image := r.image
 	if strings.TrimSpace(image) == "" {
-		image = "ghcr.io/lexcodex/relurpify/runtime:0.4.1"
+		image = DefaultRuntimeImage
 	}
 	args = append(args, image)
 	args = append(args, req.Args...)
@@ -382,7 +481,11 @@ func sortedLabelKeys(labels map[string]string) []string {
 	return keys
 }
 
-func (r *SandboxCommandRunner) protectedMounts() []string {
+// protectedMounts canonicalizes each protected path (EvalSymlinks) and binds
+// it read-only inside the container. A symlink that resolves OUTSIDE the
+// workspace is dropped and reported as sandbox.protected_path_escaped — a
+// config drift signal, not a silent skip (SBH-1 D-14).
+func (r *SandboxCommandRunner) protectedMounts(ctx context.Context) []string {
 	if r == nil || r.rt == nil {
 		return nil
 	}
@@ -400,10 +503,20 @@ func (r *SandboxCommandRunner) protectedMounts() []string {
 		if _, ok := seen[path]; ok {
 			continue
 		}
-		if _, err := os.Stat(path); err != nil {
-			continue
+		resolved, err := filepath.EvalSymlinks(path)
+		if err != nil {
+			continue // missing path → nothing to mount
 		}
-		rel, err := filepath.Rel(r.workspace, path)
+		if !pathWithinWorkspace(resolved, r.workspace) {
+			emitCommandEvent(ctx, r.events, telemetry.EventSandboxProtectedPathEscaped,
+				"sandbox protected path resolved outside workspace",
+				map[string]any{
+					"path":     path,
+					"resolved": resolved,
+				})
+			continue // drop the mount: policy misconfiguration surfaced loudly
+		}
+		rel, err := filepath.Rel(r.workspace, resolved)
 		if err != nil {
 			continue
 		}
@@ -411,10 +524,20 @@ func (r *SandboxCommandRunner) protectedMounts() []string {
 			continue
 		}
 		containerPath := filepath.ToSlash(filepath.Join("/workspace", rel))
-		seen[path] = struct{}{}
-		mounts = append(mounts, fmt.Sprintf("%s:%s:ro", path, containerPath))
+		seen[resolved] = struct{}{}
+		mounts = append(mounts, fmt.Sprintf("%s:%s:ro", resolved, containerPath))
 	}
 	return mounts
+}
+
+// pathWithinWorkspace reports whether resolved is the workspace or below it.
+func pathWithinWorkspace(resolved, workspace string) bool {
+	resolved = filepath.Clean(resolved)
+	workspace = filepath.Clean(workspace)
+	if resolved == workspace {
+		return true
+	}
+	return strings.HasPrefix(resolved, workspace+string(filepath.Separator))
 }
 
 // containerWorkdir maps the host workdir into the container mount.

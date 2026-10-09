@@ -73,6 +73,7 @@ type RunResult struct {
 	ExitCode  int
 	StdoutRef string
 	StderrRef string
+	Truncated bool
 	Error     string
 	Success   bool
 	Command   []string
@@ -156,6 +157,12 @@ func Run(ctx context.Context, runner ports.CommandRunner, spec RunSpec) (res *Ru
 	if spec.Sandbox.CPUs > 0 {
 		request.CPUs = spec.Sandbox.CPUs
 	}
+	if spec.Sandbox.OutputCeiling > 0 {
+		request.OutputCeiling = spec.Sandbox.OutputCeiling
+	}
+	if spec.Sandbox.GracePeriod > 0 {
+		request.GracePeriod = spec.Sandbox.GracePeriod
+	}
 
 	r, runErr := runner.Run(ctx, request)
 	if runErr != nil {
@@ -168,6 +175,7 @@ func Run(ctx context.Context, runner ports.CommandRunner, spec RunSpec) (res *Ru
 		ExitCode:  r.ExitCode,
 		StdoutRef: r.StdoutRef,
 		StderrRef: r.StderrRef,
+		Truncated: r.Truncated,
 		Command:   cmd,
 		Workdir:   workdir,
 	}

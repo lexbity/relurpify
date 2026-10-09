@@ -17,6 +17,7 @@ import (
 	platformfs "codeburg.org/lexbit/relurpify/platform/fs"
 	"codeburg.org/lexbit/relurpify/platform/llm"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
+	cfgsecurity "codeburg.org/lexbit/relurpify/userconfig/config/security"
 	"codeburg.org/lexbit/relurpify/userconfig/modelselect"
 	templatesembed "codeburg.org/lexbit/relurpify/userconfig/templates/embedfs"
 )
@@ -327,6 +328,9 @@ func BuildDoctorReport(ctx context.Context, cfg Config, secrets config.Secrets) 
 	// not duplicated here as a dependency entry (FR-8).
 	deps = append(deps, detectChromiumStatus(ctx, cfg.CommandPolicy))
 	deps = append(deps, probeAuditChain(cfg))
+	if bundle.Config != nil {
+		deps = append(deps, probeRuntimeImage(bundle.Config.Security.Sandbox))
+	}
 	report.Dependencies = deps
 
 	report.SandboxReady = computeSandboxReady(report)
@@ -581,4 +585,34 @@ func probeWritableDir(dir string) bool {
 	_ = f.Close()
 	_ = os.Remove(probe)
 	return true
+}
+
+// probeRuntimeImage surfaces the sandbox runtime image pin posture (SBH-1
+// D-13): a stated image_digest is pinned short-form; its absence reads as
+// "unpinned/tag-based with boot-time daemon resolution" and is a warning, not
+// a block.
+func probeRuntimeImage(sbox *cfgsecurity.SandboxPolicy) DependencyStatus {
+	if sbox == nil {
+		return DependencyStatus{Name: "runtime_image", Required: true, Available: false, Details: "sandbox policy unavailable"}
+	}
+	digest := strings.TrimSpace(sbox.ImageDigest)
+	detail := "unpinned (tag-based; resolved from the local daemon at boot — set security.sandbox.image_digest to pin)"
+	if digest != "" {
+		detail = "pinned by digest " + shortDigest(digest)
+	}
+	return DependencyStatus{
+		Name:      "runtime_image",
+		Required:  true,
+		Available: true,
+		Degraded:  digest == "",
+		Details:   detail,
+	}
+}
+
+func shortDigest(digest string) string {
+	d := strings.TrimPrefix(strings.TrimSpace(digest), "sha256:")
+	if len(d) > 12 {
+		return d[:12] + "…"
+	}
+	return d
 }
