@@ -283,9 +283,6 @@ packages:
   codeburg.org/lexbit/relurpify/testsuite/subjects/euclo:
     floor: 60
     reason: partial unit coverage; floor recorded from current coverage, raise as tests land
-  codeburg.org/lexbit/relurpify/testsuite/testfu:
-    floor: 0
-    reason: no unit tests yet; floor ratchets up from 0 as tests land
   codeburg.org/lexbit/relurpify/testsuite/testhelper:
     floor: 38
     reason: partial unit coverage; floor recorded from current coverage, raise as tests land
