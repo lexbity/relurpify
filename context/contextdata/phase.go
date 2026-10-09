@@ -1,6 +1,8 @@
 package contextdata
 
 func (e *Envelope) getWorkingValue(key string) (any, bool) {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
 	if e.WorkingData == nil {
 		return nil, false
 	}

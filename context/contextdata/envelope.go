@@ -8,6 +8,15 @@ import (
 )
 
 // Envelope is the execution context passed to graph nodes.
+//
+// Locking invariant: all Envelope state is guarded by mu. Every read and write
+// of WorkingData, References, CheckpointRequest, AssemblyMetadata, and the
+// scalar identity fields happens under mu. The public snapshot accessors
+// (WorkingDataSnapshot, ReferencesSnapshot, AssemblyMetadataSnapshot,
+// Clone, HandoffSnapshot) are the sanctioned read path.
+//
+// Direct field access from outside the package is legacy; each such site is
+// being migrated to the accessor APIs as the branch-merge redesign lands.
 type Envelope struct {
 	mu                sync.RWMutex
 	TaskID            string

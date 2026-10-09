@@ -98,14 +98,14 @@ func TestPlanExecutorAllowsCustomParallelMergePolicy(t *testing.T) {
 
 func TestBranchMergeHelperMergesBranchEnvelopes(t *testing.T) {
 	parent := contextdata.NewEnvelope("task-branch", "session")
-	left := contextdata.CloneEnvelope(parent, "left")
-	right := contextdata.CloneEnvelope(parent, "right")
+	left := contextdata.CloneEnvelope(parent)
+	right := contextdata.CloneEnvelope(parent)
 	left.SetWorkingValueWithClass("left.value", "a", contextdata.MemoryClassTask)
 	right.SetWorkingValueWithClass("right.value", "b", contextdata.MemoryClassTask)
 
 	err := mergePlanBranchEnvelopes(parent, []BranchExecutionResult{
-		{Step: PlanStep{ID: "left"}, State: left},
-		{Step: PlanStep{ID: "right"}, State: right},
+		{Step: PlanStep{ID: "left"}, State: left, Delta: contextdata.ComputeBranchDelta(parent, left)},
+		{Step: PlanStep{ID: "right"}, State: right, Delta: contextdata.ComputeBranchDelta(parent, right)},
 	})
 	require.NoError(t, err)
 	_, leftOK := contextdata.GetTyped[any](parent, "left.value")

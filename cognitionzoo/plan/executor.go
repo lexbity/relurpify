@@ -209,7 +209,6 @@ func (p *PlanExecutor) executeReadyStepsParallel(ctx context.Context, provider B
 
 	var wg sync.WaitGroup
 	results := make(chan branchResult, len(readySteps))
-	keepBranchState := p.Options.MergeBranches != nil
 	for idx, step := range readySteps {
 		branchExecutor, err := provider.BranchExecutor()
 		if err != nil {
@@ -219,14 +218,15 @@ func (p *PlanExecutor) executeReadyStepsParallel(ctx context.Context, provider B
 		go func(exec WorkflowExecutor) {
 			defer wg.Done()
 			perfstats.IncBranchClone()
-			branchID := fmt.Sprintf("branch-%s", step.ID)
-			branchEnv := contextdata.CloneEnvelope(state, branchID)
+			branchEnv := contextdata.CloneEnvelope(state)
 			err := p.executeStep(ctx, exec, task, plan, step, branchEnv, maxRecovery)
-			result := branchResult{index: idx, step: step, delta: contextdata.ComputeBranchDelta(state, branchEnv), err: err}
-			if keepBranchState {
-				result.state = branchEnv
+			results <- branchResult{
+				index: idx,
+				step:  step,
+				state: branchEnv, // retained: the delta merge reads values and refs from it
+				delta: contextdata.ComputeBranchDelta(state, branchEnv),
+				err:   err,
 			}
-			results <- result
 		}(branchExecutor)
 	}
 	wg.Wait()

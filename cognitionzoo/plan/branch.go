@@ -22,27 +22,31 @@ func mergePlanBranchEnvelopes(parent *contextdata.Envelope, branches []BranchExe
 	if parent == nil || len(branches) == 0 {
 		return nil
 	}
-	// Collect branch envelopes for merge.
-	branchEnvelopes := make([]*contextdata.Envelope, 0, len(branches))
-	for _, branch := range branches {
-		if branch.State != nil {
-			branchEnvelopes = append(branchEnvelopes, branch.State)
+	// branch.State is populated in ready-step declaration order, so the slice
+	// index is the authoritative merge order. Deltas were computed against the
+	// quiesced parent before this call.
+	envs := make([]*contextdata.Envelope, 0, len(branches))
+	units := make([]contextdata.BranchMergeUnit, 0, len(branches))
+	for i, branch := range branches {
+		if branch.State == nil {
+			continue
 		}
+		envs = append(envs, branch.State)
+		units = append(units, contextdata.BranchMergeUnit{
+			Index: i,
+			ID:    branch.Step.ID,
+			Delta: branch.Delta,
+			Env:   branch.State,
+		})
 	}
-	if len(branchEnvelopes) == 0 {
+	if len(units) == 0 {
 		return nil
 	}
-	// Validate before merge.
-	if err := contextdata.ValidateBranchMerge(branchEnvelopes); err != nil {
+	if err := contextdata.ValidateBranchMerge(envs); err != nil {
 		return err
 	}
-	// Merge envelopes.
-	merged, err := contextdata.MergeBranchEnvelopes(parent.TaskID, parent.SessionID, branchEnvelopes)
-	if err != nil {
+	if _, err := parent.ApplyBranchMerges(units); err != nil {
 		return err
 	}
-	// Update parent with merged state.
-	parent.WorkingData = merged.WorkingData
-	parent.References = merged.References
 	return nil
 }

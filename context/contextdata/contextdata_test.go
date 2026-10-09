@@ -63,7 +63,7 @@ func TestCloneEnvelopeCopiesWorkingData(t *testing.T) {
 		Rank:    1,
 	})
 
-	clone := CloneEnvelope(parent, "branch-1")
+	clone := CloneEnvelope(parent)
 	if clone == nil {
 		t.Fatal("expected clone to be created")
 	}
@@ -92,7 +92,7 @@ func TestCloneEnvelopeIsIndependent(t *testing.T) {
 	parent := NewEnvelope("task-1", "session-1")
 	parent.SetWorkingValueWithClass("key1", "value1", MemoryClassEphemeral)
 
-	clone := CloneEnvelope(parent, "branch-1")
+	clone := CloneEnvelope(parent)
 
 	// Modify clone
 	clone.SetWorkingValueWithClass("key2", "value2", MemoryClassEphemeral)
@@ -226,115 +226,6 @@ func TestHandoffSnapshotFiltersByPolicy(t *testing.T) {
 	}
 	if len(snapshot.References.Checkpoints) != 1 {
 		t.Fatalf("expected checkpoint refs to be preserved, got %d", len(snapshot.References.Checkpoints))
-	}
-}
-
-func TestMergeBranchEnvelopesUnionsWorkingMemory(t *testing.T) {
-	env1 := NewEnvelope("task-1", "session-1")
-	env1.SetWorkingValueWithClass("key1", "value1", MemoryClassEphemeral)
-
-	env2 := NewEnvelope("task-1", "session-1")
-	env2.SetWorkingValueWithClass("key2", "value2", MemoryClassSession)
-
-	merged, err := MergeBranchEnvelopes("task-1", "session-1", []*Envelope{env1, env2})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	// Should have both keys
-	if _, ok := merged.getWorkingValue("key1"); !ok {
-		t.Error("expected merged to have key1")
-	}
-	if _, ok := merged.getWorkingValue("key2"); !ok {
-		t.Error("expected merged to have key2")
-	}
-}
-
-func TestMergeBranchEnvelopesLastWriteWins(t *testing.T) {
-	env1 := NewEnvelope("task-1", "session-1")
-	env1.SetWorkingValueWithClass("key1", "value1", MemoryClassEphemeral)
-
-	env2 := NewEnvelope("task-1", "session-1")
-	env2.SetWorkingValueWithClass("key1", "value2", MemoryClassEphemeral)
-
-	merged, err := MergeBranchEnvelopes("task-1", "session-1", []*Envelope{env1, env2})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	// Last write wins
-	val, _ := merged.getWorkingValue("key1")
-	if val != "value2" {
-		t.Errorf("expected value2 (last write), got %v", val)
-	}
-}
-
-func TestMergeBranchEnvelopesDeduplicatesChunks(t *testing.T) {
-	env1 := NewEnvelope("task-1", "session-1")
-	env1.AddStreamedContextReference(ChunkReference{
-		ChunkID: ChunkID("chunk-1"),
-		Source:  "test",
-		Rank:    1,
-	})
-
-	env2 := NewEnvelope("task-1", "session-1")
-	env2.AddStreamedContextReference(ChunkReference{
-		ChunkID: ChunkID("chunk-1"),
-		Source:  "test",
-		Rank:    2,
-	})
-	env2.AddStreamedContextReference(ChunkReference{
-		ChunkID: ChunkID("chunk-2"),
-		Source:  "test",
-		Rank:    3,
-	})
-
-	merged, err := MergeBranchEnvelopes("task-1", "session-1", []*Envelope{env1, env2})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	// Should have 2 unique chunks
-	if len(merged.References.StreamedContext) != 2 {
-		t.Errorf("expected 2 unique chunks, got %d", len(merged.References.StreamedContext))
-	}
-}
-
-func TestMergeBranchEnvelopesPreservesCheckpointWorkingMemoryKeys(t *testing.T) {
-	env1 := NewEnvelope("task-1", "session-1")
-	env1.AddCheckpointReference(CheckpointReference{
-		CheckpointID:      "cp-1",
-		RequestedBy:       "node-1",
-		WorkingMemoryKeys: []string{"euclo.intent.clarification.state", "euclo.intent.clarification.turns"},
-	})
-
-	env2 := NewEnvelope("task-1", "session-1")
-	env2.AddCheckpointReference(CheckpointReference{
-		CheckpointID:      "cp-1",
-		RequestedBy:       "node-1",
-		WorkingMemoryKeys: []string{"euclo.intent.clarification.confirmed_entities"},
-	})
-
-	merged, err := MergeBranchEnvelopes("task-1", "session-1", []*Envelope{env1, env2})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if len(merged.References.Checkpoints) != 1 {
-		t.Fatalf("expected 1 merged checkpoint, got %d", len(merged.References.Checkpoints))
-	}
-	got := merged.References.Checkpoints[0].WorkingMemoryKeys
-	if len(got) != 3 {
-		t.Fatalf("expected 3 checkpoint working-memory keys, got %v", got)
-	}
-	want := []string{
-		"euclo.intent.clarification.state",
-		"euclo.intent.clarification.turns",
-		"euclo.intent.clarification.confirmed_entities",
-	}
-	for i, key := range want {
-		if got[i] != key {
-			t.Fatalf("checkpoint key %d = %q, want %q (keys=%v)", i, got[i], key, got)
-		}
 	}
 }
 
@@ -741,28 +632,6 @@ func TestSetWorkingValueUpdatesReferenceNotDuplicate(t *testing.T) {
 	val, _ := env.getWorkingValue("key1")
 	if val != "value2" {
 		t.Errorf("expected value2, got %v", val)
-	}
-}
-
-func TestMergeBranchEnvelopesSkipsNilEntries(t *testing.T) {
-	env1 := NewEnvelope("task-1", "session-1")
-	env1.SetWorkingValueWithClass("key1", "value1", MemoryClassEphemeral)
-
-	env2 := NewEnvelope("task-1", "session-1")
-	env2.SetWorkingValueWithClass("key2", "value2", MemoryClassEphemeral)
-
-	// Merge with nil entries in the slice
-	merged, err := MergeBranchEnvelopes("task-1", "session-1", []*Envelope{env1, nil, env2, nil})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	// Should have both keys, nil entries skipped
-	if _, ok := merged.getWorkingValue("key1"); !ok {
-		t.Error("expected merged to have key1")
-	}
-	if _, ok := merged.getWorkingValue("key2"); !ok {
-		t.Error("expected merged to have key2")
 	}
 }
 

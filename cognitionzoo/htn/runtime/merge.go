@@ -14,7 +14,8 @@ func MergeHTNBranches(parent *contextdata.Envelope, branches []plan.BranchExecut
 	if parent == nil || len(branches) == 0 {
 		return nil
 	}
-	branchEnvelopes := make([]*contextdata.Envelope, 0, len(branches))
+	envs := make([]*contextdata.Envelope, 0, len(branches))
+	units := make([]contextdata.BranchMergeUnit, 0, len(branches))
 	completedSet := make(map[string]struct{})
 	for _, stepID := range completedStepsFromEnvelope(parent) {
 		if stepID != "" {
@@ -22,11 +23,17 @@ func MergeHTNBranches(parent *contextdata.Envelope, branches []plan.BranchExecut
 		}
 	}
 
-	for _, branch := range branches {
+	for i, branch := range branches {
 		if branch.State == nil {
 			return fmt.Errorf("htn branch merge requires isolated state")
 		}
-		branchEnvelopes = append(branchEnvelopes, branch.State)
+		envs = append(envs, branch.State)
+		units = append(units, contextdata.BranchMergeUnit{
+			Index: i,
+			ID:    branch.Step.ID,
+			Delta: branch.Delta,
+			Env:   branch.State,
+		})
 
 		for _, stepID := range completedStepsFromEnvelope(branch.State) {
 			if stepID != "" {
@@ -35,15 +42,12 @@ func MergeHTNBranches(parent *contextdata.Envelope, branches []plan.BranchExecut
 		}
 	}
 
-	if err := contextdata.ValidateBranchMerge(branchEnvelopes); err != nil {
+	if err := contextdata.ValidateBranchMerge(envs); err != nil {
 		return err
 	}
-	merged, err := contextdata.MergeBranchEnvelopes(parent.TaskID, parent.SessionID, branchEnvelopes)
-	if err != nil {
+	if _, err := parent.ApplyBranchMerges(units); err != nil {
 		return err
 	}
-	parent.WorkingData = merged.WorkingData
-	parent.References = merged.References
 	completed := orderedCompletedSteps(parent, completedSet)
 	parent.SetWorkingValueWithClass(legacyPlanCompletedStepsKey, completed, contextdata.MemoryClassTask)
 	parent.SetWorkingValueWithClass(contextKeyCompletedSteps, completed, contextdata.MemoryClassTask)

@@ -58,6 +58,7 @@ type Edge struct {
 }
 
 type parallelBranchResult struct {
+	index int
 	edge  Edge
 	env   *contextdata.Envelope
 	delta contextdata.BranchDelta
@@ -437,22 +438,22 @@ func (g *Graph) nextNodes(ctx context.Context, env *contextdata.Envelope, node N
 	if len(parallelEdges) > 0 {
 		var wg sync.WaitGroup
 		results := make(chan parallelBranchResult, len(parallelEdges))
-		for _, edge := range parallelEdges {
+		for edgeIndex, edge := range parallelEdges {
 			wg.Add(1)
 
-			go func() {
+			go func(index int) {
 				defer wg.Done()
 				perfstats.IncBranchClone()
-				branchID := fmt.Sprintf("branch-%s", edge.To)
-				branchEnv := contextdata.CloneEnvelope(env, branchID)
+				branchEnv := contextdata.CloneEnvelope(env)
 				_, err := g.executeBranch(ctx, edge.To, branchEnv)
 				results <- parallelBranchResult{
+					index: index,
 					edge:  edge,
 					env:   branchEnv,
 					delta: contextdata.ComputeBranchDelta(env, branchEnv),
 					err:   err,
 				}
-			}()
+			}(edgeIndex)
 		}
 		wg.Wait()
 		close(results)
@@ -491,28 +492,36 @@ func mergeParallelBranchEnvelopes(parent *contextdata.Envelope, branches []paral
 	if parent == nil || len(branches) == 0 {
 		return nil
 	}
-	// Collect branch envelopes for merge
-	branchEnvelopes := make([]*contextdata.Envelope, 0, len(branches))
-	for _, branch := range branches {
-		if branch.env != nil {
-			branchEnvelopes = append(branchEnvelopes, branch.env)
+	// Results arrive in completion order; the merge is defined in edge
+	// declaration order, so order by the branch's edge index. This is the only
+	// source of ordering: goroutine scheduling no longer affects the outcome.
+	ordered := make([]parallelBranchResult, len(branches))
+	copy(ordered, branches)
+	sort.Slice(ordered, func(i, j int) bool { return ordered[i].index < ordered[j].index })
+
+	envs := make([]*contextdata.Envelope, 0, len(ordered))
+	units := make([]contextdata.BranchMergeUnit, 0, len(ordered))
+	for _, branch := range ordered {
+		if branch.env == nil {
+			continue
 		}
+		envs = append(envs, branch.env)
+		units = append(units, contextdata.BranchMergeUnit{
+			Index: branch.index,
+			ID:    branch.edge.To,
+			Delta: branch.delta,
+			Env:   branch.env,
+		})
 	}
-	if len(branchEnvelopes) == 0 {
+	if len(units) == 0 {
 		return nil
 	}
-	// Validate before merge
-	if err := contextdata.ValidateBranchMerge(branchEnvelopes); err != nil {
+	if err := contextdata.ValidateBranchMerge(envs); err != nil {
 		return err
 	}
-	// Merge envelopes
-	merged, err := contextdata.MergeBranchEnvelopes(parent.TaskID, parent.SessionID, branchEnvelopes)
-	if err != nil {
+	if _, err := parent.ApplyBranchMerges(units); err != nil {
 		return err
 	}
-	// Update parent with merged state
-	parent.WorkingData = merged.WorkingData
-	parent.References = merged.References
 	return nil
 }
 

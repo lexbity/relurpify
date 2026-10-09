@@ -136,5 +136,3 @@ func (e *Envelope) StringSliceFromContext(key string) []string {
 	}
 	return nil
 }
-
-

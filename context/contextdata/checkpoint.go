@@ -57,16 +57,20 @@ func (e *Envelope) SetAssemblyMetadata(meta AssemblyMeta) {
 
 // Clone returns a deep copy of the envelope.
 func (e *Envelope) Clone() *Envelope {
+	// Scalar fields are read under the same lock that guards map and slice
+	// state; string/time fields are multi-word and must not tear under
+	// concurrent mutation (NodeID in particular may be reassigned).
+	e.mu.RLock()
+	taskID, sessionID, nodeID := e.TaskID, e.SessionID, e.NodeID
+	assemblyMetadata, createdAt := e.AssemblyMetadata, e.createdAt
+	e.mu.RUnlock()
+
 	workingData := e.WorkingDataSnapshot()
 	refs := e.ReferencesSnapshot()
-	e.mu.RLock()
-	assemblyMetadata := e.AssemblyMetadata
-	createdAt := e.createdAt
-	e.mu.RUnlock()
 	clone := &Envelope{
-		TaskID:            e.TaskID,
-		SessionID:         e.SessionID,
-		NodeID:            e.NodeID,
+		TaskID:            taskID,
+		SessionID:         sessionID,
+		NodeID:            nodeID,
 		WorkingData:       workingData,
 		CheckpointRequest: nil,
 		AssemblyMetadata:  assemblyMetadata,
@@ -109,26 +113,29 @@ func (e *Envelope) HandoffClone() *Envelope {
 
 // HandoffSnapshot returns a filtered envelope using the supplied policy.
 func (e *Envelope) HandoffSnapshot(policy HandoffPolicy) *Envelope {
+	e.mu.RLock()
+	taskID, sessionID, nodeID, createdAt := e.TaskID, e.SessionID, e.NodeID, e.createdAt
+	assemblyMetadata := e.AssemblyMetadata
+	e.mu.RUnlock()
+
 	workingData := e.WorkingDataSnapshot()
 	refs := e.ReferencesSnapshot()
 	snapshot := &Envelope{
-		TaskID:      e.TaskID,
-		SessionID:   e.SessionID,
+		TaskID:      taskID,
+		SessionID:   sessionID,
 		WorkingData: make(map[string]any),
 		References:  ReferenceBundle{},
-		createdAt:   e.createdAt,
+		createdAt:   createdAt,
 	}
 	if policy.PreserveNodeID {
-		snapshot.NodeID = e.NodeID
+		snapshot.NodeID = nodeID
 	}
 	if policy.PreserveAssemblyMetadata {
-		e.mu.RLock()
-		snapshot.AssemblyMetadata = e.AssemblyMetadata
-		e.mu.RUnlock()
+		snapshot.AssemblyMetadata = assemblyMetadata
 	}
 	if policy.PreserveWorkingMemory {
 		snapshot.WorkingData = cloneWorkingDataForHandoff(workingData, policy)
-		snapshot.References.WorkingMemory = cloneWorkingMemoryRefsForHandoff(refs.WorkingMemory, e.TaskID, policy)
+		snapshot.References.WorkingMemory = cloneWorkingMemoryRefsForHandoff(refs.WorkingMemory, taskID, policy)
 	}
 	if policy.PreserveStreamedContext {
 		snapshot.References.StreamedContext = append([]ChunkReference(nil), refs.StreamedContext...)

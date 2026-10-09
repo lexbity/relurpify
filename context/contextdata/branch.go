@@ -3,7 +3,6 @@ package contextdata
 import (
 	"fmt"
 	"sort"
-	"strings"
 	"time"
 )
 
@@ -43,125 +42,15 @@ type BranchDelta struct {
 
 // CloneEnvelope creates a deep copy of an envelope for branch execution.
 // Working memory state and references are copied together.
-func CloneEnvelope(env *Envelope, newBranchID string) *Envelope {
+//
+// It is a nil-safe delegate to Envelope.Clone. Callers that need to record
+// which branch the clone belongs to carry that identifier alongside the clone
+// (for example BranchState.BranchID); it is not part of the envelope.
+func CloneEnvelope(env *Envelope) *Envelope {
 	if env == nil {
 		return nil
 	}
-
-	now := time.Now().UTC()
-	workingDataCopy := env.WorkingDataSnapshot()
-	refsCopy := env.ReferencesSnapshot()
-
-	return &Envelope{
-		TaskID:            env.TaskID,
-		SessionID:         env.SessionID,
-		NodeID:            env.NodeID,
-		References:        refsCopy,
-		WorkingData:       workingDataCopy,
-		CheckpointRequest: nil, // Branch clones don't inherit checkpoint requests
-		AssemblyMetadata:  env.AssemblyMetadataSnapshot(),
-		createdAt:         now,
-	}
-}
-
-// MergeBranchEnvelopes unions multiple branch envelopes into a single envelope.
-// References and working memory entries are unioned without duplication.
-//
-// Merge rules:
-//   - Working memory: Union of all keys, last-write-wins on conflict
-//   - Streamed context: Deduplicated union of chunk references
-//   - Retrieval: Union of all retrieval references
-//   - Checkpoints: Union of all checkpoint references
-func MergeBranchEnvelopes(taskID, sessionID string, envelopes []*Envelope) (*Envelope, error) {
-	if len(envelopes) == 0 {
-		return NewEnvelope(taskID, sessionID), nil
-	}
-
-	now := time.Now().UTC()
-	merged := NewEnvelope(taskID, sessionID)
-	merged.AssemblyMetadata.AssembledAt = now
-
-	// Track seen keys for deduplication
-	seenWorkingKeys := make(map[string]struct{})
-	seenChunkIDs := make(map[ChunkID]struct{})
-	seenRetrievalIDs := make(map[string]struct{})
-	checkpointIndex := make(map[string]int)
-
-	// Collect all working memory keys and their values
-	// Use last-write-wins ordering (later envelopes override earlier ones)
-	workingMemoryUnion := make(map[string]any)
-
-	for _, env := range envelopes {
-		if env == nil {
-			continue
-		}
-		workingData := env.WorkingDataSnapshot()
-		refs := env.ReferencesSnapshot()
-
-		// Merge working memory data
-		for k, v := range workingData {
-			workingMemoryUnion[k] = v
-		}
-
-		// Merge streamed context references (deduplicate by chunk ID)
-		for _, ref := range refs.StreamedContext {
-			if _, seen := seenChunkIDs[ref.ChunkID]; !seen {
-				seenChunkIDs[ref.ChunkID] = struct{}{}
-				merged.References.StreamedContext = append(
-					merged.References.StreamedContext, ref)
-			}
-		}
-
-		// Merge working memory references
-		for _, ref := range refs.WorkingMemory {
-			key := ref.TaskID + "/" + ref.Key
-			if _, seen := seenWorkingKeys[key]; !seen {
-				seenWorkingKeys[key] = struct{}{}
-				merged.References.WorkingMemory = append(
-					merged.References.WorkingMemory, ref)
-			}
-		}
-
-		// Merge retrieval references (deduplicate by query ID)
-		for _, ref := range refs.Retrieval {
-			if _, seen := seenRetrievalIDs[ref.QueryID]; !seen {
-				seenRetrievalIDs[ref.QueryID] = struct{}{}
-				merged.References.Retrieval = append(
-					merged.References.Retrieval, ref)
-			}
-		}
-
-		// Merge checkpoint references (deduplicate by checkpoint ID)
-		for _, ref := range refs.Checkpoints {
-			if idx, seen := checkpointIndex[ref.CheckpointID]; seen {
-				merged.References.Checkpoints[idx].WorkingMemoryKeys = mergeStringSets(
-					merged.References.Checkpoints[idx].WorkingMemoryKeys,
-					ref.WorkingMemoryKeys,
-				)
-				continue
-			}
-			checkpointIndex[ref.CheckpointID] = len(merged.References.Checkpoints)
-			merged.References.Checkpoints = append(
-				merged.References.Checkpoints, cloneCheckpointReference(ref))
-		}
-	}
-
-	// Sort streamed context by rank for determinism
-	sort.Slice(merged.References.StreamedContext, func(i, j int) bool {
-		return merged.References.StreamedContext[i].Rank <
-			merged.References.StreamedContext[j].Rank
-	})
-
-	// Set the unioned working data
-	merged.WorkingData = workingMemoryUnion
-
-	for i := range merged.References.Checkpoints {
-		merged.References.Checkpoints[i].WorkingMemoryKeys = dedupeStrings(
-			merged.References.Checkpoints[i].WorkingMemoryKeys,
-		)
-	}
-
-	return merged, nil
+	return env.Clone()
 }
 
 // ComputeBranchDelta calculates the difference between a parent and child envelope.
@@ -227,8 +116,11 @@ func (e *BranchMergeError) Error() string {
 	return fmt.Sprintf("branch merge error: %s (%s)", e.Reason, e.Details)
 }
 
-// ValidateBranchMerge checks if branches can be safely merged.
-// Returns an error if there are irreconcilable conflicts.
+// ValidateBranchMerge checks the structural preconditions for merging branch
+// envelopes: at least one non-nil envelope and a shared TaskID. It does not
+// reject working-memory key conflicts; those are resolved deterministically by
+// ApplyBranchMerges in favor of the branch with the higher declaration index
+// (the caller records them in MergeStats.Conflicts for observability).
 func ValidateBranchMerge(envelopes []*Envelope) error {
 	if len(envelopes) < 2 {
 		return nil // Nothing to validate
@@ -250,43 +142,7 @@ func ValidateBranchMerge(envelopes []*Envelope) error {
 		}
 	}
 
-	// Additional validation rules can be added here:
-	// - Check for conflicting checkpoint requests
-	// - Validate streamed context shape
-	// - Ensure retrieval references don't have circular dependencies
-
 	return nil
-}
-
-func mergeStringSets(base, extra []string) []string {
-	if len(base) == 0 && len(extra) == 0 {
-		return nil
-	}
-	seen := make(map[string]struct{}, len(base)+len(extra))
-	out := make([]string, 0, len(base)+len(extra))
-	add := func(values []string) {
-		for _, value := range values {
-			value = strings.TrimSpace(value)
-			if value == "" {
-				continue
-			}
-			if _, ok := seen[value]; ok {
-				continue
-			}
-			seen[value] = struct{}{}
-			out = append(out, value)
-		}
-	}
-	add(base)
-	add(extra)
-	return out
-}
-
-func dedupeStrings(values []string) []string {
-	if len(values) == 0 {
-		return nil
-	}
-	return mergeStringSets(nil, values)
 }
 
 // DeduplicateChunkReferences removes duplicate chunk references, keeping

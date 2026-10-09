@@ -207,7 +207,7 @@ func (n *CheckpointNode) Execute(ctx context.Context, env *contextdata.Envelope)
 
 	checkpointRef := contextdata.CheckpointReference{
 		CheckpointID:      ref.ArtifactID,
-		SequenceNum:       env.AssemblyMetadata.EventLogSeq,
+		SequenceNum:       env.AssemblyMetadataSnapshot().EventLogSeq,
 		RequestedBy:       checkpointRequester(env),
 		CreatedAt:         time.Now().UTC(),
 		WorkingMemoryKeys: env.WorkingMemoryKeys(),

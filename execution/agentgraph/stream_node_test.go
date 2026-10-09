@@ -35,7 +35,9 @@ func TestContextStreamNodeBlockingAppliesRefsToEnvelope(t *testing.T) {
 	node.Mode = contextstream.ModeBlocking
 
 	env := contextdata.NewEnvelope("task-1", "session-1")
-	env.AssemblyMetadata.EventLogSeq = 12
+	meta := env.AssemblyMetadataSnapshot()
+	meta.EventLogSeq = 12
+	env.SetAssemblyMetadata(meta)
 	ctx := contextstream.WithTrigger(context.Background(), contextstream.NewTrigger(compilerStub))
 	result, err := node.Execute(ctx, env)
 	require.NoError(t, err)

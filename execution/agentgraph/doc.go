@@ -13,9 +13,11 @@
 //   - Retrieval results: references to knowledge store queries
 //
 // Parallel branches clone the envelope via contextdata.CloneEnvelope, execute
-// independently, and merge branch deltas back into the parent envelope using
-// contextdata.MergeBranchEnvelopes when they converge. The merge validates
-// that branches do not conflict on the same keys.
+// independently, and merge their deltas back into the parent envelope with
+// contextdata.ApplyBranchMerges when they converge. Branches merge in edge
+// declaration order; the branch later in declaration order wins a conflicting
+// key, and deletions propagate. The envelope owns the transition under its own
+// lock rather than exposing its fields to the graph.
 //
 // # Node types
 //
