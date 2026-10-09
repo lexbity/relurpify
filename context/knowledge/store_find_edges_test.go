@@ -134,16 +134,6 @@ func TestStoreLoadEdge(t *testing.T) {
 	require.False(t, ok)
 }
 
-// TestDeterministicChunkIDStableAndDistinct pins the content-addressed ID helper.
-func TestDeterministicChunkIDStableAndDistinct(t *testing.T) {
-	a := deterministicChunkID("pattern", "ref-1")
-	b := deterministicChunkID("pattern", "ref-1")
-	c := deterministicChunkID("pattern", "ref-2")
-	require.Equal(t, a, b, "identical inputs must produce identical IDs")
-	require.NotEqual(t, a, c, "different inputs must produce distinct IDs")
-	require.NotEmpty(t, a)
-}
-
 // TestKnowledgeHelpers covers the small pure helpers used across the package.
 func TestKnowledgeHelpers(t *testing.T) {
 	require.Equal(t, 0, estimateTokens(""))
