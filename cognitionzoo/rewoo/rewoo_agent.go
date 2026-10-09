@@ -14,17 +14,21 @@ import (
 	"codeburg.org/lexbit/relurpify/context/knowledge/search"
 	execution "codeburg.org/lexbit/relurpify/execution"
 	graph "codeburg.org/lexbit/relurpify/execution/agentgraph"
+	"codeburg.org/lexbit/relurpify/execution/prompt"
 	"codeburg.org/lexbit/relurpify/model"
 )
 
-// RewooAgent executes a ReWOO-style plan with mechanical tool execution.
+// RewooAgent executes a ReWOO-style plan: plan (one LLM call when no context
+// plan exists) → governed mechanical execution → synthesize (one LLM call
+// unless opted out).
 type RewooAgent struct {
-	Model        model.LanguageModel
-	Tools        *capability.CapabilityRegistry
-	Memory       *memory.WorkingMemoryStore
-	Config       *execution.Config
-	IndexManager *ast.IndexManager
-	SearchEngine *search.SearchEngine
+	Model          model.LanguageModel
+	Tools          *capability.CapabilityRegistry
+	Memory         *memory.WorkingMemoryStore
+	Config         *execution.Config
+	IndexManager   *ast.IndexManager
+	SearchEngine   *search.SearchEngine
+	PromptRegistry prompt.Registry
 
 	Options         RewooOptions
 	CheckpointStore *RewooCheckpointStore
@@ -42,6 +46,13 @@ func (a *RewooAgent) Initialize(cfg *execution.Config) error {
 // Capabilities returns the capability identifiers this agent provides.
 func (a *RewooAgent) Capabilities() []string {
 	return []string{"rewoo"}
+}
+
+func (a *RewooAgent) modelID() string {
+	if a == nil || a.Config == nil {
+		return ""
+	}
+	return a.Config.Model
 }
 
 // Execute runs the graph workflow for a ReWOO task.
@@ -64,7 +75,12 @@ func (a *RewooAgent) Execute(ctx context.Context, task *execution.Task, env *con
 	return g.Execute(ctx, env)
 }
 
-// BuildGraph builds a minimal ReWOO execution graph.
+// BuildGraph builds the ReWOO execution graph:
+//
+//	plan_gate ──► [planner (one LLM call) when no context plan]
+//	          └──► execute (governed) ──► aggregate ──► [synthesize (one LLM call) unless Synthesize=false] ──► done
+//
+// A missing plan with a failing planner fails the turn with ErrRewooPlanInvalid.
 func (a *RewooAgent) BuildGraph(ctx context.Context, task *execution.Task) (*graph.Graph, error) {
 	if a == nil {
 		return nil, fmt.Errorf("rewoo agent unavailable")
@@ -72,26 +88,42 @@ func (a *RewooAgent) BuildGraph(ctx context.Context, task *execution.Task) (*gra
 	if a.Tools == nil {
 		return nil, fmt.Errorf("rewoo agent missing capability registry")
 	}
-	load := &rewooPlanNode{id: "rewoo_plan", agent: a, task: task}
+	gate := &rewooPlanGateNode{id: "rewoo_plan_gate", agent: a, task: task}
+	planner := &rewooPlannerNode{id: "rewoo_planner", agent: a, task: task}
 	exec := &rewooExecuteNode{id: "rewoo_execute", agent: a, task: task}
 	aggregate := NewAggregateNode("rewoo_aggregate", nil)
+	synthesize := &rewooSynthesizeNode{id: "rewoo_synthesize", agent: a, task: task}
 	done := graph.NewTerminalNode("rewoo_done")
 	g := graph.NewGraph()
-	for _, node := range []graph.Node{load, exec, aggregate, done} {
+	for _, node := range []graph.Node{gate, planner, exec, aggregate, synthesize, done} {
 		if err := g.AddNode(node); err != nil {
 			return nil, err
 		}
 	}
-	if err := g.SetStart(load.ID()); err != nil {
+	if err := g.SetStart(gate.ID()); err != nil {
 		return nil, err
 	}
-	if err := g.AddEdge(load.ID(), exec.ID(), nil, false); err != nil {
+	// Gate: context plan present → execute directly; absent → planner first.
+	if err := g.AddEdge(gate.ID(), exec.ID(), func(_ *execution.Result, env *contextdata.Envelope) bool {
+		return contextPlanPresent(env)
+	}, false); err != nil {
+		return nil, err
+	}
+	if err := g.AddEdge(gate.ID(), planner.ID(), func(_ *execution.Result, env *contextdata.Envelope) bool {
+		return !contextPlanPresent(env)
+	}, false); err != nil {
+		return nil, err
+	}
+	if err := g.AddEdge(planner.ID(), exec.ID(), nil, false); err != nil {
 		return nil, err
 	}
 	if err := g.AddEdge(exec.ID(), aggregate.ID(), nil, false); err != nil {
 		return nil, err
 	}
-	if err := g.AddEdge(aggregate.ID(), done.ID(), nil, false); err != nil {
+	if err := g.AddEdge(aggregate.ID(), synthesize.ID(), nil, false); err != nil {
+		return nil, err
+	}
+	if err := g.AddEdge(synthesize.ID(), done.ID(), nil, false); err != nil {
 		return nil, err
 	}
 	return g, nil
@@ -107,10 +139,22 @@ func (a *RewooAgent) InitializeDeps(deps *paradigm.Deps) error {
 	a.Config = deps.Config
 	a.IndexManager = deps.IndexManager
 	a.SearchEngine = deps.SearchEngine
+	a.PromptRegistry = deps.PromptRegistry
+	if a.Options.PermissionChecker == nil {
+		a.Options.PermissionChecker = deps.PermissionChecker
+	}
 	if a.CheckpointStore == nil {
 		a.CheckpointStore = NewRewooCheckpointStore(deps.AgentLifecycle, nil)
 	}
 	return a.Initialize(deps.Config)
+}
+
+func contextPlanPresent(env *contextdata.Envelope) bool {
+	if env == nil {
+		return false
+	}
+	plan, ok := contextdata.GetTyped[*RewooPlan](env, "rewoo.plan")
+	return ok && plan != nil
 }
 
 func taskIDForRewoo(task *execution.Task) string {
@@ -123,22 +167,49 @@ func taskIDForRewoo(task *execution.Task) string {
 	return "rewoo"
 }
 
-type rewooPlanNode struct {
+// rewooPlanGateNode routes the graph based on whether the task context
+// carries a plan. A context plan is stored under rewoo.plan with
+// rewoo.plan_source=context; an absent plan routes to the planner node.
+type rewooPlanGateNode struct {
 	id    string
 	agent *RewooAgent
 	task  *execution.Task
 }
 
-func (n *rewooPlanNode) ID() string           { return n.id }
-func (n *rewooPlanNode) Type() graph.NodeType { return graph.NodeTypeSystem }
+func (n *rewooPlanGateNode) ID() string           { return n.id }
+func (n *rewooPlanGateNode) Type() graph.NodeType { return graph.NodeTypeSystem }
 
-func (n *rewooPlanNode) Execute(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
+func (n *rewooPlanGateNode) Execute(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 	plan, err := loadRewooPlan(n.task)
+	if err != nil {
+		// No context plan: the conditional edge routes to the planner.
+		return &execution.Result{NodeID: n.id, Success: true, Data: execution.NewToolResultPayload(map[string]any{"plan_source": ""})}, nil
+	}
+	env.SetWorkingValueWithClass("rewoo.plan", plan, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("rewoo.plan_source", planSourceContext, contextdata.MemoryClassTask)
+	return &execution.Result{NodeID: n.id, Success: true, Data: execution.NewToolResultPayload(map[string]any{"plan_source": planSourceContext, "plan_steps": len(plan.Steps)})}, nil
+}
+
+// rewooPlannerNode runs the single planner LLM call when the task context
+// carries no plan. A plan-parse failure fails the turn loudly with
+// ErrRewooPlanInvalid.
+type rewooPlannerNode struct {
+	id    string
+	agent *RewooAgent
+	task  *execution.Task
+}
+
+func (n *rewooPlannerNode) ID() string           { return n.id }
+func (n *rewooPlannerNode) Type() graph.NodeType { return graph.NodeTypeSystem }
+
+func (n *rewooPlannerNode) Execute(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
+	plan, err := n.agent.PlanWithModel(ctx, n.task, env)
 	if err != nil {
 		return nil, err
 	}
 	env.SetWorkingValueWithClass("rewoo.plan", plan, contextdata.MemoryClassTask)
-	return &execution.Result{NodeID: n.id, Success: true, Data: execution.NewToolResultPayload(map[string]any{"plan_steps": len(plan.Steps)})}, nil
+	env.SetWorkingValueWithClass("rewoo.plan_source", planSourceLLM, contextdata.MemoryClassTask)
+	return &execution.Result{NodeID: n.id, Success: true, Data: execution.NewToolResultPayload(map[string]any{"plan_source": planSourceLLM, "plan_steps": len(plan.Steps)})}, nil
 }
 
 type rewooExecuteNode struct {
@@ -210,4 +281,38 @@ func loadRewooPlan(task *execution.Task) (*RewooPlan, error) {
 		}
 	}
 	return nil, fmt.Errorf("rewoo: plan missing")
+}
+
+// rewooSynthesizeNode produces rewoo.final_output: one LLM call by default,
+// or the deterministic mechanical summary when RewooOptions.Synthesize=false
+// (telemetry records mode=mechanical for the skip).
+type rewooSynthesizeNode struct {
+	id    string
+	agent *RewooAgent
+	task  *execution.Task
+}
+
+func (n *rewooSynthesizeNode) ID() string           { return n.id }
+func (n *rewooSynthesizeNode) Type() graph.NodeType { return graph.NodeTypeSystem }
+
+func (n *rewooSynthesizeNode) Execute(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
+	results := stepResultsFromEnvelope(env)
+	var summary string
+	if !n.agent.Options.SynthesizeEnabled() {
+		n.agent.emitLLMPhase(ctx, env, "synthesize", "mechanical")
+		summary = mechanicalSummary(results)
+	} else {
+		text, err := n.agent.SynthesizeWithModel(ctx, env)
+		if err != nil {
+			return nil, err
+		}
+		summary = text
+	}
+	env.SetWorkingValueWithClass("rewoo.final_output", summary, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("rewoo.synth_ok", true, contextdata.MemoryClassTask)
+	return &execution.Result{
+		NodeID:  n.id,
+		Success: true,
+		Data:    execution.NewToolResultPayload(map[string]any{"final_output": summary}),
+	}, nil
 }

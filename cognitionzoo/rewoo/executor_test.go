@@ -32,7 +32,7 @@ func TestExecutePlanWritesStepKeys(t *testing.T) {
 	}
 	env := contextdata.NewEnvelope("task", "session")
 
-	if _, err := ExecutePlan(context.Background(), reg, plan, env, RewooOptions{}); err != nil {
+	if _, err := ExecutePlan(context.Background(), reg, plan, env, RewooOptions{PermissionChecker: allowAllChecker()}); err != nil {
 		t.Fatalf("ExecutePlan: %v", err)
 	}
 
@@ -62,7 +62,7 @@ func TestAggregateNodeReadsExecutedSteps(t *testing.T) {
 	}
 	env := contextdata.NewEnvelope("task", "session")
 
-	if _, err := ExecutePlan(context.Background(), reg, plan, env, RewooOptions{}); err != nil {
+	if _, err := ExecutePlan(context.Background(), reg, plan, env, RewooOptions{PermissionChecker: allowAllChecker()}); err != nil {
 		t.Fatalf("ExecutePlan: %v", err)
 	}
 

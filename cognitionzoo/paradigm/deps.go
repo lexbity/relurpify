@@ -13,6 +13,7 @@ import (
 	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/execution/agentlifecycle"
 	"codeburg.org/lexbit/relurpify/execution/prompt"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/model"
 	"codeburg.org/lexbit/relurpify/telemetry"
 )
@@ -20,18 +21,22 @@ import (
 // Deps is the runtime surface used by generic cognitionzoo paradigms.
 // App composition adapts broader workspace state into this value.
 type Deps struct {
-	Config         *execution.Config
-	Model          model.LanguageModel
-	Registry       *registry.CapabilityRegistry
-	CommandRunner  sandbox.CommandRunner
-	CommandPolicy  sandbox.CommandPolicy
-	WorkingMemory  *memory.WorkingMemoryStore
-	IndexManager   *ast.IndexManager
-	SearchEngine   *search.SearchEngine
-	StreamTrigger  *contextstream.Trigger
-	OutputIngester *knowledge.OutputIngester
-	IngestOutputs  bool
-	PromptRegistry prompt.Registry
-	AgentLifecycle agentlifecycle.Repository
-	Telemetry      telemetry.Telemetry
+	Config   *execution.Config
+	Model    model.LanguageModel
+	Registry *registry.CapabilityRegistry
+	// PermissionChecker is the capability gate shared by governed paradigms
+	// (ReWOO refuses to execute without one). Sourced from the same
+	// authorization bundle that backs the registry's permission manager.
+	PermissionChecker permissions.CapabilityChecker
+	CommandRunner     sandbox.CommandRunner
+	CommandPolicy     sandbox.CommandPolicy
+	WorkingMemory     *memory.WorkingMemoryStore
+	IndexManager      *ast.IndexManager
+	SearchEngine      *search.SearchEngine
+	StreamTrigger     *contextstream.Trigger
+	OutputIngester    *knowledge.OutputIngester
+	IngestOutputs     bool
+	PromptRegistry    prompt.Registry
+	AgentLifecycle    agentlifecycle.Repository
+	Telemetry         telemetry.Telemetry
 }

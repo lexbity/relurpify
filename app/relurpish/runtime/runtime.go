@@ -32,6 +32,7 @@ import (
 	"codeburg.org/lexbit/relurpify/execution/session"
 	"codeburg.org/lexbit/relurpify/execution/workspace"
 	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/governance/policy"
 	"codeburg.org/lexbit/relurpify/model"
 	"codeburg.org/lexbit/relurpify/named/euclo"
@@ -791,21 +792,32 @@ func (r *Runtime) hitlBroker() euclopolicy.HITLBroker {
 
 func (r *Runtime) paradigmDeps() *paradigm.Deps {
 	return &paradigm.Deps{
-		Config:         r.Workspace.Environment.Config,
-		Model:          r.Model,
-		Registry:       r.Tools,
-		CommandRunner:  r.Workspace.Environment.CommandRunner,
-		CommandPolicy:  r.Workspace.Environment.CommandPolicy,
-		WorkingMemory:  r.Memory,
-		IndexManager:   r.IndexManager,
-		SearchEngine:   r.SearchEngine,
-		StreamTrigger:  r.Workspace.Environment.StreamTrigger,
-		OutputIngester: r.Workspace.Environment.OutputIngester,
-		IngestOutputs:  r.Workspace.Environment.IngestOutputs,
-		PromptRegistry: r.Workspace.Environment.PromptRegistry,
-		AgentLifecycle: r.AgentLifecycle,
-		Telemetry:      r.Workspace.Telemetry,
+		Config:            r.Workspace.Environment.Config,
+		Model:             r.Model,
+		Registry:          r.Tools,
+		PermissionChecker: r.permissionChecker(),
+		CommandRunner:     r.Workspace.Environment.CommandRunner,
+		CommandPolicy:     r.Workspace.Environment.CommandPolicy,
+		WorkingMemory:     r.Memory,
+		IndexManager:      r.IndexManager,
+		SearchEngine:      r.SearchEngine,
+		StreamTrigger:     r.Workspace.Environment.StreamTrigger,
+		OutputIngester:    r.Workspace.Environment.OutputIngester,
+		IngestOutputs:     r.Workspace.Environment.IngestOutputs,
+		PromptRegistry:    r.Workspace.Environment.PromptRegistry,
+		AgentLifecycle:    r.AgentLifecycle,
+		Telemetry:         r.Workspace.Telemetry,
 	}
+}
+
+// permissionChecker returns the agent authorization bundle's capability
+// checker, or nil when the runtime is degraded. Governed paradigms fail
+// closed on a nil checker.
+func (r *Runtime) permissionChecker() permissions.CapabilityChecker {
+	if r == nil || r.registration == nil {
+		return nil
+	}
+	return r.registration.Permissions
 }
 
 func (r *Runtime) switchAgentDeps(agentCfg *execution.Config) *paradigm.Deps {
