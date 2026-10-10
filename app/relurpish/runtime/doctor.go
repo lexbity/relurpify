@@ -7,7 +7,6 @@ import (
 	"golang.org/x/sync/errgroup"
 	"io/fs"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -17,7 +16,6 @@ import (
 	capabilitydescriptor "codeburg.org/lexbit/relurpify/capability/descriptor"
 	platformfs "codeburg.org/lexbit/relurpify/capability/fs"
 	capabilityregistry "codeburg.org/lexbit/relurpify/capability/registry"
-	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/governance/policy"
 	"codeburg.org/lexbit/relurpify/named/euclo/euclocontract"
 	eucloservices "codeburg.org/lexbit/relurpify/named/euclo/services"
@@ -120,7 +118,7 @@ func (r DoctorReport) Ready() bool {
 // without requiring the runtime to start successfully.
 func BuildDoctorReport(ctx context.Context, cfg Config, secrets config.Secrets) DoctorReport {
 	// Diagnostics are non-interactive: strip the HITL-gated command policy so
-	// dependency/chromium probes (and ProbeEnvironment below) never block on
+	// dependency probes (and ProbeEnvironment below) never block on
 	// approval. See diagnosticConfig.
 	cfg = diagnosticConfig(cfg)
 	paths := config.New(cfg.Workspace)
@@ -278,7 +276,7 @@ func BuildDoctorReport(ctx context.Context, cfg Config, secrets config.Secrets) 
 		Blocking:  report.ModelProfilesError != "",
 		Details:   firstNonEmpty(report.ModelProfilesError, report.Inference.SelectedProfile, "workspace profile available"),
 	})
-	// Keep existing sandbox and chromium checks
+	// Sandbox checks
 	runscOK := env.Sandbox.Runsc.Error == ""
 	dockerOK := env.Sandbox.Docker.Error == ""
 	dockerDegraded := env.Sandbox.Docker.Path != "" && !dockerOK
@@ -310,7 +308,6 @@ func BuildDoctorReport(ctx context.Context, cfg Config, secrets config.Secrets) 
 	})
 	// inference_backend is shown in the dedicated "Inference backend:" block,
 	// not duplicated here as a dependency entry (FR-8).
-	deps = append(deps, detectChromiumStatus(ctx, cfg.CommandPolicy))
 	deps = append(deps, probeAuditChain(cfg))
 	if bundle.Config != nil {
 		deps = append(deps, probeRuntimeImage(bundle.Config.Security.Sandbox))
@@ -442,31 +439,6 @@ func copyTemplateContent(data []byte, dst, workspace string, overwrite bool) err
 		return err
 	}
 	return os.WriteFile(filepath.Clean(cleanDst), []byte(rendered), platformfs.PublicFileMode) //nolint:gosec // workspace-scoped template output after prefix check
-}
-
-func detectChromiumStatus(ctx context.Context, policy sandbox.CommandPolicy) DependencyStatus {
-	binaries := []string{"chromium", "chromium-browser", "google-chrome", "google-chrome-stable"}
-	for _, name := range binaries {
-		path, err := exec.LookPath(name)
-		if err != nil {
-			continue
-		}
-		version, _ := runCommand(ctx, policy, path, "--version")
-		return DependencyStatus{
-			Name:      "chromium",
-			Required:  false,
-			Available: true,
-			Blocking:  false,
-			Details:   strings.TrimSpace(firstNonEmpty(version, path)),
-		}
-	}
-	return DependencyStatus{
-		Name:      "chromium",
-		Required:  false,
-		Available: false,
-		Blocking:  false,
-		Details:   "not found",
-	}
 }
 
 func formatSandboxDetail(detail string) string {

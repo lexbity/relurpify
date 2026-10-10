@@ -20,8 +20,6 @@
 //     in the workspace configuration and imports their capabilities.
 //   - Background delegation (background_delegation_provider.go): routes tasks
 //     marked for background execution to background agent instances.
-//   - Browser capabilities are exposed by the workspace service in
-//     ayenitd/service/browser and consumed through the shared registry.
 //
 // # Delegation
 //

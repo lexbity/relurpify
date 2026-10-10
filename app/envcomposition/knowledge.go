@@ -22,9 +22,11 @@ type KnowledgeRuntime struct {
 	// Grounding is the synchronous capture-as-bridge write path. Graph runs
 	// wire it as their epoch grounder (one bus, one synchronous write boundary).
 	Grounding *knowledge.GroundingService
-	// Invalidation is the revision-drift pass. It consumes code-revision events
-	// from the git watcher on the composition bus and marks affected chunks
-	// stale, so the next compile excludes them.
+	// Invalidation is the revision-drift pass. It consumes code-revision
+	// events on the composition bus and marks affected chunks stale, so the
+	// next compile excludes them. (The realtime git-watcher producer was
+	// deleted in S5; the scheduled knowledge.refresh sweep is the staleness
+	// driver until a producer is re-authored as a runner job.)
 	Invalidation *knowledge.InvalidationPass
 	// Drain is the invalidation subscriber's bounded, subscriber-side drain the
 	// epoch barrier calls. Nil when no invalidation pass is running.
@@ -108,8 +110,8 @@ func BuildKnowledgeRuntime(input KnowledgeRuntimeInput) (*KnowledgeRuntime, erro
 	if err := knowledge.AssertSameBus(comp.EventBus(), bkcEvents); err != nil {
 		return nil, err
 	}
-	// The revision-drift pass closes the loop from git-watcher revision events
-	// to stale chunks on the same bus. Its non-lethal loop keeps retrying a
+	// The revision-drift pass closes the loop from code-revision events to
+	// stale chunks on the same bus. Its non-lethal loop keeps retrying a
 	// temporarily failing store instead of dying on the first error.
 	invalidation := &knowledge.InvalidationPass{
 		Store:         knowledgeStore,

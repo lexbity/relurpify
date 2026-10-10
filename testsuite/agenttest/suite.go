@@ -90,20 +90,19 @@ type RecordingSpec struct {
 }
 
 type CaseSpec struct {
-	Name              string                        `yaml:"name"`
-	Description       string                        `yaml:"description,omitempty"`
-	Timeout           string                        `yaml:"timeout,omitempty"`
-	TaskType          string                        `yaml:"task_type,omitempty"`
-	Prompt            string                        `yaml:"prompt"`
-	InteractionScript []InteractionScriptStep       `yaml:"interaction_script,omitempty"`
-	Context           map[string]any                `yaml:"context,omitempty"`
-	Metadata          map[string]string             `yaml:"metadata,omitempty"`
-	BrowserFixtures   map[string]BrowserFixtureSpec `yaml:"browser_fixtures,omitempty"`
-	Setup             SetupSpec                     `yaml:"setup,omitempty"`
-	Requires          RequiresSpec                  `yaml:"requires,omitempty"`
-	Expect            ExpectSpec                    `yaml:"expect,omitempty"`
-	Overrides         CaseOverrideSpec              `yaml:"overrides,omitempty"`
-	Tags              []string                      `yaml:"tags,omitempty"`
+	Name              string                  `yaml:"name"`
+	Description       string                  `yaml:"description,omitempty"`
+	Timeout           string                  `yaml:"timeout,omitempty"`
+	TaskType          string                  `yaml:"task_type,omitempty"`
+	Prompt            string                  `yaml:"prompt"`
+	InteractionScript []InteractionScriptStep `yaml:"interaction_script,omitempty"`
+	Context           map[string]any          `yaml:"context,omitempty"`
+	Metadata          map[string]string       `yaml:"metadata,omitempty"`
+	Setup             SetupSpec               `yaml:"setup,omitempty"`
+	Requires          RequiresSpec            `yaml:"requires,omitempty"`
+	Expect            ExpectSpec              `yaml:"expect,omitempty"`
+	Overrides         CaseOverrideSpec        `yaml:"overrides,omitempty"`
+	Tags              []string                `yaml:"tags,omitempty"`
 	// CapabilityDirectRun bypasses the full agent loop for direct capability testing.
 	CapabilityDirectRun *CapabilityDirectRunSpec `yaml:"capability_direct_run,omitempty"`
 }
@@ -113,15 +112,6 @@ type InteractionScriptStep struct {
 	Kind   string `yaml:"kind,omitempty"`
 	Action string `yaml:"action"`
 	Text   string `yaml:"text,omitempty"`
-}
-
-type BrowserFixtureSpec struct {
-	Path        string            `yaml:"path,omitempty"`
-	File        string            `yaml:"file,omitempty"`
-	Content     string            `yaml:"content,omitempty"`
-	ContentType string            `yaml:"content_type,omitempty"`
-	Status      int               `yaml:"status,omitempty"`
-	Headers     map[string]string `yaml:"headers,omitempty"`
 }
 
 type RequiresSpec struct {
@@ -531,14 +521,6 @@ func (s *Suite) Validate() error {
 		if c.Overrides.Recording != nil {
 			if err := validateRecordingSpec(*c.Overrides.Recording, fmt.Sprintf("suite case[%s] overrides.recording", c.Name)); err != nil {
 				return err
-			}
-		}
-		for fixtureName, fixture := range c.BrowserFixtures {
-			if fixtureName == "" {
-				return fmt.Errorf("suite case[%s] has browser fixture with empty name", c.Name)
-			}
-			if fixture.File == "" && fixture.Content == "" {
-				return fmt.Errorf("suite case[%s] browser fixture[%s] missing file or content", c.Name, fixtureName)
 			}
 		}
 		if err := validateSetup(c.Setup, c.Name); err != nil {

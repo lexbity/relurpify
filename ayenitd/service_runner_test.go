@@ -4,7 +4,6 @@ import (
 	"context"
 	"sync/atomic"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -51,10 +50,9 @@ func TestStartWorkspaceServicesStartsRegisteredServices(t *testing.T) {
 	}
 }
 
-// TestRegisterWorkspaceServicesWiresKnowledgeLifecycle proves the bootstrap
-// indexer and git watcher register and start through the session manager, with
-// the bootstrap pass running exactly once.
-func TestRegisterWorkspaceServicesWiresKnowledgeLifecycle(t *testing.T) {
+// TestRegisterWorkspaceServicesWiresBootstrap proves the bootstrap indexer
+// registers and starts through the session manager, running exactly once.
+func TestRegisterWorkspaceServicesWiresBootstrap(t *testing.T) {
 	ws := &session.WorkspaceSession{ID: "test-workspace"}
 	ws.SetServiceManager(session.NewServiceManager())
 
@@ -70,64 +68,24 @@ func TestRegisterWorkspaceServicesWiresKnowledgeLifecycle(t *testing.T) {
 		LoadStats: func() (*ast.IndexStats, error) { return nil, nil },
 	}
 
-	require.NoError(t, RegisterWorkspaceServices(context.Background(), WorkspaceConfig{Workspace: deps.WorkspaceRoot}, ws, nil, nil, deps))
+	require.NoError(t, RegisterWorkspaceServices(context.Background(), WorkspaceConfig{Workspace: deps.WorkspaceRoot}, ws, deps))
 
 	ids := map[string]bool{}
 	for _, snap := range ws.ServiceSnapshots() {
 		ids[snap.ID] = true
 	}
 	require.True(t, ids["knowledge.bootstrap"], "bootstrap indexer must be registered")
-	require.True(t, ids["knowledge.git_watcher"], "git watcher must be registered")
 
 	require.NoError(t, StartWorkspaceServices(context.Background(), ws))
 	require.Equal(t, int32(1), bootstrapRuns.Load(), "bootstrap must run exactly once")
 }
 
-// TestWorkspaceGitWatcherEmitsOnBus proves the registered git watcher publishes
-// a code-revision event onto the composition bus when HEAD moves.
-func TestWorkspaceGitWatcherEmitsOnBus(t *testing.T) {
-	bus := &knowledge.EventBus{}
-	events, unsubscribe := bus.Subscribe(4)
-	defer unsubscribe()
-
+// TestRegisterWorkspaceServicesWithoutIndexManager proves a nil IndexManager
+// registers nothing rather than a dormant placeholder service.
+func TestRegisterWorkspaceServicesWithoutIndexManager(t *testing.T) {
 	ws := &session.WorkspaceSession{ID: "test-workspace"}
 	ws.SetServiceManager(session.NewServiceManager())
 
-	var calls atomic.Int32
-	deps := WorkspaceServiceDeps{
-		WorkspaceRoot:   t.TempDir(),
-		EventBus:        bus,
-		GitPollInterval: time.Millisecond,
-		RunGit: func(context.Context, string, ...string) (string, error) {
-			// 1st call: current revision; 2nd: same (initial read); 3rd: moved;
-			// 4th: affected paths.
-			switch calls.Add(1) {
-			case 1, 2:
-				return "rev-1\n", nil
-			case 3:
-				return "rev-2\n", nil
-			default:
-				return "tracked.go\n", nil
-			}
-		},
-	}
-	require.NoError(t, RegisterWorkspaceServices(context.Background(), WorkspaceConfig{Workspace: deps.WorkspaceRoot}, ws, nil, nil, deps))
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	// Start runs the watcher loop under the given context; cancel stops it.
-	// StartAll blocks only until each service's Start returns.
-	go func() { _ = StartWorkspaceServices(ctx, ws) }()
-
-	select {
-	case event := <-events:
-		require.Equal(t, knowledge.EventCodeRevisionChanged, event.Kind)
-		payload, ok := event.Payload.(knowledge.CodeRevisionChangedPayload)
-		require.True(t, ok)
-		require.Equal(t, "rev-2", payload.NewRevision)
-		require.Equal(t, []string{"tracked.go"}, payload.AffectedPaths)
-	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for the git watcher to emit a revision event")
-	}
-	cancel()
+	require.NoError(t, RegisterWorkspaceServices(context.Background(), WorkspaceConfig{Workspace: t.TempDir()}, ws, WorkspaceServiceDeps{}))
+	require.Empty(t, ws.ServiceSnapshots())
 }

@@ -54,7 +54,6 @@ type PolicyInput interface {
 type SpecView interface {
 	PolicyInput
 	GetAllowedCapabilities() []CapabilitySelectorView
-	GetBrowser() BrowserSpecView
 	GetOrchestration() OrchestrationConfigView
 }
 
@@ -118,13 +117,6 @@ type ProviderPolicyView struct {
 	Activate             string
 	DefaultTrust         string
 	AllowCredentialShare bool
-}
-
-type BrowserSpecView struct {
-	Enabled         bool
-	DefaultBackend  string
-	AllowedBackends []string
-	Actions         map[string]string
 }
 
 type OrchestrationConfigView struct {

@@ -70,10 +70,15 @@ func TestCheckForbiddenImports_centralVocabulary(t *testing.T) {
 			ImportPath: ModulePath + "/app/somewhere",
 			Imports:    []string{ModulePath + "/platform/contractsutils"}, // NOT a match (segment boundary)
 		},
+		{
+			// platform/browser was deleted in S5 and is on the grave list.
+			ImportPath:   ModulePath + "/named/euclo",
+			XTestImports: []string{ModulePath + "/platform/browser/cdp"},
+		},
 	}
 
 	got := CheckForbiddenImports(pkgs, Allowlist{})
-	if len(got) != 2 {
+	if len(got) != 3 {
 		t.Fatalf("want 2 violations, got %d: %v", len(got), got)
 	}
 	for _, v := range got {

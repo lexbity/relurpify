@@ -26,6 +26,7 @@ var ForbiddenImportPrefixes = []string{ //nolint:gochecknoglobals // immutable f
 // deleted in S5.
 var CentralVocabularyPrefixes = []string{ //nolint:gochecknoglobals // immutable central-vocabulary table
 	"platform/contracts",
+	"platform/browser",
 }
 
 // CheckForbiddenImports reports any package whose imports (production or test)

@@ -79,22 +79,6 @@ func (a *AgentRuntimeSpec) GetGlobalPolicies() map[string]string {
 	return out
 }
 
-func (a *AgentRuntimeSpec) GetBrowser() ports.BrowserSpecView {
-	if a == nil || a.Browser == nil {
-		return ports.BrowserSpecView{}
-	}
-	actions := make(map[string]string, len(a.Browser.Actions))
-	for k, v := range a.Browser.Actions {
-		actions[k] = string(v)
-	}
-	return ports.BrowserSpecView{
-		Enabled:         a.Browser.Enabled,
-		DefaultBackend:  a.Browser.DefaultBackend,
-		AllowedBackends: append([]string{}, a.Browser.AllowedBackends...),
-		Actions:         actions,
-	}
-}
-
 func (a *AgentRuntimeSpec) GetOrchestration() ports.OrchestrationConfigView {
 	if a == nil {
 		return ports.OrchestrationConfigView{}

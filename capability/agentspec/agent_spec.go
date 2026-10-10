@@ -38,7 +38,6 @@ type AgentRuntimeSpec struct {
 	Coordination        AgentCoordinationSpec           `yaml:"coordination,omitempty" json:"coordination,omitempty"`
 	Composition         *AgentCompositionSpec           `yaml:"composition,omitempty" json:"composition,omitempty"`
 	ArtifactWindow      AgentArtifactWindowSpec         `yaml:"context,omitempty" json:"context,omitempty"`
-	Browser             *AgentBrowserSpec               `yaml:"browser,omitempty" json:"browser,omitempty"`
 	LSP                 AgentLSPSpec                    `yaml:"lsp,omitempty" json:"lsp,omitempty"`
 	Search              AgentSearchSpec                 `yaml:"search,omitempty" json:"search,omitempty"`
 	Metadata            AgentMetadata                   `yaml:"metadata,omitempty" json:"metadata,omitempty"`
@@ -297,35 +296,6 @@ type AgentArtifactWindowSpec struct {
 	ProgressiveLoading  *bool  `yaml:"progressive_loading,omitempty" json:"progressive_loading,omitempty"`
 }
 
-// AgentBrowserSpec configures the model-facing browser tool and its action
-// policies without bypassing manifest network/filesystem enforcement. The
-// action policy map only accepts browser actions that are implemented end to
-// end by the browser service.
-type AgentBrowserSpec struct {
-	Enabled         bool                            `yaml:"enabled" json:"enabled"`
-	DefaultBackend  string                          `yaml:"default_backend,omitempty" json:"default_backend,omitempty"`
-	AllowedBackends []string                        `yaml:"allowed_backends,omitempty" json:"allowed_backends,omitempty"`
-	Actions         map[string]AgentPermissionLevel `yaml:"actions,omitempty" json:"actions,omitempty"`
-	Extraction      AgentBrowserExtractionSpec      `yaml:"extraction,omitempty" json:"extraction,omitempty"`
-	Downloads       AgentBrowserDownloadSpec        `yaml:"downloads,omitempty" json:"downloads,omitempty"`
-	Credentials     AgentBrowserCredentialsSpec     `yaml:"credentials,omitempty" json:"credentials,omitempty"`
-}
-
-type AgentBrowserExtractionSpec struct {
-	DefaultMode       string `yaml:"default_mode,omitempty" json:"default_mode,omitempty"`
-	MaxHTMLTokens     int    `yaml:"max_html_tokens,omitempty" json:"max_html_tokens,omitempty"`
-	MaxSnapshotTokens int    `yaml:"max_snapshot_tokens,omitempty" json:"max_snapshot_tokens,omitempty"`
-}
-
-type AgentBrowserDownloadSpec struct {
-	Enabled   bool   `yaml:"enabled,omitempty" json:"enabled,omitempty"`
-	Directory string `yaml:"directory,omitempty" json:"directory,omitempty"`
-}
-
-type AgentBrowserCredentialsSpec struct {
-	RequireHITL bool `yaml:"require_hitl,omitempty" json:"require_hitl,omitempty"`
-}
-
 // AgentOrchestrationConfig carries agent orchestration policy hints. These
 // narrow behavior but must never bypass registry permissions or sandbox rules.
 type AgentOrchestrationConfig struct {
@@ -578,11 +548,6 @@ func (a *AgentRuntimeSpec) Validate() error {
 		}
 		if weight < 0 {
 			return fmt.Errorf("orchestration.review.severity_weights[%s] must be >= 0", severity)
-		}
-	}
-	if a.Browser != nil {
-		if err := a.Browser.Validate(); err != nil {
-			return fmt.Errorf("browser config invalid: %w", err)
 		}
 	}
 	if err := a.Files.Validate(); err != nil {
@@ -938,76 +903,6 @@ func ValidateCapabilityInsertionPolicy(policy CapabilityInsertionPolicy) error {
 	default:
 		return fmt.Errorf("action=%s invalid", policy.Action)
 	}
-}
-
-var validBrowserActions = map[string]struct{}{ //nolint:gochecknoglobals // immutable validation vocabulary
-	"open":                   {},
-	"navigate":               {},
-	"click":                  {},
-	"type":                   {},
-	"wait":                   {},
-	"extract":                {},
-	"get_text":               {},
-	"get_accessibility_tree": {},
-	"get_html":               {},
-	"current_url":            {},
-	"screenshot":             {},
-	"execute_js":             {},
-	"close":                  {},
-}
-
-var validBrowserBackends = map[string]struct{}{ //nolint:gochecknoglobals // immutable validation vocabulary
-	"cdp":       {},
-	"webdriver": {},
-	"bidi":      {},
-}
-
-// Validate ensures the browser section contains only supported action and
-// backend names.
-func (b *AgentBrowserSpec) Validate() error {
-	if b == nil {
-		return nil
-	}
-	if err := validateBrowserBackendName(b.DefaultBackend, "default_backend"); err != nil {
-		return err
-	}
-	for _, backend := range b.AllowedBackends {
-		if err := validateBrowserBackendName(backend, "allowed_backends"); err != nil {
-			return err
-		}
-	}
-	for action, policy := range b.Actions {
-		action = strings.TrimSpace(action)
-		if action == "" {
-			return fmt.Errorf("actions contains empty key")
-		}
-		if _, ok := validBrowserActions[action]; !ok {
-			return fmt.Errorf("actions[%s] invalid", action)
-		}
-		switch policy {
-		case AgentPermissionAllow, AgentPermissionAsk, AgentPermissionDeny, "":
-		default:
-			return fmt.Errorf("actions[%s] policy=%s invalid", action, policy)
-		}
-	}
-	if b.Extraction.MaxHTMLTokens < 0 {
-		return fmt.Errorf("extraction.max_html_tokens must be >= 0")
-	}
-	if b.Extraction.MaxSnapshotTokens < 0 {
-		return fmt.Errorf("extraction.max_snapshot_tokens must be >= 0")
-	}
-	return nil
-}
-
-func validateBrowserBackendName(value string, field string) error {
-	value = strings.TrimSpace(strings.ToLower(value))
-	if value == "" {
-		return nil
-	}
-	if _, ok := validBrowserBackends[value]; ok {
-		return nil
-	}
-	return fmt.Errorf("%s %q invalid", field, value)
 }
 
 // Validate ensures model configuration is provided.

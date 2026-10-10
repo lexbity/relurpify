@@ -166,15 +166,6 @@ func effectiveExposurePolicies(spec *agentspec.AgentRuntimeSpec) []agentspec.Cap
 		return nil
 	}
 	policies := append([]agentspec.CapabilityExposurePolicy{}, spec.ExposurePolicies...)
-	if spec.Browser != nil && spec.Browser.Enabled {
-		policies = append(policies, agentspec.CapabilityExposurePolicy{
-			Selector: agentspec.CapabilitySelector{
-				Name:            "browser",
-				RuntimeFamilies: []agentspec.CapabilityRuntimeFamily{agentspec.CapabilityRuntimeFamilyProvider},
-			},
-			Access: agentspec.CapabilityExposureCallable,
-		})
-	}
 	return policies
 }
 

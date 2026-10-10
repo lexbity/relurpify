@@ -548,11 +548,10 @@ func buildRuntime(ctx context.Context, cfg Config, secrets config.Secrets) (*Run
 	rt.setAgent(agent)
 	emitAgentStartupEvent(ctx, env.EventLog, "local", registration.ID, cfg.AgentLabel(), agent)
 	emitContractResolvedEvent(ctx, env.EventLog, "local", registration.ID, cfg.AgentLabel(), docSnapshot)
-	if err := ayenitd.RegisterWorkspaceServices(ctx, ayenitd.WorkspaceConfig{Workspace: cfg.Workspace}, sess, rt.Tools, registration, ayenitd.WorkspaceServiceDeps{
+	if err := ayenitd.RegisterWorkspaceServices(ctx, ayenitd.WorkspaceConfig{Workspace: cfg.Workspace}, sess, ayenitd.WorkspaceServiceDeps{
 		WorkspaceRoot: cfg.Workspace,
 		EventBus:      env.KnowledgeEvents,
 		IndexManager:  env.IndexManager,
-		CommandPolicy: env.CommandPolicy,
 		Telemetry:     rt.Workspace.Telemetry,
 	}); err != nil {
 		_ = rt.Close(ctx)

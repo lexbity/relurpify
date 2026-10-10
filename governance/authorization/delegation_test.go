@@ -93,9 +93,6 @@ func (d *mockDescriptor) GetGlobalPolicies() map[string]string                  
 func (d *mockDescriptor) GetAllowedCapabilities() []governanceports.CapabilitySelectorView {
 	return nil
 }
-func (d *mockDescriptor) GetBrowser() governanceports.BrowserSpecView {
-	return governanceports.BrowserSpecView{}
-}
 func (d *mockDescriptor) GetOrchestration() governanceports.OrchestrationConfigView {
 	return governanceports.OrchestrationConfigView{}
 }
