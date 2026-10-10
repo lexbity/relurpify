@@ -329,6 +329,18 @@ func (r *CapabilityRegistry) CapabilityAvailable(ctx context.Context, state port
 	if r == nil {
 		return false
 	}
+	// Allowlist-scoped registries keep no entries of their own: availability
+	// must be evaluated against the delegate (through the same allowlist gate
+	// InvokeCapability applies), or every scoped lookup reports unavailable.
+	if r.delegate != nil {
+		if r.toolIDAllowlist != nil {
+			desc, ok := r.delegate.GetCapability(idOrName)
+			if !ok || !r.isAllowlisted(desc.ID) {
+				return false
+			}
+		}
+		return r.delegate.CapabilityAvailable(ctx, state, idOrName)
+	}
 	entry, err := r.capabilityEntry(idOrName)
 	if err != nil || entry == nil {
 		return false

@@ -118,6 +118,28 @@ type CaseReport struct {
 	// derived from the euclo.route.selected telemetry event (FR-22). It feeds
 	// the Benchmark-axis `selection:` assertion.
 	RouteSelection RouteSelectionReport `json:"route_selection,omitempty"`
+
+	// ContextStream aggregates the contextstream.injected telemetry of the
+	// case: how often a compiled knowledge slice was rendered into a model
+	// call, and with how many chunks/tokens. Zero-value when the run never
+	// streamed (cold workspace) — observable, not silent.
+	ContextStream ContextStreamReport `json:"context_stream,omitempty"`
+	// Knowledge summarizes the knowledge-loop write side of the case: how
+	// many chunks were grounded (committed) through captures.
+	Knowledge KnowledgeReport `json:"knowledge,omitempty"`
+}
+
+// ContextStreamReport aggregates the case's contextstream.injected events.
+type ContextStreamReport struct {
+	Injected  int `json:"injected,omitempty"`
+	Chunks    int `json:"chunks,omitempty"`
+	Tokens    int `json:"tokens,omitempty"`
+	CacheHits int `json:"cache_hits,omitempty"`
+}
+
+// KnowledgeReport summarizes the case's chunk.committed events.
+type KnowledgeReport struct {
+	GroundedChunks int `json:"grounded_chunks,omitempty"`
 }
 
 // RouteSelectionReport records the deterministic route-selection outcome of one

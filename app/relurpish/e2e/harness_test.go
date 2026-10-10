@@ -12,6 +12,7 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/model"
+	"codeburg.org/lexbit/relurpify/testsuite/testhelper"
 )
 
 // recordingRunner records every command request that reaches it.
@@ -183,30 +184,11 @@ func (m *offlineScenarioModel) inject(options *model.LLMOptions) {
 
 // autoApproveHITL subscribes to the runtime's HITL bus and approves every
 // request. It returns a cancel function that must be called before Close.
+// autoApproveHITL delegates to the shared testhelper approver — the single
+// implementation of test-side HITL auto-approval across the tree.
 func autoApproveHITL(t *testing.T, rt *runtime.Runtime) func() {
 	t.Helper()
-
-	ch, cancel := rt.SubscribeHITL()
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		for ev := range ch {
-			if ev.Request == nil {
-				continue
-			}
-			safeApproveHITL(rt, ev.Request.ID)
-		}
-	}()
-
-	return func() {
-		cancel()
-		<-done
-	}
-}
-
-func safeApproveHITL(rt *runtime.Runtime, requestID string) {
-	defer func() { _ = recover() }()
-	_ = rt.ApproveHITL(requestID, "e2e", "", 0)
+	return testhelper.AutoApproveHITL(t, rt)
 }
 
 func hasString(values []string, want string) bool {

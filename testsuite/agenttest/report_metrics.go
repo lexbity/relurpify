@@ -47,6 +47,47 @@ func applyRecordedTelemetry(report *CaseReport, events []telemetry.Event) {
 	if selection := routeSelectionFromEvents(events); selection.ChosenRoute != "" || selection.DecidedBy != "" {
 		report.RouteSelection = selection
 	}
+	if cs := contextStreamFromEvents(events); cs.Injected > 0 {
+		report.ContextStream = cs
+	}
+	if k := knowledgeFromEvents(events); k.GroundedChunks > 0 {
+		report.Knowledge = k
+	}
+}
+
+// contextStreamFromEvents aggregates the case's contextstream.injected events:
+// one entry per non-empty render of a compiled knowledge slice into a model
+// call, with the compiler's chunk/token accounting summed across the run.
+func contextStreamFromEvents(events []telemetry.Event) ContextStreamReport {
+	var cs ContextStreamReport
+	for _, ev := range events {
+		if ev.Type != telemetry.EventContextStreamInjected {
+			continue
+		}
+		cs.Injected++
+		if chunks, ok := ev.Metadata["chunks"].(int); ok {
+			cs.Chunks += chunks
+		}
+		if tokens, ok := ev.Metadata["tokens"].(int); ok {
+			cs.Tokens += tokens
+		}
+		if hit, ok := ev.Metadata["cache_hit"].(bool); ok && hit {
+			cs.CacheHits++
+		}
+	}
+	return cs
+}
+
+// knowledgeFromEvents counts the chunk commits the case produced — the write
+// half of the knowledge loop, observed through the recorder sink.
+func knowledgeFromEvents(events []telemetry.Event) KnowledgeReport {
+	var k KnowledgeReport
+	for _, ev := range events {
+		if ev.Type == telemetry.EventChunkCommitted {
+			k.GroundedChunks++
+		}
+	}
+	return k
 }
 
 // routeSelectionFromEvents derives the case's route-selection outcome from the

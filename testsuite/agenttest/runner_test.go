@@ -32,7 +32,7 @@ const (
 	kind                      = "kind"
 	manifest_model            = "manifest-model"
 	mode                      = "mode"
-	model                     = "model"
+	modelKey                  = "model"
 	models                    = "models"
 	name                      = "name"
 	scope                     = "scope"
@@ -139,7 +139,7 @@ func TestResolveCaseMaxRetries(t *testing.T) {
 }
 
 func TestResolveCaseExecutionPrefersCLIThenSuiteThenManifestModel(t *testing.T) {
-	layout := newRunCaseLayout(t.TempDir(), smoke, model)
+	layout := newRunCaseLayout(t.TempDir(), smoke, modelKey)
 	suite := &Suite{Spec: SuiteSpec{}}
 
 	exec, err := resolveCaseExecution(suite, CaseSpec{Name: smoke}, ModelSpec{Name: suite_model}, manifest_model, RunOptions{ModelOverride: "cli-model"}, layout, t.TempDir(), t.TempDir())
@@ -168,7 +168,7 @@ func TestResolveCaseExecutionPrefersCLIThenSuiteThenManifestModel(t *testing.T) 
 }
 
 func TestResolveCaseExecutionFailsWithoutResolvedModel(t *testing.T) {
-	layout := newRunCaseLayout(t.TempDir(), smoke, model)
+	layout := newRunCaseLayout(t.TempDir(), smoke, modelKey)
 	_, err := resolveCaseExecution(&Suite{Spec: SuiteSpec{}}, CaseSpec{Name: smoke}, ModelSpec{}, "", RunOptions{}, layout, t.TempDir(), t.TempDir())
 	if err == nil {
 		t.Fatal("expected missing model to fail")
@@ -176,7 +176,7 @@ func TestResolveCaseExecutionFailsWithoutResolvedModel(t *testing.T) {
 }
 
 func TestResolveCaseExecutionReplayRequiresTape(t *testing.T) {
-	layout := newRunCaseLayout(t.TempDir(), smoke, model)
+	layout := newRunCaseLayout(t.TempDir(), smoke, modelKey)
 	suite := &Suite{
 		Spec: SuiteSpec{
 			Recording: RecordingSpec{Mode: "replay", Tape: "missing.jsonl"},

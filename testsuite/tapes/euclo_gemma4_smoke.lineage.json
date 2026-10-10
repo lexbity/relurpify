@@ -1,6 +1,6 @@
 {
   "suite_name": "euclo_gemma4_smoke",
-  "suite_path": "testsuite/agenttests/euclo_gemma4_smoke.testsuite.yaml",
+  "suite_path": "testsuite/agenttests/euclo.gemma4.smoke.testsuite.yaml",
   "classification": "capability",
   "case_name": "smoke",
   "model": "gemma4:e4b",

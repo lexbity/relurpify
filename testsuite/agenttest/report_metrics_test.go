@@ -157,3 +157,41 @@ func TestSecurityObservationsFromDenials(t *testing.T) {
 		t.Fatalf("unexpected security event observation: %+v", observations[1])
 	}
 }
+
+func TestApplyRecordedTelemetryAggregatesContextStreamAndKnowledge(t *testing.T) {
+	report := &CaseReport{}
+	events := []telemetry.Event{
+		{Type: telemetry.EventContextStreamInjected, Metadata: map[string]any{
+			"chunks": 3, "tokens": 1240, "bytes": 5320, "cache_hit": false, "epoch": uint64(7),
+		}},
+		{Type: telemetry.EventContextStreamInjected, Metadata: map[string]any{
+			"chunks": 1, "tokens": 204, "bytes": 900, "cache_hit": true, "epoch": uint64(9),
+		}},
+		{Type: telemetry.EventChunkCommitted, Metadata: map[string]any{"chunk_id": "chunk:a"}},
+		{Type: telemetry.EventChunkCommitted, Metadata: map[string]any{"chunk_id": "chunk:b"}},
+		{Type: telemetry.EventChunkCommitted, Metadata: map[string]any{"chunk_id": "chunk:b"}},
+	}
+	applyRecordedTelemetry(report, events)
+	if report.ContextStream.Injected != 2 {
+		t.Errorf("injected = %d, want 2", report.ContextStream.Injected)
+	}
+	if report.ContextStream.Chunks != 4 || report.ContextStream.Tokens != 1444 {
+		t.Errorf("context stream aggregates = %+v", report.ContextStream)
+	}
+	if report.ContextStream.CacheHits != 1 {
+		t.Errorf("cache hits = %d, want 1", report.ContextStream.CacheHits)
+	}
+	if report.Knowledge.GroundedChunks != 3 {
+		t.Errorf("grounded chunks = %d, want 3", report.Knowledge.GroundedChunks)
+	}
+}
+
+func TestApplyRecordedTelemetryLeavesContextStreamZeroWhenNotStreamed(t *testing.T) {
+	report := &CaseReport{}
+	applyRecordedTelemetry(report, []telemetry.Event{
+		{Type: telemetry.EventStateChange, Metadata: map[string]any{"security_event": "capability_denied"}},
+	})
+	if report.ContextStream.Injected != 0 || report.Knowledge.GroundedChunks != 0 {
+		t.Errorf("cold run must report zero aggregates, got %+v / %+v", report.ContextStream, report.Knowledge)
+	}
+}

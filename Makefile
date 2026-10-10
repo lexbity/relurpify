@@ -1,4 +1,4 @@
-.PHONY: test-unit test-integ test-scenario test-conformance test-all check-stream-contract
+.PHONY: test-unit test-integ test-scenario test-conformance test-all check-stream-contract test-prep
 .PHONY: test-contract-migration test-dev-agent test-tape-fidelity test-euclo-golden check-contract-dissolution grep-architecture-gates
 .PHONY: lint-config generate-config check-config-tree-drift
 .PHONY: lint-all lint-arch lint-go lint-go-fix check-makefile-phonys check-no-dead-resolver check-no-ghost-schemas lint-class-normalization lint-no-permissive-hitl
@@ -222,7 +222,13 @@ test-tape-fidelity:
 	@mkdir -p /tmp/relurpify-go-cache
 	$(GO_OFFLINE_ENV) GOCACHE=/tmp/relurpify-go-cache go test ./platform/llm -run 'TestTapeModelReplaysCommittedEucloSmoke' -count=1
 	$(GO_OFFLINE_ENV) GOCACHE=/tmp/relurpify-go-cache go test ./testsuite/agenttest/tapes -run 'TestCommittedEucloTapeValidates|TestCommittedEucloLineageValidates' -count=1
-	$(GO_OFFLINE_ENV) GOCACHE=/tmp/relurpify-go-cache go test ./app/relurpish/runtime -run TestEucloTapeFidelity -count=1
+	$(GO_OFFLINE_ENV) GOCACHE=/tmp/relurpify-go-cache go test -tags live ./app/relurpish/runtime -run TestEucloTapeFidelity -count=1 -timeout 120s
+
+# test-prep runs the hermetic dry-run tier directly (spec Phase 4/5): real
+# loader, real agent, scripted mind — included in test-unit via `go test ./...`.
+test-prep:
+	@mkdir -p /tmp/relurpify-go-cache /tmp/relurpify-go-tmp
+	$(GO_OFFLINE_ENV) GOCACHE=/tmp/relurpify-go-cache GOTMPDIR=/tmp/relurpify-go-tmp go test ./testsuite/agenttest/prep/... -count=1 -timeout 120s
 
 # test-euclo-golden runs the golden characterisation harness for euclo recipe
 # compilation (plan snapshot, graph topology, execution trace). Each slice after

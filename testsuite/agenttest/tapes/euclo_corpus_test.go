@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/platform/llm"
@@ -89,5 +90,15 @@ func TestCommittedEucloLineageValidates(t *testing.T) {
 	}
 	if record.DestinationTape != "testsuite/tapes/euclo_gemma4_smoke.tape.jsonl" {
 		t.Fatalf("destination tape = %q", record.DestinationTape)
+	}
+	// The suite_path cross-check closes the dangling-lineage class: a lineage
+	// record must name a suite file that exists in the tree, not a path that
+	// silently stopped resolving when the catalog moved.
+	if strings.TrimSpace(record.SuitePath) == "" {
+		t.Fatal("lineage suite_path is empty")
+	}
+	suiteAbs := filepath.Join("..", "..", "..", filepath.FromSlash(record.SuitePath))
+	if _, err := os.Stat(filepath.Clean(suiteAbs)); err != nil {
+		t.Fatalf("lineage suite_path %q does not resolve: %v", record.SuitePath, err)
 	}
 }
