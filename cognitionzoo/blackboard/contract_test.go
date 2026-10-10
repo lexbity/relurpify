@@ -15,8 +15,11 @@ func TestBlackboardContractRegistered(t *testing.T) {
 	if c.Shape != paradigm.ShapeBlackboard {
 		t.Fatalf("blackboard shape = %q, want %q", c.Shape, paradigm.ShapeBlackboard)
 	}
-	if got := c.DirectiveNames(); len(got) != 0 {
-		t.Fatalf("blackboard directive names = %v, want none (retired no-op vocabularies)", got)
+	if got := c.DirectiveNames(); len(got) != 1 || got[0] != "source" {
+		t.Fatalf("blackboard directive names = %v, want [source] (restored D6)", got)
+	}
+	if spec, ok := c.Directive("source"); !ok || !spec.Repeatable || spec.Required {
+		t.Fatalf("source spec = %+v, want repeatable and not required (FR-9: built-in specialist loop stays the default)", spec)
 	}
 }
 

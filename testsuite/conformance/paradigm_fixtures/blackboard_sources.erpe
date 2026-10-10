@@ -1,0 +1,15 @@
+thoughtrecipe blackboard_sources
+"Authored sources run in declaration order, each gated by its when predicate."
+
+agent board uses blackboard
+
+run board:
+  source alpha:
+    write state.alpha_out
+    do relurpic:conformance_alpha
+
+  source beta:
+    when state.gate is ready
+    read state.seed
+    write state.beta_out
+    do relurpic:conformance_beta

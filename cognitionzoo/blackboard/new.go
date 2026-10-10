@@ -59,5 +59,6 @@ func (a *BlackboardAgent) InitializeDeps(deps *paradigm.Deps) error {
 	a.Tools = deps.Registry
 	a.Memory = deps.WorkingMemory
 	a.Config = deps.Config
+	a.Grounder = deps.Grounder
 	return a.Initialize(deps.Config)
 }

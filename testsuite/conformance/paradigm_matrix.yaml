@@ -1,4 +1,12 @@
 declared:
+    - paradigm: blackboard
+      directive: source
+      status: implemented
+      cases:
+        - blackboard/source_order_and_eligibility
+        - blackboard/source_episode_rearm
+        - blackboard/write_grounds_provenance
+        - blackboard/grounding_failure_fails_cycle
     - paradigm: chainer
       directive: link
       status: implemented
@@ -75,6 +83,14 @@ declared:
       cases:
         - rewoo/synthesize_guidance
 restored:
+    - paradigm: blackboard
+      directive: source
+      status: implemented
+      cases:
+        - blackboard/source_order_and_eligibility
+        - blackboard/source_episode_rearm
+        - blackboard/write_grounds_provenance
+        - blackboard/grounding_failure_fails_cycle
     - paradigm: htn
       directive: method
       status: implemented
@@ -135,7 +151,6 @@ restored:
       cases:
         - rewoo/synthesize_guidance
 deleted:
-    - blackboard/source
     - clarify
     - decompose
     - detect

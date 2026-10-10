@@ -808,6 +808,7 @@ func (p *Parser) parseDirectiveItem() (ExecutionItem, error) {
 		return &DirectiveClause{
 			positioned: positioned{Span: spanFromTokens(start, endToken(pexpr))},
 			Name:       Identifier{positioned: positioned{Span: spanFromToken(nameTok)}, Value: nameTok.Lexeme},
+			Predicate:  &pexpr,
 			Raw:        collectRaw(rawTokens),
 		}, nil
 	}

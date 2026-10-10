@@ -1,0 +1,19 @@
+thoughtrecipe blackboard_rearm
+"A when-gated source re-arms after its predicate transitions false to true."
+
+agent board uses blackboard
+
+run board:
+  source probe:
+    when state.gate is ready
+    write state.probe_out
+    do relurpic:conformance_probe
+
+  source flip:
+    when state.gate is missing
+    write state.flip_out
+    do relurpic:conformance_flip
+
+  source break:
+    write state.break_out
+    do relurpic:conformance_break

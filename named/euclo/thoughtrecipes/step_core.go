@@ -136,7 +136,11 @@ func (c *stepCore) buildAgent(task *execution.Task) (agentgraph.WorkflowExecutor
 		}
 		return reflectionagent.New(deps, delegate, reflectionOpts...), nil
 	case "blackboard":
-		return blackboardagent.New(deps, c.streamOptionsBlackboard()...), nil
+		blackboardOpts, err := blackboardOptions(c.step)
+		if err != nil {
+			return nil, &paradigm.ErrContractViolation{Step: c.step.ID, Paradigm: c.step.Paradigm, Cause: err}
+		}
+		return blackboardagent.New(deps, append(c.streamOptionsBlackboard(), blackboardOpts...)...), nil
 	case "chainer":
 		chainBuilder := func(*execution.Task) (*chaineragent.Chain, error) {
 			return buildChainerChain(c.step.Directives)

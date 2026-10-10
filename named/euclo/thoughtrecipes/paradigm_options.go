@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	blackboardagent "codeburg.org/lexbit/relurpify/cognitionzoo/blackboard"
 	htnagent "codeburg.org/lexbit/relurpify/cognitionzoo/htn"
 	"codeburg.org/lexbit/relurpify/cognitionzoo/paradigm"
 	pl "codeburg.org/lexbit/relurpify/cognitionzoo/plan"
@@ -294,6 +295,119 @@ func plannerAuthoredSteps(steps []TypedDirective) ([]pl.PlanStep, error) {
 			Description: text,
 			Tool:        tool,
 		})
+	}
+	return authored, nil
+}
+
+// blackboardOptions lowers the blackboard directive vocabulary (source, with
+// its per-source when/read/write/do clauses) into the runner's option surface
+// (D6). Authored sources replace the built-in specialist set for the run; they
+// execute in declaration order with episode re-arming, and their `write` target
+// grounds capture-equivalently. Absent directives yield no options and the
+// runner keeps the built-in specialist loop (FR-9).
+func blackboardOptions(step ExecutionStep) ([]blackboardagent.Option, error) {
+	sources := StepItems(step.Directives, "source")
+	if len(sources) == 0 {
+		return nil, nil
+	}
+	authored := make([]blackboardagent.AuthoredSource, 0, len(sources))
+	for i, source := range sources {
+		authoredSource, err := blackboardAuthoredSource(source, i)
+		if err != nil {
+			return nil, err
+		}
+		authored = append(authored, authoredSource)
+	}
+	return []blackboardagent.Option{blackboardagent.WithAuthoredSources(authored)}, nil
+}
+
+// blackboardAuthoredSource lowers one `source` block. Per-source rules (the
+// contract's order rule is per-block, so these are builder-level load errors):
+// the source requires a name and exactly one `write`; `when`/`read` are
+// optional and MUST precede `write` (`do` may sit on either side, matching the
+// deep-review examples that close the block with the capability line);
+// `write` targets durable `state.*` only — a scratch write is a load error
+// because blackboard writes are durable by definition (D6).
+func blackboardAuthoredSource(source TypedDirective, index int) (blackboardagent.AuthoredSource, error) {
+	authored := blackboardagent.AuthoredSource{}
+	name := directiveFirstText(source)
+	if name == "" {
+		return authored, fmt.Errorf("blackboard source %d requires a name", index+1)
+	}
+	authored.Name = name
+
+	writeIndex := -1
+	writeCount := 0
+	for i, item := range source.Body {
+		if item.Name == "write" {
+			writeIndex = i
+			writeCount++
+		}
+	}
+	if writeCount > 1 {
+		return authored, fmt.Errorf("blackboard source %q declares multiple write clauses; exactly one is required", name)
+	}
+	if writeIndex == -1 {
+		return authored, fmt.Errorf("blackboard source %q requires a write clause", name)
+	}
+	authored.Write = strings.TrimSpace(unquoteString(directiveFirstText(source.Body[writeIndex])))
+	if authored.Write == "" {
+		return authored, fmt.Errorf("blackboard source %q requires a non-empty write target", name)
+	}
+	if !strings.HasPrefix(authored.Write, "state.") {
+		return authored, fmt.Errorf("blackboard source %q write target %q must be a state.* key; blackboard writes are durable by definition", name, authored.Write)
+	}
+
+	for _, item := range source.Body {
+		switch item.Name {
+		case "write":
+			// Exactly-once was validated above; this case only advances the
+			// trailing-clause sentinel so later when/read/do clauses are
+			// rejected as out of order.
+			if writeIndex == -2 {
+				return authored, fmt.Errorf("blackboard source %q declares multiple write clauses; exactly one is required", name)
+			}
+			writeIndex = -2
+			continue
+		case "when":
+			if writeIndex == -2 {
+				return authored, fmt.Errorf("blackboard source %q: when clause must precede write", name)
+			}
+			if authored.When != nil {
+				return authored, fmt.Errorf("blackboard source %q declares multiple when clauses; at most one is allowed", name)
+			}
+			if item.Predicate == nil {
+				return authored, fmt.Errorf("blackboard source %q when clause requires a predicate", name)
+			}
+			predicate, err := NormalizeRoutePredicate(*item.Predicate)
+			if err != nil {
+				return authored, err
+			}
+			compiled := compilePredicate(*predicate)
+			authored.When = func(env *contextdata.Envelope) bool { return compiled(nil, env) }
+			authored.WhenExpr = strings.TrimSpace(item.Predicate.Raw)
+		case "read":
+			if writeIndex == -2 {
+				return authored, fmt.Errorf("blackboard source %q: read clause must precede write", name)
+			}
+			for _, raw := range item.TextArgs {
+				key := strings.TrimSpace(unquoteString(raw))
+				if key == "" {
+					return authored, fmt.Errorf("blackboard source %q read clause carries an empty key", name)
+				}
+				authored.Read = append(authored.Read, key)
+			}
+		case "do":
+			// `do` may precede or follow `write`: the deep-review grammar of
+			// record places it last, so only when/read are order-bound.
+			capability, err := doCapabilityID(source, "blackboard source")
+			if err != nil {
+				return authored, err
+			}
+			authored.Capability = capability
+		default:
+			return authored, fmt.Errorf("blackboard source %q contains unsupported clause %q; allowed: when, read, do, write", name, item.Name)
+		}
 	}
 	return authored, nil
 }

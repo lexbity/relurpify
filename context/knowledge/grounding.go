@@ -140,6 +140,33 @@ func (g *GroundingService) SetGivenOriginLookup(lookup GivenOriginLookup) *Groun
 	return g
 }
 
+// ChunkIDForCaptureValue resolves the canonical chunk ID a previously grounded
+// capture value carries, by recomputing its content-addressed ID (the same
+// canonical encoding Ground uses) and loading it from the store. A missing,
+// tombstoned, or stale chunk resolves to absent — (zero, false, nil) — never
+// an error; only store failures surface as errors. It is the read-input
+// resolver for authored blackboard sources (Wave 3 D6): a source's `read`
+// context becomes derives_from provenance when the value was grounded, and is
+// recorded as an absent input when it was not.
+func (g *GroundingService) ChunkIDForCaptureValue(value any, typeAnnotation string) (ChunkID, bool, error) {
+	if g == nil || g.store == nil {
+		return "", false, nil
+	}
+	encoded, err := canonicalCaptureItem(GroundingItem{Value: value, TypeAnnotation: typeAnnotation})
+	if err != nil {
+		return "", false, fmt.Errorf("encode capture value: %w", err)
+	}
+	id := CanonicalChunkID(ChunkKindCapture, encoded)
+	chunk, ok, err := g.store.LoadIncludingTombstoned(id)
+	if err != nil || !ok {
+		return "", false, err
+	}
+	if chunk.Freshness != FreshnessValid {
+		return "", false, nil
+	}
+	return id, true, nil
+}
+
 // Ground commits every admitted item in one atomic store transaction and
 // returns the per-item report. Admission (suspicion, quota) runs before the
 // transaction; quarantined and skipped items never reach the store.

@@ -1,0 +1,10 @@
+thoughtrecipe blackboard_write
+"An authored source write grounds capture-equivalently with read provenance."
+
+agent board uses blackboard
+
+run board:
+  source echo:
+    read state.note
+    do relurpic:conformance_echo
+    write state.echo_out

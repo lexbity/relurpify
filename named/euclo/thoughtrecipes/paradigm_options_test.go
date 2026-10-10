@@ -4,7 +4,9 @@ import (
 	"strings"
 	"testing"
 
+	blackboardagent "codeburg.org/lexbit/relurpify/cognitionzoo/blackboard"
 	rewooagent "codeburg.org/lexbit/relurpify/cognitionzoo/rewoo"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
 )
 
 func applyRewooOptions(t *testing.T, step ExecutionStep) (*rewooagent.RewooAgent, error) {
@@ -202,5 +204,147 @@ func TestHTNMethodCardinality(t *testing.T) {
 	}
 	if len(opts) != 1 {
 		t.Fatalf("htnOptions(valid) = %d options, want 1", len(opts))
+	}
+}
+
+func applyBlackboardOptions(t *testing.T, step ExecutionStep) (*blackboardagent.BlackboardAgent, error) {
+	t.Helper()
+	opts, err := blackboardOptions(step)
+	if err != nil {
+		return nil, err
+	}
+	return blackboardagent.New(nil, opts...), nil
+}
+
+// TestBlackboardOptionsLowering proves the source-block lowering: names, the
+// compiled when predicate, read keys, the pinned capability, and the state
+// write target all cross the boundary as typed values.
+func TestBlackboardOptionsLowering(t *testing.T) {
+	step := ExecutionStep{
+		ID:       "run.board",
+		Paradigm: "blackboard",
+		Directives: []TypedDirective{
+			{Name: "source", TextArgs: []string{`"architecture"`}, Body: []TypedDirective{
+				{Name: "when", Predicate: &PredicateExpr{Raw: "state.phase is initial", Kind: "is", Subject: PathExpr{Raw: "state.phase"}, Value: StringLiteral{Value: "initial"}}},
+				{Name: "read", TextArgs: []string{"state.workspace", "state.notes"}},
+				{Name: "do", TextArgs: []string{"relurpic:layer_check"}},
+				{Name: "write", TextArgs: []string{"state.architecture_state"}},
+			}},
+			{Name: "source", TextArgs: []string{`"security"`}, Body: []TypedDirective{
+				{Name: "write", TextArgs: []string{"state.security_state"}},
+			}},
+		},
+	}
+	agent, err := applyBlackboardOptions(t, step)
+	if err != nil {
+		t.Fatalf("blackboardOptions: %v", err)
+	}
+	sources := agent.AuthoredSources()
+	if len(sources) == 0 {
+		t.Fatal("authored sources not installed")
+	}
+	if len(sources) != 2 {
+		t.Fatalf("authored sources = %d, want 2", len(sources))
+	}
+	first := sources[0]
+	if first.Name != "architecture" || first.Capability != "euclo:cap.layer_check" {
+		t.Fatalf("source[0] = %+v", first)
+	}
+	if len(first.Read) != 2 || first.Read[0] != "state.workspace" {
+		t.Fatalf("source[0].Read = %v", first.Read)
+	}
+	if first.Write != "state.architecture_state" {
+		t.Fatalf("source[0].Write = %q", first.Write)
+	}
+	if first.When == nil {
+		t.Fatal("source[0].When predicate missing")
+	}
+	// The predicate must actually evaluate (scratch-reach semantics included).
+	env := contextdata.NewEnvelope("t", "s")
+	if first.When(env) {
+		t.Fatal("predicate held on an empty envelope")
+	}
+	env.SetWorkingValueWithClass("state.phase", "initial", contextdata.MemoryClassTask)
+	if !first.When(env) {
+		t.Fatal("predicate did not hold on a matching envelope")
+	}
+	if sources[1].Capability != "" {
+		t.Fatalf("source[1].Capability = %q, want empty", sources[1].Capability)
+	}
+}
+
+// TestBlackboardSourceLoweringErrors pins the per-source load errors: missing
+// name, missing write, scratch write, when-after-write, and unsupported clauses.
+func TestBlackboardSourceLoweringErrors(t *testing.T) {
+	cases := []struct {
+		name    string
+		source  TypedDirective
+		message string
+	}{
+		{
+			name:    "missing name",
+			source:  TypedDirective{Name: "source", Body: []TypedDirective{{Name: "write", TextArgs: []string{"state.x"}}}},
+			message: "requires a name",
+		},
+		{
+			name:    "missing write",
+			source:  TypedDirective{Name: "source", TextArgs: []string{`"a"`}},
+			message: "requires a write clause",
+		},
+		{
+			name: "scratch write",
+			source: TypedDirective{Name: "source", TextArgs: []string{`"a"`}, Body: []TypedDirective{
+				{Name: "write", TextArgs: []string{"scratch.x"}},
+			}},
+			message: "must be a state.* key",
+		},
+		{
+			name: "when after write",
+			source: TypedDirective{Name: "source", TextArgs: []string{`"a"`}, Body: []TypedDirective{
+				{Name: "write", TextArgs: []string{"state.x"}},
+				{Name: "when", Predicate: &PredicateExpr{Raw: "state.g is ready", Kind: "is", Subject: PathExpr{Raw: "state.g"}, Value: StringLiteral{Value: "ready"}}},
+			}},
+			message: "when clause must precede write",
+		},
+		{
+			name: "unsupported clause",
+			source: TypedDirective{Name: "source", TextArgs: []string{`"a"`}, Body: []TypedDirective{
+				{Name: "stream", TextArgs: []string{"q"}},
+				{Name: "write", TextArgs: []string{"state.x"}},
+			}},
+			message: "unsupported clause",
+		},
+		{
+			name: "when without predicate",
+			source: TypedDirective{Name: "source", TextArgs: []string{`"a"`}, Body: []TypedDirective{
+				{Name: "when"},
+				{Name: "write", TextArgs: []string{"state.x"}},
+			}},
+			message: "when clause requires a predicate",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			step := ExecutionStep{ID: "run.board", Paradigm: "blackboard", Directives: []TypedDirective{tc.source}}
+			_, err := applyBlackboardOptions(t, step)
+			if err == nil {
+				t.Fatalf("expected load error containing %q, got none", tc.message)
+			}
+			if !strings.Contains(err.Error(), tc.message) {
+				t.Fatalf("error %q does not contain %q", err.Error(), tc.message)
+			}
+		})
+	}
+}
+
+// TestBlackboardOptionsAbsentDirectivesNoOp pins FR-9 for blackboard: a step
+// without source blocks lowers to no options.
+func TestBlackboardOptionsAbsentDirectivesNoOp(t *testing.T) {
+	opts, err := blackboardOptions(ExecutionStep{ID: "run.board", Paradigm: "blackboard"})
+	if err != nil {
+		t.Fatalf("blackboardOptions: %v", err)
+	}
+	if len(opts) != 0 {
+		t.Fatalf("expected no options for absent directives, got %d", len(opts))
 	}
 }

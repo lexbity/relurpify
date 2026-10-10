@@ -375,6 +375,10 @@ type DirectiveClause struct {
 	positioned
 	Name      Identifier
 	Arguments []ValueExpr
+	// Predicate carries the parsed expression of a bare `when <predicate>`
+	// clause line (e.g. a blackboard source's gate). The block form
+	// (`revise when …:`) keeps its predicate on DirectiveBlock.
+	Predicate *PredicateExpr
 	Raw       string
 }
 

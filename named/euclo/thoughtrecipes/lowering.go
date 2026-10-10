@@ -182,9 +182,10 @@ func lowerTypedDirective(item ExecutionItem) TypedDirective {
 	switch node := item.(type) {
 	case *DirectiveClause:
 		return TypedDirective{
-			Name:     strings.TrimSpace(node.Name.Value),
-			TextArgs: textArgsFromValueExprs(node.Arguments),
-			Span:     node.GetSpan(),
+			Name:      strings.TrimSpace(node.Name.Value),
+			TextArgs:  textArgsFromValueExprs(node.Arguments),
+			Predicate: node.Predicate,
+			Span:      node.GetSpan(),
 		}
 	case *DirectiveBlock:
 		typed := TypedDirective{

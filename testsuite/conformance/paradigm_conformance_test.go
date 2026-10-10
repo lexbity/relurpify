@@ -2,6 +2,7 @@ package conformance
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -9,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"gopkg.in/yaml.v3"
 
@@ -20,9 +22,14 @@ import (
 	"codeburg.org/lexbit/relurpify/cognitionzoo/paradigm"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/context/contextstream"
+	"codeburg.org/lexbit/relurpify/context/knowledge"
+	"codeburg.org/lexbit/relurpify/context/knowledge/graphdb"
 	contextports "codeburg.org/lexbit/relurpify/context/ports"
 	execution "codeburg.org/lexbit/relurpify/execution"
+	"codeburg.org/lexbit/relurpify/execution/agentgraph"
 	"codeburg.org/lexbit/relurpify/model"
+	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
+	"codeburg.org/lexbit/relurpify/named/euclo/state"
 	thoughtrecipe "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
 	"codeburg.org/lexbit/relurpify/testsuite/testhelper"
 )
@@ -78,6 +85,10 @@ var conformanceRunners = map[string]conformanceRunner{ //nolint:gochecknoglobals
 	"reflection/revise_fires_on_predicate":      runReflectionReviseFiresOnPredicate,
 	"reflection/revision_cap_bounded":           runReflectionRevisionCapBounded,
 	"reflection/review_pass_ends_loop":          runReflectionReviewPassEndsLoop,
+	"blackboard/source_order_and_eligibility":   runBlackboardSourceOrderAndEligibility,
+	"blackboard/source_episode_rearm":           runBlackboardSourceEpisodeRearm,
+	"blackboard/write_grounds_provenance":       runBlackboardWriteGroundsProvenance,
+	"blackboard/grounding_failure_fails_cycle":  runBlackboardGroundingFailureFailsCycle,
 }
 
 // runReactUntilBounds proves the `until` directive caps the react loop budget:
@@ -640,6 +651,17 @@ func runFixture(t *testing.T, name string, deps *paradigm.Deps) *contextdata.Env
 // envelope.
 func runFixtureInto(t *testing.T, name string, deps *paradigm.Deps, env *contextdata.Envelope) {
 	t.Helper()
+	if err := tryRunFixtureInto(t, name, deps, env, nil); err != nil {
+		t.Fatalf("fixture %s: %v", name, err)
+	}
+}
+
+// tryRunFixtureInto is runFixtureInto with an optional durable grounder: when
+// grounder is non-nil the recipe graph runs with a real epoch coordinator, so
+// capture-equivalent writes ground through the Wave-1 service. It returns the
+// execution error instead of failing the test, for failure-path cases.
+func tryRunFixtureInto(t *testing.T, name string, deps *paradigm.Deps, env *contextdata.Envelope, grounder agentgraph.Grounder) error {
+	t.Helper()
 	path := filepath.Join(paradigmFixtureDir, name)
 	src, err := os.ReadFile(filepath.Clean(path))
 	if err != nil {
@@ -663,10 +685,14 @@ func runFixtureInto(t *testing.T, name string, deps *paradigm.Deps, env *context
 	if err != nil {
 		t.Fatalf("BuildThoughtRecipeGraph(%s): %v", name, err)
 	}
+	if grounder != nil {
+		graph.SetGrounder(grounder)
+	}
 	ctx := context.Background()
 	if _, err := graph.Execute(ctx, env); err != nil {
-		t.Fatalf("graph.Execute(%s): %v", name, err)
+		return err
 	}
+	return nil
 }
 
 func stepResultPayloads(env *contextdata.Envelope) []string {
@@ -736,6 +762,222 @@ func (r *recordingPromptRegistry) Resolve(_ string, ctx any) (string, error) {
 	return r.prompt, nil
 }
 
+// --- blackboard (Wave 3 Phase 5, D6) ----------------------------------------
+
+// runBlackboardSourceOrderAndEligibility proves the restored `source`
+// directive: authored sources execute in declaration order, the gated one only
+// where its predicate holds, and both writes land on the envelope in one cycle.
+func runBlackboardSourceOrderAndEligibility(t *testing.T) {
+	t.Helper()
+	order := []string{}
+	reg := newSequenceRegistry(t, &order, "euclo:cap.conformance_alpha", "euclo:cap.conformance_beta")
+	env := contextdata.NewEnvelope("task-bb-sources", "session-conformance")
+	env.SetWorkingValueWithClass("state.gate", "ready", contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("state.seed", "s1", contextdata.MemoryClassTask)
+
+	runFixtureInto(t, "blackboard_sources.erpe", paradigmDeps(nil, reg), env)
+
+	wantOrder := []string{"euclo:cap.conformance_alpha", "euclo:cap.conformance_beta"}
+	if strings.Join(order, ",") != strings.Join(wantOrder, ",") {
+		t.Fatalf("source execution order = %v, want %v", order, wantOrder)
+	}
+	executed, ok := contextdata.GetTyped[[]string](env, "blackboard.sources_executed")
+	if !ok {
+		t.Fatal("expected blackboard.sources_executed on the envelope")
+	}
+	if strings.Join(executed, ",") != "alpha,beta" {
+		t.Fatalf("blackboard.sources_executed = %v, want [alpha beta]", executed)
+	}
+	if cycles, _ := contextdata.GetTyped[int](env, "blackboard.cycles"); cycles != 1 {
+		t.Fatalf("blackboard.cycles = %d, want 1", cycles)
+	}
+	for _, key := range []string{"state.alpha_out", "state.beta_out"} {
+		if value, ok := contextdata.GetTyped[any](env, key); !ok || fmt.Sprint(value) == "" {
+			t.Fatalf("write target %q missing after the run", key)
+		}
+	}
+}
+
+// runBlackboardSourceEpisodeRearm proves the episode semantics: a source whose
+// predicate transitions false→true re-arms and runs again, a continuously-true
+// predicate runs once, and quiescence ends the loop (goal_satisfied).
+func runBlackboardSourceEpisodeRearm(t *testing.T) {
+	t.Helper()
+	order := []string{}
+	reg := registry.NewRegistry()
+	for _, capabilityHandler := range []interface{}{
+		&stateCapability{id: "euclo:cap.conformance_probe", order: &order},
+		&stateCapability{id: "euclo:cap.conformance_flip", order: &order, writes: map[string]string{"state.gate": "ready"}},
+		&stateCapability{id: "euclo:cap.conformance_break", order: &order, writes: map[string]string{"state.gate": "missing"}},
+	} {
+		if err := reg.RegisterInvocableCapability(context.Background(), capabilityHandler.(interface {
+			Descriptor(context.Context, ports.State) descriptor.CapabilityDescriptor
+			Invoke(context.Context, ports.State, map[string]any) (*ports.ToolResult, error)
+		})); err != nil {
+			t.Fatalf("register capability: %v", err)
+		}
+	}
+	env := contextdata.NewEnvelope("task-bb-rearm", "session-conformance")
+	env.SetWorkingValueWithClass("state.gate", "ready", contextdata.MemoryClassTask)
+
+	runFixtureInto(t, "blackboard_rearm.erpe", paradigmDeps(nil, reg), env)
+
+	// c1: probe (gate ready) + break (unconditional, gate→missing);
+	// c2: flip (gate missing → ready); c3: probe re-armed; c4: quiescent.
+	wantOrder := []string{
+		"euclo:cap.conformance_probe", "euclo:cap.conformance_break",
+		"euclo:cap.conformance_flip", "euclo:cap.conformance_probe",
+	}
+	if strings.Join(order, ",") != strings.Join(wantOrder, ",") {
+		t.Fatalf("episode execution order = %v, want %v", order, wantOrder)
+	}
+	if cycles, _ := contextdata.GetTyped[int](env, "blackboard.cycles"); cycles != 3 {
+		t.Fatalf("blackboard.cycles = %d, want 3", cycles)
+	}
+	if termination, _ := contextdata.GetTyped[string](env, "blackboard.termination"); termination != "goal_satisfied" {
+		t.Fatalf("blackboard.termination = %q, want goal_satisfied", termination)
+	}
+}
+
+// runBlackboardWriteGroundsProvenance proves the capture-equivalent write: the
+// source's product grounds through the real Wave-1 service (temp Badger) with
+// the write's state key and a derives_from edge to the grounded read input,
+// and the envelope holds the value immediately (intra-cycle read-your-writes).
+func runBlackboardWriteGroundsProvenance(t *testing.T) {
+	t.Helper()
+	store, grounder := newConformanceGroundingStore(t)
+	if _, err := grounder.Ground(context.Background(), []knowledge.GroundingItem{{
+		Value:      "seed-note-1",
+		Epistemics: knowledge.EpistemicClaimed,
+		Origin:     contextdata.OriginLLM,
+		StateKey:   "state.note",
+		NodeID:     "seed",
+		TaskID:     "task-bb-write",
+		Kind:       knowledge.ChunkKindCapture,
+	}}); err != nil {
+		t.Fatalf("seed grounding: %v", err)
+	}
+	order := []string{}
+	reg := newSequenceRegistry(t, &order, "euclo:cap.conformance_echo")
+	deps := paradigmDeps(nil, reg)
+	deps.Grounder = grounder
+	env := contextdata.NewEnvelope("task-bb-write", "session-conformance")
+	env.SetWorkingValueWithClass("state.note", "seed-note-1", contextdata.MemoryClassTask)
+
+	if err := tryRunFixtureInto(t, "blackboard_write.erpe", deps, env, grounder); err != nil {
+		t.Fatalf("blackboard_write fixture: %v", err)
+	}
+	if value, ok := contextdata.GetTyped[any](env, "state.echo_out"); !ok || fmt.Sprint(value) == "" {
+		t.Fatal("write target state.echo_out missing from the envelope after the cycle")
+	}
+	all, err := store.FindAll()
+	if err != nil {
+		t.Fatalf("FindAll: %v", err)
+	}
+	var outChunkID knowledge.ChunkID
+	for _, chunk := range all {
+		if key, _ := chunk.Body.Fields["state_key"].(string); key == "state.echo_out" {
+			outChunkID = chunk.ID
+		}
+	}
+	if outChunkID == "" {
+		t.Fatalf("no grounded chunk for state.echo_out (chunks: %d) — write bypassed grounding", len(all))
+	}
+	edges, err := store.LoadEdgesFrom(outChunkID, knowledge.EdgeKindDerivesFrom)
+	if err != nil {
+		t.Fatalf("LoadEdgesFrom: %v", err)
+	}
+	noteID, ok, err := grounder.ChunkIDForCaptureValue("seed-note-1", "")
+	if err != nil || !ok {
+		t.Fatalf("read input chunk unresolved: %v (ok=%v)", err, ok)
+	}
+	found := false
+	for _, edge := range edges {
+		if edge.ToChunk == noteID {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("grounded write carries no derives_from edge to the read input %s", noteID)
+	}
+}
+
+// runBlackboardGroundingFailureFailsCycle proves the D6 tradeoff: a grounding
+// admission failure at the cycle barrier fails the cycle as grounding_failed,
+// under the step's on_error policy.
+func runBlackboardGroundingFailureFailsCycle(t *testing.T) {
+	t.Helper()
+	order := []string{}
+	reg := newSequenceRegistry(t, &order, "euclo:cap.conformance_echo")
+	deps := paradigmDeps(nil, reg)
+	env := contextdata.NewEnvelope("task-bb-fail", "session-conformance")
+
+	// FR-7: the delegate step ends structured — the graph run carries the
+	// classified step failure instead of a raw error.
+	if err := tryRunFixtureInto(t, "blackboard_write.erpe", deps, env, &failingConformanceGrounder{}); err != nil {
+		t.Fatalf("grounding failure must end structured, not as a raw graph error: %v", err)
+	}
+	failure, ok := state.GetStepFailure(env)
+	if !ok {
+		t.Fatal("expected a recorded step failure on the envelope")
+	}
+	if failure.Kind != euclotypes.FailureGroundingFailed {
+		t.Fatalf("failure kind = %q, want grounding_failed", failure.Kind)
+	}
+	if !errors.Is(failure.Cause, knowledge.ErrGroundingFailed) {
+		t.Fatalf("failure cause %v does not chain to the grounding sentinel", failure.Cause)
+	}
+}
+
+// stateCapability is a sequenceCapability that optionally writes state keys
+// before returning (the episode re-arm actuator).
+type stateCapability struct {
+	id     string
+	order  *[]string
+	writes map[string]string
+}
+
+func (h *stateCapability) Descriptor(_ context.Context, _ ports.State) descriptor.CapabilityDescriptor {
+	return descriptor.CapabilityDescriptor{
+		ID:            h.id,
+		Name:          h.id,
+		Kind:          agentspec.CapabilityKindTool,
+		RuntimeFamily: agentspec.CapabilityRuntimeFamilyProvider,
+		Availability:  descriptor.AvailabilitySpec{Available: true},
+	}
+}
+
+func (h *stateCapability) Invoke(_ context.Context, state ports.State, _ map[string]any) (*ports.ToolResult, error) {
+	*h.order = append(*h.order, h.id)
+	for key, value := range h.writes {
+		state.SetWorkingValue(key, value)
+	}
+	return &ports.ToolResult{Success: true, Data: map[string]any{"capability_id": h.id}}, nil
+}
+
+// newConformanceGroundingStore builds a real temp-Badger chunk store and its
+// grounding service for the durable-leg conformance case.
+func newConformanceGroundingStore(t *testing.T) (*knowledge.ChunkStore, *knowledge.GroundingService) {
+	t.Helper()
+	engine, err := graphdb.Open(context.Background(), graphdb.DefaultOptions(t.TempDir()))
+	if err != nil {
+		t.Fatalf("open graphdb: %v", err)
+	}
+	t.Cleanup(func() { _ = engine.Close(context.Background()) })
+	store := &knowledge.ChunkStore{Graph: engine}
+	grounder := knowledge.NewGroundingService(store, nil, nil, nil)
+	grounder.SetClock(func() time.Time { return time.Unix(1700000000, 0).UTC() })
+	return store, grounder
+}
+
+// failingConformanceGrounder always rejects the batch (fault-injected
+// admission, the R-6 detection leg).
+type failingConformanceGrounder struct{}
+
+func (f *failingConformanceGrounder) Ground(context.Context, []knowledge.GroundingItem) (knowledge.GroundingReport, error) {
+	return knowledge.GroundingReport{}, errors.New("injected admission failure")
+}
+
 // --- matrix (generated, committed) ------------------------------------------
 
 // TestParadigmMatrixUpToDate regenerates the conformance matrix from the
@@ -796,6 +1038,10 @@ var caseStatus = map[string]string{ //nolint:gochecknoglobals // immutable matri
 	"reflection/revise_fires_on_predicate":      "implemented",
 	"reflection/revision_cap_bounded":           "implemented",
 	"reflection/review_pass_ends_loop":          "implemented",
+	"blackboard/source_order_and_eligibility":   "implemented",
+	"blackboard/source_episode_rearm":           "implemented",
+	"blackboard/write_grounds_provenance":       "implemented",
+	"blackboard/grounding_failure_fails_cycle":  "implemented",
 }
 
 // restoredDirectives is the restoration audit (Wave 3): every (paradigm,
@@ -808,6 +1054,7 @@ var restoredDirectives = []string{ //nolint:gochecknoglobals // immutable audit 
 	"planner/plan", "planner/step", "planner/verify", "planner/summarize",
 	"htn/method", "htn/task",
 	"reflection/review", "reflection/revise",
+	"blackboard/source",
 }
 
 // deletedDirectives is the implement-or-delete audit outcome (FR-6): every
@@ -818,7 +1065,6 @@ var restoredDirectives = []string{ //nolint:gochecknoglobals // immutable audit 
 // paradigm/directive for pairs that were once declared, and bare keywords for
 // vocabulary never owned by a paradigm.
 var deletedDirectives = []string{ //nolint:gochecknoglobals // immutable audit result
-	"blackboard/source",
 	"detect", "clarify", "retry", "decompose", "solve",
 }
 

@@ -8,6 +8,7 @@ import (
 	capability "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/context/contextstream"
+	"codeburg.org/lexbit/relurpify/context/knowledge"
 	"codeburg.org/lexbit/relurpify/context/knowledge/memory"
 	"codeburg.org/lexbit/relurpify/context/knowledge/retrieval"
 	execution "codeburg.org/lexbit/relurpify/execution"
@@ -43,6 +44,15 @@ type BlackboardAgent struct {
 	// to the agent at construction time. It seeds the blackboard with
 	// AST symbols and BKC chunks before the first KS cycle.
 	SemanticContext execctx.AgentSemanticContext
+
+	// Grounder is the Wave-1 grounding service, used to resolve read-context
+	// values to their grounded chunk IDs for authored-source provenance (D6).
+	Grounder *knowledge.GroundingService
+
+	// authoredSources is the authored `source` block set (Wave 3 D6). Its
+	// presence replaces the built-in specialist set for the execution; the
+	// zero value keeps the built-in loop (FR-9).
+	authoredSources []AuthoredSource
 
 	initialised      bool
 	executionCatalog *capability.ExecutionCapabilityCatalogSnapshot
@@ -189,6 +199,14 @@ func (a *BlackboardAgent) Execute(ctx context.Context, task *execution.Task, env
 	}
 	if env == nil {
 		env = contextdata.NewEnvelope("blackboard", "session")
+	}
+	if a.authoredMode() {
+		if task != nil {
+			env.SetWorkingValueWithClass("task.id", task.ID, contextdata.MemoryClassTask)
+			env.SetWorkingValueWithClass("task.type", task.Type, contextdata.MemoryClassTask)
+			env.SetWorkingValueWithClass("task.instruction", task.Instruction, contextdata.MemoryClassTask)
+		}
+		return a.executeAuthored(ctx, task, env)
 	}
 	if task != nil {
 		env.SetWorkingValueWithClass("task.id", task.ID, contextdata.MemoryClassTask)

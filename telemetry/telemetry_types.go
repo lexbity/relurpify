@@ -146,6 +146,14 @@ const (
 	// EventPlannerPhase frames each directive-mode phase boundary
 	// (plan/execute/verify/summarize) with its provenance origin.
 	EventPlannerPhase EventType = "planner.phase"
+
+	// EventBlackboardSourceExecuted frames one authored blackboard source
+	// execution (Wave 3 D6). Metadata: source, cycle, capability, read_keys.
+	EventBlackboardSourceExecuted EventType = "blackboard.source_executed"
+	// EventBlackboardWriteGrounded marks an authored source's write target
+	// enqueued through the capture-grounding path. Metadata: source, write,
+	// read_inputs, read_inputs_absent.
+	EventBlackboardWriteGrounded EventType = "blackboard.write_grounded"
 )
 
 // Operational-failure and grounded-restore events (Wave 2 Phase 4). The
