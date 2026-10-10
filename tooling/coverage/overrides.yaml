@@ -139,9 +139,6 @@ packages:
   codeburg.org/lexbit/relurpify/execution/context:
     floor: 0
     reason: no unit tests yet; floor ratchets up from 0 as tests land
-  codeburg.org/lexbit/relurpify/execution/paradigminput:
-    floor: 0
-    reason: no unit tests yet; floor ratchets up from 0 as tests land
   codeburg.org/lexbit/relurpify/execution/prompt:
     floor: 58
     reason: partial unit coverage; floor recorded from current coverage, raise as tests land
@@ -274,12 +271,6 @@ packages:
   codeburg.org/lexbit/relurpify/testsuite/agenttest:
     floor: 34
     reason: partial unit coverage; floor recorded from current coverage, raise as tests land
-  codeburg.org/lexbit/relurpify/testsuite/fixtures/euclo_baseline_chat:
-    floor: 0
-    reason: no unit tests yet; floor ratchets up from 0 as tests land
-  codeburg.org/lexbit/relurpify/testsuite/fixtures/euclo_baseline_debug:
-    floor: 0
-    reason: no unit tests yet; floor ratchets up from 0 as tests land
   codeburg.org/lexbit/relurpify/testsuite/subjects/euclo:
     floor: 60
     reason: partial unit coverage; floor recorded from current coverage, raise as tests land

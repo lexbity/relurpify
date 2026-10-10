@@ -8,22 +8,17 @@ const (
 	Consumer_allowlist_test                          = "consumer"
 	Consumerdeadhasnonontestimporters_allowlist_test = "consumer: dead has no non-test importers"
 	Cycle_allowlist_test                             = "cycle"
-	Layer_allowlist_test                             = "layer"
 )
 
 func TestAllowlistContains(t *testing.T) {
 	a := Allowlist{entries: map[string]map[string]bool{
 		Cycle_allowlist_test: {"cycle: a depends on b": true},
-		Layer_allowlist_test: {},
 	}}
 	if !a.Contains(Cycle_allowlist_test, "cycle: a depends on b") {
 		t.Error("allowlist should contain known cycle")
 	}
 	if a.Contains(Cycle_allowlist_test, "cycle: x depends on y") {
 		t.Error("allowlist should not contain unknown cycle")
-	}
-	if a.Contains(Layer_allowlist_test, "layer: anything") {
-		t.Error("empty allowlist category should not match anything")
 	}
 	if a.Contains("nonexistent", "anything") {
 		t.Error("nonexistent category should not match")
@@ -37,9 +32,6 @@ func TestLoadAllowlist(t *testing.T) {
 	}
 	if !a.Contains(Cycle_allowlist_test, "cycle: test cycle") {
 		t.Error("should contain test cycle")
-	}
-	if !a.Contains(Layer_allowlist_test, "layer: test layer violation") {
-		t.Error("should contain test layer violation")
 	}
 	if !a.Contains(Consumer_allowlist_test, "consumer: test consumer violation") {
 		t.Error("should contain test consumer violation")

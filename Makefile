@@ -14,6 +14,7 @@ GO_OFFLINE_ENV := GOPROXY=off GOSUMDB=off
 # greppable half of grep-architecture-gates and no-dead.
 lint-arch: lint-class-normalization lint-no-permissive-hitl envcheck shimcheck symcheck
 	$(GO_OFFLINE_ENV) go run ./tooling/arch/cmd/archcheck; EXIT_CODE=$$?; \
+	$(GO_OFFLINE_ENV) go run ./tooling/arch/cmd/domaincheck -mode=enforce -check=direction; \
 	$(GO_OFFLINE_ENV) go run ./tooling/arch/cmd/domaincheck -mode=enforce -check=governance-orch; \
 	$(GO_OFFLINE_ENV) go run ./tooling/arch/cmd/domaincheck -mode=enforce -check=context-ports; \
 	exit $$EXIT_CODE
@@ -406,6 +407,10 @@ check-gates-honest:
 	fi
 	@if ! make -n no-dead | grep -qF 'InvokeOnBestNode'; then \
 		echo "[FAIL] check-gates-honest: no-dead lost its removed-symbol patterns"; \
+		exit 1; \
+	fi
+	@if ! make -n lint-arch | grep -qF -- '-check=direction'; then \
+		echo "[FAIL] check-gates-honest: lint-arch lost the domaincheck direction-enforce run"; \
 		exit 1; \
 	fi
 	@for tool in envcheck shimcheck symcheck; do \

@@ -19,30 +19,58 @@ func TestCheckConsumers_noViolation(t *testing.T) {
 		{ImportPath: ImportPathC_consumer_check_test, Name: "c", GoFiles: []string{"c.go"}},
 		{ImportPath: ImportPathD_consumer_check_test, Name: "d", GoFiles: []string{"d.go"}},
 	}
-	reverse := map[string][]string{
-		ImportPathA_consumer_check_test: {ImportPathB_consumer_check_test},
-		ImportPathB_consumer_check_test: {ImportPathC_consumer_check_test},
-		ImportPathC_consumer_check_test: {ImportPathD_consumer_check_test},
-		ImportPathD_consumer_check_test: {ImportPathA_consumer_check_test},
+	// a imports b, b imports c, c imports d, d imports a (production imports).
+	setImports := func(pkg GoPackage, imp string) GoPackage {
+		pkg.Imports = []string{imp}
+		return pkg
 	}
-	violations := CheckConsumers(pkgs, reverse, Allowlist{})
+	pkgs[0] = setImports(pkgs[0], ImportPathB_consumer_check_test)
+	pkgs[1] = setImports(pkgs[1], ImportPathC_consumer_check_test)
+	pkgs[2] = setImports(pkgs[2], ImportPathD_consumer_check_test)
+	pkgs[3] = setImports(pkgs[3], ImportPathA_consumer_check_test)
+	violations := CheckConsumers(pkgs, Allowlist{})
 	if len(violations) != 0 {
 		t.Errorf("expected no consumer violations, got %v", violations)
 	}
 }
 
-func TestCheckConsumers_unusedPackage(t *testing.T) {
+func TestCheckConsumers_testOnlyConsumedPackage(t *testing.T) {
+	// A package consumed exclusively by test files (TestImports/XTestImports)
+	// must pass: test-support packages are load-bearing infrastructure.
 	pkgs := []GoPackage{
 		{ImportPath: ImportPathA_consumer_check_test, Name: "a", GoFiles: []string{"a.go"}},
+		{
+			ImportPath:   ImportPathB_consumer_check_test,
+			Name:         "b",
+			GoFiles:      []string{"b.go"},
+			TestGoFiles:  []string{"b_test.go"},
+			TestImports:  []string{ImportPathA_consumer_check_test},
+			XTestImports: []string{ImportPathA_consumer_check_test},
+		},
+		// governance is a doc anchor: exempt, terminating the chain.
+		{ImportPath: ModulePath + "/governance", Name: "governance", GoFiles: []string{"doc.go"}, Imports: []string{ImportPathB_consumer_check_test}},
+	}
+	violations := CheckConsumers(pkgs, Allowlist{})
+	if len(violations) != 0 {
+		t.Errorf("test-only-consumed package must pass, got %v", violations)
+	}
+}
+
+func TestCheckConsumers_zeroImporters(t *testing.T) {
+	pkgs := []GoPackage{
+		{ImportPath: ImportPathA_consumer_check_test, Name: "a", GoFiles: []string{"a.go"}},
+		{ImportPath: ImportPathB_consumer_check_test, Name: "b", GoFiles: []string{"b.go"}, Imports: []string{ImportPathA_consumer_check_test}},
+		// governance is a doc anchor: exempt, terminating the chain.
+		{ImportPath: ModulePath + "/governance", Name: "governance", GoFiles: []string{"doc.go"}, Imports: []string{ImportPathB_consumer_check_test}},
 		{ImportPath: ImportPathUnused_consumer_check_test, Name: "unused", GoFiles: []string{"unused.go"}},
 	}
-	reverse := map[string][]string{
-		ImportPathA_consumer_check_test:      {},
-		ImportPathUnused_consumer_check_test: {},
+	violations := CheckConsumers(pkgs, Allowlist{})
+	if len(violations) != 1 {
+		t.Fatalf("expected 1 consumer violation for zero-importer package, got %v", violations)
 	}
-	violations := CheckConsumers(pkgs, reverse, Allowlist{})
-	if len(violations) == 0 {
-		t.Fatal("expected consumer violation for unused package")
+	want := "consumer: " + ImportPathUnused_consumer_check_test + " has no importers"
+	if violations[0] != want {
+		t.Errorf("want %q, got %q", want, violations[0])
 	}
 }
 
@@ -50,10 +78,7 @@ func TestCheckConsumers_mainPackage(t *testing.T) {
 	pkgs := []GoPackage{
 		{ImportPath: "codeburg.org/lexbit/relurpify/cmd/tool", Name: "main", GoFiles: []string{"main.go"}},
 	}
-	reverse := map[string][]string{
-		"codeburg.org/lexbit/relurpify/cmd/tool": {},
-	}
-	violations := CheckConsumers(pkgs, reverse, Allowlist{})
+	violations := CheckConsumers(pkgs, Allowlist{})
 	if len(violations) != 0 {
 		t.Errorf("main package should be exempt, got %v", violations)
 	}
@@ -69,10 +94,28 @@ func TestCheckConsumers_testOnlyPackage(t *testing.T) {
 			OnlyTestGoFiles: true,
 		},
 	}
-	reverse := map[string][]string{}
-	violations := CheckConsumers(pkgs, reverse, Allowlist{})
+	violations := CheckConsumers(pkgs, Allowlist{})
 	if len(violations) != 0 {
 		t.Errorf("test-only package should be exempt, got %v", violations)
+	}
+}
+
+func TestCheckConsumers_docAnchorExempt(t *testing.T) {
+	pkgs := []GoPackage{
+		{ImportPath: ModulePath + "/capability", Name: "capability", GoFiles: []string{"doc.go"}},
+		{ImportPath: ModulePath + "/governance", Name: "governance", GoFiles: []string{"doc.go"}},
+		{ImportPath: ModulePath + "/platform", Name: "platform", GoFiles: []string{"doc.go"}},
+		{ImportPath: ModulePath + "/userconfig", Name: "userconfig", GoFiles: []string{"doc.go"}},
+		{ImportPath: ModulePath + "/cognitionzoo", Name: "cognitionzoo", GoFiles: []string{"doc.go"}},
+		// A subpackage with the anchor as a name-segment prefix is NOT exempt.
+		{ImportPath: ModulePath + "/capability/notananchor", Name: "notananchor", GoFiles: []string{"x.go"}},
+	}
+	violations := CheckConsumers(pkgs, Allowlist{})
+	if len(violations) != 1 {
+		t.Fatalf("expected only the non-anchor package flagged, got %v", violations)
+	}
+	if want := "consumer: " + ModulePath + "/capability/notananchor has no importers"; violations[0] != want {
+		t.Errorf("want %q, got %q", want, violations[0])
 	}
 }
 
@@ -80,11 +123,10 @@ func TestCheckConsumers_allowlist(t *testing.T) {
 	pkgs := []GoPackage{
 		{ImportPath: ImportPathUnused_consumer_check_test, Name: "unused", GoFiles: []string{"unused.go"}},
 	}
-	reverse := map[string][]string{}
 	allowlist := Allowlist{entries: map[string]map[string]bool{
-		"consumer": {"consumer: codeburg.org/lexbit/relurpify/unused has no non-test importers": true},
+		"consumer": {"consumer: " + ImportPathUnused_consumer_check_test + " has no importers": true},
 	}}
-	violations := CheckConsumers(pkgs, reverse, allowlist)
+	violations := CheckConsumers(pkgs, allowlist)
 	if len(violations) != 0 {
 		t.Errorf("expected allowlist to exempt consumer violation, got %v", violations)
 	}

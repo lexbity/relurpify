@@ -14,7 +14,7 @@ import (
 const ModulePath = "codeburg.org/lexbit/relurpify"
 
 // TopLevelDomains lists the canonical top-level domain directories.
-// Packages outside these are in "framework/", "platform/", "testsuite/", etc.
+// Every package in the module lives under one of these domains.
 var TopLevelDomains = []string{ //nolint:gochecknoglobals // immutable top-level domain vocabulary
 	"app",
 	"ayenitd",
@@ -22,7 +22,6 @@ var TopLevelDomains = []string{ //nolint:gochecknoglobals // immutable top-level
 	"cognitionzoo",
 	"context",
 	"execution",
-	"framework",
 	"governance",
 	"jobs",
 	"model",
@@ -64,8 +63,12 @@ func PackageDomain(importPath string) string {
 }
 
 // ListPackages runs `go list -json ./...` and returns all packages.
+// The live build tag is enabled because the integration driver
+// (testsuite/agenttest) keeps part of its imports behind `//go:build live`;
+// without the tag those edges are invisible and the consumer check would
+// flag live-consumed packages as dead.
 func ListPackages(root string) ([]GoPackage, error) {
-	cmd := exec.Command("go", "list", "-json", "./...")
+	cmd := exec.Command("go", "list", "-json", "-tags", "live", "./...")
 	cmd.Dir = root
 	cmd.Stderr = os.Stderr
 	stdout, err := cmd.Output()

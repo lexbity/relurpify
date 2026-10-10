@@ -1,5 +1,0 @@
-tool: cli_wc
-stdout: "ok"
-expect:
-  exit_code: 0
-  stdout_contains: ["ok"]

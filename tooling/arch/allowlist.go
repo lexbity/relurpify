@@ -18,9 +18,9 @@ type Allowlist struct {
 type AllowlistFile struct {
 	Version           int      `yaml:"version"`
 	Cycles            []string `yaml:"cycle_violations"`
-	Layers            []string `yaml:"layer_violations"`
 	Buckets           []string `yaml:"bucket_violations"`
 	Consumers         []string `yaml:"consumer_violations"`
+	Forbidden         []string `yaml:"forbidden_violations"`
 	Globs             []string `yaml:"glob_violations"`
 	Stubs             []string `yaml:"stub_violations"`
 	InternalConsumers []string `yaml:"internal_consumer_violations"`
@@ -44,9 +44,9 @@ func LoadAllowlist(path string) (Allowlist, error) {
 
 	categories := map[string][]string{
 		"cycle":             f.Cycles,
-		"layer":             f.Layers,
 		"bucket":            f.Buckets,
 		"consumer":          f.Consumers,
+		"forbidden":         f.Forbidden,
 		"glob":              f.Globs,
 		"stub":              f.Stubs,
 		"internal-consumer": f.InternalConsumers,

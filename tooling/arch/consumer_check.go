@@ -2,16 +2,48 @@ package arch
 
 import (
 	"fmt"
-	"strings"
 )
 
+// docAnchors lists domain-root documentation packages exempt from the
+// consumer rule. They exist as anchors for their domain's identity (the
+// path prefix); they are meant to be imported transitively, not directly.
+var docAnchors = map[string]bool{ //nolint:gochecknoglobals // immutable exemption table
+	ModulePath + "/capability":   true,
+	ModulePath + "/cognitionzoo": true,
+	ModulePath + "/governance":   true,
+	ModulePath + "/platform":     true,
+	ModulePath + "/userconfig":   true,
+}
+
+// pathConsumedFixtures lists directory-prefixes whose packages are consumed
+// by the test harness through the filesystem (compiled/executed by path),
+// never by import. They are testdata, not library code.
+var pathConsumedFixtures = []string{ //nolint:gochecknoglobals // immutable exemption table
+	"testsuite/agenttest_fixtures",
+}
+
 // CheckConsumers ensures every non-main, non-test package has at least one
-// non-test importer.  Packages with zero consumers are dead code.
-func CheckConsumers(pkgs []GoPackage, reverse map[string][]string, allowlist Allowlist) []string {
+// importer, counting test-only importers (TestImports/XTestImports) equally
+// with production imports — a package consumed only by tests is still
+// load-bearing infrastructure here. Packages with zero importers of any kind
+// are dead code.
+func CheckConsumers(pkgs []GoPackage, allowlist Allowlist) []string {
 	var violations []string
-	pkgMap := make(map[string]GoPackage)
+	importerOf := make(map[string][]string)
 	for _, pkg := range pkgs {
-		pkgMap[pkg.ImportPath] = pkg
+		seen := make(map[string]bool)
+		add := func(imports []string) {
+			for _, imp := range imports {
+				if imp == pkg.ImportPath || seen[imp] {
+					continue
+				}
+				seen[imp] = true
+				importerOf[imp] = append(importerOf[imp], pkg.ImportPath)
+			}
+		}
+		add(pkg.Imports)
+		add(pkg.TestImports)
+		add(pkg.XTestImports)
 	}
 
 	for _, pkg := range pkgs {
@@ -21,24 +53,25 @@ func CheckConsumers(pkgs []GoPackage, reverse map[string][]string, allowlist All
 		if pkg.OnlyTestGoFiles {
 			continue
 		}
-
-		importers := reverse[pkg.ImportPath]
-		nonTestImporters := 0
-		for _, imp := range importers {
-			if !strings.HasSuffix(imp, "_test") && imp != pkg.ImportPath {
-				if impPkg, ok := pkgMap[imp]; ok && !impPkg.OnlyTestGoFiles {
-					nonTestImporters++
-				} else if !ok {
-					nonTestImporters++
-				}
+		if docAnchors[pkg.ImportPath] {
+			continue
+		}
+		rel := TrimModulePrefix(pkg.ImportPath)
+		consumedByPath := false
+		for _, prefix := range pathConsumedFixtures {
+			if rel == prefix || hasPathPrefix(rel, prefix) {
+				consumedByPath = true
+				break
 			}
 		}
-		if nonTestImporters > 0 {
+		if consumedByPath {
+			continue
+		}
+		if len(importerOf[pkg.ImportPath]) > 0 {
 			continue
 		}
 
-		// Check self-import isn't counted
-		violation := fmt.Sprintf("consumer: %s has no non-test importers", pkg.ImportPath)
+		violation := fmt.Sprintf("consumer: %s has no importers", pkg.ImportPath)
 		if !allowlist.Contains("consumer", violation) {
 			violations = append(violations, violation)
 		}

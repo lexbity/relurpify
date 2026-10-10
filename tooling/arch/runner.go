@@ -30,9 +30,8 @@ func RunAll(root, allowlistPath string) ([]Result, error) {
 	// Collect raw violations (before allowlist filtering)
 	rawViolations := map[string][]string{
 		"cycle":     CheckCycles(forward, Allowlist{}),
-		"layer":     CheckLayerDirection(pkgs, forward, Allowlist{}),
 		"bucket":    CheckBuckets(pkgs, reverse, 3, root, Allowlist{}),
-		"consumer":  CheckConsumers(pkgs, reverse, Allowlist{}),
+		"consumer":  CheckConsumers(pkgs, Allowlist{}),
 		"forbidden": CheckForbiddenImports(pkgs, Allowlist{}),
 		"converter": CheckStructIdentityConverters(pkgs, root, Allowlist{}),
 		"sqlite":    CheckSQLiteFree(pkgs, Allowlist{}),

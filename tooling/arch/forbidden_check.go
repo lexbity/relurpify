@@ -16,9 +16,23 @@ var ForbiddenImportPrefixes = []string{ //nolint:gochecknoglobals // immutable f
 	"framework/core",
 }
 
+// CentralVocabularyPrefixes lists module-relative package paths that carry
+// central vocabulary or substrate code which must not re-accumulate new
+// importers. This is the named-list successor to the deleted blanket layer
+// rule (platform was importable by every domain by design; only specific
+// non-adapter packages are banned). Entries are removed when the package is
+// relocated or deleted (platform/fs and platform/observability leave when
+// they move in S4; platform/browser joins when it is deleted in S5).
+var CentralVocabularyPrefixes = []string{ //nolint:gochecknoglobals // immutable central-vocabulary table
+	"platform/contracts",
+	"platform/observability",
+	"platform/fs",
+}
+
 // CheckForbiddenImports reports any package whose imports (production or test)
-// reference a forbidden, deleted package. It checks Imports, TestImports, and
-// XTestImports so a regression cannot hide in test-only code.
+// reference a forbidden, deleted package, or a central-vocabulary package on
+// the grave list. It checks Imports, TestImports, and XTestImports so a
+// regression cannot hide in test-only code.
 func CheckForbiddenImports(pkgs []GoPackage, allowlist Allowlist) []string {
 	var violations []string
 	for _, pkg := range pkgs {
@@ -29,17 +43,22 @@ func CheckForbiddenImports(pkgs []GoPackage, allowlist Allowlist) []string {
 					continue
 				}
 				rel := TrimModulePrefix(imp)
-				for _, forbidden := range ForbiddenImportPrefixes {
-					if rel == forbidden || hasPathPrefix(rel, forbidden) {
-						key := pkg.ImportPath + "→" + imp + "(" + kind + ")"
-						if seen[key] {
-							continue
-						}
-						seen[key] = true
-						v := fmt.Sprintf("forbidden: %s imports deleted package %s (%s)", pkg.ImportPath, imp, kind)
-						if !allowlist.Contains("forbidden", v) {
-							violations = append(violations, v)
-						}
+				label, prefixes := "deleted package", ForbiddenImportPrefixes
+				if matchesAny(rel, CentralVocabularyPrefixes) {
+					label, prefixes = "central-vocabulary package", CentralVocabularyPrefixes
+				}
+				for _, forbidden := range prefixes {
+					if rel != forbidden && !hasPathPrefix(rel, forbidden) {
+						continue
+					}
+					key := pkg.ImportPath + "→" + imp + "(" + kind + ")"
+					if seen[key] {
+						continue
+					}
+					seen[key] = true
+					v := fmt.Sprintf("forbidden: %s imports %s %s (%s)", pkg.ImportPath, label, imp, kind)
+					if !allowlist.Contains("forbidden", v) {
+						violations = append(violations, v)
 					}
 				}
 			}
@@ -50,6 +69,18 @@ func CheckForbiddenImports(pkgs []GoPackage, allowlist Allowlist) []string {
 	}
 	sort.Strings(violations)
 	return violations
+}
+
+// matchesAny reports whether rel equals or is below any of the prefixes,
+// matching on path segment boundaries (so "framework/coreutil" is not a match
+// for "framework/core").
+func matchesAny(rel string, prefixes []string) bool {
+	for _, prefix := range prefixes {
+		if rel == prefix || hasPathPrefix(rel, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 // hasPathPrefix reports whether rel is at or below the forbidden package path,
