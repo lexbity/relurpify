@@ -3,9 +3,7 @@ package envcomposition
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
-	"strings"
 
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/fs"
@@ -192,10 +190,7 @@ func BuildCapabilityRuntime(ctx context.Context, workspace string, runner *fsand
 		}
 	}
 	if err := startIndexingFn(manager, ctx); err != nil {
-		if !shouldIgnoreBootstrapIndexError(err) {
-			return nil, err
-		}
-		log.Printf("runtime bootstrap warning: AST index build incomplete: %v", err)
+		return nil, err
 	}
 	searchEngine := newSearchEngineFn(nil, nil)
 	if searchEngine == nil {
@@ -240,9 +235,3 @@ func BuildMinimalToolRegistry(ctx context.Context, workspace string, runner fsan
 	return capReg, nil
 }
 
-func shouldIgnoreBootstrapIndexError(err error) bool {
-	if err == nil {
-		return false
-	}
-	return strings.Contains(err.Error(), "no parser for ")
-}

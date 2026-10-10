@@ -595,14 +595,9 @@ func buildRuntime(ctx context.Context, cfg Config, secrets config.Secrets) (*Run
 				}
 			}
 		}
-		if status.Available && rt.runnerClient != nil && runnerSettings.RefreshInterval > 0 {
-			// FR-23: the scheduler's production consumer — the runner-side
-			// scheduled submission re-issues knowledge.refresh on the
-			// configured cadence via the spool (config default 0 = off).
-			sess.RegisterService("knowledge.refresh-scheduler", newRefreshSchedulerService(
-				runnerSettings.RefreshInterval, runnerSettings.Queues[0], rt.runnerClient,
-			))
-		}
+		// FR-23: the scheduler's production consumer is the runner itself —
+		// the spawned runner receives --refresh-interval and registers the
+		// scheduled knowledge.refresh submission (config default 0 = off).
 	}
 	if !runnerSettings.Enabled || rt.runnerClient == nil {
 		// Degraded/disabled fallback: in-process bootstrap (same moved
@@ -745,6 +740,15 @@ func (r *Runtime) Close(ctx context.Context) error {
 		}
 		r.Workspace = nil
 	}
+
+	// 5. The spawned runner child stops last — after the app's own services
+	// (Q16: SIGTERM → 5 s grace → SIGKILL, reaped). An attached runner is
+	// not ours to stop (stop is nil).
+	if r.runnerStop != nil {
+		r.runnerStop()
+		r.runnerStop = nil
+	}
+
 	r.interactionMu.Lock()
 	r.interactionEnvelopes = make(map[string]*contextdata.Envelope)
 	r.interactionMu.Unlock()

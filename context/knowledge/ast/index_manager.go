@@ -156,11 +156,23 @@ func (im *IndexManager) IndexFile(ctx context.Context, path string) error {
 	}
 
 	if !ok {
+		// No parser for this language: index via the symbol provider when
+		// one is attached (the app's LSP tool), otherwise skip — the file is
+		// not an indexable code file (yaml, plain text, …). Non-code files
+		// are ingested as chunks, not AST nodes.
+		if !im.hasSymbolProvider() {
+			return nil
+		}
 		return im.indexWithSymbols(ctx, path, string(content), language, category, contentHash)
 	}
 
 	result, err := parser.Parse(string(content), path)
 	if err != nil {
+		// A registered parser that fails is a real error: fall back to the
+		// symbol provider when one is attached, otherwise surface it.
+		if !im.hasSymbolProvider() {
+			return err
+		}
 		if symErr := im.indexWithSymbols(ctx, path, string(content), language, category, contentHash); symErr == nil {
 			return nil
 		}
@@ -514,6 +526,13 @@ func (im *IndexManager) Close(ctx context.Context) error {
 		firstErr = err
 	}
 	return firstErr
+}
+
+// hasSymbolProvider reports whether a document symbol source is attached.
+func (im *IndexManager) hasSymbolProvider() bool {
+	im.mu.Lock()
+	defer im.mu.Unlock()
+	return im.symbolProvider != nil
 }
 
 func (im *IndexManager) indexWithSymbols(ctx context.Context, path, content, language string, category Category, contentHash string) error {

@@ -104,6 +104,17 @@ func Run(ctx context.Context, cfg RunnerConfig) error {
 	mgr.RegisterWithInfo("status-writer", statusSrv,
 		services.ServiceRegistrationInfo{Source: "internal", Owner: "ayenitd", Notes: []string{"5 s heartbeat"}})
 
+	// FR-23: the scheduler's production consumer — the runner-side
+	// scheduled submission re-issues knowledge.refresh on the configured
+	// cadence through the spool (config default 0 = off: the service is
+	// absent, not stubbed).
+	if cfg.RefreshInterval > 0 {
+		if client, err := NewSpoolClient(cfg.StateDir, "relurpify-runner", cfg.Workspace); err == nil {
+			mgr.RegisterWithInfo("refresh-submitter", newRefreshSubmitter(cfg.RefreshInterval, cfg.Queues, client),
+				services.ServiceRegistrationInfo{Source: "internal", Owner: "ayenitd", Notes: []string{"scheduled knowledge.refresh submission"}})
+		}
+	}
+
 	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	if err := mgr.StartAll(runCtx); err != nil {

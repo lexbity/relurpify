@@ -439,21 +439,42 @@ func TestIndexManagerIndexFileParseErrorFallbackToSymbols(t *testing.T) {
 	require.NoError(t, err)
 	defer func() { _ = store.Close() }()
 
+	// The .err extension detects as language "unknown"; register the failing
+	// parser under that language so the parse-error path is exercised.
 	manager := NewIndexManager(store, IndexConfig{WorkspacePath: tmpDir})
+	manager.RegisterParser(&errorParser{language: "unknown"})
 
-	// Create a fake parser that returns an error
-	manager.RegisterParser(&errorParser{})
-
-	// Create a file with the error parser's language
 	path := filepath.Join(tmpDir, "test.err")
 	require.NoError(t, fs.WriteFileSecure(path, []byte(`some content`)))
 
-	// Without a symbol provider, this should fail
+	// Without a symbol provider the parse error surfaces.
 	err = manager.IndexFile(context.Background(), path)
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "parse error")
+
+	// With a symbol provider attached, the parse error falls back to
+	// symbols and indexing succeeds.
+	manager.UseSymbolProvider(&stubSymbolProvider{})
+	require.NoError(t, manager.IndexFile(context.Background(), path))
 }
 
-type errorParser struct{}
+func TestIndexManagerIndexFileNoParserSkipsWithoutSymbolProvider(t *testing.T) {
+	tmpDir := t.TempDir()
+	store, err := NewTestStore(filepath.Join(tmpDir, IndexDb_ast_edge_test))
+	require.NoError(t, err)
+	defer func() { _ = store.Close() }()
+
+	// No parser for yaml and no symbol provider: the file is not an
+	// indexable code file — skip it, not an error.
+	manager := NewIndexManager(store, IndexConfig{WorkspacePath: tmpDir})
+	path := filepath.Join(tmpDir, "config.yaml")
+	require.NoError(t, fs.WriteFileSecure(path, []byte("key: value\n")))
+	require.NoError(t, manager.IndexFile(context.Background(), path))
+}
+
+type errorParser struct {
+	language string
+}
 
 func (p *errorParser) Parse(content string, filePath string) (*ParseResult, error) {
 	return nil, errors.New("parse error")
@@ -463,6 +484,19 @@ func (p *errorParser) ParseIncremental(oldAST *ParseResult, changes []ContentCha
 	return nil, errors.New("incremental not supported")
 }
 
-func (p *errorParser) Language() string          { return "errlang" }
+func (p *errorParser) Language() string {
+	if p.language == "" {
+		return "errlang"
+	}
+	return p.language
+}
+
 func (p *errorParser) Category() Category        { return CategoryCode }
 func (p *errorParser) SupportsIncremental() bool { return false }
+
+// stubSymbolProvider returns one section symbol for any file.
+type stubSymbolProvider struct{}
+
+func (s *stubSymbolProvider) DocumentSymbols(ctx context.Context, path string) ([]DocumentSymbol, error) {
+	return []DocumentSymbol{{Name: "stub", Kind: NodeTypeSection, StartLine: 1, EndLine: 1}}, nil
+}

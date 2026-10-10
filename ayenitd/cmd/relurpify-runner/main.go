@@ -15,10 +15,8 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"os/signal"
 	"path/filepath"
 	"strings"
-	"syscall"
 
 	"codeburg.org/lexbit/relurpify/ayenitd"
 )
@@ -35,6 +33,8 @@ func main() {
 		fmt.Fprintln(os.Stderr, "relurpify-runner: --workspace and --state-dir are required")
 		os.Exit(2)
 	}
+
+	ctx := context.Background()
 
 	telemetryLog := filepath.Join(*stateDir, "logs", "runner.jsonl")
 	if err := os.MkdirAll(filepath.Dir(telemetryLog), 0o700); err != nil {
