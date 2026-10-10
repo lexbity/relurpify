@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/model"
 	"codeburg.org/lexbit/relurpify/platform/llm"
 	// Blank imports register the managed backend kinds with the llm factory;
@@ -12,7 +13,6 @@ import (
 	_ "codeburg.org/lexbit/relurpify/platform/llm/lmstudio"
 	_ "codeburg.org/lexbit/relurpify/platform/llm/ollama"
 	_ "codeburg.org/lexbit/relurpify/platform/llm/openaicompat"
-	"codeburg.org/lexbit/relurpify/platform/observability"
 	"codeburg.org/lexbit/relurpify/telemetry"
 )
 
@@ -61,65 +61,70 @@ func BuildModelRuntime(input ModelRuntimeInput) (*ModelRuntime, error) {
 		Backend: backend,
 		ModelFactory: func(tel model.EventSink, debug bool) model.LanguageModel {
 			backend.SetDebugLogging(debug)
-			instrumented := llm.NewInstrumentedModel(backend.Model(), modelTelemetryAdapter{inner: tel}, debug)
+			instrumented := llm.NewInstrumentedModel(backend.Model(), tel, debug)
 			_ = llm.ApplyProfile(instrumented, input.Profile)
 			return instrumented
 		},
 	}, nil
 }
 
-type modelTelemetryAdapter struct {
-	inner model.EventSink
+// IdentityTriple is the node/session/task identity supplied at the wiring
+// point that already knows it. The adapter stamps it onto events whose
+// fields the emitter left empty; the per-call context envelope backfills
+// whatever the triple does not carry.
+type IdentityTriple struct {
+	NodeID    string
+	SessionID string
+	TaskID    string
 }
 
-func (a modelTelemetryAdapter) Emit(event observability.Event) {
+// NewEventSinkAdapter adapts the workspace telemetry chain into the
+// model.EventSink the ModelFactory consumes (Q9). It lives at the
+// composition root — not in platform/llm — so the identity backfill can
+// read the context envelope without giving platform a context edge.
+func NewEventSinkAdapter(tel telemetry.Telemetry, ident IdentityTriple) model.EventSink {
+	if tel == nil {
+		return nil
+	}
+	return eventSinkAdapter{inner: tel, ident: ident}
+}
+
+type eventSinkAdapter struct {
+	inner telemetry.Telemetry
+	ident IdentityTriple
+}
+
+func (a eventSinkAdapter) Emit(ctx context.Context, event any) {
 	if a.inner == nil {
 		return
 	}
-	ev := telemetry.Event{
-		Type:      telemetry.EventType(event.Type),
-		SessionID: event.SessionID,
-		RunID:     event.RunID,
-		TraceID:   event.TraceID,
-		AgentID:   event.AgentID,
-		NodeID:    event.NodeID,
-		SpanID:    event.SpanID,
-		TaskID:    event.TaskID,
-		Message:   event.Message,
-		Timestamp: event.Timestamp,
-		Metadata:  event.Metadata,
-		Seq:       event.Seq,
-		Partition: event.Partition,
-		Payload:   event.Payload,
-		Actor:     actorID(event.Actor),
-	}
-	// Reconstruct correlation context from the stamped event so the
-	// downstream model telemetry can re-stamp without losing fields.
-	ctx := context.Background()
-	if ev.SessionID != "" || ev.RunID != "" || ev.TraceID != "" || ev.AgentID != "" {
-		ctx = observability.WithRunContext(ctx, observability.RunContext{
-			SessionID: ev.SessionID,
-			RunID:     ev.RunID,
-			TraceID:   ev.TraceID,
-			AgentID:   ev.AgentID,
-		})
-	}
-	if ev.TraceID != "" || ev.SpanID != "" {
-		ctx = observability.WithTraceContext(ctx, observability.TraceContext{
-			TraceID: ev.TraceID,
-			SpanID:  ev.SpanID,
-		})
+	ev, ok := event.(telemetry.Event)
+	if !ok {
+		return
 	}
 	telemetry.StampCorrelation(ctx, &ev)
-	a.inner.Emit(ctx, ev)
-}
-
-func actorID(actor observability.Actor) string {
-	if actor.ID != "" {
-		return actor.ID
+	// Identity enrichment: the wiring point's triple first, then the
+	// per-call context envelope (which carries the authoritative
+	// node/session/task of the emitting step).
+	if ev.NodeID == "" && a.ident.NodeID != "" {
+		ev.NodeID = a.ident.NodeID
 	}
-	if actor.Label != "" {
-		return actor.Label
+	if ev.SessionID == "" && a.ident.SessionID != "" {
+		ev.SessionID = a.ident.SessionID
 	}
-	return actor.Kind
+	if ev.TaskID == "" && a.ident.TaskID != "" {
+		ev.TaskID = a.ident.TaskID
+	}
+	if env, ok := contextdata.EnvelopeFrom(ctx); ok {
+		if ev.NodeID == "" && env.NodeIDSnapshot() != "" {
+			ev.NodeID = env.NodeIDSnapshot()
+		}
+		if ev.SessionID == "" && env.SessionIDSnapshot() != "" {
+			ev.SessionID = env.SessionIDSnapshot()
+		}
+		if ev.TaskID == "" && env.TaskIDSnapshot() != "" {
+			ev.TaskID = env.TaskIDSnapshot()
+		}
+	}
+	a.inner.Emit(ev)
 }

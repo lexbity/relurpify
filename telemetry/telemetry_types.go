@@ -96,6 +96,14 @@ const (
 	EventCheckpointMirrorFailed EventType = "checkpoint.mirror_failed"
 )
 
+// EventTapeRecordFailed: tape recorder write failure, absorbed from the
+// dissolved platform/observability vocabulary (S4). The other observability
+// consts collided with existing telemetry consts, which won per the
+// reconciliation rule (event_reconciliation_test.go).
+const (
+	EventTapeRecordFailed EventType = "tape.record_failed"
+)
+
 // Paradigm lifecycle events emitted by the cognitionzoo paradigms (HTN,
 // reflection, planner) through the standard telemetry.Telemetry +
 // StampCorrelation path (spec §1.7). They use the same dot-qualified spelling
@@ -170,6 +178,10 @@ type Event struct {
 	Partition string         `json:"partition,omitempty"`
 	Payload   []byte         `json:"payload,omitempty"`
 	Actor     string         `json:"actor,omitempty"`
+	// ActorKind classifies the actor (e.g. "agent", "system"). The
+	// observability.Event Actor struct was flattened into Actor (the ID)
+	// plus this field when the two Event structs unified (S4).
+	ActorKind string `json:"actor_kind,omitempty"`
 }
 
 // Telemetry captures execution traces emitted by the graph runtime.

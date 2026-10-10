@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"cmp"
+	"codeburg.org/lexbit/relurpify/telemetry"
 	"context"
 	"encoding/json"
 	"errors"
@@ -17,7 +18,6 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/model"
-	"codeburg.org/lexbit/relurpify/platform/observability"
 )
 
 // DefaultEndpoint is the default Ollama API endpoint.
@@ -588,7 +588,7 @@ func estimatePromptTokensFromPayload(payload any) int {
 	switch p := payload.(type) {
 	case map[string]any:
 		if prompt, ok := p["prompt"].(string); ok && prompt != "" {
-			return observability.EstimateTokens(prompt)
+			return telemetry.EstimateTokens(prompt)
 		}
 		return estimatePromptTokensFromMessages(p["messages"])
 	default:
@@ -602,7 +602,7 @@ func estimatePromptTokensFromMessages(value any) int {
 		total := 0
 		for _, msg := range msgs {
 			if content, ok := msg["content"].(string); ok {
-				total += observability.EstimateTokens(content)
+				total += telemetry.EstimateTokens(content)
 			}
 		}
 		return total
@@ -614,7 +614,7 @@ func estimatePromptTokensFromMessages(value any) int {
 				continue
 			}
 			if content, ok := msg["content"].(string); ok {
-				total += observability.EstimateTokens(content)
+				total += telemetry.EstimateTokens(content)
 			}
 		}
 		return total
@@ -624,7 +624,7 @@ func estimatePromptTokensFromMessages(value any) int {
 }
 
 func estimateUsage(promptTokens int, responseText string) model.TokenUsage {
-	completionTokens := observability.EstimateTokens(responseText)
+	completionTokens := telemetry.EstimateTokens(responseText)
 	return model.TokenUsage{
 		PromptTokens:     promptTokens,
 		CompletionTokens: completionTokens,

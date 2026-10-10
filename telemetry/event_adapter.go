@@ -1,28 +1,26 @@
 package telemetry
 
 import (
+	evt "codeburg.org/lexbit/relurpify/telemetry/event"
 	"context"
 	"encoding/json"
 	"time"
-
-	"codeburg.org/lexbit/relurpify/platform/observability"
-	evt "codeburg.org/lexbit/relurpify/telemetry/event"
 )
 
 // EventTelemetry mirrors telemetry events into the framework event log.
 type EventTelemetry struct {
 	Log       evt.Log
 	Partition string
-	Actor     observability.Actor
+	Actor     evt.Actor
 	Clock     func() time.Time
 }
 
 // NewEventTelemetry assembles the causal mirror from platform-neutral
-// identity inputs. The observability.Actor type stays inside telemetry so
+// identity inputs. The Actor type stays inside telemetry so
 // domain packages (execution, governance, capability) do not need the
 // platform import to participate in the causal record.
 func NewEventTelemetry(log evt.Log, partition, agentID, label string) EventTelemetry {
-	actor := observability.Actor{Kind: "agent", ID: agentID, Label: label}
+	actor := evt.Actor{Kind: "agent", ID: agentID, Label: label}
 	return EventTelemetry{
 		Log:       log,
 		Partition: partition,
@@ -65,9 +63,9 @@ func (e EventTelemetry) partition() string {
 	return e.Partition
 }
 
-func (e EventTelemetry) actor() observability.Actor {
+func (e EventTelemetry) actor() evt.Actor {
 	if e.Actor.Kind == "" && e.Actor.ID == "" {
-		return observability.Actor{Kind: "system", ID: "relurpify"}
+		return evt.Actor{Kind: "system", ID: "relurpify"}
 	}
 	return e.Actor
 }
@@ -117,7 +115,7 @@ func (e EventTelemetry) mapEventType(ev Event) string {
 	case EventDoomLoopDetected:
 		return evt.EventDoomLoopDetected
 	default:
-		return "telemetry." + string(ev.Type) + ".v1"
+		return "" + string(ev.Type) + ".v1"
 	}
 }
 

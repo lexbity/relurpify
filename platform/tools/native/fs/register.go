@@ -1,8 +1,8 @@
 package fs
 
 import (
+	platformfs "codeburg.org/lexbit/relurpify/capability/fs"
 	"codeburg.org/lexbit/relurpify/capability/ports"
-	platformfs "codeburg.org/lexbit/relurpify/platform/fs"
 )
 
 // Constructors returns the fs tool constructors as an explicit map.

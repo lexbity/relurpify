@@ -13,7 +13,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 	"codeburg.org/lexbit/relurpify/app/relurpish/tui"
-	"codeburg.org/lexbit/relurpify/platform/fs"
+	"codeburg.org/lexbit/relurpify/capability/fs"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 

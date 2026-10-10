@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/platform/fs"
+	"codeburg.org/lexbit/relurpify/capability/fs"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 	"codeburg.org/lexbit/relurpify/telemetry/perfstats"
 )

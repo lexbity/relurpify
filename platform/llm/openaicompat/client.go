@@ -14,7 +14,8 @@ import (
 
 	"codeburg.org/lexbit/relurpify/model"
 	"codeburg.org/lexbit/relurpify/platform/llm"
-	"codeburg.org/lexbit/relurpify/platform/observability"
+
+	"codeburg.org/lexbit/relurpify/telemetry"
 )
 
 // Re-export contract types for local usage
@@ -517,7 +518,7 @@ func estimatePromptTokensFromPayload(payload map[string]any) int {
 		return 0
 	}
 	if prompt, ok := payload["prompt"].(string); ok && prompt != "" {
-		return observability.EstimateTokens(prompt)
+		return telemetry.EstimateTokens(prompt)
 	}
 	messages := payload["messages"]
 	switch msgs := messages.(type) {
@@ -525,7 +526,7 @@ func estimatePromptTokensFromPayload(payload map[string]any) int {
 		total := 0
 		for _, msg := range msgs {
 			if content, ok := msg["content"].(string); ok {
-				total += observability.EstimateTokens(content)
+				total += telemetry.EstimateTokens(content)
 			}
 		}
 		return total
@@ -537,7 +538,7 @@ func estimatePromptTokensFromPayload(payload map[string]any) int {
 				continue
 			}
 			if content, ok := msg["content"].(string); ok {
-				total += observability.EstimateTokens(content)
+				total += telemetry.EstimateTokens(content)
 			}
 		}
 		return total
@@ -547,7 +548,7 @@ func estimatePromptTokensFromPayload(payload map[string]any) int {
 }
 
 func estimateUsage(promptTokens int, responseText string) model.TokenUsage {
-	completionTokens := observability.EstimateTokens(responseText)
+	completionTokens := telemetry.EstimateTokens(responseText)
 	totalTokens := promptTokens + completionTokens
 	return model.TokenUsage{
 		PromptTokens:     promptTokens,

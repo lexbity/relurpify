@@ -17,7 +17,7 @@ import (
 	"github.com/dgraph-io/badger/v4"
 )
 
-// secureDirMode matches platform/fs SecureDirMode; the event log creates
+// secureDirMode matches capability/fs SecureDirMode; the event log creates
 // only its own Badger directory and must not import platform packages
 // (telemetry → telemetry/event stays dependency-clean).
 const secureDirMode os.FileMode = 0o700

@@ -8,9 +8,10 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	capresult "codeburg.org/lexbit/relurpify/capability/result"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
-	"codeburg.org/lexbit/relurpify/platform/observability"
 	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
 	"github.com/stretchr/testify/require"
+
+	"codeburg.org/lexbit/relurpify/telemetry"
 )
 
 func TestToolNodeSetsTraceContext(t *testing.T) {
@@ -24,7 +25,7 @@ func TestToolNodeSetsTraceContext(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify that trace context was set on the context passed to InvokeCapability
-	tc, ok := observability.TraceContextFromContext(reg.lastCtx)
+	tc, ok := telemetry.TraceContextFromContext(reg.lastCtx)
 	require.True(t, ok, "InvokeCapability should receive context with trace context")
 	require.Equal(t, "root_trace_123", tc.TraceID)
 	require.NotEmpty(t, tc.SpanID)

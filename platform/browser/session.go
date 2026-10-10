@@ -12,7 +12,9 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/governance/permissions"
-	"codeburg.org/lexbit/relurpify/platform/observability"
+
+	"codeburg.org/lexbit/relurpify/telemetry"
+	"codeburg.org/lexbit/relurpify/telemetry/observing"
 )
 
 const defaultBudgetCategory = "immediate"
@@ -23,7 +25,7 @@ type SessionConfig struct {
 	BackendName       string
 	PermissionManager permissions.NetworkPermissionChecker
 	AgentID           string
-	Budget            observability.BudgetManager
+	Budget            observing.BudgetManager
 	BudgetCategory    string
 }
 
@@ -56,7 +58,7 @@ type Session struct {
 	backendName       string
 	permissionManager permissions.NetworkPermissionChecker
 	agentID           string
-	budget            observability.BudgetManager
+	budget            observing.BudgetManager
 	budgetCategory    string
 
 	mu          sync.Mutex
@@ -361,7 +363,7 @@ func defaultPort(scheme string) int {
 func (s *Session) allocateExtraction(key, content string) (*Extraction, error) {
 	result := &Extraction{
 		Content:        content,
-		OriginalTokens: observability.EstimateTokens(content),
+		OriginalTokens: telemetry.EstimateTokens(content),
 	}
 	if s.budget == nil {
 		result.FinalTokens = result.OriginalTokens
@@ -385,7 +387,7 @@ func (s *Session) allocateExtraction(key, content string) (*Extraction, error) {
 	}
 	content = truncateToTokens(content, remaining)
 	result.Content = content
-	result.FinalTokens = observability.EstimateTokens(content)
+	result.FinalTokens = telemetry.EstimateTokens(content)
 	result.Truncated = result.FinalTokens < result.OriginalTokens
 
 	itemID := fmt.Sprintf("browser:%s:%s", s.backendName, key)
@@ -400,7 +402,7 @@ func truncateToTokens(content string, maxTokens int) string {
 	if maxTokens <= 0 || content == "" {
 		return ""
 	}
-	if observability.EstimateTokens(content) <= maxTokens {
+	if telemetry.EstimateTokens(content) <= maxTokens {
 		return content
 	}
 	maxChars := maxTokens * 4
@@ -465,9 +467,9 @@ type extractionBudgetItem struct {
 	tokens int
 }
 
-func (i extractionBudgetItem) GetID() string                               { return i.id }
-func (i extractionBudgetItem) GetTokenCount() int                          { return i.tokens }
-func (i extractionBudgetItem) GetPriority() int                            { return 0 }
-func (i extractionBudgetItem) CanCompress() bool                           { return false }
-func (i extractionBudgetItem) Compress() (observability.BudgetItem, error) { return i, nil }
-func (i extractionBudgetItem) CanEvict() bool                              { return true }
+func (i extractionBudgetItem) GetID() string                           { return i.id }
+func (i extractionBudgetItem) GetTokenCount() int                      { return i.tokens }
+func (i extractionBudgetItem) GetPriority() int                        { return 0 }
+func (i extractionBudgetItem) CanCompress() bool                       { return false }
+func (i extractionBudgetItem) Compress() (observing.BudgetItem, error) { return i, nil }
+func (i extractionBudgetItem) CanEvict() bool                          { return true }

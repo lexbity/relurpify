@@ -16,7 +16,8 @@ import (
 	"go.uber.org/goleak"
 
 	"codeburg.org/lexbit/relurpify/model"
-	"codeburg.org/lexbit/relurpify/platform/observability"
+
+	"codeburg.org/lexbit/relurpify/telemetry"
 )
 
 type stubModel struct {
@@ -375,10 +376,10 @@ func (b *blockingStreamModel) ChatWithTools(_ context.Context, _ []Message, _ []
 }
 
 type recordingTelemetry struct {
-	events []observability.Event
+	events []telemetry.Event
 }
 
-func (r *recordingTelemetry) Emit(ev observability.Event) {
+func (r *recordingTelemetry) Emit(ev telemetry.Event) {
 	r.events = append(r.events, ev)
 }
 
@@ -465,7 +466,7 @@ func TestTapeModelRecordFailureDegrades(t *testing.T) {
 	}
 	count := 0
 	for _, ev := range tel.events {
-		if ev.Type == observability.EventTapeRecordFailed {
+		if ev.Type == telemetry.EventTapeRecordFailed {
 			count++
 		}
 	}
@@ -481,7 +482,7 @@ func TestTapeModelRecordFailureDegrades(t *testing.T) {
 	}
 	count = 0
 	for _, ev := range tel.events {
-		if ev.Type == observability.EventTapeRecordFailed {
+		if ev.Type == telemetry.EventTapeRecordFailed {
 			count++
 		}
 	}

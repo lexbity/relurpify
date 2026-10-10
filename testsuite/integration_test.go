@@ -16,7 +16,6 @@ import (
 	"codeburg.org/lexbit/relurpify/execution/compiler"
 	"codeburg.org/lexbit/relurpify/model"
 	"codeburg.org/lexbit/relurpify/platform/llm"
-	"codeburg.org/lexbit/relurpify/platform/observability"
 	"codeburg.org/lexbit/relurpify/telemetry"
 )
 
@@ -39,23 +38,19 @@ func (t *phase9Telemetry) Snapshot() []telemetry.Event {
 	return out
 }
 
-type phase9ObservabilityTelemetry struct {
+// phase9EventSink adapts phase9Telemetry into the ctx-carrying
+// model.EventSink the instrumented model consumes. With one Event struct
+// there is nothing to copy — the adapter only carries the ctx through.
+type phase9EventSink struct {
 	parent *phase9Telemetry
 }
 
-func (o *phase9ObservabilityTelemetry) Emit(event observability.Event) {
-	o.parent.Emit(telemetry.Event{
-		Type:      telemetry.EventType(event.Type),
-		NodeID:    event.NodeID,
-		TaskID:    event.TaskID,
-		Message:   event.Message,
-		Timestamp: event.Timestamp,
-		Metadata:  event.Metadata,
-		Seq:       event.Seq,
-		Partition: event.Partition,
-		Payload:   event.Payload,
-		Actor:     event.Actor.Label,
-	})
+func (o *phase9EventSink) Emit(_ context.Context, event any) {
+	ev, ok := event.(telemetry.Event)
+	if !ok {
+		return
+	}
+	o.parent.Emit(ev)
 }
 
 type phase9UsageModel struct{}
@@ -217,10 +212,10 @@ func TestProvenance_FullChain(t *testing.T) {
 }
 
 func TestBudgetExhaustion_ResetProtocol(t *testing.T) {
-	advisor := &observability.ContextBudgetAdvisor{ModelContextSize: 2048}
+	advisor := &telemetry.ContextBudgetAdvisor{ModelContextSize: 2048}
 	tel := &phase9Telemetry{}
-	model := llm.NewInstrumentedModel(phase9UsageModel{}, &phase9ObservabilityTelemetry{parent: tel}, false)
-	ctx := observability.WithAdvisor(context.Background(), advisor)
+	model := llm.NewInstrumentedModel(phase9UsageModel{}, &phase9EventSink{parent: tel}, false)
+	ctx := telemetry.WithAdvisor(context.Background(), advisor)
 
 	_, err := model.Chat(ctx, []llm.Message{{Role: "user", Content: "ping"}}, nil)
 	require.NoError(t, err)

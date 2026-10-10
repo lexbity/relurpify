@@ -10,7 +10,7 @@ import (
 
 	"github.com/dgraph-io/badger/v4"
 
-	"codeburg.org/lexbit/relurpify/platform/fs"
+	"codeburg.org/lexbit/relurpify/capability/fs"
 )
 
 // BadgerOptions controls the behaviour of the Badger-backed durable store.

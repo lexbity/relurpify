@@ -8,7 +8,7 @@ import (
 
 // newTestAuditLogger returns a file-backed audit chain logger over a temp dir.
 // The canonical testsuite/testhelper.NewTestAuditLogger is unavailable to this
-// package's internal test files: testhelper imports platform/fs, which imports
+// package's internal test files: testhelper imports capability/fs, which imports
 // governance/authorization, which would close an import cycle in test. The
 // behavior is identical (temp dir + cleanup close), so external consumers keep
 // using the shared testhelper.

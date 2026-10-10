@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
-	"codeburg.org/lexbit/relurpify/platform/fs"
+	"codeburg.org/lexbit/relurpify/capability/fs"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
 	tea "github.com/charmbracelet/bubbletea"

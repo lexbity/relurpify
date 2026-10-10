@@ -21,12 +21,11 @@ var ForbiddenImportPrefixes = []string{ //nolint:gochecknoglobals // immutable f
 // importers. This is the named-list successor to the deleted blanket layer
 // rule (platform was importable by every domain by design; only specific
 // non-adapter packages are banned). Entries are removed when the package is
-// relocated or deleted (platform/fs and platform/observability leave when
-// they move in S4; platform/browser joins when it is deleted in S5).
+// relocated or deleted: platform/fs and platform/observability left in S4
+// (capability/fs and telemetry/observing); platform/browser joins when it is
+// deleted in S5.
 var CentralVocabularyPrefixes = []string{ //nolint:gochecknoglobals // immutable central-vocabulary table
 	"platform/contracts",
-	"platform/observability",
-	"platform/fs",
 }
 
 // CheckForbiddenImports reports any package whose imports (production or test)

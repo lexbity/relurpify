@@ -11,6 +11,7 @@ import (
 	"sync"
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/capability/fs"
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/context/contextstream"
@@ -21,7 +22,6 @@ import (
 	intentcontext "codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
-	"codeburg.org/lexbit/relurpify/platform/fs"
 	"codeburg.org/lexbit/relurpify/platform/llm"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"

@@ -3,19 +3,26 @@ package event
 import (
 	"encoding/json"
 	"time"
-
-	"codeburg.org/lexbit/relurpify/platform/observability"
 )
 
+// Actor identifies the origin of a framework event in the persisted event
+// log. The log's actor is a labeled record (kind + display label), distinct
+// from telemetry.Event's flattened actor strings.
+type Actor struct {
+	Kind  string `json:"kind,omitempty"`
+	ID    string `json:"id,omitempty"`
+	Label string `json:"label,omitempty"`
+}
+
 type FrameworkEvent struct {
-	Seq            uint64              `json:"seq"`
-	Timestamp      time.Time           `json:"ts"`
-	Type           string              `json:"type"`
-	CausedBy       []uint64            `json:"caused_by,omitempty"`
-	Payload        json.RawMessage     `json:"payload"`
-	Actor          observability.Actor `json:"actor"`
-	IdempotencyKey string              `json:"idem_key,omitempty"`
-	Partition      string              `json:"partition"`
+	Seq            uint64          `json:"seq"`
+	Timestamp      time.Time       `json:"ts"`
+	Type           string          `json:"type"`
+	CausedBy       []uint64        `json:"caused_by,omitempty"`
+	Payload        json.RawMessage `json:"payload"`
+	Actor          Actor           `json:"actor"`
+	IdempotencyKey string          `json:"idem_key,omitempty"`
+	Partition      string          `json:"partition"`
 }
 
 const (

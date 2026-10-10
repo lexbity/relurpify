@@ -1,4 +1,4 @@
-package observability
+package telemetry
 
 import (
 	"context"
@@ -117,40 +117,6 @@ func CorrelationFromContext(ctx context.Context) Correlation {
 		c.NodeID = nodeID
 	}
 	return c
-}
-
-// StampCorrelation populates the correlation fields on ev from the
-// correlation identifiers carried by ctx. Merge semantics come from
-// CorrelationFromContext (single source of truth): a non-empty RunContext
-// value overwrites the corresponding field, an empty one never clears a
-// field the caller already set, and TraceID is turn-scoped — a RunContext
-// TraceID wins over any node-local TraceContext, whose TraceID is only a
-// fallback. Emitters must never construct correlation fields by hand.
-func StampCorrelation(ctx context.Context, ev *Event) {
-	if ev == nil {
-		return
-	}
-	c := CorrelationFromContext(ctx)
-	if c.SessionID != "" {
-		ev.SessionID = c.SessionID
-	}
-	if c.RunID != "" {
-		ev.RunID = c.RunID
-	}
-	if c.TraceIDTurnScoped {
-		ev.TraceID = c.TraceID
-	} else if c.TraceID != "" && ev.TraceID == "" {
-		ev.TraceID = c.TraceID
-	}
-	if c.AgentID != "" {
-		ev.AgentID = c.AgentID
-	}
-	if c.SpanID != "" {
-		ev.SpanID = c.SpanID
-	}
-	if c.NodeID != "" && ev.NodeID == "" {
-		ev.NodeID = c.NodeID
-	}
 }
 
 // NewTraceID generates a random trace ID.

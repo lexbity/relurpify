@@ -42,7 +42,6 @@ import (
 	euclopolicy "codeburg.org/lexbit/relurpify/named/euclo/policy"
 	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
 	"codeburg.org/lexbit/relurpify/platform/llm"
-	"codeburg.org/lexbit/relurpify/platform/observability"
 	"codeburg.org/lexbit/relurpify/telemetry"
 	"codeburg.org/lexbit/relurpify/telemetry/event"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
@@ -440,6 +439,12 @@ func buildRuntime(ctx context.Context, cfg Config, secrets config.Secrets) (*Run
 		ModelProduct: &model.ModelProduct{
 			Backend:      modelProduct.Backend,
 			ModelFactory: modelProduct.ModelFactory,
+		},
+		NewEventSink: func(chain telemetry.Telemetry) model.EventSink {
+			// Q9: the identity-enriching EventSink adapter lives at the
+			// composition root; the triple is stamped per-call from the
+			// graph context envelope.
+			return envcomposition.NewEventSinkAdapter(chain, envcomposition.IdentityTriple{})
 		},
 		EventLogFactory: openRuntimeEventLogFactory,
 		Scope:           session.ScopeFull,
@@ -904,7 +909,7 @@ func emitAgentStartupEvent(ctx context.Context, eventLog event.Log, partition, a
 		Timestamp: time.Now().UTC(),
 		Type:      event.EventAgentRunStarted,
 		Payload:   data,
-		Actor:     observability.Actor{Kind: "agent", ID: agentID, Label: label},
+		Actor:     event.Actor{Kind: "agent", ID: agentID, Label: label},
 		Partition: partition,
 	}})
 }
@@ -929,7 +934,7 @@ func emitContractResolvedEvent(ctx context.Context, eventLog event.Log, partitio
 		Timestamp: time.Now().UTC(),
 		Type:      event.EventContractResolved,
 		Payload:   data,
-		Actor:     observability.Actor{Kind: "agent", ID: agentID, Label: label},
+		Actor:     event.Actor{Kind: "agent", ID: agentID, Label: label},
 		Partition: partition,
 	}})
 }
@@ -1147,7 +1152,7 @@ func (r *Runtime) beginWorkflow(task *execution.Task) (workflowID, runID string)
 		return "", ""
 	}
 	ctx := context.Background()
-	workflowID = "wf-" + observability.NewRunID()
+	workflowID = "wf-" + telemetry.NewRunID()
 	meta := map[string]any{"instruction": task.Instruction}
 	if task.Type != "" {
 		meta["type"] = task.Type
@@ -1161,7 +1166,7 @@ func (r *Runtime) beginWorkflow(task *execution.Task) (workflowID, runID string)
 	}); err != nil {
 		return "", ""
 	}
-	runID = "run-" + observability.NewRunID()
+	runID = "run-" + telemetry.NewRunID()
 	if err := r.AgentLifecycle.CreateRun(ctx, agentlifecycle.WorkflowRunRecord{
 		RunID:      runID,
 		WorkflowID: workflowID,
@@ -1199,14 +1204,14 @@ func (r *Runtime) ensureSessionID() string {
 	r.sessionIDMu.Lock()
 	defer r.sessionIDMu.Unlock()
 	if r.sessionID == "" {
-		r.sessionID = observability.NewSessionID()
+		r.sessionID = telemetry.NewSessionID()
 	}
 	return r.sessionID
 }
 
 // beginTurn starts a new correlation scope for one turn: it generates a fresh
 // RunID and TraceID, attaches them to ctx for every downstream emitter to read
-// via observability.RunContextFromContext, and mirrors the session identity onto
+// via telemetry.RunContextFromContext, and mirrors the session identity onto
 // the envelope. Called once per turn (including interaction resumes).
 func (r *Runtime) beginTurn(ctx context.Context, env *contextdata.Envelope) context.Context {
 	sessionID := r.ensureSessionID()
@@ -1227,10 +1232,10 @@ func (r *Runtime) beginTurn(ctx context.Context, env *contextdata.Envelope) cont
 	if env != nil {
 		ctx = contextdata.WithEnvelope(ctx, env)
 	}
-	return observability.WithRunContext(ctx, observability.RunContext{
+	return telemetry.WithRunContext(ctx, telemetry.RunContext{
 		SessionID: sessionID,
-		RunID:     observability.NewRunID(),
-		TraceID:   observability.NewTraceID(),
+		RunID:     telemetry.NewRunID(),
+		TraceID:   telemetry.NewTraceID(),
 		AgentID:   agentID,
 	})
 }
@@ -1472,7 +1477,7 @@ func emitDocumentReloadedEvent(ctx context.Context, eventLog event.Log, agentID,
 			Timestamp: time.Now().UTC(),
 			Type:      event.EventManifestReloaded,
 			Payload:   data,
-			Actor:     observability.Actor{Kind: "agent", ID: agentID, Label: label},
+			Actor:     event.Actor{Kind: "agent", ID: agentID, Label: label},
 			Partition: "local",
 		}})
 	}

@@ -10,7 +10,7 @@ import (
 	"github.com/dgraph-io/badger/v4"
 	"github.com/stretchr/testify/require"
 
-	"codeburg.org/lexbit/relurpify/platform/fs"
+	"codeburg.org/lexbit/relurpify/capability/fs"
 )
 
 // ────────────────────────────────────────────────────────────────────

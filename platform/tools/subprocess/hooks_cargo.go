@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"codeburg.org/lexbit/relurpify/capability/fs"
 	"codeburg.org/lexbit/relurpify/capability/ports"
-	"codeburg.org/lexbit/relurpify/platform/fs"
 )
 
 // applyCargoIsolation checks whether the tool invocation targets a nested Cargo

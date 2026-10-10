@@ -15,7 +15,8 @@ import (
 	"codeburg.org/lexbit/relurpify/platform/llm"
 	"codeburg.org/lexbit/relurpify/platform/llm/offline"
 	"codeburg.org/lexbit/relurpify/platform/llm/openaicompat"
-	"codeburg.org/lexbit/relurpify/platform/observability"
+
+	"codeburg.org/lexbit/relurpify/telemetry"
 )
 
 // The stream lifecycle contract (R1-R6, stated normatively on
@@ -71,14 +72,14 @@ func (g *gatedStreamModel) ChatWithTools(ctx context.Context, _ []model.Message,
 }
 
 type capturedTelemetry struct {
-	events []observability.Event
+	events []telemetry.Event
 }
 
-func (c *capturedTelemetry) Emit(ev observability.Event) {
+func (c *capturedTelemetry) Emit(ev telemetry.Event) {
 	c.events = append(c.events, ev)
 }
 
-func (c *capturedTelemetry) countOfType(t observability.EventType) int {
+func (c *capturedTelemetry) countOfType(t telemetry.EventType) int {
 	n := 0
 	for _, ev := range c.events {
 		if ev.Type == t {
@@ -225,7 +226,7 @@ func TestStreamLifecycle(t *testing.T) {
 		if !tm.Degraded() {
 			t.Fatal("recorder must degrade on write failure")
 		}
-		if got := tel.countOfType(observability.EventTapeRecordFailed); got != 1 {
+		if got := tel.countOfType(telemetry.EventTapeRecordFailed); got != 1 {
 			t.Fatalf("tape.record_failed must fire exactly once, got %d", got)
 		}
 		if _, err := tm.Chat(context.Background(), []model.Message{{Role: "user", Content: "hi"}}, nil); err != nil {
@@ -234,7 +235,7 @@ func TestStreamLifecycle(t *testing.T) {
 		if got := tm.DroppedRecords(); got != 1 {
 			t.Fatalf("post-degradation entries must be dropped and counted, got %d", got)
 		}
-		if got := tel.countOfType(observability.EventTapeRecordFailed); got != 1 {
+		if got := tel.countOfType(telemetry.EventTapeRecordFailed); got != 1 {
 			t.Fatalf("tape.record_failed must stay one-shot, got %d", got)
 		}
 	})

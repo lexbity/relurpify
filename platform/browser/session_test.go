@@ -7,9 +7,10 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/governance/authorization"
-	"codeburg.org/lexbit/relurpify/platform/observability"
 	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
 	"github.com/stretchr/testify/require"
+
+	"codeburg.org/lexbit/relurpify/telemetry/observing"
 )
 
 func TestSessionNavigateChecksNetworkPermissions(t *testing.T) {
@@ -119,12 +120,12 @@ func (e *errorBackend) WaitFor(context.Context, WaitCondition, time.Duration) er
 func (e *errorBackend) CurrentURL(context.Context) (string, error)                  { return "", e.err }
 func (e *errorBackend) Close(_ context.Context) error                               { return e.err }
 
-// stubBudget implements observability.BudgetManager for testing
+// stubBudget implements observing.BudgetManager for testing
 type stubBudget struct {
 	remaining int
 }
 
-func (s *stubBudget) Allocate(category string, tokens int, item observability.BudgetItem) error {
+func (s *stubBudget) Allocate(category string, tokens int, item observing.BudgetItem) error {
 	if tokens > s.remaining {
 		return errors.New("budget exhausted")
 	}

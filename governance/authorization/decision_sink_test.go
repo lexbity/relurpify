@@ -6,10 +6,11 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/governance/policy"
-	"codeburg.org/lexbit/relurpify/platform/observability"
 	fwtelemetry "codeburg.org/lexbit/relurpify/telemetry"
 	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
 	"github.com/stretchr/testify/require"
+
+	"codeburg.org/lexbit/relurpify/telemetry"
 )
 
 func newDecisionSinkPermissionManager(t *testing.T) (*PermissionManager, *fwtelemetry.SnapshotDecisionSink) {
@@ -71,8 +72,8 @@ func TestPermissionManager_TelemetryDecisionSinkCarriesCorrelation(t *testing.T)
 	events := &correlatingEventSink{}
 	pm.SetDecisionSink(fwtelemetry.TelemetryDecisionSink{Telemetry: events})
 
-	rc := observability.RunContext{SessionID: "sess-9", RunID: "run-9", TraceID: "trace-9", AgentID: "agent-9"}
-	ctx := observability.WithRunContext(context.Background(), rc)
+	rc := telemetry.RunContext{SessionID: "sess-9", RunID: "run-9", TraceID: "trace-9", AgentID: "agent-9"}
+	ctx := telemetry.WithRunContext(context.Background(), rc)
 
 	require.NoError(t, pm.CheckCapability(ctx, "agent:euclo", "test-cap"))
 

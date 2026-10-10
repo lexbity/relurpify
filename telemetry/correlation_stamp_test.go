@@ -2,10 +2,8 @@ package telemetry
 
 import (
 	"context"
-	"testing"
-
-	"codeburg.org/lexbit/relurpify/platform/observability"
 	"github.com/stretchr/testify/require"
+	"testing"
 )
 
 // recordingSink is a test sink that captures emitted events.
@@ -25,8 +23,8 @@ func TestMultiplexTelemetryEmitForwardsCorrelation(t *testing.T) {
 	sink := &recordingSink{}
 	mux := MultiplexTelemetry{Sinks: []Telemetry{sink}}
 
-	rc := observability.RunContext{SessionID: "sess-1", RunID: "run-1", TraceID: "trace-1", AgentID: "agent-1"}
-	ctx := observability.WithRunContext(context.Background(), rc)
+	rc := RunContext{SessionID: "sess-1", RunID: "run-1", TraceID: "trace-1", AgentID: "agent-1"}
+	ctx := WithRunContext(context.Background(), rc)
 
 	ev := Event{
 		Type: EventAgentStart,
@@ -60,29 +58,29 @@ func TestMultiplexTelemetryEmitMultipleSinks(t *testing.T) {
 }
 
 // TestStampCorrelationWithTraceContext verifies that StampCorrelation also
-// stamps SpanID from observability.TraceContext when present.
+// stamps SpanID from TraceContext when present.
 func TestStampCorrelationWithTraceContext(t *testing.T) {
-	rc := observability.RunContext{SessionID: "sess-1", RunID: "run-1", TraceID: "trace-1", AgentID: "agent-1"}
-	tc := observability.TraceContext{TraceID: "node-trace", SpanID: "span-1"}
-	ctx := observability.WithRunContext(context.Background(), rc)
-	ctx = observability.WithTraceContext(ctx, tc)
+	rc := RunContext{SessionID: "sess-1", RunID: "run-1", TraceID: "trace-1", AgentID: "agent-1"}
+	tc := TraceContext{TraceID: "node-trace", SpanID: "span-1"}
+	ctx := WithRunContext(context.Background(), rc)
+	ctx = WithTraceContext(ctx, tc)
 
 	ev := &Event{
 		Type: EventAgentStart,
 	}
 	StampCorrelation(ctx, ev)
 
-	// observability.RunContext wins for TraceID (Decision 3)
+	// RunContext wins for TraceID (Decision 3)
 	require.Equal(t, "trace-1", ev.TraceID)
-	// SpanID comes from observability.TraceContext
+	// SpanID comes from TraceContext
 	require.Equal(t, "span-1", ev.SpanID)
 }
 
-// TestStampCorrelationTraceContextFallback verifies that observability.TraceContext.TraceID
-// is used as a fallback when no observability.RunContext is present.
+// TestStampCorrelationTraceContextFallback verifies that TraceContext.TraceID
+// is used as a fallback when no RunContext is present.
 func TestStampCorrelationTraceContextFallback(t *testing.T) {
-	tc := observability.TraceContext{TraceID: "node-trace", SpanID: "span-1"}
-	ctx := observability.WithTraceContext(context.Background(), tc)
+	tc := TraceContext{TraceID: "node-trace", SpanID: "span-1"}
+	ctx := WithTraceContext(context.Background(), tc)
 
 	ev := &Event{
 		Type: EventAgentStart,
@@ -94,9 +92,9 @@ func TestStampCorrelationTraceContextFallback(t *testing.T) {
 }
 
 // TestStampCorrelationEmptyRunContextPreservesExisting verifies that an empty
-// observability.RunContext value never clears a field the caller already set.
+// RunContext value never clears a field the caller already set.
 func TestStampCorrelationEmptyRunContextPreservesExisting(t *testing.T) {
-	ctx := observability.WithRunContext(context.Background(), observability.RunContext{})
+	ctx := WithRunContext(context.Background(), RunContext{})
 
 	ev := &Event{
 		Type:      EventAgentStart,
@@ -116,12 +114,12 @@ func TestStampCorrelationNilEvent(t *testing.T) {
 }
 
 func TestCorrelationFromContext_MergesAllCarriers(t *testing.T) {
-	rc := observability.RunContext{SessionID: "sess-1", RunID: "run-1", TraceID: "trace-1", AgentID: "agent-1"}
-	ctx := observability.WithRunContext(context.Background(), rc)
-	ctx = observability.WithTraceContext(ctx, observability.TraceContext{TraceID: "node-trace", SpanID: "span-1"})
-	ctx = observability.WithNodeContext(ctx, "node-1")
+	rc := RunContext{SessionID: "sess-1", RunID: "run-1", TraceID: "trace-1", AgentID: "agent-1"}
+	ctx := WithRunContext(context.Background(), rc)
+	ctx = WithTraceContext(ctx, TraceContext{TraceID: "node-trace", SpanID: "span-1"})
+	ctx = WithNodeContext(ctx, "node-1")
 
-	c := observability.CorrelationFromContext(ctx)
+	c := CorrelationFromContext(ctx)
 
 	require.Equal(t, "sess-1", c.SessionID)
 	require.Equal(t, "run-1", c.RunID)
@@ -133,27 +131,27 @@ func TestCorrelationFromContext_MergesAllCarriers(t *testing.T) {
 }
 
 func TestCorrelationFromContext_TraceContextFallbackRules(t *testing.T) {
-	// Without a observability.RunContext, observability.TraceContext supplies TraceID as fallback.
-	c := observability.CorrelationFromContext(observability.WithTraceContext(context.Background(), observability.TraceContext{TraceID: "node-trace", SpanID: "span-1"}))
+	// Without a RunContext, TraceContext supplies TraceID as fallback.
+	c := CorrelationFromContext(WithTraceContext(context.Background(), TraceContext{TraceID: "node-trace", SpanID: "span-1"}))
 	require.Equal(t, "node-trace", c.TraceID)
 	require.False(t, c.TraceIDTurnScoped)
 	require.True(t, c.HasTraceID())
 
-	// With a turn-scoped TraceID present, the observability.TraceContext TraceID is not
+	// With a turn-scoped TraceID present, the TraceContext TraceID is not
 	// promoted; it stays a fallback the stamper applies only when the event
 	// is missing a TraceID.
-	c = observability.CorrelationFromContext(observability.WithTraceContext(
-		observability.WithRunContext(context.Background(), observability.RunContext{RunID: "run-1"}),
-		observability.TraceContext{TraceID: "node-trace"},
+	c = CorrelationFromContext(WithTraceContext(
+		WithRunContext(context.Background(), RunContext{RunID: "run-1"}),
+		TraceContext{TraceID: "node-trace"},
 	))
 	require.Equal(t, "node-trace", c.TraceID, "fallback is still resolved for events without a TraceID")
 	require.False(t, c.TraceIDTurnScoped, "must not be marked turn-scoped, so it never overwrites")
 }
 
 func TestCorrelationFromContext_NoCarriers(t *testing.T) {
-	c := observability.CorrelationFromContext(context.Background())
-	require.Equal(t, observability.Correlation{}, c)
+	c := CorrelationFromContext(context.Background())
+	require.Equal(t, Correlation{}, c)
 	require.False(t, c.HasTraceID())
 
-	require.Equal(t, observability.Correlation{}, observability.CorrelationFromContext(nil))
+	require.Equal(t, Correlation{}, CorrelationFromContext(nil))
 }

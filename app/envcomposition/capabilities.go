@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/capability/fs"
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	regpkg "codeburg.org/lexbit/relurpify/capability/registry"
 	fsandbox "codeburg.org/lexbit/relurpify/capability/sandbox"
@@ -15,7 +16,6 @@ import (
 	"codeburg.org/lexbit/relurpify/context/knowledge/ast"
 	"codeburg.org/lexbit/relurpify/context/knowledge/graphdb"
 	"codeburg.org/lexbit/relurpify/context/knowledge/search"
-	"codeburg.org/lexbit/relurpify/platform/fs"
 	platformsearch "codeburg.org/lexbit/relurpify/platform/search"
 	"codeburg.org/lexbit/relurpify/platform/tools/composite"
 	"codeburg.org/lexbit/relurpify/platform/tools/subprocess"

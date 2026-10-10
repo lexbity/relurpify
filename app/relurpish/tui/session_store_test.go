@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/platform/fs"
+	"codeburg.org/lexbit/relurpify/capability/fs"
 )
 
 func TestSessionMetaRoundTripNewFields(t *testing.T) {

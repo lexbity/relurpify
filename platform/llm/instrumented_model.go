@@ -7,51 +7,31 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/model"
-	"codeburg.org/lexbit/relurpify/platform/observability"
+	"codeburg.org/lexbit/relurpify/telemetry"
+	"codeburg.org/lexbit/relurpify/telemetry/observing"
 )
 
-// stampObservabilityCorrelation populates every correlation field on an
-// observability.Event from ctx — including TaskID. It is the single
-// sanctioned way to correlate LLM events (NFR-6): emitters must never
-// construct correlation fields by hand, and must never smuggle them
-// through Metadata.
-//
-// Merge semantics come from observability.StampCorrelation (single source
-// of truth). The fallbacks resolved here are for the fields only the
-// envelope knows — SessionID, NodeID, and TaskID — because the envelope's
-// private context key is only reachable via the contextdata accessor,
-// which keeps the platform/llm → execution import cycle broken.
-func stampObservabilityCorrelation(ctx context.Context, ev *observability.Event) {
+// stampObservabilityCorrelation stamps the context-carried correlation
+// fields onto a telemetry.Event (NFR-6): emitters never construct
+// correlation fields by hand and never smuggle them through Metadata.
+// The identity triple (Node/Session/Task) backfill lives app-side, in the
+// composition-root EventSink adapter (Q9) — platform holds no context edge.
+func stampObservabilityCorrelation(ctx context.Context, ev *telemetry.Event) {
 	if ev == nil {
 		return
 	}
-	observability.StampCorrelation(ctx, ev)
-	if env, ok := contextdata.EnvelopeFrom(ctx); ok {
-		if ev.NodeID == "" && env.NodeIDSnapshot() != "" {
-			ev.NodeID = env.NodeIDSnapshot()
-		}
-		if ev.SessionID == "" && env.SessionIDSnapshot() != "" {
-			ev.SessionID = env.SessionIDSnapshot()
-		}
-		if ev.TaskID == "" && env.TaskIDSnapshot() != "" {
-			ev.TaskID = env.TaskIDSnapshot()
-		}
-	}
+	telemetry.StampCorrelation(ctx, ev)
 }
-
-// ProfiledModel is re-exported from contracts
-type ProfiledModel = model.ProfiledModel
 
 // InstrumentedModel wraps a LanguageModel and emits telemetry for prompts and responses.
 type InstrumentedModel struct {
 	Inner     LanguageModel
-	Telemetry observability.Telemetry
+	Telemetry model.EventSink
 	Debug     bool
 }
 
-func NewInstrumentedModel(inner LanguageModel, telemetry observability.Telemetry, debug bool) *InstrumentedModel {
+func NewInstrumentedModel(inner LanguageModel, telemetry model.EventSink, debug bool) *InstrumentedModel {
 	return &InstrumentedModel{Inner: inner, Telemetry: telemetry, Debug: debug}
 }
 
@@ -109,33 +89,33 @@ func (m *InstrumentedModel) SetProfile(profile *ModelProfile) {
 	}
 }
 
-// ToolRepairStrategy implements ProfiledModel when the wrapped model
+// ToolRepairStrategy implements model.ProfiledModel when the wrapped model
 // exposes profile metadata.
 func (m *InstrumentedModel) ToolRepairStrategy() string {
 	if m != nil {
-		if profiled, ok := m.Inner.(ProfiledModel); ok {
+		if profiled, ok := m.Inner.(model.ProfiledModel); ok {
 			return profiled.ToolRepairStrategy()
 		}
 	}
 	return "heuristic-only"
 }
 
-// MaxToolsPerCall implements ProfiledModel when the wrapped model
+// MaxToolsPerCall implements model.ProfiledModel when the wrapped model
 // exposes profile metadata.
 func (m *InstrumentedModel) MaxToolsPerCall() int {
 	if m != nil {
-		if profiled, ok := m.Inner.(ProfiledModel); ok {
+		if profiled, ok := m.Inner.(model.ProfiledModel); ok {
 			return profiled.MaxToolsPerCall()
 		}
 	}
 	return 0
 }
 
-// UsesNativeToolCalling implements ProfiledModel when the wrapped model
+// UsesNativeToolCalling implements model.ProfiledModel when the wrapped model
 // exposes profile metadata.
 func (m *InstrumentedModel) UsesNativeToolCalling() bool {
 	if m != nil {
-		if profiled, ok := m.Inner.(ProfiledModel); ok {
+		if profiled, ok := m.Inner.(model.ProfiledModel); ok {
 			return profiled.UsesNativeToolCalling()
 		}
 	}
@@ -209,40 +189,40 @@ func (m *InstrumentedModel) emitPrompt(ctx context.Context, kind string, base ma
 			metadata[k] = v
 		}
 	}
-	ev := observability.Event{
-		Type:      observability.EventLLMPrompt,
+	ev := telemetry.Event{
+		Type:      telemetry.EventLLMPrompt,
 		Timestamp: time.Now().UTC(),
 		Message:   fmt.Sprintf("llm %s prompt", kind),
 		Metadata:  metadata,
 	}
 	stampObservabilityCorrelation(ctx, &ev)
-	m.Telemetry.Emit(ev)
+	m.Telemetry.Emit(ctx, ev)
 }
 
 func (m *InstrumentedModel) emitResponse(ctx context.Context, kind string, resp *LLMResponse, err error) {
 	if m == nil {
 		return
 	}
-	if obs := observability.UsageObserverFromContext(ctx); obs != nil && resp != nil {
-		obs.RecordTokenUsage(observability.TokenUsage(resp.Usage))
+	if obs := observing.UsageObserverFromContext(ctx); obs != nil && resp != nil {
+		obs.RecordTokenUsage(observing.TokenUsage(resp.Usage))
 		if snapshot, ok := obs.ConsumeResetNotice(); ok && m.Telemetry != nil {
 			metadata := map[string]any{
 				"budget_snapshot": snapshot,
 			}
-			ev := observability.Event{
-				Type:      observability.EventSessionResetRequired,
+			ev := telemetry.Event{
+				Type:      telemetry.EventSessionResetRequired,
 				Timestamp: time.Now().UTC(),
 				Message:   "session reset required",
 				Metadata:  metadata,
 			}
 			stampObservabilityCorrelation(ctx, &ev)
-			m.Telemetry.Emit(ev)
+			m.Telemetry.Emit(ctx, ev)
 		}
 	}
-	if obs := observability.SnapshotObserverFromContext(ctx); obs != nil {
+	if obs := observing.SnapshotObserverFromContext(ctx); obs != nil {
 		obs.Observe()
 	}
-	if ing := observability.ResponseIngesterFromContext(ctx); ing != nil && resp != nil && err == nil {
+	if ing := observing.ResponseIngesterFromContext(ctx); ing != nil && resp != nil && err == nil {
 		go func() {
 			timeoutCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 			defer cancel()
@@ -272,14 +252,14 @@ func (m *InstrumentedModel) emitResponse(ctx context.Context, kind string, resp 
 	if err != nil {
 		metadata["error"] = err.Error()
 	}
-	ev := observability.Event{
-		Type:      observability.EventLLMResponse,
+	ev := telemetry.Event{
+		Type:      telemetry.EventLLMResponse,
 		Timestamp: time.Now().UTC(),
 		Message:   fmt.Sprintf("llm %s response", kind),
 		Metadata:  metadata,
 	}
 	stampObservabilityCorrelation(ctx, &ev)
-	m.Telemetry.Emit(ev)
+	m.Telemetry.Emit(ctx, ev)
 }
 
 func modelFromOptions(options *LLMOptions) string {

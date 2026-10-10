@@ -9,9 +9,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"codeburg.org/lexbit/relurpify/capability/fs"
 	capports "codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/model"
-	"codeburg.org/lexbit/relurpify/platform/fs"
 	"codeburg.org/lexbit/relurpify/platform/llm"
 	"codeburg.org/lexbit/relurpify/platform/llm/offline"
 	"codeburg.org/lexbit/relurpify/testsuite/testhelper"

@@ -13,8 +13,8 @@ import (
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/jobs"
 	"codeburg.org/lexbit/relurpify/model"
-	"codeburg.org/lexbit/relurpify/platform/observability"
 	"codeburg.org/lexbit/relurpify/telemetry"
+	"codeburg.org/lexbit/relurpify/telemetry/observing"
 )
 
 type outputIngesterContextKey struct{}
@@ -28,7 +28,7 @@ func WithOutputIngester(ctx context.Context, ing *OutputIngester) context.Contex
 	}
 	ctx = context.WithValue(ctx, outputIngesterContextKey{}, ing)
 	ctx = telemetry.WithResponseIngester(ctx, ing)
-	return observability.WithResponseIngester(ctx, ing)
+	return observing.WithResponseIngester(ctx, ing)
 }
 
 // OutputIngesterFromContext extracts an output ingester from context.

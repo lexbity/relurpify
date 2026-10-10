@@ -13,7 +13,7 @@ import (
 	"strings"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/platform/fs"
+	"codeburg.org/lexbit/relurpify/capability/fs"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 	euclosubject "codeburg.org/lexbit/relurpify/testsuite/subjects/euclo"
 )

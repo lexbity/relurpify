@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/platform/fs"
+	"codeburg.org/lexbit/relurpify/capability/fs"
 )
 
 // PreparedRun bundles the descriptor and its run-scoped artifact layout.

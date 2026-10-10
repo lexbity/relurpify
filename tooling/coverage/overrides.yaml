@@ -232,9 +232,9 @@ packages:
   codeburg.org/lexbit/relurpify/platform/lsp:
     floor: 13
     reason: partial unit coverage; floor recorded from current coverage, raise as tests land
-  codeburg.org/lexbit/relurpify/platform/observability:
+  codeburg.org/lexbit/relurpify/telemetry/observing:
     floor: 0
-    reason: no unit tests yet; floor ratchets up from 0 as tests land
+    reason: floor re-anchored from platform/observability (S4 move); ratchets up from 0 as tests land
   codeburg.org/lexbit/relurpify/platform/search:
     floor: 7
     reason: partial unit coverage; floor recorded from current coverage, raise as tests land

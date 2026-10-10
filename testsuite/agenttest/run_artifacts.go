@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/platform/fs"
+	"codeburg.org/lexbit/relurpify/capability/fs"
 )
 
 // PreparedRunArtifacts captures the canonical on-disk layout for a prepared

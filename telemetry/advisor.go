@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/platform/observability"
+	"codeburg.org/lexbit/relurpify/telemetry/observing"
 )
 
 // ContextBudgetAdvisor tracks consumed token budget across LLM calls and
@@ -24,28 +24,28 @@ type ContextBudgetAdvisor struct {
 	resetNotified    bool
 }
 
-// WithAdvisor stores the advisor in the context via the observability.UsageObserver
+// WithAdvisor stores the advisor in the context via the observing.UsageObserver
 // interface key so that platform/llm.InstrumentedModel can retrieve it without
 // importing framework packages.
 func WithAdvisor(ctx context.Context, advisor *ContextBudgetAdvisor) context.Context {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	return observability.WithUsageObserver(ctx, advisor)
+	return observing.WithUsageObserver(ctx, advisor)
 }
 
-// AdvisorFromContext extracts the advisor from the observability.UsageObserver context key.
+// AdvisorFromContext extracts the advisor from the observing.UsageObserver context key.
 func AdvisorFromContext(ctx context.Context) *ContextBudgetAdvisor {
 	if ctx == nil {
 		return nil
 	}
-	obs := observability.UsageObserverFromContext(ctx)
+	obs := observing.UsageObserverFromContext(ctx)
 	advisor, _ := obs.(*ContextBudgetAdvisor)
 	return advisor
 }
 
-// RecordTokenUsage implements observability.UsageObserver.
-func (a *ContextBudgetAdvisor) RecordTokenUsage(usage observability.TokenUsage) {
+// RecordTokenUsage implements observing.UsageObserver.
+func (a *ContextBudgetAdvisor) RecordTokenUsage(usage observing.TokenUsage) {
 	a.RecordCall(TokenUsage(usage))
 }
 

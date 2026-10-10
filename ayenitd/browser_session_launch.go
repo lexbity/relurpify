@@ -1,6 +1,7 @@
 package ayenitd
 
 import (
+	"codeburg.org/lexbit/relurpify/telemetry/observing"
 	"context"
 	"encoding/json"
 	"errors"
@@ -21,7 +22,6 @@ import (
 	"codeburg.org/lexbit/relurpify/platform/browser/bidi"
 	"codeburg.org/lexbit/relurpify/platform/browser/cdp"
 	"codeburg.org/lexbit/relurpify/platform/browser/webdriver"
-	"codeburg.org/lexbit/relurpify/platform/observability"
 	"codeburg.org/lexbit/relurpify/telemetry"
 )
 
@@ -345,7 +345,7 @@ func browserLaunchPolicy(cfg browsersvc.BrowserSessionConfig) sandbox.CommandPol
 	return cfg.Policy
 }
 
-func newBudgetManager(maxTokens int) observability.BudgetManager {
+func newBudgetManager(maxTokens int) observing.BudgetManager {
 	return observabilityBudgetManagerAdapter{budget: telemetry.NewArtifactBudget(maxTokens)}
 }
 
@@ -353,7 +353,7 @@ type observabilityBudgetManagerAdapter struct {
 	budget *telemetry.ArtifactBudget
 }
 
-func (b observabilityBudgetManagerAdapter) Allocate(category string, tokens int, item observability.BudgetItem) error {
+func (b observabilityBudgetManagerAdapter) Allocate(category string, tokens int, item observing.BudgetItem) error {
 	if b.budget == nil {
 		return fmt.Errorf("budget unavailable")
 	}
@@ -393,7 +393,7 @@ func (b observabilityBudgetManagerAdapter) CanAddTokens(tokens int) bool {
 }
 
 type telemetryBudgetItemAdapter struct {
-	item observability.BudgetItem
+	item observing.BudgetItem
 }
 
 func (b telemetryBudgetItemAdapter) GetID() string {

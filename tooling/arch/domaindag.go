@@ -92,12 +92,12 @@ func domainDAG() map[string]map[string]bool {
 			Platform_domaindag, Testsuite_domaindag, Tooling_domaindag,
 		},
 		// Platform adapters sit at the substrate: they may import the bottom
-		// vocabulary domains (userconfig included — the permission vocabulary
-		// is decoded userconfig-side and consumed directly, no governance
-		// alias re-export) plus capability/governance/context/model.
+		// vocabulary domains (userconfig — the permission vocabulary is
+		// decoded userconfig-side; telemetry — correlation and observing
+		// moved here in S4) plus capability/governance/context/model.
 		Platform_domaindag: {
 			Capability_domaindag, Governance_domaindag, Context_domaindag, Model_domaindag,
-			Userconfig_domaindag,
+			Userconfig_domaindag, Telemetry_domaindag,
 			Testsuite_domaindag, Tooling_domaindag,
 		},
 	}

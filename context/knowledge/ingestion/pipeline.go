@@ -9,12 +9,12 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/capability/fs"
 	"codeburg.org/lexbit/relurpify/context/knowledge"
 	contextports "codeburg.org/lexbit/relurpify/context/ports"
 	"codeburg.org/lexbit/relurpify/governance/classification"
 	"codeburg.org/lexbit/relurpify/governance/identity"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
-	"codeburg.org/lexbit/relurpify/platform/fs"
 	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
 )
 

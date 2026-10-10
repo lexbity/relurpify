@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/platform/fs"
+	"codeburg.org/lexbit/relurpify/capability/fs"
 	"codeburg.org/lexbit/relurpify/telemetry/perfstats"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 )

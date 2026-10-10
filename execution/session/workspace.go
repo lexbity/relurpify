@@ -599,7 +599,10 @@ func OpenWorkspace(ctx context.Context, cfg WorkspaceConfig) (_ *Workspace, err 
 	if cfg.Scope.LLMBackend && backend != nil {
 		backend.SetDebugLogging(logLLM)
 		if cfg.ModelProduct.ModelFactory != nil {
-			model = cfg.ModelProduct.ModelFactory(newModelTelemetryAdapter(telemetryChain), logLLM)
+			if cfg.NewEventSink == nil {
+				return nil, fmt.Errorf("model factory requires NewEventSink: the composition root supplies the telemetry adapter")
+			}
+			model = cfg.ModelProduct.ModelFactory(cfg.NewEventSink(telemetryChain), logLLM)
 		} else {
 			model = backend.Model()
 		}

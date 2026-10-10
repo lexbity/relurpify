@@ -12,7 +12,8 @@ import (
 	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/model"
 	"codeburg.org/lexbit/relurpify/platform/llm"
-	"codeburg.org/lexbit/relurpify/platform/observability"
+
+	"codeburg.org/lexbit/relurpify/telemetry"
 )
 
 // probeModel is a LanguageModel that records the context of every
@@ -61,19 +62,23 @@ func (m *probeModel) invocationCount() int {
 // InstrumentedModel.
 type observabilitySink struct {
 	mu     sync.Mutex
-	events []observability.Event
+	events []telemetry.Event
 }
 
-func (s *observabilitySink) Emit(ev observability.Event) {
+func (s *observabilitySink) Emit(_ context.Context, ev any) {
+	telemetryEv, ok := ev.(telemetry.Event)
+	if !ok {
+		return
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.events = append(s.events, ev)
+	s.events = append(s.events, telemetryEv)
 }
 
-func (s *observabilitySink) snapshot() []observability.Event {
+func (s *observabilitySink) snapshot() []telemetry.Event {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	out := make([]observability.Event, len(s.events))
+	out := make([]telemetry.Event, len(s.events))
 	copy(out, s.events)
 	return out
 }
@@ -110,7 +115,7 @@ func TestGraph_InjectsEnvelopeAndNodeIDIntoNodeContext(t *testing.T) {
 	require.NoError(t, graph.AddEdge(node.ID(), done.ID(), nil, false))
 
 	env := contextdata.NewEnvelope("task-ctx", "session-ctx")
-	ctx := observability.WithRunContext(context.Background(), observability.RunContext{
+	ctx := telemetry.WithRunContext(context.Background(), telemetry.RunContext{
 		SessionID: "session-ctx",
 		RunID:     "run-ctx",
 		TraceID:   "trace-ctx",
@@ -124,18 +129,46 @@ func TestGraph_InjectsEnvelopeAndNodeIDIntoNodeContext(t *testing.T) {
 	nodeEnv, ok := contextdata.EnvelopeFrom(node.ctx)
 	require.True(t, ok, "node context must carry the envelope")
 	require.Same(t, env, nodeEnv)
-	nodeID, ok := observability.NodeIDFromContext(node.ctx)
+	nodeID, ok := telemetry.NodeIDFromContext(node.ctx)
 	require.True(t, ok, "node context must carry the executing node ID")
 	require.Equal(t, "probe.node", nodeID)
-	rc, ok := observability.RunContextFromContext(node.ctx)
+	rc, ok := telemetry.RunContextFromContext(node.ctx)
 	require.True(t, ok, "node context must preserve the turn's run context")
 	require.Equal(t, "run-ctx", rc.RunID)
+}
+
+// envelopeBackfillSink mirrors the composition root's EventSink adapter
+// (Q9): the graph runtime stamps node context; the task envelope's
+// node/session/task backfill is composition-owned, so the test wires the
+// same behavior locally to prove the whole diagnostic-loop pipeline.
+type envelopeBackfillSink struct {
+	inner *observabilitySink
+}
+
+func (s *envelopeBackfillSink) Emit(ctx context.Context, event any) {
+	ev, ok := event.(telemetry.Event)
+	if !ok {
+		return
+	}
+	telemetry.StampCorrelation(ctx, &ev)
+	if env, ok := contextdata.EnvelopeFrom(ctx); ok {
+		if ev.NodeID == "" && env.NodeIDSnapshot() != "" {
+			ev.NodeID = env.NodeIDSnapshot()
+		}
+		if ev.SessionID == "" && env.SessionIDSnapshot() != "" {
+			ev.SessionID = env.SessionIDSnapshot()
+		}
+		if ev.TaskID == "" && env.TaskIDSnapshot() != "" {
+			ev.TaskID = env.TaskIDSnapshot()
+		}
+	}
+	s.inner.Emit(ctx, ev)
 }
 
 func TestGraph_AttributesLLMEventsToNodeAndTask(t *testing.T) {
 	probe := &probeModel{}
 	sink := &observabilitySink{}
-	instrumented := llm.NewInstrumentedModel(probe, sink, false)
+	instrumented := llm.NewInstrumentedModel(probe, &envelopeBackfillSink{inner: sink}, false)
 	node := &llmCallNode{id: "euclo.probe", model: instrumented}
 	done := NewTerminalNode("done")
 
@@ -146,7 +179,7 @@ func TestGraph_AttributesLLMEventsToNodeAndTask(t *testing.T) {
 	require.NoError(t, graph.AddEdge(node.ID(), done.ID(), nil, false))
 
 	env := contextdata.NewEnvelope("task-42", "session-42")
-	ctx := observability.WithRunContext(context.Background(), observability.RunContext{
+	ctx := telemetry.WithRunContext(context.Background(), telemetry.RunContext{
 		SessionID: "session-42",
 		RunID:     "run-42",
 		TraceID:   "trace-42",
@@ -156,12 +189,12 @@ func TestGraph_AttributesLLMEventsToNodeAndTask(t *testing.T) {
 	require.NoError(t, err)
 
 	events := sink.snapshot()
-	var prompt, response *observability.Event
+	var prompt, response *telemetry.Event
 	for i := range events {
 		switch events[i].Type {
-		case observability.EventLLMPrompt:
+		case telemetry.EventLLMPrompt:
 			prompt = &events[i]
-		case observability.EventLLMResponse:
+		case telemetry.EventLLMResponse:
 			response = &events[i]
 		}
 	}
@@ -172,7 +205,7 @@ func TestGraph_AttributesLLMEventsToNodeAndTask(t *testing.T) {
 	// correlation fields as the graph's own node events, so a prompt
 	// can be joined to the turn, task, and node that caused it. Correlation
 	// lives on the event's first-class fields only — never in Metadata.
-	for _, ev := range []*observability.Event{prompt, response} {
+	for _, ev := range []*telemetry.Event{prompt, response} {
 		require.Equal(t, "task-42", ev.TaskID, "task_id must be attributed to the turn's task")
 		require.Equal(t, "euclo.probe", ev.NodeID, "node_id must be attributed to the executing node")
 		require.Equal(t, "run-42", ev.RunID, "run_id must match the turn")
@@ -194,7 +227,7 @@ func TestGraph_LLMEventAttributionWithoutTurnContext(t *testing.T) {
 	// that are unknown simply stay empty rather than being wrong.
 	probe := &probeModel{}
 	sink := &observabilitySink{}
-	instrumented := llm.NewInstrumentedModel(probe, sink, false)
+	instrumented := llm.NewInstrumentedModel(probe, &envelopeBackfillSink{inner: sink}, false)
 	node := &llmCallNode{id: "bare.node", model: instrumented}
 	done := NewTerminalNode("done")
 
@@ -211,7 +244,7 @@ func TestGraph_LLMEventAttributionWithoutTurnContext(t *testing.T) {
 	events := sink.snapshot()
 	require.NotEmpty(t, events)
 	for _, ev := range events {
-		if ev.Type == observability.EventLLMPrompt || ev.Type == observability.EventLLMResponse {
+		if ev.Type == telemetry.EventLLMPrompt || ev.Type == telemetry.EventLLMResponse {
 			require.Equal(t, "task-bare", ev.TaskID)
 			require.Equal(t, "bare.node", ev.NodeID)
 			require.Empty(t, ev.RunID)
@@ -227,7 +260,7 @@ func TestGraph_NodeContextSurvivesNestedGraphExecution(t *testing.T) {
 	// keeping the turn's correlation identifiers.
 	innerProbe := &probeModel{}
 	innerSink := &observabilitySink{}
-	innerModel := llm.NewInstrumentedModel(innerProbe, innerSink, false)
+	innerModel := llm.NewInstrumentedModel(innerProbe, &envelopeBackfillSink{inner: innerSink}, false)
 	innerNode := &llmCallNode{id: "inner.think", model: innerModel}
 	innerDone := NewTerminalNode("inner.done")
 	innerGraph := NewGraph()
@@ -248,7 +281,7 @@ func TestGraph_NodeContextSurvivesNestedGraphExecution(t *testing.T) {
 	require.NoError(t, outerGraph.AddEdge(outerNode.ID(), outerDone.ID(), nil, false))
 
 	env := contextdata.NewEnvelope("task-nested", "session-nested")
-	ctx := observability.WithRunContext(context.Background(), observability.RunContext{
+	ctx := telemetry.WithRunContext(context.Background(), telemetry.RunContext{
 		SessionID: "session-nested",
 		RunID:     "run-nested",
 		TraceID:   "trace-nested",
@@ -260,7 +293,7 @@ func TestGraph_NodeContextSurvivesNestedGraphExecution(t *testing.T) {
 	events := innerSink.snapshot()
 	require.NotEmpty(t, events)
 	for _, ev := range events {
-		if ev.Type == observability.EventLLMPrompt || ev.Type == observability.EventLLMResponse {
+		if ev.Type == telemetry.EventLLMPrompt || ev.Type == telemetry.EventLLMResponse {
 			require.Equal(t, "task-nested", ev.TaskID)
 			require.Equal(t, "inner.think", ev.NodeID, "nested LLM events attribute to the inner node")
 			require.Equal(t, "run-nested", ev.RunID)

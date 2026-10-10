@@ -5,8 +5,8 @@ import (
 	"runtime"
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/capability/fs"
 	"codeburg.org/lexbit/relurpify/governance/policy"
-	"codeburg.org/lexbit/relurpify/platform/fs"
 )
 
 // NewTestAuditLogger returns a file-backed audit chain logger over a fresh

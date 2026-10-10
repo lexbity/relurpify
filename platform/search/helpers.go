@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	securefs "codeburg.org/lexbit/relurpify/platform/fs"
+	securefs "codeburg.org/lexbit/relurpify/capability/fs"
 )
 
 func shouldSkipGeneratedDir(name string) bool {

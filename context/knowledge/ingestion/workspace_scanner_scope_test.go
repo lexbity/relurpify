@@ -7,9 +7,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"codeburg.org/lexbit/relurpify/capability/fs"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/governance/identity"
-	"codeburg.org/lexbit/relurpify/platform/fs"
 )
 
 func TestAcquireFromFileRespectsFileScope(t *testing.T) {

@@ -8,7 +8,7 @@ import (
 	"regexp"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/platform/fs"
+	"codeburg.org/lexbit/relurpify/capability/fs"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 

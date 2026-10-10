@@ -9,8 +9,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"codeburg.org/lexbit/relurpify/app/relurpish/tui"
+	"codeburg.org/lexbit/relurpify/capability/fs"
 	"codeburg.org/lexbit/relurpify/named/euclo/reporting"
-	"codeburg.org/lexbit/relurpify/platform/fs"
 )
 
 func TestDiffPaneGroupsByFileAndShowsVerificationAlerts(t *testing.T) {

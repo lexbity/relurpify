@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/platform/fs"
+	"codeburg.org/lexbit/relurpify/capability/fs"
 )
 
 func TestLoadExecutorCaseReportFallsBackWhenMissing(t *testing.T) {

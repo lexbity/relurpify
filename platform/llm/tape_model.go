@@ -16,9 +16,10 @@ import (
 	"sync/atomic"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/telemetry"
+
+	"codeburg.org/lexbit/relurpify/capability/fs"
 	"codeburg.org/lexbit/relurpify/model"
-	"codeburg.org/lexbit/relurpify/platform/fs"
-	"codeburg.org/lexbit/relurpify/platform/observability"
 )
 
 type TapeMode string
@@ -64,7 +65,7 @@ type TapeModel struct {
 
 	// Telemetry, when set, receives the one-shot tape.record_failed event on
 	// the first record-write failure. When nil, the failure is logged once.
-	Telemetry observability.Telemetry
+	Telemetry telemetry.Telemetry
 
 	mu                   sync.Mutex
 	file                 *os.File
@@ -317,8 +318,8 @@ func (t *TapeModel) notifyRecordFailed(err error) {
 		class = pathErr.Op + "_" + pathErr.Err.Error()
 	}
 	if t.Telemetry != nil {
-		t.Telemetry.Emit(observability.Event{
-			Type:      observability.EventTapeRecordFailed,
+		t.Telemetry.Emit(telemetry.Event{
+			Type:      telemetry.EventTapeRecordFailed,
 			Timestamp: time.Now().UTC(),
 			Message:   "tape record write failed; recorder degraded",
 			Metadata: map[string]any{

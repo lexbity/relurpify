@@ -17,7 +17,7 @@ import (
 	"sync"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/platform/fs"
+	"codeburg.org/lexbit/relurpify/capability/fs"
 )
 
 // Ref is a retrieval-addressable artifact handle (e.g. "artifact://<session>/<id>").

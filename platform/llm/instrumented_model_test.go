@@ -15,24 +15,29 @@ import (
 	"codeburg.org/lexbit/relurpify/context/knowledge"
 	"codeburg.org/lexbit/relurpify/context/knowledge/graphdb"
 	"codeburg.org/lexbit/relurpify/model"
-	"codeburg.org/lexbit/relurpify/platform/observability"
+
+	"codeburg.org/lexbit/relurpify/telemetry"
 )
 
 type llmEventSink struct {
 	mu     sync.Mutex
-	events []observability.Event
+	events []telemetry.Event
 }
 
-func (s *llmEventSink) Emit(event observability.Event) {
+func (s *llmEventSink) Emit(_ context.Context, event any) {
+	ev, ok := event.(telemetry.Event)
+	if !ok {
+		return
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.events = append(s.events, event)
+	s.events = append(s.events, ev)
 }
 
-func (s *llmEventSink) Snapshot() []observability.Event {
+func (s *llmEventSink) Snapshot() []telemetry.Event {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	out := make([]observability.Event, len(s.events))
+	out := make([]telemetry.Event, len(s.events))
 	copy(out, s.events)
 	return out
 }
@@ -174,10 +179,10 @@ func TestInstrumentedModel_IngestsLLMResponse_NonBlocking(t *testing.T) {
 }
 
 func TestInstrumentedModel_EmitsSessionResetRequired(t *testing.T) {
-	advisor := &observability.ContextBudgetAdvisor{ModelContextSize: 1024}
+	advisor := &telemetry.ContextBudgetAdvisor{ModelContextSize: 1024}
 	sink := &llmEventSink{}
 	instrumented := NewInstrumentedModel(stubUsageResponseModel{}, sink, false)
-	ctx := observability.WithAdvisor(context.Background(), advisor)
+	ctx := telemetry.WithAdvisor(context.Background(), advisor)
 
 	_, err := instrumented.Chat(ctx, []model.Message{{Role: "user", Content: "ping"}}, nil)
 	require.NoError(t, err)
@@ -185,22 +190,22 @@ func TestInstrumentedModel_EmitsSessionResetRequired(t *testing.T) {
 	require.Eventually(t, func() bool {
 		events := sink.Snapshot()
 		for _, event := range events {
-			if event.Type == observability.EventSessionResetRequired {
+			if event.Type == telemetry.EventSessionResetRequired {
 				return true
 			}
 		}
 		return false
 	}, time.Second, 10*time.Millisecond)
 	events := sink.Snapshot()
-	var resetEvent *observability.Event
+	var resetEvent *telemetry.Event
 	for i := range events {
-		if events[i].Type == observability.EventSessionResetRequired {
+		if events[i].Type == telemetry.EventSessionResetRequired {
 			resetEvent = &events[i]
 			break
 		}
 	}
 	require.NotNil(t, resetEvent)
-	snapshot, ok := resetEvent.Metadata["budget_snapshot"].(observability.BudgetSnapshot)
+	snapshot, ok := resetEvent.Metadata["budget_snapshot"].(telemetry.BudgetSnapshot)
 	require.True(t, ok)
 	require.True(t, snapshot.ShouldReset)
 }

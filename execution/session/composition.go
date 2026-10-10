@@ -162,6 +162,13 @@ type WorkspaceConfig struct {
 	// ModelProduct is the pre-built model runtime. The app composition root
 	// (app/envcomposition) constructs provider backends and instrumentation.
 	ModelProduct *model.ModelProduct
+
+	// NewEventSink adapts the workspace telemetry chain into the
+	// model.EventSink the ModelFactory consumes. The composition root
+	// supplies it (Q9): the adapter lives app-side so the identity
+	// backfill keeps platform free of a context edge. Required whenever
+	// ModelProduct.ModelFactory is set.
+	NewEventSink func(telemetry.Telemetry) model.EventSink
 	// EventLogFactory creates an event.Log implementation for the workspace.
 	// If nil, no event log is created. This allows apps to inject app-specific
 	// event log implementations (e.g., app/nexus/db) without framework dependencies.
