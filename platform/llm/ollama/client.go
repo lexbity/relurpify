@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/model"
+	llm "codeburg.org/lexbit/relurpify/platform/llm"
 )
 
 // DefaultEndpoint is the default Ollama API endpoint.
@@ -321,6 +322,9 @@ func (c *Client) doRequest(ctx context.Context, apiPath string, payload any) (*L
 	if resp.StatusCode >= 300 {
 		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
 		detail := strings.TrimSpace(string(msg))
+		if ctxErr := llm.ContextLengthError(resp.StatusCode, detail); ctxErr != nil {
+			return nil, fmt.Errorf("ollama error: %w", ctxErr)
+		}
 		if detail != "" {
 			return nil, fmt.Errorf("ollama error: %s: %s", resp.Status, detail)
 		}
@@ -355,6 +359,9 @@ func (c *Client) doRequestStream(ctx context.Context, apiPath string, payload ma
 	if resp.StatusCode >= 300 {
 		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
 		detail := strings.TrimSpace(string(msg))
+		if ctxErr := llm.ContextLengthError(resp.StatusCode, detail); ctxErr != nil {
+			return nil, fmt.Errorf("ollama error: %w", ctxErr)
+		}
 		if detail != "" {
 			return nil, fmt.Errorf("ollama error: %s: %s", resp.Status, detail)
 		}

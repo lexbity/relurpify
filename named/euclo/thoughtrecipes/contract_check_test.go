@@ -405,3 +405,65 @@ func TestBuildAgentReturnsContractViolationGuard(t *testing.T) {
 		t.Fatalf("guard error must not carry the retired plain-text wording: %q", err.Error())
 	}
 }
+
+// TestRewooOrderRule proves the restored rewoo contract's order rule: a
+// directive declared before its canonical predecessor is a load error naming
+// both directives. `synthesize` before `plan` is the canonical example.
+func TestRewooOrderRule(t *testing.T) {
+	msg := contractErrorText(t, `thoughtrecipe rewoo_order
+"Order."
+
+agent executor uses rewoo
+
+run executor:
+  synthesize "Combine the results."
+  plan "Identify the checks needed."
+`)
+	for _, want := range []string{
+		`"plan"`,
+		"out of order",
+		`"synthesize"`,
+		"rewoo paradigm contract",
+	} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("error text %q missing %q", msg, want)
+		}
+	}
+}
+
+// TestRewooCanonicalOrderAccepted proves the declared order validates clean:
+// plan → step → synthesize.
+func TestRewooCanonicalOrderAccepted(t *testing.T) {
+	src := `thoughtrecipe rewoo_ok
+"Ok."
+
+agent executor uses rewoo
+
+run executor:
+  plan "Identify the checks needed."
+  step "Check architecture":
+    do relurpic:layer_check
+  synthesize "Combine the results."
+`
+	if errs := contractErrors(t, src); len(errs) != 0 {
+		t.Fatalf("expected no contract violations, got %v", errs)
+	}
+}
+
+// TestRewooStepBodyRejectsForeignClause proves a `step` block may only carry
+// its declared `do` body item.
+func TestRewooStepBodyRejectsForeignClause(t *testing.T) {
+	msg := contractErrorText(t, `thoughtrecipe rewoo_stepbody
+"Step body."
+
+agent executor uses rewoo
+
+run executor:
+  plan "p"
+  step "x":
+    capture result -> state.y
+`)
+	if !strings.Contains(msg, "not allowed in a step block") {
+		t.Fatalf("error text %q missing the nested-item rejection", msg)
+	}
+}

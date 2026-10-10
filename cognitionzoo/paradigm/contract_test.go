@@ -182,3 +182,81 @@ func TestRegistryRegisterHelperUsesGlobal(t *testing.T) {
 		t.Fatal("expected helper registration to reach the global registry")
 	}
 }
+
+func TestContractOrderRuleAccessor(t *testing.T) {
+	var nilContract *Contract
+	if nilContract.OrderRule() != nil {
+		t.Fatal("nil contract must report no order rule")
+	}
+	plain := testContract("plain")
+	if plain.OrderRule() != nil {
+		t.Fatal("contract without an order rule must report nil")
+	}
+	ordered := testContract("ordered")
+	ordered.Order = &OrderRule{Sequence: []string{"goal", "stage"}}
+	if got := ordered.OrderRule(); got == nil || len(got.Sequence) != 2 {
+		t.Fatalf("OrderRule() = %#v, want the declared rule", got)
+	}
+}
+
+func TestContractRejectsOrderRuleReferencingUndeclaredDirective(t *testing.T) {
+	reg := NewContractRegistry()
+	c := testContract("badorder")
+	c.Order = &OrderRule{Sequence: []string{"goal", "ghost"}}
+	if err := reg.Register(c); err == nil || !strings.Contains(err.Error(), "undeclared directive") {
+		t.Fatalf("expected order-rule rejection, got %v", err)
+	}
+}
+
+func TestContractAcceptsValidOrderRule(t *testing.T) {
+	reg := NewContractRegistry()
+	c := testContract("goodorder")
+	c.Order = &OrderRule{Sequence: []string{"goal", "stage"}}
+	if err := reg.Register(c); err != nil {
+		t.Fatalf("expected a valid order rule to register: %v", err)
+	}
+}
+
+func TestErrDirectiveOrderMessage(t *testing.T) {
+	err := &ErrDirectiveOrder{
+		Paradigm:  "rewoo",
+		Directive: "step",
+		At:        ContractLocation{File: "r.erpe", Line: 5, Column: 3},
+		After:     "synthesize",
+		AfterAt:   ContractLocation{File: "r.erpe", Line: 7, Column: 3},
+	}
+	msg := err.Error()
+	for _, want := range []string{"r.erpe:5:3", `"step"`, "rewoo", "out of order", `"synthesize"`, "r.erpe:7:3"} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("message %q missing %q", msg, want)
+		}
+	}
+	// A predecessor without a source position falls back to a generic label.
+	bare := &ErrDirectiveOrder{Paradigm: "rewoo", Directive: "plan", After: "synthesize"}
+	if !strings.Contains(bare.Error(), "declared earlier") {
+		t.Errorf("bare message %q missing the generic predecessor label", bare.Error())
+	}
+}
+
+func TestErrContractViolationCauseAndUnwrap(t *testing.T) {
+	cause := errString("rewoo step \"x\" requires a do clause")
+	err := &ErrContractViolation{Step: "s1", Paradigm: "rewoo", Cause: cause}
+	if !strings.Contains(err.Error(), "requires a do clause") {
+		t.Fatalf("message %q missing the cause detail", err.Error())
+	}
+	if err.Unwrap() != cause {
+		t.Fatal("Unwrap must expose the underlying cause")
+	}
+	plain := &ErrContractViolation{Step: "s1", Paradigm: "nosuch"}
+	if !strings.Contains(plain.Error(), "no registered contract") {
+		t.Fatalf("plain message %q missing the no-contract wording", plain.Error())
+	}
+	if plain.Unwrap() != nil {
+		t.Fatal("Unwrap must be nil without a cause")
+	}
+}
+
+// errString is a minimal error for exercising the typed guard's cause path.
+type errString string
+
+func (e errString) Error() string { return string(e) }

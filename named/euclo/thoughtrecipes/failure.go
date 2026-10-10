@@ -11,6 +11,7 @@ import (
 	"codeburg.org/lexbit/relurpify/context/knowledge"
 	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
+	"codeburg.org/lexbit/relurpify/model"
 	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	"codeburg.org/lexbit/relurpify/named/euclo/state"
@@ -43,6 +44,8 @@ func ClassifyFailure(err error) euclotypes.FailureKind {
 		return ""
 	case errors.Is(err, knowledge.ErrGroundingFailed):
 		return euclotypes.FailureGroundingFailed
+	case errors.Is(err, model.ErrContextLength), errors.Is(err, model.ErrTokenBudget):
+		return euclotypes.FailureBudgetExhausted
 	case errors.Is(err, context.Canceled):
 		return euclotypes.FailureCancelled
 	case errors.Is(err, context.DeadlineExceeded):

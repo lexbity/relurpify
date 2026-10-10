@@ -133,9 +133,11 @@ func (c *stepCore) buildAgent(task *execution.Task) (agentgraph.WorkflowExecutor
 	case "pipeline":
 		return pipelineagent.New(deps, c.streamOptionsPipeline()...), nil
 	case "rewoo":
-		agent := rewooagent.New(deps)
-		agent.Options = c.rewooOptions()
-		return agent, nil
+		rewooOpts, err := rewooOptions(c.step)
+		if err != nil {
+			return nil, &paradigm.ErrContractViolation{Step: c.step.ID, Paradigm: c.step.Paradigm, Cause: err}
+		}
+		return rewooagent.New(deps, append(c.streamOptionsRewoo(), rewooOpts...)...), nil
 	default:
 		// Defense-in-depth: the loader and RegisterCompiled validate every
 		// paradigm against the contract registry, so this branch is reachable

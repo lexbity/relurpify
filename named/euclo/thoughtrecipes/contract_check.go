@@ -60,6 +60,7 @@ func ValidateAgainstContracts(doc *ThoughtRecipeDocument, reg *paradigm.Contract
 			}
 		}
 	}
+	errs = append(errs, validateDocumentDirectiveOrder(doc, reg, agents)...)
 	return errs
 }
 
@@ -83,6 +84,7 @@ func ValidatePlanContracts(plan *ExecutionPlan, reg *paradigm.ContractRegistry) 
 	}
 	uses := make(map[string]*paradigmUse)
 	order := make([]string, 0)
+	var errs []error
 
 	var record func(step ExecutionStep)
 	record = func(step ExecutionStep) {
@@ -95,6 +97,11 @@ func ValidatePlanContracts(plan *ExecutionPlan, reg *paradigm.ContractRegistry) 
 		paradigmName := strings.TrimSpace(step.Paradigm)
 		if paradigmName == "" {
 			return
+		}
+		if contract, ok := reg.Lookup(paradigmName); ok {
+			if err := validateOrder(contract.Paradigm, step.Directives, contract.OrderRule()); err != nil {
+				errs = append(errs, err)
+			}
 		}
 		use, ok := uses[paradigmName]
 		if !ok {
@@ -128,7 +135,6 @@ func ValidatePlanContracts(plan *ExecutionPlan, reg *paradigm.ContractRegistry) 
 	}
 
 	sort.Strings(order)
-	var errs []error
 	for _, paradigmName := range order {
 		use := uses[paradigmName]
 		contract, ok := reg.Lookup(paradigmName)
@@ -449,4 +455,117 @@ func locationFromSpan(span SourceSpan) paradigm.ContractLocation {
 		Line:   span.Start.Line,
 		Column: span.Start.Column,
 	}
+}
+
+// validateOrder checks the declaration order of a directive list against a
+// paradigm's OrderRule. A directive whose canonical rank is lower than a
+// predecessor's is a load error quoting both names and source positions; the
+// first violation is returned. Names absent from the rule are unconstrained.
+// The list is the directives of a single run/delegate block (order is a
+// per-block property, never a per-paradigm aggregate).
+func validateOrder(paradigmName string, directives []TypedDirective, rule *paradigm.OrderRule) error {
+	if rule == nil || len(rule.Sequence) == 0 {
+		return nil
+	}
+	rank := make(map[string]int, len(rule.Sequence))
+	for i, name := range rule.Sequence {
+		rank[name] = i
+	}
+	maxRank := -1
+	var predecessor TypedDirective
+	for _, directive := range directives {
+		r, ok := rank[directive.Name]
+		if !ok {
+			continue
+		}
+		if r < maxRank {
+			return &paradigm.ErrDirectiveOrder{
+				Paradigm:  paradigmName,
+				Directive: directive.Name,
+				At:        locationFromSpan(directive.Span),
+				After:     predecessor.Name,
+				AfterAt:   locationFromSpan(predecessor.Span),
+			}
+		}
+		maxRank = r
+		predecessor = directive
+	}
+	return nil
+}
+
+// validateDocumentDirectiveOrder walks every run/delegate block in the AST and
+// checks the declaration order of its top-level directives against the bound
+// contract's OrderRule. It is the load-time half of the ordering rule; the
+// plan-level half runs per compiled run/delegate step in ValidatePlanContracts
+// and additionally covers route and pipeline bodies.
+func validateDocumentDirectiveOrder(doc *ThoughtRecipeDocument, reg *paradigm.ContractRegistry, agents map[string]*contractAgentUse) []error {
+	if doc == nil {
+		return nil
+	}
+	if reg == nil {
+		reg = paradigm.Registry
+	}
+	var errs []error
+	var check func(items []ExecutionItem, agentName string) []TypedDirective
+	check = func(items []ExecutionItem, agentName string) []TypedDirective {
+		var typed []TypedDirective
+		for _, item := range items {
+			switch item.(type) {
+			case *DirectiveClause, *DirectiveBlock:
+				typed = append(typed, lowerTypedDirective(item))
+			}
+		}
+		if len(typed) == 0 || agentName == "" {
+			return typed
+		}
+		agent, ok := agents[agentName]
+		if !ok {
+			return typed
+		}
+		contract, ok := reg.Lookup(agent.paradigm)
+		if !ok {
+			return typed
+		}
+		if err := validateOrder(contract.Paradigm, typed, contract.OrderRule()); err != nil {
+			errs = append(errs, err)
+		}
+		return typed
+	}
+	var walk func(items []ExecutionItem, agentName string)
+	walk = func(items []ExecutionItem, agentName string) {
+		check(items, agentName)
+		for _, item := range items {
+			switch node := item.(type) {
+			case *RunDecl:
+				walk(node.Items, node.Agent.Value)
+			case *DelegateDecl:
+				walk(node.Items, node.Agent.Value)
+			case *RouteDecl:
+				for _, branch := range node.Branches {
+					walk(branch.Body, agentName)
+				}
+			case *PipelineDecl:
+				for _, stage := range node.Stages {
+					walk(stage.Body, agentName)
+				}
+			}
+		}
+	}
+	for _, decl := range doc.Declarations {
+		switch node := decl.(type) {
+		case *RunDecl:
+			walk(node.Items, node.Agent.Value)
+		case *DelegateDecl:
+			walk(node.Items, node.Agent.Value)
+		case *RouteDecl:
+			for _, branch := range node.Branches {
+				walk(branch.Body, "")
+			}
+		case *PipelineDecl:
+			for _, stage := range node.Stages {
+				walk(stage.Body, "")
+			}
+		}
+	}
+	return errs
 }

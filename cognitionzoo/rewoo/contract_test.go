@@ -15,8 +15,18 @@ func TestRewooContractRegistered(t *testing.T) {
 	if c.Shape != paradigm.ShapeStagedPlan {
 		t.Fatalf("rewoo shape = %q, want %q", c.Shape, paradigm.ShapeStagedPlan)
 	}
-	if got := c.DirectiveNames(); len(got) != 0 {
-		t.Fatalf("rewoo directive names = %v, want none (retired no-op vocabularies)", got)
+	want := []string{"plan", "step", "synthesize"}
+	got := c.DirectiveNames()
+	if len(got) != len(want) {
+		t.Fatalf("rewoo directive names = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("rewoo directive names = %v, want %v", got, want)
+		}
+	}
+	if c.OrderRule() == nil {
+		t.Fatal("expected rewoo to declare an order rule")
 	}
 }
 

@@ -261,6 +261,9 @@ func (t *TapeModel) roundTrip(ctx context.Context, kind string, req tapeRequest,
 			return nil, err
 		}
 		if entry.Error != "" {
+			if budgetErr := RecordedBudgetError(entry.Error); budgetErr != nil {
+				return nil, budgetErr
+			}
 			return nil, errors.New(entry.Error)
 		}
 		if entry.Response == nil {

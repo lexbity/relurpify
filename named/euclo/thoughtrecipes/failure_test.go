@@ -3,6 +3,7 @@ package thoughtrecipe
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 
@@ -76,6 +77,12 @@ func TestClassifyFailureGroundingUsesErrorsIs(t *testing.T) {
 		{name: "context cancellation", err: context.Canceled, want: euclotypes.FailureCancelled},
 		{name: "deadline", err: context.DeadlineExceeded, want: euclotypes.FailureModelUnavailable},
 		{name: "invalid planner output", err: rewooagent.ErrRewooPlanInvalid, want: euclotypes.FailureModelInvalidOutput},
+		{
+			name: "context-length budget",
+			err:  fmt.Errorf("ollama error: %w: detail", model.ErrContextLength),
+			want: euclotypes.FailureBudgetExhausted,
+		},
+		{name: "token budget", err: model.ErrTokenBudget, want: euclotypes.FailureBudgetExhausted},
 		{
 			name: "permission denied",
 			err:  &permissions.PermissionDeniedError{Message: "denied"},

@@ -109,6 +109,17 @@ type RewooOptions struct {
 	StreamMode      contextstream.Mode
 	StreamQuery     string
 	StreamMaxTokens int
+	// AuthoredSteps, when non-empty, replaces the planning LLM call: the recipe
+	// authored the plan structure, so the runner executes exactly those steps
+	// in declaration order with zero structural model calls (D1/D7). nil means
+	// generated mode (the existing LLM planner).
+	AuthoredSteps []RewooStep
+	// PlanObjective is the authored `plan` guidance carried into the aggregate
+	// context. It falls back to task.Instruction when empty.
+	PlanObjective string
+	// SynthesizeGuidance, when non-empty, replaces the default synthesizer
+	// instruction for this run.
+	SynthesizeGuidance string
 }
 
 // SynthesizeEnabled reports whether the LLM synthesis phase should run.

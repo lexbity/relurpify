@@ -21,10 +21,14 @@ func (a *RewooAgent) SynthesizeWithModel(ctx context.Context, env *contextdata.E
 	plan := planFromEnvelope(env)
 	results := stepResultsFromEnvelope(env)
 	a.emitLLMPhase(ctx, env, "synthesize", "llm")
-	resp, err := a.Model.Chat(ctx, []model.Message{
+	messages := []model.Message{
 		{Role: "system", Content: a.resolvePhasePrompt(ctx, synthPromptID, nil, env)},
-		{Role: "user", Content: synthUserPrompt(plan, results)},
-	}, &model.LLMOptions{
+	}
+	if guidance := strings.TrimSpace(a.Options.SynthesizeGuidance); guidance != "" {
+		messages = append(messages, model.Message{Role: "system", Content: synthesizeGuidanceMessage(guidance)})
+	}
+	messages = append(messages, model.Message{Role: "user", Content: synthUserPrompt(plan, results)})
+	resp, err := a.Model.Chat(ctx, messages, &model.LLMOptions{
 		Model:       a.modelID(),
 		Temperature: 0.1,
 		MaxTokens:   512,
@@ -37,6 +41,13 @@ func (a *RewooAgent) SynthesizeWithModel(ctx context.Context, env *contextdata.E
 		summary = mechanicalSummary(results)
 	}
 	return summary, nil
+}
+
+// synthesizeGuidanceMessage renders the recipe-authored synthesizer guidance
+// as an authoritative system instruction. The default synthesizer prompt still
+// applies wherever the guidance is silent.
+func synthesizeGuidanceMessage(guidance string) string {
+	return fmt.Sprintf("Synthesizer guidance from recipe (authoritative):\n%s\n\nDefault instructions apply where guidance is silent.", guidance)
 }
 
 // MechanicalSummary is the synthesis-free final output: a deterministic

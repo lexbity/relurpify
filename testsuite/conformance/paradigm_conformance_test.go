@@ -59,10 +59,13 @@ type conformanceRunner func(t *testing.T)
 
 // conformanceRunners maps every declared ConformanceCase ID to its runner.
 var conformanceRunners = map[string]conformanceRunner{ //nolint:gochecknoglobals // immutable case table
-	"react/until_bounds_iterations":     runReactUntilBounds,
-	"chainer/link_builds_chain":         runChainerLinks,
-	"chainer/link_from_registry_prompt": runChainerFromRegistryPrompt,
-	"pipeline/stages_execute_in_order":  runPipelineStages,
+	"react/until_bounds_iterations":         runReactUntilBounds,
+	"chainer/link_builds_chain":             runChainerLinks,
+	"chainer/link_from_registry_prompt":     runChainerFromRegistryPrompt,
+	"pipeline/stages_execute_in_order":      runPipelineStages,
+	"rewoo/authored_plan_skips_planner":     runRewooAuthoredPlanSkipsPlanner,
+	"rewoo/authored_steps_execute_in_order": runRewooAuthoredStepsInOrder,
+	"rewoo/synthesize_guidance":             runRewooSynthesizeGuidance,
 }
 
 // runReactUntilBounds proves the `until` directive caps the react loop budget:
@@ -165,16 +168,173 @@ func runPipelineStages(t *testing.T) {
 	}
 }
 
+// runRewooAuthoredPlanSkipsPlanner proves the restored `plan` directive:
+// authored plan+steps execute with zero planning-model calls and record
+// plan_origin=authored.
+func runRewooAuthoredPlanSkipsPlanner(t *testing.T) {
+	t.Helper()
+	order := []string{}
+	reg := newRewooConformanceRegistry(t, &order, "euclo:cap.conformance_layer_check", "euclo:cap.conformance_fix")
+	mdl := &conformanceRecordingModel{text: "synthesized"}
+	env := runFixture(t, "rewoo_authored.erpe", paradigmDeps(mdl, reg))
+
+	if got := mdl.callCount(); got != 1 {
+		t.Fatalf("model calls = %d, want 1 (synthesize only; planner skipped)", got)
+	}
+	for _, messages := range mdl.allMessages() {
+		for _, message := range messages {
+			if strings.Contains(message.Content, "ReWOO planner") {
+				t.Fatalf("the planner prompt ran in authored mode: %q", message.Content)
+			}
+		}
+	}
+	if origin, _ := contextdata.GetTyped[string](env, "rewoo.plan_origin"); origin != "authored" {
+		t.Fatalf("rewoo.plan_origin = %q, want authored", origin)
+	}
+	if len(order) != 2 {
+		t.Fatalf("governed steps executed = %d, want 2", len(order))
+	}
+}
+
+// runRewooAuthoredStepsInOrder proves the restored `step` directive: authored
+// steps execute in declaration order through the governed executor.
+func runRewooAuthoredStepsInOrder(t *testing.T) {
+	t.Helper()
+	order := []string{}
+	reg := newRewooConformanceRegistry(t, &order, "euclo:cap.conformance_layer_check", "euclo:cap.conformance_fix")
+	mdl := &conformanceRecordingModel{text: "synthesized"}
+	runFixture(t, "rewoo_authored.erpe", paradigmDeps(mdl, reg))
+
+	want := []string{"euclo:cap.conformance_layer_check", "euclo:cap.conformance_fix"}
+	if len(order) != len(want) {
+		t.Fatalf("executed steps = %v, want %v", order, want)
+	}
+	for i := range want {
+		if order[i] != want[i] {
+			t.Fatalf("execution order = %v, want %v", order, want)
+		}
+	}
+}
+
+// runRewooSynthesizeGuidance proves the restored `synthesize` directive:
+// authored guidance reaches the synthesizer prompt as an authoritative system
+// message.
+func runRewooSynthesizeGuidance(t *testing.T) {
+	t.Helper()
+	order := []string{}
+	reg := newRewooConformanceRegistry(t, &order, "euclo:cap.conformance_layer_check")
+	mdl := &conformanceRecordingModel{text: "synthesized"}
+	runFixture(t, "rewoo_guidance.erpe", paradigmDeps(mdl, reg))
+
+	found := false
+	for _, messages := range mdl.allMessages() {
+		for _, message := range messages {
+			if strings.Contains(message.Content, "Prefer a terse bullet list.") {
+				found = true
+			}
+		}
+	}
+	if !found {
+		t.Fatal("synthesize guidance did not reach the synthesizer prompt")
+	}
+}
+
+// newRewooConformanceRegistry registers sequence-recording invocable
+// capabilities for the rewoo fixtures.
+func newRewooConformanceRegistry(t *testing.T, order *[]string, ids ...string) *registry.CapabilityRegistry {
+	t.Helper()
+	reg := registry.NewRegistry()
+	for _, id := range ids {
+		if err := reg.RegisterInvocableCapability(context.Background(), &sequenceCapability{id: id, order: order}); err != nil {
+			t.Fatalf("register %s: %v", id, err)
+		}
+	}
+	return reg
+}
+
+// sequenceCapability records the order in which capabilities are invoked and
+// reports its own id as output.
+type sequenceCapability struct {
+	id    string
+	order *[]string
+}
+
+func (h *sequenceCapability) Descriptor(_ context.Context, _ ports.State) descriptor.CapabilityDescriptor {
+	return descriptor.CapabilityDescriptor{
+		ID:            h.id,
+		Name:          h.id,
+		Kind:          agentspec.CapabilityKindTool,
+		RuntimeFamily: agentspec.CapabilityRuntimeFamilyProvider,
+		Availability:  descriptor.AvailabilitySpec{Available: true},
+	}
+}
+
+func (h *sequenceCapability) Invoke(_ context.Context, _ ports.State, _ map[string]any) (*ports.ToolResult, error) {
+	*h.order = append(*h.order, h.id)
+	return &ports.ToolResult{Success: true, Data: map[string]any{"capability_id": h.id}}, nil
+}
+
+// conformanceRecordingModel records every Chat call's messages and returns a
+// fixed text, so conformance cases can distinguish planner from synthesizer
+// calls and inspect prompt content.
+type conformanceRecordingModel struct {
+	mu    sync.Mutex
+	text  string
+	calls [][]model.Message
+}
+
+func (m *conformanceRecordingModel) Generate(ctx context.Context, _ string, options *model.LLMOptions) (*model.LLMResponse, error) {
+	return m.Chat(ctx, nil, options)
+}
+
+func (m *conformanceRecordingModel) GenerateStream(_ context.Context, _ string, _ *model.LLMOptions) (<-chan string, error) {
+	ch := make(chan string)
+	close(ch)
+	return ch, nil
+}
+
+func (m *conformanceRecordingModel) Chat(_ context.Context, messages []model.Message, _ *model.LLMOptions) (*model.LLMResponse, error) {
+	m.mu.Lock()
+	m.calls = append(m.calls, append([]model.Message(nil), messages...))
+	m.mu.Unlock()
+	return &model.LLMResponse{Text: m.text}, nil
+}
+
+func (m *conformanceRecordingModel) ChatWithTools(ctx context.Context, messages []model.Message, _ []model.LLMToolSpec, options *model.LLMOptions) (*model.LLMResponse, error) {
+	return m.Chat(ctx, messages, options)
+}
+
+func (m *conformanceRecordingModel) callCount() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return len(m.calls)
+}
+
+func (m *conformanceRecordingModel) allMessages() [][]model.Message {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := make([][]model.Message, len(m.calls))
+	copy(out, m.calls)
+	return out
+}
+
 // --- fixture plumbing -------------------------------------------------------
 
 func paradigmDeps(model model.LanguageModel, reg *registry.CapabilityRegistry) *paradigm.Deps {
 	return &paradigm.Deps{
-		Model:         model,
-		Registry:      reg,
-		Config:        &execution.Config{Name: "paradigm-conformance", Model: "scripted"},
-		StreamTrigger: contextstream.NewTrigger(noopCompiler{}),
+		Model:             model,
+		Registry:          reg,
+		Config:            &execution.Config{Name: "paradigm-conformance", Model: "scripted"},
+		StreamTrigger:     contextstream.NewTrigger(noopCompiler{}),
+		PermissionChecker: permissiveCapabilityChecker{},
 	}
 }
+
+// permissiveCapabilityChecker allows every capability so governed paradigms
+// (rewoo) run under conformance without a policy composition.
+type permissiveCapabilityChecker struct{}
+
+func (permissiveCapabilityChecker) CheckCapability(context.Context, string, string) error { return nil }
 
 // noopCompiler is an offline compiler invoker so react's streaming trigger node
 // resolves during conformance runs without a real compiler.
@@ -327,6 +487,7 @@ type matrixRow struct {
 // paradigmMatrix is the committed conformance matrix.
 type paradigmMatrix struct {
 	Declared []matrixRow `yaml:"declared"`
+	Restored []matrixRow `yaml:"restored"`
 	Deleted  []string    `yaml:"deleted"`
 	Keywords []string    `yaml:"documented_directive_keywords"`
 }
@@ -334,10 +495,22 @@ type paradigmMatrix struct {
 // caseStatus annotates whether a case's effect predated this phase (honored)
 // or was implemented inside it (implemented).
 var caseStatus = map[string]string{ //nolint:gochecknoglobals // immutable matrix annotation
-	"react/until_bounds_iterations":     "implemented",
-	"chainer/link_builds_chain":         "implemented",
-	"chainer/link_from_registry_prompt": "implemented",
-	"pipeline/stages_execute_in_order":  "honored",
+	"react/until_bounds_iterations":         "implemented",
+	"chainer/link_builds_chain":             "implemented",
+	"chainer/link_from_registry_prompt":     "implemented",
+	"pipeline/stages_execute_in_order":      "honored",
+	"rewoo/authored_plan_skips_planner":     "implemented",
+	"rewoo/authored_steps_execute_in_order": "implemented",
+	"rewoo/synthesize_guidance":             "implemented",
+}
+
+// restoredDirectives is the restoration audit (Wave 3): every (paradigm,
+// directive) pair whose vocabulary was retired by the Wave-2 implement-or-delete
+// ruling and is restored as honored runner semantics in this wave. Each entry
+// must be declared by its contract and backed by a conformance case; the
+// invariant test enforces that and that no entry lingers in the deleted list.
+var restoredDirectives = []string{ //nolint:gochecknoglobals // immutable audit result
+	"rewoo/plan", "rewoo/step", "rewoo/synthesize",
 }
 
 // deletedDirectives is the implement-or-delete audit outcome (FR-6): every
@@ -352,7 +525,6 @@ var deletedDirectives = []string{ //nolint:gochecknoglobals // immutable audit r
 	"htn/method", "htn/task",
 	"reflection/review", "reflection/revise",
 	"blackboard/source",
-	"rewoo/plan", "rewoo/step", "rewoo/synthesize",
 	"detect", "clarify", "retry", "decompose", "solve",
 }
 
@@ -398,11 +570,39 @@ func generateMatrixYAML(t *testing.T) []byte {
 	}
 	matrix.Deleted = append([]string(nil), deletedDirectives...)
 	matrix.Keywords = append([]string(nil), documentedDirectiveKeywords...)
+	for _, entry := range restoredDirectives {
+		paradigmName, directive, ok := strings.Cut(entry, "/")
+		if !ok {
+			continue
+		}
+		contract, ok := paradigm.Registry.Lookup(paradigmName)
+		if !ok {
+			continue
+		}
+		var cases []string
+		for _, cas := range contract.Conformance {
+			if cas.Directive == directive {
+				cases = append(cases, cas.ID)
+			}
+		}
+		matrix.Restored = append(matrix.Restored, matrixRow{
+			Paradigm:  paradigmName,
+			Directive: directive,
+			Status:    statusForCase(cases),
+			Cases:     cases,
+		})
+	}
 	sort.Slice(matrix.Declared, func(i, j int) bool {
 		if matrix.Declared[i].Paradigm != matrix.Declared[j].Paradigm {
 			return matrix.Declared[i].Paradigm < matrix.Declared[j].Paradigm
 		}
 		return matrix.Declared[i].Directive < matrix.Declared[j].Directive
+	})
+	sort.Slice(matrix.Restored, func(i, j int) bool {
+		if matrix.Restored[i].Paradigm != matrix.Restored[j].Paradigm {
+			return matrix.Restored[i].Paradigm < matrix.Restored[j].Paradigm
+		}
+		return matrix.Restored[i].Directive < matrix.Restored[j].Directive
 	})
 	sort.Strings(matrix.Deleted)
 	sort.Strings(matrix.Keywords)
@@ -451,20 +651,57 @@ func TestParadigmMatrixInvariants(t *testing.T) {
 			}
 		}
 	}
-	deleted := map[string]bool{}
+	deletedKeywords := map[string]bool{}
+	deletedPairs := map[string]bool{}
 	for _, entry := range deletedDirectives {
-		keyword := entry
-		if _, pair, ok := strings.Cut(entry, "/"); ok {
-			keyword = pair
+		if _, directive, ok := strings.Cut(entry, "/"); ok {
+			if declaredPairs[entry] {
+				t.Errorf("deleted entry %q is still declared by a contract", entry)
+			}
+			deletedPairs[entry] = true
+			deletedKeywords[directive] = true
+			continue
 		}
-		if declaredNames[keyword] {
+		if declaredNames[entry] {
 			t.Errorf("deleted entry %q is still declared by a contract", entry)
 		}
-		deleted[keyword] = true
+		deletedKeywords[entry] = true
 	}
 	for _, keyword := range documentedDirectiveKeywords {
-		if !declaredNames[keyword] && !deleted[keyword] {
+		if !declaredNames[keyword] && !deletedKeywords[keyword] {
 			t.Errorf("documented directive keyword %q is neither declared nor listed as deleted", keyword)
+		}
+	}
+	// (4) every restored pair is declared and backed by a status-annotated case.
+	for _, entry := range restoredDirectives {
+		paradigmName, directive, ok := strings.Cut(entry, "/")
+		if !ok {
+			t.Errorf("restored entry %q is not paradigm/directive", entry)
+			continue
+		}
+		if !declaredPairs[entry] {
+			t.Errorf("restored pair %q is not declared by any contract", entry)
+			continue
+		}
+		if deletedPairs[entry] {
+			t.Errorf("restored pair %q also appears in the deleted list", entry)
+		}
+		contract, ok := paradigm.Registry.Lookup(paradigmName)
+		if !ok {
+			t.Errorf("restored pair %q names an unregistered paradigm", entry)
+			continue
+		}
+		caseCount := 0
+		for _, cas := range contract.Conformance {
+			if cas.Directive == directive {
+				caseCount++
+				if caseStatus[cas.ID] == "" {
+					t.Errorf("restored case %s has no status annotation", cas.ID)
+				}
+			}
+		}
+		if caseCount == 0 {
+			t.Errorf("restored pair %q has no conformance case", entry)
 		}
 	}
 	_ = declaredPairs

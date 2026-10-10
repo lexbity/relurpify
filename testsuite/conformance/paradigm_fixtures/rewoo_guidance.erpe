@@ -1,0 +1,10 @@
+thoughtrecipe rewoo_guidance
+"ReWOO synthesized output with authored guidance."
+
+agent executor uses rewoo
+
+run executor:
+  plan "Identify the checks needed."
+  step "Check architecture":
+    do relurpic:conformance_layer_check
+  synthesize "Prefer a terse bullet list."

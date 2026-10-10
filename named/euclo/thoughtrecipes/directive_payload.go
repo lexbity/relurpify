@@ -1,5 +1,7 @@
 package thoughtrecipe
 
+import "fmt"
+
 // directive_payload.go is the only permitted home for direct indexing into
 // TypedDirective slices carried on ExecutionStep. Node code resolves directive
 // payloads through these accessors instead of hand-parsing strings or indexing
@@ -39,6 +41,66 @@ func DirectivePredicate(directives []TypedDirective, name string) *PredicateExpr
 		}
 	}
 	return nil
+}
+
+// ExactlyOne returns the single directive with the given name, or an error
+// when it is absent or appears more than once. It is the cardinality helper
+// the paradigm option builders use for required-once directives.
+func ExactlyOne(directives []TypedDirective, name string) (TypedDirective, error) {
+	var found TypedDirective
+	count := 0
+	for _, directive := range directives {
+		if directive.Name != name {
+			continue
+		}
+		count++
+		if count == 1 {
+			found = directive
+			continue
+		}
+		return TypedDirective{}, fmt.Errorf("duplicate directive %q at line %d", name, directive.Span.Start.Line)
+	}
+	if count == 0 {
+		return TypedDirective{}, fmt.Errorf("missing required directive %q", name)
+	}
+	return found, nil
+}
+
+// AtMostOne returns the single directive with the given name and whether it
+// was present, or an error when it appears more than once. It is the
+// cardinality helper for optional-once directives.
+func AtMostOne(directives []TypedDirective, name string) (TypedDirective, bool, error) {
+	var found TypedDirective
+	count := 0
+	for _, directive := range directives {
+		if directive.Name != name {
+			continue
+		}
+		count++
+		if count == 1 {
+			found = directive
+			continue
+		}
+		return TypedDirective{}, false, fmt.Errorf("duplicate directive %q at line %d", name, directive.Span.Start.Line)
+	}
+	if count == 0 {
+		return TypedDirective{}, false, nil
+	}
+	return found, true, nil
+}
+
+// StepItems returns every directive with the given name, in source order. It
+// operates on any directive slice: the top-level directives of a step, or the
+// nested Body of a block (where it collects ordered children such as repeated
+// `task`/`do` items).
+func StepItems(directives []TypedDirective, name string) []TypedDirective {
+	var out []TypedDirective
+	for _, directive := range directives {
+		if directive.Name == name {
+			out = append(out, directive)
+		}
+	}
+	return out
 }
 
 // DirectiveNames returns the top-level directive names in source order. It is

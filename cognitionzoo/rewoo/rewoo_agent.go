@@ -189,6 +189,7 @@ func (n *rewooPlanGateNode) Execute(ctx context.Context, env *contextdata.Envelo
 	}
 	env.SetWorkingValueWithClass("rewoo.plan", plan, contextdata.MemoryClassTask)
 	env.SetWorkingValueWithClass("rewoo.plan_source", planSourceContext, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("rewoo.plan_origin", planOriginContext, contextdata.MemoryClassTask)
 	return &execution.Result{NodeID: n.id, Success: true, Data: execution.NewToolResultPayload(map[string]any{"plan_source": planSourceContext, "plan_steps": len(plan.Steps)})}, nil
 }
 
@@ -209,9 +210,14 @@ func (n *rewooPlannerNode) Execute(ctx context.Context, env *contextdata.Envelop
 	if err != nil {
 		return nil, err
 	}
+	origin := planOriginFromEnvelope(env)
+	source := planSourceLLM
+	if origin == planOriginAuthored {
+		source = planOriginAuthored
+	}
 	env.SetWorkingValueWithClass("rewoo.plan", plan, contextdata.MemoryClassTask)
-	env.SetWorkingValueWithClass("rewoo.plan_source", planSourceLLM, contextdata.MemoryClassTask)
-	return &execution.Result{NodeID: n.id, Success: true, Data: execution.NewToolResultPayload(map[string]any{"plan_source": planSourceLLM, "plan_steps": len(plan.Steps)})}, nil
+	env.SetWorkingValueWithClass("rewoo.plan_source", source, contextdata.MemoryClassTask)
+	return &execution.Result{NodeID: n.id, Success: true, Data: execution.NewToolResultPayload(map[string]any{"plan_source": source, "plan_origin": origin, "plan_steps": len(plan.Steps)})}, nil
 }
 
 type rewooExecuteNode struct {
@@ -312,9 +318,14 @@ func (n *rewooSynthesizeNode) Execute(ctx context.Context, env *contextdata.Enve
 	}
 	env.SetWorkingValueWithClass("rewoo.final_output", summary, contextdata.MemoryClassTask)
 	env.SetWorkingValueWithClass("rewoo.synth_ok", true, contextdata.MemoryClassTask)
+	origin := planOriginFromEnvelope(env)
+	fields := map[string]any{"final_output": summary}
+	if origin != "" {
+		fields["plan_origin"] = origin
+	}
 	return &execution.Result{
 		NodeID:  n.id,
 		Success: true,
-		Data:    execution.NewToolResultPayload(map[string]any{"final_output": summary}),
+		Data:    execution.NewToolResultPayload(fields),
 	}, nil
 }

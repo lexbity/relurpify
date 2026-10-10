@@ -1,0 +1,12 @@
+thoughtrecipe rewoo_authored
+"Authored rewoo plan: deterministic steps with zero planning model calls."
+
+agent executor uses rewoo
+
+run executor:
+  plan "Identify the checks needed."
+  step "Check architecture":
+    do relurpic:conformance_layer_check
+  step "Suggest targeted fixes":
+    do relurpic:conformance_fix
+  synthesize "Combine the results."

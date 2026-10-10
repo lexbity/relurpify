@@ -15,6 +15,37 @@ declared:
       status: implemented
       cases:
         - react/until_bounds_iterations
+    - paradigm: rewoo
+      directive: plan
+      status: implemented
+      cases:
+        - rewoo/authored_plan_skips_planner
+    - paradigm: rewoo
+      directive: step
+      status: implemented
+      cases:
+        - rewoo/authored_steps_execute_in_order
+    - paradigm: rewoo
+      directive: synthesize
+      status: implemented
+      cases:
+        - rewoo/synthesize_guidance
+restored:
+    - paradigm: rewoo
+      directive: plan
+      status: implemented
+      cases:
+        - rewoo/authored_plan_skips_planner
+    - paradigm: rewoo
+      directive: step
+      status: implemented
+      cases:
+        - rewoo/authored_steps_execute_in_order
+    - paradigm: rewoo
+      directive: synthesize
+      status: implemented
+      cases:
+        - rewoo/synthesize_guidance
 deleted:
     - blackboard/source
     - clarify
@@ -29,9 +60,6 @@ deleted:
     - reflection/review
     - reflection/revise
     - retry
-    - rewoo/plan
-    - rewoo/step
-    - rewoo/synthesize
     - solve
 documented_directive_keywords:
     - clarify

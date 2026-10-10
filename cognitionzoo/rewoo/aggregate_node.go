@@ -95,6 +95,14 @@ func (n *AggregateNode) Execute(ctx context.Context, env *contextdata.Envelope) 
 			"steps_run":    len(results),
 			"steps_ok":     stepsOK,
 			"steps_failed": stepsFailed,
+			"plan_origin":  planOriginFromEnvelope(env),
 		}),
 	}, nil
+}
+
+// planOriginFromEnvelope reports the recorded plan provenance (authored,
+// generated, or context), or "" when no plan origin was recorded.
+func planOriginFromEnvelope(env *contextdata.Envelope) string {
+	origin, _ := contextdata.GetTyped[string](env, "rewoo.plan_origin")
+	return origin
 }

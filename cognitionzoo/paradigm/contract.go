@@ -85,6 +85,16 @@ var ValidBodyItems = []BodyItem{ //nolint:gochecknoglobals // immutable contract
 	BodyItemMay,
 }
 
+// OrderRule declares the canonical declaration order of a paradigm's
+// directives. A directive that appears before one of its declared predecessors
+// in Sequence is a load error (see validateOrder). Directive names absent from
+// Sequence are unconstrained: they carry no ordering obligation. Order is a
+// per-run-block property, so the rule is checked against the directives of one
+// run/delegate block, never against a per-paradigm aggregate.
+type OrderRule struct {
+	Sequence []string
+}
+
 // DirectiveSpec is the declared contract for one directive of a paradigm:
 // its grammar form, argument arity, whether it may carry a `when` predicate,
 // whether its single argument must be a positive integer (until-style caps),
@@ -125,6 +135,18 @@ type Contract struct {
 	Composes    []string
 	Guarantees  []string
 	Conformance []ConformanceCase
+	// Order optionally declares the canonical declaration order of the
+	// paradigm's directives. Nil means declaration order is unconstrained.
+	Order *OrderRule
+}
+
+// OrderRule returns the contract's declared order rule, or nil when the
+// paradigm imposes no ordering obligation.
+func (c *Contract) OrderRule() *OrderRule {
+	if c == nil {
+		return nil
+	}
+	return c.Order
 }
 
 // Directive returns the declared spec for name, when present.
@@ -322,6 +344,13 @@ func validateContractIntrinsic(c Contract) []error {
 	}
 	// RequiredNames derives from DirectiveSpec.Required, so a required name is
 	// declared by construction; no separate cross-check exists here.
+	if c.Order != nil {
+		for _, name := range c.Order.Sequence {
+			if _, ok := seen[name]; !ok {
+				errs = append(errs, fmt.Errorf("order rule references undeclared directive %q", name))
+			}
+		}
+	}
 	for _, composed := range c.Composes {
 		if strings.TrimSpace(composed) == "" {
 			errs = append(errs, fmt.Errorf("composes entry must be a paradigm name"))
@@ -442,19 +471,51 @@ func (e *ErrDirectiveShape) Error() string {
 		e.Directive, e.Paradigm, e.Problem)
 }
 
+// ErrDirectiveOrder reports a directive declared out of the paradigm
+// contract's canonical order (e.g. `synthesize` before `plan`). It quotes both
+// the offending directive and the predecessor it must appear before, with
+// their source positions.
+type ErrDirectiveOrder struct {
+	Paradigm  string
+	Directive string
+	At        ContractLocation
+	After     string
+	AfterAt   ContractLocation
+}
+
+func (e *ErrDirectiveOrder) Error() string {
+	afterLabel := "declared earlier"
+	if strings.TrimSpace(e.AfterAt.File) != "" {
+		afterLabel = fmt.Sprintf("declared at %s:%d:%d", e.AfterAt.File, e.AfterAt.Line, e.AfterAt.Column)
+	}
+	return locationPrefix(e.At) + fmt.Sprintf("directive %q in the %s paradigm contract is out of order: it must appear before %q (%s)",
+		e.Directive, e.Paradigm, e.After, afterLabel)
+}
+
 // ErrContractViolation is the runtime guard for a paradigm outside the
-// contract registry. It is reachable only when a caller constructs an
-// ExecutionPlan bypassing the loader and registration validation; an
-// .erpe-reachable authoring path rejects the same mistake at load time.
+// contract registry, or a step whose directive payloads fail option lowering.
+// It is reachable only when a caller constructs an ExecutionPlan bypassing the
+// loader and registration validation; an .erpe-reachable authoring path rejects
+// the same mistake at load time.
 type ErrContractViolation struct {
 	Step     string
 	Paradigm string
+	// Cause is the underlying load-time lowering error (e.g. a missing `do`
+	// clause), when present. It preserves the specific diagnostic while keeping
+	// the typed guard for errors.As.
+	Cause error
 }
 
 func (e *ErrContractViolation) Error() string {
+	if e.Cause != nil {
+		return fmt.Sprintf("thoughtrecipe step %q violates the paradigm contract: %v", e.Step, e.Cause)
+	}
 	return fmt.Sprintf("thoughtrecipe step %q violates the paradigm contract: paradigm %q has no registered contract",
 		e.Step, e.Paradigm)
 }
+
+// Unwrap exposes the underlying lowering error for errors.Is/As.
+func (e *ErrContractViolation) Unwrap() error { return e.Cause }
 
 func locationPrefix(loc ContractLocation) string {
 	if strings.TrimSpace(loc.File) == "" {

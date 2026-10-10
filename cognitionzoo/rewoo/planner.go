@@ -29,35 +29,75 @@ const (
 	planSourceContext = "context"
 	planSourceLLM     = "llm"
 
+	// planOriginAuthored / planOriginGenerated / planOriginContext classify how
+	// the executed plan came to be (D1/D7 provenance). `authored` means the
+	// recipe declared the structure and no planning LLM call ran; `generated`
+	// means one bounded planner call produced it; `context` means it was
+	// supplied on the task context.
+	planOriginAuthored  = "authored"
+	planOriginGenerated = "generated"
+	planOriginContext   = "context"
+
 	planOutputSchema = `{"goal":"short restatement","steps":[{"id":"s1","description":"what this step does","tool":"exact tool name","params":{},"depends_on":[]}]}`
 )
 
-// PlanWithModel issues exactly ONE LLM call that produces a strict-JSON
-// ReWOO plan. It runs only when the task context carries no plan; a decode
-// failure fails the turn with ErrRewooPlanInvalid — there is no silent
-// fallback to single-step execution.
+// PlanWithModel resolves the plan for a run and records its origin on the
+// envelope under rewoo.plan_origin. An authored plan (Options.AuthoredSteps)
+// is returned verbatim with no model call; otherwise the single bounded
+// planner LLM call runs.
 func (a *RewooAgent) PlanWithModel(ctx context.Context, task *execution.Task, env *contextdata.Envelope) (*RewooPlan, error) {
-	if a == nil || a.Model == nil {
-		return nil, fmt.Errorf("rewoo: language model unavailable for planning")
+	plan, origin, err := a.resolvePlan(ctx, task, env)
+	if err != nil {
+		return nil, err
+	}
+	if env != nil {
+		env.SetWorkingValueWithClass("rewoo.plan_origin", origin, contextdata.MemoryClassTask)
+	}
+	return plan, nil
+}
+
+// resolvePlan is the model-free authored fast path plus the generated plan
+// path. Authored structures are authoritative: when the recipe authored steps,
+// they are the plan, deterministically, and no planner call occurs (D1).
+func (a *RewooAgent) resolvePlan(ctx context.Context, task *execution.Task, env *contextdata.Envelope) (*RewooPlan, string, error) {
+	if a == nil {
+		return nil, "", fmt.Errorf("rewoo: language model unavailable for planning")
+	}
+	if len(a.Options.AuthoredSteps) > 0 {
+		a.emitRewooEvent(ctx, env, "rewoo.plan_authored", map[string]any{"steps": len(a.Options.AuthoredSteps)})
+		return a.authoredPlan(task), planOriginAuthored, nil
+	}
+	if a.Model == nil {
+		return nil, "", fmt.Errorf("rewoo: language model unavailable for planning")
 	}
 	a.emitLLMPhase(ctx, env, "plan", "llm")
 	resp, err := a.Model.Chat(ctx, []model.Message{
 		{Role: "system", Content: a.resolvePhasePrompt(ctx, planPromptID, task, env)},
-		{Role: "user", Content: planUserPrompt(task, a.modelCallableToolNames(ctx))},
+		{Role: "user", Content: planUserPrompt(task, a.planObjective(task), a.modelCallableToolNames(ctx))},
 	}, &model.LLMOptions{
 		Model:       a.modelID(),
 		Temperature: 0,
 		MaxTokens:   1024,
 	})
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	plan, err := decodeRewooPlan(resp)
 	if err != nil {
 		a.emitRewooEvent(ctx, env, "rewoo_plan_invalid", map[string]any{"err": err.Error()})
-		return nil, fmt.Errorf("%w: %v", ErrRewooPlanInvalid, err)
+		return nil, "", fmt.Errorf("%w: %v", ErrRewooPlanInvalid, err)
 	}
-	return plan, nil
+	return plan, planOriginGenerated, nil
+}
+
+// authoredPlan lowers the recipe-authored steps into a RewooPlan. The authored
+// plan objective refines the goal; an empty objective falls back to the task
+// instruction so generated downstream behavior stays identical.
+func (a *RewooAgent) authoredPlan(task *execution.Task) *RewooPlan {
+	goal := a.planObjective(task)
+	steps := make([]RewooStep, len(a.Options.AuthoredSteps))
+	copy(steps, a.Options.AuthoredSteps)
+	return &RewooPlan{Goal: goal, Steps: steps}
 }
 
 // decodeRewooPlan strictly decodes the model response into a plan and
@@ -90,12 +130,13 @@ func decodeRewooPlan(resp *model.LLMResponse) (*RewooPlan, error) {
 	return &plan, nil
 }
 
-// planUserPrompt renders the user turn: the instruction, the callable tool
-// names (registry-derived, the same source react uses for its tool list) and
-// the required output schema.
-func planUserPrompt(task *execution.Task, toolNames []string) string {
-	instruction := ""
-	if task != nil {
+// planUserPrompt renders the user turn: the objective, the callable tool names
+// (registry-derived, the same source react uses for its tool list) and the
+// required output schema. The objective is the authored `plan` guidance when
+// present, else the task instruction.
+func planUserPrompt(task *execution.Task, objective string, toolNames []string) string {
+	instruction := strings.TrimSpace(objective)
+	if instruction == "" && task != nil {
 		instruction = task.Instruction
 	}
 	return fmt.Sprintf(`Task: %s
@@ -106,6 +147,18 @@ Available tools:
 Produce a plan of mechanical tool steps that accomplishes the task.
 Return ONLY JSON matching this schema, no prose outside the JSON object:
 %s`, instruction, strings.Join(toolNames, "\n"), planOutputSchema)
+}
+
+// planObjective returns the authored `plan` guidance, falling back to the task
+// instruction. It is the single source for both the authored-plan goal and the
+// generated planner prompt.
+func (a *RewooAgent) planObjective(task *execution.Task) string {
+	if a != nil {
+		if objective := strings.TrimSpace(a.Options.PlanObjective); objective != "" {
+			return objective
+		}
+	}
+	return taskInstructionText(task)
 }
 
 // callableToolsForPrompt returns the registry's callable tools for prompt

@@ -92,19 +92,18 @@ func (c *stepCore) streamOptionsPipeline() []pipelineagent.Option {
 	return opts
 }
 
-func (c *stepCore) rewooOptions() rewooagent.RewooOptions {
-	opts := rewooagent.RewooOptions{
-		PermissionChecker: c.deps.PermissionChecker,
-	}
+func (c *stepCore) streamOptionsRewoo() []rewooagent.Option {
+	opts := make([]rewooagent.Option, 0, 4)
+	opts = append(opts, rewooagent.WithPermissionChecker(c.deps.PermissionChecker))
 	if c.step.Stream != nil {
 		if mode := strings.TrimSpace(c.step.Stream.Mode); mode != "" {
-			opts.StreamMode = contextstream.Mode(mode)
+			opts = append(opts, rewooagent.WithContextStreamMode(contextstream.Mode(mode)))
 		}
 		if query := strings.TrimSpace(c.step.Stream.QueryTemplate); query != "" {
-			opts.StreamQuery = query
+			opts = append(opts, rewooagent.WithContextStreamQuery(query))
 		}
 		if c.step.Stream.MaxTokens > 0 {
-			opts.StreamMaxTokens = c.step.Stream.MaxTokens
+			opts = append(opts, rewooagent.WithContextStreamMaxTokens(c.step.Stream.MaxTokens))
 		}
 	}
 	return opts

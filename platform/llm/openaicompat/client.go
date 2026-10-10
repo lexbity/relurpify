@@ -591,6 +591,9 @@ func parseIntString(text string) int {
 func readHTTPError(resp *http.Response) error {
 	msg, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
 	detail := strings.TrimSpace(string(msg))
+	if ctxErr := llm.ContextLengthError(resp.StatusCode, detail); ctxErr != nil {
+		return ctxErr
+	}
 	if detail != "" {
 		return fmt.Errorf("openai-compatible error: %s: %s", resp.Status, detail)
 	}
