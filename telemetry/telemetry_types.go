@@ -104,6 +104,22 @@ const (
 	EventTapeRecordFailed EventType = "tape.record_failed"
 )
 
+// Durable-jobs lifecycle events (S8, §5.8). The runner stamps every state
+// transition with one of these — no silent transitions (NFR-9).
+const (
+	EventJobSubmitted        EventType = "job.submitted"
+	EventJobClaimed          EventType = "job.claimed"
+	EventJobCompleted        EventType = "job.completed"
+	EventJobFailed           EventType = "job.failed"
+	EventJobRetried          EventType = "job.retried"
+	EventJobInterrupted      EventType = "job.interrupted"
+	EventJobDuplicateIgnored EventType = "job.duplicate_ignored"
+	EventSpoolMalformed      EventType = "spool.malformed"
+	EventRunnerStarted       EventType = "runner.started"
+	EventRunnerStopped       EventType = "runner.stopped"
+	EventRunnerLockContented EventType = "runner.lock_contented"
+)
+
 // Paradigm lifecycle events emitted by the cognitionzoo paradigms (HTN,
 // reflection, planner) through the standard telemetry.Telemetry +
 // StampCorrelation path (spec §1.7). They use the same dot-qualified spelling

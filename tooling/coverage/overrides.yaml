@@ -26,11 +26,11 @@ packages:
     floor: 30
     reason: partial unit coverage; floor recorded from current coverage, raise as tests land
   codeburg.org/lexbit/relurpify/ayenitd:
-    floor: 32
-    reason: partial unit coverage; floor recorded from current coverage, raise as tests land
-  codeburg.org/lexbit/relurpify/ayenitd/service/browser:
-    floor: 0
-    reason: no unit tests yet; floor ratchets up from 0 as tests land
+    floor: 85
+    reason: NFR-7 (S8) — the runner (spool watcher, executor, status writer) is the store-facing execution surface; floor pinned at 85
+  codeburg.org/lexbit/relurpify/execution/services:
+    floor: 70
+    reason: promoted supervision substrate (Q17); at the default floor, entry records the S8 promotion
   codeburg.org/lexbit/relurpify/capability/agentspec:
     floor: 42
     reason: partial unit coverage; floor recorded from current coverage, raise as tests land
@@ -308,3 +308,7 @@ packages:
   codeburg.org/lexbit/relurpify/context/jobsstore:
     floor: 85
     reason: NFR-7 (S7) — the durable-queue substrate is safety-critical; floor pinned at 85
+
+  codeburg.org/lexbit/relurpify/ayenitd/cmd/relurpify-runner:
+    floor: 0
+    reason: main() is binary-tested (make build-runner + e2e_runner_test.go runs the runner in-process); the telemetry writer is unit-covered

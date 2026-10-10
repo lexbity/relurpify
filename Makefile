@@ -208,6 +208,11 @@ test-contract-migration:
 	@mkdir -p /tmp/relurpify-go-cache
 	$(GO_OFFLINE_ENV) GOCACHE=/tmp/relurpify-go-cache go test ./userconfig/config ./execution/session/... ./governance/... ./app/envcomposition/... ./ayenitd/... -count=1
 
+# build-runner builds the ayenitd service runner binary (S8) next to
+# relurpish; the release/build-all path builds both.
+build-runner:
+	$(GO_OFFLINE_ENV) go build -o relurpify-runner ./ayenitd/cmd/relurpify-runner
+
 test-dev-agent:
 	@mkdir -p /tmp/relurpify-go-cache
 	$(GO_OFFLINE_ENV) GOCACHE=/tmp/relurpify-go-cache go build ./tooling/dev-agent-cli/...
@@ -374,7 +379,7 @@ COVERAGE_OVERRIDES := tooling/coverage/overrides.yaml
 # and baseline targets.
 COVERAGE_PROFILE_CMD = @mkdir -p /tmp/relurpify-go-cache && $(GO_OFFLINE_ENV) GOCACHE=/tmp/relurpify-go-cache go test -coverprofile=coverage.out ./... -count=1 -timeout 120s
 
-.PHONY: release-snapshot release test-coverage coverage-baseline
+.PHONY: release-snapshot release test-coverage coverage-baseline build-runner
 
 test-coverage:
 	$(COVERAGE_PROFILE_CMD)

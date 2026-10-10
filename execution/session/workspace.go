@@ -1,6 +1,7 @@
 package session
 
 import (
+	"codeburg.org/lexbit/relurpify/execution/services"
 	"context"
 	"errors"
 	"fmt"
@@ -83,15 +84,15 @@ type Workspace struct {
 	Telemetry telemetry.Telemetry
 	Logger    *log.Logger
 
-	// Service management (new for dynamic lifecycle)
-	ServiceManager ServiceManager
+	// services.Service management (new for dynamic lifecycle)
+	ServiceManager services.ServiceManager
 
 	// Readiness tracks whether the workspace is fully operational.
 	Readiness Readiness
 }
 
 // Close releases all resources held by the Workspace. This includes:
-// 1. Stopping all services via ServiceManager (clearing registry)
+// 1. Stopping all services via services.ServiceManager (clearing registry)
 // 2. Closing database stores, files, and loggers
 func (w *Workspace) Close(ctx context.Context) error {
 	var errs []error
@@ -180,7 +181,7 @@ func (w *Workspace) Restart(ctx context.Context) error {
 
 // GetService returns a specific service by ID if registered. Returns nil if
 // not found. Useful for accessing the Scheduler or custom workers.
-func (w *Workspace) GetService(id string) Service {
+func (w *Workspace) GetService(id string) services.Service {
 	if w.ServiceManager == nil {
 		return nil
 	}
@@ -665,7 +666,7 @@ func OpenWorkspace(ctx context.Context, cfg WorkspaceConfig) (_ *Workspace, err 
 	boot.Environment.PromptRegistry = promptRegistry
 	logger.Printf("workspace: prompt registry loaded: %d prompts", promptRegistry.Count())
 
-	// Phase H: ServiceManager, Scheduler, Knowledge, and Retrieval
+	// Phase H: services.ServiceManager, Scheduler, Knowledge, and Retrieval
 	// (gated by Scope.Services and Scope.Knowledge)
 	env := boot.Environment
 	env.PermissionManager = registration.Permissions
@@ -682,13 +683,13 @@ func OpenWorkspace(ctx context.Context, cfg WorkspaceConfig) (_ *Workspace, err 
 	cleanup.Add(func(_ context.Context) error { return artifactStore.Close() })
 	env.ArtifactStore = artifactStore
 
-	var sm ServiceManager
+	var sm services.ServiceManager
 	if cfg.Scope.Services {
-		scheduler := NewServiceScheduler()
+		scheduler := services.NewServiceScheduler()
 		scheduler.SetTelemetry(tel)
 		env.Scheduler = scheduler
-		sm = NewServiceManager()
-		sm.RegisterWithInfo("scheduler", scheduler, ServiceRegistrationInfo{
+		sm = services.NewServiceManager()
+		sm.RegisterWithInfo("scheduler", scheduler, services.ServiceRegistrationInfo{
 			Source: "execution/session/workspace.go",
 			Owner:  "execution",
 			Notes:  []string{"workspace scheduler", "owned by workspace runtime"},

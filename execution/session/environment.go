@@ -1,6 +1,7 @@
 package session
 
 import (
+	"codeburg.org/lexbit/relurpify/execution/services"
 	"time"
 
 	registry "codeburg.org/lexbit/relurpify/capability/registry"
@@ -103,8 +104,8 @@ type agentEnv struct {
 	Grounding *knowledge.GroundingService
 
 	// Scheduling + services
-	Scheduler      *ServiceScheduler
-	ServiceManager ServiceManager
+	Scheduler      *services.ServiceScheduler
+	ServiceManager services.ServiceManager
 	// JobSubmitter allows capability handlers and agents to enqueue long-running
 	// work into the framework job queue without holding a full JobStore reference.
 	// Nil when the workspace is not backed by a persistent job store (e.g., in

@@ -43,22 +43,24 @@ func domainDAG() map[string]map[string]bool {
 			Platform_domaindag, Testsuite_domaindag, Tooling_domaindag,
 		},
 		"named": {
-			Cognitionzoo_domaindag, Ayenitd_domaindag, Execution_domaindag,
+			Cognitionzoo_domaindag, Execution_domaindag,
 			Context_domaindag, Capability_domaindag, Governance_domaindag,
 			Model_domaindag, Jobs_domaindag, Telemetry_domaindag, Userconfig_domaindag,
 			Platform_domaindag, Testsuite_domaindag, Tooling_domaindag,
 		},
 		Cognitionzoo_domaindag: {
-			Ayenitd_domaindag, Execution_domaindag,
-			Context_domaindag, Capability_domaindag, Governance_domaindag,
-			Model_domaindag, Jobs_domaindag, Telemetry_domaindag, Userconfig_domaindag,
-			Platform_domaindag, Testsuite_domaindag, Tooling_domaindag,
-		},
-		Ayenitd_domaindag: {
 			Execution_domaindag,
 			Context_domaindag, Capability_domaindag, Governance_domaindag,
 			Model_domaindag, Jobs_domaindag, Telemetry_domaindag, Userconfig_domaindag,
 			Platform_domaindag, Testsuite_domaindag, Tooling_domaindag,
+		},
+		// The runner (S8): supervises services, drains the spool into the
+		// durable jobs store, executes knowledge handlers — no capability,
+		// governance, or model linkage; it must never link app composition.
+		Ayenitd_domaindag: {
+			Execution_domaindag, Context_domaindag, Jobs_domaindag,
+			Telemetry_domaindag, Userconfig_domaindag, Platform_domaindag,
+			Testsuite_domaindag, Tooling_domaindag,
 		},
 		Execution_domaindag: {
 			Context_domaindag, Capability_domaindag, Governance_domaindag,

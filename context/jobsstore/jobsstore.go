@@ -505,6 +505,14 @@ func (s *store) recoverOne(worker string, job jobs.Job, now time.Time) error {
 			if err := txn.Delete(runningIndexKey(worker, job.ID)); err != nil {
 				return err
 			}
+			// The canonical record is the truth: a stale running index
+			// entry for a job that already reached a terminal state (the
+			// executor completes/fails without the worker key) is index
+			// debris, not an interrupted attempt. Only a job that is still
+			// running is recoverable.
+			if canonical.State != jobs.StateRunning {
+				return nil
+			}
 			// 1. interrupted → failed with an event.
 			canonical.State = jobs.StateFailed
 			canonical.LastError = "interrupted by restart"
