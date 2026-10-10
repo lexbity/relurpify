@@ -180,3 +180,28 @@ func TestCheckCanonicalRecipes_MaterializedWorkspace(t *testing.T) {
 		t.Fatalf("found = %d, want %d", len(result.found), len(canonicalRecipeIDs))
 	}
 }
+
+// TestCheckCanonicalRecipes_BrokenAuthoredRecipe: a recipe dir that exists but
+// fails contract validation is its own diagnostic — the message says the
+// authored recipe must be fixed, not that starters should be materialized.
+func TestCheckCanonicalRecipes_BrokenAuthoredRecipe(t *testing.T) {
+	workspace := t.TempDir()
+	dst := filepath.Join(workspace, "relurpify_cfg", "euclo")
+	if err := os.MkdirAll(dst, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	broken := "thoughtrecipe broken_fixture\n\"missing trigger block\"\nrun ghost:\n  from nothing.at.all\n"
+	if err := os.WriteFile(filepath.Join(dst, "broken_fixture.erpe"), []byte(broken), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	result := checkCanonicalRecipes(workspace)
+	if result.ready {
+		t.Fatal("workspace with a contract-invalid recipe must not report ready")
+	}
+	if strings.Contains(result.errText, "to materialize starter recipes") {
+		t.Fatalf("parse failure must not offer the starter-materialization hint: %q", result.errText)
+	}
+	if !strings.Contains(result.errText, "contract validation failed") {
+		t.Fatalf("error text missing contract-validation diagnostic: %q", result.errText)
+	}
+}

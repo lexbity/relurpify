@@ -105,6 +105,9 @@ type Runtime struct {
 	activeWorkflowID string
 
 	execSink *telemetry.BroadcastSink
+	// knowledgeBridge forwards knowledge bus chunk commits onto the runtime
+	// telemetry surface; closed before the knowledge runtime on teardown.
+	knowledgeBridge *knowledge.EventBusTelemetryBridge
 
 	providersMu          sync.Mutex
 	providers            []runtimeProviderRecord
@@ -503,6 +506,15 @@ func buildRuntime(ctx context.Context, cfg Config, secrets config.Secrets) (*Run
 	ws.Telemetry = telemetry.MultiplexTelemetry{
 		Sinks: []telemetry.Telemetry{baseTelemetry, execSink},
 	}
+	// The agents' execution configs were built at workspace-open time holding
+	// the boot telemetry chain. Repoint them at the runtime's surface so
+	// everything the paradigms emit — above all the contextstream injected
+	// events and knowledge commits — reaches the execution event stream the
+	// composition root exposes (SubscribeExecutionEvents), not a sink the
+	// runtime no longer owns.
+	if ws.Environment.Config != nil {
+		ws.Environment.Config.Telemetry = ws.Telemetry
+	}
 
 	// Register relurpic capabilities (subagent-backed).
 
@@ -530,6 +542,10 @@ func buildRuntime(ctx context.Context, cfg Config, secrets config.Secrets) (*Run
 		execSink:             execSink,
 		knowledge:            knowledgeRuntime,
 	}
+	// Bridge the knowledge bus onto the runtime telemetry surface — the same
+	// composition the harness and dry run use — so grounded-chunk commits are
+	// observable on the execution event stream (FR-14 parity).
+	rt.knowledgeBridge = knowledge.NewEventBusTelemetryBridge(knowledgeRuntime.KnowledgeEvents, ws.Telemetry)
 	rt.Delegations.SetObserver(rt.observeDelegationSnapshot)
 	if err := RegisterBuiltinProviders(ctx, rt); err != nil {
 		_ = rt.Close(ctx)
@@ -722,7 +738,14 @@ func (r *Runtime) Close(ctx context.Context) error {
 		r.coordinator.DrainAndStop()
 	}
 
-	// 2. Execution-event broadcast closes before providers, so no provider
+	// 2. The knowledge bridge stops forwarding before the broadcast sink
+	// closes, so no chunk commit races subscriber teardown.
+	if r.knowledgeBridge != nil {
+		r.knowledgeBridge.Close()
+		r.knowledgeBridge = nil
+	}
+
+	// 3. Execution-event broadcast closes before providers, so no provider
 	// teardown event races an ordering-dependent subscriber.
 	if r.execSink != nil {
 		r.execSink.Close()

@@ -51,7 +51,7 @@ func TestDryRunCanonicalRecipeTable(t *testing.T) {
 				WorkspaceFiles: map[string]string{canonicalMarker: "1"},
 				Instruction:    tc.instruction,
 				Turns:          []testhelper.ModelTurn{{Text: canonicalAnswer}},
-				Scripted:          canonicalScripted(),
+				Scripted:       canonicalScripted(),
 			})
 			if err != nil {
 				t.Fatalf("run: %v", err)

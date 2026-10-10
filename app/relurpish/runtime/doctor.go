@@ -3,6 +3,7 @@ package runtime
 import (
 	"codeburg.org/lexbit/relurpify/userconfig/config/model"
 	"context"
+	"errors"
 	"fmt"
 	"golang.org/x/sync/errgroup"
 	"io/fs"
@@ -683,9 +684,16 @@ func checkCanonicalRecipes(workspace string) recipesCheckResult {
 	loader := thoughtrecipes.NewLoader().WithCapabilityRegistry(eucloservices.CapabilityLookup(caps))
 	loadResult, err := loader.LoadWorkspace(workspace)
 	if err != nil {
-		// Sources unreadable (missing directory, unreadable file): nothing
-		// registered, so every canonical ID is missing.
-		result.errText = fmt.Sprintf("read thoughtrecipe sources: %v (run 'relurpish doctor --fix' to materialize starter recipes)", err)
+		// Missing directory: materializing the starter templates fixes it.
+		// Anything else — an authored recipe that no longer parses under the
+		// current contracts — is the D-8 boot error surfaced as a preflight
+		// diagnostic; --fix would not repair it, so the message says what
+		// actually would.
+		if errors.Is(err, thoughtrecipes.ErrNoRecipeDir) {
+			result.errText = fmt.Sprintf("read thoughtrecipe sources: %v (run 'relurpish doctor --fix' to materialize starter recipes)", err)
+		} else {
+			result.errText = fmt.Sprintf("thoughtrecipe contract validation failed: %v (fix the authored recipe; 'relurpish doctor --fix' only materializes missing starters)", err)
+		}
 		result.missing = append(result.missing, canonicalRecipeIDs...)
 		return result
 	}

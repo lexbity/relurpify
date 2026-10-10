@@ -67,7 +67,7 @@ func TestLiveContextStreamInjectedSmoke(t *testing.T) {
 	if err := fs.WriteFileSecure(recipePath, []byte(liveSmokeRecipe)); err != nil {
 		t.Fatal(err)
 	}
-	desc.Instruction = "summarize live-smoke-corpus.md"
+	desc.Instruction = "investigate live-smoke-corpus.md"
 	desc.ModelName = overrides.ModelName
 	if overrides.ModelProvider != "" {
 		desc.BackendProvider = overrides.ModelProvider
