@@ -11,15 +11,17 @@ type ModelBackend interface {
 	SetDebugLogging(bool)
 }
 
-// Telemetry is the narrow event sink surface consumed by model wrappers.
-// All methods accept a context for correlation stamping.
-type Telemetry interface {
+// EventSink is the narrow, ctx-carrying event emit port consumed by model
+// wrappers. Deliberately not telemetry.Telemetry: model must not gain a DAG
+// edge to the telemetry domain — providers emit plain events and the
+// composition root adapts.
+type EventSink interface {
 	Emit(ctx context.Context, event any)
 }
 
 // ModelFactory wraps a backend model with app-level instrumentation and
 // profile handling after workspace telemetry has been assembled.
-type ModelFactory func(Telemetry, bool) LanguageModel
+type ModelFactory func(EventSink, bool) LanguageModel
 
 // ModelProduct bundles a model backend with its factory function.
 // The app composition root constructs this product and passes it to

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/governance/sandbox"
 )
 
 // stubRuntime implements SandboxRuntime for testing.
@@ -15,16 +16,18 @@ type stubRuntime struct {
 	validateError error
 	applyError    error
 	capabilities  Capabilities
-	runConfig     SandboxConfig
+	runConfig     sandbox.SandboxConfig
 }
 
-func (s *stubRuntime) Name() string                                         { return s.name }
-func (s *stubRuntime) Verify(_ context.Context) error                       { return s.verifyError }
-func (s *stubRuntime) Capabilities() Capabilities                           { return s.capabilities }
-func (s *stubRuntime) ValidatePolicy(_ SandboxPolicy) error                 { return s.validateError }
-func (s *stubRuntime) ApplyPolicy(_ context.Context, _ SandboxPolicy) error { return s.applyError }
-func (s *stubRuntime) Policy() SandboxPolicy                                { return SandboxPolicy{} }
-func (s *stubRuntime) RunConfig() SandboxConfig                             { return s.runConfig }
+func (s *stubRuntime) Name() string                                 { return s.name }
+func (s *stubRuntime) Verify(_ context.Context) error               { return s.verifyError }
+func (s *stubRuntime) Capabilities() Capabilities                   { return s.capabilities }
+func (s *stubRuntime) ValidatePolicy(_ sandbox.SandboxPolicy) error { return s.validateError }
+func (s *stubRuntime) ApplyPolicy(_ context.Context, _ sandbox.SandboxPolicy) error {
+	return s.applyError
+}
+func (s *stubRuntime) Policy() sandbox.SandboxPolicy    { return sandbox.SandboxPolicy{} }
+func (s *stubRuntime) RunConfig() sandbox.SandboxConfig { return s.runConfig }
 
 // stubProviderRuntime implements both SandboxRuntime and CommandRunnerProvider.
 type stubProviderRuntime struct {
@@ -61,7 +64,7 @@ func TestNewVerifiedCommandRunner_Success(t *testing.T) {
 			ReadOnlyRoot:     true,
 		},
 	}
-	policy := SandboxPolicy{}
+	policy := sandbox.SandboxPolicy{}
 	config := &CommandRunnerConfig{
 		Workspace: ws,
 	}
@@ -85,7 +88,7 @@ func TestNewVerifiedCommandRunner_VerifyFails(t *testing.T) {
 		name:        "test",
 		verifyError: expectedErr,
 	}
-	policy := SandboxPolicy{}
+	policy := sandbox.SandboxPolicy{}
 	config := &CommandRunnerConfig{
 		Workspace: ws,
 	}
@@ -106,7 +109,7 @@ func TestNewVerifiedCommandRunner_NilRuntime(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 
-	policy := SandboxPolicy{}
+	policy := sandbox.SandboxPolicy{}
 	config := &CommandRunnerConfig{
 		Workspace: "/tmp/test",
 	}
@@ -131,7 +134,7 @@ func TestNewVerifiedCommandRunner_CommandRunnerProvider(t *testing.T) {
 		},
 		runner: fakeRunner,
 	}
-	policy := SandboxPolicy{}
+	policy := sandbox.SandboxPolicy{}
 	config := &CommandRunnerConfig{}
 
 	runner, err := NewVerifiedCommandRunner(ctx, rt, policy, config)
@@ -153,7 +156,7 @@ func TestNewVerifiedCommandRunner_ValidatePolicyFails(t *testing.T) {
 		name:          "test",
 		validateError: expectedErr,
 	}
-	policy := SandboxPolicy{}
+	policy := sandbox.SandboxPolicy{}
 	config := &CommandRunnerConfig{
 		Workspace: ws,
 	}
@@ -180,7 +183,7 @@ func TestNewVerifiedCommandRunner_ApplyPolicyFails(t *testing.T) {
 		name:       "test",
 		applyError: expectedErr,
 	}
-	policy := SandboxPolicy{}
+	policy := sandbox.SandboxPolicy{}
 	config := &CommandRunnerConfig{
 		Workspace: ws,
 	}

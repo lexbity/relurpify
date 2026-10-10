@@ -2,23 +2,23 @@ package security
 
 import "time"
 
-// NetworkRule describes a sandbox network allowance or restriction.
-type NetworkRule struct {
+// NetworkRuleConfig describes a sandbox network allowance or restriction.
+type NetworkRuleConfig struct {
 	Direction string `yaml:"direction,omitempty"`
 	Protocol  string `yaml:"protocol,omitempty"`
 	Host      string `yaml:"host,omitempty"`
 	Port      int    `yaml:"port,omitempty"`
 }
 
-// SandboxPolicy captures the filesystem and network constraints loaded from config.
-type SandboxPolicy struct {
-	ReadOnlyRoot    bool          `yaml:"read_only_root,omitempty"`
-	ProtectedPaths  []string      `yaml:"protected_paths,omitempty"`
-	NoNewPrivileges bool          `yaml:"no_new_privileges,omitempty"`
-	SeccompProfile  string        `yaml:"seccomp_profile,omitempty"`
-	AllowedEnvKeys  []string      `yaml:"allowed_env_keys,omitempty"`
-	DeniedEnvKeys   []string      `yaml:"denied_env_keys,omitempty"`
-	NetworkRules    []NetworkRule `yaml:"network_rules,omitempty"`
+// SandboxPolicyConfig captures the filesystem and network constraints loaded from config.
+type SandboxPolicyConfig struct {
+	ReadOnlyRoot    bool                `yaml:"read_only_root,omitempty"`
+	ProtectedPaths  []string            `yaml:"protected_paths,omitempty"`
+	NoNewPrivileges bool                `yaml:"no_new_privileges,omitempty"`
+	SeccompProfile  string              `yaml:"seccomp_profile,omitempty"`
+	AllowedEnvKeys  []string            `yaml:"allowed_env_keys,omitempty"`
+	DeniedEnvKeys   []string            `yaml:"denied_env_keys,omitempty"`
+	NetworkRules    []NetworkRuleConfig `yaml:"network_rules,omitempty"`
 	// ReapOrphans enables boot-time reaping of orphaned managed containers
 	// whose owner process is dead (crashed sessions). Default true.
 	ReapOrphans bool `yaml:"reap_orphans,omitempty"`

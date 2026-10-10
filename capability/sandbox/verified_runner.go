@@ -1,6 +1,7 @@
 package sandbox
 
 import (
+	"codeburg.org/lexbit/relurpify/governance/sandbox"
 	"context"
 	"errors"
 	"fmt"
@@ -8,7 +9,7 @@ import (
 
 // NewVerifiedCommandRunner verifies the runtime, applies the policy, and returns a
 // sandbox-backed CommandRunner.
-func NewVerifiedCommandRunner(ctx context.Context, runtime SandboxRuntime, policy SandboxPolicy, config *CommandRunnerConfig) (CommandRunner, error) {
+func NewVerifiedCommandRunner(ctx context.Context, runtime SandboxRuntime, policy sandbox.SandboxPolicy, config *CommandRunnerConfig) (CommandRunner, error) {
 	if runtime == nil {
 		return nil, errors.New("sandbox runtime required")
 	}

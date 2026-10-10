@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"codeburg.org/lexbit/relurpify/model"
+	"codeburg.org/lexbit/relurpify/platform/llm"
 	"codeburg.org/lexbit/relurpify/platform/llm/conformance"
 )
 
@@ -134,18 +135,18 @@ func TestBackend_ConformanceSuite(t *testing.T) {
 		},
 		Health: func(backend any) any {
 			report, _ := backend.(interface {
-				Health(context.Context) (*HealthReport, error)
+				Health(context.Context) (*llm.HealthReport, error)
 			}).Health(context.Background())
 			return report
 		},
 		ListModels: func(backend any) any {
 			models, _ := backend.(interface {
-				ListModels(context.Context) ([]ModelInfo, error)
+				ListModels(context.Context) ([]llm.ModelInfo, error)
 			}).ListModels(context.Background())
 			return models
 		},
 		Embed: func(backend any) ([][]float32, error) {
-			embedder := backend.(interface{ Embedder() *Embedder }).Embedder()
+			embedder := backend.(interface{ Embedder() llm.Embedder }).Embedder()
 			return embedder.Embed(context.Background(), []string{"hello"})
 		},
 		Close: func(backend any) error {

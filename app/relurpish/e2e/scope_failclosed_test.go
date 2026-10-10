@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"codeburg.org/lexbit/relurpify/governance/sandbox"
 	"context"
 	"os"
 	"path/filepath"
@@ -36,7 +37,7 @@ func TestScopeFailClosed_DegradedRuntimeDeniesFileTools(t *testing.T) {
 	}
 
 	cfg.SecurityRunner = &recordingRunner{}
-	cfg.SandboxBackendFactory = func(context.Context, string, governanceports.SandboxConfig, string, string) (governanceports.SandboxRuntime, error) {
+	cfg.SandboxBackendFactory = func(context.Context, string, sandbox.SandboxConfig, string, string) (governanceports.SandboxRuntime, error) {
 		return nil, nil
 	}
 

@@ -24,17 +24,6 @@ const (
 	factoryTestTapeResponse     = "hello from tape"
 )
 
-func TestRegisteredKindsIncludesBuiltinsAndOffline(t *testing.T) {
-	registered := RegisteredKinds()
-	require.ElementsMatch(t, []string{"ollama", "lmstudio", "offline", "tape", "openai_compatible"}, registered)
-}
-
-func TestRegisteredKindsExactSet(t *testing.T) {
-	registered := RegisteredKinds()
-	require.Len(t, registered, 5, "expected exactly 5 registered kinds")
-	require.ElementsMatch(t, []string{"ollama", "lmstudio", "offline", "tape", "openai_compatible"}, registered)
-}
-
 func TestRegisteredKindsDoesNotContainEmptyOrUnknown(t *testing.T) {
 	registered := RegisteredKinds()
 	for _, kind := range registered {
@@ -49,65 +38,6 @@ func TestRegisterKindPanicsOnDuplicateInTests(t *testing.T) {
 			return offlineBackend{}, nil
 		})
 	})
-}
-
-func TestNewDispatchesOnKind(t *testing.T) {
-	backend, err := New(ProviderConfig{
-		Kind:     "ollama",
-		Endpoint: factoryTestEndpoint,
-		Model:    factoryTestModel,
-	}, ProviderSecrets{})
-	require.NoError(t, err)
-	require.NotNil(t, backend)
-}
-
-func TestNewDispatchesOnProviderWhenKindEmpty(t *testing.T) {
-	backend, err := New(ProviderConfig{
-		Provider: factoryTestProviderOllama,
-		Endpoint: factoryTestEndpoint,
-		Model:    factoryTestModel,
-	}, ProviderSecrets{})
-	require.NoError(t, err)
-	require.NotNil(t, backend)
-}
-
-func TestNewDefaultsToOllamaWhenBothEmpty(t *testing.T) {
-	backend, err := New(ProviderConfig{
-		Endpoint: factoryTestEndpoint,
-		Model:    factoryTestModel,
-	}, ProviderSecrets{})
-	require.NoError(t, err)
-	require.NotNil(t, backend)
-}
-
-func TestNew_OllamaExplicit(t *testing.T) {
-	backend, err := New(ProviderConfig{
-		Kind:     factoryTestProviderOllama,
-		Endpoint: factoryTestEndpoint,
-		Model:    factoryTestModel,
-	}, ProviderSecrets{})
-	require.NoError(t, err)
-	require.NotNil(t, backend)
-}
-
-func TestNew_LMStudio(t *testing.T) {
-	backend, err := New(ProviderConfig{
-		Kind:     factoryTestProviderLMStudio,
-		Endpoint: "http://localhost:1234",
-		Model:    factoryTestModel,
-	}, ProviderSecrets{})
-	require.NoError(t, err)
-	require.NotNil(t, backend)
-}
-
-func TestNew_OllamaFromProviderField(t *testing.T) {
-	backend, err := New(ProviderConfig{
-		Provider: factoryTestProviderOllama,
-		Endpoint: factoryTestEndpoint,
-		Model:    factoryTestModel,
-	}, ProviderSecrets{})
-	require.NoError(t, err)
-	require.NotNil(t, backend)
 }
 
 func TestNew_TapeProvider(t *testing.T) {
@@ -222,12 +152,8 @@ func TestNew_UnknownProvider(t *testing.T) {
 }
 
 func TestIsRegisteredKind(t *testing.T) {
-	require.True(t, IsRegisteredKind("ollama"))
-	require.True(t, IsRegisteredKind("OLLAMA"))
-	require.True(t, IsRegisteredKind("lmstudio"))
 	require.True(t, IsRegisteredKind("offline"))
 	require.True(t, IsRegisteredKind("tape"))
-	require.True(t, IsRegisteredKind("openai_compatible"))
 	require.False(t, IsRegisteredKind("vllm"))
 	require.False(t, IsRegisteredKind(""))
 }

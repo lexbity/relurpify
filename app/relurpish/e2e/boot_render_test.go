@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"codeburg.org/lexbit/relurpify/governance/sandbox"
 	"context"
 	"strings"
 	"testing"
@@ -29,7 +30,7 @@ func TestBootRender_RealAdapter_NoPanic(t *testing.T) {
 	cfg.InferenceProvider = "offline"
 	cfg.InferenceModel = "offline-synthetic"
 	cfg.InferenceNativeToolCalling = true
-	cfg.SandboxBackendFactory = func(context.Context, string, governanceports.SandboxConfig, string, string) (governanceports.SandboxRuntime, error) {
+	cfg.SandboxBackendFactory = func(context.Context, string, sandbox.SandboxConfig, string, string) (governanceports.SandboxRuntime, error) {
 		return &fakeSandboxRuntime{}, nil
 	}
 

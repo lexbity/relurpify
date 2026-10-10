@@ -282,7 +282,7 @@ func envGetString(env *contextdata.Envelope, key string) string {
 }
 
 func reflectionReviewGuidance(agent *ReflectionAgent, task *execution.Task) string {
-	var cfg policyresolve.AgentOrchestrationConfig
+	var cfg policyresolve.ResolvedAgentOrchestrationConfig
 	if agent != nil && agent.Config != nil && agent.Config.AgentSpec != nil {
 		cfg = agentspec.ToPolicyResolveOrchConfig(agent.Config.AgentSpec.Orchestration)
 	}
@@ -294,7 +294,7 @@ func reflectionReviewGuidance(agent *ReflectionAgent, task *execution.Task) stri
 }
 
 func reflectionAssessmentForReview(agent *ReflectionAgent, env *contextdata.Envelope, review reviewPayload) reflectionAssessment {
-	var cfg policyresolve.AgentOrchestrationConfig
+	var cfg policyresolve.ResolvedAgentOrchestrationConfig
 	if agent != nil && agent.Config != nil && agent.Config.AgentSpec != nil {
 		cfg = agentspec.ToPolicyResolveOrchConfig(agent.Config.AgentSpec.Orchestration)
 	}

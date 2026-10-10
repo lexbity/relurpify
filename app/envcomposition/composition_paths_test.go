@@ -4,12 +4,14 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/context/knowledge/graphdb"
 	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
-	governanceports "codeburg.org/lexbit/relurpify/governance/ports"
+	govsandbox "codeburg.org/lexbit/relurpify/governance/sandbox"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
+	cfgsecurity "codeburg.org/lexbit/relurpify/userconfig/config/security"
 	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
 	"github.com/stretchr/testify/require"
 )
@@ -56,34 +58,46 @@ func TestBuildKnowledgeRuntime(t *testing.T) {
 	require.ErrorContains(t, err, "graphdb engine required")
 }
 
-// TestSandboxPolicyAdapters round-trips the governance<->sandbox policy bridge
-// and the manifest-derived sandbox policy.
-func TestSandboxPolicyAdapters(t *testing.T) {
-	gp := governanceports.SandboxPolicy{
+// TestSandboxPolicyFromConfig proves the decode→runtime bridge maps every
+// overlapping field, so nothing authored is silently dropped (FR-8).
+func TestSandboxPolicyFromConfig(t *testing.T) {
+	cfg := &cfgsecurity.SandboxPolicyConfig{
 		ReadOnlyRoot:    true,
 		ProtectedPaths:  []string{"a", "b"},
 		NoNewPrivileges: true,
-		NetworkRules: []governanceports.SandboxNetworkRule{
-			{Direction: "egress", Protocol: "tcp", Host: "example.com", Port: 443, Description: "web"},
+		SeccompProfile:  "runtime/default",
+		AllowedEnvKeys:  []string{"PATH"},
+		DeniedEnvKeys:   []string{"AWS_SECRET"},
+		NetworkRules: []cfgsecurity.NetworkRuleConfig{
+			{Direction: "egress", Protocol: "tcp", Host: "example.com", Port: 443},
 		},
 	}
-	sp := toSandboxPolicy(gp)
-	require.True(t, sp.ReadOnlyRoot)
-	require.True(t, sp.NoNewPrivileges)
-	require.Equal(t, []string{"a", "b"}, sp.ProtectedPaths)
-	require.Len(t, sp.NetworkRules, 1)
-	require.Equal(t, "example.com", sp.NetworkRules[0].Host)
+	// Config-only extras are consumed directly at the composition root
+	// (reaping, image pinning); pin them so their removal from the config
+	// contract is a compile error.
+	cfg.ReapOrphans = true
+	cfg.OrphanMaxAge = 24 * time.Hour
+	cfg.ImageDigest = "sha256:abc"
+	require.True(t, cfg.ReapOrphans)
+	require.Equal(t, "sha256:abc", cfg.ImageDigest)
 
-	back := fromSandboxPolicy(sp)
-	require.Equal(t, gp.ReadOnlyRoot, back.ReadOnlyRoot)
-	require.Equal(t, gp.ProtectedPaths, back.ProtectedPaths)
-	require.Len(t, back.NetworkRules, 1)
-	require.Equal(t, "example.com", back.NetworkRules[0].Host)
+	p := sandboxPolicyFromConfig(config.SecuritySpec{ReadOnlyRoot: false, NoNewPrivileges: false}, cfg)
+	require.True(t, p.ReadOnlyRoot)
+	require.True(t, p.NoNewPrivileges)
+	require.Equal(t, []string{"a", "b"}, p.ProtectedPaths)
+	require.Equal(t, "runtime/default", p.SeccompProfile)
+	require.Equal(t, []string{"PATH"}, p.AllowedEnvKeys)
+	require.Equal(t, []string{"AWS_SECRET"}, p.DeniedEnvKeys)
+	require.Len(t, p.NetworkRules, 1)
+	require.Equal(t, "example.com", p.NetworkRules[0].Host)
+	require.Equal(t, 443, p.NetworkRules[0].Port)
+	require.NoError(t, p.Validate())
 
-	np := newSandboxPolicy(config.SecuritySpec{ReadOnlyRoot: true, NoNewPrivileges: true}, []string{"p"})
-	require.Equal(t, []string{"p"}, np.ProtectedPaths)
-	require.True(t, np.ReadOnlyRoot)
-	require.True(t, np.NoNewPrivileges)
+	// Manifest-spec booleans apply even without a bundle policy.
+	p2 := sandboxPolicyFromConfig(config.SecuritySpec{ReadOnlyRoot: true, NoNewPrivileges: true}, nil)
+	require.True(t, p2.ReadOnlyRoot)
+	require.True(t, p2.NoNewPrivileges)
+	require.Nil(t, p2.ProtectedPaths)
 }
 
 // TestNewSandboxBackendFactory covers the supported-backend and
@@ -92,10 +106,10 @@ func TestNewSandboxBackendFactory(t *testing.T) {
 	factory := NewSandboxBackendFactory()
 	require.NotNil(t, factory)
 
-	_, err := factory(context.Background(), "bogus", governanceports.SandboxConfig{}, "", t.TempDir())
+	_, err := factory(context.Background(), "bogus", govsandbox.SandboxConfig{}, "", t.TempDir())
 	require.ErrorContains(t, err, "unsupported sandbox backend")
 
-	rt, err := factory(context.Background(), "gvisor", governanceports.SandboxConfig{}, "", t.TempDir())
+	rt, err := factory(context.Background(), "gvisor", govsandbox.SandboxConfig{}, "", t.TempDir())
 	require.NoError(t, err)
 	require.NotNil(t, rt)
 	require.NotEmpty(t, rt.Name())

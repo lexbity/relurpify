@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"codeburg.org/lexbit/relurpify/governance/sandbox"
 	"context"
 	"path/filepath"
 	"strings"
@@ -22,7 +23,7 @@ func TestExecEvents_SubscriberReceivesEvents(t *testing.T) {
 	cfg.InferenceProvider = "offline"
 	cfg.InferenceModel = "offline-synthetic"
 	cfg.SecurityRunner = fakeCommandRunner{}
-	cfg.SandboxBackendFactory = func(context.Context, string, governanceports.SandboxConfig, string, string) (governanceports.SandboxRuntime, error) {
+	cfg.SandboxBackendFactory = func(context.Context, string, sandbox.SandboxConfig, string, string) (governanceports.SandboxRuntime, error) {
 		return &fakeSandboxRuntime{}, nil
 	}
 
@@ -107,7 +108,7 @@ func TestExecEvents_EmitThroughWorkspaceTelemetry(t *testing.T) {
 	cfg.InferenceProvider = "offline"
 	cfg.InferenceModel = "offline-synthetic"
 	cfg.SecurityRunner = fakeCommandRunner{}
-	cfg.SandboxBackendFactory = func(context.Context, string, governanceports.SandboxConfig, string, string) (governanceports.SandboxRuntime, error) {
+	cfg.SandboxBackendFactory = func(context.Context, string, sandbox.SandboxConfig, string, string) (governanceports.SandboxRuntime, error) {
 		return &fakeSandboxRuntime{}, nil
 	}
 
@@ -223,7 +224,7 @@ func TestExecEvents_CancelCloseOrder(t *testing.T) {
 	cfg.InferenceProvider = "offline"
 	cfg.InferenceModel = "offline-synthetic"
 	cfg.SecurityRunner = fakeCommandRunner{}
-	cfg.SandboxBackendFactory = func(context.Context, string, governanceports.SandboxConfig, string, string) (governanceports.SandboxRuntime, error) {
+	cfg.SandboxBackendFactory = func(context.Context, string, sandbox.SandboxConfig, string, string) (governanceports.SandboxRuntime, error) {
 		return &fakeSandboxRuntime{}, nil
 	}
 
@@ -254,7 +255,7 @@ func TestExecEvents_SubscribeAfterClose(t *testing.T) {
 	cfg.InferenceProvider = "offline"
 	cfg.InferenceModel = "offline-synthetic"
 	cfg.SecurityRunner = fakeCommandRunner{}
-	cfg.SandboxBackendFactory = func(context.Context, string, governanceports.SandboxConfig, string, string) (governanceports.SandboxRuntime, error) {
+	cfg.SandboxBackendFactory = func(context.Context, string, sandbox.SandboxConfig, string, string) (governanceports.SandboxRuntime, error) {
 		return &fakeSandboxRuntime{}, nil
 	}
 

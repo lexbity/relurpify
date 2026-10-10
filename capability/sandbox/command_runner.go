@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/governance/sandbox"
 	"codeburg.org/lexbit/relurpify/telemetry"
 )
 
@@ -48,7 +49,7 @@ var _ CommandRunner = (*SandboxCommandRunner)(nil)
 
 // SandboxCommandRunner launches commands via the configured sandbox runtime.
 type SandboxCommandRunner struct {
-	config          SandboxConfig
+	config          sandbox.SandboxConfig
 	rt              SandboxRuntime
 	image           string
 	workspace       string

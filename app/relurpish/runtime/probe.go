@@ -58,7 +58,6 @@ type InferenceBackendReport struct {
 	ProfileReason   string
 	ProfileSource   string
 	Error           string
-	Resources       *llm.ResourceSnapshot
 }
 
 // EnvironmentReport aggregates the runtime environment checks.
@@ -174,7 +173,6 @@ func detectInferenceBackend(ctx context.Context, cfg Config, secrets config.Secr
 	health, err := backend.Health(ctx)
 	if health != nil {
 		report.State = health.State
-		report.Resources = health.Resources
 		if health.Message != "" && report.Error == "" {
 			report.Error = health.Message
 		}

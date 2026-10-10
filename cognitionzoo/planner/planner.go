@@ -718,7 +718,7 @@ func normalizePlannerPlan(agent *PlannerAgent, task *execution.Task, plan pl.Pla
 		adjustments = append(adjustments, fmt.Sprintf("assigned ids to %d plan steps", added))
 	}
 	repairPlannerSteps(agent.Tools, &plan, &adjustments)
-	var fallback policyresolve.AgentOrchestrationConfig
+	var fallback policyresolve.ResolvedAgentOrchestrationConfig
 	if agent.Config != nil && agent.Config.AgentSpec != nil {
 		fallback = agentspec.ToPolicyResolveOrchConfig(agent.Config.AgentSpec.Orchestration)
 	}

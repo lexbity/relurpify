@@ -257,7 +257,7 @@ func loadWorkspaceConfigSection(absWorkspace string, strictMode bool) (*Workspac
 
 func loadSecurityBundle(absWorkspace string) (*security.Bundle, []ConfigDiagnostic, error) {
 	bundle := &security.Bundle{
-		Sandbox:   &security.SandboxPolicy{},
+		Sandbox:   &security.SandboxPolicyConfig{},
 		Shell:     &security.ShellBlacklist{},
 		LocalTool: map[string]security.ToolPolicy{},
 	}

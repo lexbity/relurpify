@@ -7,7 +7,7 @@ import (
 // BranchExecutorProvider allows plan execution to allocate an isolated runtime
 // executor per branch before any parallel step execution is attempted.
 type BranchExecutorProvider interface {
-	BranchExecutor() (WorkflowExecutor, error)
+	BranchExecutor() (StepExecutor, error)
 }
 
 // BranchExecutionResult captures the isolated context and step metadata for one

@@ -1,17 +1,19 @@
-package llm
+package openaicompat
 
 import (
 	"testing"
+
+	llm "codeburg.org/lexbit/relurpify/platform/llm"
 
 	"github.com/stretchr/testify/require"
 )
 
 func TestOpenAICompatBackendConstructs(t *testing.T) {
-	backend, err := New(ProviderConfig{
+	backend, err := llm.New(llm.ProviderConfig{
 		Kind:     "openai_compatible",
 		Endpoint: "http://localhost:8080/v1",
 		Model:    "test-model",
-	}, ProviderSecrets{})
+	}, llm.ProviderSecrets{})
 	require.NoError(t, err)
 	require.NotNil(t, backend)
 
@@ -21,10 +23,10 @@ func TestOpenAICompatBackendConstructs(t *testing.T) {
 }
 
 func TestOpenAICompatRequiresEndpoint(t *testing.T) {
-	backend, err := New(ProviderConfig{
+	backend, err := llm.New(llm.ProviderConfig{
 		Kind:  "openai_compatible",
 		Model: "test-model",
-	}, ProviderSecrets{})
+	}, llm.ProviderSecrets{})
 	require.Error(t, err)
 	require.Nil(t, backend)
 	require.Contains(t, err.Error(), "endpoint required")
@@ -32,22 +34,22 @@ func TestOpenAICompatRequiresEndpoint(t *testing.T) {
 
 func TestOpenAICompatFromProviderField(t *testing.T) {
 	// name-as-kind fallback: Provider = kind
-	backend, err := New(ProviderConfig{
+	backend, err := llm.New(llm.ProviderConfig{
 		Provider: "openai_compatible",
 		Endpoint: "http://localhost:8080/v1",
 		Model:    "test-model",
-	}, ProviderSecrets{})
+	}, llm.ProviderSecrets{})
 	require.NoError(t, err)
 	require.NotNil(t, backend)
 }
 
 func TestOpenAICompatCapabilities(t *testing.T) {
-	backend, err := New(ProviderConfig{
+	backend, err := llm.New(llm.ProviderConfig{
 		Kind:              "openai_compatible",
 		Endpoint:          "http://localhost:8080/v1",
 		Model:             "test-model",
 		NativeToolCalling: true,
-	}, ProviderSecrets{})
+	}, llm.ProviderSecrets{})
 	require.NoError(t, err)
 
 	caps := backend.Capabilities()
@@ -58,14 +60,14 @@ func TestOpenAICompatCapabilities(t *testing.T) {
 }
 
 func TestOpenAICompatSetProfile(t *testing.T) {
-	backend, err := New(ProviderConfig{
+	backend, err := llm.New(llm.ProviderConfig{
 		Kind:     "openai_compatible",
 		Endpoint: "http://localhost:8080/v1",
 		Model:    "test-model",
-	}, ProviderSecrets{})
+	}, llm.ProviderSecrets{})
 	require.NoError(t, err)
 
 	// SetProfile should not panic
 	backend.SetProfile(nil)
-	backend.SetProfile(&ModelProfile{})
+	backend.SetProfile(&llm.ModelProfile{})
 }

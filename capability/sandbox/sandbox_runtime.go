@@ -1,12 +1,13 @@
 package sandbox
 
 import (
+	"codeburg.org/lexbit/relurpify/governance/sandbox"
 	"fmt"
 	"strings"
 )
 
 // NewSandboxRuntimeForBackend resolves a backend name to a SandboxRuntime.
-func NewSandboxRuntimeForBackend(backend string, cfg SandboxConfig, image, workspace string) (SandboxRuntime, error) {
+func NewSandboxRuntimeForBackend(backend string, cfg sandbox.SandboxConfig, image, workspace string) (SandboxRuntime, error) {
 	b := strings.ToLower(strings.TrimSpace(backend))
 	if b == "" {
 		b = "gvisor"

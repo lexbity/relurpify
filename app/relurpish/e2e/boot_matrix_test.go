@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"codeburg.org/lexbit/relurpify/governance/sandbox"
 	"context"
 	"os"
 	"path/filepath"
@@ -38,7 +39,7 @@ func TestBootMatrix_NoPanic(t *testing.T) {
 			cfg.InferenceModel = offlineModel
 			cfg.InferenceNativeToolCalling = true
 			cfg.SecurityRunner = &recordingRunner{}
-			cfg.SandboxBackendFactory = func(context.Context, string, governanceports.SandboxConfig, string, string) (governanceports.SandboxRuntime, error) {
+			cfg.SandboxBackendFactory = func(context.Context, string, sandbox.SandboxConfig, string, string) (governanceports.SandboxRuntime, error) {
 				return &fakeSandboxRuntime{}, nil
 			}
 

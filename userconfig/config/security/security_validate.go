@@ -12,7 +12,7 @@ type Decoder func(path string, data []byte, out any) (any, error)
 
 // Bundle groups the typed security policy files loaded from relurpify_cfg/security.
 type Bundle struct {
-	Sandbox   *SandboxPolicy
+	Sandbox   *SandboxPolicyConfig
 	Shell     *ShellBlacklist
 	LocalTool map[string]ToolPolicy
 	Ingestion []PolicyRule

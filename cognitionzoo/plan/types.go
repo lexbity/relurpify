@@ -7,10 +7,8 @@ import (
 	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
-type Result = execution.Result
-
-type WorkflowExecutor interface {
-	Execute(ctx context.Context, task *execution.Task, env *contextdata.Envelope) (*Result, error)
+type StepExecutor interface {
+	Execute(ctx context.Context, task *execution.Task, env *contextdata.Envelope) (*execution.Result, error)
 }
 
 // Plan represents a collection of steps with dependencies.
@@ -42,7 +40,7 @@ type PlanExecutionOptions struct {
 	Diagnose            func(ctx context.Context, step PlanStep, err error) (string, error)
 	Recover             func(ctx context.Context, step PlanStep, stepTask *execution.Task, state *contextdata.Envelope, err error) (*StepRecovery, error)
 	BeforeStep          func(step PlanStep, stepTask *execution.Task, state *contextdata.Envelope)
-	AfterStep           func(step PlanStep, state *contextdata.Envelope, result *Result)
+	AfterStep           func(step PlanStep, state *contextdata.Envelope, result *execution.Result)
 	MergeBranches       func(parent *contextdata.Envelope, branches []BranchExecutionResult) error
 }
 

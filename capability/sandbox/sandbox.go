@@ -11,24 +11,25 @@ import (
 
 	"codeburg.org/lexbit/relurpify/capability/sandbox/safeexec"
 	"codeburg.org/lexbit/relurpify/governance/netpolicy"
+	"codeburg.org/lexbit/relurpify/governance/sandbox"
 )
 
 // Validate/Supports methods live on the sandbox types.
 
 // SandboxRuntimeImpl enforces runsc-backed execution.
 type SandboxRuntimeImpl struct {
-	config   SandboxConfig
+	config   sandbox.SandboxConfig
 	verified bool
 	mu       sync.Mutex
 	version  string
-	policy   SandboxPolicy
+	policy   sandbox.SandboxPolicy
 }
 
 // Compile-time guarantee that the gVisor runtime satisfies the sandbox API.
 var _ SandboxRuntime = (*SandboxRuntimeImpl)(nil)
 
 // NewSandboxRuntime configures the runtime.
-func NewSandboxRuntime(config SandboxConfig) *SandboxRuntimeImpl {
+func NewSandboxRuntime(config sandbox.SandboxConfig) *SandboxRuntimeImpl {
 	if config.RunscPath == "" {
 		config.RunscPath = "runsc"
 	}
@@ -52,7 +53,7 @@ func (g *SandboxRuntimeImpl) Name() string {
 }
 
 // RunConfig returns the effective configuration.
-func (g *SandboxRuntimeImpl) RunConfig() SandboxConfig {
+func (g *SandboxRuntimeImpl) RunConfig() sandbox.SandboxConfig {
 	return g.config
 }
 
@@ -71,7 +72,7 @@ func (g *SandboxRuntimeImpl) Capabilities() Capabilities {
 }
 
 // ValidatePolicy checks policy structure and backend support before apply.
-func (g *SandboxRuntimeImpl) ValidatePolicy(policy SandboxPolicy) error {
+func (g *SandboxRuntimeImpl) ValidatePolicy(policy sandbox.SandboxPolicy) error {
 	return validateBackendPolicy(g.Name(), g.Capabilities(), policy)
 }
 
@@ -79,7 +80,7 @@ func (g *SandboxRuntimeImpl) ValidatePolicy(policy SandboxPolicy) error {
 // sandbox backend must enforce. Backends supply their name and enforced
 // capabilities; a policy rejected by one backend for a structural reason is
 // rejected by all of them.
-func validateBackendPolicy(name string, caps Capabilities, policy SandboxPolicy) error {
+func validateBackendPolicy(name string, caps Capabilities, policy sandbox.SandboxPolicy) error {
 	if err := policy.Validate(); err != nil {
 		return err
 	}
@@ -115,7 +116,7 @@ func validateBackendPolicy(name string, caps Capabilities, policy SandboxPolicy)
 }
 
 // ApplyPolicy validates and stores the policy.
-func (g *SandboxRuntimeImpl) ApplyPolicy(_ context.Context, policy SandboxPolicy) error {
+func (g *SandboxRuntimeImpl) ApplyPolicy(_ context.Context, policy sandbox.SandboxPolicy) error {
 	if err := g.ValidatePolicy(policy); err != nil {
 		return err
 	}
@@ -143,7 +144,7 @@ func (g *SandboxRuntimeImpl) Verify(ctx context.Context) error {
 }
 
 // Policy returns the currently enforced sandbox policy.
-func (g *SandboxRuntimeImpl) Policy() SandboxPolicy {
+func (g *SandboxRuntimeImpl) Policy() sandbox.SandboxPolicy {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	return g.policy

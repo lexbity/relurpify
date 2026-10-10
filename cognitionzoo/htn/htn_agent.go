@@ -254,7 +254,7 @@ func (a *HTNAgent) Execute(ctx context.Context, task *execution.Task, env *conte
 				s.SetWorkingValueWithClass(runtime.ContextKeyLastRecoveryNotes, notes, contextdata.MemoryClassTask)
 				return &pl.StepRecovery{Diagnosis: diagnosis, Notes: notes}, nil
 			},
-			AfterStep: func(step pl.PlanStep, s *contextdata.Envelope, result *pl.Result) {
+			AfterStep: func(step pl.PlanStep, s *contextdata.Envelope, result *execution.Result) {
 				a.afterStep(ctx, step, s, result, checkpointStore, stepIndexes, surfaces.Workflow, workflowID, runID, resolvedTask)
 			},
 		},
@@ -356,7 +356,7 @@ func (a *HTNAgent) afterStep(
 	ctx context.Context,
 	step pl.PlanStep,
 	env *contextdata.Envelope,
-	result *pl.Result,
+	result *execution.Result,
 	checkpointStore any,
 	stepIndexes map[string]int,
 	wfStore any,

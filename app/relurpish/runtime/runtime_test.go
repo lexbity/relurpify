@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"codeburg.org/lexbit/relurpify/governance/sandbox"
 	"context"
 	"encoding/json"
 	"errors"
@@ -89,7 +90,7 @@ type recordingExecutor struct {
 }
 
 type fakeSandboxRuntime struct {
-	policy governanceports.SandboxPolicy
+	policy sandbox.SandboxPolicy
 }
 
 type fakeCommandRunner struct{}
@@ -114,17 +115,17 @@ func (r *recordingExecutor) BuildGraph(_ context.Context, _ *execution.Task) (*a
 
 func (f *fakeSandboxRuntime) Verify(context.Context) error { return nil }
 
-func (f *fakeSandboxRuntime) ValidatePolicy(governanceports.SandboxPolicy) error { return nil }
+func (f *fakeSandboxRuntime) ValidatePolicy(sandbox.SandboxPolicy) error { return nil }
 
-func (f *fakeSandboxRuntime) ApplyPolicy(_ context.Context, policy governanceports.SandboxPolicy) error {
+func (f *fakeSandboxRuntime) ApplyPolicy(_ context.Context, policy sandbox.SandboxPolicy) error {
 	f.policy = policy
 	return nil
 }
 
-func (f *fakeSandboxRuntime) Policy() governanceports.SandboxPolicy { return f.policy }
+func (f *fakeSandboxRuntime) Policy() sandbox.SandboxPolicy { return f.policy }
 
-func (f *fakeSandboxRuntime) RunConfig() governanceports.SandboxConfig {
-	return governanceports.SandboxConfig{}
+func (f *fakeSandboxRuntime) RunConfig() sandbox.SandboxConfig {
+	return sandbox.SandboxConfig{}
 }
 
 func (f *fakeSandboxRuntime) Name() string { return "fake" }
@@ -341,7 +342,7 @@ func TestNewBootsWithTapeProviderFromWorkspaceConfig(t *testing.T) {
 	cfg.InferenceModel = ""
 	cfg.InferenceTapePath = tapePath
 	cfg.SecurityRunner = fakeCommandRunner{}
-	cfg.SandboxBackendFactory = func(context.Context, string, governanceports.SandboxConfig, string, string) (governanceports.SandboxRuntime, error) {
+	cfg.SandboxBackendFactory = func(context.Context, string, sandbox.SandboxConfig, string, string) (governanceports.SandboxRuntime, error) {
 		return &fakeSandboxRuntime{}, nil
 	}
 
@@ -378,7 +379,7 @@ func TestEucloTapeFidelity(t *testing.T) {
 
 	cfg := ConfigForWorkspace(Config{AgentName: "euclo"}, workspace)
 	cfg.SecurityRunner = fakeCommandRunner{}
-	cfg.SandboxBackendFactory = func(context.Context, string, governanceports.SandboxConfig, string, string) (governanceports.SandboxRuntime, error) {
+	cfg.SandboxBackendFactory = func(context.Context, string, sandbox.SandboxConfig, string, string) (governanceports.SandboxRuntime, error) {
 		return &fakeSandboxRuntime{}, nil
 	}
 

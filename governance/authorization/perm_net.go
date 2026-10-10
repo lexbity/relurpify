@@ -1,12 +1,12 @@
 package authorization
 
 import (
+	"codeburg.org/lexbit/relurpify/governance/sandbox"
 	"context"
 	"fmt"
 
 	"codeburg.org/lexbit/relurpify/governance/netpolicy"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
-	governanceports "codeburg.org/lexbit/relurpify/governance/ports"
 	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
 )
 
@@ -89,7 +89,7 @@ func (m *PermissionManager) recordNetworkRule(ctx context.Context, direction, pr
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	rule := governanceports.SandboxNetworkRule{
+	rule := sandbox.NetworkRule{
 		Direction: direction,
 		Protocol:  protocol,
 		Host:      host,

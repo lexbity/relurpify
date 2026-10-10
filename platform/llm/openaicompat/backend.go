@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/model"
+	"codeburg.org/lexbit/relurpify/platform/llm"
 )
 
 // BackendConfig configures an OpenAI-compatible managed backend.
@@ -37,7 +38,7 @@ func NewBackend(cfg BackendConfig, apiKey string) *Backend {
 }
 
 // Model returns the underlying language model client.
-func (b *Backend) Model() *Client {
+func (b *Backend) Model() llm.LanguageModel {
 	if b == nil {
 		return nil
 	}
@@ -45,7 +46,7 @@ func (b *Backend) Model() *Client {
 }
 
 // Embedder returns an OpenAI-compatible embedder bound to the endpoint.
-func (b *Backend) Embedder() *Embedder {
+func (b *Backend) Embedder() llm.Embedder {
 	if b == nil || b.client == nil {
 		return nil
 	}
@@ -87,26 +88,26 @@ func (b *Backend) ModelContextSize(ctx context.Context) (int, error) {
 }
 
 // Health checks backend reachability via /v1/models.
-func (b *Backend) Health(ctx context.Context) (*HealthReport, error) {
+func (b *Backend) Health(ctx context.Context) (*llm.HealthReport, error) {
 	models, err := b.client.ListModels(ctx)
 	if err != nil {
-		return &HealthReport{
-			State:      HealthStateUnhealthy,
+		return &llm.HealthReport{
+			State:      llm.BackendHealthUnhealthy,
 			Message:    err.Error(),
 			LastError:  err.Error(),
 			ErrorCount: 1,
 		}, err
 	}
 	_ = models
-	return &HealthReport{
-		State:       HealthStateReady,
+	return &llm.HealthReport{
+		State:       llm.BackendHealthReady,
 		Message:     "backend reachable",
 		UptimeSince: time.Now().UTC(),
 	}, nil
 }
 
 // ListModels fetches /v1/models and converts it into model summaries.
-func (b *Backend) ListModels(ctx context.Context) ([]ModelInfo, error) {
+func (b *Backend) ListModels(ctx context.Context) ([]llm.ModelInfo, error) {
 	if b == nil || b.client == nil {
 		return nil, nil
 	}
@@ -114,14 +115,14 @@ func (b *Backend) ListModels(ctx context.Context) ([]ModelInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	out := make([]ModelInfo, 0, len(models))
+	out := make([]llm.ModelInfo, 0, len(models))
 	contextSize := b.client.ContextSize()
 	for _, m := range models {
 		size := m.ContextSize
 		if size == 0 && contextSize > 0 {
 			size = contextSize
 		}
-		out = append(out, ModelInfo{
+		out = append(out, llm.ModelInfo{
 			Name:          m.Name,
 			Family:        m.Family,
 			ParameterSize: m.ParameterSize,
@@ -163,34 +164,4 @@ func (b *Backend) SetProfile(p *model.ModelProfile) {
 // Reset is a no-op for HTTP-based backends.
 func (b *Backend) Reset(ctx context.Context, strategy string) error {
 	return nil
-}
-
-// HealthState describes backend availability.
-type HealthState string
-
-const (
-	HealthStateReady     HealthState = "ready"
-	HealthStateUnhealthy HealthState = "unhealthy"
-)
-
-// HealthReport captures the latest backend status snapshot.
-type HealthReport struct {
-	State       HealthState       `json:"state"`
-	Message     string            `json:"message,omitempty"`
-	LastError   string            `json:"last_error,omitempty"`
-	LastErrorAt time.Time         `json:"last_error_at,omitempty"`
-	ErrorCount  int64             `json:"error_count,omitempty"`
-	UptimeSince time.Time         `json:"uptime_since,omitempty"`
-	Resources   *ResourceSnapshot `json:"resources,omitempty"`
-}
-
-// ResourceSnapshot captures coarse backend resource metrics.
-type ResourceSnapshot struct {
-	VRAMUsedMB      int64 `json:"vram_used_mb,omitempty"`
-	VRAMTotalMB     int64 `json:"vram_total_mb,omitempty"`
-	SystemRAMUsedMB int64 `json:"system_ram_used_mb,omitempty"`
-	ThreadsActive   int   `json:"threads_active,omitempty"`
-	KVCacheSlots    int   `json:"kv_cache_slots,omitempty"`
-	KVCacheUsed     int   `json:"kv_cache_used,omitempty"`
-	ModelLoaded     bool  `json:"model_loaded,omitempty"`
 }

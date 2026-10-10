@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"codeburg.org/lexbit/relurpify/model"
+	"codeburg.org/lexbit/relurpify/platform/llm"
 	"codeburg.org/lexbit/relurpify/platform/llm/conformance"
 	"codeburg.org/lexbit/relurpify/platform/llm/openaicompat"
 )
@@ -137,18 +138,18 @@ func TestBackend_ConformanceSuite(t *testing.T) {
 		},
 		Health: func(backend any) any {
 			report, _ := backend.(interface {
-				Health(context.Context) (*HealthReport, error)
+				Health(context.Context) (*llm.HealthReport, error)
 			}).Health(context.Background())
 			return report
 		},
 		ListModels: func(backend any) any {
 			models, _ := backend.(interface {
-				ListModels(context.Context) ([]ModelInfo, error)
+				ListModels(context.Context) ([]llm.ModelInfo, error)
 			}).ListModels(context.Background())
 			return models
 		},
 		Embed: func(backend any) ([][]float32, error) {
-			embedder := backend.(interface{ Embedder() *openaicompat.Embedder }).Embedder()
+			embedder := backend.(interface{ Embedder() llm.Embedder }).Embedder()
 			return embedder.Embed(context.Background(), []string{"hello"})
 		},
 		Close: func(backend any) error {
@@ -363,7 +364,7 @@ func TestLMStudioBackend_Health(t *testing.T) {
 	backend := NewBackend(Config{Endpoint: srv.URL, Model: "test-model"}, "")
 	report, err := backend.Health(context.Background())
 	require.NoError(t, err)
-	assert.Equal(t, BackendHealthReady, report.State)
+	assert.Equal(t, llm.BackendHealthReady, report.State)
 }
 
 func TestLMStudioBackend_CloseAndDebugLogging(t *testing.T) {

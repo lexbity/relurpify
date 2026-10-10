@@ -4,7 +4,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
-	fsandbox "codeburg.org/lexbit/relurpify/capability/sandbox"
+	"codeburg.org/lexbit/relurpify/governance/sandbox"
 )
 
 // WorkspaceConfig is the resolved configuration produced from CLI flags, YAML
@@ -32,7 +32,7 @@ type WorkspaceConfig struct {
 	HITLTimeout         time.Duration
 	AuditLimit          int
 	SandboxBackend      string
-	Sandbox             fsandbox.SandboxConfig
+	Sandbox             sandbox.SandboxConfig
 	DebugLLM            bool
 	DebugAgent          bool
 	AllowedCapabilities []agentspec.CapabilitySelector

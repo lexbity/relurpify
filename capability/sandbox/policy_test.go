@@ -1,6 +1,7 @@
 package sandbox
 
 import (
+	"codeburg.org/lexbit/relurpify/governance/sandbox"
 	"strings"
 	"testing"
 )
@@ -9,9 +10,9 @@ import (
 // the sandbox policy path, not just exposed as a helper: a declared egress rule
 // to a blocked literal host is rejected, while a public host is accepted.
 func TestValidatePolicyEnforcesEgressDenylist(t *testing.T) {
-	rt := NewSandboxRuntime(SandboxConfig{})
+	rt := NewSandboxRuntime(sandbox.SandboxConfig{})
 
-	blocked := SandboxPolicy{NetworkRules: []NetworkRule{
+	blocked := sandbox.SandboxPolicy{NetworkRules: []sandbox.NetworkRule{
 		{Direction: "egress", Protocol: "tcp", Host: "169.254.169.254", Port: 80},
 	}}
 	if err := rt.ValidatePolicy(blocked); err == nil {
@@ -22,7 +23,7 @@ func TestValidatePolicyEnforcesEgressDenylist(t *testing.T) {
 
 	// Inet-aton spellings of loopback are literals and must be rejected.
 	for _, host := range []string{"2130706433", "0x7f000001", "0177.0.0.1", "127.1", "0.0.0.0", "::"} {
-		policy := SandboxPolicy{NetworkRules: []NetworkRule{
+		policy := sandbox.SandboxPolicy{NetworkRules: []sandbox.NetworkRule{
 			{Direction: "egress", Protocol: "tcp", Host: host, Port: 80},
 		}}
 		if err := rt.ValidatePolicy(policy); err == nil {
@@ -30,7 +31,7 @@ func TestValidatePolicyEnforcesEgressDenylist(t *testing.T) {
 		}
 	}
 
-	allowed := SandboxPolicy{NetworkRules: []NetworkRule{
+	allowed := sandbox.SandboxPolicy{NetworkRules: []sandbox.NetworkRule{
 		{Direction: "egress", Protocol: "tcp", Host: "8.8.8.8", Port: 443},
 	}}
 	if err := rt.ValidatePolicy(allowed); err != nil {
@@ -39,7 +40,7 @@ func TestValidatePolicyEnforcesEgressDenylist(t *testing.T) {
 
 	// Hostnames are not resolved at policy-validation time (no I/O), so a
 	// name-based rule is accepted here and screened per-invocation.
-	name := SandboxPolicy{NetworkRules: []NetworkRule{
+	name := sandbox.SandboxPolicy{NetworkRules: []sandbox.NetworkRule{
 		{Direction: "egress", Protocol: "tcp", Host: "example.com", Port: 443},
 	}}
 	if err := rt.ValidatePolicy(name); err != nil {
@@ -47,7 +48,7 @@ func TestValidatePolicyEnforcesEgressDenylist(t *testing.T) {
 	}
 
 	// Ingress bind-all rules are not egress dial targets.
-	ingress := SandboxPolicy{NetworkRules: []NetworkRule{
+	ingress := sandbox.SandboxPolicy{NetworkRules: []sandbox.NetworkRule{
 		{Direction: "ingress", Protocol: "tcp", Host: "0.0.0.0", Port: 8080},
 	}}
 	if err := rt.ValidatePolicy(ingress); err != nil {

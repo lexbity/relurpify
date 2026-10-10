@@ -575,7 +575,7 @@ func probeWritableDir(dir string) bool {
 // D-13): a stated image_digest is pinned short-form; its absence reads as
 // "unpinned/tag-based with boot-time daemon resolution" and is a warning, not
 // a block.
-func probeRuntimeImage(sbox *cfgsecurity.SandboxPolicy) DependencyStatus {
+func probeRuntimeImage(sbox *cfgsecurity.SandboxPolicyConfig) DependencyStatus {
 	if sbox == nil {
 		return DependencyStatus{Name: "runtime_image", Required: true, Available: false, Details: "sandbox policy unavailable"}
 	}

@@ -28,7 +28,7 @@ func SaveLocalToolPolicy(path string, tools map[string]security.ToolPolicy) erro
 }
 
 // SaveSandboxPolicy atomically writes a sandbox policy file with backup.
-func SaveSandboxPolicy(path string, policy *security.SandboxPolicy) error {
+func SaveSandboxPolicy(path string, policy *security.SandboxPolicyConfig) error {
 	if strings.TrimSpace(path) == "" {
 		return fmt.Errorf("path required")
 	}

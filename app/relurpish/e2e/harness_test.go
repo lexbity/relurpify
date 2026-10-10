@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	govsandbox "codeburg.org/lexbit/relurpify/governance/sandbox"
 	"context"
 	"os/exec"
 	"strings"
@@ -10,7 +11,6 @@ import (
 	"codeburg.org/lexbit/relurpify/app/relurpish/runtime"
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
-	governanceports "codeburg.org/lexbit/relurpify/governance/ports"
 	"codeburg.org/lexbit/relurpify/model"
 )
 
@@ -48,25 +48,25 @@ func (r *recordingRunner) reset() {
 // fakeSandboxRuntime satisfies governanceports.SandboxRuntime without a real backend.
 type fakeSandboxRuntime struct {
 	mu     sync.Mutex
-	policy governanceports.SandboxPolicy
+	policy govsandbox.SandboxPolicy
 	runner *recordingRunner
 }
 
-func (f *fakeSandboxRuntime) Verify(context.Context) error                       { return nil }
-func (f *fakeSandboxRuntime) ValidatePolicy(governanceports.SandboxPolicy) error { return nil }
-func (f *fakeSandboxRuntime) ApplyPolicy(_ context.Context, p governanceports.SandboxPolicy) error {
+func (f *fakeSandboxRuntime) Verify(context.Context) error                  { return nil }
+func (f *fakeSandboxRuntime) ValidatePolicy(govsandbox.SandboxPolicy) error { return nil }
+func (f *fakeSandboxRuntime) ApplyPolicy(_ context.Context, p govsandbox.SandboxPolicy) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.policy = p
 	return nil
 }
-func (f *fakeSandboxRuntime) Policy() governanceports.SandboxPolicy {
+func (f *fakeSandboxRuntime) Policy() govsandbox.SandboxPolicy {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.policy
 }
-func (f *fakeSandboxRuntime) RunConfig() governanceports.SandboxConfig {
-	return governanceports.SandboxConfig{}
+func (f *fakeSandboxRuntime) RunConfig() govsandbox.SandboxConfig {
+	return govsandbox.SandboxConfig{}
 }
 func (f *fakeSandboxRuntime) Name() string { return "fake" }
 func (f *fakeSandboxRuntime) NewCommandRunner(*sandbox.CommandRunnerConfig) (sandbox.CommandRunner, error) {

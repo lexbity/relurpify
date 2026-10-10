@@ -1,6 +1,7 @@
 package sandbox
 
 import (
+	"codeburg.org/lexbit/relurpify/governance/sandbox"
 	"context"
 	"os"
 	"path/filepath"
@@ -40,7 +41,7 @@ func containsArg(t *testing.T, log string, needle string) {
 
 func newTestRunner(t *testing.T) *SandboxCommandRunner {
 	t.Helper()
-	rt := NewSandboxRuntime(SandboxConfig{})
+	rt := NewSandboxRuntime(sandbox.SandboxConfig{})
 	runner, err := NewSandboxCommandRunner(&CommandRunnerConfig{Workspace: t.TempDir()}, rt)
 	require.NoError(t, err)
 	return runner

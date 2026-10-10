@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
+	govsandbox "codeburg.org/lexbit/relurpify/governance/sandbox"
 )
 
 // ErrNoSandboxBackend is returned by NewWorkspaceSandboxRunner when the
@@ -20,12 +21,12 @@ var ErrNoSandboxBackend = errors.New("no sandbox backend available")
 // If the sandbox backend cannot be selected or verified, the returned error
 // wraps ErrNoSandboxBackend so callers can skip tests with RequireSandbox.
 func NewWorkspaceSandboxRunner(ctx context.Context, workspaceRoot, backend string) (sandbox.CommandRunner, error) {
-	sandboxCfg := sandbox.SandboxConfig{}
+	sandboxCfg := govsandbox.SandboxConfig{}
 	sboxRuntime, err := sandbox.NewSandboxRuntimeForBackend(backend, sandboxCfg, "", workspaceRoot)
 	if err != nil {
 		return nil, fmt.Errorf("%w: select sandbox runtime: %w", ErrNoSandboxBackend, err)
 	}
-	policy := sandbox.SandboxPolicy{
+	policy := govsandbox.SandboxPolicy{
 		ProtectedPaths: nil,
 	}
 	runner, err := sandbox.NewVerifiedCommandRunner(ctx, sboxRuntime, policy, &sandbox.CommandRunnerConfig{

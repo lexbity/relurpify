@@ -31,14 +31,14 @@ func DispatchTask(ctx context.Context, tools *capability.CapabilityRegistry, fal
 	return (&primitiveDispatcher{tools: tools, fallback: fallback}).Execute(ctx, task, env)
 }
 
-func NewPrimitiveDispatcher(tools *capability.CapabilityRegistry, fallback graph.WorkflowExecutor) plan.WorkflowExecutor {
+func NewPrimitiveDispatcher(tools *capability.CapabilityRegistry, fallback graph.WorkflowExecutor) plan.StepExecutor {
 	return &primitiveDispatcher{
 		tools:    tools,
 		fallback: fallback,
 	}
 }
 
-func (d *primitiveDispatcher) BranchExecutor() (plan.WorkflowExecutor, error) {
+func (d *primitiveDispatcher) BranchExecutor() (plan.StepExecutor, error) {
 	if d == nil {
 		return &primitiveDispatcher{}, nil
 	}

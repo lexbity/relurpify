@@ -178,7 +178,7 @@ func TestOverlaySecurityBundle_ShellDenyPatterns(t *testing.T) {
 func TestOverlaySecurityBundle_Sandbox(t *testing.T) {
 	base := config.BuildEffectiveAgentContract("euclo", defaultOverlaySpec(), ucperms.PermissionSet{}, config.ResourceSpec{}, config.SecuritySpec{}, config.SourceSummary{})
 	bundle := &security.Bundle{
-		Sandbox: &security.SandboxPolicy{
+		Sandbox: &security.SandboxPolicyConfig{
 			ReadOnlyRoot:    true,
 			NoNewPrivileges: true,
 		},
@@ -198,7 +198,7 @@ func TestOverlaySecurityBundle_Sandbox(t *testing.T) {
 func TestOverlaySecurityBundle_SandboxOverrides(t *testing.T) {
 	base := config.BuildEffectiveAgentContract("euclo", defaultOverlaySpec(), ucperms.PermissionSet{}, config.ResourceSpec{}, config.SecuritySpec{RunAsUser: 1001, ReadOnlyRoot: true, NoNewPrivileges: true}, config.SourceSummary{})
 	bundle := &security.Bundle{
-		Sandbox: &security.SandboxPolicy{
+		Sandbox: &security.SandboxPolicyConfig{
 			ReadOnlyRoot:    false,
 			NoNewPrivileges: false,
 		},

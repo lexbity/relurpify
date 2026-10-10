@@ -10,6 +10,7 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	fsandbox "codeburg.org/lexbit/relurpify/capability/sandbox"
 	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
+	"codeburg.org/lexbit/relurpify/governance/sandbox"
 	"codeburg.org/lexbit/relurpify/model"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
@@ -42,7 +43,7 @@ type Config struct {
 	SandboxBackend             string
 	EnvOverrides               []string
 	ReduceMotion               bool
-	Sandbox                    fsandbox.SandboxConfig
+	Sandbox                    sandbox.SandboxConfig
 	SecurityRunner             fsandbox.CommandRunner
 	SandboxBackendFactory      fauthorization.SandboxBackendFactory
 	CommandPolicy              fsandbox.CommandPolicy
@@ -75,7 +76,7 @@ func DefaultConfig() Config {
 		AuditEnforcement: "strict",
 		HITLTimeout:      45 * time.Second,
 		SandboxBackend:   "",
-		Sandbox: fsandbox.SandboxConfig{
+		Sandbox: sandbox.SandboxConfig{
 			RunscPath:        "runsc",
 			ContainerRuntime: "docker",
 			Platform:         "",

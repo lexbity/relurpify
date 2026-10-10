@@ -1,6 +1,7 @@
 package authorization
 
 import (
+	"codeburg.org/lexbit/relurpify/governance/sandbox"
 	"context"
 	"os"
 	"path/filepath"
@@ -24,7 +25,7 @@ func TestRegisterAgentFailClosedWhenAuditDirUnwritable(t *testing.T) {
 		DocumentSnapshot: struct{}{},
 		Permissions:      ucperms.PermissionSet{},
 		Backend:          "unit",
-		BackendFactory: func(_ context.Context, backend string, _ governanceports.SandboxConfig, _, _ string) (governanceports.SandboxRuntime, error) {
+		BackendFactory: func(_ context.Context, backend string, _ sandbox.SandboxConfig, _, _ string) (governanceports.SandboxRuntime, error) {
 			return &fakeSandboxRuntime{name: backend}, nil
 		},
 		BaseFS:      t.TempDir(),
@@ -63,7 +64,7 @@ func TestRegisterAgentGeneratesDeterministicID(t *testing.T) {
 		DocumentSnapshot: struct{}{},
 		Permissions:      ucperms.PermissionSet{},
 		Backend:          "unit",
-		BackendFactory: func(_ context.Context, backend string, _ governanceports.SandboxConfig, _, _ string) (governanceports.SandboxRuntime, error) {
+		BackendFactory: func(_ context.Context, backend string, _ sandbox.SandboxConfig, _, _ string) (governanceports.SandboxRuntime, error) {
 			return &fakeSandboxRuntime{name: backend}, nil
 		},
 		BaseFS:      t.TempDir(),

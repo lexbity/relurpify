@@ -48,11 +48,6 @@ type BatchRequest struct {
 	SessionID string
 }
 
-// BackendResourceReporter exposes backend resource metrics.
-type BackendResourceReporter interface {
-	ResourceSnapshot(ctx context.Context) (*ResourceSnapshot, error)
-}
-
 // ModelController exposes explicit model load and unload controls.
 type ModelController interface {
 	LoadModel(ctx context.Context, path string, opts ModelLoadOptions) error

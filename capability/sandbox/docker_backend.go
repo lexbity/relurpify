@@ -1,6 +1,7 @@
 package sandbox
 
 import (
+	"codeburg.org/lexbit/relurpify/governance/sandbox"
 	"context"
 	"sync"
 )
@@ -17,10 +18,10 @@ import (
 // off. This is less robust than gVisor's userspace kernel but sufficient for
 // many workloads.
 type DockerSandboxBackend struct {
-	config   SandboxConfig
+	config   sandbox.SandboxConfig
 	verified bool
 	mu       sync.Mutex
-	policy   SandboxPolicy
+	policy   sandbox.SandboxPolicy
 }
 
 // Compile-time guarantees that the docker backend satisfies the sandbox API and
@@ -32,7 +33,7 @@ var (
 
 // NewDockerSandboxBackend configures a Docker-native sandbox runtime. Network
 // isolation defaults to enabled; callers must opt out explicitly.
-func NewDockerSandboxBackend(config SandboxConfig) *DockerSandboxBackend {
+func NewDockerSandboxBackend(config sandbox.SandboxConfig) *DockerSandboxBackend {
 	if config.ContainerRuntime == "" {
 		config.ContainerRuntime = "docker"
 	}
@@ -46,7 +47,7 @@ func NewDockerSandboxBackend(config SandboxConfig) *DockerSandboxBackend {
 func (d *DockerSandboxBackend) Name() string { return "docker" }
 
 // RunConfig returns the effective configuration.
-func (d *DockerSandboxBackend) RunConfig() SandboxConfig { return d.config }
+func (d *DockerSandboxBackend) RunConfig() sandbox.SandboxConfig { return d.config }
 
 // Capabilities reports the security properties Docker native isolation enforces.
 func (d *DockerSandboxBackend) Capabilities() Capabilities {
@@ -63,12 +64,12 @@ func (d *DockerSandboxBackend) Capabilities() Capabilities {
 }
 
 // ValidatePolicy checks policy structure and backend support before apply.
-func (d *DockerSandboxBackend) ValidatePolicy(policy SandboxPolicy) error {
+func (d *DockerSandboxBackend) ValidatePolicy(policy sandbox.SandboxPolicy) error {
 	return validateBackendPolicy(d.Name(), d.Capabilities(), policy)
 }
 
 // ApplyPolicy validates and stores the policy.
-func (d *DockerSandboxBackend) ApplyPolicy(_ context.Context, policy SandboxPolicy) error {
+func (d *DockerSandboxBackend) ApplyPolicy(_ context.Context, policy sandbox.SandboxPolicy) error {
 	if err := d.ValidatePolicy(policy); err != nil {
 		return err
 	}
@@ -79,7 +80,7 @@ func (d *DockerSandboxBackend) ApplyPolicy(_ context.Context, policy SandboxPoli
 }
 
 // Policy returns the currently enforced sandbox policy.
-func (d *DockerSandboxBackend) Policy() SandboxPolicy {
+func (d *DockerSandboxBackend) Policy() sandbox.SandboxPolicy {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	return d.policy

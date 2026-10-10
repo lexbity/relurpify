@@ -11,7 +11,7 @@ type modelTelemetryAdapter struct {
 	inner telemetry.Telemetry
 }
 
-func newModelTelemetryAdapter(inner telemetry.Telemetry) model.Telemetry {
+func newModelTelemetryAdapter(inner telemetry.Telemetry) model.EventSink {
 	if inner == nil {
 		return nil
 	}
@@ -28,4 +28,4 @@ func (a modelTelemetryAdapter) Emit(ctx context.Context, event any) {
 	}
 }
 
-var _ model.Telemetry = modelTelemetryAdapter{}
+var _ model.EventSink = modelTelemetryAdapter{}

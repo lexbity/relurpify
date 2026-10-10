@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/model"
+	"codeburg.org/lexbit/relurpify/platform/llm"
 	"codeburg.org/lexbit/relurpify/platform/llm/openaicompat"
 )
 
@@ -54,7 +55,7 @@ func (b *Backend) Model() LanguageModel {
 }
 
 // Embedder returns an OpenAI-compatible embedder bound to the LM Studio endpoint.
-func (b *Backend) Embedder() *openaicompat.Embedder {
+func (b *Backend) Embedder() llm.Embedder {
 	if b == nil || b.client == nil {
 		return nil
 	}
@@ -96,26 +97,26 @@ func (b *Backend) ModelContextSize(ctx context.Context) (int, error) {
 }
 
 // Health checks backend reachability via /v1/models.
-func (b *Backend) Health(ctx context.Context) (*HealthReport, error) {
+func (b *Backend) Health(ctx context.Context) (*llm.HealthReport, error) {
 	models, err := b.ListModels(ctx)
 	if err != nil {
-		return &HealthReport{
-			State:      BackendHealthUnhealthy,
+		return &llm.HealthReport{
+			State:      llm.BackendHealthUnhealthy,
 			Message:    err.Error(),
 			LastError:  err.Error(),
 			ErrorCount: 1,
 		}, err
 	}
 	_ = models
-	return &HealthReport{
-		State:       BackendHealthReady,
+	return &llm.HealthReport{
+		State:       llm.BackendHealthReady,
 		Message:     "backend reachable",
 		UptimeSince: nowUTC(),
 	}, nil
 }
 
 // ListModels fetches /v1/models and converts it into model summaries.
-func (b *Backend) ListModels(ctx context.Context) ([]ModelInfo, error) {
+func (b *Backend) ListModels(ctx context.Context) ([]llm.ModelInfo, error) {
 	if b == nil || b.client == nil {
 		return nil, nil
 	}
@@ -123,14 +124,14 @@ func (b *Backend) ListModels(ctx context.Context) ([]ModelInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	out := make([]ModelInfo, 0, len(models))
+	out := make([]llm.ModelInfo, 0, len(models))
 	contextSize := b.client.ContextSize()
 	for _, m := range models {
 		size := m.ContextSize
 		if size == 0 && contextSize > 0 {
 			size = contextSize
 		}
-		out = append(out, ModelInfo{
+		out = append(out, llm.ModelInfo{
 			Name:          m.Name,
 			Family:        m.Family,
 			ParameterSize: m.ParameterSize,
@@ -172,3 +173,11 @@ func (b *Backend) SetProfile(p *openaicompat.ModelProfile) {
 func nowUTC() time.Time {
 	return time.Now().UTC()
 }
+
+// Reset is a no-op: LM Studio exposes no reset API. Explicit absence, so the
+// ManagedBackend surface is satisfied honestly.
+func (b *Backend) Reset(ctx context.Context, strategy string) error {
+	return nil
+}
+
+var _ llm.ManagedBackend = (*Backend)(nil)

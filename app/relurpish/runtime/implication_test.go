@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	govsandbox "codeburg.org/lexbit/relurpify/governance/sandbox"
 	"context"
 	"os"
 	"path/filepath"
@@ -31,7 +32,7 @@ func TestDoctorReadyImpliesRuntimeNewOk(t *testing.T) {
 	cfg.InferenceModel = "offline-synthetic"
 	cfg.SharedRoot = filepath.Join(workspace, ".local", "share", "relurpify")
 	cfg.SecurityRunner = &implicationRunner{}
-	cfg.SandboxBackendFactory = func(context.Context, string, governanceports.SandboxConfig, string, string) (governanceports.SandboxRuntime, error) {
+	cfg.SandboxBackendFactory = func(context.Context, string, govsandbox.SandboxConfig, string, string) (governanceports.SandboxRuntime, error) {
 		return &implicationSandbox{}, nil
 	}
 
@@ -83,7 +84,7 @@ generation:
 	cfg.InferenceProvider = "offline"
 	cfg.InferenceModel = "offline-synthetic"
 	cfg.SecurityRunner = &implicationRunner{}
-	cfg.SandboxBackendFactory = func(context.Context, string, governanceports.SandboxConfig, string, string) (governanceports.SandboxRuntime, error) {
+	cfg.SandboxBackendFactory = func(context.Context, string, govsandbox.SandboxConfig, string, string) (governanceports.SandboxRuntime, error) {
 		return &implicationSandbox{}, nil
 	}
 
@@ -110,16 +111,16 @@ func (f *implicationRunner) Run(_ context.Context, _ capabilityports.CommandRequ
 
 type implicationSandbox struct{}
 
-func (f *implicationSandbox) Verify(context.Context) error                       { return nil }
-func (f *implicationSandbox) ValidatePolicy(governanceports.SandboxPolicy) error { return nil }
-func (f *implicationSandbox) ApplyPolicy(context.Context, governanceports.SandboxPolicy) error {
+func (f *implicationSandbox) Verify(context.Context) error                  { return nil }
+func (f *implicationSandbox) ValidatePolicy(govsandbox.SandboxPolicy) error { return nil }
+func (f *implicationSandbox) ApplyPolicy(context.Context, govsandbox.SandboxPolicy) error {
 	return nil
 }
-func (f *implicationSandbox) Policy() governanceports.SandboxPolicy {
-	return governanceports.SandboxPolicy{}
+func (f *implicationSandbox) Policy() govsandbox.SandboxPolicy {
+	return govsandbox.SandboxPolicy{}
 }
-func (f *implicationSandbox) RunConfig() governanceports.SandboxConfig {
-	return governanceports.SandboxConfig{}
+func (f *implicationSandbox) RunConfig() govsandbox.SandboxConfig {
+	return govsandbox.SandboxConfig{}
 }
 func (f *implicationSandbox) Name() string { return "fake" }
 func (f *implicationSandbox) NewCommandRunner(*sandbox.CommandRunnerConfig) (capabilityports.CommandRunner, error) {

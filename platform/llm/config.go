@@ -62,7 +62,7 @@ func (c ProviderConfig) Validate() error {
 	if kind == "" {
 		return fmt.Errorf("provider kind required")
 	}
-	if !IsRegisteredKind(kind) {
+	if !IsKnownKind(kind) {
 		return fmt.Errorf("unknown provider kind %q", kind)
 	}
 	if kindRequiresEndpoint(kind) && strings.TrimSpace(c.Endpoint) == "" {
@@ -75,6 +75,23 @@ func (c ProviderConfig) Validate() error {
 		return fmt.Errorf("provider kind %q timeout must be >= 0", kind)
 	}
 	return nil
+}
+
+// knownKinds is the canonical provider-kind vocabulary. Config validation
+// checks this vocabulary, not the linked backend registry: which backends
+// are compiled in is a composition-root decision, not a config validity
+// question.
+var knownKinds = map[string]bool{ //nolint:gochecknoglobals // immutable provider-kind vocabulary
+	"ollama":            true,
+	"lmstudio":          true,
+	"openai_compatible": true,
+	"offline":           true,
+	"tape":              true,
+}
+
+// IsKnownKind reports whether the kind is part of the provider vocabulary.
+func IsKnownKind(kind string) bool {
+	return knownKinds[strings.ToLower(strings.TrimSpace(kind))]
 }
 
 // kindRequiresEndpoint returns true when a provider kind needs a network

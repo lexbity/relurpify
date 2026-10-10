@@ -1,6 +1,7 @@
 package authorization
 
 import (
+	"codeburg.org/lexbit/relurpify/governance/sandbox"
 	"context"
 	"errors"
 	"fmt"
@@ -20,7 +21,7 @@ import (
 const runtimeStateDirName = ".relurpify_state"
 
 // SandboxBackendFactory creates a governanceports.SandboxRuntime for the given backend.
-type SandboxBackendFactory func(ctx context.Context, backend string, cfg governanceports.SandboxConfig, image, workspace string) (governanceports.SandboxRuntime, error)
+type SandboxBackendFactory func(ctx context.Context, backend string, cfg sandbox.SandboxConfig, image, workspace string) (governanceports.SandboxRuntime, error)
 
 // SandboxSecurity is the governance-local projection of the security settings a
 // sandbox needs. It decouples governance from userconfig.SecuritySpec; the
@@ -52,7 +53,7 @@ type RuntimeConfig struct {
 	DefaultToolPolicy  string
 	ConfigPath         string
 	Backend            string
-	SandboxCfg         governanceports.SandboxConfig
+	SandboxCfg         sandbox.SandboxConfig
 	BackendFactory     SandboxBackendFactory
 	AuditLimit         int
 	AuditEnforcement   string // "strict" (default) | "best_effort"
@@ -221,7 +222,7 @@ func sanitizeIDPart(s string) string {
 }
 
 // selectSandboxRuntime returns a sandbox runtime using the provided factory.
-func selectSandboxRuntime(ctx context.Context, backend string, sandboxCfg governanceports.SandboxConfig, image, workspace string, factory SandboxBackendFactory) (governanceports.SandboxRuntime, error) {
+func selectSandboxRuntime(ctx context.Context, backend string, sandboxCfg sandbox.SandboxConfig, image, workspace string, factory SandboxBackendFactory) (governanceports.SandboxRuntime, error) {
 	if factory != nil {
 		return factory(ctx, backend, sandboxCfg, image, workspace)
 	}
@@ -230,8 +231,8 @@ func selectSandboxRuntime(ctx context.Context, backend string, sandboxCfg govern
 
 // buildSandboxPolicy constructs a sandbox policy from typed permissions and
 // protected paths.
-func buildSandboxPolicy(perms ucperms.PermissionSet, security SandboxSecurity, protectedPaths []string) governanceports.SandboxPolicy {
-	policy := governanceports.SandboxPolicy{
+func buildSandboxPolicy(perms ucperms.PermissionSet, security SandboxSecurity, protectedPaths []string) sandbox.SandboxPolicy {
+	policy := sandbox.SandboxPolicy{
 		ProtectedPaths: append([]string(nil), protectedPaths...),
 	}
 	policy.NetworkRules = buildNetworkPolicy(perms.Network)
@@ -241,13 +242,13 @@ func buildSandboxPolicy(perms ucperms.PermissionSet, security SandboxSecurity, p
 }
 
 // buildNetworkPolicy converts network permissions into sandbox-friendly rules.
-func buildNetworkPolicy(perms []ucperms.NetworkPermission) []governanceports.SandboxNetworkRule {
-	var rules []governanceports.SandboxNetworkRule
+func buildNetworkPolicy(perms []ucperms.NetworkPermission) []sandbox.NetworkRule {
+	var rules []sandbox.NetworkRule
 	for _, perm := range perms {
 		if perm.Direction != "egress" {
 			continue
 		}
-		rules = append(rules, governanceports.SandboxNetworkRule{
+		rules = append(rules, sandbox.NetworkRule{
 			Direction: perm.Direction,
 			Protocol:  perm.Protocol,
 			Host:      perm.Host,

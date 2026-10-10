@@ -7,6 +7,11 @@ import (
 
 	"codeburg.org/lexbit/relurpify/model"
 	"codeburg.org/lexbit/relurpify/platform/llm"
+	// Blank imports register the managed backend kinds with the llm factory;
+	// the composition root is where the set of available providers is fixed.
+	_ "codeburg.org/lexbit/relurpify/platform/llm/lmstudio"
+	_ "codeburg.org/lexbit/relurpify/platform/llm/ollama"
+	_ "codeburg.org/lexbit/relurpify/platform/llm/openaicompat"
 	"codeburg.org/lexbit/relurpify/platform/observability"
 	"codeburg.org/lexbit/relurpify/telemetry"
 )
@@ -54,7 +59,7 @@ func BuildModelRuntime(input ModelRuntimeInput) (*ModelRuntime, error) {
 	}
 	return &ModelRuntime{
 		Backend: backend,
-		ModelFactory: func(tel model.Telemetry, debug bool) model.LanguageModel {
+		ModelFactory: func(tel model.EventSink, debug bool) model.LanguageModel {
 			backend.SetDebugLogging(debug)
 			instrumented := llm.NewInstrumentedModel(backend.Model(), modelTelemetryAdapter{inner: tel}, debug)
 			_ = llm.ApplyProfile(instrumented, input.Profile)
@@ -64,7 +69,7 @@ func BuildModelRuntime(input ModelRuntimeInput) (*ModelRuntime, error) {
 }
 
 type modelTelemetryAdapter struct {
-	inner model.Telemetry
+	inner model.EventSink
 }
 
 func (a modelTelemetryAdapter) Emit(event observability.Event) {

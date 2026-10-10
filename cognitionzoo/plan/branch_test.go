@@ -16,14 +16,14 @@ type conflictingIsolatedExecutor struct {
 
 func (e *conflictingIsolatedExecutor) Initialize(config *execution.Config) error { return nil }
 func (e *conflictingIsolatedExecutor) Capabilities() []string                    { return nil }
-func (e *conflictingIsolatedExecutor) BranchExecutor() (WorkflowExecutor, error) {
+func (e *conflictingIsolatedExecutor) BranchExecutor() (StepExecutor, error) {
 	return &conflictingIsolatedExecutor{shared: e.shared}, nil
 }
-func (e *conflictingIsolatedExecutor) Execute(ctx context.Context, task *execution.Task, env *contextdata.Envelope) (*Result, error) {
+func (e *conflictingIsolatedExecutor) Execute(ctx context.Context, task *execution.Task, env *contextdata.Envelope) (*execution.Result, error) {
 	stepVal := task.Context["current_step"]
 	step, _ := stepVal.(PlanStep)
 	env.SetWorkingValueWithClass("shared.conflict", step.ID, contextdata.MemoryClassTask)
-	return &Result{Success: true}, nil
+	return &execution.Result{Success: true}, nil
 }
 
 func TestPlanExecutorRejectsConflictingParallelStateMergesByDefault(t *testing.T) {
@@ -46,10 +46,10 @@ type historyMutatingExecutor struct{}
 
 func (e *historyMutatingExecutor) Initialize(config *execution.Config) error { return nil }
 func (e *historyMutatingExecutor) Capabilities() []string                    { return nil }
-func (e *historyMutatingExecutor) BranchExecutor() (WorkflowExecutor, error) {
+func (e *historyMutatingExecutor) BranchExecutor() (StepExecutor, error) {
 	return &historyMutatingExecutor{}, nil
 }
-func (e *historyMutatingExecutor) Execute(ctx context.Context, task *execution.Task, env *contextdata.Envelope) (*Result, error) {
+func (e *historyMutatingExecutor) Execute(ctx context.Context, task *execution.Task, env *contextdata.Envelope) (*execution.Result, error) {
 	// Add interaction to history stored in _history key.
 	var history []any
 	if h, ok := contextdata.GetTyped[[]any](env, "_history"); ok {
@@ -57,7 +57,7 @@ func (e *historyMutatingExecutor) Execute(ctx context.Context, task *execution.T
 	}
 	history = append(history, map[string]any{"role": "assistant", "content": "branch note"})
 	env.SetWorkingValueWithClass("_history", history, contextdata.MemoryClassTask)
-	return &Result{Success: true}, nil
+	return &execution.Result{Success: true}, nil
 }
 
 func TestPlanExecutorRejectsParallelHistoryMutationWithoutCustomMergePolicy(t *testing.T) {

@@ -10,6 +10,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"codeburg.org/lexbit/relurpify/governance/sandbox"
 	"codeburg.org/lexbit/relurpify/telemetry"
 )
 
@@ -21,8 +22,8 @@ func newPostureRunner(t *testing.T, cfg *CommandRunnerConfig) *SandboxCommandRun
 	if cfg.Workspace == "" {
 		cfg.Workspace = t.TempDir()
 	}
-	rt := NewSandboxRuntime(SandboxConfig{})
-	require.NoError(t, rt.ApplyPolicy(context.Background(), SandboxPolicy{}))
+	rt := NewSandboxRuntime(sandbox.SandboxConfig{})
+	require.NoError(t, rt.ApplyPolicy(context.Background(), sandbox.SandboxPolicy{}))
 	runner, err := NewSandboxCommandRunner(cfg, rt)
 	require.NoError(t, err)
 	return runner
@@ -119,8 +120,8 @@ func TestRunnerPosture_ProtectedPathSymlinkEscapeDropped(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Join(ws, ".git"), 0o755))
 
 	sink := &commandRecordingSink{}
-	rt := NewSandboxRuntime(SandboxConfig{})
-	require.NoError(t, rt.ApplyPolicy(context.Background(), SandboxPolicy{
+	rt := NewSandboxRuntime(sandbox.SandboxConfig{})
+	require.NoError(t, rt.ApplyPolicy(context.Background(), sandbox.SandboxPolicy{
 		ProtectedPaths: []string{
 			filepath.Join(ws, "link"),
 			filepath.Join(ws, ".git"),
@@ -159,8 +160,8 @@ func TestRunnerPosture_ProtectedMountsDedupeResolved(t *testing.T) {
 	alias := filepath.Join(ws, "alias")
 	require.NoError(t, os.Symlink(target, alias))
 
-	rt := NewSandboxRuntime(SandboxConfig{})
-	require.NoError(t, rt.ApplyPolicy(context.Background(), SandboxPolicy{
+	rt := NewSandboxRuntime(sandbox.SandboxConfig{})
+	require.NoError(t, rt.ApplyPolicy(context.Background(), sandbox.SandboxPolicy{
 		// The same resolved source appears three times: the real path twice and
 		// a symlink alias once.
 		ProtectedPaths: []string{target, alias, target},
@@ -181,8 +182,8 @@ func TestRunnerPosture_ProtectedPathSelfSkipped(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Join(ws, ".git"), 0o750))
 
 	sink := &commandRecordingSink{}
-	rt := NewSandboxRuntime(SandboxConfig{})
-	require.NoError(t, rt.ApplyPolicy(context.Background(), SandboxPolicy{
+	rt := NewSandboxRuntime(sandbox.SandboxConfig{})
+	require.NoError(t, rt.ApplyPolicy(context.Background(), sandbox.SandboxPolicy{
 		ProtectedPaths: []string{ws, filepath.Join(ws, ".git")},
 	}))
 	runner, err := NewSandboxCommandRunner(&CommandRunnerConfig{Workspace: ws, Events: sink}, rt)

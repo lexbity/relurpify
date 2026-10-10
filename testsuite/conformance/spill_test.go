@@ -11,6 +11,7 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/capability/toolcapabilities"
+	govsandbox "codeburg.org/lexbit/relurpify/governance/sandbox"
 	"codeburg.org/lexbit/relurpify/platform/tools/subprocess"
 )
 
@@ -46,7 +47,7 @@ func runSpillMatrixRow(t *testing.T) {
 	runner, err := sandbox.NewSandboxCommandRunner(&sandbox.CommandRunnerConfig{
 		Workspace: t.TempDir(),
 		SpillDir:  spillDir,
-	}, sandbox.NewSandboxRuntime(sandbox.SandboxConfig{}))
+	}, sandbox.NewSandboxRuntime(govsandbox.SandboxConfig{}))
 	require.NoError(t, err)
 
 	tools := toolcapabilities.Build(t.TempDir(), runner, []*ports.ToolManifest{spillManifest()},
@@ -70,7 +71,7 @@ func runSpillMatrixRow(t *testing.T) {
 	// Without SpillDir the truncation is still reported; the refs stay empty.
 	noSpillRunner, err := sandbox.NewSandboxCommandRunner(&sandbox.CommandRunnerConfig{
 		Workspace: t.TempDir(),
-	}, sandbox.NewSandboxRuntime(sandbox.SandboxConfig{}))
+	}, sandbox.NewSandboxRuntime(govsandbox.SandboxConfig{}))
 	require.NoError(t, err)
 	tools2 := toolcapabilities.Build(t.TempDir(), noSpillRunner, []*ports.ToolManifest{spillManifest()},
 		toolcapabilities.StrictMode(),

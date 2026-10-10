@@ -6,10 +6,11 @@ import (
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/governance/sandbox"
 )
 
 func TestDockerSandboxBackendDefaults(t *testing.T) {
-	d := NewDockerSandboxBackend(SandboxConfig{})
+	d := NewDockerSandboxBackend(sandbox.SandboxConfig{})
 	if d.Name() != "docker" {
 		t.Fatalf("Name() = %q, want docker", d.Name())
 	}
@@ -27,8 +28,8 @@ func TestDockerSandboxBackendDefaults(t *testing.T) {
 }
 
 func TestDockerSandboxBackendPolicyRoundTrip(t *testing.T) {
-	d := NewDockerSandboxBackend(SandboxConfig{})
-	policy := SandboxPolicy{ReadOnlyRoot: true, NoNewPrivileges: true, ProtectedPaths: []string{"/workspace/secret"}}
+	d := NewDockerSandboxBackend(sandbox.SandboxConfig{})
+	policy := sandbox.SandboxPolicy{ReadOnlyRoot: true, NoNewPrivileges: true, ProtectedPaths: []string{"/workspace/secret"}}
 	if err := d.ApplyPolicy(context.Background(), policy); err != nil {
 		t.Fatalf("ApplyPolicy: %v", err)
 	}
@@ -39,23 +40,23 @@ func TestDockerSandboxBackendPolicyRoundTrip(t *testing.T) {
 }
 
 func TestDockerSandboxBackendRejectsEnvFiltering(t *testing.T) {
-	d := NewDockerSandboxBackend(SandboxConfig{})
-	err := d.ValidatePolicy(SandboxPolicy{AllowedEnvKeys: []string{"PATH"}})
+	d := NewDockerSandboxBackend(sandbox.SandboxConfig{})
+	err := d.ValidatePolicy(sandbox.SandboxPolicy{AllowedEnvKeys: []string{"PATH"}})
 	if err == nil || !strings.Contains(err.Error(), "environment filtering") {
 		t.Fatalf("expected env-filtering rejection, got %v", err)
 	}
 }
 
 func TestDockerSandboxBackendRejectsPrivateNetworkRule(t *testing.T) {
-	d := NewDockerSandboxBackend(SandboxConfig{})
-	err := d.ValidatePolicy(SandboxPolicy{NetworkRules: []NetworkRule{{Direction: "egress", Protocol: "tcp", Host: "127.0.0.1", Port: 80}}})
+	d := NewDockerSandboxBackend(sandbox.SandboxConfig{})
+	err := d.ValidatePolicy(sandbox.SandboxPolicy{NetworkRules: []sandbox.NetworkRule{{Direction: "egress", Protocol: "tcp", Host: "127.0.0.1", Port: 80}}})
 	if err == nil || !strings.Contains(err.Error(), "blocked host") {
 		t.Fatalf("expected private-host rejection, got %v", err)
 	}
 }
 
 func TestNewSandboxRuntimeForBackendDocker(t *testing.T) {
-	rt, err := NewSandboxRuntimeForBackend("docker", SandboxConfig{}, "", t.TempDir())
+	rt, err := NewSandboxRuntimeForBackend("docker", sandbox.SandboxConfig{}, "", t.TempDir())
 	if err != nil {
 		t.Fatalf("NewSandboxRuntimeForBackend(docker): %v", err)
 	}
@@ -65,7 +66,7 @@ func TestNewSandboxRuntimeForBackendDocker(t *testing.T) {
 }
 
 func TestNewSandboxRuntimeForBackendGvisor(t *testing.T) {
-	rt, err := NewSandboxRuntimeForBackend("gvisor", SandboxConfig{}, "", t.TempDir())
+	rt, err := NewSandboxRuntimeForBackend("gvisor", sandbox.SandboxConfig{}, "", t.TempDir())
 	if err != nil {
 		t.Fatalf("NewSandboxRuntimeForBackend(gvisor): %v", err)
 	}
@@ -75,7 +76,7 @@ func TestNewSandboxRuntimeForBackendGvisor(t *testing.T) {
 }
 
 func TestDockerSandboxBackendCommandRunnerArgs(t *testing.T) {
-	d := NewDockerSandboxBackend(SandboxConfig{NetworkIsolation: true, SeccompProfile: "/etc/seccomp.json"})
+	d := NewDockerSandboxBackend(sandbox.SandboxConfig{NetworkIsolation: true, SeccompProfile: "/etc/seccomp.json"})
 	runner, err := d.NewCommandRunner(&CommandRunnerConfig{
 		Workspace:    t.TempDir(),
 		Image:        "example/runtime:1",
@@ -109,7 +110,7 @@ func TestDockerSandboxBackendCommandRunnerArgs(t *testing.T) {
 }
 
 func TestGVisorCommandRunnerArgsUseRunsc(t *testing.T) {
-	rt := NewSandboxRuntime(SandboxConfig{NetworkIsolation: true})
+	rt := NewSandboxRuntime(sandbox.SandboxConfig{NetworkIsolation: true})
 	runner, err := NewSandboxCommandRunner(&CommandRunnerConfig{Workspace: t.TempDir()}, rt)
 	if err != nil {
 		t.Fatalf("NewSandboxCommandRunner: %v", err)

@@ -335,7 +335,6 @@ type AgentOrchestrationConfig struct {
 	Recovery                 AgentRecoveryPolicy             `yaml:"recovery,omitempty" json:"recovery,omitempty"`
 	Planning                 AgentPlanningPolicy             `yaml:"planning,omitempty" json:"planning,omitempty"`
 	Review                   AgentReviewPolicy               `yaml:"review,omitempty" json:"review,omitempty"`
-	ContextHints             AgentOrchestrationContextHints  `yaml:"context_hints,omitempty" json:"context_hints,omitempty"`
 }
 
 type AgentVerificationPolicy struct {
@@ -372,11 +371,6 @@ type AgentReviewPolicy struct {
 type AgentReviewApprovalRules struct {
 	RequireVerificationEvidence bool `yaml:"require_verification_evidence,omitempty" json:"require_verification_evidence,omitempty"`
 	RejectOnUnresolvedErrors    bool `yaml:"reject_on_unresolved_errors,omitempty" json:"reject_on_unresolved_errors,omitempty"`
-}
-
-type AgentOrchestrationContextHints struct {
-	PreferredDetailLevel string   `yaml:"preferred_detail_level,omitempty" json:"preferred_detail_level,omitempty"`
-	ProtectPatterns      []string `yaml:"protect_patterns,omitempty" json:"protect_patterns,omitempty"`
 }
 
 // AgentMetadata captures auxiliary metadata for display.

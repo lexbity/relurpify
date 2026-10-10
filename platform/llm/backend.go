@@ -61,7 +61,6 @@ type HealthReport struct {
 	LastErrorAt time.Time          `json:"last_error_at,omitempty"`
 	ErrorCount  int64              `json:"error_count,omitempty"`
 	UptimeSince time.Time          `json:"uptime_since,omitempty"`
-	Resources   *ResourceSnapshot  `json:"resources,omitempty"`
 }
 
 // ModelInfo summarizes a backend-visible model entry.
@@ -72,15 +71,4 @@ type ModelInfo struct {
 	ContextSize   int    `json:"context_size,omitempty"`
 	Quantization  string `json:"quantization,omitempty"`
 	HasGPU        bool   `json:"has_gpu,omitempty"`
-}
-
-// ResourceSnapshot captures coarse backend resource metrics.
-type ResourceSnapshot struct {
-	VRAMUsedMB      int64 `json:"vram_used_mb,omitempty"`
-	VRAMTotalMB     int64 `json:"vram_total_mb,omitempty"`
-	SystemRAMUsedMB int64 `json:"system_ram_used_mb,omitempty"`
-	ThreadsActive   int   `json:"threads_active,omitempty"`
-	KVCacheSlots    int   `json:"kv_cache_slots,omitempty"`
-	KVCacheUsed     int   `json:"kv_cache_used,omitempty"`
-	ModelLoaded     bool  `json:"model_loaded,omitempty"`
 }

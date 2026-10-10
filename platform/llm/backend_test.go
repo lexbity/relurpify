@@ -84,10 +84,6 @@ func (s *stubManagedBackend) ChatBatch(context.Context, []BatchRequest, *model.L
 	return nil, nil
 }
 
-func (s *stubManagedBackend) ResourceSnapshot(context.Context) (*ResourceSnapshot, error) {
-	return &ResourceSnapshot{}, nil
-}
-
 func (s *stubManagedBackend) LoadModel(context.Context, string, ModelLoadOptions) error {
 	return nil
 }
@@ -142,9 +138,6 @@ func TestOptionalInterfaceTypeAssertions(t *testing.T) {
 	require.True(t, ok)
 
 	_, ok = backend.(BatchInferenceBackend)
-	require.True(t, ok)
-
-	_, ok = backend.(BackendResourceReporter)
 	require.True(t, ok)
 
 	_, ok = backend.(ModelController)
@@ -259,15 +252,6 @@ func TestHealthReport_Serialisation(t *testing.T) {
 		LastErrorAt: time.Unix(123, 0).UTC(),
 		ErrorCount:  7,
 		UptimeSince: time.Unix(100, 0).UTC(),
-		Resources: &ResourceSnapshot{
-			VRAMUsedMB:      512,
-			VRAMTotalMB:     1024,
-			SystemRAMUsedMB: 2048,
-			ThreadsActive:   4,
-			KVCacheSlots:    16,
-			KVCacheUsed:     12,
-			ModelLoaded:     true,
-		},
 	}
 
 	data, err := json.Marshal(report)

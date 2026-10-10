@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"codeburg.org/lexbit/relurpify/governance/sandbox"
 	"context"
 	"path/filepath"
 	"testing"
@@ -77,7 +78,7 @@ func bootRuntimeForSwitchDepsTest(t *testing.T) *Runtime {
 
 	cfg := ConfigForWorkspace(Config{AgentName: "euclo"}, workspace)
 	cfg.SecurityRunner = fakeCommandRunner{}
-	cfg.SandboxBackendFactory = func(context.Context, string, governanceports.SandboxConfig, string, string) (governanceports.SandboxRuntime, error) {
+	cfg.SandboxBackendFactory = func(context.Context, string, sandbox.SandboxConfig, string, string) (governanceports.SandboxRuntime, error) {
 		return &fakeSandboxRuntime{}, nil
 	}
 

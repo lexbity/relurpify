@@ -20,9 +20,9 @@ type RegistryView interface {
 	EffectiveExposure(desc any) string
 }
 
-// CapabilitySelector is a local type matching agentspec.CapabilitySelector fields
+// ResolvedCapabilitySelector is a local type matching agentspec.CapabilitySelector fields
 // needed for policy resolution.
-type CapabilitySelector struct {
+type ResolvedCapabilitySelector struct {
 	ID                          string
 	Name                        string
 	Kind                        string
@@ -40,45 +40,45 @@ type CapabilitySelector struct {
 	CoordinationDirectInsertion int32
 }
 
-// AgentVerificationPolicy holds verification-related orchestration config.
-type AgentVerificationPolicy struct {
+// ResolvedAgentVerificationPolicy holds verification-related orchestration config.
+type ResolvedAgentVerificationPolicy struct {
 	SuccessTools               []string
-	SuccessCapabilitySelectors []CapabilitySelector
+	SuccessCapabilitySelectors []ResolvedCapabilitySelector
 	StopOnSuccess              bool
 }
 
-// AgentRecoveryPolicy holds recovery-related orchestration config.
-type AgentRecoveryPolicy struct {
+// ResolvedAgentRecoveryPolicy holds recovery-related orchestration config.
+type ResolvedAgentRecoveryPolicy struct {
 	FailureProbeTools               []string
-	FailureProbeCapabilitySelectors []CapabilitySelector
+	FailureProbeCapabilitySelectors []ResolvedCapabilitySelector
 }
 
-// AgentPlanningPolicy holds planning-related orchestration config.
-type AgentPlanningPolicy struct {
-	RequiredBeforeEdit          []CapabilitySelector
-	PreferredEditCapabilities   []CapabilitySelector
-	PreferredVerifyCapabilities []CapabilitySelector
-	StepTemplates               []policy.SkillStepTemplate
+// ResolvedAgentPlanningPolicy holds planning-related orchestration config.
+type ResolvedAgentPlanningPolicy struct {
+	RequiredBeforeEdit          []ResolvedCapabilitySelector
+	PreferredEditCapabilities   []ResolvedCapabilitySelector
+	PreferredVerifyCapabilities []ResolvedCapabilitySelector
+	StepTemplates               []policy.ResolvedSkillStepTemplate
 	RequireVerificationStep     bool
 }
 
-// AgentReviewPolicy holds review-related orchestration config.
-type AgentReviewPolicy struct {
+// ResolvedAgentReviewPolicy holds review-related orchestration config.
+type ResolvedAgentReviewPolicy struct {
 	Criteria        []string
 	FocusTags       []string
-	ApprovalRules   policy.AgentReviewApprovalRules
+	ApprovalRules   policy.ResolvedAgentReviewApprovalRules
 	SeverityWeights map[string]float64
 }
 
-// AgentOrchestrationConfig mirrors agentspec.AgentOrchestrationConfig fields
+// ResolvedAgentOrchestrationConfig mirrors agentspec.AgentOrchestrationConfig fields
 // needed for policy resolution.
-type AgentOrchestrationConfig struct {
+type ResolvedAgentOrchestrationConfig struct {
 	PhaseCapabilities        map[string][]string
-	PhaseCapabilitySelectors map[string][]CapabilitySelector
-	Verification             AgentVerificationPolicy
-	Recovery                 AgentRecoveryPolicy
-	Planning                 AgentPlanningPolicy
-	Review                   AgentReviewPolicy
+	PhaseCapabilitySelectors map[string][]ResolvedCapabilitySelector
+	Verification             ResolvedAgentVerificationPolicy
+	Recovery                 ResolvedAgentRecoveryPolicy
+	Planning                 ResolvedAgentPlanningPolicy
+	Review                   ResolvedAgentReviewPolicy
 }
 
 var (
@@ -87,7 +87,7 @@ var (
 
 // ResolveAgentPolicy resolves the agent spec's orchestration configuration
 // against the capability registry to produce a policy.ResolvedAgentPolicy.
-func ResolveAgentPolicy(registry RegistryView, config AgentOrchestrationConfig) policy.ResolvedAgentPolicy {
+func ResolveAgentPolicy(registry RegistryView, config ResolvedAgentOrchestrationConfig) policy.ResolvedAgentPolicy {
 	phaseCapabilities := resolvePhaseCapabilities(registry, config)
 	return policy.ResolvedAgentPolicy{
 		PhaseCapabilities:               phaseCapabilities,
@@ -110,14 +110,14 @@ func ResolveAgentPolicy(registry RegistryView, config AgentOrchestrationConfig) 
 }
 
 // ResolveEffectiveAgentPolicy resolves policy from the effective orchestration config.
-func ResolveEffectiveAgentPolicy(cfg AgentOrchestrationConfig, registry RegistryView) policy.EffectiveAgentPolicy {
+func ResolveEffectiveAgentPolicy(cfg ResolvedAgentOrchestrationConfig, registry RegistryView) policy.EffectiveAgentPolicy {
 	return policy.EffectiveAgentPolicy{
 		Spec:   cfg,
 		Policy: ResolveAgentPolicy(registry, cfg),
 	}
 }
 
-func resolvePhaseCapabilities(registry RegistryView, config AgentOrchestrationConfig) map[string][]string {
+func resolvePhaseCapabilities(registry RegistryView, config ResolvedAgentOrchestrationConfig) map[string][]string {
 	if len(config.PhaseCapabilities) == 0 && len(config.PhaseCapabilitySelectors) == 0 {
 		return nil
 	}
@@ -131,7 +131,7 @@ func resolvePhaseCapabilities(registry RegistryView, config AgentOrchestrationCo
 	return out
 }
 
-func resolveCapabilityNames(registry RegistryView, explicit []string, selectors []CapabilitySelector) []string {
+func resolveCapabilityNames(registry RegistryView, explicit []string, selectors []ResolvedCapabilitySelector) []string {
 	var out []string
 	for _, name := range explicit {
 		name = strings.TrimSpace(name)
@@ -172,7 +172,7 @@ func resolveCapabilityNames(registry RegistryView, explicit []string, selectors 
 	return out
 }
 
-func selectorCapabilityName(selector CapabilitySelector) string {
+func selectorCapabilityName(selector ResolvedCapabilitySelector) string {
 	if name := strings.TrimSpace(selector.Name); name != "" {
 		return name
 	}
@@ -201,7 +201,7 @@ func resolvedCapabilityName(desc any) string {
 	return strings.TrimSpace(d.CapabilityID())
 }
 
-func selectorMatchesDescriptor(selector CapabilitySelector, desc any) bool {
+func selectorMatchesDescriptor(selector ResolvedCapabilitySelector, desc any) bool {
 	d, ok := desc.(ports.DescriptorView)
 	if !ok {
 		return false

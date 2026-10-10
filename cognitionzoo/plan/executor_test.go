@@ -22,7 +22,7 @@ func (s *stubExecutor) Initialize(config *execution.Config) error { return nil }
 
 func (s *stubExecutor) Capabilities() []string { return nil }
 
-func (s *stubExecutor) Execute(ctx context.Context, task *execution.Task, env *contextdata.Envelope) (*Result, error) {
+func (s *stubExecutor) Execute(ctx context.Context, task *execution.Task, env *contextdata.Envelope) (*execution.Result, error) {
 	stepVal, ok := task.Context["current_step"]
 	if ok {
 		if step, ok := stepVal.(PlanStep); ok {
@@ -33,7 +33,7 @@ func (s *stubExecutor) Execute(ctx context.Context, task *execution.Task, env *c
 			s.mu.Unlock()
 		}
 	}
-	return &Result{Success: true}, nil
+	return &execution.Result{Success: true}, nil
 }
 
 func TestPlanExecutorSerializesReadyStepsWithoutBranchIsolation(t *testing.T) {
@@ -104,7 +104,7 @@ type flakyExecutor struct {
 
 func (f *flakyExecutor) Initialize(config *execution.Config) error { return nil }
 func (f *flakyExecutor) Capabilities() []string                    { return nil }
-func (f *flakyExecutor) Execute(ctx context.Context, task *execution.Task, env *contextdata.Envelope) (*Result, error) {
+func (f *flakyExecutor) Execute(ctx context.Context, task *execution.Task, env *contextdata.Envelope) (*execution.Result, error) {
 	f.attempts++
 	if f.attempts == 1 {
 		return nil, errors.New("first attempt failed")
@@ -113,7 +113,7 @@ func (f *flakyExecutor) Execute(ctx context.Context, task *execution.Task, env *
 	if len(notes) == 0 {
 		return nil, errors.New("missing recovery notes")
 	}
-	return &Result{Success: true}, nil
+	return &execution.Result{Success: true}, nil
 }
 
 func TestPlanExecutorAppliesStructuredRecoveryBeforeRetry(t *testing.T) {
@@ -199,18 +199,18 @@ type isolatedExecutorShared struct {
 func (e *isolatedExecutor) Initialize(config *execution.Config) error { return nil }
 func (e *isolatedExecutor) Capabilities() []string                    { return nil }
 
-func (e *isolatedExecutor) BranchExecutor() (WorkflowExecutor, error) {
+func (e *isolatedExecutor) BranchExecutor() (StepExecutor, error) {
 	return &isolatedExecutor{shared: e.shared}, nil
 }
 
-func (e *isolatedExecutor) Execute(ctx context.Context, task *execution.Task, env *contextdata.Envelope) (*Result, error) {
+func (e *isolatedExecutor) Execute(ctx context.Context, task *execution.Task, env *contextdata.Envelope) (*execution.Result, error) {
 	stepVal, ok := task.Context["current_step"]
 	if !ok {
-		return &Result{Success: true}, nil
+		return &execution.Result{Success: true}, nil
 	}
 	step, ok := stepVal.(PlanStep)
 	if !ok {
-		return &Result{Success: true}, nil
+		return &execution.Result{Success: true}, nil
 	}
 	current := atomic.AddInt32(&e.shared.current, 1)
 	for {
@@ -226,7 +226,7 @@ func (e *isolatedExecutor) Execute(ctx context.Context, task *execution.Task, en
 	<-e.shared.release
 	atomic.AddInt32(&e.shared.current, -1)
 	env.SetWorkingValueWithClass("completed."+step.ID, true, contextdata.MemoryClassTask)
-	return &Result{Success: true}, nil
+	return &execution.Result{Success: true}, nil
 }
 
 func TestPlanExecutorRunsReadyStepsInParallelWithIsolatedBranchAgents(t *testing.T) {

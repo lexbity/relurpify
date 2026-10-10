@@ -5,14 +5,14 @@ import (
 	"strings"
 )
 
-// SkillStepTemplate is a plan-step template that agents may offer the LLM.
-type SkillStepTemplate struct {
+// ResolvedSkillStepTemplate is a plan-step template that agents may offer the LLM.
+type ResolvedSkillStepTemplate struct {
 	Kind        string
 	Description string
 }
 
-// AgentReviewApprovalRules configures approval rules for agent review.
-type AgentReviewApprovalRules struct {
+// ResolvedAgentReviewApprovalRules configures approval rules for agent review.
+type ResolvedAgentReviewApprovalRules struct {
 	RequireVerificationEvidence bool
 	RejectOnUnresolvedErrors    bool
 }
@@ -39,7 +39,7 @@ type ResolvedPlanningPolicy struct {
 	RequiredBeforeEdit          []string
 	PreferredEditCapabilities   []string
 	PreferredVerifyCapabilities []string
-	StepTemplates               []SkillStepTemplate
+	StepTemplates               []ResolvedSkillStepTemplate
 	RequireVerificationStep     bool
 }
 
@@ -47,7 +47,7 @@ type ResolvedPlanningPolicy struct {
 type ResolvedReviewPolicy struct {
 	Criteria        []string
 	FocusTags       []string
-	ApprovalRules   AgentReviewApprovalRules
+	ApprovalRules   ResolvedAgentReviewApprovalRules
 	SeverityWeights map[string]float64
 }
 

@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"codeburg.org/lexbit/relurpify/governance/sandbox"
 	"context"
 	"fmt"
 	"path/filepath"
@@ -39,14 +40,14 @@ func TestFocusPinReferenceFloor(t *testing.T) {
 	cfg.InferenceModel = "offline-synthetic"
 	cfg.InferenceNativeToolCalling = true
 	cfg.ModelFactoryWrapper = func(base model.ModelFactory) model.ModelFactory {
-		return func(tel model.Telemetry, debug bool) model.LanguageModel {
+		return func(tel model.EventSink, debug bool) model.LanguageModel {
 			offline.inner = base(tel, debug)
 			offline.scenario = func() string { return scenario.get() }
 			return offline
 		}
 	}
 	cfg.SecurityRunner = runner
-	cfg.SandboxBackendFactory = func(context.Context, string, governanceports.SandboxConfig, string, string) (governanceports.SandboxRuntime, error) {
+	cfg.SandboxBackendFactory = func(context.Context, string, sandbox.SandboxConfig, string, string) (governanceports.SandboxRuntime, error) {
 		return &fakeSandboxRuntime{runner: runner}, nil
 	}
 
@@ -131,14 +132,14 @@ func TestFocusPinContentRankBias(t *testing.T) {
 	cfg.InferenceModel = "offline-synthetic"
 	cfg.InferenceNativeToolCalling = true
 	cfg.ModelFactoryWrapper = func(base model.ModelFactory) model.ModelFactory {
-		return func(tel model.Telemetry, debug bool) model.LanguageModel {
+		return func(tel model.EventSink, debug bool) model.LanguageModel {
 			offline.inner = base(tel, debug)
 			offline.scenario = func() string { return scenario.get() }
 			return offline
 		}
 	}
 	cfg.SecurityRunner = runner
-	cfg.SandboxBackendFactory = func(context.Context, string, governanceports.SandboxConfig, string, string) (governanceports.SandboxRuntime, error) {
+	cfg.SandboxBackendFactory = func(context.Context, string, sandbox.SandboxConfig, string, string) (governanceports.SandboxRuntime, error) {
 		return &fakeSandboxRuntime{runner: runner}, nil
 	}
 
@@ -223,14 +224,14 @@ func TestFocusPinCap(t *testing.T) {
 	cfg.InferenceModel = "offline-synthetic"
 	cfg.InferenceNativeToolCalling = true
 	cfg.ModelFactoryWrapper = func(base model.ModelFactory) model.ModelFactory {
-		return func(tel model.Telemetry, debug bool) model.LanguageModel {
+		return func(tel model.EventSink, debug bool) model.LanguageModel {
 			offline.inner = base(tel, debug)
 			offline.scenario = func() string { return scenario.get() }
 			return offline
 		}
 	}
 	cfg.SecurityRunner = runner
-	cfg.SandboxBackendFactory = func(context.Context, string, governanceports.SandboxConfig, string, string) (governanceports.SandboxRuntime, error) {
+	cfg.SandboxBackendFactory = func(context.Context, string, sandbox.SandboxConfig, string, string) (governanceports.SandboxRuntime, error) {
 		return &fakeSandboxRuntime{runner: runner}, nil
 	}
 

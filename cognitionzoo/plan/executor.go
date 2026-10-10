@@ -19,7 +19,7 @@ type PlanExecutor struct {
 }
 
 // Execute runs the plan using the provided executor agent and shared state.
-func (p *PlanExecutor) Execute(ctx context.Context, executor WorkflowExecutor, task *execution.Task, plan *Plan, state *contextdata.Envelope) (*Result, error) {
+func (p *PlanExecutor) Execute(ctx context.Context, executor StepExecutor, task *execution.Task, plan *Plan, state *contextdata.Envelope) (*execution.Result, error) {
 	if executor == nil {
 		return nil, fmt.Errorf("executor agent required")
 	}
@@ -27,7 +27,7 @@ func (p *PlanExecutor) Execute(ctx context.Context, executor WorkflowExecutor, t
 		state = contextdata.NewEnvelope(task.ID, "")
 	}
 	if plan == nil || len(plan.Steps) == 0 {
-		return &Result{
+		return &execution.Result{
 			Success: true,
 			Data:    execution.NewToolResultPayload(map[string]any{"steps_completed": 0}),
 		}, nil
@@ -100,7 +100,7 @@ func (p *PlanExecutor) Execute(ctx context.Context, executor WorkflowExecutor, t
 		}
 	}
 
-	return &Result{
+	return &execution.Result{
 		Success: true,
 		Data:    execution.NewToolResultPayload(map[string]any{"steps_completed": len(completedSteps)}),
 	}, nil
@@ -119,7 +119,7 @@ func (p *PlanExecutor) completedStepIDs(state *contextdata.Envelope) []string {
 	return nil
 }
 
-func (p *PlanExecutor) executeStep(ctx context.Context, executor WorkflowExecutor, task *execution.Task, plan *Plan, step PlanStep, state *contextdata.Envelope, maxRecovery int) error {
+func (p *PlanExecutor) executeStep(ctx context.Context, executor StepExecutor, task *execution.Task, plan *Plan, step PlanStep, state *contextdata.Envelope, maxRecovery int) error {
 	stepTask := defaultBuildStepTask(task, plan, step)
 	if p.Options.BuildStepTask != nil {
 		stepTask = p.Options.BuildStepTask(task, plan, step, state)
@@ -170,7 +170,7 @@ func (p *PlanExecutor) executeStep(ctx context.Context, executor WorkflowExecuto
 	return fmt.Errorf("step %s failed: %w", step.ID, stepErr)
 }
 
-func (p *PlanExecutor) executeReadySteps(ctx context.Context, executor WorkflowExecutor, task *execution.Task, plan *Plan, readySteps []PlanStep, state *contextdata.Envelope, maxRecovery int) ([]PlanStep, error) {
+func (p *PlanExecutor) executeReadySteps(ctx context.Context, executor StepExecutor, task *execution.Task, plan *Plan, readySteps []PlanStep, state *contextdata.Envelope, maxRecovery int) ([]PlanStep, error) {
 	if len(readySteps) == 0 {
 		return nil, nil
 	}
@@ -187,7 +187,7 @@ func (p *PlanExecutor) executeReadySteps(ctx context.Context, executor WorkflowE
 	return p.executeReadyStepsParallel(ctx, provider, task, plan, readySteps, state, maxRecovery)
 }
 
-func (p *PlanExecutor) executeReadyStepsSerial(ctx context.Context, executor WorkflowExecutor, task *execution.Task, plan *Plan, readySteps []PlanStep, state *contextdata.Envelope, maxRecovery int) ([]PlanStep, error) {
+func (p *PlanExecutor) executeReadyStepsSerial(ctx context.Context, executor StepExecutor, task *execution.Task, plan *Plan, readySteps []PlanStep, state *contextdata.Envelope, maxRecovery int) ([]PlanStep, error) {
 	executed := make([]PlanStep, 0, len(readySteps))
 	for _, step := range readySteps {
 		if err := p.executeStep(ctx, executor, task, plan, step, state, maxRecovery); err != nil {
@@ -215,7 +215,7 @@ func (p *PlanExecutor) executeReadyStepsParallel(ctx context.Context, provider B
 			return nil, err
 		}
 		wg.Add(1)
-		go func(exec WorkflowExecutor) {
+		go func(exec StepExecutor) {
 			defer wg.Done()
 			perfstats.IncBranchClone()
 			branchEnv := contextdata.CloneEnvelope(state)

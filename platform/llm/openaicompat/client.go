@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/model"
+	"codeburg.org/lexbit/relurpify/platform/llm"
 	"codeburg.org/lexbit/relurpify/platform/observability"
 )
 
@@ -293,7 +294,7 @@ func (c *Client) newRequest(ctx context.Context, method, path string, payload an
 	return req, nil
 }
 
-func (c *Client) ListModels(ctx context.Context) ([]ModelInfo, error) {
+func (c *Client) ListModels(ctx context.Context) ([]llm.ModelInfo, error) {
 	req, err := c.newRequest(ctx, http.MethodGet, "/v1/models", nil)
 	if err != nil {
 		return nil, err
@@ -317,13 +318,10 @@ func (c *Client) ListModels(ctx context.Context) ([]ModelInfo, error) {
 	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
 		return nil, err
 	}
-	out := make([]ModelInfo, 0, len(raw.Data))
+	out := make([]llm.ModelInfo, 0, len(raw.Data))
 	for _, item := range raw.Data {
-		out = append(out, ModelInfo{
-			Name:      item.ID,
-			OwnedBy:   item.OwnedBy,
-			Object:    item.Object,
-			UpdatedAt: time.Unix(item.CreatedAt, 0).UTC(),
+		out = append(out, llm.ModelInfo{
+			Name: item.ID,
 		})
 	}
 	return out, nil

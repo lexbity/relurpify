@@ -1,6 +1,7 @@
 package sandbox
 
 import (
+	"codeburg.org/lexbit/relurpify/governance/sandbox"
 	"context"
 	"os/exec"
 	"strings"
@@ -14,7 +15,7 @@ import (
 // ----------------------------------------------------------------------------
 
 func TestNewSandboxRuntimeDefaults(t *testing.T) {
-	emptyConfig := SandboxConfig{}
+	emptyConfig := sandbox.SandboxConfig{}
 
 	gt := NewSandboxRuntime(emptyConfig)
 	cfg := gt.RunConfig()
@@ -37,7 +38,7 @@ func TestNewSandboxRuntimeDefaults(t *testing.T) {
 }
 
 func TestNewSandboxRuntime_ExplicitConfigPreserved(t *testing.T) {
-	customConfig := SandboxConfig{
+	customConfig := sandbox.SandboxConfig{
 		RunscPath:        "custom-runsc",
 		Platform:         "ptrace",
 		ContainerRuntime: "containerd",
@@ -61,10 +62,10 @@ func TestNewSandboxRuntime_ExplicitConfigPreserved(t *testing.T) {
 }
 
 func TestSandboxPolicy_StateStorage(t *testing.T) {
-	gt := NewSandboxRuntime(SandboxConfig{})
+	gt := NewSandboxRuntime(sandbox.SandboxConfig{})
 
-	expectedPolicy := SandboxPolicy{
-		NetworkRules: []NetworkRule{
+	expectedPolicy := sandbox.SandboxPolicy{
+		NetworkRules: []sandbox.NetworkRule{
 			{Direction: "egress", Protocol: "tcp", Host: "api.local", Port: 443},
 		},
 	}
@@ -84,9 +85,9 @@ func TestSandboxPolicy_StateStorage(t *testing.T) {
 }
 
 func TestSandboxPolicy_ConcurrentSafe(t *testing.T) {
-	gt := NewSandboxRuntime(SandboxConfig{})
+	gt := NewSandboxRuntime(sandbox.SandboxConfig{})
 
-	policy1 := SandboxPolicy{NetworkRules: []NetworkRule{{Direction: "egress", Protocol: "tcp", Host: "example.com", Port: 443}}}
+	policy1 := sandbox.SandboxPolicy{NetworkRules: []sandbox.NetworkRule{{Direction: "egress", Protocol: "tcp", Host: "example.com", Port: 443}}}
 
 	var wg sync.WaitGroup
 	for i := 0; i < 5; i++ {
@@ -110,11 +111,11 @@ func TestSandboxPolicy_ConcurrentSafe(t *testing.T) {
 }
 
 func TestSandboxPolicy_ReturnsSnapshot(t *testing.T) {
-	gt := NewSandboxRuntime(SandboxConfig{})
-	policy1 := SandboxPolicy{NetworkRules: []NetworkRule{{Direction: "egress", Protocol: "tcp", Host: "v1", Port: 443}}}
+	gt := NewSandboxRuntime(sandbox.SandboxConfig{})
+	policy1 := sandbox.SandboxPolicy{NetworkRules: []sandbox.NetworkRule{{Direction: "egress", Protocol: "tcp", Host: "v1", Port: 443}}}
 	_ = gt.ApplyPolicy(context.Background(), policy1)
 
-	policy2 := SandboxPolicy{NetworkRules: []NetworkRule{{Direction: "egress", Protocol: "tcp", Host: "v2", Port: 443}}}
+	policy2 := sandbox.SandboxPolicy{NetworkRules: []sandbox.NetworkRule{{Direction: "egress", Protocol: "tcp", Host: "v2", Port: 443}}}
 	_ = gt.ApplyPolicy(context.Background(), policy2)
 
 	// Policy() should return the latest snapshot
@@ -128,7 +129,7 @@ func TestSandboxPolicy_ReturnsSnapshot(t *testing.T) {
 }
 
 func TestName_Method(t *testing.T) {
-	gt := NewSandboxRuntime(SandboxConfig{})
+	gt := NewSandboxRuntime(sandbox.SandboxConfig{})
 	name := gt.Name()
 	if name != "gvisor" {
 		t.Errorf("Expected Name() to return 'gvisor', got: %q", name)
@@ -136,7 +137,7 @@ func TestName_Method(t *testing.T) {
 }
 
 func TestRunConfig_ReturnsStored(t *testing.T) {
-	gt := NewSandboxRuntime(SandboxConfig{
+	gt := NewSandboxRuntime(sandbox.SandboxConfig{
 		RunscPath:        "custom-runsc",
 		Platform:         "kvm",
 		ContainerRuntime: "docker",
@@ -156,7 +157,7 @@ func TestVerify_SkipsIfAlreadyVerified(t *testing.T) {
 	if !isBinaryExists("runsc") || !isBinaryExists("docker") {
 		t.Skip("Skipping Verify() skip-path test: runsc or docker binary not found on PATH")
 	}
-	gt := NewSandboxRuntime(SandboxConfig{Platform: "kvm"})
+	gt := NewSandboxRuntime(sandbox.SandboxConfig{Platform: "kvm"})
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -194,7 +195,7 @@ func TestVerify_RunsOnlyIfBinariesExist(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	gt := NewSandboxRuntime(SandboxConfig{Platform: "kvm"}) // Match platform hint if installed
+	gt := NewSandboxRuntime(sandbox.SandboxConfig{Platform: "kvm"}) // Match platform hint if installed
 
 	err := gt.Verify(ctx)
 	if err != nil {
@@ -214,7 +215,7 @@ func TestVerify_RunscMissing_FailsGracefully(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	gt := NewSandboxRuntime(SandboxConfig{})
+	gt := NewSandboxRuntime(sandbox.SandboxConfig{})
 	err := gt.Verify(ctx)
 	if err == nil {
 		t.Error("Expected error when runsc verification fails (if docker is present)")
@@ -229,7 +230,7 @@ func TestVerify_DockerMissing_FailsGracefully(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	gt := NewSandboxRuntime(SandboxConfig{ContainerRuntime: "containerd"}) // Try containerd if docker is missing
+	gt := NewSandboxRuntime(sandbox.SandboxConfig{ContainerRuntime: "containerd"}) // Try containerd if docker is missing
 	err := gt.Verify(ctx)
 	if err == nil {
 		t.Error("Expected error when docker/containerd verification fails")
@@ -248,7 +249,7 @@ func TestVerify_PlatformHintMismatchAnnotates(t *testing.T) {
 	// exercised directly so the assertion is independent of the container
 	// runtime check.
 	const bogusPlatform = "nonexistent-platform"
-	gt := NewSandboxRuntime(SandboxConfig{Platform: bogusPlatform})
+	gt := NewSandboxRuntime(sandbox.SandboxConfig{Platform: bogusPlatform})
 
 	if err := gt.checkRunsc(ctx); err != nil {
 		t.Fatalf("platform hint mismatch should be non-fatal, got: %v", err)
@@ -265,7 +266,7 @@ func TestVerify_PlatformHintMismatchAnnotates(t *testing.T) {
 
 // TestName_ReturnsCorrectValue
 func TestVerify_NameConsistency(t *testing.T) {
-	gt := NewSandboxRuntime(SandboxConfig{})
+	gt := NewSandboxRuntime(sandbox.SandboxConfig{})
 	if gt.Name() != "gvisor" {
 		t.Errorf("Name() should always return 'gvisor'")
 	}
@@ -273,7 +274,7 @@ func TestVerify_NameConsistency(t *testing.T) {
 
 // TestRunConfig_PreservesInput
 func TestVerify_RunConfigReturnsStoredConfig(t *testing.T) {
-	gt := NewSandboxRuntime(SandboxConfig{
+	gt := NewSandboxRuntime(sandbox.SandboxConfig{
 		RunscPath:        "custom-runsc",
 		Platform:         "ptrace",
 		ContainerRuntime: "containerd",

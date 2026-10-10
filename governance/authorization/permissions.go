@@ -6,6 +6,7 @@
 package authorization
 
 import (
+	"codeburg.org/lexbit/relurpify/governance/sandbox"
 	"context"
 	"errors"
 	"path/filepath"
@@ -83,7 +84,7 @@ type PermissionManager struct {
 	grants           *bounded.Cache[string, *PermissionGrant]
 	mu               sync.RWMutex
 	grantClock       func() time.Time
-	netPolicy        []governanceports.SandboxNetworkRule
+	netPolicy        []sandbox.NetworkRule
 	defaultDecision  permissions.Decision // governs undeclared tool permissions; default is Ask
 	decisions        fwtelemetry.DecisionSink
 	runtimePolicyErr error
@@ -225,9 +226,9 @@ func (m *PermissionManager) applyRuntimePolicyLocked(ctx context.Context) {
 
 // Policy returns the merged sandbox policy currently known to the
 // permission manager. Callers get a copy and can inspect it without racing.
-func (m *PermissionManager) Policy() governanceports.SandboxPolicy {
+func (m *PermissionManager) Policy() sandbox.SandboxPolicy {
 	if m == nil {
-		return governanceports.SandboxPolicy{}
+		return sandbox.SandboxPolicy{}
 	}
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -244,15 +245,15 @@ func (m *PermissionManager) RuntimePolicyError() error {
 	return m.runtimePolicyErr
 }
 
-func (m *PermissionManager) currentSandboxPolicyLocked() governanceports.SandboxPolicy {
+func (m *PermissionManager) currentSandboxPolicyLocked() sandbox.SandboxPolicy {
 	if m == nil {
-		return governanceports.SandboxPolicy{}
+		return sandbox.SandboxPolicy{}
 	}
-	policy := governanceports.SandboxPolicy{}
+	policy := sandbox.SandboxPolicy{}
 	if m.runtime != nil {
 		policy = m.runtime.Policy()
 	}
-	policy.NetworkRules = append([]governanceports.SandboxNetworkRule(nil), m.netPolicy...)
+	policy.NetworkRules = append([]sandbox.NetworkRule(nil), m.netPolicy...)
 	return policy
 }
 

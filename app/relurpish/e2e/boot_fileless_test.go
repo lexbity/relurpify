@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"codeburg.org/lexbit/relurpify/governance/sandbox"
 	"context"
 	"os"
 	"path/filepath"
@@ -32,7 +33,7 @@ func TestBoot_NoAgentsDir(t *testing.T) {
 	cfg.InferenceModel = "offline-synthetic"
 	cfg.InferenceNativeToolCalling = true
 	cfg.SecurityRunner = runner
-	cfg.SandboxBackendFactory = func(context.Context, string, governanceports.SandboxConfig, string, string) (governanceports.SandboxRuntime, error) {
+	cfg.SandboxBackendFactory = func(context.Context, string, sandbox.SandboxConfig, string, string) (governanceports.SandboxRuntime, error) {
 		return &fakeSandboxRuntime{runner: runner}, nil
 	}
 
@@ -73,7 +74,7 @@ func TestBoot_MissingSecurityOverlay(t *testing.T) {
 	cfg.InferenceModel = "offline-synthetic"
 	cfg.InferenceNativeToolCalling = true
 	cfg.SecurityRunner = runner
-	cfg.SandboxBackendFactory = func(context.Context, string, governanceports.SandboxConfig, string, string) (governanceports.SandboxRuntime, error) {
+	cfg.SandboxBackendFactory = func(context.Context, string, sandbox.SandboxConfig, string, string) (governanceports.SandboxRuntime, error) {
 		return &fakeSandboxRuntime{runner: runner}, nil
 	}
 
@@ -114,7 +115,7 @@ func TestBoot_MissingAllSecurityOverlays(t *testing.T) {
 	cfg.InferenceModel = "offline-synthetic"
 	cfg.InferenceNativeToolCalling = true
 	cfg.SecurityRunner = runner
-	cfg.SandboxBackendFactory = func(context.Context, string, governanceports.SandboxConfig, string, string) (governanceports.SandboxRuntime, error) {
+	cfg.SandboxBackendFactory = func(context.Context, string, sandbox.SandboxConfig, string, string) (governanceports.SandboxRuntime, error) {
 		return &fakeSandboxRuntime{runner: runner}, nil
 	}
 

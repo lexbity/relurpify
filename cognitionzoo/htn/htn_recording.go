@@ -17,13 +17,13 @@ import (
 // recordingPrimitiveAgent wraps a primitive executor and persists step outcomes
 // to the runtime and workflow memory stores after each execution.
 type recordingPrimitiveAgent struct {
-	delegate   plan.WorkflowExecutor
+	delegate   plan.StepExecutor
 	workflow   any
 	workflowID string
 	runID      string
 }
 
-func (a *recordingPrimitiveAgent) BranchExecutor() (plan.WorkflowExecutor, error) {
+func (a *recordingPrimitiveAgent) BranchExecutor() (plan.StepExecutor, error) {
 	if a == nil {
 		return &recordingPrimitiveAgent{}, nil
 	}

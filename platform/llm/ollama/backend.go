@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/model"
+	"codeburg.org/lexbit/relurpify/platform/llm"
 )
 
 // Re-export contract types for local usage
@@ -58,7 +59,7 @@ func (b *Backend) Model() LanguageModel {
 }
 
 // Embedder returns a transport-backed embedder when embedding is enabled.
-func (b *Backend) Embedder() *Embedder {
+func (b *Backend) Embedder() llm.Embedder {
 	if b == nil {
 		return nil
 	}
@@ -111,26 +112,26 @@ func (b *Backend) ModelContextSize(ctx context.Context) (int, error) {
 }
 
 // Health checks backend reachability and model listing availability.
-func (b *Backend) Health(ctx context.Context) (*HealthReport, error) {
+func (b *Backend) Health(ctx context.Context) (*llm.HealthReport, error) {
 	models, err := b.ListModels(ctx)
 	if err != nil {
-		return &HealthReport{
-			State:      BackendHealthUnhealthy,
+		return &llm.HealthReport{
+			State:      llm.BackendHealthUnhealthy,
 			Message:    err.Error(),
 			LastError:  err.Error(),
 			ErrorCount: 1,
 		}, err
 	}
 	_ = models
-	return &HealthReport{
-		State:       BackendHealthReady,
+	return &llm.HealthReport{
+		State:       llm.BackendHealthReady,
 		Message:     "backend reachable",
 		UptimeSince: time.Now().UTC(),
 	}, nil
 }
 
 // ListModels fetches /api/tags and converts it into model summaries.
-func (b *Backend) ListModels(ctx context.Context) ([]ModelInfo, error) {
+func (b *Backend) ListModels(ctx context.Context) ([]llm.ModelInfo, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, b.client.ollamaAPIEndpoint()+"/api/tags", nil)
 	if err != nil {
 		return nil, err
@@ -157,14 +158,14 @@ func (b *Backend) ListModels(ctx context.Context) ([]ModelInfo, error) {
 	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
 		return nil, err
 	}
-	out := make([]ModelInfo, 0, len(payload.Models))
+	out := make([]llm.ModelInfo, 0, len(payload.Models))
 	contextSize, _ := b.cachedModelContextSize()
 	for _, m := range payload.Models {
 		size := 0
 		if strings.TrimSpace(m.Name) == strings.TrimSpace(b.cfg.Model) {
 			size = contextSize
 		}
-		out = append(out, ModelInfo{
+		out = append(out, llm.ModelInfo{
 			Name:         m.Name,
 			Family:       strings.TrimSpace(m.Families),
 			ContextSize:  size,

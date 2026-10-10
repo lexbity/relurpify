@@ -14,20 +14,20 @@ func SandboxPolicyPath(workspace string) string {
 }
 
 type sandboxPolicyFile struct {
-	ReadOnlyRoot    bool          `yaml:"read_only_root,omitempty"`
-	ProtectedPaths  []string      `yaml:"protected_paths,omitempty"`
-	NoNewPrivileges bool          `yaml:"no_new_privileges,omitempty"`
-	SeccompProfile  string        `yaml:"seccomp_profile,omitempty"`
-	AllowedEnvKeys  []string      `yaml:"allowed_env_keys,omitempty"`
-	DeniedEnvKeys   []string      `yaml:"denied_env_keys,omitempty"`
-	NetworkRules    []NetworkRule `yaml:"network_rules,omitempty"`
-	ReapOrphans     *bool         `yaml:"reap_orphans,omitempty"`
-	OrphanMaxAge    string        `yaml:"orphan_max_age,omitempty"`
-	ImageDigest     string        `yaml:"image_digest,omitempty"`
+	ReadOnlyRoot    bool                `yaml:"read_only_root,omitempty"`
+	ProtectedPaths  []string            `yaml:"protected_paths,omitempty"`
+	NoNewPrivileges bool                `yaml:"no_new_privileges,omitempty"`
+	SeccompProfile  string              `yaml:"seccomp_profile,omitempty"`
+	AllowedEnvKeys  []string            `yaml:"allowed_env_keys,omitempty"`
+	DeniedEnvKeys   []string            `yaml:"denied_env_keys,omitempty"`
+	NetworkRules    []NetworkRuleConfig `yaml:"network_rules,omitempty"`
+	ReapOrphans     *bool               `yaml:"reap_orphans,omitempty"`
+	OrphanMaxAge    string              `yaml:"orphan_max_age,omitempty"`
+	ImageDigest     string              `yaml:"image_digest,omitempty"`
 }
 
 // LoadSandboxPolicy loads and validates the sandbox policy file.
-func LoadSandboxPolicy(path, workspace string, decode Decoder) (*SandboxPolicy, error) {
+func LoadSandboxPolicy(path, workspace string, decode Decoder) (*SandboxPolicyConfig, error) {
 	var file sandboxPolicyFile
 	if err := loadAndDecode(path, workspace, decode, SandboxPolicyPath, &file); err != nil {
 		return nil, err
@@ -51,14 +51,14 @@ func LoadSandboxPolicy(path, workspace string, decode Decoder) (*SandboxPolicy, 
 		}
 		orphanMaxAge = d
 	}
-	policy := &SandboxPolicy{
+	policy := &SandboxPolicyConfig{
 		ReadOnlyRoot:    file.ReadOnlyRoot,
 		ProtectedPaths:  normalizeProtectedPaths(absWorkspace, file.ProtectedPaths),
 		NoNewPrivileges: file.NoNewPrivileges,
 		SeccompProfile:  strings.TrimSpace(file.SeccompProfile),
 		AllowedEnvKeys:  append([]string(nil), file.AllowedEnvKeys...),
 		DeniedEnvKeys:   append([]string(nil), file.DeniedEnvKeys...),
-		NetworkRules:    append([]NetworkRule(nil), file.NetworkRules...),
+		NetworkRules:    append([]NetworkRuleConfig(nil), file.NetworkRules...),
 		ReapOrphans:     reapOrphans,
 		OrphanMaxAge:    orphanMaxAge,
 		ImageDigest:     strings.TrimSpace(file.ImageDigest),

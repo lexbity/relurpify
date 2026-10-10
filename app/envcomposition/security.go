@@ -12,6 +12,7 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
+	govsandbox "codeburg.org/lexbit/relurpify/governance/sandbox"
 	"codeburg.org/lexbit/relurpify/telemetry"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 	cfgsecurity "codeburg.org/lexbit/relurpify/userconfig/config/security"
@@ -151,7 +152,7 @@ func BuildSecurityRuntime(ctx context.Context, in SecurityRuntimeInput) (*Securi
 // buildRunnerConfig constructs a CommandRunnerConfig from manifest-derived
 // hardening fields plus the sandbox bundle. Returns a minimal config with just
 // Workspace when the bundle is nil.
-func buildRunnerConfig(workspace string, image string, security config.SecuritySpec, bundle *cfgsecurity.SandboxPolicy, events telemetry.Telemetry) *sandbox.CommandRunnerConfig {
+func buildRunnerConfig(workspace string, image string, security config.SecuritySpec, bundle *cfgsecurity.SandboxPolicyConfig, events telemetry.Telemetry) *sandbox.CommandRunnerConfig {
 	cfg := &sandbox.CommandRunnerConfig{
 		Workspace: workspace,
 	}
@@ -173,7 +174,7 @@ func buildRunnerImpl(in SecurityRuntimeInput) (sandbox.CommandRunner, *sandbox.C
 	if in.SecurityBundle == nil {
 		return nil, nil, fmt.Errorf("security bundle required to build sandbox runner")
 	}
-	sboxRuntime, err := sandbox.NewSandboxRuntimeForBackend(in.SandboxBackend, sandbox.SandboxConfig{}, "", in.Workspace)
+	sboxRuntime, err := sandbox.NewSandboxRuntimeForBackend(in.SandboxBackend, govsandbox.SandboxConfig{}, "", in.Workspace)
 	if err != nil {
 		return nil, nil, fmt.Errorf("select sandbox runtime: %w", err)
 	}
@@ -182,7 +183,7 @@ func buildRunnerImpl(in SecurityRuntimeInput) (sandbox.CommandRunner, *sandbox.C
 	// pulls). The resolved ref stays on the runner config; an unpinned boot is
 	// loud via the pin event + doctor image-pin status.
 	runnerConfig.Image = resolveRunnerImage(in.Context, in.Image, in.SecurityBundle.Sandbox, in.Events)
-	sboxPolicy := newSandboxPolicy(in.Security, in.SecurityBundle.Sandbox.ProtectedPaths)
+	sboxPolicy := sandboxPolicyFromConfig(in.Security, in.SecurityBundle.Sandbox)
 	runner, err := sandbox.NewVerifiedCommandRunner(in.Context, sboxRuntime, sboxPolicy, runnerConfig)
 	if err != nil {
 		return nil, nil, fmt.Errorf("build verified runner: %w", err)
@@ -192,7 +193,7 @@ func buildRunnerImpl(in SecurityRuntimeInput) (sandbox.CommandRunner, *sandbox.C
 
 // resolveRunnerImage applies digest pinning to the configured runtime image
 // and surfaces sandbox.image_pinned / sandbox.image_unpinned.
-func resolveRunnerImage(ctx context.Context, configuredImage string, bundle *cfgsecurity.SandboxPolicy, events telemetry.Telemetry) string {
+func resolveRunnerImage(ctx context.Context, configuredImage string, bundle *cfgsecurity.SandboxPolicyConfig, events telemetry.Telemetry) string {
 	ref := configuredImage
 	if strings.TrimSpace(ref) == "" {
 		ref = sandbox.DefaultRuntimeImage
@@ -219,12 +220,31 @@ func defaultDenyPolicy() sandbox.CommandPolicy {
 	})
 }
 
-// newSandboxPolicy constructs a sandbox policy from a manifest spec.
-func newSandboxPolicy(spec config.SecuritySpec, protectedPaths []string) sandbox.SandboxPolicy {
-	policy := sandbox.SandboxPolicy{
-		ProtectedPaths: append([]string(nil), protectedPaths...),
+// sandboxPolicyFromConfig is the decode→runtime bridge for sandbox policy:
+// the one named adapter from the yaml-decoded SandboxPolicyConfig to the
+// governance-owned runtime policy. Every overlapping field is mapped — an
+// authored field that is not resolved here is a defect, not a default.
+func sandboxPolicyFromConfig(spec config.SecuritySpec, cfg *cfgsecurity.SandboxPolicyConfig) govsandbox.SandboxPolicy {
+	policy := govsandbox.SandboxPolicy{
+		ReadOnlyRoot: spec.ReadOnlyRoot,
 	}
-	policy.ReadOnlyRoot = spec.ReadOnlyRoot
-	policy.NoNewPrivileges = spec.NoNewPrivileges
+	if cfg != nil {
+		policy.ProtectedPaths = append([]string(nil), cfg.ProtectedPaths...)
+		policy.ReadOnlyRoot = policy.ReadOnlyRoot || cfg.ReadOnlyRoot
+	}
+	policy.NoNewPrivileges = spec.NoNewPrivileges || (cfg != nil && cfg.NoNewPrivileges)
+	if cfg != nil {
+		policy.SeccompProfile = cfg.SeccompProfile
+		policy.AllowedEnvKeys = append([]string(nil), cfg.AllowedEnvKeys...)
+		policy.DeniedEnvKeys = append([]string(nil), cfg.DeniedEnvKeys...)
+		for _, r := range cfg.NetworkRules {
+			policy.NetworkRules = append(policy.NetworkRules, govsandbox.NetworkRule{
+				Direction: r.Direction,
+				Protocol:  r.Protocol,
+				Host:      r.Host,
+				Port:      r.Port,
+			})
+		}
+	}
 	return policy
 }

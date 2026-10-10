@@ -8,10 +8,10 @@ import (
 )
 
 // ToPolicyResolveOrchConfig converts an AgentOrchestrationConfig to
-// policyresolve.AgentOrchestrationConfig so callers can pass orchestration
+// policyresolve.ResolvedAgentOrchestrationConfig so callers can pass orchestration
 // configuration to policyresolve without importing policyresolve.
-func ToPolicyResolveOrchConfig(cfg AgentOrchestrationConfig) policyresolve.AgentOrchestrationConfig {
-	return policyresolve.AgentOrchestrationConfig{
+func ToPolicyResolveOrchConfig(cfg AgentOrchestrationConfig) policyresolve.ResolvedAgentOrchestrationConfig {
+	return policyresolve.ResolvedAgentOrchestrationConfig{
 		PhaseCapabilities:        cloneMap(cfg.PhaseCapabilities),
 		PhaseCapabilitySelectors: toCapSelectorsMap(cfg.PhaseCapabilitySelectors),
 		Verification:             toVerificationPolicy(cfg.Verification),
@@ -21,24 +21,24 @@ func ToPolicyResolveOrchConfig(cfg AgentOrchestrationConfig) policyresolve.Agent
 	}
 }
 
-func toCapSelectorsMap(in map[string][]CapabilitySelector) map[string][]policyresolve.CapabilitySelector {
+func toCapSelectorsMap(in map[string][]CapabilitySelector) map[string][]policyresolve.ResolvedCapabilitySelector {
 	if in == nil {
 		return nil
 	}
-	out := make(map[string][]policyresolve.CapabilitySelector, len(in))
+	out := make(map[string][]policyresolve.ResolvedCapabilitySelector, len(in))
 	for k, selectors := range in {
 		out[k] = toCapSelectors(selectors)
 	}
 	return out
 }
 
-func toCapSelectors(in []CapabilitySelector) []policyresolve.CapabilitySelector {
+func toCapSelectors(in []CapabilitySelector) []policyresolve.ResolvedCapabilitySelector {
 	if in == nil {
 		return nil
 	}
-	out := make([]policyresolve.CapabilitySelector, len(in))
+	out := make([]policyresolve.ResolvedCapabilitySelector, len(in))
 	for i, s := range in {
-		out[i] = policyresolve.CapabilitySelector{
+		out[i] = policyresolve.ResolvedCapabilitySelector{
 			ID:                          s.ID,
 			Name:                        s.Name,
 			Kind:                        string(s.Kind),
@@ -59,23 +59,23 @@ func toCapSelectors(in []CapabilitySelector) []policyresolve.CapabilitySelector 
 	return out
 }
 
-func toVerificationPolicy(v AgentVerificationPolicy) policyresolve.AgentVerificationPolicy {
-	return policyresolve.AgentVerificationPolicy{
+func toVerificationPolicy(v AgentVerificationPolicy) policyresolve.ResolvedAgentVerificationPolicy {
+	return policyresolve.ResolvedAgentVerificationPolicy{
 		SuccessTools:               append([]string(nil), v.SuccessTools...),
 		SuccessCapabilitySelectors: toCapSelectors(v.SuccessCapabilitySelectors),
 		StopOnSuccess:              v.StopOnSuccess,
 	}
 }
 
-func toRecoveryPolicy(r AgentRecoveryPolicy) policyresolve.AgentRecoveryPolicy {
-	return policyresolve.AgentRecoveryPolicy{
+func toRecoveryPolicy(r AgentRecoveryPolicy) policyresolve.ResolvedAgentRecoveryPolicy {
+	return policyresolve.ResolvedAgentRecoveryPolicy{
 		FailureProbeTools:               append([]string(nil), r.FailureProbeTools...),
 		FailureProbeCapabilitySelectors: toCapSelectors(r.FailureProbeCapabilitySelectors),
 	}
 }
 
-func toPlanningPolicy(p AgentPlanningPolicy) policyresolve.AgentPlanningPolicy {
-	return policyresolve.AgentPlanningPolicy{
+func toPlanningPolicy(p AgentPlanningPolicy) policyresolve.ResolvedAgentPlanningPolicy {
+	return policyresolve.ResolvedAgentPlanningPolicy{
 		RequiredBeforeEdit:          toCapSelectors(p.RequiredBeforeEdit),
 		PreferredEditCapabilities:   toCapSelectors(p.PreferredEditCapabilities),
 		PreferredVerifyCapabilities: toCapSelectors(p.PreferredVerifyCapabilities),
@@ -84,22 +84,22 @@ func toPlanningPolicy(p AgentPlanningPolicy) policyresolve.AgentPlanningPolicy {
 	}
 }
 
-func toSkillTemplates(in []SkillStepTemplate) []policy.SkillStepTemplate {
+func toSkillTemplates(in []SkillStepTemplate) []policy.ResolvedSkillStepTemplate {
 	if in == nil {
 		return nil
 	}
-	out := make([]policy.SkillStepTemplate, len(in))
+	out := make([]policy.ResolvedSkillStepTemplate, len(in))
 	for i, s := range in {
-		out[i] = policy.SkillStepTemplate{Kind: s.Kind, Description: s.Description}
+		out[i] = policy.ResolvedSkillStepTemplate{Kind: s.Kind, Description: s.Description}
 	}
 	return out
 }
 
-func toReviewPolicy(r AgentReviewPolicy) policyresolve.AgentReviewPolicy {
-	return policyresolve.AgentReviewPolicy{
+func toReviewPolicy(r AgentReviewPolicy) policyresolve.ResolvedAgentReviewPolicy {
+	return policyresolve.ResolvedAgentReviewPolicy{
 		Criteria:  append([]string(nil), r.Criteria...),
 		FocusTags: append([]string(nil), r.FocusTags...),
-		ApprovalRules: policy.AgentReviewApprovalRules{
+		ApprovalRules: policy.ResolvedAgentReviewApprovalRules{
 			RequireVerificationEvidence: r.ApprovalRules.RequireVerificationEvidence,
 			RejectOnUnresolvedErrors:    r.ApprovalRules.RejectOnUnresolvedErrors,
 		},
