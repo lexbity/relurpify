@@ -189,8 +189,14 @@ func BuildCapabilityRuntime(ctx context.Context, workspace string, runner *fsand
 			return nil, err
 		}
 	}
-	if err := startIndexingFn(manager, ctx); err != nil {
-		return nil, err
+	// FR-12: SkipASTIndex prevents the AST index from starting; rankings
+	// degrade deterministically to the remaining rankers
+	// (keyword/recency/trust). The ASTProximityRanker stays registered — it
+	// no-ops on an empty index.
+	if !cfg.SkipASTIndex {
+		if err := startIndexingFn(manager, ctx); err != nil {
+			return nil, err
+		}
 	}
 	searchEngine := newSearchEngineFn(nil, nil)
 	if searchEngine == nil {

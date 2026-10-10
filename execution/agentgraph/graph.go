@@ -134,8 +134,8 @@ func (g *Graph) SetTelemetry(t telemetry.Telemetry) error {
 }
 
 // SetGrounder wires the durable grounding boundary the epoch coordinator flushes
-// through. Without a grounder the run carries no coordinator and recipe captures
-// degrade to the explicit capture.sink_absent event.
+// through. Without a grounder the run carries no coordinator; a recipe declaring
+// capture fails graph build instead of reaching execution.
 func (g *Graph) SetGrounder(grounder Grounder) {
 	g.mu.Lock()
 	defer g.mu.Unlock()

@@ -69,7 +69,7 @@ type RunnerConfigV1 struct {
 const (
 	runnerDefaultPollInterval    = 500 * time.Millisecond
 	runnerDefaultHeartbeat       = 5 * time.Second
-	runnerDefaultRefreshInterval = 0 // off: absent, not stubbed (FR-23)
+	runnerDefaultRefreshInterval = 0 // off by design: absent means disabled (FR-23)
 )
 
 // RunnerSettings is the resolved runner configuration: every field carries a

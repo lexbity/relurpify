@@ -36,8 +36,6 @@ type Deps struct {
 	IndexManager      *ast.IndexManager
 	SearchEngine      *search.SearchEngine
 	StreamTrigger     *contextstream.Trigger
-	OutputIngester    *knowledge.OutputIngester
-	IngestOutputs     bool
 	// Grounder is the capture-as-bridge write path. Graph runs wire it as their
 	// epoch grounder so recipe captures land at the epoch barrier.
 	Grounder *knowledge.GroundingService

@@ -63,8 +63,6 @@ func (a *ReActAgent) InitializeDeps(deps *paradigm.Deps) error {
 	a.IndexManager = deps.IndexManager
 	a.SearchEngine = deps.SearchEngine
 	a.StreamTrigger = deps.StreamTrigger
-	a.OutputIngester = deps.OutputIngester
-	a.IngestOutputs = deps.IngestOutputs
 	a.PromptRegistry = deps.PromptRegistry
 	return a.Initialize(deps.Config)
 }

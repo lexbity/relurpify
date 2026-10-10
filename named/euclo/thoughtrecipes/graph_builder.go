@@ -50,6 +50,14 @@ func BuildThoughtRecipeGraph(plan *ExecutionPlan, deps *paradigm.Deps, ingestion
 		}
 	}
 
+	// Fail-closed write boundary (D-5): a recipe that declares capture
+	// promises its outputs reach the knowledge graph. Without a grounding
+	// boundary that promise is unfulfillable — a boot error, never a silent
+	// capture drop at first execution.
+	if err := validateCaptureSinks(plan, deps); err != nil {
+		return nil, err
+	}
+
 	graph := agentgraph.NewGraph()
 	sections := make([]graphSection, 0, 1+len(plan.Routes))
 
@@ -574,4 +582,48 @@ func routeConditionFalse(groupID, branchID string) agentgraph.ConditionFunc {
 		_ = result
 		return !envBool(env, key)
 	}
+}
+
+// validateCaptureSinks fails graph build when any step declares capture but
+// the composed deps carry no grounding boundary (D-5).
+func validateCaptureSinks(plan *ExecutionPlan, deps *paradigm.Deps) error {
+	if !DeclaresGroundingCaptures(plan) {
+		return nil
+	}
+	if deps == nil || deps.Grounder == nil {
+		return fmt.Errorf("euclo: recipe declares capture but no grounding boundary is composed (Grounder); wire the knowledge runtime or drop the capture clauses")
+	}
+	return nil
+}
+
+// DeclaresGroundingCaptures reports whether any step declares a capture
+// bound for a grounding destination (state.*/output.* — scratch.* never
+// grounds). The graph build fails closed when this holds without a composed
+// grounding boundary (D-5).
+func DeclaresGroundingCaptures(plan *ExecutionPlan) bool {
+	if plan == nil {
+		return false
+	}
+	if declaresGroundingCapture(plan.Steps) {
+		return true
+	}
+	for _, route := range plan.Routes {
+		for _, branch := range route.Branches {
+			if declaresGroundingCapture(branch.Steps) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func declaresGroundingCapture(steps []ExecutionStep) bool {
+	for _, step := range steps {
+		for _, binding := range step.CaptureBindings {
+			if groundingDestination(CaptureDestinationKey(binding)) {
+				return true
+			}
+		}
+	}
+	return false
 }

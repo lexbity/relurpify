@@ -42,11 +42,11 @@ func TestSwitchAgentDepsParity(t *testing.T) {
 	if switched.StreamTrigger != base.StreamTrigger {
 		t.Fatalf("stream trigger deps changed: got %p want %p", switched.StreamTrigger, base.StreamTrigger)
 	}
-	if switched.OutputIngester != base.OutputIngester {
-		t.Fatalf("output ingester deps changed: got %p want %p", switched.OutputIngester, base.OutputIngester)
+	if switched.Grounder != base.Grounder {
+		t.Fatalf("grounding deps changed: got %p want %p", switched.Grounder, base.Grounder)
 	}
-	if switched.IngestOutputs != base.IngestOutputs {
-		t.Fatalf("ingest outputs deps changed: got %t want %t", switched.IngestOutputs, base.IngestOutputs)
+	if switched.EpochDrain == nil || base.EpochDrain == nil {
+		t.Fatalf("epoch drain deps must both be wired: switched=%t base=%t", switched.EpochDrain != nil, base.EpochDrain != nil)
 	}
 	if switched.PromptRegistry != base.PromptRegistry {
 		t.Fatalf("prompt registry deps changed: got %p want %p", switched.PromptRegistry, base.PromptRegistry)

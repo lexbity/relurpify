@@ -222,13 +222,6 @@ func (m *InstrumentedModel) emitResponse(ctx context.Context, kind string, resp 
 	if obs := observing.SnapshotObserverFromContext(ctx); obs != nil {
 		obs.Observe()
 	}
-	if ing := observing.ResponseIngesterFromContext(ctx); ing != nil && resp != nil && err == nil {
-		go func() {
-			timeoutCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-			defer cancel()
-			_ = ing.IngestLLMResponse(timeoutCtx, resp)
-		}()
-	}
 	if m.Telemetry == nil {
 		return
 	}

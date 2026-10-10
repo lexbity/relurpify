@@ -1,10 +1,14 @@
 package thoughtrecipe
 
 import (
+	"context"
 	"fmt"
+	"strings"
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/cognitionzoo/paradigm"
+	"codeburg.org/lexbit/relurpify/context/knowledge"
+	"codeburg.org/lexbit/relurpify/context/knowledge/graphdb"
 	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/execution/agentgraph"
 	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
@@ -249,4 +253,52 @@ func containsAll(values []string, want []string) bool {
 		seen[w]--
 	}
 	return true
+}
+
+// buildProbeGroundingService composes a real grounding boundary over a temp
+// graph engine for build-time validation.
+func buildProbeGroundingService(t *testing.T) *knowledge.GroundingService {
+	t.Helper()
+	engine, err := graphdb.Open(context.Background(), graphdb.DefaultOptions(t.TempDir()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = engine.Close(context.Background()) })
+	return knowledge.NewGroundingService(&knowledge.ChunkStore{Graph: engine}, &knowledge.EventBus{}, nil, nil)
+}
+
+// TestBuildGraphCaptureWithoutGrounderFailsClosed is D-5: a recipe step that
+// declares capture is a boot error without a grounding boundary — never a
+// silent capture drop at first execution.
+func TestBuildGraphCaptureWithoutGrounderFailsClosed(t *testing.T) {
+	plan := &ExecutionPlan{
+		ThoughtRecipe: &surface.ThoughtRecipe{ID: "capture.graph", Name: "capture graph"},
+		Steps: []ExecutionStep{{
+			ID:       "capture.step",
+			Kind:     StepKindRun,
+			Paradigm: "react",
+			Goal:     "probe",
+			Scope:    AllowAll(),
+			CaptureBindings: []CaptureBinding{{
+				Source:      &PathExpr{Raw: "result"},
+				Destination: PathExpr{Raw: "state.findings"},
+			}},
+		}},
+	}
+	_, err := BuildThoughtRecipeGraph(plan, &paradigm.Deps{}, nil)
+	if err == nil {
+		t.Fatal("expected build error for capture without grounding boundary")
+	}
+	if !strings.Contains(err.Error(), "declares capture") {
+		t.Fatalf("error %q does not name the capture contract", err)
+	}
+
+	// The same plan builds once the boundary is composed.
+	graph, err := BuildThoughtRecipeGraph(plan, &paradigm.Deps{Grounder: buildProbeGroundingService(t)}, nil)
+	if err != nil {
+		t.Fatalf("BuildThoughtRecipeGraph with grounder: %v", err)
+	}
+	if graph == nil {
+		t.Fatal("expected a graph")
+	}
 }

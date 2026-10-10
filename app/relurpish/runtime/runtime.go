@@ -71,6 +71,9 @@ type Runtime struct {
 	secrets          config.Secrets
 	registration     *fauthorization.AgentRegistration
 	modelBackend     llm.ManagedBackend
+	// knowledge is the composed knowledge runtime; the write boundary is
+	// wired into paradigm deps through envcomposition.WireGrounding (D-5).
+	knowledge *envcomposition.KnowledgeRuntime
 
 	// agent is the workflow executor serving turns. It is mutex-guarded so
 	// SwitchAgent can hot-swap it without racing an executing turn (D10).
@@ -525,6 +528,7 @@ func buildRuntime(ctx context.Context, cfg Config, secrets config.Secrets) (*Run
 		registration:         registration,
 		modelBackend:         modelProduct.Backend,
 		execSink:             execSink,
+		knowledge:            knowledgeRuntime,
 	}
 	rt.Delegations.SetObserver(rt.observeDelegationSnapshot)
 	if err := RegisterBuiltinProviders(ctx, rt); err != nil {
@@ -562,8 +566,8 @@ func buildRuntime(ctx context.Context, cfg Config, secrets config.Secrets) (*Run
 	// the runner (attach/spawn/degrade). A healthy runner receives the
 	// bootstrap SUBMISSION via the spool and the in-process service is not
 	// registered; a degraded or disabled runner falls back to the in-process
-	// bootstrap service (the same moved context/knowledge code — honestly
-	// dual-path, not a shim).
+	// bootstrap service (the same moved context/knowledge code — both legs
+	// are real implementations).
 	stateDir := config.DefaultWorkspaceStateDir(cfg.Workspace)
 	runnerSettings, runnerErr := runnerSettingsFor(cfg.ConfigPath)
 	if runnerErr != nil {
@@ -911,7 +915,7 @@ func (r *Runtime) hitlBroker() euclopolicy.HITLBroker {
 }
 
 func (r *Runtime) paradigmDeps() *paradigm.Deps {
-	return &paradigm.Deps{
+	deps := &paradigm.Deps{
 		Config:            r.Workspace.Environment.Config,
 		Model:             r.Model,
 		Registry:          r.Tools,
@@ -922,14 +926,11 @@ func (r *Runtime) paradigmDeps() *paradigm.Deps {
 		IndexManager:      r.IndexManager,
 		SearchEngine:      r.SearchEngine,
 		StreamTrigger:     r.Workspace.Environment.StreamTrigger,
-		OutputIngester:    r.Workspace.Environment.OutputIngester,
-		IngestOutputs:     r.Workspace.Environment.IngestOutputs,
-		Grounder:          r.Workspace.Environment.Grounding,
-		EpochDrain:        r.Workspace.Environment.KnowledgeDrain,
 		PromptRegistry:    r.Workspace.Environment.PromptRegistry,
 		AgentLifecycle:    r.AgentLifecycle,
 		Telemetry:         r.Workspace.Telemetry,
 	}
+	return envcomposition.WireGrounding(deps, r.knowledge)
 }
 
 // permissionChecker returns the agent authorization bundle's capability

@@ -1,14 +1,31 @@
 package thoughtrecipe
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"sort"
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/cognitionzoo/paradigm"
+	"codeburg.org/lexbit/relurpify/context/knowledge"
+	"codeburg.org/lexbit/relurpify/context/knowledge/graphdb"
 	"codeburg.org/lexbit/relurpify/execution/agentgraph"
 )
+
+// goldenDeps composes the grounding boundary golden recipes' capture clauses
+// require (D-5: graph build fails closed without one).
+func goldenDeps(t *testing.T) *paradigm.Deps {
+	t.Helper()
+	engine, err := graphdb.Open(context.Background(), graphdb.DefaultOptions(t.TempDir()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = engine.Close(context.Background()) })
+	return &paradigm.Deps{
+		Grounder: knowledge.NewGroundingService(&knowledge.ChunkStore{Graph: engine}, &knowledge.EventBus{}, nil, nil),
+	}
+}
 
 func TestGoldenGraphs(t *testing.T) {
 	recipes := loadGoldenRecipes(t)
@@ -18,7 +35,7 @@ func TestGoldenGraphs(t *testing.T) {
 			if err != nil {
 				t.Fatalf("LowerDocument(%s) failed: %v", name, err)
 			}
-			graph, err := BuildThoughtRecipeGraph(plan, &paradigm.Deps{}, nil)
+			graph, err := BuildThoughtRecipeGraph(plan, goldenDeps(t), nil)
 			if err != nil {
 				t.Fatalf("BuildThoughtRecipeGraph(%s) failed: %v", name, err)
 			}
@@ -66,7 +83,7 @@ run reviewer:
 	originalID := plan.Steps[0].ID
 
 	plan.Steps[0].ID = "mutated." + originalID
-	graph, err := BuildThoughtRecipeGraph(plan, &paradigm.Deps{}, nil)
+	graph, err := BuildThoughtRecipeGraph(plan, goldenDeps(t), nil)
 	if err != nil {
 		t.Fatalf("BuildThoughtRecipeGraph failed: %v", err)
 	}

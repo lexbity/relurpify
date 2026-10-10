@@ -191,24 +191,45 @@ func TestProvenance_FullChain(t *testing.T) {
 	_, err = store.SaveEdge(context.TODO(), knowledge.ChunkEdge{FromChunk: fileChunk.ID, ToChunk: summaryChunk.ID, Kind: knowledge.EdgeKindDerivesFrom, Weight: 1})
 	require.NoError(t, err)
 
-	ing := knowledge.NewOutputIngester(store, nil)
-	env := contextdata.NewEnvelope("task-1", "session-1")
-	env.AddStreamedContextReference(contextdata.ChunkReference{ChunkID: contextdata.ChunkID(summaryChunk.ID), Source: "test", Rank: 1})
-	ctx := knowledge.WithOutputIngester(contextdata.WithEnvelope(context.Background(), env), ing)
-	saved, err := ing.IngestLLMResponseFull(ctx, &model.LLMResponse{Text: "grounded response", FinishReason: "stop"})
+	// The provenance proof lives on the boundary that owns it: a capture
+	// grounded through the GroundingService carries DerivedFrom provenance to
+	// the streamed-context chunk it was derived from (D-5 migration; the
+	// orphaned response-ingest path is gone).
+	grounding := knowledge.NewGroundingService(store, &knowledge.EventBus{}, nil, nil)
+	report, err := grounding.Ground(context.Background(), []knowledge.GroundingItem{{
+		Value:         "grounded capture derived from the summary chunk",
+		Epistemics:    knowledge.EpistemicClaimed,
+		Origin:        contextdata.OriginTool,
+		StateKey:      "state.findings",
+		NodeID:        "node-capture",
+		TaskID:        "task-1",
+		Kind:          knowledge.ChunkKindCapture,
+		ForwardedFrom: []knowledge.ChunkID{summaryChunk.ID},
+	}})
 	require.NoError(t, err)
-	require.NotNil(t, saved)
+	require.Len(t, report.Grounded, 1)
+	savedID := report.Grounded[0].ChunkID
+	saved, ok, err := store.Load(savedID)
+	require.NoError(t, err)
+	require.True(t, ok, "grounded chunk %s must be loadable", savedID)
 	require.Equal(t, []knowledge.ChunkID{summaryChunk.ID}, saved.DerivedFrom)
 
+	edges, err := store.LoadEdgesFrom(saved.ID, knowledge.EdgeKindDerivesFrom)
+	require.NoError(t, err)
+	foundSummary := false
+	for _, edge := range edges {
+		if edge.ToChunk == summaryChunk.ID {
+			foundSummary = true
+		}
+	}
+	require.True(t, foundSummary, "grounded capture must carry a derives_from edge to its source chunk")
+
+	// And the chain closes to the file chunk through the summary's own
+	// DerivedFrom provenance.
 	loadedSummary, ok, err := store.Load(summaryChunk.ID)
 	require.NoError(t, err)
 	require.True(t, ok)
 	require.Equal(t, []knowledge.ChunkID{fileChunk.ID}, loadedSummary.DerivedFrom)
-
-	loadedResponse, ok, err := store.Load(saved.ID)
-	require.NoError(t, err)
-	require.True(t, ok)
-	require.Equal(t, summaryChunk.ID, loadedResponse.DerivedFrom[0])
 }
 
 func TestBudgetExhaustion_ResetProtocol(t *testing.T) {

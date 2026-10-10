@@ -169,3 +169,31 @@ func categorize(events []telemetry.Event) (prompt *telemetry.Event, response *te
 	}
 	return prompt, response
 }
+
+// profileAwareStubModel is a minimal model stub used where the correlation
+// tests only observe instrumentation behavior.
+type profileAwareStubModel struct {
+	profile *ModelProfile
+}
+
+func (m *profileAwareStubModel) Generate(context.Context, string, *model.LLMOptions) (*model.LLMResponse, error) {
+	return &model.LLMResponse{Text: "ok"}, nil
+}
+
+func (m *profileAwareStubModel) GenerateStream(context.Context, string, *model.LLMOptions) (<-chan string, error) {
+	ch := make(chan string)
+	close(ch)
+	return ch, nil
+}
+
+func (m *profileAwareStubModel) Chat(context.Context, []model.Message, *model.LLMOptions) (*model.LLMResponse, error) {
+	return &model.LLMResponse{Text: "ok"}, nil
+}
+
+func (m *profileAwareStubModel) ChatWithTools(context.Context, []model.Message, []model.LLMToolSpec, *model.LLMOptions) (*model.LLMResponse, error) {
+	return &model.LLMResponse{Text: "ok"}, nil
+}
+
+func (m *profileAwareStubModel) SetProfile(profile *ModelProfile) {
+	m.profile = profile
+}

@@ -20,11 +20,6 @@ type SnapshotObserver interface {
 	Observe()
 }
 
-// ResponseIngester indexes LLM responses into the knowledge graph.
-type ResponseIngester interface {
-	IngestLLMResponse(ctx context.Context, resp any) error
-}
-
 // TokenUsage records token consumption for a model invocation.
 type TokenUsage struct {
 	PromptTokens     int    `json:"prompt_tokens"`
@@ -95,7 +90,6 @@ func (s *PerfStats) SuccessRate() float64 {
 
 type usageObserverKey struct{}
 type snapshotObserverKey struct{}
-type responseIngesterKey struct{}
 
 // WithUsageObserver attaches a UsageObserver to the context.
 func WithUsageObserver(ctx context.Context, obs UsageObserver) context.Context {
@@ -116,17 +110,6 @@ func WithSnapshotObserver(ctx context.Context, obs SnapshotObserver) context.Con
 // SnapshotObserverFromContext extracts the SnapshotObserver from context, or nil.
 func SnapshotObserverFromContext(ctx context.Context) SnapshotObserver {
 	v, _ := ctx.Value(snapshotObserverKey{}).(SnapshotObserver)
-	return v
-}
-
-// WithResponseIngester attaches a ResponseIngester to the context.
-func WithResponseIngester(ctx context.Context, ing ResponseIngester) context.Context {
-	return context.WithValue(ctx, responseIngesterKey{}, ing)
-}
-
-// ResponseIngesterFromContext extracts the ResponseIngester from context, or nil.
-func ResponseIngesterFromContext(ctx context.Context) ResponseIngester {
-	v, _ := ctx.Value(responseIngesterKey{}).(ResponseIngester)
 	return v
 }
 

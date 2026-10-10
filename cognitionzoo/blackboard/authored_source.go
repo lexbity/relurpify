@@ -304,13 +304,10 @@ func (a *BlackboardAgent) enqueueWrite(ctx context.Context, env *contextdata.Env
 		item.ForwardedFrom = append(item.ForwardedFrom, id)
 		resolved++
 	}
+	// A run composed without a knowledge runtime carries no sink and no
+	// grounding boundary; that is composition, not degradation.
 	if sink := graph.CaptureSinkFromContext(ctx); sink != nil {
 		sink.EnqueueCapture(item)
-	} else {
-		emitBlackboardEvent(ctx, a.telemetry(), env, telemetry.EventCaptureSinkAbsent, authoredNodeID, env.TaskIDSnapshot(), "capture sink absent", map[string]any{
-			"source": source.Name,
-			"write":  source.Write,
-		})
 	}
 	emitBlackboardEvent(ctx, a.telemetry(), env, telemetry.EventBlackboardWriteGrounded, authoredNodeID, env.TaskIDSnapshot(), "blackboard write grounded", map[string]any{
 		"source":             source.Name,

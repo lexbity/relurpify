@@ -16,6 +16,7 @@ import (
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/context/knowledge/retrieval"
 	execution "codeburg.org/lexbit/relurpify/execution"
+	"codeburg.org/lexbit/relurpify/execution/agentgraph"
 	"codeburg.org/lexbit/relurpify/execution/prompt/prompttest"
 	"codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
@@ -455,7 +456,7 @@ func TestThoughtRecipeStepNodeDelegationFiltersChildEnvelopeAndReturnsCaptures(t
 			},
 		},
 	}
-	node := NewDelegateNode("delegate.step.execute", &paradigm.Deps{}, step)
+	node := NewDelegateNode("delegate.step.execute", goldenDeps(t), step)
 
 	child := node.buildDelegationEnvelope(parent)
 	if child == nil {
@@ -501,7 +502,7 @@ func TestThoughtRecipeStepNodeDelegationFiltersChildEnvelopeAndReturnsCaptures(t
 			"result": "child summary",
 		}),
 	}
-	if err := node.writeDelegationCaptures(context.Background(), parent, child, result); err != nil {
+	if err := node.writeDelegationCaptures(agentgraph.WithCaptureSink(context.Background(), &recordingCaptureSink{}), parent, child, result); err != nil {
 		t.Fatalf("writeDelegationCaptures failed: %v", err)
 	}
 	if got, ok := contextdata.GetTyped[string](parent, "state.plan"); !ok || got != "child summary" {
@@ -527,7 +528,7 @@ func TestThoughtRecipeStepNodeAskPausesAndResumesWithCapture(t *testing.T) {
 			},
 		},
 	}
-	node := NewAskNode("ask.step.execute", &paradigm.Deps{}, step)
+	node := NewAskNode("ask.step.execute", goldenDeps(t), step)
 
 	first, err := node.Execute(context.Background(), env)
 	if err != nil {
@@ -549,7 +550,7 @@ func TestThoughtRecipeStepNodeAskPausesAndResumesWithCapture(t *testing.T) {
 	}
 	frame.RespondedAt = &now
 
-	second, err := node.Execute(context.Background(), env)
+	second, err := node.Execute(agentgraph.WithCaptureSink(context.Background(), &recordingCaptureSink{}), env)
 	if err != nil {
 		t.Fatalf("second execute failed: %v", err)
 	}

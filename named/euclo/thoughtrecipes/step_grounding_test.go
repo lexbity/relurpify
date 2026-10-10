@@ -79,6 +79,28 @@ func TestBuildCaptureItemsDowngradesGivenOnNonUserOrigin(t *testing.T) {
 	require.Equal(t, knowledge.EpistemicClaimed, items[0].Epistemics, "given downgraded to claimed")
 }
 
+// TestBuildCaptureItemsToolOriginGroundsAsToolKind pins the absorbed input
+// taxonomy at the production capture site: a capture whose dataflow floor is
+// tool output grounds as ChunkKindTool; agent-claim captures stay
+// ChunkKindCapture.
+func TestBuildCaptureItemsToolOriginGroundsAsToolKind(t *testing.T) {
+	env := contextdata.NewEnvelope("task-1", "session-1")
+	env.SetWorkingValueWithOrigin("tools.grep.result", "match line", contextdata.MemoryClassTask, contextdata.OriginTool)
+	env.SetWorkingValueWithClass("findings", "agent text", contextdata.MemoryClassTask)
+	step := ExecutionStep{ID: "step.1", Sources: []string{"tools.grep.result"}}
+
+	items, downgrades := buildCaptureItems(step, env, []CaptureBinding{
+		captureBindingFor("tools.grep.result", "state.evidence", nil),
+		captureBindingFor("findings", "state.summary", nil),
+	}, nil)
+	require.Len(t, items, 2)
+	require.Empty(t, downgrades)
+	require.Equal(t, knowledge.ChunkKindTool, items[0].Kind, "tool-floor capture grounds as a tool fact")
+	require.Equal(t, contextdata.OriginTool, items[0].Origin)
+	require.Equal(t, knowledge.ChunkKindCapture, items[1].Kind, "agent-claim capture stays a capture")
+	require.Equal(t, contextdata.OriginLLM, items[1].Origin)
+}
+
 func TestBuildCaptureItemsSkipsScratchDestination(t *testing.T) {
 	env := contextdata.NewEnvelope("task-1", "session-1")
 	step := ExecutionStep{ID: "step.1"}
@@ -99,29 +121,9 @@ func TestEnqueueCaptureItemsUsesSinkFromContext(t *testing.T) {
 
 	sink := &recordingCaptureSink{}
 	core := &stepCore{id: "step.1", step: step}
-	core.enqueueCaptureItems(agentgraph.WithCaptureSink(ctx, sink), env, []CaptureBinding{
+	require.NoError(t, core.enqueueCaptureItems(agentgraph.WithCaptureSink(ctx, sink), env, []CaptureBinding{
 		captureBindingFor("user.prompt", "state.answer", &EpistemicExpr{Value: "given"}),
-	}, nil)
+	}, nil))
 	require.Len(t, sink.items, 1)
 	require.Equal(t, knowledge.EpistemicGiven, sink.items[0].Epistemics)
-}
-
-func TestEnqueueCaptureItemsSinkAbsentIsExplicit(t *testing.T) {
-	env := contextdata.NewEnvelope("task-1", "session-1")
-	step := ExecutionStep{ID: "step.1"}
-	tel := &recordingTelemetrySink{}
-	core := &stepCore{id: "step.1", step: step, deps: telDepsWithSink(t, tel)}
-	core.enqueueCaptureItems(context.Background(), env, []CaptureBinding{
-		captureBindingFor("findings", "state.answer", nil),
-	}, nil)
-	require.True(t, telHasEvent(t, tel, "capture.sink_absent"), "missing sink must be observable")
-}
-
-func TestBuildToolResultItemKindAndOrigin(t *testing.T) {
-	env := contextdata.NewEnvelope("task-1", "session-1")
-	step := ExecutionStep{ID: "step.1"}
-	item := buildToolResultItem(step, env, map[string]any{"output": "payload"})
-	require.Equal(t, knowledge.ChunkKindTool, item.Kind)
-	require.Equal(t, contextdata.OriginTool, item.Origin)
-	require.Equal(t, knowledge.EpistemicClaimed, item.Epistemics)
 }

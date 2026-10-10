@@ -63,10 +63,6 @@ type agentEnv struct {
 	// KnowledgeStore is the concrete chunk store implementation.
 	// Kept as concrete type for direct access to knowledge operations.
 	KnowledgeStore *knowledge.ChunkStore
-	// OutputIngester closes the write loop from runtime outputs back into knowledge.
-	OutputIngester *knowledge.OutputIngester
-	// IngestOutputs enables runtime output ingestion for agents that opt in.
-	IngestOutputs bool
 	// PatternStore is the pattern store interface.
 	PatternStore knowledge.PatternStore
 	// AgentLifecycle is the runtime agent lifecycle management interface.

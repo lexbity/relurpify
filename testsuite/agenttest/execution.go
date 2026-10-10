@@ -348,7 +348,7 @@ func (e *PreparedRunExecutor) assembleDeps(desc *PreparedRunDescriptor, tel tele
 		Telemetry:     tel,
 	}
 	modelTel := modelTelemetryAdapter{inner: tel}
-	return &paradigm.Deps{
+	deps := &paradigm.Deps{
 		Config:         cfg,
 		Model:          e.model.ModelFactory(modelTel, false),
 		Registry:       e.capability.Registry,
@@ -358,12 +358,12 @@ func (e *PreparedRunExecutor) assembleDeps(desc *PreparedRunDescriptor, tel tele
 		IndexManager:   e.capability.IndexManager,
 		SearchEngine:   e.capability.SearchEngine,
 		StreamTrigger:  e.knowledge.StreamTrigger,
-		OutputIngester: knowledge.NewOutputIngester(e.knowledge.KnowledgeStore, e.knowledge.KnowledgeEvents),
-		IngestOutputs:  true,
 		PromptRegistry: prompt.NewRegistry(),
 		AgentLifecycle: nil,
 		Telemetry:      tel,
 	}
+	// D-5: the harness wires the same grounding composition as production.
+	return envcomposition.WireGrounding(deps, e.knowledge)
 }
 
 func (e *PreparedRunExecutor) createAgent(deps *paradigm.Deps, workspace string) error {

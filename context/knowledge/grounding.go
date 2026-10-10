@@ -2,6 +2,8 @@ package knowledge
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -261,7 +263,11 @@ func (g *GroundingService) prepare(ctx context.Context, items []GroundingItem, r
 				report.Skipped = append(report.Skipped, entry)
 				g.emitTombstonePreserved(item, id)
 				continue
-			case mergeMerged:
+			case mergeMerged, mergeResurrected:
+				// A resurrected chunk re-establishes a retracted fact, so its
+				// grounding history spans the retraction: the prior records
+				// stay in GroundedBy and the report marks the identity as
+				// pre-existing, exactly as for a live merge.
 				chunk.GroundedBy = append(append([]GroundingRecord(nil), existing.GroundedBy...), chunk.GroundedBy...)
 				alreadyExisted = true
 			}
@@ -484,6 +490,23 @@ func kindFor(item GroundingItem) ChunkKind {
 	return ChunkKindCapture
 }
 
+// CaptureKindForOrigin resolves the canonical chunk kind for a runtime
+// capture from its dataflow origin floor. It is the grounding-side heir of
+// the output ingester's input taxonomy (the ingester was absorbed into this
+// commit boundary; see devdocs/plans/bkc-bidirectional-context-and-hermetic-
+// dryrun-spec.md, Phase 3): a capture whose dataflow floor is tool output
+// grounds as a tool fact (ChunkKindTool, the kind the capture encoding already
+// documents for tool results), while agent claims and user-given values ground
+// as ChunkKindCapture. Verbatim LLM-response and observation ingestion stay
+// deferred by design: without a summarizer and a recipe-level policy, storing
+// model output under a summarized-storage contract would be dishonest metadata.
+func CaptureKindForOrigin(origin contextdata.OriginClass) ChunkKind {
+	if origin == contextdata.OriginTool {
+		return ChunkKindTool
+	}
+	return ChunkKindCapture
+}
+
 func sourceOriginForClass(origin contextdata.OriginClass) SourceOrigin {
 	switch origin {
 	case contextdata.OriginUser:
@@ -540,4 +563,11 @@ func suspiciousGroundingValue(value any) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// contentHashForText is the grounding boundary's content digest: stable,
+// truncated SHA-256 over the encoded capture value.
+func contentHashForText(text string) string {
+	sum := sha256.Sum256([]byte(text))
+	return hex.EncodeToString(sum[:16])
 }

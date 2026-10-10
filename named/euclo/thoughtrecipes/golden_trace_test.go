@@ -237,6 +237,7 @@ func minimalTraceDeps(t *testing.T) (*paradigm.Deps, *regpkg.CapabilityRegistry)
 			Model: "offline",
 		},
 		Registry: reg,
+		Grounder: goldenDeps(t).Grounder,
 	}
 	return deps, reg
 }

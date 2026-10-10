@@ -172,8 +172,7 @@ func (n *DelegateNode) writeDelegationCaptures(ctx context.Context, parent, chil
 		if _, err := ApplyCaptureBindingsFromSnapshot(parent, sourceData, n.step.CaptureBindings, execution.ResultFields(result.Data)); err != nil {
 			return err
 		}
-		n.enqueueCaptureItems(ctx, parent, n.step.CaptureBindings, execution.ResultFields(result.Data))
-		return nil
+		return n.enqueueCaptureItems(ctx, parent, n.step.CaptureBindings, execution.ResultFields(result.Data))
 	}
 	return n.writeCaptures(ctx, parent, result)
 }

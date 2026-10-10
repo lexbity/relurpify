@@ -2,6 +2,7 @@ package thoughtrecipe
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/context/contextdata"
@@ -17,9 +18,10 @@ const groundingContextCap = 16
 
 // enqueueCaptureItems builds grounding items for finished capture bindings and
 // hands them to the run's capture sink. Items targeting scratch.* are never
-// grounded (FR-1). When no sink is present in the node context the batch is
-// dropped with an explicit event — never silently.
-func (c *stepCore) enqueueCaptureItems(ctx context.Context, env *contextdata.Envelope, bindings []CaptureBinding, resultData map[string]any) {
+// grounded (FR-1). Graph build fails a recipe that declares grounding-bound
+// captures without a boundary (validateCaptureSinks); a sink still absent at
+// execution is a hard node error, never a silent drop.
+func (c *stepCore) enqueueCaptureItems(ctx context.Context, env *contextdata.Envelope, bindings []CaptureBinding, resultData map[string]any) error {
 	items, downgrades := buildCaptureItems(c.step, env, bindings, resultData)
 	for _, downgrade := range downgrades {
 		c.emitGroundingEvent(fwtelemetry.EventCaptureEpistemicsDowngraded, "capture epistemics downgraded", map[string]any{
@@ -28,35 +30,16 @@ func (c *stepCore) enqueueCaptureItems(ctx context.Context, env *contextdata.Env
 		})
 	}
 	if len(items) == 0 {
-		return
+		return nil
 	}
 	sink := agentgraph.CaptureSinkFromContext(ctx)
 	if sink == nil {
-		c.emitGroundingEvent(fwtelemetry.EventCaptureSinkAbsent, "capture sink absent", map[string]any{
-			"node_id":  c.step.ID,
-			"captures": len(items),
-		})
-		return
+		return fmt.Errorf("capture step %q has no grounding boundary in context (Grounder unwired)", c.step.ID)
 	}
 	for _, item := range items {
 		sink.EnqueueCapture(item)
 	}
-}
-
-// enqueueToolResult builds a tool-result grounding item (origin tool, kind
-// tool) and enqueues it through the capture sink. It replaces the
-// fire-and-forget async ingestion path.
-func (c *stepCore) enqueueToolResult(ctx context.Context, env *contextdata.Envelope, data map[string]any) {
-	item := buildToolResultItem(c.step, env, data)
-	sink := agentgraph.CaptureSinkFromContext(ctx)
-	if sink == nil {
-		c.emitGroundingEvent(fwtelemetry.EventCaptureSinkAbsent, "capture sink absent", map[string]any{
-			"node_id": c.step.ID,
-			"kind":    "tool",
-		})
-		return
-	}
-	sink.EnqueueCapture(item)
+	return nil
 }
 
 // buildCaptureItems resolves one grounding item per finished grounding-capable
@@ -81,41 +64,24 @@ func buildCaptureItems(step ExecutionStep, env *contextdata.Envelope, bindings [
 		if downgraded {
 			downgrades = append(downgrades, dest)
 		}
+		origin := captureOriginFloor(env, step.Sources, binding)
 		item := knowledge.GroundingItem{
 			Value:          value,
 			TypeAnnotation: typeAnnotationName(binding.Annotation),
 			Epistemics:     knowledge.Epistemics(epistemics),
-			Origin:         captureOriginFloor(env, step.Sources, binding),
+			Origin:         origin,
 			StateKey:       dest,
 			NodeID:         step.ID,
 			TaskID:         env.TaskID,
 			SessionID:      env.SessionID,
 			WorkspaceID:    workspaceIDFromEnvelope(env),
 			RecipeID:       recipeIDFromEnvelope(env),
-			Kind:           knowledge.ChunkKindCapture,
+			Kind:           knowledge.CaptureKindForOrigin(origin),
 			SourceChunkIDs: cappedChunkIDs(env.StreamedChunkIDs(), groundingContextCap),
 		}
 		items = append(items, item)
 	}
 	return items, downgrades
-}
-
-func buildToolResultItem(step ExecutionStep, env *contextdata.Envelope, data map[string]any) knowledge.GroundingItem {
-	if env == nil {
-		env = contextdata.NewEnvelope("", "")
-	}
-	return knowledge.GroundingItem{
-		Value:          data,
-		Epistemics:     knowledge.EpistemicClaimed,
-		Origin:         contextdata.OriginTool,
-		NodeID:         step.ID,
-		TaskID:         env.TaskID,
-		SessionID:      env.SessionID,
-		WorkspaceID:    workspaceIDFromEnvelope(env),
-		RecipeID:       recipeIDFromEnvelope(env),
-		Kind:           knowledge.ChunkKindTool,
-		SourceChunkIDs: cappedChunkIDs(env.StreamedChunkIDs(), groundingContextCap),
-	}
 }
 
 // resolveCaptureEpistemics applies the epistemic annotation at runtime: `given`

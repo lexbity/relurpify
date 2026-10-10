@@ -172,8 +172,7 @@ func (c *stepCore) writeCaptures(ctx context.Context, env *contextdata.Envelope,
 	if err != nil {
 		return err
 	}
-	c.enqueueCaptureItems(ctx, env, c.step.CaptureBindings, execution.ResultFields(result.Data))
-	return nil
+	return c.enqueueCaptureItems(ctx, env, c.step.CaptureBindings, execution.ResultFields(result.Data))
 }
 
 func (c *stepCore) renderTemplate(src string, data map[string]any) string {

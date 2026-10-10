@@ -436,19 +436,17 @@ func (n *reactActNode) recordObservation(ctx context.Context, env *contextdata.E
 		}
 	}
 	env.SetWorkingValueWithClass("react.tool_observations", history, contextdata.MemoryClassTask)
-	if n != nil && n.agent != nil && n.agent.outputIngestionEnabled() {
+	if n != nil && n.agent != nil {
 		summary := strings.TrimSpace(observation.Summary)
 		if summary == "" {
 			return
 		}
-		// Observations ground through the capture sink (the run's epoch
-		// coordinator); the fire-and-forget async ingestion path is gone.
+		// Observations ground unconditionally through the run's capture sink
+		// (the epoch coordinator). A run composed without a knowledge runtime
+		// carries no sink and no grounding boundary; that is composition, not
+		// degradation.
 		sink := agentgraph.CaptureSinkFromContext(ctx)
 		if sink == nil {
-			n.emitGroundingEvent(ctx, "capture.sink_absent", map[string]any{
-				"node_id": n.id,
-				"kind":    string(knowledge.ChunkKindObservation),
-			})
 			return
 		}
 		sink.EnqueueCapture(knowledge.GroundingItem{

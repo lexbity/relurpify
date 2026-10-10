@@ -692,6 +692,13 @@ func tryRunFixtureInto(t *testing.T, name string, deps *paradigm.Deps, env *cont
 	if err := thoughtrecipe.ValidatePlanContracts(plan, paradigm.Registry); err != nil {
 		t.Fatalf("fixture %s fails plan-level contract validation: %v", name, err)
 	}
+	// D-5: a fixture declaring grounding-bound captures composes a grounding
+	// boundary automatically — the graph build fails closed without one.
+	if grounder == nil && thoughtrecipe.DeclaresGroundingCaptures(plan) {
+		_, service := newConformanceGroundingStore(t)
+		grounder = service
+		deps.Grounder = service
+	}
 	graph, err := thoughtrecipe.BuildThoughtRecipeGraph(plan, deps, nil)
 	if err != nil {
 		t.Fatalf("BuildThoughtRecipeGraph(%s): %v", name, err)

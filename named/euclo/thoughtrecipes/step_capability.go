@@ -208,10 +208,6 @@ func (c *stepCore) executeCapability(ctx context.Context, env *contextdata.Envel
 		}
 	}
 
-	if c.deps.IngestOutputs {
-		c.enqueueToolResult(ctx, env, data)
-	}
-
 	result := &execution.Result{
 		NodeID:  c.id,
 		Success: success,
