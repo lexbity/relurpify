@@ -5,8 +5,8 @@ import (
 	"fmt"
 
 	"codeburg.org/lexbit/relurpify/governance/netpolicy"
-	"codeburg.org/lexbit/relurpify/governance/permissions"
 	governanceports "codeburg.org/lexbit/relurpify/governance/ports"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
 )
 
 // permissionManagerEnforcer adapts PermissionManager to the Enforcer interface.
@@ -53,14 +53,14 @@ func (e *permissionManagerEnforcer) Check(ctx context.Context, req governancepor
 }
 
 func (e *permissionManagerEnforcer) checkFile(ctx context.Context, agentID, action, path string) governanceports.Decision {
-	var act permissions.FileSystemAction
+	var act ucperms.FileSystemAction
 	switch action {
 	case "read":
-		act = permissions.FileSystemRead
+		act = ucperms.FileSystemRead
 	case "write":
-		act = permissions.FileSystemWrite
+		act = ucperms.FileSystemWrite
 	case "execute":
-		act = permissions.FileSystemExecute
+		act = ucperms.FileSystemExecute
 	default:
 		return governanceports.Decision{Allow: false, Reason: "unsupported filesystem action: " + action}
 	}
@@ -90,8 +90,8 @@ func (e *permissionManagerEnforcer) checkNetwork(ctx context.Context, agentID, r
 		return governanceports.Decision{Allow: true, Reason: "network allowed"}
 	}
 	const reason = "unresolved network target — resolve via netpolicy before Enforcer.Check"
-	e.pm.emitPolicyDecision(ctx, agentID, permissions.PermissionDescriptor{
-		Type:     permissions.PermissionTypeNetwork,
+	e.pm.emitPolicyDecision(ctx, agentID, ucperms.PermissionDescriptor{
+		Type:     ucperms.PermissionTypeNetwork,
 		Action:   "net:egress",
 		Resource: resource,
 	}, "deny", reason, map[string]any{"event": "netpolicy/unresolved", "host": resource})

@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
 )
 
 type browserPaths struct {
@@ -87,7 +87,7 @@ func (s *BrowserService) ensureBrowserPathRoot(label, path string) error {
 	if path == "" {
 		return fmt.Errorf("browser %s missing", label)
 	}
-	if err := s.checkFileScope(permissions.FileSystemWrite, path); err != nil {
+	if err := s.checkFileScope(ucperms.FileSystemWrite, path); err != nil {
 		return fmt.Errorf("browser %s out of scope: %w", label, err)
 	}
 	return nil

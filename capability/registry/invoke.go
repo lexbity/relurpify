@@ -11,17 +11,16 @@ import (
 	"strings"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/descriptor"
 	"codeburg.org/lexbit/relurpify/capability/handler"
-
-	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/governance/classification"
 	"codeburg.org/lexbit/relurpify/governance/identity"
-	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/governance/policy"
 	"codeburg.org/lexbit/relurpify/governance/risk"
 	fwtelemetry "codeburg.org/lexbit/relurpify/telemetry"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
 )
 
 const (
@@ -290,8 +289,8 @@ func (r *CapabilityRegistry) enforceCapabilityPolicy(ctx context.Context, entry 
 	}, ApprovalRequest{
 		AgentID: agentID,
 		Manager: manager,
-		Permission: permissions.PermissionDescriptor{
-			Type:         permissions.PermissionTypeCapability,
+		Permission: ucperms.PermissionDescriptor{
+			Type:         ucperms.PermissionTypeCapability,
 			Action:       "capability:" + desc.Name,
 			Resource:     desc.ID,
 			RequiresHITL: true,

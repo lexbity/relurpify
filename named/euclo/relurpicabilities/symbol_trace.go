@@ -4,13 +4,12 @@ import (
 	"context"
 	"fmt"
 
-	"codeburg.org/lexbit/relurpify/capability/descriptor"
-
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/capability/descriptor"
 	"codeburg.org/lexbit/relurpify/capability/ports"
-	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
 	"codeburg.org/lexbit/relurpify/context/knowledge/ast"
 	"codeburg.org/lexbit/relurpify/governance/classification"
+	"codeburg.org/lexbit/relurpify/model"
 )
 
 // SymbolTraceHandler implements the symbol trace capability for call graph analysis.
@@ -39,9 +38,9 @@ func (h *SymbolTraceHandler) Descriptor(ctx context.Context, env ports.State) de
 		},
 		TrustClass:    agentspec.TrustClassBuiltinTrusted,
 		EffectClasses: []classification.EffectClass{},
-		InputSchema: &schemacoerce.Schema{
+		InputSchema: &model.Schema{
 			Type: "object",
-			Properties: map[string]*schemacoerce.Schema{
+			Properties: map[string]*model.Schema{
 				"symbol": {
 					Type:        "string",
 					Description: "Symbol name to trace",
@@ -49,9 +48,9 @@ func (h *SymbolTraceHandler) Descriptor(ctx context.Context, env ports.State) de
 			},
 			Required: []string{"symbol"},
 		},
-		OutputSchema: &schemacoerce.Schema{
+		OutputSchema: &model.Schema{
 			Type: "object",
-			Properties: map[string]*schemacoerce.Schema{
+			Properties: map[string]*model.Schema{
 				"success": {
 					Type:        "boolean",
 					Description: "True if trace executed successfully",
@@ -67,14 +66,14 @@ func (h *SymbolTraceHandler) Descriptor(ctx context.Context, env ports.State) de
 				"callees": {
 					Type:        "array",
 					Description: "Functions called by this symbol",
-					Items: &schemacoerce.Schema{
+					Items: &model.Schema{
 						Type: "object",
 					},
 				},
 				"callers": {
 					Type:        "array",
 					Description: "Functions that call this symbol",
-					Items: &schemacoerce.Schema{
+					Items: &model.Schema{
 						Type: "object",
 					},
 				},

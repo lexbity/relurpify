@@ -4,10 +4,10 @@ import (
 	"context"
 	"testing"
 
-	"github.com/stretchr/testify/require"
-
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
+	"github.com/stretchr/testify/require"
 )
 
 // unavailableAuditLogger mimics a chain logger whose writer is stalled past
@@ -26,8 +26,8 @@ func (unavailableAuditLogger) Query(context.Context, policy.AuditQuery) ([]polic
 // accept a governed grant, the grant MUST fail with the audit reason instead
 // of silently proceeding unrecorded.
 func TestGrantFailsClosedWhenAuditUnavailable(t *testing.T) {
-	declared := &permissions.PermissionSet{
-		Executables: []permissions.ExecutablePermission{{Binary: "echo"}},
+	declared := &ucperms.PermissionSet{
+		Executables: []ucperms.ExecutablePermission{{Binary: "echo"}},
 	}
 	pm, err := NewPermissionManager("/tmp", declared, unavailableAuditLogger{}, nil)
 	require.NoError(t, err)
@@ -42,8 +42,8 @@ func TestGrantFailsClosedWhenAuditUnavailable(t *testing.T) {
 // when the audit enqueue fails — audit failure never converts a denial into a
 // grant.
 func TestDenyStillDeniesWhenAuditUnavailable(t *testing.T) {
-	declared := &permissions.PermissionSet{
-		Executables: []permissions.ExecutablePermission{{Binary: "echo"}},
+	declared := &ucperms.PermissionSet{
+		Executables: []ucperms.ExecutablePermission{{Binary: "echo"}},
 	}
 	pm, err := NewPermissionManager("/tmp", declared, unavailableAuditLogger{}, nil)
 	require.NoError(t, err)

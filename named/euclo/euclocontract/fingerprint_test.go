@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
 )
 
 func TestContractFingerprint_StableOnUnchangedInput(t *testing.T) {
@@ -19,7 +19,7 @@ func TestContractFingerprint_StableOnUnchangedInput(t *testing.T) {
 		ToolExecutionPolicy: map[string]config.ToolPolicy{
 			"cli_git": {Execute: config.AgentPermissionAsk},
 		},
-	}, permissions.PermissionSet{}, config.ResourceSpec{}, config.SecuritySpec{}, config.SourceSummary{})
+	}, ucperms.PermissionSet{}, config.ResourceSpec{}, config.SecuritySpec{}, config.SourceSummary{})
 
 	first := config.ContractFingerprint(c, workspace)
 	second := config.ContractFingerprint(c, workspace)
@@ -37,7 +37,7 @@ func TestContractFingerprint_Stable100x(t *testing.T) {
 		ToolExecutionPolicy: map[string]config.ToolPolicy{
 			"cli_git": {Execute: config.AgentPermissionAsk},
 		},
-	}, permissions.PermissionSet{}, config.ResourceSpec{}, config.SecuritySpec{}, config.SourceSummary{})
+	}, ucperms.PermissionSet{}, config.ResourceSpec{}, config.SecuritySpec{}, config.SourceSummary{})
 
 	fp := config.ContractFingerprint(c, workspace)
 	for i := 0; i < 100; i++ {
@@ -57,7 +57,7 @@ func TestContractFingerprint_ChangesWhenLocaltoolChanges(t *testing.T) {
 		ToolExecutionPolicy: map[string]config.ToolPolicy{
 			"cli_git": {Execute: config.AgentPermissionAsk},
 		},
-	}, permissions.PermissionSet{}, config.ResourceSpec{}, config.SecuritySpec{}, config.SourceSummary{})
+	}, ucperms.PermissionSet{}, config.ResourceSpec{}, config.SecuritySpec{}, config.SourceSummary{})
 
 	allowFP := config.ContractFingerprint(c, workspace)
 
@@ -78,7 +78,7 @@ func TestContractFingerprint_ChangesWhenContractChanges(t *testing.T) {
 		ToolExecutionPolicy: map[string]config.ToolPolicy{
 			"cli_git": {Execute: config.AgentPermissionAsk},
 		},
-	}, permissions.PermissionSet{}, config.ResourceSpec{}, config.SecuritySpec{}, config.SourceSummary{})
+	}, ucperms.PermissionSet{}, config.ResourceSpec{}, config.SecuritySpec{}, config.SourceSummary{})
 
 	baseFP := config.ContractFingerprint(base, workspace)
 
@@ -87,7 +87,7 @@ func TestContractFingerprint_ChangesWhenContractChanges(t *testing.T) {
 		ToolExecutionPolicy: map[string]config.ToolPolicy{
 			"cli_git": {Execute: config.AgentPermissionDeny},
 		},
-	}, permissions.PermissionSet{}, config.ResourceSpec{}, config.SecuritySpec{}, config.SourceSummary{})
+	}, ucperms.PermissionSet{}, config.ResourceSpec{}, config.SecuritySpec{}, config.SourceSummary{})
 
 	modifiedFP := config.ContractFingerprint(modified, workspace)
 

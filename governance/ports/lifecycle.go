@@ -68,5 +68,3 @@ const (
 	ArtifactStorageInline   ArtifactStorageKind = "inline"
 	ArtifactStorageExternal ArtifactStorageKind = "external"
 )
-
-

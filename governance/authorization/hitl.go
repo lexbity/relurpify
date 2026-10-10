@@ -7,9 +7,9 @@ import (
 	"sync"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/governance/policy"
 	fwtelemetry "codeburg.org/lexbit/relurpify/telemetry"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
 )
 
 type HITLTimeoutBehavior string
@@ -21,17 +21,17 @@ const (
 
 // PermissionRequest captures a pending permission escalation.
 type PermissionRequest struct {
-	ID              string                           `json:"id"`
-	Permission      permissions.PermissionDescriptor `json:"permission"`
-	Justification   string                           `json:"justification"`
-	Scope           policy.GrantScope                `json:"scope"`
-	Duration        time.Duration                    `json:"duration"`
-	Risk            policy.RiskLevel                 `json:"risk"`
-	RunID           string                           `json:"run_id,omitempty"`
-	Timeout         time.Duration                    `json:"timeout,omitempty"`
-	TimeoutBehavior HITLTimeoutBehavior              `json:"timeout_behavior,omitempty"`
-	RequestedAt     time.Time                        `json:"requested_at"`
-	State           string                           `json:"state"`
+	ID              string                       `json:"id"`
+	Permission      ucperms.PermissionDescriptor `json:"permission"`
+	Justification   string                       `json:"justification"`
+	Scope           policy.GrantScope            `json:"scope"`
+	Duration        time.Duration                `json:"duration"`
+	Risk            policy.RiskLevel             `json:"risk"`
+	RunID           string                       `json:"run_id,omitempty"`
+	Timeout         time.Duration                `json:"timeout,omitempty"`
+	TimeoutBehavior HITLTimeoutBehavior          `json:"timeout_behavior,omitempty"`
+	RequestedAt     time.Time                    `json:"requested_at"`
+	State           string                       `json:"state"`
 }
 
 // PermissionDecision encapsulates an approval or rejection.
@@ -452,7 +452,7 @@ func (h *HITLBroker) PendingRequests() []*PermissionRequest {
 }
 
 // GrantManual creates a permission grant without the async flow.
-func GrantManual(permission permissions.PermissionDescriptor, approvedBy string, scope policy.GrantScope, duration time.Duration) *PermissionGrant {
+func GrantManual(permission ucperms.PermissionDescriptor, approvedBy string, scope policy.GrantScope, duration time.Duration) *PermissionGrant {
 	grant := &PermissionGrant{
 		ID:         fmt.Sprintf("manual-%d", time.Now().UnixNano()),
 		Permission: permission,

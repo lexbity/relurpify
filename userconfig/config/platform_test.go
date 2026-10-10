@@ -4,18 +4,17 @@ import (
 	"path/filepath"
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/userconfig/securefile"
 	"github.com/stretchr/testify/require"
-
-	"codeburg.org/lexbit/relurpify/platform/fs"
 )
 
 func TestLoadPlatformConfig(t *testing.T) {
 	workspace := t.TempDir()
 	toolsDir := DefaultToolManifestDir(workspace)
-	require.NoError(t, fs.MkdirAllSecure(toolsDir))
+	require.NoError(t, securefile.MkdirAllSecure(toolsDir))
 	secDir := filepath.Join(workspace, "relurpify_cfg", "security")
-	require.NoError(t, fs.MkdirAllSecure(secDir))
-	require.NoError(t, fs.WriteFileSecure(filepath.Join(toolsDir, "demo.tool.yaml"), []byte(`schema: relurpify/tool/v1
+	require.NoError(t, securefile.MkdirAllSecure(secDir))
+	require.NoError(t, securefile.WriteFileSecure(filepath.Join(toolsDir, "demo.tool.yaml"), []byte(`schema: relurpify/tool/v1
 name: demo
 family: cli
 intent: [demo]
@@ -34,7 +33,7 @@ capability:
   risk_class: [read-only]
   effect_class: [inspect]
 `)))
-	require.NoError(t, fs.WriteFileSecure(filepath.Join(secDir, "localtool.policy.yaml"), []byte(`schema: relurpify/policy/localtool/v1
+	require.NoError(t, securefile.WriteFileSecure(filepath.Join(secDir, "localtool.policy.yaml"), []byte(`schema: relurpify/policy/localtool/v1
 tools:
   demo:
     execute: ask

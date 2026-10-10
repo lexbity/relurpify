@@ -10,8 +10,8 @@ import (
 
 // Loader scans Euclo DSL thoughtrecipe sources from the workspace.
 type Loader struct {
-	PromptRegistry    PromptRegistryLookup
-	RecipeRegistry    ThoughtRecipeRegistryLookup
+	PromptRegistry     PromptRegistryLookup
+	RecipeRegistry     ThoughtRecipeRegistryLookup
 	CapabilityRegistry CapabilityRegistryLookup
 }
 
@@ -170,7 +170,6 @@ func (l *Loader) loadThoughtRecipeSource(result *LoadResult, source SourceFile) 
 	}
 	return nil
 }
-
 
 // validateCapabilityStepScopes is the belt-to-the-lowering's-suspenders load
 // invariant: every capability step MUST carry a resolved scope. The lowering

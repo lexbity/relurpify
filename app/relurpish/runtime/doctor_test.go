@@ -22,9 +22,9 @@ func writeMinimalDoctorWorkspace(t *testing.T, workspace string, providerYAMLs m
 		}
 	}
 	policies := map[string]string{
-		"localtool.policy.yaml":       "schema: relurpify/policy/localtool/v1\ntools:\n  cli_git:\n    execute: allow\n",
-		"shell.policy.yaml":           "schema: relurpify/policy/shell/v1\nrules: []\n",
-		"sandbox.policy.yaml":         "schema: relurpify/policy/sandbox/v1\nread_only_root: false\nno_new_privileges: false\n",
+		"localtool.policy.yaml":          "schema: relurpify/policy/localtool/v1\ntools:\n  cli_git:\n    execute: allow\n",
+		"shell.policy.yaml":              "schema: relurpify/policy/shell/v1\nrules: []\n",
+		"sandbox.policy.yaml":            "schema: relurpify/policy/sandbox/v1\nread_only_root: false\nno_new_privileges: false\n",
 		"workspaceingestion.policy.yaml": "schema: relurpify/policy/ingestion/v1\nrules: []\n",
 	}
 	for name, content := range policies {
@@ -46,9 +46,9 @@ func TestDoctorReport_ProvidersBlockPopulated(t *testing.T) {
 	})
 
 	cfg := Config{
-		Workspace:          workspace,
-		InferenceProvider:  "ollama",
-		InferenceEndpoint:  "http://localhost:11434",
+		Workspace:         workspace,
+		InferenceProvider: "ollama",
+		InferenceEndpoint: "http://localhost:11434",
 	}
 
 	report := BuildDoctorReport(context.Background(), cfg, config.Secrets{})
@@ -73,13 +73,13 @@ func TestDoctorReport_ProvidersBlockPopulated(t *testing.T) {
 func TestDoctorReport_SelectedProviderMarked(t *testing.T) {
 	workspace := t.TempDir()
 	writeMinimalDoctorWorkspace(t, workspace, map[string]string{
-		"ollama.provider.yaml":  "schema: relurpify/model/provider/v1\nname: ollama\nendpoint: http://localhost:11434\nkind: ollama\n",
+		"ollama.provider.yaml":   "schema: relurpify/model/provider/v1\nname: ollama\nendpoint: http://localhost:11434\nkind: ollama\n",
 		"lmstudio.provider.yaml": "schema: relurpify/model/provider/v1\nname: lmstudio\nendpoint: http://localhost:1234\nkind: lmstudio\n",
 	})
 	cfg := Config{
-		Workspace:          workspace,
-		InferenceProvider:  "lmstudio",
-		InferenceEndpoint:  "http://localhost:1234",
+		Workspace:         workspace,
+		InferenceProvider: "lmstudio",
+		InferenceEndpoint: "http://localhost:1234",
 	}
 	report := BuildDoctorReport(context.Background(), cfg, config.Secrets{})
 	var lmstudioSelected, ollamaSelected bool
@@ -105,9 +105,9 @@ func TestDoctorReport_NoInferenceBackendDep(t *testing.T) {
 		"ollama.provider.yaml": "schema: relurpify/model/provider/v1\nname: ollama\nendpoint: http://localhost:11434\nkind: ollama\n",
 	})
 	cfg := Config{
-		Workspace:          workspace,
-		InferenceProvider:  "ollama",
-		InferenceEndpoint:  "http://localhost:11434",
+		Workspace:         workspace,
+		InferenceProvider: "ollama",
+		InferenceEndpoint: "http://localhost:11434",
 	}
 	report := BuildDoctorReport(context.Background(), cfg, config.Secrets{})
 	for _, dep := range report.Dependencies {

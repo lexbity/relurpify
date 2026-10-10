@@ -8,6 +8,7 @@ import (
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/governance/policy"
 	governanceports "codeburg.org/lexbit/relurpify/governance/ports"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
 )
 
 // toolApprovingProvider is an inline HITLProvider test double that approves
@@ -38,7 +39,7 @@ func (p *toolApprovingProvider) RequestPermission(_ context.Context, req Permiss
 func newToolAuthManager(t *testing.T) (*PermissionManager, *policy.FileChainAuditLogger) {
 	t.Helper()
 	audit := newTestAuditLogger(t)
-	pm, err := NewPermissionManager("/tmp", &permissions.PermissionSet{}, audit, nil)
+	pm, err := NewPermissionManager("/tmp", &ucperms.PermissionSet{}, audit, nil)
 	if err != nil {
 		t.Fatalf("NewPermissionManager: %v", err)
 	}
@@ -69,7 +70,7 @@ func TestAuthorizeToolByNameDenyPolicy(t *testing.T) {
 
 func TestAuthorizeToolByNameAskPolicyWithHITL(t *testing.T) {
 	broker := &toolApprovingProvider{}
-	pm, err := NewPermissionManager("/tmp", &permissions.PermissionSet{}, newTestAuditLogger(t), broker)
+	pm, err := NewPermissionManager("/tmp", &ucperms.PermissionSet{}, newTestAuditLogger(t), broker)
 	if err != nil {
 		t.Fatalf("NewPermissionManager: %v", err)
 	}

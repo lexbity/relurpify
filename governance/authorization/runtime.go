@@ -11,6 +11,7 @@ import (
 	permissions "codeburg.org/lexbit/relurpify/governance/permissions"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
 	governanceports "codeburg.org/lexbit/relurpify/governance/ports"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
 )
 
 // runtimeStateDirName is the workspace-relative runtime state directory used as a
@@ -42,8 +43,8 @@ type SandboxSecurity struct {
 type RuntimeConfig struct {
 	DocumentSnapshot   any
 	AgentSpec          any
-	Permissions        permissions.PermissionSet
-	DefaultPermissions *permissions.PermissionSet
+	Permissions        ucperms.PermissionSet
+	DefaultPermissions *ucperms.PermissionSet
 	Security           SandboxSecurity
 	ProtectedPaths     []string
 	Image              string
@@ -71,7 +72,7 @@ type AgentRegistration struct {
 	DocumentSnapshot  any
 	AgentSpec         any
 	Permissions       *PermissionManager
-	PermissionSet     permissions.PermissionSet
+	PermissionSet     ucperms.PermissionSet
 	Policy            PolicyEngine
 	Audit             policy.AuditLogger
 	HITL              *HITLBroker
@@ -229,7 +230,7 @@ func selectSandboxRuntime(ctx context.Context, backend string, sandboxCfg govern
 
 // buildSandboxPolicy constructs a sandbox policy from typed permissions and
 // protected paths.
-func buildSandboxPolicy(perms permissions.PermissionSet, security SandboxSecurity, protectedPaths []string) governanceports.SandboxPolicy {
+func buildSandboxPolicy(perms ucperms.PermissionSet, security SandboxSecurity, protectedPaths []string) governanceports.SandboxPolicy {
 	policy := governanceports.SandboxPolicy{
 		ProtectedPaths: append([]string(nil), protectedPaths...),
 	}
@@ -240,7 +241,7 @@ func buildSandboxPolicy(perms permissions.PermissionSet, security SandboxSecurit
 }
 
 // buildNetworkPolicy converts network permissions into sandbox-friendly rules.
-func buildNetworkPolicy(perms []permissions.NetworkPermission) []governanceports.SandboxNetworkRule {
+func buildNetworkPolicy(perms []ucperms.NetworkPermission) []governanceports.SandboxNetworkRule {
 	var rules []governanceports.SandboxNetworkRule
 	for _, perm := range perms {
 		if perm.Direction != "egress" {
@@ -265,7 +266,7 @@ func (r *AgentRegistration) QueryAudit(ctx context.Context, filter policy.AuditQ
 }
 
 // GrantPermission allows operators to programmatically approve scopes.
-func (r *AgentRegistration) GrantPermission(desc permissions.PermissionDescriptor, approvedBy string, scope policy.GrantScope, duration time.Duration) {
+func (r *AgentRegistration) GrantPermission(desc ucperms.PermissionDescriptor, approvedBy string, scope policy.GrantScope, duration time.Duration) {
 	if r == nil || r.Permissions == nil {
 		return
 	}

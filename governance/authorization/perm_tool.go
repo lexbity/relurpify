@@ -9,17 +9,18 @@ import (
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
 	fwtelemetry "codeburg.org/lexbit/relurpify/telemetry"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
 )
 
 // toolLike is the narrow tool surface needed by permission authorization.
 // It deliberately exposes the permission set as the canonical
-// *permissions.PermissionSet rather than a capability-owned wrapper type so a
+// *ucperms.PermissionSet rather than a capability-owned wrapper type so a
 // foreign tool can satisfy it structurally without governance importing the
 // capability domain (which would invert the allowed package direction).
 type toolLike interface {
 	Name() string
 	Tags() []string
-	PermissionSet() *permissions.PermissionSet
+	PermissionSet() *ucperms.PermissionSet
 }
 
 // toolAdapter wraps a foreign tool implementation to satisfy authorization.Tool.
@@ -112,9 +113,9 @@ func (m *PermissionManager) handleUndeclaredTool(ctx context.Context, agentID, n
 }
 
 // toolDescriptor builds the canonical permission descriptor for a tool action.
-func toolDescriptor(name, agentID string) permissions.PermissionDescriptor {
-	return permissions.PermissionDescriptor{
-		Type:     permissions.PermissionTypeHITL,
+func toolDescriptor(name, agentID string) ucperms.PermissionDescriptor {
+	return ucperms.PermissionDescriptor{
+		Type:     ucperms.PermissionTypeHITL,
 		Action:   fmt.Sprintf("tool:%s", name),
 		Resource: agentID,
 	}
@@ -122,7 +123,7 @@ func toolDescriptor(name, agentID string) permissions.PermissionDescriptor {
 
 // collectUndeclared returns human-readable descriptions of any permissions
 // required by the tool that are not covered by the agent manifest.
-func (m *PermissionManager) collectUndeclared(requirements *permissions.PermissionSet) []string {
+func (m *PermissionManager) collectUndeclared(requirements *ucperms.PermissionSet) []string {
 	var missing []string
 	for _, perm := range requirements.FileSystem {
 		if m.findFilesystemPermission(perm.Action, perm.Path) == nil {

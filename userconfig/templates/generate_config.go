@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	relurpifyfs "codeburg.org/lexbit/relurpify/platform/fs"
+	"codeburg.org/lexbit/relurpify/userconfig/securefile"
 	"codeburg.org/lexbit/relurpify/userconfig/templates/embedfs"
 )
 
@@ -24,7 +24,7 @@ func GenerateConfig(output string) error {
 	if err := os.RemoveAll(output); err != nil {
 		return fmt.Errorf("clean output dir %q: %w", output, err)
 	}
-	if err := relurpifyfs.MkdirAllSecure(output); err != nil {
+	if err := securefile.MkdirAllSecure(output); err != nil {
 		return fmt.Errorf("create output dir %q: %w", output, err)
 	}
 	return fs.WalkDir(efs, "workspace", func(path string, d fs.DirEntry, err error) error {
@@ -37,15 +37,15 @@ func GenerateConfig(output string) error {
 		rel := strings.TrimPrefix(path, "workspace/")
 		target := filepath.Join(output, rel)
 		if d.IsDir() {
-			return relurpifyfs.MkdirAllSecure(target)
+			return securefile.MkdirAllSecure(target)
 		}
 		data, err := fs.ReadFile(efs, path)
 		if err != nil {
 			return err
 		}
-		if err := relurpifyfs.MkdirAllSecure(filepath.Dir(target)); err != nil {
+		if err := securefile.MkdirAllSecure(filepath.Dir(target)); err != nil {
 			return err
 		}
-		return relurpifyfs.WriteFileSecure(target, data)
+		return securefile.WriteFileSecure(target, data)
 	})
 }

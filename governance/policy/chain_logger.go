@@ -17,7 +17,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/governance/permissions"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
 )
 
 // AuditChainFormatV1 is the on-disk chain format version. Canonicalization is
@@ -238,18 +238,18 @@ func (l *FileChainAuditLogger) now() time.Time {
 // canonical AuditAction vocabulary. Records without a recognizable permission
 // type fall back to the permission_request family so they stay durable.
 func auditActionForRecord(record AuditRecord) AuditAction {
-	switch permissions.PermissionType(record.Type) {
-	case permissions.PermissionTypeFilesystem:
+	switch ucperms.PermissionType(record.Type) {
+	case ucperms.PermissionTypeFilesystem:
 		return AuditActionFileAccess
-	case permissions.PermissionTypeExecutable:
+	case ucperms.PermissionTypeExecutable:
 		return AuditActionExec
-	case permissions.PermissionTypeNetwork:
+	case ucperms.PermissionTypeNetwork:
 		return AuditActionNetwork
-	case permissions.PermissionTypeCapability:
+	case ucperms.PermissionTypeCapability:
 		return AuditActionCapability
-	case permissions.PermissionTypeIPC:
+	case ucperms.PermissionTypeIPC:
 		return AuditActionIPC
-	case permissions.PermissionTypeHITL:
+	case ucperms.PermissionTypeHITL:
 		return AuditActionRequest
 	default:
 		return AuditActionRequest

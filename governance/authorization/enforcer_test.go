@@ -7,6 +7,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	governanceports "codeburg.org/lexbit/relurpify/governance/ports"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
 )
 
 func TestNewEnforcer_nil(t *testing.T) {
@@ -116,8 +117,8 @@ func TestEnforcer_Check_netEgressPrivateLiteralDenied(t *testing.T) {
 // TestEnforcer_Check_netEgressPublicLiteralAllowed proves a public literal
 // routes through CheckNetwork (declared permission granted).
 func TestEnforcer_Check_netEgressPublicLiteralAllowed(t *testing.T) {
-	declared := &permissions.PermissionSet{
-		Network: []permissions.NetworkPermission{
+	declared := &ucperms.PermissionSet{
+		Network: []ucperms.NetworkPermission{
 			{Direction: "egress", Protocol: "tcp", Host: "8.8.8.8", Port: 0},
 		},
 	}
@@ -141,8 +142,8 @@ func TestEnforcer_Check_netEgressPublicLiteralAllowed(t *testing.T) {
 // never resolves. A hostname is denied with an actionable reason instead of
 // being silently dialed after a TOCTOU re-resolution in the child.
 func TestEnforcer_Check_netEgressNameDeniedUnresolved(t *testing.T) {
-	declared := &permissions.PermissionSet{
-		Network: []permissions.NetworkPermission{
+	declared := &ucperms.PermissionSet{
+		Network: []ucperms.NetworkPermission{
 			{Direction: "egress", Protocol: "tcp", Host: "example.com", Port: 0},
 		},
 	}
@@ -191,12 +192,12 @@ func TestFailClosed_nilDecision(t *testing.T) {
 // newTestPermissionManager creates a PermissionManager for testing.
 func newTestPermissionManager(t *testing.T) *PermissionManager {
 	t.Helper()
-	declared := &permissions.PermissionSet{
-		FileSystem: []permissions.FileSystemPermission{
-			{Path: "/tmp/**", Action: permissions.FileSystemRead},
-			{Path: "/tmp/**", Action: permissions.FileSystemWrite},
+	declared := &ucperms.PermissionSet{
+		FileSystem: []ucperms.FileSystemPermission{
+			{Path: "/tmp/**", Action: ucperms.FileSystemRead},
+			{Path: "/tmp/**", Action: ucperms.FileSystemWrite},
 		},
-		Capabilities: []permissions.CapabilityPermission{
+		Capabilities: []ucperms.CapabilityPermission{
 			{Capability: "test-cap"},
 		},
 	}

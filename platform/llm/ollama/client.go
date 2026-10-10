@@ -459,7 +459,7 @@ func convertLLMToolSpecs(specs []LLMToolSpec) []toolDef {
 	return res
 }
 
-func schemaToOllamaParameters(schema *Schema) map[string]any {
+func schemaToOllamaParameters(schema *model.Schema) map[string]any {
 	props := make(map[string]any)
 	var required []string
 	if schema != nil && schema.Type == "object" {

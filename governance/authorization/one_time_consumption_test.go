@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/governance/policy"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
 )
 
 // countingApprovalProvider is a HITLProvider that counts every request and
@@ -52,13 +52,13 @@ func (p *countingApprovalProvider) count() int {
 // the check after that requires re-approval. Denial paths never consume.
 func TestOneTimeConsumedOnUse(t *testing.T) {
 	provider := &countingApprovalProvider{approve: map[string]policy.GrantScope{}}
-	pm, err := NewPermissionManager(t.TempDir(), &permissions.PermissionSet{}, nil, provider)
+	pm, err := NewPermissionManager(t.TempDir(), &ucperms.PermissionSet{}, nil, provider)
 	if err != nil {
 		t.Fatalf("NewPermissionManager: %v", err)
 	}
 
-	desc := permissions.PermissionDescriptor{
-		Type:         permissions.PermissionTypeFilesystem,
+	desc := ucperms.PermissionDescriptor{
+		Type:         ucperms.PermissionTypeFilesystem,
 		Action:       "write",
 		Resource:     "/workspace/file.txt",
 		RequiresHITL: true,
@@ -95,11 +95,11 @@ func TestOneTimeConsumedOnUse(t *testing.T) {
 // check re-asks.
 func TestOneTimeDenyDoesNotConsume(t *testing.T) {
 	provider := &countingApprovalProvider{deny: map[string]string{"write": "policy blocks write"}}
-	pm, err := NewPermissionManager(t.TempDir(), &permissions.PermissionSet{}, nil, provider)
+	pm, err := NewPermissionManager(t.TempDir(), &ucperms.PermissionSet{}, nil, provider)
 	if err != nil {
 		t.Fatalf("NewPermissionManager: %v", err)
 	}
-	desc := permissions.PermissionDescriptor{Type: permissions.PermissionTypeFilesystem, Action: "write", Resource: "/workspace/file.txt", RequiresHITL: true}
+	desc := ucperms.PermissionDescriptor{Type: ucperms.PermissionTypeFilesystem, Action: "write", Resource: "/workspace/file.txt", RequiresHITL: true}
 
 	for i := 0; i < 2; i++ {
 		if err := pm.RequireApproval(context.Background(), "agent-1", desc, "denied check", policy.GrantScopeOneTime, policy.RiskLevelMedium, 0); err == nil {
@@ -119,11 +119,11 @@ func TestOneTimeDenyDoesNotConsume(t *testing.T) {
 // (D14 vocabulary: one-time = one use, session = repeatable).
 func TestSessionScopeGrantSurvivesChecks(t *testing.T) {
 	provider := &countingApprovalProvider{approve: map[string]policy.GrantScope{}}
-	pm, err := NewPermissionManager(t.TempDir(), &permissions.PermissionSet{}, nil, provider)
+	pm, err := NewPermissionManager(t.TempDir(), &ucperms.PermissionSet{}, nil, provider)
 	if err != nil {
 		t.Fatalf("NewPermissionManager: %v", err)
 	}
-	desc := permissions.PermissionDescriptor{Type: permissions.PermissionTypeFilesystem, Action: "write", Resource: "/workspace/file.txt", RequiresHITL: true}
+	desc := ucperms.PermissionDescriptor{Type: ucperms.PermissionTypeFilesystem, Action: "write", Resource: "/workspace/file.txt", RequiresHITL: true}
 
 	for i := 0; i < 3; i++ {
 		if err := pm.RequireApproval(context.Background(), "agent-1", desc, "session check", policy.GrantScopeSession, policy.RiskLevelMedium, 0); err != nil {
@@ -140,11 +140,11 @@ func TestSessionScopeGrantSurvivesChecks(t *testing.T) {
 // authorizes one check and is consumed; the next enforcement re-asks.
 func TestEnsureGrantOneTimeConsumedOnUse(t *testing.T) {
 	provider := &countingApprovalProvider{approve: map[string]policy.GrantScope{}}
-	pm, err := NewPermissionManager(t.TempDir(), &permissions.PermissionSet{}, nil, provider)
+	pm, err := NewPermissionManager(t.TempDir(), &ucperms.PermissionSet{}, nil, provider)
 	if err != nil {
 		t.Fatalf("NewPermissionManager: %v", err)
 	}
-	desc := permissions.PermissionDescriptor{Type: permissions.PermissionTypeFilesystem, Action: "write", Resource: "/workspace/file.txt", RequiresHITL: true}
+	desc := ucperms.PermissionDescriptor{Type: ucperms.PermissionTypeFilesystem, Action: "write", Resource: "/workspace/file.txt", RequiresHITL: true}
 
 	// Seed a cached one-time grant as a prior HITL approval would.
 	pm.GrantPermission(desc, "user", policy.GrantScopeOneTime, 0)

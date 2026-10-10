@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/governance/permissions"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
 )
 
 // CheckExecutable validates binary execution.
@@ -16,8 +17,8 @@ func (m *PermissionManager) CheckExecutable(ctx context.Context, agentID, binary
 	}
 	perm := m.findExecutablePermission(binary)
 	if perm == nil {
-		desc := permissions.PermissionDescriptor{
-			Type:     permissions.PermissionTypeExecutable,
+		desc := ucperms.PermissionDescriptor{
+			Type:     ucperms.PermissionTypeExecutable,
 			Action:   fmt.Sprintf("exec:binary:%s", binary),
 			Resource: binary,
 		}
@@ -30,22 +31,22 @@ func (m *PermissionManager) CheckExecutable(ctx context.Context, agentID, binary
 		}
 	}
 	if len(perm.Args) > 0 && !matchArgs(perm.Args, args) {
-		return m.deny(ctx, agentID, permissions.PermissionDescriptor{
-			Type:     permissions.PermissionTypeExecutable,
+		return m.deny(ctx, agentID, ucperms.PermissionDescriptor{
+			Type:     ucperms.PermissionTypeExecutable,
 			Action:   fmt.Sprintf("exec:args:%s", strings.Join(args, " ")),
 			Resource: binary,
 		}, "arguments rejected")
 	}
 	if len(perm.Env) > 0 && !matchEnv(perm.Env, env) {
-		return m.deny(ctx, agentID, permissions.PermissionDescriptor{
-			Type:     permissions.PermissionTypeExecutable,
+		return m.deny(ctx, agentID, ucperms.PermissionDescriptor{
+			Type:     ucperms.PermissionTypeExecutable,
 			Action:   "exec:env",
 			Resource: binary,
 		}, "environment rejected")
 	}
 	if perm.HITLRequired {
-		if err := m.ensureGrant(ctx, agentID, permissions.PermissionDescriptor{
-			Type:         permissions.PermissionTypeExecutable,
+		if err := m.ensureGrant(ctx, agentID, ucperms.PermissionDescriptor{
+			Type:         ucperms.PermissionTypeExecutable,
 			Action:       fmt.Sprintf("exec:binary:%s", binary),
 			Resource:     binary,
 			RequiresHITL: true,
@@ -53,8 +54,8 @@ func (m *PermissionManager) CheckExecutable(ctx context.Context, agentID, binary
 			return err
 		}
 	}
-	if err := m.log(ctx, agentID, permissions.PermissionDescriptor{
-		Type:     permissions.PermissionTypeExecutable,
+	if err := m.log(ctx, agentID, ucperms.PermissionDescriptor{
+		Type:     ucperms.PermissionTypeExecutable,
 		Action:   fmt.Sprintf("exec:%s", binary),
 		Resource: binary,
 	}, "granted", map[string]any{
@@ -71,7 +72,7 @@ func (m *PermissionManager) CheckExecutable(ctx context.Context, agentID, binary
 }
 
 // findExecutablePermission locates the manifest entry authorizing a binary.
-func (m *PermissionManager) findExecutablePermission(binary string) *permissions.ExecutablePermission {
+func (m *PermissionManager) findExecutablePermission(binary string) *ucperms.ExecutablePermission {
 	if m == nil || m.declared == nil {
 		return nil
 	}
@@ -79,7 +80,7 @@ func (m *PermissionManager) findExecutablePermission(binary string) *permissions
 	if perm, ok := m.execPermCache.Get(cacheKey); ok {
 		return perm
 	}
-	var matched *permissions.ExecutablePermission
+	var matched *ucperms.ExecutablePermission
 	for _, perm := range m.declared.Executables {
 		if perm.Binary == binary {
 			permCopy := perm

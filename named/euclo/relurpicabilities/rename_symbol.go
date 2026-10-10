@@ -6,13 +6,12 @@ import (
 	"sort"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/capability/descriptor"
-
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/capability/descriptor"
 	"codeburg.org/lexbit/relurpify/capability/ports"
-	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
 	frameworkast "codeburg.org/lexbit/relurpify/context/knowledge/ast"
 	"codeburg.org/lexbit/relurpify/governance/classification"
+	"codeburg.org/lexbit/relurpify/model"
 )
 
 type RenameSymbolHandler struct {
@@ -39,9 +38,9 @@ func (h *RenameSymbolHandler) Descriptor(ctx context.Context, env ports.State) d
 		Source:        descriptor.CapabilitySource{Scope: classification.CapabilityScopeBuiltin},
 		TrustClass:    agentspec.TrustClassBuiltinTrusted,
 		EffectClasses: []classification.EffectClass{classification.EffectClassFilesystemMutation},
-		InputSchema: &schemacoerce.Schema{
+		InputSchema: &model.Schema{
 			Type: "object",
-			Properties: map[string]*schemacoerce.Schema{
+			Properties: map[string]*model.Schema{
 				"from":    {Type: "string"},
 				"to":      {Type: "string"},
 				"file":    {Type: "string"},
@@ -49,13 +48,13 @@ func (h *RenameSymbolHandler) Descriptor(ctx context.Context, env ports.State) d
 			},
 			Required: []string{"from", "to"},
 		},
-		OutputSchema: &schemacoerce.Schema{
+		OutputSchema: &model.Schema{
 			Type: "object",
-			Properties: map[string]*schemacoerce.Schema{
+			Properties: map[string]*model.Schema{
 				"success":        {Type: "boolean"},
 				"preview":        {Type: "boolean"},
 				"applied":        {Type: "boolean"},
-				"files_modified": {Type: "array", Items: &schemacoerce.Schema{Type: "object"}},
+				"files_modified": {Type: "array", Items: &model.Schema{Type: "object"}},
 				"replacements":   {Type: "integer"},
 			},
 		},

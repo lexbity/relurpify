@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/capability/ports"
-	"codeburg.org/lexbit/relurpify/governance/permissions"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
 )
 
 // GrepTool implements plain text search.
@@ -91,7 +91,7 @@ func (t *GrepTool) Execute(ctx context.Context, args map[string]any) (*ports.Too
 func (t *GrepTool) IsAvailable(ctx context.Context) bool { return true }
 
 func (t *GrepTool) Permissions() ports.ToolPermissions {
-	return ports.ToolPermissions{Permissions: &permissions.PermissionSet{}}
+	return ports.ToolPermissions{Permissions: &ucperms.PermissionSet{}}
 }
 func (t *GrepTool) Tags() []string {
 	return []string{ports.TagReadOnly, "search", "recovery"}
@@ -169,7 +169,7 @@ func (t *SimilarityTool) Execute(ctx context.Context, args map[string]any) (*por
 func (t *SimilarityTool) IsAvailable(ctx context.Context) bool { return true }
 
 func (t *SimilarityTool) Permissions() ports.ToolPermissions {
-	return ports.ToolPermissions{Permissions: &permissions.PermissionSet{}}
+	return ports.ToolPermissions{Permissions: &ucperms.PermissionSet{}}
 }
 func (t *SimilarityTool) Tags() []string { return []string{ports.TagReadOnly, "search"} }
 
@@ -249,7 +249,7 @@ func (t *SemanticSearchTool) IsAvailable(ctx context.Context) bool {
 }
 
 func (t *SemanticSearchTool) Permissions() ports.ToolPermissions {
-	return ports.ToolPermissions{Permissions: &permissions.PermissionSet{}}
+	return ports.ToolPermissions{Permissions: &ucperms.PermissionSet{}}
 }
 func (t *SemanticSearchTool) Tags() []string { return []string{ports.TagReadOnly, "search"} }
 

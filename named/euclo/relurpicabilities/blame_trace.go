@@ -4,13 +4,12 @@ import (
 	"context"
 	"fmt"
 
-	"codeburg.org/lexbit/relurpify/capability/descriptor"
-
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/capability/descriptor"
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
-	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
 	"codeburg.org/lexbit/relurpify/governance/classification"
+	"codeburg.org/lexbit/relurpify/model"
 )
 
 // BlameTraceHandler implements the git blame capability.
@@ -51,9 +50,9 @@ func (h *BlameTraceHandler) Descriptor(ctx context.Context, env ports.State) des
 		},
 		TrustClass:    agentspec.TrustClassBuiltinTrusted,
 		EffectClasses: []classification.EffectClass{},
-		InputSchema: &schemacoerce.Schema{
+		InputSchema: &model.Schema{
 			Type: "object",
-			Properties: map[string]*schemacoerce.Schema{
+			Properties: map[string]*model.Schema{
 				"file": {
 					Type:        "string",
 					Description: "File path to blame",
@@ -61,7 +60,7 @@ func (h *BlameTraceHandler) Descriptor(ctx context.Context, env ports.State) des
 				"lines": {
 					Type:        "array",
 					Description: "Line range [start, end] to blame (optional)",
-					Items: &schemacoerce.Schema{
+					Items: &model.Schema{
 						Type: "integer",
 					},
 				},
@@ -72,9 +71,9 @@ func (h *BlameTraceHandler) Descriptor(ctx context.Context, env ports.State) des
 			},
 			Required: []string{"file"},
 		},
-		OutputSchema: &schemacoerce.Schema{
+		OutputSchema: &model.Schema{
 			Type: "object",
-			Properties: map[string]*schemacoerce.Schema{
+			Properties: map[string]*model.Schema{
 				"success": {
 					Type:        "boolean",
 					Description: "True if blame executed successfully",
@@ -86,7 +85,7 @@ func (h *BlameTraceHandler) Descriptor(ctx context.Context, env ports.State) des
 				"entries": {
 					Type:        "array",
 					Description: "Blame entries per line",
-					Items: &schemacoerce.Schema{
+					Items: &model.Schema{
 						Type: "object",
 					},
 				},

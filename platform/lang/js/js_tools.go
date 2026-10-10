@@ -12,9 +12,9 @@ import (
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/capability/ports"
-	"codeburg.org/lexbit/relurpify/governance/permissions"
 	lang "codeburg.org/lexbit/relurpify/platform/lang"
 	"codeburg.org/lexbit/relurpify/platform/tools/subprocess"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
 )
 
 var nodeProjectMarkers = []string{ //nolint:gochecknoglobals // immutable project-marker table
@@ -85,7 +85,7 @@ func (t *NodeWorkspaceDetectTool) Execute(ctx context.Context, args map[string]a
 }
 func (t *NodeWorkspaceDetectTool) IsAvailable(ctx context.Context) bool { return true }
 func (t *NodeWorkspaceDetectTool) Permissions() ports.ToolPermissions {
-	return ports.ToolPermissions{Permissions: &permissions.PermissionSet{}}
+	return ports.ToolPermissions{Permissions: &ucperms.PermissionSet{}}
 }
 func (t *NodeWorkspaceDetectTool) Tags() []string {
 	return []string{ports.TagReadOnly, "lang:node", "workspace-detect", "recovery"}
@@ -128,7 +128,7 @@ func (t *NodeProjectMetadataTool) Execute(ctx context.Context, args map[string]a
 }
 func (t *NodeProjectMetadataTool) IsAvailable(ctx context.Context) bool { return true }
 func (t *NodeProjectMetadataTool) Permissions() ports.ToolPermissions {
-	return ports.ToolPermissions{Permissions: &permissions.PermissionSet{}}
+	return ports.ToolPermissions{Permissions: &ucperms.PermissionSet{}}
 }
 func (t *NodeProjectMetadataTool) Tags() []string {
 	return []string{ports.TagReadOnly, "lang:node", "metadata", "recovery"}
@@ -195,8 +195,8 @@ func (t *NodeNPMTestTool) Execute(ctx context.Context, args map[string]any) (*po
 }
 func (t *NodeNPMTestTool) IsAvailable(ctx context.Context) bool { return t.runner != nil }
 func (t *NodeNPMTestTool) Permissions() ports.ToolPermissions {
-	return ports.ToolPermissions{Permissions: &permissions.PermissionSet{
-		Executables: []permissions.ExecutablePermission{{Binary: "npm"}},
+	return ports.ToolPermissions{Permissions: &ucperms.PermissionSet{
+		Executables: []ucperms.ExecutablePermission{{Binary: "npm"}},
 	}}
 }
 func (t *NodeNPMTestTool) Tags() []string {
@@ -260,8 +260,8 @@ func (t *NodeSyntaxCheckTool) Execute(ctx context.Context, args map[string]any) 
 }
 func (t *NodeSyntaxCheckTool) IsAvailable(ctx context.Context) bool { return t.runner != nil }
 func (t *NodeSyntaxCheckTool) Permissions() ports.ToolPermissions {
-	return ports.ToolPermissions{Permissions: &permissions.PermissionSet{
-		Executables: []permissions.ExecutablePermission{{Binary: "node"}},
+	return ports.ToolPermissions{Permissions: &ucperms.PermissionSet{
+		Executables: []ucperms.ExecutablePermission{{Binary: "node"}},
 	}}
 }
 func (t *NodeSyntaxCheckTool) Tags() []string {

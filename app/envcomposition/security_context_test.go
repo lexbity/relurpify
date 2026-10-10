@@ -4,11 +4,10 @@ import (
 	"context"
 	"testing"
 
-	"github.com/stretchr/testify/require"
-
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
-	gpermissions "codeburg.org/lexbit/relurpify/governance/permissions"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
+	"github.com/stretchr/testify/require"
 )
 
 // ctxMarkerKey is a private context key used to prove ctx propagation (AC-10).
@@ -29,7 +28,7 @@ func (h *ctxCapturingHITL) RequestPermission(ctx context.Context, _ fauthorizati
 // the authorization path and any HITL ask it raises.
 func TestCommandPolicyContext(t *testing.T) {
 	hitl := &ctxCapturingHITL{}
-	manager, err := fauthorization.NewPermissionManager(t.TempDir(), &gpermissions.PermissionSet{}, nil, hitl)
+	manager, err := fauthorization.NewPermissionManager(t.TempDir(), &ucperms.PermissionSet{}, nil, hitl)
 	require.NoError(t, err)
 
 	sec, err := BuildSecurityRuntime(context.Background(), SecurityRuntimeInput{

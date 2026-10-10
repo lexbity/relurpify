@@ -6,14 +6,14 @@ import (
 	"fmt"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/governance/permissions"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
 )
 
 type ApprovalRequest struct {
 	AgentID            string
 	Manager            *PermissionManager
-	Permission         permissions.PermissionDescriptor
+	Permission         ucperms.PermissionDescriptor
 	Justification      string
 	Scope              policy.GrantScope
 	Risk               policy.RiskLevel

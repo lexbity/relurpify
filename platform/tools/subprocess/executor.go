@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/capability/ports"
-	"codeburg.org/lexbit/relurpify/governance/permissions"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
 )
 
 // NewTool builds a subprocess-backed tool implementation from a manifest.
@@ -49,10 +49,10 @@ func (t *subprocessTool) Parameters() []ports.ToolParameter {
 }
 func (t *subprocessTool) IsAvailable(context.Context) bool { return t.runner != nil }
 func (t *subprocessTool) Permissions() ports.ToolPermissions {
-	perms := &permissions.PermissionSet{}
+	perms := &ucperms.PermissionSet{}
 	if cmd := t.manifest.Execution.Command; cmd != nil && len(cmd.Base) > 0 {
 		hitl := hasDestructiveRisk(t.manifest.Capability.RiskClass)
-		perms.Executables = []permissions.ExecutablePermission{{
+		perms.Executables = []ucperms.ExecutablePermission{{
 			Binary:       cmd.Base[0],
 			Args:         append([]string(nil), t.manifest.Execution.DefaultArgs...),
 			HITLRequired: hitl,

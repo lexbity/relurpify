@@ -4,9 +4,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/userconfig/securefile"
 	"github.com/stretchr/testify/require"
-
-	"codeburg.org/lexbit/relurpify/platform/fs"
 )
 
 func TestLoadProviderDir_Valid(t *testing.T) {
@@ -129,7 +128,7 @@ func TestLoadProviderDir_MissingDir(t *testing.T) {
 func TestLoadProviderDir_EmptyDir(t *testing.T) {
 	dir := t.TempDir()
 	base := filepath.Join(dir, "relurpify_cfg", "model", "provider")
-	require.NoError(t, fs.MkdirAllSecure(base))
+	require.NoError(t, securefile.MkdirAllSecure(base))
 
 	_, err := LoadProviderDir(base, testDecode)
 	require.Error(t, err)
@@ -138,10 +137,10 @@ func TestLoadProviderDir_EmptyDir(t *testing.T) {
 
 func writeModelTestFile(t *testing.T, path, contents string) {
 	t.Helper()
-	if err := fs.MkdirAllSecure(filepath.Dir(path)); err != nil {
+	if err := securefile.MkdirAllSecure(filepath.Dir(path)); err != nil {
 		t.Fatalf("mkdir failed: %v", err)
 	}
-	if err := fs.WriteFileSecure(path, []byte(contents)); err != nil {
+	if err := securefile.WriteFileSecure(path, []byte(contents)); err != nil {
 		t.Fatalf("write failed: %v", err)
 	}
 }

@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/governance/policy"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
 )
 
 // PermissionManagerHandle and PolicyEngine are consumer-defined ports: the
@@ -15,7 +15,7 @@ import (
 // vocabulary so *authorization.PermissionManager and authorization.PolicyEngine
 // satisfy them structurally without capability importing authorization.
 type PermissionManagerHandle interface {
-	RequireApproval(ctx context.Context, agentID string, desc permissions.PermissionDescriptor, justification string, scope policy.GrantScope, risk policy.RiskLevel, duration time.Duration) error
+	RequireApproval(ctx context.Context, agentID string, desc ucperms.PermissionDescriptor, justification string, scope policy.GrantScope, risk policy.RiskLevel, duration time.Duration) error
 	AuthorizeTool(ctx context.Context, agentID string, tool any, args map[string]any) error
 }
 
@@ -26,7 +26,7 @@ type PolicyEngine interface {
 type ApprovalRequest struct {
 	AgentID            string
 	Manager            PermissionManagerHandle
-	Permission         permissions.PermissionDescriptor
+	Permission         ucperms.PermissionDescriptor
 	Justification      string
 	Scope              policy.GrantScope
 	Risk               policy.RiskLevel

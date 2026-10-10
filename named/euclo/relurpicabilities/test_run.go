@@ -6,13 +6,12 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/capability/descriptor"
-
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/capability/descriptor"
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
-	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
 	"codeburg.org/lexbit/relurpify/governance/classification"
+	"codeburg.org/lexbit/relurpify/model"
 )
 
 // TestRunHandler implements the test runner capability as a shell tool.
@@ -42,9 +41,9 @@ func (h *TestRunHandler) Descriptor(ctx context.Context, env ports.State) descri
 		},
 		TrustClass:    agentspec.TrustClassBuiltinTrusted,
 		EffectClasses: []classification.EffectClass{classification.EffectClassProcessSpawn},
-		InputSchema: &schemacoerce.Schema{
+		InputSchema: &model.Schema{
 			Type: "object",
-			Properties: map[string]*schemacoerce.Schema{
+			Properties: map[string]*model.Schema{
 				"command": {
 					Type:        "string",
 					Description: "Test command to execute (e.g., 'go test ./...')",
@@ -60,9 +59,9 @@ func (h *TestRunHandler) Descriptor(ctx context.Context, env ports.State) descri
 			},
 			Required: []string{"command"},
 		},
-		OutputSchema: &schemacoerce.Schema{
+		OutputSchema: &model.Schema{
 			Type: "object",
-			Properties: map[string]*schemacoerce.Schema{
+			Properties: map[string]*model.Schema{
 				"success": {
 					Type:        "boolean",
 					Description: "True if command executed successfully",
@@ -86,7 +85,7 @@ func (h *TestRunHandler) Descriptor(ctx context.Context, env ports.State) descri
 				"failed_tests": {
 					Type:        "array",
 					Description: "List of failed test names",
-					Items: &schemacoerce.Schema{
+					Items: &model.Schema{
 						Type: "string",
 					},
 				},

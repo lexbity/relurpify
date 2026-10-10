@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/stretchr/testify/require"
-
 	"codeburg.org/lexbit/relurpify/governance/permissions"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
+	"github.com/stretchr/testify/require"
 )
 
 func TestAllFileTools_NilScopeDenies(t *testing.T) {
@@ -163,7 +163,7 @@ func TestAllFileTools_PermissiveScopeDeniesOutside(t *testing.T) {
 func TestScopedFileTool_EnforceSandboxScope(t *testing.T) {
 	t.Run("nil scope denies", func(t *testing.T) {
 		s := &scopedFileTool{scope: nil}
-		err := s.enforceSandboxScope(permissions.FileSystemRead, "/any/path")
+		err := s.enforceSandboxScope(ucperms.FileSystemRead, "/any/path")
 		require.Error(t, err)
 		require.ErrorIs(t, err, permissions.ErrSandboxScopeUnset)
 	})
@@ -172,9 +172,9 @@ func TestScopedFileTool_EnforceSandboxScope(t *testing.T) {
 		dir := t.TempDir()
 		scope := NewFileScopePolicy(dir, nil)
 		s := &scopedFileTool{scope: scope}
-		err := s.enforceSandboxScope(permissions.FileSystemRead, filepath.Join(dir, "foo.txt"))
+		err := s.enforceSandboxScope(ucperms.FileSystemRead, filepath.Join(dir, "foo.txt"))
 		require.NoError(t, err)
-		err = s.enforceSandboxScope(permissions.FileSystemRead, filepath.Join(t.TempDir(), "foo.txt"))
+		err = s.enforceSandboxScope(ucperms.FileSystemRead, filepath.Join(t.TempDir(), "foo.txt"))
 		require.Error(t, err)
 		require.ErrorIs(t, err, ErrFileScopeOutsideWorkspace)
 	})
@@ -189,20 +189,20 @@ func TestScopedFileTool_EnforceSandboxScope(t *testing.T) {
 
 func TestCheckOrDeny(t *testing.T) {
 	t.Run("nil scope returns ErrSandboxScopeUnset", func(t *testing.T) {
-		err := permissions.CheckOrDeny(nil, permissions.FileSystemRead, "/path")
+		err := permissions.CheckOrDeny(nil, ucperms.FileSystemRead, "/path")
 		require.ErrorIs(t, err, permissions.ErrSandboxScopeUnset)
 	})
 
 	t.Run("deny-all scope rejects", func(t *testing.T) {
 		denyAll := permissions.NewDenyAllFileScopePolicy()
-		err := permissions.CheckOrDeny(denyAll, permissions.FileSystemRead, "/any/path")
+		err := permissions.CheckOrDeny(denyAll, ucperms.FileSystemRead, "/any/path")
 		require.Error(t, err)
 	})
 
 	t.Run("permissive scope allows allowed path", func(t *testing.T) {
 		dir := t.TempDir()
 		scope := NewFileScopePolicy(dir, nil)
-		err := permissions.CheckOrDeny(scope, permissions.FileSystemRead, filepath.Join(dir, "x.txt"))
+		err := permissions.CheckOrDeny(scope, ucperms.FileSystemRead, filepath.Join(dir, "x.txt"))
 		require.NoError(t, err)
 	})
 }

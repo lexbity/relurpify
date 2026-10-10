@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/capability/ports"
-	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
+	"codeburg.org/lexbit/relurpify/model"
 )
 
 // ValidateAndCoerce is the single validate→coerce→reject pipeline for tool and
@@ -21,7 +21,7 @@ import (
 // and default injection. When params is empty the schema's own property types
 // are used (capability-descriptor path).
 // The args map is mutated in place with coerced values and injected defaults.
-func ValidateAndCoerce(args map[string]any, schema *schemacoerce.Schema, params []ports.ToolParameter) error {
+func ValidateAndCoerce(args map[string]any, schema *model.Schema, params []ports.ToolParameter) error {
 	// Build declared key index from schema properties and ToolParameter list.
 	declared := make(map[string]bool)
 	if schema != nil {
@@ -82,7 +82,7 @@ func ValidateAndCoerce(args map[string]any, schema *schemacoerce.Schema, params 
 // validateArgsAgainstSchema validates a flat args map against a schema.
 // Unlike validateValueAgainstSchema, this handles the top-level object
 // differently (args is always an object) and rejects unknown schema keys.
-func validateArgsAgainstSchema(args map[string]any, schema *schemacoerce.Schema, path string) error {
+func validateArgsAgainstSchema(args map[string]any, schema *model.Schema, path string) error {
 	if schema == nil {
 		return nil
 	}
@@ -115,14 +115,14 @@ func validateArgsAgainstSchema(args map[string]any, schema *schemacoerce.Schema,
 
 // ValidateValueAgainstSchema performs lightweight runtime validation for the
 // framework-owned schema subset used by tool and capability descriptors.
-func ValidateValueAgainstSchema(value any, schema *schemacoerce.Schema) error {
+func ValidateValueAgainstSchema(value any, schema *model.Schema) error {
 	if schema == nil {
 		return nil
 	}
 	return validateValueAgainstSchema(value, schema, "$")
 }
 
-func validateValueAgainstSchema(value any, schema *schemacoerce.Schema, path string) error {
+func validateValueAgainstSchema(value any, schema *model.Schema, path string) error {
 	if schema == nil {
 		return nil
 	}

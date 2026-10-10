@@ -6,16 +6,15 @@ import (
 	"strings"
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/userconfig/securefile"
 	"github.com/stretchr/testify/require"
-
-	"codeburg.org/lexbit/relurpify/platform/fs"
 )
 
 func TestLoadDiagnosticKeepsPartialProfilesAndLoadStaysStrictOnSharedBundle(t *testing.T) {
 	workspace := t.TempDir()
 	copyDir(t, filepath.Join("..", "..", "relurpify_cfg"), filepath.Join(workspace, "relurpify_cfg"))
-	require.NoError(t, fs.MkdirAllSecure(filepath.Join(workspace, "relurpify_cfg", "model", "profiles")))
-	require.NoError(t, fs.WriteFileSecure(filepath.Join(workspace, "relurpify_cfg", "model", "profiles", "broken.llm.yaml"), []byte(`schema: relurpify/model/profile/v1
+	require.NoError(t, securefile.MkdirAllSecure(filepath.Join(workspace, "relurpify_cfg", "model", "profiles")))
+	require.NoError(t, securefile.WriteFileSecure(filepath.Join(workspace, "relurpify_cfg", "model", "profiles", "broken.llm.yaml"), []byte(`schema: relurpify/model/profile/v1
 pattern: "broken*"
 tool_calling:
   intent: native
@@ -60,7 +59,7 @@ func TestLoadDiagnosticMatchesLoadOnCleanWorkspace(t *testing.T) {
 func TestLoadDiagnosticReturnsPartialBundleForBrokenDefaultProfile(t *testing.T) {
 	workspace := t.TempDir()
 	copyDir(t, filepath.Join("..", "..", "relurpify_cfg"), filepath.Join(workspace, "relurpify_cfg"))
-	require.NoError(t, fs.WriteFileSecure(filepath.Join(workspace, "relurpify_cfg", "model", "profiles", "default.llm.yaml"), []byte(`schema: relurpify/model/profile/v1
+	require.NoError(t, securefile.WriteFileSecure(filepath.Join(workspace, "relurpify_cfg", "model", "profiles", "default.llm.yaml"), []byte(`schema: relurpify/model/profile/v1
 pattern: ""
 tool_calling:
   intent: auto
@@ -95,13 +94,13 @@ func copyDir(t *testing.T, src, dst string) {
 		}
 		target := filepath.Join(dst, rel)
 		if d.IsDir() {
-			return fs.MkdirAllSecure(target)
+			return securefile.MkdirAllSecure(target)
 		}
 		data, err := ReadFileRaw(path)
 		if err != nil {
 			return err
 		}
-		return fs.WriteFileSecure(target, data)
+		return securefile.WriteFileSecure(target, data)
 	})
 	require.NoError(t, err)
 }

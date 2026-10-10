@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/governance/permissions"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
 )
 
 func TestNormalizePathSimpleFile(t *testing.T) {
@@ -190,8 +191,8 @@ func TestSetDefaultDecisionDenyBlocksUndeclaredTool(t *testing.T) {
 func testPermManager(t *testing.T, ws string) *PermissionManager {
 	t.Helper()
 	audit := newTestAuditLogger(t)
-	declared := &permissions.PermissionSet{
-		Executables: []permissions.ExecutablePermission{
+	declared := &ucperms.PermissionSet{
+		Executables: []ucperms.ExecutablePermission{
 			{Binary: "echo"},
 		},
 	}

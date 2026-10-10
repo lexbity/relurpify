@@ -23,7 +23,6 @@ type (
 	LLMResponse   = model.LLMResponse
 	Message       = model.Message
 	LLMToolSpec   = model.LLMToolSpec
-	Schema        = model.Schema
 	ModelProfile  = model.ModelProfile
 )
 
@@ -400,7 +399,7 @@ func convertTools(tools []LLMToolSpec) []map[string]any {
 	return out
 }
 
-func schemaToJSONSchema(schema *Schema) map[string]any {
+func schemaToJSONSchema(schema *model.Schema) map[string]any {
 	if schema == nil {
 		return map[string]any{"type": "object"}
 	}

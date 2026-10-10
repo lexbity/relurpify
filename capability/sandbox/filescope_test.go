@@ -5,9 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
 	"github.com/stretchr/testify/require"
-
-	"codeburg.org/lexbit/relurpify/governance/permissions"
 )
 
 func TestFileScopePolicyCheck(t *testing.T) {
@@ -17,9 +16,9 @@ func TestFileScopePolicyCheck(t *testing.T) {
 	require.NoError(t, os.WriteFile(protected, []byte("config"), 0o600))
 
 	policy := NewFileScopePolicy(dir, []string{protected})
-	err := policy.Check(permissions.FileSystemWrite, protected)
+	err := policy.Check(ucperms.FileSystemWrite, protected)
 	require.ErrorIs(t, err, ErrFileScopeProtectedPath)
 
-	err = policy.Check(permissions.FileSystemWrite, filepath.Join(dir, "..", "escape.txt"))
+	err = policy.Check(ucperms.FileSystemWrite, filepath.Join(dir, "..", "escape.txt"))
 	require.ErrorIs(t, err, ErrFileScopeOutsideWorkspace)
 }

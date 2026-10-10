@@ -8,6 +8,7 @@ import (
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/governance/policy"
 	fwtelemetry "codeburg.org/lexbit/relurpify/telemetry"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
 )
 
 const commandApprovalAction = "command:exec"
@@ -152,8 +153,8 @@ func requireCommandApproval(ctx context.Context, manager *PermissionManager, age
 	if source := strings.TrimSpace(req.Source); source != "" {
 		metadata["source"] = source
 	}
-	return manager.RequireApproval(ctx, agentID, permissions.PermissionDescriptor{
-		Type:         permissions.PermissionTypeHITL,
+	return manager.RequireApproval(ctx, agentID, ucperms.PermissionDescriptor{
+		Type:         ucperms.PermissionTypeHITL,
 		Action:       commandApprovalAction,
 		Resource:     commandString,
 		Metadata:     metadata,

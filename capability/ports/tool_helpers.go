@@ -11,43 +11,43 @@ import (
 
 // Re-exported types from userconfig/tools/manifest.
 type (
-	ToolParameterType              = manifest.ToolParameterType
-	ToolParameter                  = manifest.ToolParameter
-	ToolBackend                    = manifest.ToolBackend
-	ToolRateLimit                  = manifest.ToolRateLimit
-	ToolManifest                   = manifest.ToolManifest
-	ToolManifestSandbox            = manifest.ToolManifestSandbox
-	ToolManifestExecution          = manifest.ToolManifestExecution
-	ToolManifestCommand            = manifest.ToolManifestCommand
-	ToolManifestTelemetry          = manifest.ToolManifestTelemetry
-	ToolManifestGuidance           = manifest.ToolManifestGuidance
-	ToolManifestFlag               = manifest.ToolManifestFlag
-	ToolManifestComposition        = manifest.ToolManifestComposition
-	ToolManifestCompositionStep    = manifest.ToolManifestCompositionStep
-	ToolManifestReturns            = manifest.ToolManifestReturns
-	ToolManifestReturnsChunking    = manifest.ToolManifestReturnsChunking
-	ToolManifestCapability         = manifest.ToolManifestCapability
+	ToolParameterType           = manifest.ToolParameterType
+	ToolParameter               = manifest.ToolParameter
+	ToolBackend                 = manifest.ToolBackend
+	ToolRateLimit               = manifest.ToolRateLimit
+	ToolManifest                = manifest.ToolManifest
+	ToolManifestSandbox         = manifest.ToolManifestSandbox
+	ToolManifestExecution       = manifest.ToolManifestExecution
+	ToolManifestCommand         = manifest.ToolManifestCommand
+	ToolManifestTelemetry       = manifest.ToolManifestTelemetry
+	ToolManifestGuidance        = manifest.ToolManifestGuidance
+	ToolManifestFlag            = manifest.ToolManifestFlag
+	ToolManifestComposition     = manifest.ToolManifestComposition
+	ToolManifestCompositionStep = manifest.ToolManifestCompositionStep
+	ToolManifestReturns         = manifest.ToolManifestReturns
+	ToolManifestReturnsChunking = manifest.ToolManifestReturnsChunking
+	ToolManifestCapability      = manifest.ToolManifestCapability
 )
 
 const (
-	ToolParamString        = manifest.ToolParamString
-	ToolParamInteger       = manifest.ToolParamInteger
-	ToolParamNumber        = manifest.ToolParamNumber
-	ToolParamBoolean       = manifest.ToolParamBoolean
-	ToolParamArray         = manifest.ToolParamArray
-	ToolParamObject        = manifest.ToolParamObject
-	ToolBackendSubprocess  = manifest.ToolBackendSubprocess
-	ToolBackendGoNative    = manifest.ToolBackendGoNative
-	ToolBackendComposite   = manifest.ToolBackendComposite
-	TagReadOnly            = manifest.TagReadOnly
-	TagExecute             = manifest.TagExecute
-	TagDestructive         = manifest.TagDestructive
-	TagNetwork             = manifest.TagNetwork
-	FlagStyleEquals        = manifest.FlagStyleEquals
-	FlagStyleSeparate      = manifest.FlagStyleSeparate
-	ChunkingModeWhole      = manifest.ChunkingModeWhole
-	ChunkingModePerItem    = manifest.ChunkingModePerItem
-	ChunkingModePerField   = manifest.ChunkingModePerField
+	ToolParamString       = manifest.ToolParamString
+	ToolParamInteger      = manifest.ToolParamInteger
+	ToolParamNumber       = manifest.ToolParamNumber
+	ToolParamBoolean      = manifest.ToolParamBoolean
+	ToolParamArray        = manifest.ToolParamArray
+	ToolParamObject       = manifest.ToolParamObject
+	ToolBackendSubprocess = manifest.ToolBackendSubprocess
+	ToolBackendGoNative   = manifest.ToolBackendGoNative
+	ToolBackendComposite  = manifest.ToolBackendComposite
+	TagReadOnly           = manifest.TagReadOnly
+	TagExecute            = manifest.TagExecute
+	TagDestructive        = manifest.TagDestructive
+	TagNetwork            = manifest.TagNetwork
+	FlagStyleEquals       = manifest.FlagStyleEquals
+	FlagStyleSeparate     = manifest.FlagStyleSeparate
+	ChunkingModeWhole     = manifest.ChunkingModeWhole
+	ChunkingModePerItem   = manifest.ChunkingModePerItem
+	ChunkingModePerField  = manifest.ChunkingModePerField
 )
 
 // NormalizeToolName canonicalizes tool identifiers for lookups.

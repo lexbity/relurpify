@@ -4,21 +4,21 @@ import (
 	"context"
 
 	capability "codeburg.org/lexbit/relurpify/capability/registry"
-	"codeburg.org/lexbit/relurpify/governance/permissions"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
 )
 
 // DefaultPermissionSet builds a minimal permission set that allows workspace read/write
 // and grants all registered tool capabilities.
-func DefaultPermissionSet(registry *capability.CapabilityRegistry, workspacePath string) *permissions.PermissionSet {
-	perm := &permissions.PermissionSet{
+func DefaultPermissionSet(registry *capability.CapabilityRegistry, workspacePath string) *ucperms.PermissionSet {
+	perm := &ucperms.PermissionSet{
 		// Allow read/write on workspace
-		FileSystem: []permissions.FileSystemPermission{
+		FileSystem: []ucperms.FileSystemPermission{
 			{
-				Action: permissions.FileSystemRead,
+				Action: ucperms.FileSystemRead,
 				Path:   workspacePath + "/**",
 			},
 			{
-				Action: permissions.FileSystemWrite,
+				Action: ucperms.FileSystemWrite,
 				Path:   workspacePath + "/**",
 			},
 		},
@@ -28,7 +28,7 @@ func DefaultPermissionSet(registry *capability.CapabilityRegistry, workspacePath
 	if registry != nil {
 		tools := registry.All(context.Background())
 		for _, tool := range tools {
-			perm.Capabilities = append(perm.Capabilities, permissions.CapabilityPermission{
+			perm.Capabilities = append(perm.Capabilities, ucperms.CapabilityPermission{
 				Capability: tool.Name(),
 			})
 		}
@@ -39,22 +39,22 @@ func DefaultPermissionSet(registry *capability.CapabilityRegistry, workspacePath
 
 // RestrictedPermissionSet builds a permission set that only allows specific tools.
 // Useful for creating sandboxed execution contexts.
-func RestrictedPermissionSet(workspacePath string, allowedTools []string) *permissions.PermissionSet {
-	perm := &permissions.PermissionSet{
-		FileSystem: []permissions.FileSystemPermission{
+func RestrictedPermissionSet(workspacePath string, allowedTools []string) *ucperms.PermissionSet {
+	perm := &ucperms.PermissionSet{
+		FileSystem: []ucperms.FileSystemPermission{
 			{
-				Action: permissions.FileSystemRead,
+				Action: ucperms.FileSystemRead,
 				Path:   workspacePath + "/**",
 			},
 			{
-				Action: permissions.FileSystemWrite,
+				Action: ucperms.FileSystemWrite,
 				Path:   workspacePath + "/**",
 			},
 		},
 	}
 
 	for _, tool := range allowedTools {
-		perm.Capabilities = append(perm.Capabilities, permissions.CapabilityPermission{
+		perm.Capabilities = append(perm.Capabilities, ucperms.CapabilityPermission{
 			Capability: tool,
 		})
 	}
@@ -64,11 +64,11 @@ func RestrictedPermissionSet(workspacePath string, allowedTools []string) *permi
 
 // ReadOnlyPermissionSet builds a permission set that only allows file reads.
 // Useful for analysis-only workflows.
-func ReadOnlyPermissionSet(workspacePath string) *permissions.PermissionSet {
-	return &permissions.PermissionSet{
-		FileSystem: []permissions.FileSystemPermission{
+func ReadOnlyPermissionSet(workspacePath string) *ucperms.PermissionSet {
+	return &ucperms.PermissionSet{
+		FileSystem: []ucperms.FileSystemPermission{
 			{
-				Action: permissions.FileSystemRead,
+				Action: ucperms.FileSystemRead,
 				Path:   workspacePath + "/**",
 			},
 		},

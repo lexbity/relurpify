@@ -10,9 +10,9 @@ import (
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/capability/ports"
-	"codeburg.org/lexbit/relurpify/governance/permissions"
 	lang "codeburg.org/lexbit/relurpify/platform/lang"
 	"codeburg.org/lexbit/relurpify/platform/tools/subprocess"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
 )
 
 type GoWorkspaceDetectTool struct {
@@ -69,7 +69,7 @@ func (t *GoWorkspaceDetectTool) Execute(ctx context.Context, args map[string]any
 }
 func (t *GoWorkspaceDetectTool) IsAvailable(ctx context.Context) bool { return true }
 func (t *GoWorkspaceDetectTool) Permissions() ports.ToolPermissions {
-	return ports.ToolPermissions{Permissions: &permissions.PermissionSet{}}
+	return ports.ToolPermissions{Permissions: &ucperms.PermissionSet{}}
 }
 func (t *GoWorkspaceDetectTool) Tags() []string {
 	return []string{ports.TagReadOnly, "lang:go", "workspace-detect", "recovery"}
@@ -123,8 +123,8 @@ func (t *GoModuleMetadataTool) Execute(ctx context.Context, args map[string]any)
 }
 func (t *GoModuleMetadataTool) IsAvailable(ctx context.Context) bool { return t.runner != nil }
 func (t *GoModuleMetadataTool) Permissions() ports.ToolPermissions {
-	return ports.ToolPermissions{Permissions: &permissions.PermissionSet{
-		Executables: []permissions.ExecutablePermission{{Binary: "go"}},
+	return ports.ToolPermissions{Permissions: &ucperms.PermissionSet{
+		Executables: []ucperms.ExecutablePermission{{Binary: "go"}},
 	}}
 }
 func (t *GoModuleMetadataTool) Tags() []string {
@@ -199,8 +199,8 @@ func (t *GoTestTool) Execute(ctx context.Context, args map[string]any) (*ports.T
 }
 func (t *GoTestTool) IsAvailable(ctx context.Context) bool { return t.runner != nil }
 func (t *GoTestTool) Permissions() ports.ToolPermissions {
-	return ports.ToolPermissions{Permissions: &permissions.PermissionSet{
-		Executables: []permissions.ExecutablePermission{{Binary: "go"}},
+	return ports.ToolPermissions{Permissions: &ucperms.PermissionSet{
+		Executables: []ucperms.ExecutablePermission{{Binary: "go"}},
 	}}
 }
 func (t *GoTestTool) Tags() []string {
@@ -269,8 +269,8 @@ func (t *GoBuildTool) Execute(ctx context.Context, args map[string]any) (*ports.
 }
 func (t *GoBuildTool) IsAvailable(ctx context.Context) bool { return t.runner != nil }
 func (t *GoBuildTool) Permissions() ports.ToolPermissions {
-	return ports.ToolPermissions{Permissions: &permissions.PermissionSet{
-		Executables: []permissions.ExecutablePermission{{Binary: "go"}},
+	return ports.ToolPermissions{Permissions: &ucperms.PermissionSet{
+		Executables: []ucperms.ExecutablePermission{{Binary: "go"}},
 	}}
 }
 func (t *GoBuildTool) Tags() []string {

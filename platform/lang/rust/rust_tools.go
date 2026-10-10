@@ -11,9 +11,9 @@ import (
 
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	registry "codeburg.org/lexbit/relurpify/capability/registry"
-	"codeburg.org/lexbit/relurpify/governance/permissions"
 	lang "codeburg.org/lexbit/relurpify/platform/lang"
 	"codeburg.org/lexbit/relurpify/platform/tools/subprocess"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
 )
 
 type RustWorkspaceDetectTool struct {
@@ -67,7 +67,7 @@ func (t *RustWorkspaceDetectTool) Execute(ctx context.Context, args map[string]a
 }
 func (t *RustWorkspaceDetectTool) IsAvailable(ctx context.Context) bool { return true }
 func (t *RustWorkspaceDetectTool) Permissions() ports.ToolPermissions {
-	return ports.ToolPermissions{Permissions: &permissions.PermissionSet{}}
+	return ports.ToolPermissions{Permissions: &ucperms.PermissionSet{}}
 }
 func (t *RustWorkspaceDetectTool) Tags() []string {
 	return []string{ports.TagReadOnly, "lang:rust", "workspace-detect", "recovery"}
@@ -141,8 +141,8 @@ func (t *RustCargoTestTool) Execute(ctx context.Context, args map[string]any) (*
 }
 func (t *RustCargoTestTool) IsAvailable(ctx context.Context) bool { return t.runner != nil }
 func (t *RustCargoTestTool) Permissions() ports.ToolPermissions {
-	return ports.ToolPermissions{Permissions: &permissions.PermissionSet{
-		Executables: []permissions.ExecutablePermission{{Binary: "cargo"}},
+	return ports.ToolPermissions{Permissions: &ucperms.PermissionSet{
+		Executables: []ucperms.ExecutablePermission{{Binary: "cargo"}},
 	}}
 }
 func (t *RustCargoTestTool) Tags() []string {
@@ -211,8 +211,8 @@ func (t *RustCargoCheckTool) Execute(ctx context.Context, args map[string]any) (
 }
 func (t *RustCargoCheckTool) IsAvailable(ctx context.Context) bool { return t.runner != nil }
 func (t *RustCargoCheckTool) Permissions() ports.ToolPermissions {
-	return ports.ToolPermissions{Permissions: &permissions.PermissionSet{
-		Executables: []permissions.ExecutablePermission{{Binary: "cargo"}},
+	return ports.ToolPermissions{Permissions: &ucperms.PermissionSet{
+		Executables: []ucperms.ExecutablePermission{{Binary: "cargo"}},
 	}}
 }
 func (t *RustCargoCheckTool) Tags() []string {
@@ -277,8 +277,8 @@ func (t *RustCargoMetadataTool) IsAvailable(ctx context.Context) bool {
 	return t.runner != nil
 }
 func (t *RustCargoMetadataTool) Permissions() ports.ToolPermissions {
-	return ports.ToolPermissions{Permissions: &permissions.PermissionSet{
-		Executables: []permissions.ExecutablePermission{{Binary: "cargo"}},
+	return ports.ToolPermissions{Permissions: &ucperms.PermissionSet{
+		Executables: []ucperms.ExecutablePermission{{Binary: "cargo"}},
 	}}
 }
 func (t *RustCargoMetadataTool) Tags() []string {

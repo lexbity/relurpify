@@ -11,8 +11,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"gopkg.in/yaml.v3"
-
 	runtimesvc "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
@@ -27,6 +25,8 @@ import (
 	"codeburg.org/lexbit/relurpify/telemetry"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 	"codeburg.org/lexbit/relurpify/userconfig/config/security"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
+	"gopkg.in/yaml.v3"
 )
 
 const contextFileMaxBytes = 8000
@@ -401,7 +401,7 @@ func (r *runtimeAdapter) ResolveContextFiles(ctx context.Context, files []string
 		abs = filepath.Clean(abs)
 
 		if perm != nil {
-			if err := perm.CheckFileAccess(ctx, ws.Registration.ID, permissions.FileSystemRead, abs); err != nil {
+			if err := perm.CheckFileAccess(ctx, ws.Registration.ID, ucperms.FileSystemRead, abs); err != nil {
 				res.Denied[path] = err.Error()
 				continue
 			}

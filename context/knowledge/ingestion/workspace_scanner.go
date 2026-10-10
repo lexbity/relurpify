@@ -17,6 +17,7 @@ import (
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/platform/fs"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
 )
 
 // SkillIngestionSource defines a path pattern for skill resource ingestion.
@@ -341,9 +342,9 @@ func (s *WorkspaceScanner) allowsPath(path string, isDir bool) bool {
 	if s == nil || s.FileScope == nil {
 		return true
 	}
-	action := permissions.FileSystemRead
+	action := ucperms.FileSystemRead
 	if isDir {
-		action = permissions.FileSystemList
+		action = ucperms.FileSystemList
 	}
 	return s.FileScope.Check(action, path) == nil
 }

@@ -5,5 +5,4 @@
 // Defined in later phases:
 //
 //	CompilerTrigger  — context/persistence triggers compilation without importing execution (P11)
-//
 package ports

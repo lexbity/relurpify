@@ -5,8 +5,8 @@ package agenttest
 
 import (
 	"os"
-	"strings"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/platform/fs"
@@ -18,7 +18,7 @@ const (
 	agents         = "agents"
 	coding_go_yaml = "coding-go.yaml"
 	manifest_yaml  = "manifest.yaml"
-	templates_dir = "templates"
+	templates_dir  = "templates"
 	workspace      = "workspace"
 )
 

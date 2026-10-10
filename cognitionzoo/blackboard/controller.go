@@ -82,7 +82,7 @@ func (c *Controller) Snapshot(bb *Blackboard, cycle int, termination, lastSource
 }
 
 // ExecutionMode describes how the controller schedules eligible knowledge
-	// sources while keeping the runtime explicitly single-fire serial.
+// sources while keeping the runtime explicitly single-fire serial.
 func (c *Controller) ExecutionMode() ExecutionMode {
 	return ExecutionModeSingleFireSerial
 }

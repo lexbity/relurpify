@@ -4,16 +4,15 @@ import (
 	"path/filepath"
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/userconfig/securefile"
 	"github.com/stretchr/testify/require"
-
-	"codeburg.org/lexbit/relurpify/platform/fs"
 )
 
 func TestLoadWorkspaceIngestionPolicy(t *testing.T) {
 	workspace := t.TempDir()
 	path := WorkspaceIngestionPolicyPath(workspace)
-	require.NoError(t, fs.MkdirAllSecure(filepath.Dir(path)))
-	require.NoError(t, fs.WriteFileSecure(path, []byte(`schema: relurpify/policy/ingestion/v1
+	require.NoError(t, securefile.MkdirAllSecure(filepath.Dir(path)))
+	require.NoError(t, securefile.WriteFileSecure(path, []byte(`schema: relurpify/policy/ingestion/v1
 rules:
   - id: allow-workspace-ingestion
     name: Workspace ingestion
@@ -32,8 +31,8 @@ rules:
 func TestLoadWorkspaceIngestionPolicyRejectsInvalidRule(t *testing.T) {
 	workspace := t.TempDir()
 	path := WorkspaceIngestionPolicyPath(workspace)
-	require.NoError(t, fs.MkdirAllSecure(filepath.Dir(path)))
-	require.NoError(t, fs.WriteFileSecure(path, []byte(`schema: relurpify/policy/ingestion/v1
+	require.NoError(t, securefile.MkdirAllSecure(filepath.Dir(path)))
+	require.NoError(t, securefile.WriteFileSecure(path, []byte(`schema: relurpify/policy/ingestion/v1
 rules:
   - id: ""
     name: broken

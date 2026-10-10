@@ -4,14 +4,13 @@ import (
 	"context"
 	"fmt"
 
-	"codeburg.org/lexbit/relurpify/capability/descriptor"
-
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/capability/descriptor"
 	"codeburg.org/lexbit/relurpify/capability/ports"
-	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/context/knowledge/ast"
 	"codeburg.org/lexbit/relurpify/governance/classification"
+	"codeburg.org/lexbit/relurpify/model"
 )
 
 // ASTQueryHandler implements the AST query capability for searching code structure.
@@ -40,9 +39,9 @@ func (h *ASTQueryHandler) Descriptor(ctx context.Context, env ports.State) descr
 		},
 		TrustClass:    agentspec.TrustClassBuiltinTrusted,
 		EffectClasses: []classification.EffectClass{},
-		InputSchema: &schemacoerce.Schema{
+		InputSchema: &model.Schema{
 			Type: "object",
-			Properties: map[string]*schemacoerce.Schema{
+			Properties: map[string]*model.Schema{
 				"query": {
 					Type:        "string",
 					Description: "Symbol name or pattern to search for",
@@ -50,14 +49,14 @@ func (h *ASTQueryHandler) Descriptor(ctx context.Context, env ports.State) descr
 				"types": {
 					Type:        "array",
 					Description: "Filter by node types (e.g., function, class, struct)",
-					Items: &schemacoerce.Schema{
+					Items: &model.Schema{
 						Type: "string",
 					},
 				},
 				"languages": {
 					Type:        "array",
 					Description: "Filter by programming languages",
-					Items: &schemacoerce.Schema{
+					Items: &model.Schema{
 						Type: "string",
 					},
 				},
@@ -68,9 +67,9 @@ func (h *ASTQueryHandler) Descriptor(ctx context.Context, env ports.State) descr
 			},
 			Required: []string{"query"},
 		},
-		OutputSchema: &schemacoerce.Schema{
+		OutputSchema: &model.Schema{
 			Type: "object",
-			Properties: map[string]*schemacoerce.Schema{
+			Properties: map[string]*model.Schema{
 				"success": {
 					Type:        "boolean",
 					Description: "True if query executed successfully",
@@ -78,7 +77,7 @@ func (h *ASTQueryHandler) Descriptor(ctx context.Context, env ports.State) descr
 				"matches": {
 					Type:        "array",
 					Description: "Matching AST nodes",
-					Items: &schemacoerce.Schema{
+					Items: &model.Schema{
 						Type: "object",
 					},
 				},

@@ -17,6 +17,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/context/knowledge/graphdb"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
 )
 
 // IndexConfig configures the IndexManager.
@@ -119,7 +120,7 @@ func (im *IndexManager) SetFileScope(scope *permissions.FileScopePolicy) {
 
 // IndexFile parses and stores AST for a file path.
 func (im *IndexManager) IndexFile(ctx context.Context, path string) error {
-	if !im.allowedPath(permissions.FileSystemRead, path, false) {
+	if !im.allowedPath(ucperms.FileSystemRead, path, false) {
 		return nil
 	}
 	im.mu.Lock()
@@ -187,7 +188,7 @@ func (im *IndexManager) RefreshFiles(ctx context.Context, paths []string) error 
 }
 
 func (im *IndexManager) refreshFile(ctx context.Context, path string) error {
-	if !im.allowedPath(permissions.FileSystemRead, path, false) {
+	if !im.allowedPath(ucperms.FileSystemRead, path, false) {
 		return im.removeIndexedFile(ctx, path)
 	}
 	if _, err := os.Stat(path); err != nil {
@@ -320,12 +321,12 @@ func (im *IndexManager) runWorkspaceIndex(ctx context.Context) error {
 			return err
 		}
 		if d.IsDir() {
-			if !im.allowedPath(permissions.FileSystemList, path, true) {
+			if !im.allowedPath(ucperms.FileSystemList, path, true) {
 				return filepath.SkipDir
 			}
 			return nil
 		}
-		if !im.allowedPath(permissions.FileSystemRead, path, false) {
+		if !im.allowedPath(ucperms.FileSystemRead, path, false) {
 			return nil
 		}
 		if im.shouldIgnore(path) {
@@ -356,7 +357,7 @@ func (im *IndexManager) shouldIgnore(path string) bool {
 	return false
 }
 
-func (im *IndexManager) allowedPath(action permissions.FileSystemAction, path string, isDir bool) bool {
+func (im *IndexManager) allowedPath(action ucperms.FileSystemAction, path string, isDir bool) bool {
 	im.mu.Lock()
 	scope := im.fileScope
 	filter := im.pathFilter

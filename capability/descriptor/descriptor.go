@@ -8,9 +8,9 @@ import (
 
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
-	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
 	"codeburg.org/lexbit/relurpify/governance/classification"
-	"codeburg.org/lexbit/relurpify/governance/permissions"
+	"codeburg.org/lexbit/relurpify/model"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
 )
 
 type CapabilitySource struct {
@@ -52,8 +52,8 @@ type CoordinationTargetMetadata struct {
 	MaxDepth               int                                   `json:"max_depth,omitempty"`
 	MaxRuntimeSeconds      int                                   `json:"max_runtime_seconds,omitempty"`
 	DirectInsertionAllowed EnabledState                          `json:"direct_insertion_allowed,omitempty"`
-	ExpectedInput          *schemacoerce.Schema                  `json:"expected_input,omitempty"`
-	ExpectedOutput         *schemacoerce.Schema                  `json:"expected_output,omitempty"`
+	ExpectedInput          *model.Schema                         `json:"expected_input,omitempty"`
+	ExpectedOutput         *model.Schema                         `json:"expected_output,omitempty"`
 }
 
 type CapabilityDescriptor struct {
@@ -69,8 +69,8 @@ type CapabilityDescriptor struct {
 	TrustClass      agentspec.TrustClass              `json:"trust_class,omitempty"`
 	EffectClasses   []classification.EffectClass      `json:"effect_classes,omitempty"`
 	SessionAffinity string                            `json:"session_affinity,omitempty"`
-	InputSchema     *schemacoerce.Schema              `json:"input_schema,omitempty"`
-	OutputSchema    *schemacoerce.Schema              `json:"output_schema,omitempty"`
+	InputSchema     *model.Schema                     `json:"input_schema,omitempty"`
+	OutputSchema    *model.Schema                     `json:"output_schema,omitempty"`
 	Availability    AvailabilitySpec                  `json:"availability,omitempty"`
 	Coordination    *CoordinationTargetMetadata       `json:"coordination,omitempty"`
 	Annotations     map[string]any                    `json:"annotations,omitempty"`
@@ -287,7 +287,7 @@ func ToolEffectClasses(tool ports.Tool) []classification.EffectClass {
 	perms := tool.Permissions().Permissions
 	if perms != nil {
 		for _, fs := range perms.FileSystem {
-			if fs.Action == permissions.FileSystemWrite || fs.Action == permissions.FileSystemExecute {
+			if fs.Action == ucperms.FileSystemWrite || fs.Action == ucperms.FileSystemExecute {
 				set[classification.EffectClassFilesystemMutation] = struct{}{}
 				break
 			}
@@ -306,15 +306,15 @@ func ToolEffectClasses(tool ports.Tool) []classification.EffectClass {
 	return effectClassSetToSlice(set)
 }
 
-func ToolInputSchema(tool ports.Tool) *schemacoerce.Schema {
+func ToolInputSchema(tool ports.Tool) *model.Schema {
 	if tool == nil {
 		return nil
 	}
 	params := tool.Parameters()
-	properties := make(map[string]*schemacoerce.Schema, len(params))
+	properties := make(map[string]*model.Schema, len(params))
 	required := make([]string, 0, len(params))
 	for _, param := range params {
-		schema := &schemacoerce.Schema{
+		schema := &model.Schema{
 			Type:        strings.TrimSpace(string(param.Type)),
 			Description: strings.TrimSpace(param.Description),
 			Default:     param.Default,
@@ -328,7 +328,7 @@ func ToolInputSchema(tool ports.Tool) *schemacoerce.Schema {
 		}
 	}
 	sort.Strings(required)
-	return &schemacoerce.Schema{
+	return &model.Schema{
 		Type:       "object",
 		Properties: properties,
 		Required:   required,
@@ -456,7 +456,7 @@ func normalizeCapabilityTags(tags []string) []string {
 	return out
 }
 
-func normalizeCoordinationTargetMetadata(metadata *CoordinationTargetMetadata, defaultInput, defaultOutput *schemacoerce.Schema) *CoordinationTargetMetadata {
+func normalizeCoordinationTargetMetadata(metadata *CoordinationTargetMetadata, defaultInput, defaultOutput *model.Schema) *CoordinationTargetMetadata {
 	if metadata == nil {
 		return nil
 	}
@@ -538,7 +538,7 @@ func containsCoordinationExecutionMode(values []agentspec.CoordinationExecutionM
 	return false
 }
 
-func cloneSchema(schema *schemacoerce.Schema) *schemacoerce.Schema {
+func cloneSchema(schema *model.Schema) *model.Schema {
 	if schema == nil {
 		return nil
 	}
@@ -547,7 +547,7 @@ func cloneSchema(schema *schemacoerce.Schema) *schemacoerce.Schema {
 		clone.Items = cloneSchema(schema.Items)
 	}
 	if schema.Properties != nil {
-		clone.Properties = make(map[string]*schemacoerce.Schema, len(schema.Properties))
+		clone.Properties = make(map[string]*model.Schema, len(schema.Properties))
 		for key, value := range schema.Properties {
 			clone.Properties[key] = cloneSchema(value)
 		}

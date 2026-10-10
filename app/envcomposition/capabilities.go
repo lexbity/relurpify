@@ -15,13 +15,13 @@ import (
 	"codeburg.org/lexbit/relurpify/context/knowledge/ast"
 	"codeburg.org/lexbit/relurpify/context/knowledge/graphdb"
 	"codeburg.org/lexbit/relurpify/context/knowledge/search"
-	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/platform/fs"
 	platformsearch "codeburg.org/lexbit/relurpify/platform/search"
 	"codeburg.org/lexbit/relurpify/platform/tools/composite"
 	"codeburg.org/lexbit/relurpify/platform/tools/subprocess"
 	"codeburg.org/lexbit/relurpify/telemetry"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
 )
 
 var (
@@ -69,8 +69,8 @@ type CapabilityRuntimeOptions struct {
 // PermissionManager is the permission surface consumed during capability construction.
 type PermissionManager interface {
 	regpkg.PermissionManagerHandle
-	CheckFileAccess(context.Context, string, permissions.FileSystemAction, string) error
-	StaticallyAllowsFileAccess(permissions.FileSystemAction, string) bool
+	CheckFileAccess(context.Context, string, ucperms.FileSystemAction, string) error
+	StaticallyAllowsFileAccess(ucperms.FileSystemAction, string) bool
 	SetDecisionSink(telemetry.DecisionSink)
 	DefaultPolicy() string
 }
@@ -169,9 +169,9 @@ func BuildCapabilityRuntime(ctx context.Context, workspace string, runner *fsand
 	fileScope := fsandbox.NewFileScopePolicy(workspace, cfg.ProtectedPaths)
 	manager.SetFileScope(fileScope)
 	manager.SetPathFilter(func(path string, isDir bool) bool {
-		action := permissions.FileSystemRead
+		action := ucperms.FileSystemRead
 		if isDir {
-			action = permissions.FileSystemList
+			action = ucperms.FileSystemList
 		}
 		if fileScope.Check(action, path) != nil {
 			return false

@@ -7,6 +7,7 @@ import (
 	"codeburg.org/lexbit/relurpify/governance/netpolicy"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	governanceports "codeburg.org/lexbit/relurpify/governance/ports"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
 )
 
 // Network permission directions, named to keep the matcher readable.
@@ -24,9 +25,9 @@ func (m *PermissionManager) ResolveTarget(ctx context.Context, token string) (ne
 }
 
 // networkDescriptor builds the audit/policy descriptor for a network target.
-func networkDescriptor(direction, protocol, host string, port int) permissions.PermissionDescriptor {
-	return permissions.PermissionDescriptor{
-		Type:     permissions.PermissionTypeNetwork,
+func networkDescriptor(direction, protocol, host string, port int) ucperms.PermissionDescriptor {
+	return ucperms.PermissionDescriptor{
+		Type:     ucperms.PermissionTypeNetwork,
 		Action:   fmt.Sprintf("net:%s:%s:%s:%d", direction, protocol, host, port),
 		Resource: host,
 	}
@@ -60,8 +61,8 @@ func (m *PermissionManager) CheckNetwork(ctx context.Context, agentID string, di
 		}
 	}
 	if perm.HITLRequired {
-		if err := m.ensureGrant(ctx, agentID, permissions.PermissionDescriptor{
-			Type:         permissions.PermissionTypeNetwork,
+		if err := m.ensureGrant(ctx, agentID, ucperms.PermissionDescriptor{
+			Type:         ucperms.PermissionTypeNetwork,
 			Action:       fmt.Sprintf("net:%s:%s", direction, protocol),
 			Resource:     fmt.Sprintf("%s:%d", host, port),
 			RequiresHITL: true,
@@ -69,8 +70,8 @@ func (m *PermissionManager) CheckNetwork(ctx context.Context, agentID string, di
 			return err
 		}
 	}
-	if err := m.log(ctx, agentID, permissions.PermissionDescriptor{
-		Type:     permissions.PermissionTypeNetwork,
+	if err := m.log(ctx, agentID, ucperms.PermissionDescriptor{
+		Type:     ucperms.PermissionTypeNetwork,
 		Action:   fmt.Sprintf("net:%s", direction),
 		Resource: fmt.Sprintf("%s:%d", host, port),
 	}, "granted", nil); err != nil {
@@ -100,7 +101,7 @@ func (m *PermissionManager) recordNetworkRule(ctx context.Context, direction, pr
 
 // findNetworkPermission resolves whether the host/port pair is authorized for
 // the given direction/protocol combination.
-func (m *PermissionManager) findNetworkPermission(direction, protocol, host string, port int) *permissions.NetworkPermission {
+func (m *PermissionManager) findNetworkPermission(direction, protocol, host string, port int) *ucperms.NetworkPermission {
 	if m == nil || m.declared == nil {
 		return nil
 	}

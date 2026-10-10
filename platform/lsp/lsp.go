@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/capability/ports"
-	"codeburg.org/lexbit/relurpify/governance/permissions"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
 )
 
 // Position follows the LSP specification.
@@ -278,7 +278,7 @@ func (t *DefinitionTool) IsAvailable(ctx context.Context) bool {
 }
 
 func (t *DefinitionTool) Permissions() ports.ToolPermissions {
-	return ports.ToolPermissions{Permissions: &permissions.PermissionSet{}}
+	return ports.ToolPermissions{Permissions: &ucperms.PermissionSet{}}
 }
 func (t *DefinitionTool) Tags() []string { return []string{ports.TagReadOnly} }
 
@@ -333,7 +333,7 @@ func (t *ReferencesTool) IsAvailable(ctx context.Context) bool {
 }
 
 func (t *ReferencesTool) Permissions() ports.ToolPermissions {
-	return ports.ToolPermissions{Permissions: &permissions.PermissionSet{}}
+	return ports.ToolPermissions{Permissions: &ucperms.PermissionSet{}}
 }
 func (t *ReferencesTool) Tags() []string { return []string{ports.TagReadOnly} }
 
@@ -387,7 +387,7 @@ func (t *HoverTool) IsAvailable(ctx context.Context) bool {
 }
 
 func (t *HoverTool) Permissions() ports.ToolPermissions {
-	return ports.ToolPermissions{Permissions: &permissions.PermissionSet{}}
+	return ports.ToolPermissions{Permissions: &ucperms.PermissionSet{}}
 }
 func (t *HoverTool) Tags() []string { return []string{ports.TagReadOnly} }
 
@@ -429,7 +429,7 @@ func (t *DiagnosticsTool) IsAvailable(ctx context.Context) bool {
 }
 
 func (t *DiagnosticsTool) Permissions() ports.ToolPermissions {
-	return ports.ToolPermissions{Permissions: &permissions.PermissionSet{}}
+	return ports.ToolPermissions{Permissions: &ucperms.PermissionSet{}}
 }
 func (t *DiagnosticsTool) Tags() []string { return []string{ports.TagReadOnly} }
 
@@ -472,7 +472,7 @@ func (t *SearchSymbolsTool) IsAvailable(ctx context.Context) bool {
 }
 
 func (t *SearchSymbolsTool) Permissions() ports.ToolPermissions {
-	return ports.ToolPermissions{Permissions: &permissions.PermissionSet{}}
+	return ports.ToolPermissions{Permissions: &ucperms.PermissionSet{}}
 }
 func (t *SearchSymbolsTool) Tags() []string { return []string{ports.TagReadOnly} }
 
@@ -514,7 +514,7 @@ func (t *DocumentSymbolsTool) IsAvailable(ctx context.Context) bool {
 }
 
 func (t *DocumentSymbolsTool) Permissions() ports.ToolPermissions {
-	return ports.ToolPermissions{Permissions: &permissions.PermissionSet{}}
+	return ports.ToolPermissions{Permissions: &ucperms.PermissionSet{}}
 }
 func (t *DocumentSymbolsTool) Tags() []string { return []string{ports.TagReadOnly} }
 
@@ -557,7 +557,7 @@ func (t *FormatTool) IsAvailable(ctx context.Context) bool {
 }
 
 func (t *FormatTool) Permissions() ports.ToolPermissions {
-	return ports.ToolPermissions{Permissions: &permissions.PermissionSet{}}
+	return ports.ToolPermissions{Permissions: &ucperms.PermissionSet{}}
 }
 func (t *FormatTool) Tags() []string { return []string{ports.TagDestructive} }
 

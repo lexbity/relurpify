@@ -6,11 +6,9 @@ import (
 	"fmt"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/capability/descriptor"
-
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/capability/descriptor"
 	"codeburg.org/lexbit/relurpify/capability/ports"
-	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
 	reactpkg "codeburg.org/lexbit/relurpify/cognitionzoo/react"
 	"codeburg.org/lexbit/relurpify/context/knowledge/ast"
 	"codeburg.org/lexbit/relurpify/governance/classification"
@@ -47,9 +45,9 @@ func (h *TargetedRefactorHandler) Descriptor(ctx context.Context, env ports.Stat
 		},
 		TrustClass:    agentspec.TrustClassBuiltinTrusted,
 		EffectClasses: []classification.EffectClass{classification.EffectClassFilesystemMutation},
-		InputSchema: &schemacoerce.Schema{
+		InputSchema: &model.Schema{
 			Type: "object",
-			Properties: map[string]*schemacoerce.Schema{
+			Properties: map[string]*model.Schema{
 				"symbol": {
 					Type:        "string",
 					Description: "Symbol name to refactor",
@@ -73,9 +71,9 @@ func (h *TargetedRefactorHandler) Descriptor(ctx context.Context, env ports.Stat
 			},
 			Required: []string{"symbol", "transformation"},
 		},
-		OutputSchema: &schemacoerce.Schema{
+		OutputSchema: &model.Schema{
 			Type: "object",
-			Properties: map[string]*schemacoerce.Schema{
+			Properties: map[string]*model.Schema{
 				"success": {
 					Type:        "boolean",
 					Description: "True if refactor applied",

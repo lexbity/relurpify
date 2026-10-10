@@ -11,6 +11,7 @@ import (
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
 	governanceports "codeburg.org/lexbit/relurpify/governance/ports"
 	fwtelemetry "codeburg.org/lexbit/relurpify/telemetry"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
 )
 
 // hitlRateMax is the maximum HITL requests per key within hitlRateWindow before
@@ -69,7 +70,7 @@ func (m *PermissionManager) RevokeTaskGrant(runID string) {
 }
 
 // GrantPermission records a manual approval for a specific permission key.
-func (m *PermissionManager) GrantPermission(desc permissions.PermissionDescriptor, approvedBy string, scope policy.GrantScope, duration time.Duration) {
+func (m *PermissionManager) GrantPermission(desc ucperms.PermissionDescriptor, approvedBy string, scope policy.GrantScope, duration time.Duration) {
 	if m == nil {
 		return
 	}
@@ -111,7 +112,7 @@ func (m *PermissionManager) toolAllowedByTaskGrant(ctx context.Context, tool Too
 }
 
 // ensureGrant obtains a HITL approval when a permission requires human review.
-func (m *PermissionManager) ensureGrant(ctx context.Context, agentID string, desc permissions.PermissionDescriptor) error {
+func (m *PermissionManager) ensureGrant(ctx context.Context, agentID string, desc ucperms.PermissionDescriptor) error {
 	key := desc.Action + ":" + desc.Resource
 	// D14: one-time grants are consumed at the moment they authorize an
 	// enforcement check. TakeIf makes allow+consume one atomic critical
@@ -129,7 +130,7 @@ func (m *PermissionManager) ensureGrant(ctx context.Context, agentID string, des
 
 // requestGrant asks the HITL provider for a fresh approval and caches the
 // grant under the permission key.
-func (m *PermissionManager) requestGrant(ctx context.Context, agentID string, desc permissions.PermissionDescriptor) error {
+func (m *PermissionManager) requestGrant(ctx context.Context, agentID string, desc ucperms.PermissionDescriptor) error {
 	if m.hitl == nil {
 		return m.deny(ctx, agentID, desc, "hitl approval required")
 	}
@@ -167,7 +168,7 @@ func (m *PermissionManager) checkHITLRateLimit(key string) error {
 
 // RequireApproval requests HITL approval for an arbitrary runtime decision
 // (tool gating, file matrix, bash policy) and caches the resulting grant.
-func (m *PermissionManager) RequireApproval(ctx context.Context, agentID string, desc permissions.PermissionDescriptor, justification string, scope policy.GrantScope, risk policy.RiskLevel, duration time.Duration) error {
+func (m *PermissionManager) RequireApproval(ctx context.Context, agentID string, desc ucperms.PermissionDescriptor, justification string, scope policy.GrantScope, risk policy.RiskLevel, duration time.Duration) error {
 	if m == nil {
 		return errors.New("permission manager missing")
 	}
@@ -226,7 +227,7 @@ func decisionEffectFor(result string) string {
 // deny records an audit event and returns a structured error describing why an
 // action was blocked. The telemetry decision is emitted by log() with the
 // shared effect mapping.
-func (m *PermissionManager) deny(ctx context.Context, agentID string, desc permissions.PermissionDescriptor, reason string) error {
+func (m *PermissionManager) deny(ctx context.Context, agentID string, desc ucperms.PermissionDescriptor, reason string) error {
 	m.log(ctx, agentID, desc, "denied", map[string]any{
 		"reason": reason,
 	})
@@ -239,7 +240,7 @@ func (m *PermissionManager) deny(ctx context.Context, agentID string, desc permi
 // emitPolicyDecision forwards one policy evaluation to the decision sink.
 // agentID is the acting principal and becomes both the event's Actor and the
 // sink-neutral actor.
-func (m *PermissionManager) emitPolicyDecision(ctx context.Context, agentID string, desc permissions.PermissionDescriptor, effect, reason string, fields map[string]any) {
+func (m *PermissionManager) emitPolicyDecision(ctx context.Context, agentID string, desc ucperms.PermissionDescriptor, effect, reason string, fields map[string]any) {
 	if m == nil {
 		return
 	}
@@ -341,7 +342,7 @@ func redactSensitivePath(path string) string {
 // chain logger blocks on durable enqueue and returns an error that grant
 // callers MUST propagate ("no unrecorded governed effects", SBH-1 INV-5);
 // best-effort or denial records return nil here.
-func (m *PermissionManager) log(ctx context.Context, agentID string, desc permissions.PermissionDescriptor, result string, fields map[string]any) error {
+func (m *PermissionManager) log(ctx context.Context, agentID string, desc ucperms.PermissionDescriptor, result string, fields map[string]any) error {
 	if m.audit != nil {
 		err := m.audit.Log(ctx, policy.AuditRecord{
 			Timestamp:   time.Now().UTC(),
@@ -378,14 +379,14 @@ func reasonFor(result string, fields map[string]any) string {
 // CheckCapability verifies capability usage.
 func (m *PermissionManager) CheckCapability(ctx context.Context, agentID string, capability string) error {
 	if !m.hasCapability(capability) {
-		return m.deny(ctx, agentID, permissions.PermissionDescriptor{
-			Type:     permissions.PermissionTypeCapability,
+		return m.deny(ctx, agentID, ucperms.PermissionDescriptor{
+			Type:     ucperms.PermissionTypeCapability,
 			Action:   fmt.Sprintf("cap:%s", capability),
 			Resource: capability,
 		}, "capability not declared")
 	}
-	if err := m.log(ctx, agentID, permissions.PermissionDescriptor{
-		Type:     permissions.PermissionTypeCapability,
+	if err := m.log(ctx, agentID, ucperms.PermissionDescriptor{
+		Type:     ucperms.PermissionTypeCapability,
 		Action:   fmt.Sprintf("cap:%s", capability),
 		Resource: capability,
 	}, "granted", nil); err != nil {
@@ -398,15 +399,15 @@ func (m *PermissionManager) CheckCapability(ctx context.Context, agentID string,
 func (m *PermissionManager) CheckIPC(ctx context.Context, agentID string, kind string, target string) error {
 	perm := m.findIPCPermission(kind, target)
 	if perm == nil {
-		return m.deny(ctx, agentID, permissions.PermissionDescriptor{
-			Type:     permissions.PermissionTypeIPC,
+		return m.deny(ctx, agentID, ucperms.PermissionDescriptor{
+			Type:     ucperms.PermissionTypeIPC,
 			Action:   fmt.Sprintf("ipc:%s", kind),
 			Resource: target,
 		}, "ipc scope missing")
 	}
 	if perm.HITLRequired {
-		if err := m.ensureGrant(ctx, agentID, permissions.PermissionDescriptor{
-			Type:         permissions.PermissionTypeIPC,
+		if err := m.ensureGrant(ctx, agentID, ucperms.PermissionDescriptor{
+			Type:         ucperms.PermissionTypeIPC,
 			Action:       fmt.Sprintf("ipc:%s", kind),
 			Resource:     perm.Target,
 			RequiresHITL: true,
@@ -414,8 +415,8 @@ func (m *PermissionManager) CheckIPC(ctx context.Context, agentID string, kind s
 			return err
 		}
 	}
-	if err := m.log(ctx, agentID, permissions.PermissionDescriptor{
-		Type:     permissions.PermissionTypeIPC,
+	if err := m.log(ctx, agentID, ucperms.PermissionDescriptor{
+		Type:     ucperms.PermissionTypeIPC,
 		Action:   fmt.Sprintf("ipc:%s", kind),
 		Resource: target,
 	}, "granted", nil); err != nil {
@@ -425,7 +426,7 @@ func (m *PermissionManager) CheckIPC(ctx context.Context, agentID string, kind s
 }
 
 // findIPCPermission determines if the IPC target was declared in the manifest.
-func (m *PermissionManager) findIPCPermission(kind, target string) *permissions.IPCPermission {
+func (m *PermissionManager) findIPCPermission(kind, target string) *ucperms.IPCPermission {
 	if m == nil || m.declared == nil {
 		return nil
 	}

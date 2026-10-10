@@ -12,7 +12,7 @@ import (
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/capability/ports"
-	"codeburg.org/lexbit/relurpify/governance/permissions"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
 )
 
 // fullFeaturesTool declares parameters with every supported feature to verify
@@ -34,8 +34,8 @@ func (f *fullFeaturesTool) Execute(ctx context.Context, args map[string]any) (*p
 }
 func (f *fullFeaturesTool) IsAvailable(ctx context.Context) bool { return true }
 func (f *fullFeaturesTool) Permissions() ports.ToolPermissions {
-	return ports.ToolPermissions{Permissions: &permissions.PermissionSet{
-		Executables: []permissions.ExecutablePermission{{Binary: "echo"}},
+	return ports.ToolPermissions{Permissions: &ucperms.PermissionSet{
+		Executables: []ucperms.ExecutablePermission{{Binary: "echo"}},
 	}}
 }
 func (f *fullFeaturesTool) Tags() []string { return nil }
@@ -131,5 +131,5 @@ func TestOllamaSchemaNestedObjectDocumentedLoss(t *testing.T) {
 	t.Log("KNOWN LOSS: Nested object schemas are NOT converted through the")
 	t.Log("ToolParameter system because ToolParameter.Type is a flat type.")
 	t.Log("This test documents the limitation — nested objects require")
-	t.Log("the schemacoerce.Schema path, not the ToolParameter path.")
+	t.Log("a typed JSON-schema struct path, not the ToolParameter path.")
 }

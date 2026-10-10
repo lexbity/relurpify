@@ -4,9 +4,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
 	"mvdan.cc/sh/v3/syntax"
-
-	"codeburg.org/lexbit/relurpify/governance/permissions"
 )
 
 // maxUnwrapDepth bounds the transparent-wrapper unwrapping chain. Beyond it the
@@ -17,9 +16,9 @@ const maxUnwrapDepth = 5
 // LiftedPermissions aggregates all virtual operations statically extracted
 // from a shell command string or an argv vector.
 type LiftedPermissions struct {
-	FileSystem  []permissions.FileSystemPermission
-	Executables []permissions.ExecutablePermission
-	Network     []permissions.NetworkPermission
+	FileSystem  []ucperms.FileSystemPermission
+	Executables []ucperms.ExecutablePermission
+	Network     []ucperms.NetworkPermission
 	HasDynamic  bool
 }
 
@@ -88,13 +87,13 @@ func liftShellString(cmdStr string, res *LiftedPermissions, depth int) error {
 			}
 			switch n.Op {
 			case syntax.RdrOut, syntax.AppOut:
-				res.FileSystem = append(res.FileSystem, permissions.FileSystemPermission{
-					Action: permissions.FileSystemWrite,
+				res.FileSystem = append(res.FileSystem, ucperms.FileSystemPermission{
+					Action: ucperms.FileSystemWrite,
 					Path:   target,
 				})
 			case syntax.RdrIn:
-				res.FileSystem = append(res.FileSystem, permissions.FileSystemPermission{
-					Action: permissions.FileSystemRead,
+				res.FileSystem = append(res.FileSystem, ucperms.FileSystemPermission{
+					Action: ucperms.FileSystemRead,
 					Path:   target,
 				})
 			}
@@ -142,17 +141,17 @@ func liftCommand(argv []string, res *LiftedPermissions, depth int) error {
 
 	if isOpaqueConstructor(binary, args) {
 		res.HasDynamic = true
-		res.Executables = append(res.Executables, permissions.ExecutablePermission{Binary: binary, Args: append([]string(nil), args...)})
+		res.Executables = append(res.Executables, ucperms.ExecutablePermission{Binary: binary, Args: append([]string(nil), args...)})
 		return nil
 	}
 	if isShellBinary(binary) {
 		if cmdStr, ok := shellCommandString(args); ok {
-			res.Executables = append(res.Executables, permissions.ExecutablePermission{Binary: binary, Args: append([]string(nil), args...)})
+			res.Executables = append(res.Executables, ucperms.ExecutablePermission{Binary: binary, Args: append([]string(nil), args...)})
 			return liftShellString(cmdStr, res, depth+1)
 		}
 	}
 	if inner, ok := stripArgvWrapper(binary, args); ok {
-		res.Executables = append(res.Executables, permissions.ExecutablePermission{Binary: binary, Args: append([]string(nil), args...)})
+		res.Executables = append(res.Executables, ucperms.ExecutablePermission{Binary: binary, Args: append([]string(nil), args...)})
 		return liftCommand(inner, res, depth+1)
 	}
 
@@ -216,7 +215,7 @@ func liftPlain(binary string, args []string, res *LiftedPermissions) {
 	case "curl", "wget":
 		if host := firstNetworkArg(args); host != "" {
 			if h := extractHostFromURL(host); h != "" {
-				res.Network = append(res.Network, permissions.NetworkPermission{
+				res.Network = append(res.Network, ucperms.NetworkPermission{
 					Direction: "egress",
 					Protocol:  "tcp",
 					Host:      h,
@@ -226,7 +225,7 @@ func liftPlain(binary string, args []string, res *LiftedPermissions) {
 	}
 
 	// Every command contributes its executable permission.
-	res.Executables = append(res.Executables, permissions.ExecutablePermission{
+	res.Executables = append(res.Executables, ucperms.ExecutablePermission{
 		Binary: binary,
 		Args:   append([]string(nil), args...),
 	})
@@ -271,19 +270,19 @@ func liftOutputCarriers(binary string, args []string, res *LiftedPermissions) {
 
 func (res *LiftedPermissions) addReads(paths []string) {
 	for _, p := range paths {
-		res.FileSystem = append(res.FileSystem, permissions.FileSystemPermission{Action: permissions.FileSystemRead, Path: p})
+		res.FileSystem = append(res.FileSystem, ucperms.FileSystemPermission{Action: ucperms.FileSystemRead, Path: p})
 	}
 }
 
 func (res *LiftedPermissions) addWrites(paths []string) {
 	for _, p := range paths {
-		res.FileSystem = append(res.FileSystem, permissions.FileSystemPermission{Action: permissions.FileSystemWrite, Path: p})
+		res.FileSystem = append(res.FileSystem, ucperms.FileSystemPermission{Action: ucperms.FileSystemWrite, Path: p})
 	}
 }
 
 func (res *LiftedPermissions) addDeletes(paths []string) {
 	for _, p := range paths {
-		res.FileSystem = append(res.FileSystem, permissions.FileSystemPermission{Action: permissions.FileSystemDelete, Path: p})
+		res.FileSystem = append(res.FileSystem, ucperms.FileSystemPermission{Action: ucperms.FileSystemDelete, Path: p})
 	}
 }
 

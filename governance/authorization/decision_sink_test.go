@@ -5,18 +5,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
-
-	"codeburg.org/lexbit/relurpify/platform/observability"
-	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/governance/policy"
+	"codeburg.org/lexbit/relurpify/platform/observability"
 	fwtelemetry "codeburg.org/lexbit/relurpify/telemetry"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
+	"github.com/stretchr/testify/require"
 )
 
 func newDecisionSinkPermissionManager(t *testing.T) (*PermissionManager, *fwtelemetry.SnapshotDecisionSink) {
 	t.Helper()
-	declared := &permissions.PermissionSet{
-		Capabilities: []permissions.CapabilityPermission{
+	declared := &ucperms.PermissionSet{
+		Capabilities: []ucperms.CapabilityPermission{
 			{Capability: "test-cap"},
 		},
 	}
@@ -61,8 +60,8 @@ func TestPermissionManager_EmitsPolicyAllow(t *testing.T) {
 // TestPermissionManager_TelemetryDecisionSinkCarriesCorrelation verifies the
 // full chain: manager → TelemetryDecisionSink → stamped JSONL event (FR-2).
 func TestPermissionManager_TelemetryDecisionSinkCarriesCorrelation(t *testing.T) {
-	declared := &permissions.PermissionSet{
-		Capabilities: []permissions.CapabilityPermission{
+	declared := &ucperms.PermissionSet{
+		Capabilities: []ucperms.CapabilityPermission{
 			{Capability: "test-cap"},
 		},
 	}
@@ -139,7 +138,7 @@ func TestHITLBroker_EmitsLifecycleEvents(t *testing.T) {
 	}()
 
 	_, err := broker.RequestPermission(context.Background(), PermissionRequest{
-		Permission:    permissions.PermissionDescriptor{Action: "fs:write:/tmp/x"},
+		Permission:    ucperms.PermissionDescriptor{Action: "fs:write:/tmp/x"},
 		Justification: "test approval",
 		Scope:         policy.GrantScopeOneTime,
 	})
@@ -161,7 +160,7 @@ func TestHITLBroker_EmitsExpiredEvent(t *testing.T) {
 	defer broker.Stop()
 
 	_, err := broker.RequestPermission(context.Background(), PermissionRequest{
-		Permission: permissions.PermissionDescriptor{Action: "fs:write:/tmp/x"},
+		Permission: ucperms.PermissionDescriptor{Action: "fs:write:/tmp/x"},
 	})
 	require.Error(t, err)
 
@@ -181,7 +180,7 @@ func TestHITLBroker_EmitsAsyncResolution(t *testing.T) {
 
 	ctx := context.Background()
 	requestID, err := broker.SubmitAsync(ctx, PermissionRequest{
-		Permission:    permissions.PermissionDescriptor{Action: "fs:write:/tmp/x"},
+		Permission:    ucperms.PermissionDescriptor{Action: "fs:write:/tmp/x"},
 		Justification: "async ask",
 	})
 	require.NoError(t, err)

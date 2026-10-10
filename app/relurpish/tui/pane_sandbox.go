@@ -6,13 +6,13 @@ import (
 	"sort"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
-
 	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"gopkg.in/yaml.v3"
 )
 
@@ -55,7 +55,7 @@ type sandboxNode struct {
 
 	// File scope fields.
 	fileIndex int
-	filePerm  permissions.FileSystemPermission
+	filePerm  ucperms.FileSystemPermission
 
 	// Command fields.
 	patternIndex int
@@ -65,7 +65,7 @@ type sandboxNode struct {
 
 	// Network fields.
 	networkIndex int
-	networkPerm  permissions.NetworkPermission
+	networkPerm  ucperms.NetworkPermission
 
 	// Provider policy fields.
 	providerID  string
@@ -285,7 +285,7 @@ func (p *SandboxPane) buildTree() *sandboxNode {
 	return root
 }
 
-func (p *SandboxPane) buildFileCategory(perms permissions.PermissionSet) *sandboxNode {
+func (p *SandboxPane) buildFileCategory(perms ucperms.PermissionSet) *sandboxNode {
 	cat := &sandboxNode{
 		ID:         "files",
 		Label:      "File Scopes",
@@ -366,7 +366,7 @@ func (p *SandboxPane) buildCommandCategory(agentSpec *agentspec.AgentRuntimeSpec
 	return cat
 }
 
-func (p *SandboxPane) buildNetworkCategory(perms permissions.PermissionSet) *sandboxNode {
+func (p *SandboxPane) buildNetworkCategory(perms ucperms.PermissionSet) *sandboxNode {
 	cat := &sandboxNode{
 		ID:         "network",
 		Label:      "Network Rules",
@@ -769,7 +769,7 @@ func (p *SandboxPane) buildSavedDocument() (*config.Document, error) {
 }
 
 func (p *SandboxPane) applyFileCategory(doc *config.Document, cat *sandboxNode) error {
-	perms := make([]permissions.FileSystemPermission, 0, len(cat.Children))
+	perms := make([]ucperms.FileSystemPermission, 0, len(cat.Children))
 	for _, child := range cat.Children {
 		if child.State == agentspec.AgentPermissionDeny {
 			continue
@@ -780,7 +780,7 @@ func (p *SandboxPane) applyFileCategory(doc *config.Document, cat *sandboxNode) 
 		perms = append(perms, perm)
 	}
 	sort.Slice(perms, func(i, j int) bool { return perms[i].Path < perms[j].Path })
-	return upsertDocumentSection(doc, "permissions", func(ps *permissions.PermissionSet) {
+	return upsertDocumentSection(doc, "permissions", func(ps *ucperms.PermissionSet) {
 		ps.FileSystem = perms
 	})
 }
@@ -817,7 +817,7 @@ func (p *SandboxPane) applyCommandCategory(doc *config.Document, cat *sandboxNod
 }
 
 func (p *SandboxPane) applyNetworkCategory(doc *config.Document, cat *sandboxNode) error {
-	perms := make([]permissions.NetworkPermission, 0, len(cat.Children))
+	perms := make([]ucperms.NetworkPermission, 0, len(cat.Children))
 	for _, child := range cat.Children {
 		if child.State == agentspec.AgentPermissionDeny {
 			continue
@@ -836,7 +836,7 @@ func (p *SandboxPane) applyNetworkCategory(doc *config.Document, cat *sandboxNod
 		}
 		return perms[i].Direction < perms[j].Direction
 	})
-	return upsertDocumentSection(doc, "permissions", func(ps *permissions.PermissionSet) {
+	return upsertDocumentSection(doc, "permissions", func(ps *ucperms.PermissionSet) {
 		ps.Network = perms
 	})
 }
@@ -973,17 +973,17 @@ func (p *SandboxPane) selectedNode() *sandboxNode {
 	return p.visible[p.sel].node
 }
 
-func (p *SandboxPane) permissionSet() (permissions.PermissionSet, error) {
+func (p *SandboxPane) permissionSet() (ucperms.PermissionSet, error) {
 	if p.document == nil {
-		return permissions.PermissionSet{}, fmt.Errorf("document unavailable")
+		return ucperms.PermissionSet{}, fmt.Errorf("document unavailable")
 	}
 	node, ok := p.document.Section("permissions")
 	if !ok {
-		return permissions.PermissionSet{}, nil
+		return ucperms.PermissionSet{}, nil
 	}
 	ps, err := permissions.DecodeSection(node)
 	if err != nil || ps == nil {
-		return permissions.PermissionSet{}, err
+		return ucperms.PermissionSet{}, err
 	}
 	return *ps, nil
 }

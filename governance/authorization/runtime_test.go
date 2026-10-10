@@ -6,10 +6,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/stretchr/testify/require"
-
-	"codeburg.org/lexbit/relurpify/governance/permissions"
 	governanceports "codeburg.org/lexbit/relurpify/governance/ports"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
+	"github.com/stretchr/testify/require"
 )
 
 // TestRegisterAgentFailClosedWhenAuditDirUnwritable proves registration fails
@@ -23,7 +22,7 @@ func TestRegisterAgentFailClosedWhenAuditDirUnwritable(t *testing.T) {
 
 	cfg := RuntimeConfig{
 		DocumentSnapshot: struct{}{},
-		Permissions:      permissions.PermissionSet{},
+		Permissions:      ucperms.PermissionSet{},
 		Backend:          "unit",
 		BackendFactory: func(_ context.Context, backend string, _ governanceports.SandboxConfig, _, _ string) (governanceports.SandboxRuntime, error) {
 			return &fakeSandboxRuntime{name: backend}, nil
@@ -62,7 +61,7 @@ func TestGenerateAgentID(t *testing.T) {
 func TestRegisterAgentGeneratesDeterministicID(t *testing.T) {
 	cfg := RuntimeConfig{
 		DocumentSnapshot: struct{}{},
-		Permissions:      permissions.PermissionSet{},
+		Permissions:      ucperms.PermissionSet{},
 		Backend:          "unit",
 		BackendFactory: func(_ context.Context, backend string, _ governanceports.SandboxConfig, _, _ string) (governanceports.SandboxRuntime, error) {
 			return &fakeSandboxRuntime{name: backend}, nil

@@ -7,11 +7,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"gopkg.in/yaml.v3"
-
-	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/platform/fs"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
+	"gopkg.in/yaml.v3"
 )
 
 const (
@@ -227,18 +226,18 @@ func testDocumentWithPermissions(t *testing.T) *config.Document {
 		Spec:       map[string]yaml.Node{},
 	}
 	var node yaml.Node
-	if err := node.Encode(permissions.PermissionSet{
-		FileSystem: []permissions.FileSystemPermission{
-			{Action: permissions.FileSystemWrite, Path: "${workspace}/**"},
-			{Action: permissions.FileSystemRead, Path: "/tmp/*.log"},
-			{Action: permissions.FileSystemDelete, Path: "/var/data/*"},
+	if err := node.Encode(ucperms.PermissionSet{
+		FileSystem: []ucperms.FileSystemPermission{
+			{Action: ucperms.FileSystemWrite, Path: "${workspace}/**"},
+			{Action: ucperms.FileSystemRead, Path: "/tmp/*.log"},
+			{Action: ucperms.FileSystemDelete, Path: "/var/data/*"},
 		},
-		Executables: []permissions.ExecutablePermission{
+		Executables: []ucperms.ExecutablePermission{
 			{Binary: "go"},
 			{Binary: "git"},
 			{Binary: "python*"},
 		},
-		Network: []permissions.NetworkPermission{
+		Network: []ucperms.NetworkPermission{
 			{Host: api_example_com, Port: 443},
 			{Host: "*.local", Port: 0},
 			{Host: "localhost", Port: 8080},
@@ -257,32 +256,32 @@ func TestDocumentCoversFileAction(t *testing.T) {
 	workspace := "/home/user/project"
 
 	// Test: write within workspace should be covered
-	if !DocumentCoversFileAction(m, permissions.FileSystemWrite, "file.go", workspace) {
+	if !DocumentCoversFileAction(m, ucperms.FileSystemWrite, "file.go", workspace) {
 		t.Error("Expected write to file.go to be covered by ${workspace}/**")
 	}
 
 	// Test: write to absolute path within workspace
-	if !DocumentCoversFileAction(m, permissions.FileSystemWrite, "/home/user/project/src/main.go", workspace) {
+	if !DocumentCoversFileAction(m, ucperms.FileSystemWrite, "/home/user/project/src/main.go", workspace) {
 		t.Error("Expected write to /home/user/project/src/main.go to be covered")
 	}
 
 	// Test: read from /tmp with matching pattern
-	if !DocumentCoversFileAction(m, permissions.FileSystemRead, "/tmp/app.log", workspace) {
+	if !DocumentCoversFileAction(m, ucperms.FileSystemRead, "/tmp/app.log", workspace) {
 		t.Error("Expected read of /tmp/app.log to be covered")
 	}
 
 	// Test: read from /tmp with non-matching pattern
-	if DocumentCoversFileAction(m, permissions.FileSystemRead, "/tmp/app.txt", workspace) {
+	if DocumentCoversFileAction(m, ucperms.FileSystemRead, "/tmp/app.txt", workspace) {
 		t.Error("Expected read of /tmp/app.txt to NOT be covered (wrong extension)")
 	}
 
 	// Test: action not matching (write vs read)
-	if DocumentCoversFileAction(m, permissions.FileSystemWrite, "/tmp/app.log", workspace) {
+	if DocumentCoversFileAction(m, ucperms.FileSystemWrite, "/tmp/app.log", workspace) {
 		t.Error("Expected write to /tmp/app.log to NOT be covered (pattern is read-only)")
 	}
 
 	// Test: nil manifest
-	if DocumentCoversFileAction(nil, permissions.FileSystemWrite, "file.go", workspace) {
+	if DocumentCoversFileAction(nil, ucperms.FileSystemWrite, "file.go", workspace) {
 		t.Error(expected_nil_manifest_to_not_cover_anything)
 	}
 }

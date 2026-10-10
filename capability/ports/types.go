@@ -5,7 +5,7 @@ import (
 	"errors"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/governance/permissions"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
 )
 
 // Tool is the primary capability interface. Every tool, whether native,
@@ -59,7 +59,7 @@ type ToolChunk struct {
 
 // ToolPermissions describes the permissions a tool requires.
 type ToolPermissions struct {
-	Permissions *permissions.PermissionSet `json:"permissions,omitempty"`
+	Permissions *ucperms.PermissionSet `json:"permissions,omitempty"`
 }
 
 // Validate ensures tool permission manifests are well-formed.
@@ -115,19 +115,6 @@ type CommandResult struct {
 // CommandRunner executes a command request and returns a result.
 type CommandRunner interface {
 	Run(ctx context.Context, req CommandRequest) (*CommandResult, error)
-}
-
-// Schema is a JSON Schema used for tool parameters.
-type Schema struct {
-	Type        string             `json:"type,omitempty" yaml:"type,omitempty"`
-	Properties  map[string]*Schema `json:"properties,omitempty" yaml:"properties,omitempty"`
-	Items       *Schema            `json:"items,omitempty" yaml:"items,omitempty"`
-	Required    []string           `json:"required,omitempty" yaml:"required,omitempty"`
-	Default     any                `json:"default,omitempty" yaml:"default,omitempty"`
-	Enum        []any              `json:"enum,omitempty" yaml:"enum,omitempty"`
-	Title       string             `json:"title,omitempty" yaml:"title,omitempty"`
-	Description string             `json:"description,omitempty" yaml:"description,omitempty"`
-	Format      string             `json:"format,omitempty" yaml:"format,omitempty"`
 }
 
 // ToolRegistry is a read-only interface for looking up tool manifests.

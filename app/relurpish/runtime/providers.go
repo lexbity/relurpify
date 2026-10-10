@@ -13,9 +13,9 @@ import (
 	"codeburg.org/lexbit/relurpify/context/knowledge/memory"
 	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
 	"codeburg.org/lexbit/relurpify/governance/identity"
-	"codeburg.org/lexbit/relurpify/governance/permissions"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
 )
 
 var ErrSessionNotManaged = errors.New("provider session not managed")
@@ -144,8 +144,8 @@ func (r *Runtime) authorizeProviderActivation(ctx context.Context, desc provider
 		}, fauthorization.ApprovalRequest{
 			AgentID: r.AgentWorkspace().Registration.ID,
 			Manager: r.registration.Permissions,
-			Permission: permissions.PermissionDescriptor{
-				Type:         permissions.PermissionTypeCapability,
+			Permission: ucperms.PermissionDescriptor{
+				Type:         ucperms.PermissionTypeCapability,
 				Action:       fmt.Sprintf("provider:%s:activate", desc.ID),
 				Resource:     desc.ID,
 				Metadata:     metadata,
@@ -190,8 +190,8 @@ func (r *Runtime) authorizeProviderActivation(ctx context.Context, desc provider
 		if desc.Security.Origin != "" {
 			metadata["provider_origin"] = string(desc.Security.Origin)
 		}
-		return r.registration.Permissions.RequireApproval(ctx, r.registration.ID, permissions.PermissionDescriptor{
-			Type:         permissions.PermissionTypeCapability,
+		return r.registration.Permissions.RequireApproval(ctx, r.registration.ID, ucperms.PermissionDescriptor{
+			Type:         ucperms.PermissionTypeCapability,
 			Action:       fmt.Sprintf("provider:%s:activate", desc.ID),
 			Resource:     desc.ID,
 			Metadata:     metadata,

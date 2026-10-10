@@ -4,9 +4,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/userconfig/securefile"
 	"github.com/stretchr/testify/require"
-
-	"codeburg.org/lexbit/relurpify/platform/fs"
 )
 
 func TestLoadProfileDir(t *testing.T) {
@@ -122,10 +121,10 @@ func TestMatchProfile_FallsBackToDefault(t *testing.T) {
 
 func writeProfileTestFile(t *testing.T, path, contents string) {
 	t.Helper()
-	if err := fs.MkdirAllSecure(filepath.Dir(path)); err != nil {
+	if err := securefile.MkdirAllSecure(filepath.Dir(path)); err != nil {
 		t.Fatalf("mkdir failed: %v", err)
 	}
-	if err := fs.WriteFileSecure(path, []byte(contents)); err != nil {
+	if err := securefile.WriteFileSecure(path, []byte(contents)); err != nil {
 		t.Fatalf("write failed: %v", err)
 	}
 }

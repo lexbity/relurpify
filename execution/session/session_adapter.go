@@ -9,8 +9,8 @@ import (
 	"codeburg.org/lexbit/relurpify/context/knowledge"
 	"codeburg.org/lexbit/relurpify/execution/workspace"
 	"codeburg.org/lexbit/relurpify/governance/authorization"
-	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/governance/policy"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
 )
 
 // Adapter implements WorkspaceService using OpenWorkspace
@@ -114,8 +114,8 @@ func (c *securityController) RequestApproval(ctx context.Context, req ApprovalRe
 		return ApprovalDecision{}, ErrSecurityUnavailable
 	}
 	grant, err := approver.RequestPermission(ctx, authorization.PermissionRequest{
-		Permission: permissions.PermissionDescriptor{
-			Type:         permissions.PermissionTypeHITL,
+		Permission: ucperms.PermissionDescriptor{
+			Type:         ucperms.PermissionTypeHITL,
 			Action:       req.Action,
 			RequiresHITL: true,
 		},

@@ -3,8 +3,8 @@ package testhelper
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 

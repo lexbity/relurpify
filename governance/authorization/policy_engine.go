@@ -8,6 +8,7 @@ import (
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
 	"codeburg.org/lexbit/relurpify/governance/ports"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
 )
 
 // policyEngineUnavailable is the fail-closed reason for a missing engine.
@@ -137,8 +138,8 @@ func (e *ManifestPolicyEngine) emitDecision(ctx context.Context, req policy.Poli
 	if e == nil || e.manager == nil {
 		return
 	}
-	desc := permissions.PermissionDescriptor{
-		Type:     permissions.PermissionTypeCapability,
+	desc := ucperms.PermissionDescriptor{
+		Type:     ucperms.PermissionTypeCapability,
 		Action:   permissionActionForRequest(req),
 		Resource: permissionResourceForRequest(req),
 	}

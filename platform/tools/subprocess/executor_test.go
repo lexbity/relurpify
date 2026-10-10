@@ -4,10 +4,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/stretchr/testify/require"
-
 	"codeburg.org/lexbit/relurpify/capability/ports"
-	"codeburg.org/lexbit/relurpify/governance/permissions"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
+	"github.com/stretchr/testify/require"
 )
 
 const (
@@ -648,10 +647,10 @@ func (r *exitCodeRunner) Run(_ context.Context, req ports.CommandRequest) (*port
 	}, nil
 }
 
-func ps(v any) *permissions.PermissionSet {
+func ps(v any) *ucperms.PermissionSet {
 	if v == nil {
 		return nil
 	}
-	p, _ := v.(*permissions.PermissionSet)
+	p, _ := v.(*ucperms.PermissionSet)
 	return p
 }

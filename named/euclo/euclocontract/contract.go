@@ -6,8 +6,8 @@
 package euclocontract
 
 import (
-	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
 )
 
 const (
@@ -61,13 +61,13 @@ func defaultAgentSpec() *config.AgentSpec {
 	}
 }
 
-func defaultPermissions() permissions.PermissionSet {
-	return permissions.PermissionSet{
-		Executables: []permissions.ExecutablePermission{
+func defaultPermissions() ucperms.PermissionSet {
+	return ucperms.PermissionSet{
+		Executables: []ucperms.ExecutablePermission{
 			{Binary: "git"},
 			{Binary: "rg"},
 		},
-		FileSystem: []permissions.FileSystemPermission{
+		FileSystem: []ucperms.FileSystemPermission{
 			{Action: "fs:read", Path: "${workspace}/**"},
 			{Action: "fs:write", Path: "${workspace}/**"},
 			// fs:list is required so workspace indexing (directory traversal)

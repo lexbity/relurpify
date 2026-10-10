@@ -12,20 +12,19 @@ import (
 	"testing"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"gopkg.in/yaml.v3"
-
 	"codeburg.org/lexbit/relurpify/app/relurpish/euclotui"
 	runtimesvc "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
 	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 	"codeburg.org/lexbit/relurpify/app/relurpish/tui"
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
-	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/model"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	"codeburg.org/lexbit/relurpify/platform/fs"
 	"codeburg.org/lexbit/relurpify/platform/llm"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
+	tea "github.com/charmbracelet/bubbletea"
+	"gopkg.in/yaml.v3"
 )
 
 var update = flag.Bool("update", false, "update golden files") //nolint:gochecknoglobals // golden-update flag for test maintenance
@@ -183,10 +182,10 @@ func testDocument() *config.Document {
 		Spec:       map[string]yaml.Node{},
 	}
 	var permissionsNode yaml.Node
-	_ = permissionsNode.Encode(permissions.PermissionSet{
-		FileSystem: []permissions.FileSystemPermission{
-			{Action: permissions.FileSystemRead, Path: "/workspace/**"},
-			{Action: permissions.FileSystemWrite, Path: "/workspace/**"},
+	_ = permissionsNode.Encode(ucperms.PermissionSet{
+		FileSystem: []ucperms.FileSystemPermission{
+			{Action: ucperms.FileSystemRead, Path: "/workspace/**"},
+			{Action: ucperms.FileSystemWrite, Path: "/workspace/**"},
 		},
 	})
 	doc.Spec["permissions"] = permissionsNode

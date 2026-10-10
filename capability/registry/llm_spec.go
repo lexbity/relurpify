@@ -4,8 +4,6 @@ import (
 	"fmt"
 
 	"codeburg.org/lexbit/relurpify/capability/descriptor"
-
-	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
 	"codeburg.org/lexbit/relurpify/governance/classification"
 	"codeburg.org/lexbit/relurpify/model"
 )
@@ -25,7 +23,7 @@ func LLMToolSpecFromDescriptor(d descriptor.CapabilityDescriptor) model.LLMToolS
 	return model.LLMToolSpec{
 		Name:        name,
 		Description: desc,
-		InputSchema: convertSchema(d.InputSchema),
+		InputSchema: d.InputSchema,
 	}
 }
 
@@ -53,28 +51,4 @@ func LLMToolSpecsFromDescriptors(descs []descriptor.CapabilityDescriptor) []mode
 		specs[i] = LLMToolSpecFromDescriptor(d)
 	}
 	return specs
-}
-
-// convertSchema copies a schemacoerce.Schema to a model.Schema.
-func convertSchema(src *schemacoerce.Schema) *model.Schema {
-	if src == nil {
-		return nil
-	}
-	dst := &model.Schema{
-		Type:        src.Type,
-		Properties:  make(map[string]*model.Schema, len(src.Properties)),
-		Required:    append([]string(nil), src.Required...),
-		Default:     src.Default,
-		Enum:        append([]any(nil), src.Enum...),
-		Title:       src.Title,
-		Description: src.Description,
-		Format:      src.Format,
-	}
-	for k, v := range src.Properties {
-		dst.Properties[k] = convertSchema(v)
-	}
-	if src.Items != nil {
-		dst.Items = convertSchema(src.Items)
-	}
-	return dst
 }

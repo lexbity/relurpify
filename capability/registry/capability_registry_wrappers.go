@@ -7,16 +7,16 @@ import (
 	"strings"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/descriptor"
 	"codeburg.org/lexbit/relurpify/capability/handler"
+	"codeburg.org/lexbit/relurpify/capability/ports"
 	capresult "codeburg.org/lexbit/relurpify/capability/result"
 	runtime "codeburg.org/lexbit/relurpify/capability/runtime"
-
-	"codeburg.org/lexbit/relurpify/capability/agentspec"
-	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/governance/policy"
 	fwtelemetry "codeburg.org/lexbit/relurpify/telemetry"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
 )
 
 const (
@@ -278,8 +278,8 @@ func requestCapabilityApproval(ctx context.Context, desc descriptor.CapabilityDe
 	if stateSnapshot.manager == nil {
 		return fmt.Errorf("capability %s blocked: approval required but permission manager missing", desc.ID)
 	}
-	return stateSnapshot.manager.RequireApproval(ctx, stateSnapshot.agentID, permissions.PermissionDescriptor{
-		Type:         permissions.PermissionTypeHITL,
+	return stateSnapshot.manager.RequireApproval(ctx, stateSnapshot.agentID, ucperms.PermissionDescriptor{
+		Type:         ucperms.PermissionTypeHITL,
 		Action:       fmt.Sprintf("capability:%s", desc.ID),
 		Resource:     stateSnapshot.agentID,
 		Metadata:     metadata,
@@ -323,7 +323,7 @@ func enforceDescriptorExecutionPoliciesWithProfile(ctx context.Context, desc des
 
 // authToolView adapts a ports.Tool to the structural surface the authorization
 // permission manager expects. It bridges the capability-owned
-// ports.ToolPermissions wrapper down to the canonical *permissions.PermissionSet
+// ports.ToolPermissions wrapper down to the canonical *ucperms.PermissionSet
 // so authorization can read tool permissions without importing capability/ports.
 type authToolView struct {
 	tool ports.Tool
@@ -331,7 +331,7 @@ type authToolView struct {
 
 func (a authToolView) Name() string   { return a.tool.Name() }
 func (a authToolView) Tags() []string { return a.tool.Tags() }
-func (a authToolView) PermissionSet() *permissions.PermissionSet {
+func (a authToolView) PermissionSet() *ucperms.PermissionSet {
 	return a.tool.Permissions().Permissions
 }
 

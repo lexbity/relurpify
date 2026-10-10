@@ -8,12 +8,12 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 const (
@@ -797,7 +797,7 @@ func TestCreateFileTool_NilSandboxScope(t *testing.T) {
 	dir := t.TempDir()
 	tool := &CreateFileTool{BasePath: dir}
 
-	err := tool.enforceSandboxScope(permissions.FileSystemWrite, filepath.Join(dir, test_txt))
+	err := tool.enforceSandboxScope(ucperms.FileSystemWrite, filepath.Join(dir, test_txt))
 	require.Error(t, err)
 	require.ErrorIs(t, err, permissions.ErrSandboxScopeUnset)
 }
@@ -806,7 +806,7 @@ func TestDeleteFileTool_NilSandboxScope(t *testing.T) {
 	dir := t.TempDir()
 	tool := &DeleteFileTool{BasePath: dir}
 
-	err := tool.enforceSandboxScope(permissions.FileSystemDelete, filepath.Join(dir, test_txt))
+	err := tool.enforceSandboxScope(ucperms.FileSystemDelete, filepath.Join(dir, test_txt))
 	require.Error(t, err)
 	require.ErrorIs(t, err, permissions.ErrSandboxScopeUnset)
 }
@@ -903,7 +903,7 @@ func TestWriteFileTool_NilSpec(t *testing.T) {
 func TestWriteFileTool_NilEnforceSandboxScope(t *testing.T) {
 	tool := &WriteFileTool{BasePath: tmp}
 
-	err := tool.enforceSandboxScope(permissions.FileSystemWrite, tmp_test_txt)
+	err := tool.enforceSandboxScope(ucperms.FileSystemWrite, tmp_test_txt)
 	require.Error(t, err)
 	require.ErrorIs(t, err, permissions.ErrSandboxScopeUnset)
 }
@@ -911,7 +911,7 @@ func TestWriteFileTool_NilEnforceSandboxScope(t *testing.T) {
 func TestCreateFileTool_NilEnforceSandboxScope(t *testing.T) {
 	tool := &CreateFileTool{BasePath: tmp}
 
-	err := tool.enforceSandboxScope(permissions.FileSystemWrite, tmp_test_txt)
+	err := tool.enforceSandboxScope(ucperms.FileSystemWrite, tmp_test_txt)
 	require.Error(t, err)
 	require.ErrorIs(t, err, permissions.ErrSandboxScopeUnset)
 }
@@ -919,7 +919,7 @@ func TestCreateFileTool_NilEnforceSandboxScope(t *testing.T) {
 func TestDeleteFileTool_NilEnforceSandboxScope(t *testing.T) {
 	tool := &DeleteFileTool{BasePath: tmp}
 
-	err := tool.enforceSandboxScope(permissions.FileSystemDelete, tmp_test_txt)
+	err := tool.enforceSandboxScope(ucperms.FileSystemDelete, tmp_test_txt)
 	require.Error(t, err)
 	require.ErrorIs(t, err, permissions.ErrSandboxScopeUnset)
 }
@@ -1373,7 +1373,7 @@ func TestNewTraversalPermissionCacheWithChecker_NilChecker(t *testing.T) {
 func TestTraversalPermissionCache_CheckWithNilCache(t *testing.T) {
 	// Call Check on nil cache should return nil
 	var cache *traversalPermissionCache
-	err := cache.Check(context.Background(), permissions.FileSystemRead, tmp_test_txt)
+	err := cache.Check(context.Background(), ucperms.FileSystemRead, tmp_test_txt)
 	require.NoError(t, err)
 }
 

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/governance/permissions"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
 )
 
 type mockHITLProvider struct {
@@ -26,18 +27,18 @@ func TestAuthorizeCommand_SemanticInterception(t *testing.T) {
 	// Set up PermissionManager with specific declared permissions:
 	// - Read access to /home/workspace/allowed.txt
 	// - Write access to /home/workspace/build/output.txt
-	declared := &permissions.PermissionSet{
-		FileSystem: []permissions.FileSystemPermission{
+	declared := &ucperms.PermissionSet{
+		FileSystem: []ucperms.FileSystemPermission{
 			{
-				Action: permissions.FileSystemRead,
+				Action: ucperms.FileSystemRead,
 				Path:   "/home/workspace/allowed.txt",
 			},
 			{
-				Action: permissions.FileSystemWrite,
+				Action: ucperms.FileSystemWrite,
 				Path:   "/home/workspace/build/output.txt",
 			},
 		},
-		Executables: []permissions.ExecutablePermission{
+		Executables: []ucperms.ExecutablePermission{
 			{
 				Binary: "bash",
 			},

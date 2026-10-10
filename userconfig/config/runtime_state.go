@@ -10,8 +10,8 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"codeburg.org/lexbit/relurpify/platform/fs"
 	"codeburg.org/lexbit/relurpify/userconfig/config/secretscan"
+	"codeburg.org/lexbit/relurpify/userconfig/securefile"
 )
 
 // ExecutionMode expresses the persisted workspace execution posture.
@@ -211,14 +211,14 @@ func SaveRuntimeStateDocument(path string, doc RuntimeStateDocument) error {
 	if path == "" {
 		return fmt.Errorf("runtime state path required")
 	}
-	if err := fs.MkdirAllSecure(filepath.Dir(path)); err != nil {
+	if err := securefile.MkdirAllSecure(filepath.Dir(path)); err != nil {
 		return err
 	}
 	data, err := yaml.Marshal(doc)
 	if err != nil {
 		return err
 	}
-	return fs.WriteFileSecure(path, data)
+	return securefile.WriteFileSecure(path, data)
 }
 
 // SaveRuntimeWorkspaceConfig persists selections for future sessions.
@@ -226,14 +226,14 @@ func SaveRuntimeWorkspaceConfig(path string, cfg RuntimeWorkspaceConfig) error {
 	if path == "" {
 		return fmt.Errorf("config path required")
 	}
-	if err := fs.MkdirAllSecure(filepath.Dir(path)); err != nil {
+	if err := securefile.MkdirAllSecure(filepath.Dir(path)); err != nil {
 		return err
 	}
 	data, err := yaml.Marshal(cfg)
 	if err != nil {
 		return err
 	}
-	return fs.WriteFileSecure(path, data)
+	return securefile.WriteFileSecure(path, data)
 }
 
 // SaveRuntimeWorkspaceConfigWithBackup snapshots the existing config before writing.
@@ -241,7 +241,7 @@ func SaveRuntimeWorkspaceConfigWithBackup(path string, cfg RuntimeWorkspaceConfi
 	if path == "" {
 		return "", fmt.Errorf("config path required")
 	}
-	if err := fs.MkdirAllSecure(filepath.Dir(path)); err != nil {
+	if err := securefile.MkdirAllSecure(filepath.Dir(path)); err != nil {
 		return "", err
 	}
 	backup, err := CreateTimestampedBackup(path)
@@ -259,7 +259,7 @@ func SaveRuntimeProviderConfigWithBackup(path string, cfg RuntimeProviderConfig)
 	if path == "" {
 		return "", fmt.Errorf("provider config path required")
 	}
-	if err := fs.MkdirAllSecure(filepath.Dir(path)); err != nil {
+	if err := securefile.MkdirAllSecure(filepath.Dir(path)); err != nil {
 		return "", err
 	}
 	backup, err := CreateTimestampedBackup(path)
@@ -277,7 +277,7 @@ func SaveRuntimeKeybindingConfigWithBackup(path string, cfg RuntimeKeybindingCon
 	if path == "" {
 		return "", fmt.Errorf("keybinding config path required")
 	}
-	if err := fs.MkdirAllSecure(filepath.Dir(path)); err != nil {
+	if err := securefile.MkdirAllSecure(filepath.Dir(path)); err != nil {
 		return "", err
 	}
 	backup, err := CreateTimestampedBackup(path)
@@ -292,14 +292,14 @@ func SaveRuntimeKeybindingConfigWithBackup(path string, cfg RuntimeKeybindingCon
 
 // SaveYAML marshals v to YAML and overwrites path.
 func SaveYAML(path string, v any) error {
-	if err := fs.MkdirAllSecure(filepath.Dir(path)); err != nil {
+	if err := securefile.MkdirAllSecure(filepath.Dir(path)); err != nil {
 		return err
 	}
 	data, err := yaml.Marshal(v)
 	if err != nil {
 		return err
 	}
-	return fs.WriteFileSecure(path, data)
+	return securefile.WriteFileSecure(path, data)
 }
 
 // CreateTimestampedBackup copies path into relurpify_cfg/backups with a timestamped .bak suffix.
@@ -315,7 +315,7 @@ func CreateTimestampedBackup(path string) (string, error) {
 		return "", err
 	}
 	backupDir := filepath.Join(filepath.Dir(path), "backups")
-	if err := fs.MkdirAllSecure(backupDir); err != nil {
+	if err := securefile.MkdirAllSecure(backupDir); err != nil {
 		return "", err
 	}
 	base := filepath.Base(path)
@@ -330,7 +330,7 @@ func CreateTimestampedBackup(path string) (string, error) {
 			}
 		}
 	}
-	if err := fs.WriteFileSecure(backupPath, data); err != nil {
+	if err := securefile.WriteFileSecure(backupPath, data); err != nil {
 		return "", err
 	}
 	if err := pruneTimestampedBackups(backupDir, base, 10); err != nil {

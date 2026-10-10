@@ -15,6 +15,7 @@ import (
 	"codeburg.org/lexbit/relurpify/telemetry"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 	cfgsecurity "codeburg.org/lexbit/relurpify/userconfig/config/security"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
 )
 
 // SecurityRuntimeInput carries the parameters for BuildSecurityRuntime.
@@ -31,7 +32,7 @@ type SecurityRuntimeInput struct {
 	PermissionManager *fauthorization.PermissionManager
 	SecurityBundle    *cfgsecurity.Bundle
 	Security          config.SecuritySpec
-	Permissions       permissions.PermissionSet
+	Permissions       ucperms.PermissionSet
 	ExistingRunner    sandbox.CommandRunner
 	Strict            bool
 	// Events receives sandbox posture telemetry (ceiling exceed, protected-path

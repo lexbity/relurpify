@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/capability/ports"
-	"codeburg.org/lexbit/relurpify/governance/permissions"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
 )
 
 // ToolResolver resolves a tool name to its runtime implementation.
@@ -97,8 +97,8 @@ func (t *compositeTool) Parameters() []ports.ToolParameter {
 }
 func (t *compositeTool) IsAvailable(ctx context.Context) bool { return t.resolve != nil }
 func (t *compositeTool) Permissions() ports.ToolPermissions {
-	return ports.ToolPermissions{Permissions: &permissions.PermissionSet{
-		Executables: []permissions.ExecutablePermission{{Binary: "composite"}},
+	return ports.ToolPermissions{Permissions: &ucperms.PermissionSet{
+		Executables: []ucperms.ExecutablePermission{{Binary: "composite"}},
 	}}
 }
 func (t *compositeTool) Tags() []string {

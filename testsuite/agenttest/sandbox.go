@@ -36,5 +36,3 @@ func NewWorkspaceSandboxRunner(ctx context.Context, workspaceRoot, backend strin
 	}
 	return runner, nil
 }
-
-

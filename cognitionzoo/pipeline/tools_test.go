@@ -7,8 +7,8 @@ import (
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/capability/ports"
-	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/model"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
 )
 
 // mockInvoker implements CapabilityInvoker for testing.
@@ -149,8 +149,8 @@ func (f *fakeTool) Execute(ctx context.Context, args map[string]any) (*ports.Too
 }
 func (f *fakeTool) IsAvailable(ctx context.Context) bool { return true }
 func (f *fakeTool) Permissions() ports.ToolPermissions {
-	return ports.ToolPermissions{Permissions: &permissions.PermissionSet{
-		Executables: []permissions.ExecutablePermission{
+	return ports.ToolPermissions{Permissions: &ucperms.PermissionSet{
+		Executables: []ucperms.ExecutablePermission{
 			{Binary: "echo"},
 		},
 	}}

@@ -6,6 +6,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/governance/netpolicy"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
 )
 
 // literalTarget classifies a host token through the canonical resolver. Every
@@ -132,8 +133,8 @@ func TestCheckNetworkBlocksUnspecifiedLiteral(t *testing.T) {
 func TestCheckNetworkBlocksPrivateEvenIfDeclared(t *testing.T) {
 	// Even if a permission is explicitly declared for a private IP, the
 	// hard-coded denylist must still block it.
-	declared := &permissions.PermissionSet{
-		Network: []permissions.NetworkPermission{
+	declared := &ucperms.PermissionSet{
+		Network: []ucperms.NetworkPermission{
 			{Direction: "egress", Protocol: "tcp", Host: "10.0.0.1", Port: 443},
 		},
 	}
@@ -149,8 +150,8 @@ func TestCheckNetworkBlocksPrivateEvenIfDeclared(t *testing.T) {
 }
 
 func TestCheckNetworkAllowsPublicIP(t *testing.T) {
-	declared := &permissions.PermissionSet{
-		Network: []permissions.NetworkPermission{
+	declared := &ucperms.PermissionSet{
+		Network: []ucperms.NetworkPermission{
 			{Direction: "egress", Protocol: "tcp", Host: "8.8.8.8", Port: 443},
 		},
 	}
@@ -166,8 +167,8 @@ func TestCheckNetworkAllowsPublicIP(t *testing.T) {
 }
 
 func TestDefaultDecisionAllowRejectedAtRegistration(t *testing.T) {
-	perm := &permissions.PermissionSet{
-		Executables: []permissions.ExecutablePermission{
+	perm := &ucperms.PermissionSet{
+		Executables: []ucperms.ExecutablePermission{
 			{Binary: "echo"},
 		},
 	}
@@ -188,8 +189,8 @@ func TestDefaultDecisionAllowRejectedAtRegistration(t *testing.T) {
 }
 
 func TestDefaultPolicyAskIsValid(t *testing.T) {
-	perm := &permissions.PermissionSet{
-		Executables: []permissions.ExecutablePermission{
+	perm := &ucperms.PermissionSet{
+		Executables: []ucperms.ExecutablePermission{
 			{Binary: "echo"},
 		},
 	}
@@ -202,8 +203,8 @@ func TestDefaultPolicyAskIsValid(t *testing.T) {
 }
 
 func TestDefaultPolicyDenyIsValid(t *testing.T) {
-	perm := &permissions.PermissionSet{
-		Executables: []permissions.ExecutablePermission{
+	perm := &ucperms.PermissionSet{
+		Executables: []ucperms.ExecutablePermission{
 			{Binary: "echo"},
 		},
 	}
@@ -216,8 +217,8 @@ func TestDefaultPolicyDenyIsValid(t *testing.T) {
 }
 
 func TestUndeclaredToolPermissionDeniedNotSilent(t *testing.T) {
-	perm := &permissions.PermissionSet{
-		Executables: []permissions.ExecutablePermission{
+	perm := &ucperms.PermissionSet{
+		Executables: []ucperms.ExecutablePermission{
 			{Binary: "echo"},
 		},
 	}
@@ -239,8 +240,8 @@ func TestUndeclaredToolPermissionDeniedNotSilent(t *testing.T) {
 // and no HITL provider for testing network blocking.
 func testPermissionManager(t *testing.T) *PermissionManager {
 	t.Helper()
-	declared := &permissions.PermissionSet{
-		Executables: []permissions.ExecutablePermission{
+	declared := &ucperms.PermissionSet{
+		Executables: []ucperms.ExecutablePermission{
 			{Binary: "echo"},
 		},
 	}
@@ -260,8 +261,8 @@ type testAuthTool struct {
 func (t *testAuthTool) Name() string { return t.name }
 func (t *testAuthTool) Permissions() ToolPermissions {
 	return ToolPermissions{
-		Permissions: &permissions.PermissionSet{
-			Executables: []permissions.ExecutablePermission{
+		Permissions: &ucperms.PermissionSet{
+			Executables: []ucperms.ExecutablePermission{
 				{Binary: "some-binary"},
 			},
 		},

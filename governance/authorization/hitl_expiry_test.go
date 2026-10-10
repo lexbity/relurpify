@@ -7,10 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"go.uber.org/goleak"
-
-	"codeburg.org/lexbit/relurpify/governance/permissions"
 	fwtelemetry "codeburg.org/lexbit/relurpify/telemetry"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
+	"go.uber.org/goleak"
 )
 
 type recordingHITLDecisions struct {
@@ -223,6 +222,6 @@ func TestHITLRequestPermissionDuplicateIDRejected(t *testing.T) {
 	<-done
 }
 
-func testPermissionDescriptor() permissions.PermissionDescriptor {
-	return permissions.PermissionDescriptor{Action: "tool:expire-test", Resource: "test"}
+func testPermissionDescriptor() ucperms.PermissionDescriptor {
+	return ucperms.PermissionDescriptor{Action: "tool:expire-test", Resource: "test"}
 }

@@ -8,7 +8,7 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	registry "codeburg.org/lexbit/relurpify/capability/registry"
-	"codeburg.org/lexbit/relurpify/governance/permissions"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
 )
 
 var declaredRelurpicIDs = []string{ //nolint:gochecknoglobals // test fixture data
@@ -42,7 +42,7 @@ func (t availabilityTool) Execute(ctx context.Context, args map[string]any) (*po
 }
 func (t availabilityTool) IsAvailable(ctx context.Context) bool { return t.available }
 func (t availabilityTool) Permissions() ports.ToolPermissions {
-	return ports.ToolPermissions{Permissions: &permissions.PermissionSet{}}
+	return ports.ToolPermissions{Permissions: &ucperms.PermissionSet{}}
 }
 func (t availabilityTool) Tags() []string { return []string{"test"} }
 

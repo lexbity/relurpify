@@ -9,7 +9,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	registry "codeburg.org/lexbit/relurpify/capability/registry"
-	"codeburg.org/lexbit/relurpify/governance/permissions"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
 )
 
 // SkipAvailabilityProbe disables the shell-based availability check. Prepared
@@ -200,7 +200,7 @@ func (t *GitCommandTool) IsAvailable(ctx context.Context) bool {
 }
 
 func (t *GitCommandTool) Permissions() ports.ToolPermissions {
-	return ports.ToolPermissions{Permissions: &permissions.PermissionSet{}}
+	return ports.ToolPermissions{Permissions: &ucperms.PermissionSet{}}
 }
 
 func (t *GitCommandTool) Tags() []string {

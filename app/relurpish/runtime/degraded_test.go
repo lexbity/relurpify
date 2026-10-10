@@ -4,10 +4,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/stretchr/testify/require"
-
 	"codeburg.org/lexbit/relurpify/execution/session"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
+	"github.com/stretchr/testify/require"
 )
 
 func TestDegradedWorkspace_NonNil(t *testing.T) {
@@ -22,9 +21,9 @@ func TestDegradedWorkspace_NonNil(t *testing.T) {
 
 func TestReadiness_Ready(t *testing.T) {
 	tests := []struct {
-		name    string
-		r       session.Readiness
-		want    bool
+		name string
+		r    session.Readiness
+		want bool
 	}{
 		{"all ready", session.Readiness{SandboxReady: true, ModelReady: true, Degraded: false}, true},
 		{"sandbox not ready", session.Readiness{SandboxReady: false, ModelReady: true, Degraded: false}, false},

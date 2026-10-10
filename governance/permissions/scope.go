@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
 )
 
 var (
@@ -69,7 +71,7 @@ func NewFileScopePolicy(workspace string, protectedPaths []string) *FileScopePol
 }
 
 // Check validates a target path before sandbox-backed host I/O proceeds.
-func (p *FileScopePolicy) Check(action FileSystemAction, target string) error {
+func (p *FileScopePolicy) Check(action ucperms.FileSystemAction, target string) error {
 	if p == nil {
 		return nil
 	}
@@ -198,7 +200,7 @@ func NewDenyAllFileScopePolicy() *FileScopePolicy {
 	}
 }
 
-func CheckOrDeny(scope *FileScopePolicy, action FileSystemAction, path string) error {
+func CheckOrDeny(scope *FileScopePolicy, action ucperms.FileSystemAction, path string) error {
 	if scope == nil {
 		return ErrSandboxScopeUnset
 	}

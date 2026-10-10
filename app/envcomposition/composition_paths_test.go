@@ -5,21 +5,20 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/stretchr/testify/require"
-
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/context/knowledge/graphdb"
 	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
-	gpermissions "codeburg.org/lexbit/relurpify/governance/permissions"
 	governanceports "codeburg.org/lexbit/relurpify/governance/ports"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
+	"github.com/stretchr/testify/require"
 )
 
 // TestBuildSecurityRuntimeInvalidBashDefault proves an out-of-vocabulary
 // bash default is rejected at composition time rather than silently falling
 // back to allow.
 func TestBuildSecurityRuntimeInvalidBashDefault(t *testing.T) {
-	manager, err := fauthorization.NewPermissionManager(t.TempDir(), &gpermissions.PermissionSet{}, nil, nil)
+	manager, err := fauthorization.NewPermissionManager(t.TempDir(), &ucperms.PermissionSet{}, nil, nil)
 	require.NoError(t, err)
 
 	_, err = BuildSecurityRuntime(context.Background(), SecurityRuntimeInput{

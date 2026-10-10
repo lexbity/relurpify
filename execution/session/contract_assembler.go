@@ -4,9 +4,9 @@ import (
 	"errors"
 	"fmt"
 
-	"codeburg.org/lexbit/relurpify/governance/permissions"
 	execctx "codeburg.org/lexbit/relurpify/execution/context"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
 	"gopkg.in/yaml.v3"
 )
 
@@ -59,14 +59,14 @@ func AssembleContract(doc *config.Document) (*config.EffectiveAgentContract, err
 	return config.BuildEffectiveAgentContract(agentID, agentSpec, perms, resources, security, sources), nil
 }
 
-func decodePermissionsSection(doc *config.Document) (permissions.PermissionSet, error) {
+func decodePermissionsSection(doc *config.Document) (ucperms.PermissionSet, error) {
 	node, ok := doc.Section("permissions")
 	if !ok {
-		return permissions.PermissionSet{}, nil
+		return ucperms.PermissionSet{}, nil
 	}
 	ps, err := config.DecodePermissionsSection(node)
 	if err != nil || ps == nil {
-		return permissions.PermissionSet{}, err
+		return ucperms.PermissionSet{}, err
 	}
 	return *ps, nil
 }

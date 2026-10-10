@@ -5,9 +5,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stretchr/testify/require"
-
 	"codeburg.org/lexbit/relurpify/governance/permissions"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
+	"github.com/stretchr/testify/require"
 )
 
 type capturingHITL struct {
@@ -21,8 +21,8 @@ func (c *capturingHITL) RequestPermission(_ context.Context, req PermissionReque
 
 func newCommandApprovalManager(t *testing.T) (*PermissionManager, *capturingHITL) {
 	t.Helper()
-	declared := &permissions.PermissionSet{
-		Executables: []permissions.ExecutablePermission{{Binary: "echo"}, {Binary: "bash"}, {Binary: "curl"}},
+	declared := &ucperms.PermissionSet{
+		Executables: []ucperms.ExecutablePermission{{Binary: "echo"}, {Binary: "bash"}, {Binary: "curl"}},
 	}
 	hitl := &capturingHITL{}
 	pm, err := NewPermissionManager("/tmp", declared, newTestAuditLogger(t), hitl)

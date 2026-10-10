@@ -3,9 +3,8 @@ package authorization
 import (
 	"testing"
 
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
 	"github.com/stretchr/testify/require"
-
-	"codeburg.org/lexbit/relurpify/governance/permissions"
 )
 
 func TestUnwrapCommand(t *testing.T) {
@@ -129,7 +128,7 @@ func TestLiftShellCommand_OutputCarriers(t *testing.T) {
 			require.NoError(t, err)
 			found := false
 			for _, fsPerm := range res.FileSystem {
-				if fsPerm.Action == permissions.FileSystemWrite && fsPerm.Path == tc.path {
+				if fsPerm.Action == ucperms.FileSystemWrite && fsPerm.Path == tc.path {
 					found = true
 				}
 			}
@@ -146,7 +145,7 @@ func TestLiftShellCommand_OutputCarrierDoesNotBecomeHost(t *testing.T) {
 
 	found := false
 	for _, fsPerm := range res.FileSystem {
-		if fsPerm.Action == permissions.FileSystemWrite && fsPerm.Path == "out.txt" {
+		if fsPerm.Action == ucperms.FileSystemWrite && fsPerm.Path == "out.txt" {
 			found = true
 		}
 	}
@@ -175,7 +174,7 @@ func TestLiftShellCommand_FileSystem(t *testing.T) {
 	testCases := []struct {
 		name           string
 		command        string
-		expectedAction permissions.FileSystemAction
+		expectedAction ucperms.FileSystemAction
 		expectedPath   string
 		expectedCount  int
 		hasDynamic     bool
@@ -183,63 +182,63 @@ func TestLiftShellCommand_FileSystem(t *testing.T) {
 		{
 			name:           "cat a single file",
 			command:        "cat src/app.go",
-			expectedAction: permissions.FileSystemRead,
+			expectedAction: ucperms.FileSystemRead,
 			expectedPath:   "src/app.go",
 			expectedCount:  1,
 		},
 		{
 			name:           "cat a file with flags",
 			command:        "cat -n -v src/app.go",
-			expectedAction: permissions.FileSystemRead,
+			expectedAction: ucperms.FileSystemRead,
 			expectedPath:   "src/app.go",
 			expectedCount:  1,
 		},
 		{
 			name:           "rm force recursive",
 			command:        "rm -rf /tmp/build",
-			expectedAction: permissions.FileSystemDelete,
+			expectedAction: ucperms.FileSystemDelete,
 			expectedPath:   "/tmp/build",
 			expectedCount:  1,
 		},
 		{
 			name:           "shred delete file",
 			command:        "shred -u key.pem",
-			expectedAction: permissions.FileSystemDelete,
+			expectedAction: ucperms.FileSystemDelete,
 			expectedPath:   "key.pem",
 			expectedCount:  1,
 		},
 		{
 			name:           "mkdir directories",
 			command:        "mkdir -p src/utils",
-			expectedAction: permissions.FileSystemWrite,
+			expectedAction: ucperms.FileSystemWrite,
 			expectedPath:   "src/utils",
 			expectedCount:  1,
 		},
 		{
 			name:           "touch create file",
 			command:        "touch src/main.go",
-			expectedAction: permissions.FileSystemWrite,
+			expectedAction: ucperms.FileSystemWrite,
 			expectedPath:   "src/main.go",
 			expectedCount:  1,
 		},
 		{
 			name:           "outward redirection",
 			command:        "echo 'hello' > output.log",
-			expectedAction: permissions.FileSystemWrite,
+			expectedAction: ucperms.FileSystemWrite,
 			expectedPath:   "output.log",
 			expectedCount:  1,
 		},
 		{
 			name:           "append redirection",
 			command:        "echo 'world' >> output.log",
-			expectedAction: permissions.FileSystemWrite,
+			expectedAction: ucperms.FileSystemWrite,
 			expectedPath:   "output.log",
 			expectedCount:  1,
 		},
 		{
 			name:           "inward redirection",
 			command:        "cat < input.txt",
-			expectedAction: permissions.FileSystemRead,
+			expectedAction: ucperms.FileSystemRead,
 			expectedPath:   "input.txt",
 			expectedCount:  1, // one for redirect (1), cat has 0 path args
 		},
@@ -281,11 +280,11 @@ func TestLiftShellCommand_CopyMove(t *testing.T) {
 		t.Fatalf("expected 2 filesystem operations, got %d", len(res.FileSystem))
 	}
 	// Check read of source
-	if res.FileSystem[0].Action != permissions.FileSystemRead || res.FileSystem[0].Path != "src/app.go" {
+	if res.FileSystem[0].Action != ucperms.FileSystemRead || res.FileSystem[0].Path != "src/app.go" {
 		t.Errorf("expected source to be Read src/app.go, got %+v", res.FileSystem[0])
 	}
 	// Check write of destination
-	if res.FileSystem[1].Action != permissions.FileSystemWrite || res.FileSystem[1].Path != "build/app.go" {
+	if res.FileSystem[1].Action != ucperms.FileSystemWrite || res.FileSystem[1].Path != "build/app.go" {
 		t.Errorf("expected destination to be Write build/app.go, got %+v", res.FileSystem[1])
 	}
 }

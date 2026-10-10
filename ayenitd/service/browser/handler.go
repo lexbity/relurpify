@@ -12,14 +12,14 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/descriptor"
 	"codeburg.org/lexbit/relurpify/capability/ports"
-	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
 	"codeburg.org/lexbit/relurpify/capability/toolcapabilities"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
 	"codeburg.org/lexbit/relurpify/governance/classification"
-	"codeburg.org/lexbit/relurpify/governance/permissions"
 	govpolicy "codeburg.org/lexbit/relurpify/governance/policy"
+	"codeburg.org/lexbit/relurpify/model"
 	platformbrowser "codeburg.org/lexbit/relurpify/platform/browser"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
 )
 
 type browserCapability struct {
@@ -56,7 +56,7 @@ func (h *browserCapability) IsAvailable(context.Context, *contextdata.Envelope) 
 }
 
 func (h *browserCapability) Permissions() ports.ToolPermissions {
-	return ports.ToolPermissions{Permissions: govpolicy.NewFileSystemPermissionSet(".", permissions.FileSystemRead)}
+	return ports.ToolPermissions{Permissions: govpolicy.NewFileSystemPermissionSet(".", ucperms.FileSystemRead)}
 }
 
 func (h *browserCapability) Tags() []string {
@@ -103,10 +103,10 @@ func (h *browserCapability) Descriptor(context.Context, ports.State) descriptor.
 	return descriptor.NormalizeCapabilityDescriptor(desc)
 }
 
-func browserInputSchema() *schemacoerce.Schema {
-	return &schemacoerce.Schema{
+func browserInputSchema() *model.Schema {
+	return &model.Schema{
 		Type: "object",
-		Properties: map[string]*schemacoerce.Schema{
+		Properties: map[string]*model.Schema{
 			"action":     {Type: "string"},
 			"session_id": {Type: "string"},
 			"backend":    {Type: "string", Default: defaultBrowserBackend},
@@ -408,8 +408,8 @@ func (s *BrowserService) requireActionApproval(ctx context.Context, action strin
 	metadata := map[string]string{
 		"browser_action": browserPermissionAction(action),
 	}
-	return s.permissionManager.RequireApproval(ctx, s.agentID(), permissions.PermissionDescriptor{
-		Type:         permissions.PermissionTypeCapability,
+	return s.permissionManager.RequireApproval(ctx, s.agentID(), ucperms.PermissionDescriptor{
+		Type:         ucperms.PermissionTypeCapability,
 		Action:       browserPermissionAction(action),
 		Resource:     resource,
 		Metadata:     metadata,

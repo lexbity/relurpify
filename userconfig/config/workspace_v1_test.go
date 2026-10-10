@@ -15,4 +15,3 @@ func TestTemplateWorkspaceConfigV1_Parses(t *testing.T) {
 	_, err := LoadRuntimeWorkspaceConfigV1("../templates/embedfs/workspace/workspace.yaml")
 	require.NoError(t, err, "templates/workspace/workspace.yaml must be parseable as V1")
 }
-

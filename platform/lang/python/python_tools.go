@@ -10,9 +10,9 @@ import (
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/capability/ports"
-	"codeburg.org/lexbit/relurpify/governance/permissions"
 	lang "codeburg.org/lexbit/relurpify/platform/lang"
 	"codeburg.org/lexbit/relurpify/platform/tools/subprocess"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
 )
 
 var pythonProjectMarkers = []string{ //nolint:gochecknoglobals // immutable project-marker table
@@ -81,7 +81,7 @@ func (t *PythonWorkspaceDetectTool) Execute(ctx context.Context, args map[string
 }
 func (t *PythonWorkspaceDetectTool) IsAvailable(ctx context.Context) bool { return true }
 func (t *PythonWorkspaceDetectTool) Permissions() ports.ToolPermissions {
-	return ports.ToolPermissions{Permissions: &permissions.PermissionSet{}}
+	return ports.ToolPermissions{Permissions: &ucperms.PermissionSet{}}
 }
 func (t *PythonWorkspaceDetectTool) Tags() []string {
 	return []string{ports.TagReadOnly, "lang:python", "workspace-detect", "recovery"}
@@ -155,7 +155,7 @@ func (t *PythonProjectMetadataTool) Execute(ctx context.Context, args map[string
 }
 func (t *PythonProjectMetadataTool) IsAvailable(ctx context.Context) bool { return true }
 func (t *PythonProjectMetadataTool) Permissions() ports.ToolPermissions {
-	return ports.ToolPermissions{Permissions: &permissions.PermissionSet{}}
+	return ports.ToolPermissions{Permissions: &ucperms.PermissionSet{}}
 }
 func (t *PythonProjectMetadataTool) Tags() []string {
 	return []string{ports.TagReadOnly, "lang:python", "metadata", "recovery"}
@@ -224,8 +224,8 @@ func (t *PythonPytestTool) Execute(ctx context.Context, args map[string]any) (*p
 }
 func (t *PythonPytestTool) IsAvailable(ctx context.Context) bool { return t.runner != nil }
 func (t *PythonPytestTool) Permissions() ports.ToolPermissions {
-	return ports.ToolPermissions{Permissions: &permissions.PermissionSet{
-		Executables: []permissions.ExecutablePermission{{Binary: "python3"}},
+	return ports.ToolPermissions{Permissions: &ucperms.PermissionSet{
+		Executables: []ucperms.ExecutablePermission{{Binary: "python3"}},
 	}}
 }
 func (t *PythonPytestTool) Tags() []string {
@@ -299,8 +299,8 @@ func (t *PythonUnittestTool) Execute(ctx context.Context, args map[string]any) (
 }
 func (t *PythonUnittestTool) IsAvailable(ctx context.Context) bool { return t.runner != nil }
 func (t *PythonUnittestTool) Permissions() ports.ToolPermissions {
-	return ports.ToolPermissions{Permissions: &permissions.PermissionSet{
-		Executables: []permissions.ExecutablePermission{{Binary: "python3"}},
+	return ports.ToolPermissions{Permissions: &ucperms.PermissionSet{
+		Executables: []ucperms.ExecutablePermission{{Binary: "python3"}},
 	}}
 }
 func (t *PythonUnittestTool) Tags() []string {
@@ -373,8 +373,8 @@ func (t *PythonCompileCheckTool) IsAvailable(ctx context.Context) bool {
 	return t.runner != nil
 }
 func (t *PythonCompileCheckTool) Permissions() ports.ToolPermissions {
-	return ports.ToolPermissions{Permissions: &permissions.PermissionSet{
-		Executables: []permissions.ExecutablePermission{{Binary: "python3"}},
+	return ports.ToolPermissions{Permissions: &ucperms.PermissionSet{
+		Executables: []ucperms.ExecutablePermission{{Binary: "python3"}},
 	}}
 }
 func (t *PythonCompileCheckTool) Tags() []string {

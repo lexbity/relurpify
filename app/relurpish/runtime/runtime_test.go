@@ -15,7 +15,6 @@ import (
 	"codeburg.org/lexbit/relurpify/context/contextstream"
 	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/execution/agentgraph"
-	"codeburg.org/lexbit/relurpify/governance/permissions"
 	governanceports "codeburg.org/lexbit/relurpify/governance/ports"
 	"codeburg.org/lexbit/relurpify/model"
 	intentcontext "codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
@@ -24,6 +23,7 @@ import (
 	"codeburg.org/lexbit/relurpify/platform/fs"
 	"codeburg.org/lexbit/relurpify/platform/llm"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
 	"gopkg.in/yaml.v3"
 )
 
@@ -251,8 +251,8 @@ func TestSaveAgentDocumentWithBackup(t *testing.T) {
 		Spec:       map[string]yaml.Node{},
 	}
 	permNode := yaml.Node{}
-	if err := permNode.Encode(permissions.PermissionSet{
-		FileSystem: []permissions.FileSystemPermission{{Action: permissions.FileSystemRead, Path: "/workspace/**"}},
+	if err := permNode.Encode(ucperms.PermissionSet{
+		FileSystem: []ucperms.FileSystemPermission{{Action: ucperms.FileSystemRead, Path: "/workspace/**"}},
 	}); err != nil {
 		t.Fatalf("encode permissions: %v", err)
 	}
@@ -267,8 +267,8 @@ func TestSaveAgentDocumentWithBackup(t *testing.T) {
 		Spec:       map[string]yaml.Node{},
 	}
 	updatedPermNode := yaml.Node{}
-	if err := updatedPermNode.Encode(permissions.PermissionSet{
-		FileSystem: []permissions.FileSystemPermission{{Action: permissions.FileSystemWrite, Path: "/workspace/**"}},
+	if err := updatedPermNode.Encode(ucperms.PermissionSet{
+		FileSystem: []ucperms.FileSystemPermission{{Action: ucperms.FileSystemWrite, Path: "/workspace/**"}},
 	}); err != nil {
 		t.Fatalf("encode updated permissions: %v", err)
 	}

@@ -3,9 +3,9 @@ package euclocontract
 import (
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 	"codeburg.org/lexbit/relurpify/userconfig/config/security"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
 )
 
 func TestOverlaySecurityBundle_NilBase(t *testing.T) {
@@ -22,7 +22,7 @@ func TestOverlaySecurityBundle_NilBundle(t *testing.T) {
 		ToolExecutionPolicy: map[string]config.ToolPolicy{
 			"cli_git": {Execute: config.AgentPermissionAsk},
 		},
-	}, permissions.PermissionSet{}, config.ResourceSpec{}, config.SecuritySpec{}, config.SourceSummary{})
+	}, ucperms.PermissionSet{}, config.ResourceSpec{}, config.SecuritySpec{}, config.SourceSummary{})
 
 	result, err := config.OverlaySecurityBundle(base, nil)
 	if err != nil {
@@ -48,7 +48,7 @@ func TestOverlaySecurityBundle_Purity(t *testing.T) {
 		Bash: config.AgentBashPermissions{
 			DenyPatterns: []string{"original-deny"},
 		},
-	}, permissions.PermissionSet{}, config.ResourceSpec{}, config.SecuritySpec{}, config.SourceSummary{})
+	}, ucperms.PermissionSet{}, config.ResourceSpec{}, config.SecuritySpec{}, config.SourceSummary{})
 
 	bundle := &security.Bundle{
 		LocalTool: map[string]security.ToolPolicy{
@@ -82,7 +82,7 @@ func TestOverlaySecurityBundle_Purity(t *testing.T) {
 }
 
 func TestOverlaySecurityBundle_LocalToolAllow(t *testing.T) {
-	base := config.BuildEffectiveAgentContract("euclo", defaultOverlaySpec(), permissions.PermissionSet{}, config.ResourceSpec{}, config.SecuritySpec{}, config.SourceSummary{})
+	base := config.BuildEffectiveAgentContract("euclo", defaultOverlaySpec(), ucperms.PermissionSet{}, config.ResourceSpec{}, config.SecuritySpec{}, config.SourceSummary{})
 	bundle := &security.Bundle{
 		LocalTool: map[string]security.ToolPolicy{
 			"cli_git": {Execute: "allow"},
@@ -98,7 +98,7 @@ func TestOverlaySecurityBundle_LocalToolAllow(t *testing.T) {
 }
 
 func TestOverlaySecurityBundle_LocalToolDeny(t *testing.T) {
-	base := config.BuildEffectiveAgentContract("euclo", defaultOverlaySpec(), permissions.PermissionSet{}, config.ResourceSpec{}, config.SecuritySpec{}, config.SourceSummary{})
+	base := config.BuildEffectiveAgentContract("euclo", defaultOverlaySpec(), ucperms.PermissionSet{}, config.ResourceSpec{}, config.SecuritySpec{}, config.SourceSummary{})
 	bundle := &security.Bundle{
 		LocalTool: map[string]security.ToolPolicy{
 			"cli_git": {Execute: "deny"},
@@ -114,7 +114,7 @@ func TestOverlaySecurityBundle_LocalToolDeny(t *testing.T) {
 }
 
 func TestOverlaySecurityBundle_LocalToolAsk(t *testing.T) {
-	base := config.BuildEffectiveAgentContract("euclo", defaultOverlaySpec(), permissions.PermissionSet{}, config.ResourceSpec{}, config.SecuritySpec{}, config.SourceSummary{})
+	base := config.BuildEffectiveAgentContract("euclo", defaultOverlaySpec(), ucperms.PermissionSet{}, config.ResourceSpec{}, config.SecuritySpec{}, config.SourceSummary{})
 	bundle := &security.Bundle{
 		LocalTool: map[string]security.ToolPolicy{
 			"cli_git": {Execute: "ask"},
@@ -130,7 +130,7 @@ func TestOverlaySecurityBundle_LocalToolAsk(t *testing.T) {
 }
 
 func TestOverlaySecurityBundle_LocalToolNewTool(t *testing.T) {
-	base := config.BuildEffectiveAgentContract("euclo", defaultOverlaySpec(), permissions.PermissionSet{}, config.ResourceSpec{}, config.SecuritySpec{}, config.SourceSummary{})
+	base := config.BuildEffectiveAgentContract("euclo", defaultOverlaySpec(), ucperms.PermissionSet{}, config.ResourceSpec{}, config.SecuritySpec{}, config.SourceSummary{})
 	bundle := &security.Bundle{
 		LocalTool: map[string]security.ToolPolicy{
 			"new_tool": {Execute: "deny"},
@@ -149,7 +149,7 @@ func TestOverlaySecurityBundle_LocalToolNewTool(t *testing.T) {
 }
 
 func TestOverlaySecurityBundle_ShellDenyPatterns(t *testing.T) {
-	base := config.BuildEffectiveAgentContract("euclo", defaultOverlaySpec(), permissions.PermissionSet{}, config.ResourceSpec{}, config.SecuritySpec{}, config.SourceSummary{})
+	base := config.BuildEffectiveAgentContract("euclo", defaultOverlaySpec(), ucperms.PermissionSet{}, config.ResourceSpec{}, config.SecuritySpec{}, config.SourceSummary{})
 	bundle := &security.Bundle{
 		Shell: &security.ShellBlacklist{
 			Rules: []security.BlacklistRule{
@@ -176,7 +176,7 @@ func TestOverlaySecurityBundle_ShellDenyPatterns(t *testing.T) {
 }
 
 func TestOverlaySecurityBundle_Sandbox(t *testing.T) {
-	base := config.BuildEffectiveAgentContract("euclo", defaultOverlaySpec(), permissions.PermissionSet{}, config.ResourceSpec{}, config.SecuritySpec{}, config.SourceSummary{})
+	base := config.BuildEffectiveAgentContract("euclo", defaultOverlaySpec(), ucperms.PermissionSet{}, config.ResourceSpec{}, config.SecuritySpec{}, config.SourceSummary{})
 	bundle := &security.Bundle{
 		Sandbox: &security.SandboxPolicy{
 			ReadOnlyRoot:    true,
@@ -196,7 +196,7 @@ func TestOverlaySecurityBundle_Sandbox(t *testing.T) {
 }
 
 func TestOverlaySecurityBundle_SandboxOverrides(t *testing.T) {
-	base := config.BuildEffectiveAgentContract("euclo", defaultOverlaySpec(), permissions.PermissionSet{}, config.ResourceSpec{}, config.SecuritySpec{RunAsUser: 1001, ReadOnlyRoot: true, NoNewPrivileges: true}, config.SourceSummary{})
+	base := config.BuildEffectiveAgentContract("euclo", defaultOverlaySpec(), ucperms.PermissionSet{}, config.ResourceSpec{}, config.SecuritySpec{RunAsUser: 1001, ReadOnlyRoot: true, NoNewPrivileges: true}, config.SourceSummary{})
 	bundle := &security.Bundle{
 		Sandbox: &security.SandboxPolicy{
 			ReadOnlyRoot:    false,

@@ -10,11 +10,11 @@ import (
 // DecodeSection decodes a permissions YAML section node into a typed
 // PermissionSet. This is the governance-owned decoder — each domain that
 // owns a manifest section provides its own DecodeSection function.
-func DecodeSection(node yaml.Node) (*PermissionSet, error) {
+func DecodeSection(node yaml.Node) (*ucperms.PermissionSet, error) {
 	if node.Kind == 0 {
 		return nil, fmt.Errorf("permissions section node is absent")
 	}
-	var ps PermissionSet
+	var ps ucperms.PermissionSet
 	if err := node.Decode(&ps); err != nil {
 		return nil, fmt.Errorf("decode permissions section: %w", err)
 	}
@@ -26,8 +26,8 @@ func DecodeSection(node yaml.Node) (*PermissionSet, error) {
 // the same dedup key as earlier entries are skipped (first wins within each
 // insertion order). This is the canonical permission merge operation,
 // relocated from userconfig/config/contract_resolve.go (Slice 8).
-func Merge(sets ...*PermissionSet) PermissionSet {
-	var out PermissionSet
+func Merge(sets ...*ucperms.PermissionSet) ucperms.PermissionSet {
+	var out ucperms.PermissionSet
 
 	seenFS := make(map[string]bool)
 	seenExec := make(map[string]bool)
@@ -97,20 +97,20 @@ func Merge(sets ...*PermissionSet) PermissionSet {
 // ResolveEffective resolves the effective PermissionSet for an agent by
 // merging defaults with spec-level overrides. Any non-nil pointer is
 // included; nil pointers are skipped.
-func ResolveEffective(defaults, spec *PermissionSet) PermissionSet {
+func ResolveEffective(defaults, spec *ucperms.PermissionSet) ucperms.PermissionSet {
 	return Merge(defaults, spec)
 }
 
 // ValidateSection is a thin wrapper around ValidatePermissionSet for use as
 // a manifest section validator.
-func ValidateSection(ps *PermissionSet) error {
+func ValidateSection(ps *ucperms.PermissionSet) error {
 	if ps == nil {
 		return nil
 	}
 	return ucperms.ValidatePermissionSet(ps)
 }
 
-func joinArgsEnv(p ExecutablePermission) string {
+func joinArgsEnv(p ucperms.ExecutablePermission) string {
 	parts := make([]string, 0, len(p.Args)+len(p.Env))
 	parts = append(parts, p.Args...)
 	parts = append(parts, p.Env...)

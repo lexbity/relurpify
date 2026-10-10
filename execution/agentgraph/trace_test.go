@@ -4,13 +4,12 @@ import (
 	"context"
 	"testing"
 
-	capresult "codeburg.org/lexbit/relurpify/capability/result"
-	"codeburg.org/lexbit/relurpify/platform/observability"
-
 	"codeburg.org/lexbit/relurpify/capability/descriptor"
 	"codeburg.org/lexbit/relurpify/capability/ports"
+	capresult "codeburg.org/lexbit/relurpify/capability/result"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
-	"codeburg.org/lexbit/relurpify/governance/permissions"
+	"codeburg.org/lexbit/relurpify/platform/observability"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
 	"github.com/stretchr/testify/require"
 )
 
@@ -67,7 +66,7 @@ func (t *traceTestTool) Category() string                  { return "test" }
 func (t *traceTestTool) Parameters() []ports.ToolParameter { return nil }
 func (t *traceTestTool) Tags() []string                    { return nil }
 func (t *traceTestTool) Permissions() ports.ToolPermissions {
-	return ports.ToolPermissions{Permissions: &permissions.PermissionSet{}}
+	return ports.ToolPermissions{Permissions: &ucperms.PermissionSet{}}
 }
 func (t *traceTestTool) IsAvailable(ctx context.Context) bool { return true }
 func (t *traceTestTool) Execute(ctx context.Context, args map[string]any) (*ports.ToolResult, error) {

@@ -4,16 +4,15 @@ import (
 	"path/filepath"
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/userconfig/securefile"
 	"github.com/stretchr/testify/require"
-
-	"codeburg.org/lexbit/relurpify/platform/fs"
 )
 
 func TestLoadLocalToolPolicy(t *testing.T) {
 	workspace := t.TempDir()
 	path := LocalToolPolicyPath(workspace)
-	require.NoError(t, fs.MkdirAllSecure(filepath.Dir(path)))
-	require.NoError(t, fs.WriteFileSecure(path, []byte(`schema: relurpify/policy/localtool/v1
+	require.NoError(t, securefile.MkdirAllSecure(filepath.Dir(path)))
+	require.NoError(t, securefile.WriteFileSecure(path, []byte(`schema: relurpify/policy/localtool/v1
 tools:
   git:
     execute: ask
@@ -27,8 +26,8 @@ tools:
 func TestLoadLocalToolPolicyRejectsInvalidExecute(t *testing.T) {
 	workspace := t.TempDir()
 	path := LocalToolPolicyPath(workspace)
-	require.NoError(t, fs.MkdirAllSecure(filepath.Dir(path)))
-	require.NoError(t, fs.WriteFileSecure(path, []byte(`schema: relurpify/policy/localtool/v1
+	require.NoError(t, securefile.MkdirAllSecure(filepath.Dir(path)))
+	require.NoError(t, securefile.WriteFileSecure(path, []byte(`schema: relurpify/policy/localtool/v1
 tools:
   git:
     execute: maybe

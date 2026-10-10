@@ -6,13 +6,12 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/stretchr/testify/require"
-
 	"codeburg.org/lexbit/relurpify/capability/ports"
-	"codeburg.org/lexbit/relurpify/platform/fs"
-	"codeburg.org/lexbit/relurpify/userconfig/tools/manifest"
 	"codeburg.org/lexbit/relurpify/platform/tools/subprocess"
 	"codeburg.org/lexbit/relurpify/userconfig/config/security"
+	"codeburg.org/lexbit/relurpify/userconfig/securefile"
+	"codeburg.org/lexbit/relurpify/userconfig/tools/manifest"
+	"github.com/stretchr/testify/require"
 )
 
 const (
@@ -137,16 +136,16 @@ type stubTool struct {
 	name string
 }
 
-func (t stubTool) Name() string                      { return t.name }
-func (t stubTool) Description() string               { return t.name }
-func (t stubTool) Category() string                  { return "demo" }
+func (t stubTool) Name() string                         { return t.name }
+func (t stubTool) Description() string                  { return t.name }
+func (t stubTool) Category() string                     { return "demo" }
 func (t stubTool) Parameters() []manifest.ToolParameter { return nil }
 func (t stubTool) Execute(context.Context, map[string]any) (any, error) {
 	return map[string]any{"success": true}, nil
 }
-func (t stubTool) IsAvailable(context.Context) bool   { return true }
-func (t stubTool) Permissions() any                    { return map[string]any{} }
-func (t stubTool) Tags() []string                     { return nil }
+func (t stubTool) IsAvailable(context.Context) bool { return true }
+func (t stubTool) Permissions() any                 { return map[string]any{} }
+func (t stubTool) Tags() []string                   { return nil }
 
 func TestGenerateSubprocessTool_ParameterSubstitution(t *testing.T) {
 	def := &manifest.ToolManifest{
@@ -310,13 +309,13 @@ func TestBuildRegistry_RepositoryCorpus(t *testing.T) {
 
 func writeWorkspaceToolFixture(workspace string) error {
 	toolsDir := DefaultToolManifestDir(workspace)
-	if err := fs.MkdirAllSecure(toolsDir); err != nil {
+	if err := securefile.MkdirAllSecure(toolsDir); err != nil {
 		return err
 	}
-	if err := fs.MkdirAllSecure(filepath.Join(workspace, "relurpify_cfg", "security")); err != nil {
+	if err := securefile.MkdirAllSecure(filepath.Join(workspace, "relurpify_cfg", "security")); err != nil {
 		return err
 	}
-	if err := fs.WriteFileSecure(filepath.Join(toolsDir, "demo.tool.yaml"), []byte(`schema: relurpify/tool/v1
+	if err := securefile.WriteFileSecure(filepath.Join(toolsDir, "demo.tool.yaml"), []byte(`schema: relurpify/tool/v1
 name: demo
 family: demo
 description: Demo tool
@@ -331,7 +330,7 @@ capability:
 `)); err != nil {
 		return err
 	}
-	return fs.WriteFileSecure(filepath.Join(workspace, "relurpify_cfg", "security", "localtool.policy.yaml"), []byte(`schema: relurpify/policy/localtool/v1
+	return securefile.WriteFileSecure(filepath.Join(workspace, "relurpify_cfg", "security", "localtool.policy.yaml"), []byte(`schema: relurpify/policy/localtool/v1
 tools:
   demo:
     execute: ask

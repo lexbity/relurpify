@@ -110,14 +110,18 @@ func (f *implicationRunner) Run(_ context.Context, _ capabilityports.CommandRequ
 
 type implicationSandbox struct{}
 
-func (f *implicationSandbox) Verify(context.Context) error                        { return nil }
-func (f *implicationSandbox) ValidatePolicy(governanceports.SandboxPolicy) error   { return nil }
+func (f *implicationSandbox) Verify(context.Context) error                       { return nil }
+func (f *implicationSandbox) ValidatePolicy(governanceports.SandboxPolicy) error { return nil }
 func (f *implicationSandbox) ApplyPolicy(context.Context, governanceports.SandboxPolicy) error {
 	return nil
 }
-func (f *implicationSandbox) Policy() governanceports.SandboxPolicy               { return governanceports.SandboxPolicy{} }
-func (f *implicationSandbox) RunConfig() governanceports.SandboxConfig             { return governanceports.SandboxConfig{} }
-func (f *implicationSandbox) Name() string                                        { return "fake" }
+func (f *implicationSandbox) Policy() governanceports.SandboxPolicy {
+	return governanceports.SandboxPolicy{}
+}
+func (f *implicationSandbox) RunConfig() governanceports.SandboxConfig {
+	return governanceports.SandboxConfig{}
+}
+func (f *implicationSandbox) Name() string { return "fake" }
 func (f *implicationSandbox) NewCommandRunner(*sandbox.CommandRunnerConfig) (capabilityports.CommandRunner, error) {
 	return &implicationRunner{}, nil
 }
@@ -158,9 +162,9 @@ spec:
       name: offline-synthetic
 `)
 	for name, content := range map[string]string{
-		"sandbox.policy.yaml":           "schema: relurpify/policy/sandbox/v1\nread_only_root: false\nno_new_privileges: false\n",
-		"shell.policy.yaml":             "schema: relurpify/policy/shell/v1\nrules: []\n",
-		"localtool.policy.yaml":         "schema: relurpify/policy/localtool/v1\ntools:\n  cli_git:\n    execute: allow\n",
+		"sandbox.policy.yaml":            "schema: relurpify/policy/sandbox/v1\nread_only_root: false\nno_new_privileges: false\n",
+		"shell.policy.yaml":              "schema: relurpify/policy/shell/v1\nrules: []\n",
+		"localtool.policy.yaml":          "schema: relurpify/policy/localtool/v1\ntools:\n  cli_git:\n    execute: allow\n",
 		"workspaceingestion.policy.yaml": "schema: relurpify/policy/workspaceingestion/v1\nrules: []\n",
 	} {
 		mustWriteFile(t, filepath.Join(securityDir, name), content)

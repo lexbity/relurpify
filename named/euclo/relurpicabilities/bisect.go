@@ -6,12 +6,10 @@ import (
 	"fmt"
 	"strings"
 
-	"codeburg.org/lexbit/relurpify/capability/descriptor"
-
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/capability/descriptor"
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
-	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
 	reactpkg "codeburg.org/lexbit/relurpify/cognitionzoo/react"
 	"codeburg.org/lexbit/relurpify/governance/classification"
 	"codeburg.org/lexbit/relurpify/model"
@@ -44,9 +42,9 @@ func (h *BisectHandler) Descriptor(ctx context.Context, env ports.State) descrip
 		},
 		TrustClass:    agentspec.TrustClassBuiltinTrusted,
 		EffectClasses: []classification.EffectClass{},
-		InputSchema: &schemacoerce.Schema{
+		InputSchema: &model.Schema{
 			Type: "object",
-			Properties: map[string]*schemacoerce.Schema{
+			Properties: map[string]*model.Schema{
 				"good_ref": {
 					Type:        "string",
 					Description: "Git ref known to be good (e.g., commit hash, tag)",
@@ -66,9 +64,9 @@ func (h *BisectHandler) Descriptor(ctx context.Context, env ports.State) descrip
 			},
 			Required: []string{"good_ref", "bad_ref", "test_command"},
 		},
-		OutputSchema: &schemacoerce.Schema{
+		OutputSchema: &model.Schema{
 			Type: "object",
-			Properties: map[string]*schemacoerce.Schema{
+			Properties: map[string]*model.Schema{
 				"success": {
 					Type:        "boolean",
 					Description: "True if bisect completed successfully",

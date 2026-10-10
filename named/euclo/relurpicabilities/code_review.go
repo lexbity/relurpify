@@ -8,12 +8,10 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/capability/descriptor"
-
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/capability/descriptor"
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/capability/registry"
-	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
 	"codeburg.org/lexbit/relurpify/cognitionzoo/paradigm"
 	reactpkg "codeburg.org/lexbit/relurpify/cognitionzoo/react"
 	reflectionagent "codeburg.org/lexbit/relurpify/cognitionzoo/reflection"
@@ -51,18 +49,18 @@ func (h *CodeReviewHandler) Descriptor(ctx context.Context, env ports.State) des
 		},
 		TrustClass:    agentspec.TrustClassBuiltinTrusted,
 		EffectClasses: []classification.EffectClass{},
-		InputSchema: &schemacoerce.Schema{
+		InputSchema: &model.Schema{
 			Type: "object",
-			Properties: map[string]*schemacoerce.Schema{
+			Properties: map[string]*model.Schema{
 				"focus": {
 					Type:        "string",
 					Description: `Review focus: "correctness" | "security" | "style" | "architecture" | "all" (default: "all")`,
 				},
 			},
 		},
-		OutputSchema: &schemacoerce.Schema{
+		OutputSchema: &model.Schema{
 			Type: "object",
-			Properties: map[string]*schemacoerce.Schema{
+			Properties: map[string]*model.Schema{
 				"success": {
 					Type:        "boolean",
 					Description: "True if review completed",
@@ -70,7 +68,7 @@ func (h *CodeReviewHandler) Descriptor(ctx context.Context, env ports.State) des
 				"findings": {
 					Type:        "array",
 					Description: "Review findings",
-					Items:       &schemacoerce.Schema{Type: "object"},
+					Items:       &model.Schema{Type: "object"},
 				},
 				"summary": {
 					Type:        "string",

@@ -4,14 +4,13 @@ import (
 	"context"
 	"fmt"
 
-	"codeburg.org/lexbit/relurpify/capability/descriptor"
-
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/capability/descriptor"
 	"codeburg.org/lexbit/relurpify/capability/ports"
-	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/context/knowledge/ast"
 	"codeburg.org/lexbit/relurpify/governance/classification"
+	"codeburg.org/lexbit/relurpify/model"
 )
 
 // CallGraphHandler implements the call graph traversal capability.
@@ -40,9 +39,9 @@ func (h *CallGraphHandler) Descriptor(ctx context.Context, env ports.State) desc
 		},
 		TrustClass:    agentspec.TrustClassBuiltinTrusted,
 		EffectClasses: []classification.EffectClass{},
-		InputSchema: &schemacoerce.Schema{
+		InputSchema: &model.Schema{
 			Type: "object",
-			Properties: map[string]*schemacoerce.Schema{
+			Properties: map[string]*model.Schema{
 				"entry_point": {
 					Type:        "string",
 					Description: "Symbol name to use as entry point for graph traversal",
@@ -58,9 +57,9 @@ func (h *CallGraphHandler) Descriptor(ctx context.Context, env ports.State) desc
 			},
 			Required: []string{"entry_point"},
 		},
-		OutputSchema: &schemacoerce.Schema{
+		OutputSchema: &model.Schema{
 			Type: "object",
-			Properties: map[string]*schemacoerce.Schema{
+			Properties: map[string]*model.Schema{
 				"success": {
 					Type:        "boolean",
 					Description: "True if graph built successfully",
@@ -72,14 +71,14 @@ func (h *CallGraphHandler) Descriptor(ctx context.Context, env ports.State) desc
 				"nodes": {
 					Type:        "array",
 					Description: "Graph nodes",
-					Items: &schemacoerce.Schema{
+					Items: &model.Schema{
 						Type: "object",
 					},
 				},
 				"edges": {
 					Type:        "array",
 					Description: "Graph edges",
-					Items: &schemacoerce.Schema{
+					Items: &model.Schema{
 						Type: "object",
 					},
 				},

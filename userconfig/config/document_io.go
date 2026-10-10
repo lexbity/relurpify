@@ -5,7 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"codeburg.org/lexbit/relurpify/platform/fs"
+	"codeburg.org/lexbit/relurpify/userconfig/securefile"
 )
 
 // SaveDocumentWithBackup writes the document envelope to path after snapshotting
@@ -17,7 +17,7 @@ func SaveDocumentWithBackup(path string, doc *Document) (string, error) {
 	if doc == nil {
 		return "", fmt.Errorf("document required")
 	}
-	if err := os.MkdirAll(filepath.Dir(path), fs.PublicDirMode); err != nil { // public: document parent dir
+	if err := os.MkdirAll(filepath.Dir(path), securefile.PublicDirMode); err != nil { // public: document parent dir
 		return "", err
 	}
 	backup, err := CreateTimestampedBackup(path)

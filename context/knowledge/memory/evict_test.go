@@ -24,7 +24,7 @@ func TestTaskMemoryEnforcesEntryCap(t *testing.T) {
 	if _, ok := task.Get(keyOf(0)); ok {
 		t.Fatal("oldest entry survived the cap eviction")
 	}
-	if _, ok := task.Get(keyOf(taskMemoryMaxEntries+9)); !ok {
+	if _, ok := task.Get(keyOf(taskMemoryMaxEntries + 9)); !ok {
 		t.Fatal("newest entry missing")
 	}
 }

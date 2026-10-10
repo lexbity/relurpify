@@ -9,17 +9,17 @@ import (
 
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/descriptor"
-	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/governance/policy"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
 )
 
 type mockApprovalManager struct {
 	mu        sync.Mutex
-	requests  []permissions.PermissionDescriptor
+	requests  []ucperms.PermissionDescriptor
 	approvals int
 }
 
-func (m *mockApprovalManager) RequireApproval(_ context.Context, _ string, desc permissions.PermissionDescriptor, _ string, _ policy.GrantScope, _ policy.RiskLevel, _ time.Duration) error {
+func (m *mockApprovalManager) RequireApproval(_ context.Context, _ string, desc ucperms.PermissionDescriptor, _ string, _ policy.GrantScope, _ policy.RiskLevel, _ time.Duration) error {
 	m.mu.Lock()
 	m.requests = append(m.requests, desc)
 	if desc.RequiresHITL {

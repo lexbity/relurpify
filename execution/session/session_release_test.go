@@ -4,10 +4,9 @@ import (
 	"context"
 	"testing"
 
-	"go.uber.org/goleak"
-
-	"codeburg.org/lexbit/relurpify/governance/permissions"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
+	"go.uber.org/goleak"
 )
 
 // releaseRecordingManager records ReleaseSession calls.
@@ -15,7 +14,7 @@ type releaseRecordingManager struct {
 	released []string
 }
 
-func (m *releaseRecordingManager) CheckFileAccess(context.Context, string, permissions.FileSystemAction, string) error {
+func (m *releaseRecordingManager) CheckFileAccess(context.Context, string, ucperms.FileSystemAction, string) error {
 	return nil
 }
 

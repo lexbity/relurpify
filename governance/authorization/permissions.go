@@ -18,6 +18,7 @@ import (
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
 	governanceports "codeburg.org/lexbit/relurpify/governance/ports"
 	fwtelemetry "codeburg.org/lexbit/relurpify/telemetry"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
 )
 
 const permissionMatchAll = "**"
@@ -39,7 +40,7 @@ type AgentFileMatrix struct {
 
 // ToolPermissions describes the permissions a tool requires.
 type ToolPermissions struct {
-	Permissions *permissions.PermissionSet
+	Permissions *ucperms.PermissionSet
 }
 
 func (t ToolPermissions) Validate() error {
@@ -75,7 +76,7 @@ const (
 // PermissionManager enforces the declared permission set for runtime actions.
 type PermissionManager struct {
 	basePath         string
-	declared         *permissions.PermissionSet
+	declared         *ucperms.PermissionSet
 	audit            policy.AuditLogger
 	hitl             HITLProvider
 	runtime          governanceports.SandboxRuntime
@@ -90,14 +91,14 @@ type PermissionManager struct {
 	// RevokeTaskGrant and never outlive their run.
 	taskGrants       map[string]taskGrant
 	hitlRateLimits   *bounded.Cache[string, *hitlRateBucket]
-	fsPermCache      *bounded.Cache[string, *permissions.FileSystemPermission]
-	execPermCache    *bounded.Cache[string, *permissions.ExecutablePermission]
+	fsPermCache      *bounded.Cache[string, *ucperms.FileSystemPermission]
+	execPermCache    *bounded.Cache[string, *ucperms.ExecutablePermission]
 	fsProtectedRoots []string
 	fsExcludedRoots  []string
 }
 
 // NewPermissionManager creates an enforcement instance.
-func NewPermissionManager(basePath string, declared *permissions.PermissionSet, audit policy.AuditLogger, hitl HITLProvider) (*PermissionManager, error) {
+func NewPermissionManager(basePath string, declared *ucperms.PermissionSet, audit policy.AuditLogger, hitl HITLProvider) (*PermissionManager, error) {
 	if declared == nil {
 		return nil, errors.New("permission manager requires permission set")
 	}
@@ -112,8 +113,8 @@ func NewPermissionManager(basePath string, declared *permissions.PermissionSet, 
 		grants:          bounded.NewCache[string, *PermissionGrant](grantsCacheCap, 0, nil),
 		taskGrants:      make(map[string]taskGrant),
 		hitlRateLimits:  bounded.NewCache[string, *hitlRateBucket](hitlRateCacheCap, hitlRateEntryTTL, nil),
-		fsPermCache:     bounded.NewCache[string, *permissions.FileSystemPermission](fsPermCacheCap, 0, nil),
-		execPermCache:   bounded.NewCache[string, *permissions.ExecutablePermission](execPermCacheCap, 0, nil),
+		fsPermCache:     bounded.NewCache[string, *ucperms.FileSystemPermission](fsPermCacheCap, 0, nil),
+		execPermCache:   bounded.NewCache[string, *ucperms.ExecutablePermission](execPermCacheCap, 0, nil),
 		grantClock:      time.Now,
 		defaultDecision: permissions.DecisionAsk,
 	}
@@ -328,7 +329,7 @@ func globToRegex(pattern string) string {
 
 // PermissionRequirement declares a permission needed by a tool or plugin.
 type PermissionRequirement struct {
-	Type     permissions.PermissionType
+	Type     ucperms.PermissionType
 	Action   string
 	Resource string
 }
@@ -341,7 +342,7 @@ type HITLProvider interface {
 // PermissionGrant captures approval metadata.
 type PermissionGrant struct {
 	ID          string
-	Permission  permissions.PermissionDescriptor
+	Permission  ucperms.PermissionDescriptor
 	Scope       policy.GrantScope
 	ExpiresAt   time.Time
 	ApprovedBy  string

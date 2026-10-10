@@ -4,16 +4,15 @@ import (
 	"path/filepath"
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/userconfig/securefile"
 	"github.com/stretchr/testify/require"
-
-	"codeburg.org/lexbit/relurpify/platform/fs"
 )
 
 func TestLoadShellPolicy(t *testing.T) {
 	workspace := t.TempDir()
 	path := ShellPolicyPath(workspace)
-	require.NoError(t, fs.MkdirAllSecure(filepath.Dir(path)))
-	require.NoError(t, fs.WriteFileSecure(path, []byte(`schema: relurpify/policy/shell/v1
+	require.NoError(t, securefile.MkdirAllSecure(filepath.Dir(path)))
+	require.NoError(t, securefile.WriteFileSecure(path, []byte(`schema: relurpify/policy/shell/v1
 rules:
   - id: deny-git-reset-hard
     pattern: '(^|\s)git\s+reset\s+--hard(\s|$)'
@@ -32,8 +31,8 @@ rules:
 func TestLoadShellPolicyRejectsInvalidRegex(t *testing.T) {
 	workspace := t.TempDir()
 	path := ShellPolicyPath(workspace)
-	require.NoError(t, fs.MkdirAllSecure(filepath.Dir(path)))
-	require.NoError(t, fs.WriteFileSecure(path, []byte(`schema: relurpify/policy/shell/v1
+	require.NoError(t, securefile.MkdirAllSecure(filepath.Dir(path)))
+	require.NoError(t, securefile.WriteFileSecure(path, []byte(`schema: relurpify/policy/shell/v1
 rules:
   - id: invalid
     pattern: '('
@@ -48,8 +47,8 @@ rules:
 func TestLoadShellPolicyRejectsInvalidAction(t *testing.T) {
 	workspace := t.TempDir()
 	path := ShellPolicyPath(workspace)
-	require.NoError(t, fs.MkdirAllSecure(filepath.Dir(path)))
-	require.NoError(t, fs.WriteFileSecure(path, []byte(`schema: relurpify/policy/shell/v1
+	require.NoError(t, securefile.MkdirAllSecure(filepath.Dir(path)))
+	require.NoError(t, securefile.WriteFileSecure(path, []byte(`schema: relurpify/policy/shell/v1
 rules:
   - id: invalid
     pattern: '.*'

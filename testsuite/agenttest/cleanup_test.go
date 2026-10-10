@@ -157,4 +157,3 @@ func TestReportSchemaStability(t *testing.T) {
 		t.Errorf("AssertionResult.Tier mismatch: got %s, want outcome", roundTripped.AssertionResults[0].Tier)
 	}
 }
-

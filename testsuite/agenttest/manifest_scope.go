@@ -6,13 +6,14 @@ import (
 
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
 )
 
 // DocumentCoversFileAction returns true if the document explicitly permits
 // the given action on the given path. Path may be absolute or relative to workspace.
 func DocumentCoversFileAction(
 	doc *config.Document,
-	action permissions.FileSystemAction,
+	action ucperms.FileSystemAction,
 	path, workspace string,
 ) bool {
 	if doc == nil {

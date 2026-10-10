@@ -15,12 +15,13 @@ import (
 	"codeburg.org/lexbit/relurpify/governance/identity"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/platform/fs"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
 )
 
 // AcquireFromFile creates a pipeline for ingesting a file.
 func AcquireFromFile(ctx context.Context, path string, principal identity.SubjectRef, policy *contextports.PolicyBundle, evaluator contextports.PolicyEvaluator, store *knowledge.ChunkStore, scope *permissions.FileScopePolicy) (*Pipeline, error) {
 	if scope != nil {
-		if err := scope.Check(permissions.FileSystemRead, path); err != nil {
+		if err := scope.Check(ucperms.FileSystemRead, path); err != nil {
 			return nil, fmt.Errorf("file scope denied: %w", err)
 		}
 	}

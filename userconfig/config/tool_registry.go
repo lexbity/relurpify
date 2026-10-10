@@ -5,8 +5,8 @@ import (
 	"sort"
 	"strings"
 
-	configmanifest "codeburg.org/lexbit/relurpify/userconfig/tools/manifest"
 	"codeburg.org/lexbit/relurpify/userconfig/config/security"
+	configmanifest "codeburg.org/lexbit/relurpify/userconfig/tools/manifest"
 )
 
 // ToolRegistry stores the loaded tool manifests plus the resolved runtime

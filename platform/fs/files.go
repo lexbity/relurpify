@@ -21,6 +21,7 @@ import (
 	authorization "codeburg.org/lexbit/relurpify/governance/authorization"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
 )
 
 var (
@@ -45,7 +46,7 @@ func (s *scopedFileTool) SetToolName(name string) {
 	s.toolName = name
 }
 
-func (s *scopedFileTool) enforceSandboxScope(action permissions.FileSystemAction, path string) error {
+func (s *scopedFileTool) enforceSandboxScope(action ucperms.FileSystemAction, path string) error {
 	err := permissions.CheckOrDeny(s.scope, action, path)
 	if err != nil {
 		pathHash := sha256.Sum256([]byte(path))
@@ -58,9 +59,6 @@ func (s *scopedFileTool) enforceSandboxScope(action permissions.FileSystemAction
 func (s *scopedFileTool) sandboxScope() *permissions.FileScopePolicy {
 	return s.scope
 }
-
-// FilePermissionChecker is re-exported from contracts
-type FilePermissionChecker = permissions.FilePermissionChecker
 
 func shouldSkipGeneratedDir(name string) bool {
 	name = strings.TrimSpace(name)
@@ -79,11 +77,11 @@ func shouldSkipGeneratedDir(name string) bool {
 type ReadFileTool struct {
 	scopedFileTool
 	BasePath string
-	manager  FilePermissionChecker
+	manager  permissions.FilePermissionChecker
 	agentID  string
 }
 
-func (t *ReadFileTool) SetPermissionManager(manager FilePermissionChecker, agentID string) {
+func (t *ReadFileTool) SetPermissionManager(manager permissions.FilePermissionChecker, agentID string) {
 	t.manager = manager
 	t.agentID = agentID
 }
@@ -108,7 +106,7 @@ func (t *ReadFileTool) Execute(ctx context.Context, args map[string]any) (*ports
 		return nil, err
 	}
 
-	if err := t.enforceSandboxScope(permissions.FileSystemRead, path); err != nil {
+	if err := t.enforceSandboxScope(ucperms.FileSystemRead, path); err != nil {
 		return nil, err
 	}
 
@@ -144,7 +142,7 @@ func (t *ReadFileTool) IsAvailable(ctx context.Context) bool {
 }
 
 func (t *ReadFileTool) Permissions() ports.ToolPermissions {
-	return ports.ToolPermissions{Permissions: policy.NewFileSystemPermissionSet(t.BasePath, permissions.FileSystemRead)}
+	return ports.ToolPermissions{Permissions: policy.NewFileSystemPermissionSet(t.BasePath, ucperms.FileSystemRead)}
 }
 func (t *ReadFileTool) Tags() []string {
 	return []string{ports.TagReadOnly, "file", "inspect", "recovery"}
@@ -156,11 +154,11 @@ type WriteFileTool struct {
 	BasePath string
 	Backup   bool
 	spec     *agentspec.AgentRuntimeSpec
-	manager  FilePermissionChecker
+	manager  permissions.FilePermissionChecker
 	agentID  string
 }
 
-func (t *WriteFileTool) SetPermissionManager(manager FilePermissionChecker, agentID string) {
+func (t *WriteFileTool) SetPermissionManager(manager permissions.FilePermissionChecker, agentID string) {
 	t.manager = manager
 	t.agentID = agentID
 }
@@ -193,7 +191,7 @@ func (t *WriteFileTool) Execute(ctx context.Context, args map[string]any) (*port
 		return nil, err
 	}
 
-	if err := t.enforceSandboxScope(permissions.FileSystemWrite, path); err != nil {
+	if err := t.enforceSandboxScope(ucperms.FileSystemWrite, path); err != nil {
 		return nil, err
 	}
 	if err := t.enforceFileMatrix(ctx, "write", path); err != nil {
@@ -212,7 +210,7 @@ func (t *WriteFileTool) Execute(ctx context.Context, args map[string]any) (*port
 				return nil, err
 			}
 			// Check sandbox scope for backup path
-			if err := t.enforceSandboxScope(permissions.FileSystemWrite, backup); err != nil {
+			if err := t.enforceSandboxScope(ucperms.FileSystemWrite, backup); err != nil {
 				return nil, fmt.Errorf("backup blocked: %w", err)
 			}
 			// Apply file matrix rules based on the original path (not the ".bak" suffix).
@@ -244,7 +242,7 @@ func (t *WriteFileTool) IsAvailable(ctx context.Context) bool {
 }
 
 func (t *WriteFileTool) Permissions() ports.ToolPermissions {
-	return ports.ToolPermissions{Permissions: policy.NewFileSystemPermissionSet(t.BasePath, permissions.FileSystemWrite)}
+	return ports.ToolPermissions{Permissions: policy.NewFileSystemPermissionSet(t.BasePath, ucperms.FileSystemWrite)}
 }
 func (t *WriteFileTool) Tags() []string {
 	return []string{ports.TagDestructive, "file", "edit"}
@@ -255,11 +253,11 @@ type EditFileTool struct {
 	scopedFileTool
 	BasePath string
 	spec     *agentspec.AgentRuntimeSpec
-	manager  FilePermissionChecker
+	manager  permissions.FilePermissionChecker
 	agentID  string
 }
 
-func (t *EditFileTool) SetPermissionManager(manager FilePermissionChecker, agentID string) {
+func (t *EditFileTool) SetPermissionManager(manager permissions.FilePermissionChecker, agentID string) {
 	t.manager = manager
 	t.agentID = agentID
 }
@@ -304,7 +302,7 @@ func (t *EditFileTool) Execute(ctx context.Context, args map[string]any) (*ports
 	if err != nil {
 		return nil, err
 	}
-	if err := t.enforceSandboxScope(permissions.FileSystemWrite, path); err != nil {
+	if err := t.enforceSandboxScope(ucperms.FileSystemWrite, path); err != nil {
 		return nil, err
 	}
 	if err := t.enforceFileMatrix(ctx, "edit", path); err != nil {
@@ -374,7 +372,7 @@ func (t *EditFileTool) IsAvailable(ctx context.Context) bool {
 }
 
 func (t *EditFileTool) Permissions() ports.ToolPermissions {
-	return ports.ToolPermissions{Permissions: policy.NewFileSystemPermissionSet(t.BasePath, permissions.FileSystemWrite)}
+	return ports.ToolPermissions{Permissions: policy.NewFileSystemPermissionSet(t.BasePath, ucperms.FileSystemWrite)}
 }
 func (t *EditFileTool) Tags() []string {
 	return []string{ports.TagDestructive, "file", "edit"}
@@ -405,7 +403,7 @@ func (t *EditFileTool) Rollback(ctx context.Context, token ports.RollbackToken) 
 	if err != nil {
 		return err
 	}
-	if err := t.enforceSandboxScope(permissions.FileSystemWrite, resolved); err != nil {
+	if err := t.enforceSandboxScope(ucperms.FileSystemWrite, resolved); err != nil {
 		return err
 	}
 	if err := t.enforceFileMatrix(ctx, "edit", resolved); err != nil {
@@ -439,11 +437,11 @@ func (t *EditFileTool) Rollback(ctx context.Context, token ports.RollbackToken) 
 type ListFilesTool struct {
 	scopedFileTool
 	BasePath string
-	manager  FilePermissionChecker
+	manager  permissions.FilePermissionChecker
 	agentID  string
 }
 
-func (t *ListFilesTool) SetPermissionManager(manager FilePermissionChecker, agentID string) {
+func (t *ListFilesTool) SetPermissionManager(manager permissions.FilePermissionChecker, agentID string) {
 	t.manager = manager
 	t.agentID = agentID
 }
@@ -474,7 +472,7 @@ func (t *ListFilesTool) Execute(ctx context.Context, args map[string]any) (*port
 	if err != nil {
 		return nil, err
 	}
-	if err := t.enforceSandboxScope(permissions.FileSystemList, dir); err != nil {
+	if err := t.enforceSandboxScope(ucperms.FileSystemList, dir); err != nil {
 		return nil, err
 	}
 
@@ -488,7 +486,7 @@ func (t *ListFilesTool) Execute(ctx context.Context, args map[string]any) (*port
 			if shouldSkipGeneratedDir(d.Name()) {
 				return fs.SkipDir
 			}
-			if err := t.enforceSandboxScope(permissions.FileSystemList, path); err != nil {
+			if err := t.enforceSandboxScope(ucperms.FileSystemList, path); err != nil {
 				if sandboxProtectedPath(err) {
 					return fs.SkipDir
 				}
@@ -497,7 +495,7 @@ func (t *ListFilesTool) Execute(ctx context.Context, args map[string]any) (*port
 			return nil
 		}
 
-		if err := t.enforceSandboxScope(permissions.FileSystemRead, path); err != nil {
+		if err := t.enforceSandboxScope(ucperms.FileSystemRead, path); err != nil {
 			if sandboxProtectedPath(err) {
 				return nil
 			}
@@ -532,7 +530,7 @@ func (t *ListFilesTool) IsAvailable(ctx context.Context) bool {
 }
 
 func (t *ListFilesTool) Permissions() ports.ToolPermissions {
-	return ports.ToolPermissions{Permissions: policy.NewFileSystemPermissionSet(t.BasePath, permissions.FileSystemList)}
+	return ports.ToolPermissions{Permissions: policy.NewFileSystemPermissionSet(t.BasePath, ucperms.FileSystemList)}
 }
 func (t *ListFilesTool) Tags() []string {
 	return []string{ports.TagReadOnly, "file", "discover"}
@@ -542,11 +540,11 @@ func (t *ListFilesTool) Tags() []string {
 type SearchInFilesTool struct {
 	scopedFileTool
 	BasePath string
-	manager  FilePermissionChecker
+	manager  permissions.FilePermissionChecker
 	agentID  string
 }
 
-func (t *SearchInFilesTool) SetPermissionManager(manager FilePermissionChecker, agentID string) {
+func (t *SearchInFilesTool) SetPermissionManager(manager permissions.FilePermissionChecker, agentID string) {
 	t.manager = manager
 	t.agentID = agentID
 }
@@ -578,7 +576,7 @@ func (t *SearchInFilesTool) Execute(ctx context.Context, args map[string]any) (*
 	if err != nil {
 		return nil, err
 	}
-	if err := t.enforceSandboxScope(permissions.FileSystemRead, dir); err != nil {
+	if err := t.enforceSandboxScope(ucperms.FileSystemRead, dir); err != nil {
 		return nil, err
 	}
 
@@ -601,7 +599,7 @@ func (t *SearchInFilesTool) Execute(ctx context.Context, args map[string]any) (*
 			if shouldSkipGeneratedDir(d.Name()) {
 				return fs.SkipDir
 			}
-			if err := t.enforceSandboxScope(permissions.FileSystemList, path); err != nil {
+			if err := t.enforceSandboxScope(ucperms.FileSystemList, path); err != nil {
 				if sandboxProtectedPath(err) {
 					return fs.SkipDir
 				}
@@ -610,7 +608,7 @@ func (t *SearchInFilesTool) Execute(ctx context.Context, args map[string]any) (*
 			return nil
 		}
 
-		if err := t.enforceSandboxScope(permissions.FileSystemRead, path); err != nil {
+		if err := t.enforceSandboxScope(ucperms.FileSystemRead, path); err != nil {
 			if sandboxProtectedPath(err) {
 				return nil
 			}
@@ -658,7 +656,7 @@ func (t *SearchInFilesTool) IsAvailable(ctx context.Context) bool {
 }
 
 func (t *SearchInFilesTool) Permissions() ports.ToolPermissions {
-	return ports.ToolPermissions{Permissions: policy.NewFileSystemPermissionSet(t.BasePath, permissions.FileSystemRead, permissions.FileSystemList)}
+	return ports.ToolPermissions{Permissions: policy.NewFileSystemPermissionSet(t.BasePath, ucperms.FileSystemRead, ucperms.FileSystemList)}
 }
 func (t *SearchInFilesTool) Tags() []string {
 	return []string{ports.TagReadOnly, "search", "recovery"}
@@ -669,11 +667,11 @@ type CreateFileTool struct {
 	scopedFileTool
 	BasePath string
 	spec     *agentspec.AgentRuntimeSpec
-	manager  FilePermissionChecker
+	manager  permissions.FilePermissionChecker
 	agentID  string
 }
 
-func (t *CreateFileTool) SetPermissionManager(manager FilePermissionChecker, agentID string) {
+func (t *CreateFileTool) SetPermissionManager(manager permissions.FilePermissionChecker, agentID string) {
 	t.manager = manager
 	t.agentID = agentID
 }
@@ -706,7 +704,7 @@ func (t *CreateFileTool) Execute(ctx context.Context, args map[string]any) (*por
 		return nil, err
 	}
 
-	if err := t.enforceSandboxScope(permissions.FileSystemWrite, path); err != nil {
+	if err := t.enforceSandboxScope(ucperms.FileSystemWrite, path); err != nil {
 		return nil, err
 	}
 	if err := t.enforceFileMatrix(ctx, "write", path); err != nil {
@@ -729,7 +727,7 @@ func (t *CreateFileTool) IsAvailable(ctx context.Context) bool {
 }
 
 func (t *CreateFileTool) Permissions() ports.ToolPermissions {
-	return ports.ToolPermissions{Permissions: policy.NewFileSystemPermissionSet(t.BasePath, permissions.FileSystemWrite)}
+	return ports.ToolPermissions{Permissions: policy.NewFileSystemPermissionSet(t.BasePath, ucperms.FileSystemWrite)}
 }
 func (t *CreateFileTool) Tags() []string {
 	return []string{ports.TagDestructive, "file", "edit"}
@@ -741,11 +739,11 @@ type DeleteFileTool struct {
 	BasePath string
 	TrashDir string
 	spec     *agentspec.AgentRuntimeSpec
-	manager  FilePermissionChecker
+	manager  permissions.FilePermissionChecker
 	agentID  string
 }
 
-func (t *DeleteFileTool) SetPermissionManager(manager FilePermissionChecker, agentID string) {
+func (t *DeleteFileTool) SetPermissionManager(manager permissions.FilePermissionChecker, agentID string) {
 	t.manager = manager
 	t.agentID = agentID
 }
@@ -775,7 +773,7 @@ func (t *DeleteFileTool) Execute(ctx context.Context, args map[string]any) (*por
 		return nil, err
 	}
 
-	if err := t.enforceSandboxScope(permissions.FileSystemDelete, path); err != nil {
+	if err := t.enforceSandboxScope(ucperms.FileSystemDelete, path); err != nil {
 		return nil, err
 	}
 	if err := t.enforceFileMatrix(ctx, "write", path); err != nil {
@@ -808,7 +806,7 @@ func (t *DeleteFileTool) IsAvailable(ctx context.Context) bool {
 }
 
 func (t *DeleteFileTool) Permissions() ports.ToolPermissions {
-	return ports.ToolPermissions{Permissions: policy.NewFileSystemPermissionSet(t.BasePath, permissions.FileSystemWrite)}
+	return ports.ToolPermissions{Permissions: policy.NewFileSystemPermissionSet(t.BasePath, ucperms.FileSystemWrite)}
 }
 func (t *DeleteFileTool) Tags() []string {
 	return []string{ports.TagDestructive, "file", "edit"}
@@ -907,7 +905,7 @@ func copyFile(src, dst string) error {
 	return out.Close()
 }
 
-func enforceFileMatrix(ctx context.Context, checker FilePermissionChecker, agentID, basePath, action, absPath string, matrix agentspec.AgentFileMatrix) error {
+func enforceFileMatrix(ctx context.Context, checker permissions.FilePermissionChecker, agentID, basePath, action, absPath string, matrix agentspec.AgentFileMatrix) error {
 	rel := absPath
 	if basePath != "" {
 		if r, err := filepath.Rel(basePath, absPath); err == nil {

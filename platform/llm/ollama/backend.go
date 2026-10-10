@@ -21,7 +21,6 @@ type (
 	LLMResponse         = model.LLMResponse
 	Message             = model.Message
 	LLMToolSpec         = model.LLMToolSpec
-	Schema              = model.Schema
 	BackendClass        = model.BackendClass
 	BackendCapabilities = model.BackendCapabilities
 	ModelProfile        = model.ModelProfile

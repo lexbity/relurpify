@@ -8,11 +8,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
-
 	"codeburg.org/lexbit/relurpify/governance/authorization"
-	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/platform/observability"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
+	"github.com/stretchr/testify/require"
 )
 
 type testBackend struct {
@@ -433,8 +432,8 @@ func TestSessionExtractionBudgetHelpers(t *testing.T) {
 }
 
 func TestSessionNavigationHelpers(t *testing.T) {
-	perms := &permissions.PermissionSet{
-		Network: []permissions.NetworkPermission{{Direction: "egress", Protocol: "tcp", Host: "8.8.8.8", Port: 443}},
+	perms := &ucperms.PermissionSet{
+		Network: []ucperms.NetworkPermission{{Direction: "egress", Protocol: "tcp", Host: "8.8.8.8", Port: 443}},
 	}
 	manager, err := authorization.NewPermissionManager("", perms, nil, nil)
 	require.NoError(t, err)

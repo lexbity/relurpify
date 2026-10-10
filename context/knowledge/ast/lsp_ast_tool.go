@@ -7,7 +7,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/capability/toolcapabilities"
-	"codeburg.org/lexbit/relurpify/governance/permissions"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
 )
 
 const (
@@ -204,7 +204,7 @@ func (t *ASTTool) IsAvailable(ctx context.Context) bool {
 
 func (t *ASTTool) Permissions() ports.ToolPermissions {
 	return ports.ToolPermissions{
-		Permissions: &permissions.PermissionSet{},
+		Permissions: &ucperms.PermissionSet{},
 	}
 }
 func (t *ASTTool) Tags() []string {

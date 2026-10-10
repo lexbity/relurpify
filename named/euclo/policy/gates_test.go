@@ -8,10 +8,10 @@ import (
 
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/governance/authorization"
-	"codeburg.org/lexbit/relurpify/governance/permissions"
 	govpolicy "codeburg.org/lexbit/relurpify/governance/policy"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
 )
 
 func TestGateNodeExecute(t *testing.T) {
@@ -211,7 +211,7 @@ type stubPermissionManager struct {
 	called bool
 }
 
-func (s *stubPermissionManager) RequireApproval(ctx context.Context, agentID string, desc permissions.PermissionDescriptor, justification string, scope govpolicy.GrantScope, risk govpolicy.RiskLevel, duration time.Duration) error {
+func (s *stubPermissionManager) RequireApproval(ctx context.Context, agentID string, desc ucperms.PermissionDescriptor, justification string, scope govpolicy.GrantScope, risk govpolicy.RiskLevel, duration time.Duration) error {
 	s.called = true
 	return nil
 }

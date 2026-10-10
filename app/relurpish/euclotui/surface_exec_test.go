@@ -52,9 +52,9 @@ func TestEucloSurfaceApplyExecEvent_PopulatesRouter(t *testing.T) {
 func TestEucloSurfaceApplyExecEvent_DedupsStaleSeq(t *testing.T) {
 	s := NewSurface().(*EucloSurface)
 
-	s.ApplyExecEvent(stepEvent("euclo.step.started", "s1", 1, false))   // s1 active
-	s.ApplyExecEvent(stepEvent("euclo.step.completed", "s1", 2, true))  // s1 done
-	s.ApplyExecEvent(stepEvent("euclo.step.started", "s1", 1, false))   // stale dup → must be dropped
+	s.ApplyExecEvent(stepEvent("euclo.step.started", "s1", 1, false))  // s1 active
+	s.ApplyExecEvent(stepEvent("euclo.step.completed", "s1", 2, true)) // s1 done
+	s.ApplyExecEvent(stepEvent("euclo.step.started", "s1", 1, false))  // stale dup → must be dropped
 
 	snap := s.router.Snapshot()
 	rt, ok := snap.StepRuntime["s1"]

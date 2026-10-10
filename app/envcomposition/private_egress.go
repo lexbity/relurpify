@@ -6,9 +6,9 @@ import (
 	"strings"
 
 	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
-	"codeburg.org/lexbit/relurpify/governance/permissions"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
 	"codeburg.org/lexbit/relurpify/platform/tools/subprocess"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
 )
 
 // privateEgressApprover bridges the governance HITL broker to the subprocess
@@ -37,8 +37,8 @@ func (a privateEgressApprover) ApprovePrivateEgress(ctx context.Context, agentID
 		if host == "" {
 			continue
 		}
-		if err := a.manager.RequireApproval(ctx, agentID, permissions.PermissionDescriptor{
-			Type:         permissions.PermissionTypeNetwork,
+		if err := a.manager.RequireApproval(ctx, agentID, ucperms.PermissionDescriptor{
+			Type:         ucperms.PermissionTypeNetwork,
 			Action:       "net-egress-private:" + host,
 			Resource:     host,
 			RequiresHITL: true,

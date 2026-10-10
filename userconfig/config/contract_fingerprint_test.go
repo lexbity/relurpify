@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/governance/permissions"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
 )
 
 func TestContractFingerprint_StableOnUnchangedInput(t *testing.T) {
@@ -19,7 +19,7 @@ func TestContractFingerprint_StableOnUnchangedInput(t *testing.T) {
 		ToolExecutionPolicy: map[string]ToolPolicy{
 			"cli_git": {Execute: AgentPermissionAsk},
 		},
-	}, permissions.PermissionSet{}, ResourceSpec{}, SecuritySpec{}, SourceSummary{})
+	}, ucperms.PermissionSet{}, ResourceSpec{}, SecuritySpec{}, SourceSummary{})
 
 	first := ContractFingerprint(c, workspace)
 	second := ContractFingerprint(c, workspace)
@@ -48,7 +48,7 @@ func TestContractFingerprint_Stable100x(t *testing.T) {
 			"bash":    {Execute: AgentPermissionAsk},
 		},
 		Bash: AgentBashPermissions{DenyPatterns: []string{"pattern1", "pattern2"}},
-	}, permissions.PermissionSet{}, ResourceSpec{}, SecuritySpec{}, SourceSummary{})
+	}, ucperms.PermissionSet{}, ResourceSpec{}, SecuritySpec{}, SourceSummary{})
 
 	fp := ContractFingerprint(c, workspace)
 	for i := 0; i < 100; i++ {
@@ -68,7 +68,7 @@ func TestContractFingerprint_ChangesWhenLocaltoolChanges(t *testing.T) {
 		ToolExecutionPolicy: map[string]ToolPolicy{
 			"cli_git": {Execute: AgentPermissionAsk},
 		},
-	}, permissions.PermissionSet{}, ResourceSpec{}, SecuritySpec{}, SourceSummary{})
+	}, ucperms.PermissionSet{}, ResourceSpec{}, SecuritySpec{}, SourceSummary{})
 
 	allowFP := ContractFingerprint(c, workspace)
 
@@ -90,7 +90,7 @@ func TestContractFingerprint_ChangesWhenContractChanges(t *testing.T) {
 		ToolExecutionPolicy: map[string]ToolPolicy{
 			"cli_git": {Execute: AgentPermissionAsk},
 		},
-	}, permissions.PermissionSet{}, ResourceSpec{}, SecuritySpec{}, SourceSummary{})
+	}, ucperms.PermissionSet{}, ResourceSpec{}, SecuritySpec{}, SourceSummary{})
 
 	baseFP := ContractFingerprint(base, workspace)
 
@@ -99,7 +99,7 @@ func TestContractFingerprint_ChangesWhenContractChanges(t *testing.T) {
 		ToolExecutionPolicy: map[string]ToolPolicy{
 			"cli_git": {Execute: AgentPermissionDeny},
 		},
-	}, permissions.PermissionSet{}, ResourceSpec{}, SecuritySpec{}, SourceSummary{})
+	}, ucperms.PermissionSet{}, ResourceSpec{}, SecuritySpec{}, SourceSummary{})
 
 	modifiedFP := ContractFingerprint(modified, workspace)
 

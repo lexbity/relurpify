@@ -52,8 +52,8 @@ type fakeSandboxRuntime struct {
 	runner *recordingRunner
 }
 
-func (f *fakeSandboxRuntime) Verify(context.Context) error                              { return nil }
-func (f *fakeSandboxRuntime) ValidatePolicy(governanceports.SandboxPolicy) error         { return nil }
+func (f *fakeSandboxRuntime) Verify(context.Context) error                       { return nil }
+func (f *fakeSandboxRuntime) ValidatePolicy(governanceports.SandboxPolicy) error { return nil }
 func (f *fakeSandboxRuntime) ApplyPolicy(_ context.Context, p governanceports.SandboxPolicy) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()

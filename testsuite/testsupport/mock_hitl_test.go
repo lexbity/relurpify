@@ -5,13 +5,13 @@ import (
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/governance/authorization"
-	"codeburg.org/lexbit/relurpify/governance/permissions"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
 )
 
 func TestMockHITLBrokerFailsClosedByDefault(t *testing.T) {
 	broker := NewMockHITLBroker()
 	_, err := broker.RequestPermission(context.Background(), authorization.PermissionRequest{
-		Permission: permissions.PermissionDescriptor{Action: "euclo.policy.gate"},
+		Permission: ucperms.PermissionDescriptor{Action: "euclo.policy.gate"},
 	})
 	if err == nil {
 		t.Fatal("expected a fail-closed error with no configured response")
@@ -24,7 +24,7 @@ func TestMockHITLBrokerFailsClosedByDefault(t *testing.T) {
 func TestMockHITLBrokerApproves(t *testing.T) {
 	broker := NewAutoApprovingBroker()
 	grant, err := broker.RequestPermission(context.Background(), authorization.PermissionRequest{
-		Permission: permissions.PermissionDescriptor{Action: "euclo.policy.gate"},
+		Permission: ucperms.PermissionDescriptor{Action: "euclo.policy.gate"},
 	})
 	if err != nil {
 		t.Fatalf("auto-approve returned error: %v", err)

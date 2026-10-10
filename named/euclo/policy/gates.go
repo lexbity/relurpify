@@ -9,10 +9,10 @@ import (
 
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/governance/authorization"
-	"codeburg.org/lexbit/relurpify/governance/permissions"
 	govpolicy "codeburg.org/lexbit/relurpify/governance/policy"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
 )
 
 const (
@@ -28,7 +28,7 @@ const (
 // PermissionManager captures the subset of authorization.PermissionManager
 // behavior required by GateNode.
 type PermissionManager interface {
-	RequireApproval(ctx context.Context, agentID string, desc permissions.PermissionDescriptor, justification string, scope govpolicy.GrantScope, risk govpolicy.RiskLevel, duration time.Duration) error
+	RequireApproval(ctx context.Context, agentID string, desc ucperms.PermissionDescriptor, justification string, scope govpolicy.GrantScope, risk govpolicy.RiskLevel, duration time.Duration) error
 }
 
 // HITLBroker captures the subset of authorization.HITLBroker behavior required
@@ -179,8 +179,8 @@ func (n *GateNode) handleHITL(ctx context.Context, env *contextdata.Envelope, de
 
 	if n.hitlBroker != nil {
 		req := authorization.PermissionRequest{
-			Permission: permissions.PermissionDescriptor{
-				Type:         permissions.PermissionTypeHITL,
+			Permission: ucperms.PermissionDescriptor{
+				Type:         ucperms.PermissionTypeHITL,
 				Action:       "euclo.policy.gate",
 				Resource:     n.resourceID(env),
 				RequiresHITL: true,
@@ -212,8 +212,8 @@ func (n *GateNode) handleHITL(ctx context.Context, env *contextdata.Envelope, de
 	}
 
 	if n.permissionManager != nil {
-		desc := permissions.PermissionDescriptor{
-			Type:         permissions.PermissionTypeHITL,
+		desc := ucperms.PermissionDescriptor{
+			Type:         ucperms.PermissionTypeHITL,
 			Action:       "euclo.policy.gate",
 			Resource:     n.resourceID(env),
 			RequiresHITL: true,

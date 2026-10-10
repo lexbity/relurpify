@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/governance/permissions"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
 	governanceports "codeburg.org/lexbit/relurpify/governance/ports"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
 )
 
 // TestPermissionManagerCachesEnforceCaps: inserting cap+10 entries into each
@@ -122,8 +122,8 @@ func TestSessionGrantCarriesSessionID(t *testing.T) {
 	m.hitl = &autoApproveHITL{}
 
 	ctx := withPrincipalSession(t, "agent-session-7")
-	desc := permissions.PermissionDescriptor{
-		Type:     permissions.PermissionTypeFilesystem,
+	desc := ucperms.PermissionDescriptor{
+		Type:     ucperms.PermissionTypeFilesystem,
 		Action:   "file:test:grant",
 		Resource: "/tmp/x",
 	}
@@ -141,7 +141,7 @@ func TestSessionGrantCarriesSessionID(t *testing.T) {
 
 func grantKey(action, resource string) string { return action + ":" + resource }
 
-func grantKeyOf(desc permissions.PermissionDescriptor) string {
+func grantKeyOf(desc ucperms.PermissionDescriptor) string {
 	return desc.Action + ":" + desc.Resource
 }
 

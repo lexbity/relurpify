@@ -182,5 +182,3 @@ func TestCompilePredicate_ClosuresArePure(t *testing.T) {
 		}
 	}
 }
-
-

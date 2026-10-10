@@ -6,10 +6,10 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/stretchr/testify/require"
-
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
+	"github.com/stretchr/testify/require"
 )
 
 type scopeSpyTool struct {
@@ -39,7 +39,7 @@ func (t *scopeSpyTool) Execute(_ context.Context, args map[string]any) (*ports.T
 }
 func (t *scopeSpyTool) IsAvailable(_ context.Context) bool { return true }
 func (t *scopeSpyTool) Permissions() ports.ToolPermissions {
-	return ports.ToolPermissions{Permissions: &permissions.PermissionSet{}}
+	return ports.ToolPermissions{Permissions: &ucperms.PermissionSet{}}
 }
 func (t *scopeSpyTool) Tags() []string { return []string{"test"} }
 
@@ -59,7 +59,7 @@ func TestNewRegistry_HasDenyAllScope(t *testing.T) {
 	reg := NewRegistry()
 	require.NotNil(t, reg.sandboxScope, "fresh registry must have non-nil sandbox scope")
 
-	err := reg.sandboxScope.Check(permissions.FileSystemRead, "/tmp/test.txt")
+	err := reg.sandboxScope.Check(ucperms.FileSystemRead, "/tmp/test.txt")
 	require.Error(t, err, "deny-all scope must deny all paths")
 }
 
@@ -76,7 +76,7 @@ func TestRegisterLegacyTool_ReceivesDenyAllScope(t *testing.T) {
 	got := spy.getScope()
 	require.NotNil(t, got, "tool must receive non-nil scope after registration")
 
-	err = got.Check(permissions.FileSystemRead, "/tmp/test.txt")
+	err = got.Check(ucperms.FileSystemRead, "/tmp/test.txt")
 	require.Error(t, err, "registered tool's scope must be deny-all")
 }
 
@@ -96,7 +96,7 @@ func TestAllRegisteredTools_HaveNonNilScope(t *testing.T) {
 	for i, spy := range spies {
 		got := spy.getScope()
 		require.NotNil(t, got, "tool %d must have non-nil scope after registration", i)
-		err := got.Check(permissions.FileSystemRead, "/tmp/test.txt")
+		err := got.Check(ucperms.FileSystemRead, "/tmp/test.txt")
 		require.Error(t, err, "tool %d scope must deny paths", i)
 	}
 }
@@ -109,7 +109,7 @@ func TestUseSandboxScope_ReplacesDenyAllWithVerified(t *testing.T) {
 	require.NoError(t, err)
 
 	require.NotNil(t, spy.getScope())
-	require.Error(t, spy.getScope().Check(permissions.FileSystemRead, "/tmp/test.txt"),
+	require.Error(t, spy.getScope().Check(ucperms.FileSystemRead, "/tmp/test.txt"),
 		"before UseSandboxScope, scope must be deny-all")
 
 	tmp := t.TempDir()
@@ -118,9 +118,9 @@ func TestUseSandboxScope_ReplacesDenyAllWithVerified(t *testing.T) {
 
 	got := spy.getScope()
 	require.NotNil(t, got, "scope must be non-nil after UseSandboxScope")
-	require.NoError(t, got.Check(permissions.FileSystemRead, tmp+"/ok.txt"),
+	require.NoError(t, got.Check(ucperms.FileSystemRead, tmp+"/ok.txt"),
 		"verified scope must allow reads inside workspace")
-	require.Error(t, got.Check(permissions.FileSystemRead, "/tmp/outside.txt"),
+	require.Error(t, got.Check(ucperms.FileSystemRead, "/tmp/outside.txt"),
 		"verified scope must deny reads outside workspace")
 }
 
@@ -137,7 +137,7 @@ func TestUseSandboxScope_ToolsRegisteredAfterAlsoReceiveVerified(t *testing.T) {
 
 	got := spy.getScope()
 	require.NotNil(t, got)
-	require.NoError(t, got.Check(permissions.FileSystemRead, tmp+"/ok.txt"),
+	require.NoError(t, got.Check(ucperms.FileSystemRead, tmp+"/ok.txt"),
 		"tool registered after UseSandboxScope must receive verified scope")
 }
 
@@ -159,7 +159,7 @@ func TestUseSandboxScope_AtomicSwapDoesNotLeaveNilWindow(t *testing.T) {
 	require.NotNil(t, afterSwap)
 	require.NotSame(t, beforeSwap, afterSwap, "scope must be swapped, not the same object")
 
-	require.NoError(t, afterSwap.Check(permissions.FileSystemRead, tmp+"/ok.txt"))
+	require.NoError(t, afterSwap.Check(ucperms.FileSystemRead, tmp+"/ok.txt"))
 }
 
 func TestUseSandboxScope_NilArgNoop(t *testing.T) {

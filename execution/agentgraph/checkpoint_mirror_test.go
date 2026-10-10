@@ -4,8 +4,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/stretchr/testify/require"
-
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/context/contextstream"
 	"codeburg.org/lexbit/relurpify/context/knowledge"
@@ -13,6 +11,7 @@ import (
 	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/governance/identity"
 	"codeburg.org/lexbit/relurpify/telemetry"
+	"github.com/stretchr/testify/require"
 )
 
 // TestCheckpointNodeMirrorFailureIsHonest proves a failed checkpoint mirror is
@@ -56,6 +55,6 @@ func TestCheckpointNodeMirrorFailureIsHonest(t *testing.T) {
 // with a nil receiver and a nil sink.
 func TestCheckpointNodeEmitMirrorFailedNilsafe(t *testing.T) {
 	var n *CheckpointNode
-	n.emitMirrorFailed(context.Background(), "task-1", context.DeadlineExceeded) // nil receiver, must not panic
+	n.emitMirrorFailed(context.Background(), "task-1", context.DeadlineExceeded)                          // nil receiver, must not panic
 	(&CheckpointNode{id: "x"}).emitMirrorFailed(context.Background(), "task-1", context.DeadlineExceeded) // nil sink, must not panic
 }

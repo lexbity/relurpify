@@ -57,7 +57,7 @@ func overlayAgentSpec(base *AgentSpec, bundle *security.Bundle) *AgentSpec {
 			Default:       base.Bash.Default,
 		},
 		NativeToolCalling: base.NativeToolCalling,
-		Logging:          base.Logging,
+		Logging:           base.Logging,
 	}
 
 	for k, v := range base.ToolExecutionPolicy {

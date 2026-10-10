@@ -11,4 +11,3 @@ func cloneStreamSpec(spec *surface.ThoughtRecipeStreamSpec) *surface.ThoughtReci
 	cp := *spec
 	return &cp
 }
-

@@ -8,13 +8,12 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"gopkg.in/yaml.v3"
-
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
-	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/platform/fs"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
+	tea "github.com/charmbracelet/bubbletea"
+	"gopkg.in/yaml.v3"
 )
 
 type sandboxPaneRuntimeFake struct {
@@ -85,12 +84,12 @@ func testSandboxDocument(t *testing.T) *config.Document {
 		},
 		Spec: make(map[string]yaml.Node),
 	}
-	permissionsSpec := permissions.PermissionSet{
-		FileSystem: []permissions.FileSystemPermission{
-			{Action: permissions.FileSystemRead, Path: "/workspace/**"},
-			{Action: permissions.FileSystemWrite, Path: "/workspace/**"},
+	permissionsSpec := ucperms.PermissionSet{
+		FileSystem: []ucperms.FileSystemPermission{
+			{Action: ucperms.FileSystemRead, Path: "/workspace/**"},
+			{Action: ucperms.FileSystemWrite, Path: "/workspace/**"},
 		},
-		Network: []permissions.NetworkPermission{
+		Network: []ucperms.NetworkPermission{
 			{Direction: "egress", Protocol: "tcp", Host: "localhost", Port: 11434},
 		},
 	}
@@ -190,7 +189,7 @@ func TestSandboxPaneCyclesAndPersists(t *testing.T) {
 	if !ok {
 		t.Fatalf("permissions section missing from serialized document")
 	}
-	var ps permissions.PermissionSet
+	var ps ucperms.PermissionSet
 	if err := permNode.Decode(&ps); err != nil {
 		t.Fatalf("decode permissions section: %v", err)
 	}

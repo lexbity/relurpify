@@ -5,18 +5,18 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/stretchr/testify/require"
-
 	"codeburg.org/lexbit/relurpify/governance/permissions"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
+	"github.com/stretchr/testify/require"
 )
 
 func TestPermissionManagerBlocksWorkspaceMetadataAndStateByDefault(t *testing.T) {
 	workspace := t.TempDir()
 	stateDir := filepath.Join(workspace, ".relurpify_state")
-	declared := &permissions.PermissionSet{
-		FileSystem: []permissions.FileSystemPermission{
-			{Action: permissions.FileSystemRead, Path: filepath.ToSlash(filepath.Join(workspace, "**"))},
-			{Action: permissions.FileSystemWrite, Path: filepath.ToSlash(filepath.Join(workspace, "**"))},
+	declared := &ucperms.PermissionSet{
+		FileSystem: []ucperms.FileSystemPermission{
+			{Action: ucperms.FileSystemRead, Path: filepath.ToSlash(filepath.Join(workspace, "**"))},
+			{Action: ucperms.FileSystemWrite, Path: filepath.ToSlash(filepath.Join(workspace, "**"))},
 		},
 	}
 
@@ -31,17 +31,17 @@ func TestPermissionManagerBlocksWorkspaceMetadataAndStateByDefault(t *testing.T)
 		[]string{stateDir},
 	)
 
-	require.Error(t, pm.CheckFileAccess(context.Background(), "agent", permissions.FileSystemRead, filepath.Join(workspace, "relurpify_cfg", "workspace.yaml")))
-	require.Error(t, pm.CheckFileAccess(context.Background(), "agent", permissions.FileSystemRead, filepath.Join(workspace, ".git", "config")))
-	require.Error(t, pm.CheckFileAccess(context.Background(), "agent", permissions.FileSystemWrite, filepath.Join(stateDir, "logs", "agent.log")))
+	require.Error(t, pm.CheckFileAccess(context.Background(), "agent", ucperms.FileSystemRead, filepath.Join(workspace, "relurpify_cfg", "workspace.yaml")))
+	require.Error(t, pm.CheckFileAccess(context.Background(), "agent", ucperms.FileSystemRead, filepath.Join(workspace, ".git", "config")))
+	require.Error(t, pm.CheckFileAccess(context.Background(), "agent", ucperms.FileSystemWrite, filepath.Join(stateDir, "logs", "agent.log")))
 }
 
 func TestPermissionManagerAllowsExplicitStateDirDeclaration(t *testing.T) {
 	workspace := t.TempDir()
 	stateDir := filepath.Join(workspace, ".relurpify_state")
-	declared := &permissions.PermissionSet{
-		FileSystem: []permissions.FileSystemPermission{
-			{Action: permissions.FileSystemWrite, Path: filepath.ToSlash(filepath.Join(stateDir, "**"))},
+	declared := &ucperms.PermissionSet{
+		FileSystem: []ucperms.FileSystemPermission{
+			{Action: ucperms.FileSystemWrite, Path: filepath.ToSlash(filepath.Join(stateDir, "**"))},
 		},
 	}
 
@@ -56,5 +56,5 @@ func TestPermissionManagerAllowsExplicitStateDirDeclaration(t *testing.T) {
 		[]string{stateDir},
 	)
 
-	require.NoError(t, pm.CheckFileAccess(context.Background(), "agent", permissions.FileSystemWrite, filepath.Join(stateDir, "logs", "agent.log")))
+	require.NoError(t, pm.CheckFileAccess(context.Background(), "agent", ucperms.FileSystemWrite, filepath.Join(stateDir, "logs", "agent.log")))
 }

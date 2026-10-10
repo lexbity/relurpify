@@ -5,14 +5,13 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
-
-	relurpishruntime "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
 	"codeburg.org/lexbit/relurpify/app/relurpish/euclotui"
+	relurpishruntime "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
 	"codeburg.org/lexbit/relurpify/app/relurpish/tui"
 	governanceports "codeburg.org/lexbit/relurpify/governance/ports"
 	"codeburg.org/lexbit/relurpify/testsuite/testhelper"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 // TestBootRender_RealAdapter_NoPanic verifies that the TUI boot path renders

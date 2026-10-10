@@ -133,5 +133,3 @@ func SummarizePerformance(cases []CaseReport) PerformanceSummary {
 	}
 	return summary
 }
-
-

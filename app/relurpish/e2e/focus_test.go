@@ -67,10 +67,10 @@ func TestFocusPinReferenceFloor(t *testing.T) {
 			Text: "test",
 			Anchors: []retrieval.AnchorRef{
 				{
-					AnchorID:   "pin:alpha.txt",
-					Term:       alphaPath,
-					Class:      "session_pin",
-					Active:     true,
+					AnchorID: "pin:alpha.txt",
+					Term:     alphaPath,
+					Class:    "session_pin",
+					Active:   true,
 				},
 			},
 		},

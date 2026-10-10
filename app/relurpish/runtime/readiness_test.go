@@ -3,16 +3,15 @@ package runtime
 import (
 	"testing"
 
-	"github.com/stretchr/testify/require"
-
 	"codeburg.org/lexbit/relurpify/execution/session"
+	"github.com/stretchr/testify/require"
 )
 
 func TestReadinessTruthTable(t *testing.T) {
 	tests := []struct {
-		name    string
-		r       session.Readiness
-		want    bool
+		name string
+		r    session.Readiness
+		want bool
 	}{
 		{"both ready, not degraded", session.Readiness{SandboxReady: true, ModelReady: true, Degraded: false}, true},
 		{"sandbox not ready", session.Readiness{SandboxReady: false, ModelReady: true, Degraded: false}, false},
@@ -31,9 +30,9 @@ func TestReadinessTruthTable(t *testing.T) {
 
 func TestDoctorReport_ReadyRequiresBothAxes(t *testing.T) {
 	tests := []struct {
-		name    string
-		report  DoctorReport
-		want    bool
+		name   string
+		report DoctorReport
+		want   bool
 	}{
 		{
 			name: "all ready",

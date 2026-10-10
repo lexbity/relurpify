@@ -9,6 +9,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	policy "codeburg.org/lexbit/relurpify/governance/policy"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
 )
 
 // SetFilesystemGuardRoots configures filesystem roots that must never be
@@ -128,7 +129,7 @@ func resolveCanonicalPath(path string) (string, error) {
 
 // findFilesystemPermission returns the first filesystem permission matching the
 // requested action/path pair.
-func (m *PermissionManager) findFilesystemPermission(action permissions.FileSystemAction, path string) *permissions.FileSystemPermission {
+func (m *PermissionManager) findFilesystemPermission(action ucperms.FileSystemAction, path string) *ucperms.FileSystemPermission {
 	if m == nil || m.declared == nil {
 		return nil
 	}
@@ -140,7 +141,7 @@ func (m *PermissionManager) findFilesystemPermission(action permissions.FileSyst
 	if perm, ok := m.fsPermCache.Get(cacheKey); ok {
 		return perm
 	}
-	var matched *permissions.FileSystemPermission
+	var matched *ucperms.FileSystemPermission
 	protectedRoots := m.filesystemGuardRootsSnapshot()
 	for _, perm := range m.declared.FileSystem {
 		if perm.Action != action {
@@ -254,22 +255,22 @@ func pathWithinRoot(target, root string) bool {
 }
 
 // CheckFileAccess validates filesystem access.
-func (m *PermissionManager) CheckFileAccess(ctx context.Context, agentID string, action permissions.FileSystemAction, path string) error {
+func (m *PermissionManager) CheckFileAccess(ctx context.Context, agentID string, action ucperms.FileSystemAction, path string) error {
 	if m == nil {
 		return errors.New("permission manager missing")
 	}
 	clean, err := m.normalizePath(path)
 	if err != nil {
-		return m.deny(ctx, agentID, permissions.PermissionDescriptor{
-			Type:     permissions.PermissionTypeFilesystem,
+		return m.deny(ctx, agentID, ucperms.PermissionDescriptor{
+			Type:     ucperms.PermissionTypeFilesystem,
 			Action:   string(action),
 			Resource: path,
 		}, fmt.Sprintf("path escapes workspace: %v", err))
 	}
 	perm := m.findFilesystemPermission(action, clean)
 	if perm == nil {
-		desc := permissions.PermissionDescriptor{
-			Type:     permissions.PermissionTypeFilesystem,
+		desc := ucperms.PermissionDescriptor{
+			Type:     ucperms.PermissionTypeFilesystem,
 			Action:   string(action),
 			Resource: clean,
 		}
@@ -282,8 +283,8 @@ func (m *PermissionManager) CheckFileAccess(ctx context.Context, agentID string,
 		}
 	}
 	if perm.HITLRequired {
-		if err := m.ensureGrant(ctx, agentID, permissions.PermissionDescriptor{
-			Type:         permissions.PermissionTypeFilesystem,
+		if err := m.ensureGrant(ctx, agentID, ucperms.PermissionDescriptor{
+			Type:         ucperms.PermissionTypeFilesystem,
 			Action:       string(action),
 			Resource:     perm.Path,
 			RequiresHITL: true,
@@ -291,8 +292,8 @@ func (m *PermissionManager) CheckFileAccess(ctx context.Context, agentID string,
 			return err
 		}
 	}
-	if err := m.log(ctx, agentID, permissions.PermissionDescriptor{
-		Type:     permissions.PermissionTypeFilesystem,
+	if err := m.log(ctx, agentID, ucperms.PermissionDescriptor{
+		Type:     ucperms.PermissionTypeFilesystem,
 		Action:   string(action),
 		Resource: clean,
 	}, "granted", map[string]any{
@@ -314,7 +315,7 @@ func (m *PermissionManager) CheckFileAccess(ctx context.Context, agentID string,
 // disallowed paths rather than block on a HITL request that no human will
 // answer. A path requiring HITL, lacking a static grant, or escaping the
 // workspace returns false.
-func (m *PermissionManager) StaticallyAllowsFileAccess(action permissions.FileSystemAction, path string) bool {
+func (m *PermissionManager) StaticallyAllowsFileAccess(action ucperms.FileSystemAction, path string) bool {
 	if m == nil {
 		return false
 	}
@@ -360,8 +361,8 @@ func (m *PermissionManager) CheckFilePermission(ctx context.Context, agentID, ba
 		if m == nil {
 			return fmt.Errorf("file %s blocked: approval required but permission manager missing", rel)
 		}
-		return m.RequireApproval(ctx, agentID, permissions.PermissionDescriptor{
-			Type:         permissions.PermissionTypeHITL,
+		return m.RequireApproval(ctx, agentID, ucperms.PermissionDescriptor{
+			Type:         ucperms.PermissionTypeHITL,
 			Action:       fmt.Sprintf("file_matrix:%s", action),
 			Resource:     rel,
 			RequiresHITL: true,

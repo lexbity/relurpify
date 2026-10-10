@@ -5,13 +5,12 @@ import (
 	"fmt"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/capability/descriptor"
-
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/capability/descriptor"
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
-	"codeburg.org/lexbit/relurpify/capability/schemacoerce"
 	"codeburg.org/lexbit/relurpify/governance/classification"
+	"codeburg.org/lexbit/relurpify/model"
 )
 
 // CoverageCheckHandler implements the test coverage capability.
@@ -40,9 +39,9 @@ func (h *CoverageCheckHandler) Descriptor(ctx context.Context, env ports.State) 
 		},
 		TrustClass:    agentspec.TrustClassBuiltinTrusted,
 		EffectClasses: []classification.EffectClass{classification.EffectClassProcessSpawn},
-		InputSchema: &schemacoerce.Schema{
+		InputSchema: &model.Schema{
 			Type: "object",
-			Properties: map[string]*schemacoerce.Schema{
+			Properties: map[string]*model.Schema{
 				"package": {
 					Type:        "string",
 					Description: "Go package path to check (default: ./...)",
@@ -53,9 +52,9 @@ func (h *CoverageCheckHandler) Descriptor(ctx context.Context, env ports.State) 
 				},
 			},
 		},
-		OutputSchema: &schemacoerce.Schema{
+		OutputSchema: &model.Schema{
 			Type: "object",
-			Properties: map[string]*schemacoerce.Schema{
+			Properties: map[string]*model.Schema{
 				"success": {
 					Type:        "boolean",
 					Description: "True if coverage run completed",
@@ -67,7 +66,7 @@ func (h *CoverageCheckHandler) Descriptor(ctx context.Context, env ports.State) 
 				"packages": {
 					Type:        "array",
 					Description: "Per-package coverage results",
-					Items:       &schemacoerce.Schema{Type: "object"},
+					Items:       &model.Schema{Type: "object"},
 				},
 				"coverage": {
 					Type:        "object",

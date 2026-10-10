@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"codeburg.org/lexbit/relurpify/telemetry"
+	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
 )
 
 // PermissionManager defines the governance-owned permission surface consumed
@@ -14,7 +15,7 @@ import (
 // The capability-declared PermissionManagerHandle is composed at the app layer
 // and accessed via type assertion where needed (e.g., registry.UsePermissionManager).
 type PermissionManager interface {
-	CheckFileAccess(context.Context, string, FileSystemAction, string) error
+	CheckFileAccess(context.Context, string, ucperms.FileSystemAction, string) error
 	SetDecisionSink(telemetry.DecisionSink)
 	DefaultPolicy() string
 }

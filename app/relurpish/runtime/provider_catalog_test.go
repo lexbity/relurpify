@@ -37,9 +37,9 @@ func TestProviderDefinitionFromResolved_MapsAllFields(t *testing.T) {
 
 func TestConverterCarriesHints(t *testing.T) {
 	r := &model.ResolvedProvider{
-		Name:      "custom",
-		Kind:      "ollama",
-		Endpoint:  "http://localhost:11434",
+		Name:        "custom",
+		Kind:        "ollama",
+		Endpoint:    "http://localhost:11434",
 		Description: "Custom provider description",
 		SetupHint:   "Custom setup instructions",
 	}
@@ -176,7 +176,7 @@ func TestProviderCatalogResolve_NativeToolCalling(t *testing.T) {
 		{Name: "lmstudio", Kind: "lmstudio", Endpoint: "http://localhost:1234", NativeToolCalling: false},
 	}
 	reg, _ := buildProviderRegistry(providers)
-	
+
 	def, found := reg.Resolve("ollama")
 	require.True(t, found)
 	require.True(t, def.NativeToolCalling)

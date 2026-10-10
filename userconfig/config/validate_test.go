@@ -1,12 +1,11 @@
 package config
 
 import (
+	"codeburg.org/lexbit/relurpify/testsuite/testhelper"
+	"codeburg.org/lexbit/relurpify/userconfig/securefile"
 	"os"
 	"path/filepath"
 	"testing"
-
-	"codeburg.org/lexbit/relurpify/platform/fs"
-	"codeburg.org/lexbit/relurpify/testsuite/testhelper"
 )
 
 func TestValidateWorkspaceTreeCleanRepo(t *testing.T) {
@@ -43,7 +42,7 @@ func TestValidateWorkspaceTreeMissingWorkspaceYaml(t *testing.T) {
 func TestValidateWorkspaceTreeBadPolicy(t *testing.T) {
 	workspace := writeMinimalValidWorkspace(t)
 	policyPath := filepath.Join(workspace, "relurpify_cfg", "security", "sandbox.policy.yaml")
-	_ = fs.WriteFileSecure(policyPath, []byte("schema: relurpify/policy/sandbox/v1\n\nprotected_paths: [invalid\n"))
+	_ = securefile.WriteFileSecure(policyPath, []byte("schema: relurpify/policy/sandbox/v1\n\nprotected_paths: [invalid\n"))
 	report := ValidateWorkspaceTree(workspace)
 	if !report.HasErrors() {
 		t.Fatal("expected error for malformed policy")
