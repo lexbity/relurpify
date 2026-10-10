@@ -228,10 +228,13 @@ func BuildDoctorReport(ctx context.Context, cfg Config, secrets config.Secrets) 
 		report.ModelProfilesError = "workspace config bundle unavailable"
 	}
 	// Workspace and disk probes (folded from ayenitd/probe.go in S7; the
-	// inference backend is probed in the dedicated block above, FR-8).
+	// inference backend is probed in the dedicated block above, FR-8), plus
+	// the runner dependency (S9): read-only — boot's supervisor owns the
+	// spawn decision; a degraded runner is non-blocking (degraded-boot).
 	var deps []DependencyStatus
 	deps = append(deps, probeWorkspaceDirectory(cfg.Workspace))
 	deps = append(deps, probeDiskSpace(cfg.Workspace, 256*1024*1024))
+	deps = append(deps, probeRunner(config.DefaultWorkspaceStateDir(cfg.Workspace)))
 	deps = append(deps, DependencyStatus{
 		Name:      "starter-templates",
 		Required:  true,
@@ -746,4 +749,36 @@ func probeDiskSpace(workspace string, requiredBytes int64) DependencyStatus {
 	}
 	return DependencyStatus{Name: "disk_space", Required: false, Available: true,
 		Details: fmt.Sprintf("sufficient disk space available (%d MB)", available/(1024*1024))}
+}
+
+// probeRunner reports the service-runner dependency from status.json and a
+// PID liveness probe: attached (fresh heartbeat, live PID), degraded
+// (stale heartbeat / dead PID / no status), or never-spawned. It never
+// blocks boot and never kills a hung runner (Q16).
+func probeRunner(stateDir string) DependencyStatus {
+	status, ok := readRunnerStatus(stateDir)
+	switch {
+	case !ok:
+		return DependencyStatus{
+			Name: "runner", Required: false, Available: false, Blocking: false,
+			Details: "no runner status (not spawned yet)",
+		}
+	case runnerAlive(status, time.Now()):
+		return DependencyStatus{
+			Name: "runner", Required: false, Available: true,
+			Details: fmt.Sprintf("attached (runner %s, pid %d)", status.RunnerID, status.PID),
+		}
+	default:
+		reason := "heartbeat stale"
+		if status.Draining {
+			reason = "runner draining"
+		} else if !processAlive(status.PID) {
+			reason = "runner process is gone"
+		}
+		return DependencyStatus{
+			Name: "runner", Required: false, Available: false, Blocking: false,
+			Details: fmt.Sprintf("degraded: %s (last heartbeat %s)",
+				reason, status.HeartbeatAt.Format(time.RFC3339)),
+		}
+	}
 }

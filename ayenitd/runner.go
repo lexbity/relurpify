@@ -25,19 +25,20 @@ import (
 // RunnerConfig carries the runner's startup parameters (mirrors the main.go
 // flags; the runner reads no process env directly).
 type RunnerConfig struct {
-	Workspace    string        // workspace root the handlers operate on
-	StateDir     string        // <state>/jobs/{spool,status.json,logs}
-	StoreDir     string        // Badger directory (default <state>/jobs/store)
-	Queues       []string      // claim order
-	Workers      int           // executor worker pool (default 2)
-	PollEvery    time.Duration // spool poll interval (default 500 ms)
-	Heartbeat    time.Duration // status heartbeat (default 5 s)
-	Grace        time.Duration // shutdown handler grace (default 20 s)
-	RunnerID     string        // instance identity (default hostname-pid)
-	Tel          telemetry.Telemetry
-	IndexManager *ast.IndexManager // knowledge.bootstrap handler dependency
-	ChunkStore   *knowledge.ChunkStore
-	Staleness    *knowledge.StalenessManager
+	Workspace       string        // workspace root the handlers operate on
+	StateDir        string        // <state>/jobs/{spool,status.json,logs}
+	StoreDir        string        // Badger directory (default <state>/jobs/store)
+	Queues          []string      // claim order
+	Workers         int           // executor worker pool (default 2)
+	RefreshInterval time.Duration // scheduled knowledge.refresh submission (0 = off, FR-23)
+	PollEvery       time.Duration // spool poll interval (default 500 ms)
+	Heartbeat       time.Duration // status heartbeat (default 5 s)
+	Grace           time.Duration // shutdown handler grace (default 20 s)
+	RunnerID        string        // instance identity (default hostname-pid)
+	Tel             telemetry.Telemetry
+	IndexManager    *ast.IndexManager // knowledge.bootstrap handler dependency
+	ChunkStore      *knowledge.ChunkStore
+	Staleness       *knowledge.StalenessManager
 }
 
 // Run opens the store, supervises the three runner-internal services, and

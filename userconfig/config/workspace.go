@@ -30,6 +30,7 @@ type WorkspaceConfig struct {
 	Logging   WorkspaceLogging   `yaml:"logging"`
 	Audit     WorkspaceAudit     `yaml:"audit"`
 	Telemetry WorkspaceTelemetry `yaml:"telemetry"`
+	Runner    RunnerConfigV1     `yaml:"runner"`
 
 	SourcePath   string                  `yaml:"-"`
 	Workspace    string                  `yaml:"-"`

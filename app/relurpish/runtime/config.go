@@ -22,6 +22,8 @@ const AgentLabelEuclo = "euclo"
 // tests or future headless workflows.
 type Config struct {
 	Workspace                  string
+	RunnerExecutableDir        string        // directory holding relurpify-runner (empty: next to this binary, then PATH)
+	RunnerRefreshInterval      time.Duration // scheduled knowledge.refresh cadence (0 = off)
 	AgentsDir                  string
 	SharedRoot                 string
 	MemoryPath                 string

@@ -28,6 +28,7 @@ func main() {
 	stateDir := flag.String("state-dir", "", "runtime state dir (spool, status.json, logs, jobs store)")
 	queues := flag.String("queues", "knowledge", "comma-separated claim order")
 	workers := flag.Int("workers", 2, "executor worker count")
+	refreshInterval := flag.Duration("refresh-interval", 0, "scheduled knowledge.refresh submission cadence (0 = off)")
 	flag.Parse()
 
 	if *workspace == "" || *stateDir == "" {
@@ -46,16 +47,24 @@ func main() {
 		os.Exit(1)
 	}
 
-	cfg := ayenitd.RunnerConfig{
-		Workspace: *workspace,
-		StateDir:  *stateDir,
-		Queues:    strings.Split(*queues, ","),
-		Workers:   *workers,
-		Tel:       tel,
+	deps, err := ayenitd.BuildKnowledgeRunnerDeps(ctx, *workspace, *stateDir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "relurpify-runner: %v\n", err)
+		os.Exit(1)
 	}
+	defer deps.Close()
 
-	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
-	defer cancel()
+	cfg := ayenitd.RunnerConfig{
+		Workspace:       *workspace,
+		StateDir:        *stateDir,
+		Queues:          strings.Split(*queues, ","),
+		Workers:         *workers,
+		RefreshInterval: *refreshInterval,
+		Tel:             tel,
+		IndexManager:    deps.IndexManager,
+		ChunkStore:      deps.ChunkStore,
+		Staleness:       deps.Staleness,
+	}
 
 	if err := ayenitd.Run(ctx, cfg); err != nil {
 		fmt.Fprintf(os.Stderr, "relurpify-runner: %v\n", err)

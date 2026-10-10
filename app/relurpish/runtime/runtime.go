@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/app/envcomposition"
+	"codeburg.org/lexbit/relurpify/ayenitd"
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	aconvert "codeburg.org/lexbit/relurpify/capability/agentspec/convert"
 	registry "codeburg.org/lexbit/relurpify/capability/registry"
@@ -34,6 +35,7 @@ import (
 	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/governance/policy"
+	"codeburg.org/lexbit/relurpify/jobs"
 	"codeburg.org/lexbit/relurpify/model"
 	"codeburg.org/lexbit/relurpify/named/euclo"
 	"codeburg.org/lexbit/relurpify/named/euclo/euclocontract"
@@ -77,6 +79,14 @@ type Runtime struct {
 	// coordinator is the run quiesce unit: Runtime.Close drains/cancels/reaps
 	// every registered run through it before tearing down stores and sinks.
 	coordinator *RunCoordinator
+
+	// runnerStop is the spawned runner child's quiesce step (S9): registered
+	// by the supervisor when this runtime spawned the runner, nil when
+	// attached. Close runs it after the app's own services stop (S9 r2).
+	runnerStop func()
+	// runnerClient submits maintenance jobs to the runner via the spool —
+	// the app's only channel to the runner (never the jobs store).
+	runnerClient *ayenitd.SpoolClient
 
 	// sessionID is the process-scoped correlation session created with the
 	// runtime. It is stamped onto every turn's RunContext and mirrored onto the
@@ -548,17 +558,64 @@ func buildRuntime(ctx context.Context, cfg Config, secrets config.Secrets) (*Run
 	rt.setAgent(agent)
 	emitAgentStartupEvent(ctx, env.EventLog, "local", registration.ID, cfg.AgentLabel(), agent)
 	emitContractResolvedEvent(ctx, env.EventLog, "local", registration.ID, cfg.AgentLabel(), docSnapshot)
-	// App-side composition registers the knowledge bootstrap service
-	// directly on the session (app → context is the legal edge; the
-	// ayenitd adapter that used to carry it is gone).
-	sess.RegisterService("knowledge.bootstrap", knowledge.NewBootstrapService(
-		env.IndexManager,
-		env.KnowledgeEvents,
-		rt.Workspace.Telemetry,
-		cfg.Workspace,
-		nil,
-		nil,
-	))
+	// S9 dual-path bootstrap: when the runner section is enabled, supervise
+	// the runner (attach/spawn/degrade). A healthy runner receives the
+	// bootstrap SUBMISSION via the spool and the in-process service is not
+	// registered; a degraded or disabled runner falls back to the in-process
+	// bootstrap service (the same moved context/knowledge code — honestly
+	// dual-path, not a shim).
+	stateDir := config.DefaultWorkspaceStateDir(cfg.Workspace)
+	runnerSettings, runnerErr := runnerSettingsFor(cfg.ConfigPath)
+	if runnerErr != nil {
+		_ = rt.Close(ctx)
+		return nil, fmt.Errorf("resolve runner settings: %w", runnerErr)
+	}
+	if runnerSettings.Enabled {
+		status, stop, err := SuperviseRunner(ctx, RunnerSupervisorConfig{
+			Workspace:       cfg.Workspace,
+			StateDir:        stateDir,
+			ExecutableDir:   cfg.RunnerExecutableDir,
+			RefreshInterval: cfg.RunnerRefreshInterval,
+			Tel:             rt.Workspace.Telemetry,
+		})
+		if err != nil {
+			_ = rt.Close(ctx)
+			return nil, fmt.Errorf("supervise runner: %w", err)
+		}
+		rt.runnerStop = stop
+		if status.Available {
+			client, clientErr := ayenitd.NewSpoolClient(stateDir, "relurpish", cfg.Workspace)
+			if clientErr == nil {
+				if _, submitErr := client.Submit(ctx, jobs.Spec{
+					Kind:    "knowledge.bootstrap",
+					Payload: map[string]any{"workspace_root": cfg.Workspace},
+					Queue:   runnerSettings.Queues[0],
+				}); submitErr == nil {
+					rt.runnerClient = client
+				}
+			}
+		}
+		if status.Available && rt.runnerClient != nil && runnerSettings.RefreshInterval > 0 {
+			// FR-23: the scheduler's production consumer — the runner-side
+			// scheduled submission re-issues knowledge.refresh on the
+			// configured cadence via the spool (config default 0 = off).
+			sess.RegisterService("knowledge.refresh-scheduler", newRefreshSchedulerService(
+				runnerSettings.RefreshInterval, runnerSettings.Queues[0], rt.runnerClient,
+			))
+		}
+	}
+	if !runnerSettings.Enabled || rt.runnerClient == nil {
+		// Degraded/disabled fallback: in-process bootstrap (same moved
+		// context/knowledge service).
+		sess.RegisterService("knowledge.bootstrap", knowledge.NewBootstrapService(
+			env.IndexManager,
+			env.KnowledgeEvents,
+			rt.Workspace.Telemetry,
+			cfg.Workspace,
+			nil,
+			nil,
+		))
+	}
 	if err := sess.StartServices(ctx); err != nil {
 		_ = rt.Close(ctx)
 		return nil, fmt.Errorf("start workspace services: %w", err)

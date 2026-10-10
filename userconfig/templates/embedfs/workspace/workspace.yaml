@@ -23,3 +23,14 @@ audit:
 
 telemetry:
   enabled: false
+
+runner:
+  enabled: true
+  workers: 2
+  queues:
+    - knowledge
+  poll_interval: 500ms
+  heartbeat: 5s
+  # refresh_interval: the scheduled knowledge.refresh submission cadence.
+  # 0 (default) = off: absent, not stubbed.
+  refresh_interval: 0s
