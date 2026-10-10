@@ -96,18 +96,21 @@ func (s Spec) Valid() error {
 }
 
 type Job struct {
-	ID          string            `json:"id"`
-	Spec        Spec              `json:"spec"`
-	State       State             `json:"state"`
-	Attempt     int               `json:"attempt,omitempty"`
-	CreatedAt   time.Time         `json:"created_at"`
-	UpdatedAt   time.Time         `json:"updated_at,omitempty"`
-	CompletedAt time.Time         `json:"completed_at,omitempty"`
-	LastError   string            `json:"last_error,omitempty"`
-	Labels      map[string]string `json:"labels,omitempty"`
-	Tags        []string          `json:"tags,omitempty"`
-	Metadata    map[string]any    `json:"metadata,omitempty"`
-	ResumeToken string            `json:"resume_token,omitempty"`
+	ID          string    `json:"id"`
+	Spec        Spec      `json:"spec"`
+	State       State     `json:"state"`
+	Attempt     int       `json:"attempt,omitempty"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at,omitempty"`
+	CompletedAt time.Time `json:"completed_at,omitempty"`
+	// NextAttemptAt is the earliest retry time after a failed attempt
+	// (zero = due now). Claim re-checks it from the canonical record.
+	NextAttemptAt time.Time         `json:"next_attempt_at,omitempty"`
+	LastError     string            `json:"last_error,omitempty"`
+	Labels        map[string]string `json:"labels,omitempty"`
+	Tags          []string          `json:"tags,omitempty"`
+	Metadata      map[string]any    `json:"metadata,omitempty"`
+	ResumeToken   string            `json:"resume_token,omitempty"`
 }
 
 func (j Job) Valid() error {

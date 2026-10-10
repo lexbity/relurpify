@@ -1,4 +1,4 @@
-package ayenitd
+package knowledge
 
 import (
 	"context"
@@ -7,15 +7,19 @@ import (
 	"sync"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/context/knowledge"
 	"codeburg.org/lexbit/relurpify/context/knowledge/ast"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
-// WorkspaceBootstrapService runs a one-shot workspace indexing/bootstrap pass.
-type WorkspaceBootstrapService struct {
+// BootstrapService runs a one-shot workspace indexing/bootstrap pass. It is
+// the knowledge-domain service the workspace session registers directly
+// (S7): the ayenitd adapter that used to host it is gone. Its degraded-boot
+// semantics are the pattern of record — an operational indexing failure
+// degrades knowledge (log + boot.degraded telemetry), it never aborts boot;
+// cancellation alone propagates as lifecycle.
+type BootstrapService struct {
 	IndexManager   *ast.IndexManager
-	EventBus       *knowledge.EventBus
+	EventBus       *EventBus
 	Telemetry      telemetry.Telemetry
 	WorkspaceRoot  string
 	IndexWorkspace func(context.Context) error
@@ -25,7 +29,7 @@ type WorkspaceBootstrapService struct {
 	cancel context.CancelFunc
 }
 
-func (s *WorkspaceBootstrapService) Start(ctx context.Context) error {
+func (s *BootstrapService) Start(ctx context.Context) error {
 	if s == nil || s.IndexManager == nil {
 		return nil
 	}
@@ -58,7 +62,7 @@ func (s *WorkspaceBootstrapService) Start(ctx context.Context) error {
 		indexedFiles = stats.TotalFiles
 	}
 	if s.EventBus != nil {
-		s.EventBus.EmitBootstrapComplete(knowledge.BootstrapCompletePayload{
+		s.EventBus.EmitBootstrapComplete(BootstrapCompletePayload{
 			WorkspaceRoot: s.WorkspaceRoot,
 			IndexedFiles:  indexedFiles,
 		})
@@ -66,7 +70,7 @@ func (s *WorkspaceBootstrapService) Start(ctx context.Context) error {
 	return nil
 }
 
-func (s *WorkspaceBootstrapService) Stop() error {
+func (s *BootstrapService) Stop() error {
 	if s == nil {
 		return nil
 	}
@@ -80,7 +84,7 @@ func (s *WorkspaceBootstrapService) Stop() error {
 	return nil
 }
 
-func (s *WorkspaceBootstrapService) clearCancel() {
+func (s *BootstrapService) clearCancel() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.cancel = nil
@@ -88,7 +92,7 @@ func (s *WorkspaceBootstrapService) clearCancel() {
 
 // emitBootDegraded surfaces an indexing failure as a boot.degraded warning on
 // the workspace health instead of aborting boot.
-func (s *WorkspaceBootstrapService) emitBootDegraded(err error) {
+func (s *BootstrapService) emitBootDegraded(err error) {
 	if s == nil || s.Telemetry == nil || err == nil {
 		return
 	}
@@ -102,4 +106,18 @@ func (s *WorkspaceBootstrapService) emitBootDegraded(err error) {
 			"error":   err.Error(),
 		},
 	})
+}
+
+// NewBootstrapService constructs the workspace bootstrap service from its
+// explicit dependencies. IndexManager nil yields an inert service (Start is
+// a no-op), which is how embedded scopes and unit tests stay dormant.
+func NewBootstrapService(indexManager *ast.IndexManager, eventBus *EventBus, tel telemetry.Telemetry, workspaceRoot string, indexWorkspace func(context.Context) error, loadStats func() (*ast.IndexStats, error)) *BootstrapService {
+	return &BootstrapService{
+		IndexManager:   indexManager,
+		EventBus:       eventBus,
+		Telemetry:      tel,
+		WorkspaceRoot:  workspaceRoot,
+		IndexWorkspace: indexWorkspace,
+		LoadStats:      loadStats,
+	}
 }

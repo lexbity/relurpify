@@ -1,4 +1,4 @@
-package ayenitd
+package knowledge
 
 import (
 	"context"
@@ -19,8 +19,8 @@ type bootstrapTelemetry struct {
 
 func (b *bootstrapTelemetry) Emit(ev telemetry.Event) { b.events = append(b.events, ev) }
 
-func TestWorkspaceBootstrapServiceStopCancelsInProgressScan(t *testing.T) {
-	svc := &WorkspaceBootstrapService{
+func TestBootstrapServiceStopCancelsInProgressScan(t *testing.T) {
+	svc := &BootstrapService{
 		IndexManager: &ast.IndexManager{},
 		IndexWorkspace: func(ctx context.Context) error {
 			<-ctx.Done()
@@ -45,16 +45,16 @@ func TestWorkspaceBootstrapServiceStopCancelsInProgressScan(t *testing.T) {
 	}
 }
 
-func TestWorkspaceBootstrapServiceStopNoop(t *testing.T) {
-	require.NoError(t, (&WorkspaceBootstrapService{}).Stop())
-	require.NoError(t, (&WorkspaceBootstrapService{IndexManager: &ast.IndexManager{}}).Stop())
+func TestBootstrapServiceStopNoop(t *testing.T) {
+	require.NoError(t, (&BootstrapService{}).Stop())
+	require.NoError(t, (&BootstrapService{IndexManager: &ast.IndexManager{}}).Stop())
 }
 
 // TestWorkspaceBootstrapIndexFailureDegradesNotAborts proves an operational
 // indexing failure is a boot.degraded warning, never a boot abort.
 func TestWorkspaceBootstrapIndexFailureDegradesNotAborts(t *testing.T) {
 	rec := &bootstrapTelemetry{}
-	svc := &WorkspaceBootstrapService{
+	svc := &BootstrapService{
 		IndexManager:   &ast.IndexManager{},
 		Telemetry:      rec,
 		IndexWorkspace: func(context.Context) error { return errors.New("scan failed") },

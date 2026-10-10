@@ -97,7 +97,8 @@ type CompiledPolicy struct {
 }
 
 // WorkspaceConfig provides configuration for workspace environment construction.
-// This is extracted from ayenitd.WorkspaceConfig to avoid ayenitd dependency
+// This is the session-owned workspace environment configuration (carried
+// here from the dissolved ayenitd adapter in S7).
 // while app/envcomposition takes over concrete app wiring.
 type WorkspaceConfig struct {
 	Workspace                  string

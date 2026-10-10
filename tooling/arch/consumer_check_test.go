@@ -131,3 +131,22 @@ func TestCheckConsumers_allowlist(t *testing.T) {
 		t.Errorf("expected allowlist to exempt consumer violation, got %v", violations)
 	}
 }
+
+func TestCheckConsumers_InterimUnwiredExempt(t *testing.T) {
+	// The interim-unwired packages (ayenitd charter-only between S7 and S8;
+	// context/jobsstore awaiting its runner consumer) are exempt — and the
+	// exemption is package-exact, not a prefix.
+	pkgs := []GoPackage{
+		{ImportPath: ModulePath + "/ayenitd", Name: "ayenitd", GoFiles: []string{"doc.go"}},
+		{ImportPath: ModulePath + "/context/jobsstore", Name: "jobsstore", GoFiles: []string{"jobsstore.go"}},
+		// A look-alike is NOT exempt.
+		{ImportPath: ModulePath + "/context/jobsstoreutil", Name: "jobsstoreutil", GoFiles: []string{"x.go"}},
+	}
+	violations := CheckConsumers(pkgs, Allowlist{})
+	if len(violations) != 1 {
+		t.Fatalf("expected only the look-alike flagged, got %v", violations)
+	}
+	if want := "consumer: " + ModulePath + "/context/jobsstoreutil has no importers"; violations[0] != want {
+		t.Errorf("want %q, got %q", want, violations[0])
+	}
+}

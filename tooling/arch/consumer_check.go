@@ -15,6 +15,18 @@ var docAnchors = map[string]bool{ //nolint:gochecknoglobals // immutable exempti
 	ModulePath + "/userconfig":   true,
 }
 
+// interimUnwired lists packages in a bounded interim-unwired state (Q12):
+// declared by the spec, consumed by the next slice, exemption removed then.
+//   - ayenitd: the runner charter doc only between S7 (the bootstrap service
+//     relocated to context/knowledge; browser/git-watcher deleted in S5) and
+//     S8 (the runner binary lands).
+//   - context/jobsstore: the durable-queue substrate, conformance-proven in
+//     S7, consumed by the runner in S8.
+var interimUnwired = map[string]bool{ //nolint:gochecknoglobals // immutable interim-exemption table
+	ModulePath + "/ayenitd":           true,
+	ModulePath + "/context/jobsstore": true,
+}
+
 // pathConsumedFixtures lists directory-prefixes whose packages are consumed
 // by the test harness through the filesystem (compiled/executed by path),
 // never by import. They are testdata, not library code.
@@ -53,7 +65,7 @@ func CheckConsumers(pkgs []GoPackage, allowlist Allowlist) []string {
 		if pkg.OnlyTestGoFiles {
 			continue
 		}
-		if docAnchors[pkg.ImportPath] {
+		if docAnchors[pkg.ImportPath] || interimUnwired[pkg.ImportPath] {
 			continue
 		}
 		rel := TrimModulePrefix(pkg.ImportPath)

@@ -145,3 +145,52 @@ func TestNoopSubmitter(t *testing.T) {
 		t.Errorf("noop submitter state = %s, want queued", job.State)
 	}
 }
+
+func TestNextBackoff(t *testing.T) {
+	base := Spec{}
+	cases := []struct {
+		name    string
+		spec    Spec
+		attempt int
+		want    time.Duration
+	}{
+		{"default 30s base", Spec{}, 1, 30 * time.Second},
+		{"second attempt doubles", Spec{}, 2, 60 * time.Second},
+		{"third attempt quadruples", Spec{}, 3, 120 * time.Second},
+		{"both caps: 32x base is 16m, 5m cap wins", Spec{}, 99, 5 * time.Minute},
+		{"attempt 4 is 8x base = 4m, under 5m", Spec{}, 4, 4 * time.Minute},
+		{"attempt 5 would be 16x base, clamped to 5m", Spec{}, 5, 5 * time.Minute},
+		{"explicit base honored", Spec{Backoff: time.Second}, 1, time.Second},
+		{"explicit base doubles", Spec{Backoff: time.Second}, 2, 2 * time.Second},
+		{"explicit base caps at 32x", Spec{Backoff: time.Second}, 42, 32 * time.Second},
+		{"zero attempt treated as first", Spec{}, 0, 30 * time.Second},
+		{"negative attempt treated as first", Spec{}, -3, 30 * time.Second},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := NextBackoff(tc.spec, tc.attempt); got != tc.want {
+				t.Fatalf("NextBackoff(%+v, %d) = %v, want %v", tc.spec, tc.attempt, got, tc.want)
+			}
+		})
+	}
+	_ = base
+}
+
+func TestSpecValid_NextAttemptSemantics(t *testing.T) {
+	// NextAttemptAt lives on Job, not Spec; Spec.Valid is unchanged in its
+	// requirements but the zero-time semantics are pinned here via Job.
+	j := Job{
+		ID:        "j1",
+		Spec:      Spec{Kind: "k", Payload: map[string]any{}, Queue: "q"},
+		State:     StateQueued,
+		CreatedAt: time.Now(),
+	}
+	// Zero NextAttemptAt = due now; Valid must accept it.
+	if err := j.Valid(); err != nil {
+		t.Fatalf("zero NextAttemptAt must be valid: %v", err)
+	}
+	j.NextAttemptAt = time.Now().Add(time.Minute)
+	if err := j.Valid(); err != nil {
+		t.Fatalf("future NextAttemptAt must be valid: %v", err)
+	}
+}

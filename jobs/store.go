@@ -23,6 +23,13 @@ type Store interface {
 	Load(ctx context.Context, id string) (*Job, error)
 	List(ctx context.Context, q Query) ([]Job, error)
 
+	// Claim atomically transitions up to limit due queued jobs
+	// (state == queued and NextAttemptAt due) to running for the named
+	// worker. Queues are honored in the order given; within a queue,
+	// priority descending, then FIFO by CreatedAt (Q14). Exactly-once
+	// claims: a job claimed by one worker is never returned to another.
+	Claim(ctx context.Context, worker string, queues []string, limit int) ([]Job, error)
+
 	AppendEvent(ctx context.Context, e Event) error
 	Events(ctx context.Context, jobID string) ([]Event, error)
 

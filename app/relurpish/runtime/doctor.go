@@ -6,12 +6,13 @@ import (
 	"fmt"
 	"golang.org/x/sync/errgroup"
 	"io/fs"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/ayenitd"
 	capabilityagentspec "codeburg.org/lexbit/relurpify/capability/agentspec"
 	capabilitydescriptor "codeburg.org/lexbit/relurpify/capability/descriptor"
 	platformfs "codeburg.org/lexbit/relurpify/capability/fs"
@@ -226,42 +227,11 @@ func BuildDoctorReport(ctx context.Context, cfg Config, secrets config.Secrets) 
 	default:
 		report.ModelProfilesError = "workspace config bundle unavailable"
 	}
-	// Convert ayenitd probe results
-	// Map available Config fields to ayenitd.WorkspaceConfig.
-	// Some fields may be missing in Config; use zero values.
-	ayenitdCfg := ayenitd.WorkspaceConfig{
-		Workspace:                  cfg.Workspace,
-		InferenceProvider:          cfg.InferenceProvider,
-		InferenceEndpoint:          cfg.InferenceEndpoint,
-		InferenceModel:             cfg.InferenceModel,
-		InferenceTapePath:          cfg.InferenceTapePath,
-		InferenceNativeToolCalling: cfg.InferenceNativeToolCalling,
-		ConfigPath:                 cfg.ConfigPath,
-		AgentsDir:                  cfg.AgentsDir,
-		AgentName:                  cfg.AgentName,
-		LogPath:                    cfg.LogPath,
-		TelemetryPath:              cfg.TelemetryPath,
-		EventsPath:                 cfg.EventsPath,
-		MemoryPath:                 cfg.MemoryPath,
-		HITLTimeout:                cfg.HITLTimeout,
-		AuditLimit:                 cfg.AuditLimit,
-		SandboxBackend:             cfg.SandboxBackend,
-		Sandbox:                    cfg.Sandbox,
-	}
-	ayenitdResults := ayenitd.ProbeWorkspace(ctx, ayenitdCfg, llm.ProviderSecrets{APIKey: secrets.LLMAPIKey}, nil)
+	// Workspace and disk probes (folded from ayenitd/probe.go in S7; the
+	// inference backend is probed in the dedicated block above, FR-8).
 	var deps []DependencyStatus
-	for _, r := range ayenitdResults {
-		if r.Name == "inference_backend" {
-			continue // shown in dedicated Inference backend block (FR-8)
-		}
-		deps = append(deps, DependencyStatus{
-			Name:      r.Name,
-			Required:  r.Required,
-			Available: r.OK,
-			Blocking:  r.Required && !r.OK,
-			Details:   r.Message,
-		})
-	}
+	deps = append(deps, probeWorkspaceDirectory(cfg.Workspace))
+	deps = append(deps, probeDiskSpace(cfg.Workspace, 256*1024*1024))
 	deps = append(deps, DependencyStatus{
 		Name:      "starter-templates",
 		Required:  true,
@@ -733,4 +703,47 @@ func checkCanonicalRecipes(workspace string) recipesCheckResult {
 	}
 	result.ready = true
 	return result
+}
+
+// probeWorkspaceDirectory verifies the workspace root exists and is readable.
+func probeWorkspaceDirectory(workspace string) DependencyStatus {
+	info, err := os.Stat(workspace)
+	if err != nil {
+		return DependencyStatus{Name: "workspace_directory", Required: true, Available: false, Blocking: true,
+			Details: fmt.Sprintf("workspace not found: %s", err)}
+	}
+	if !info.IsDir() {
+		return DependencyStatus{Name: "workspace_directory", Required: true, Available: false, Blocking: true,
+			Details: "workspace path is not a directory"}
+	}
+	f, err := os.Open(filepath.Clean(workspace))
+	if err != nil {
+		return DependencyStatus{Name: "workspace_directory", Required: true, Available: false, Blocking: true,
+			Details: fmt.Sprintf("workspace not readable: %s", err)}
+	}
+	_ = f.Close()
+	return DependencyStatus{Name: "workspace_directory", Required: true, Available: true,
+		Details: "workspace directory exists and is readable"}
+}
+
+// probeDiskSpace verifies the workspace volume has at least requiredBytes free.
+func probeDiskSpace(workspace string, requiredBytes int64) DependencyStatus {
+	var stat syscall.Statfs_t
+	err := syscall.Statfs(workspace, &stat)
+	if err != nil {
+		return DependencyStatus{Name: "disk_space", Required: false, Available: true,
+			Details: fmt.Sprintf("cannot check disk space: %s (assuming sufficient)", err)}
+	}
+	if stat.Bsize < 0 || (stat.Bsize > 0 && stat.Bavail > math.MaxUint64/uint64(stat.Bsize)) {
+		return DependencyStatus{Name: "disk_space", Required: false, Available: true,
+			Details: "cannot check disk space: overflow (assuming sufficient)"}
+	}
+	available := stat.Bavail * uint64(stat.Bsize)
+	if requiredBytes < 0 || uint64(requiredBytes) > available {
+		return DependencyStatus{Name: "disk_space", Required: false, Available: false,
+			Details: fmt.Sprintf("insufficient disk space: %d MB available, need at least %d MB",
+				available/(1024*1024), requiredBytes/(1024*1024))}
+	}
+	return DependencyStatus{Name: "disk_space", Required: false, Available: true,
+		Details: fmt.Sprintf("sufficient disk space available (%d MB)", available/(1024*1024))}
 }

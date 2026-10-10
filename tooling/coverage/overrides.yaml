@@ -304,3 +304,7 @@ packages:
   codeburg.org/lexbit/relurpify/userconfig/tools/manifest:
     floor: 0
     reason: no unit tests yet; floor ratchets up from 0 as tests land
+
+  codeburg.org/lexbit/relurpify/context/jobsstore:
+    floor: 85
+    reason: NFR-7 (S7) — the durable-queue substrate is safety-critical; floor pinned at 85

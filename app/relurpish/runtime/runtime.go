@@ -14,13 +14,13 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/app/envcomposition"
-	"codeburg.org/lexbit/relurpify/ayenitd"
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	aconvert "codeburg.org/lexbit/relurpify/capability/agentspec/convert"
 	registry "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/cognitionzoo/paradigm"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
+	"codeburg.org/lexbit/relurpify/context/knowledge"
 	"codeburg.org/lexbit/relurpify/context/knowledge/ast"
 	"codeburg.org/lexbit/relurpify/context/knowledge/graphdb"
 	"codeburg.org/lexbit/relurpify/context/knowledge/memory"
@@ -491,7 +491,7 @@ func buildRuntime(ctx context.Context, cfg Config, secrets config.Secrets) (*Run
 		Sinks: []telemetry.Telemetry{baseTelemetry, execSink},
 	}
 
-	// Register relurpic capabilities (subagent-backed; cannot be done in ayenitd).
+	// Register relurpic capabilities (subagent-backed).
 
 	// Use WorkflowStore interface directly
 	rt := &Runtime{
@@ -548,16 +548,18 @@ func buildRuntime(ctx context.Context, cfg Config, secrets config.Secrets) (*Run
 	rt.setAgent(agent)
 	emitAgentStartupEvent(ctx, env.EventLog, "local", registration.ID, cfg.AgentLabel(), agent)
 	emitContractResolvedEvent(ctx, env.EventLog, "local", registration.ID, cfg.AgentLabel(), docSnapshot)
-	if err := ayenitd.RegisterWorkspaceServices(ctx, ayenitd.WorkspaceConfig{Workspace: cfg.Workspace}, sess, ayenitd.WorkspaceServiceDeps{
-		WorkspaceRoot: cfg.Workspace,
-		EventBus:      env.KnowledgeEvents,
-		IndexManager:  env.IndexManager,
-		Telemetry:     rt.Workspace.Telemetry,
-	}); err != nil {
-		_ = rt.Close(ctx)
-		return nil, fmt.Errorf("register workspace services: %w", err)
-	}
-	if err := ayenitd.StartWorkspaceServices(ctx, sess); err != nil {
+	// App-side composition registers the knowledge bootstrap service
+	// directly on the session (app → context is the legal edge; the
+	// ayenitd adapter that used to carry it is gone).
+	sess.RegisterService("knowledge.bootstrap", knowledge.NewBootstrapService(
+		env.IndexManager,
+		env.KnowledgeEvents,
+		rt.Workspace.Telemetry,
+		cfg.Workspace,
+		nil,
+		nil,
+	))
+	if err := sess.StartServices(ctx); err != nil {
 		_ = rt.Close(ctx)
 		return nil, fmt.Errorf("start workspace services: %w", err)
 	}
