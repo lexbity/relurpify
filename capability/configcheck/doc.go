@@ -7,6 +7,8 @@
 // declare its effect on the system. Silent under-declaration (e.g. a network
 // tool claiming only process_spawn) is caught at validation time.
 // Package configcheck validates tool manifests against expected capability
-// declarations. Lives in testsuite/ so it is not compiled into production
-// binaries — it is a CI/lint tool.
+// declarations. configcheck is product workspace-linter logic owned by the
+// capability domain: it judges manifests over manifest data the domain
+// itself defines (relurplint consumes it; it is testable independently of
+// any binary).
 package configcheck

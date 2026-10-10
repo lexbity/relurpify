@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"codeburg.org/lexbit/relurpify/capability/configcheck"
 	"codeburg.org/lexbit/relurpify/capability/toolcapabilities"
-	"codeburg.org/lexbit/relurpify/testsuite/configcheck"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 	"codeburg.org/lexbit/relurpify/userconfig/templates"
 )
