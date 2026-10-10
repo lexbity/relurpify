@@ -23,7 +23,17 @@ type ReflectionAgent struct {
 	Delegate      graph.WorkflowExecutor
 	Config        *execution.Config
 	maxIterations int
+
+	// Directive-driven configuration (Wave 3 D5). The zero value preserves the
+	// library review loop exactly (FR-9).
+	reviewCriteria  string
+	reviseBody      ReviseBodyFunc
+	revisePredicate func(*contextdata.Envelope) bool
 }
+
+// MaxRevisionCycles is the authored revise-loop cap (contract constant, not
+// authored): at most two revise bodies run before the last verdict stands.
+const MaxRevisionCycles = 2
 
 // Initialize configures the reviewer.
 func (a *ReflectionAgent) Initialize(cfg *execution.Config) error {
@@ -38,6 +48,12 @@ func (a *ReflectionAgent) Initialize(cfg *execution.Config) error {
 
 // Execute runs the review workflow.
 func (a *ReflectionAgent) Execute(ctx context.Context, task *execution.Task, env *contextdata.Envelope) (*execution.Result, error) {
+	if env == nil {
+		env = contextdata.NewEnvelope("reflection", "session")
+	}
+	if a.directiveMode() {
+		return a.executeDirective(ctx, task, env)
+	}
 	graph, err := a.BuildGraph(ctx, task)
 	if err != nil {
 		return nil, err
@@ -46,9 +62,6 @@ func (a *ReflectionAgent) Execute(ctx context.Context, task *execution.Task, env
 		if err := graph.SetTelemetry(cfg.Telemetry); err != nil {
 			return nil, err
 		}
-	}
-	if env == nil {
-		env = contextdata.NewEnvelope("reflection", "session")
 	}
 	result, err := graph.Execute(ctx, env)
 	iterations := 0
@@ -62,6 +75,141 @@ func (a *ReflectionAgent) Execute(ctx context.Context, task *execution.Task, env
 // Capabilities returns capabilities.
 func (a *ReflectionAgent) Capabilities() []string {
 	return []string{"reflection"}
+}
+
+// directiveMode reports whether authored review/revise directives drive this
+// run (Wave 3 D5). When false, the library review loop is unchanged (FR-9).
+func (a *ReflectionAgent) directiveMode() bool {
+	return a != nil && (strings.TrimSpace(a.reviewCriteria) != "" || a.reviseBody != nil || a.revisePredicate != nil)
+}
+
+// executeDirective runs the authored loop: work (delegate) → review →
+// (predicate → body → review)ⁿ with n ≤ MaxRevisionCycles (D5). A `fail`
+// verdict is the quality signal the predicate routes on, not a failure. The
+// revise body executes in-process through the delegate execution core, and the
+// cap ends the loop normally with the last verdict standing.
+func (a *ReflectionAgent) executeDirective(ctx context.Context, task *execution.Task, env *contextdata.Envelope) (*execution.Result, error) {
+	if a.Reviewer == nil {
+		return nil, fmt.Errorf("reflection agent missing reviewer model")
+	}
+	lastResult, err := a.runDelegateWork(ctx, task, env)
+	if err != nil {
+		return nil, err
+	}
+	lastVerdict := ""
+	var lastIssues []string
+	bodyRuns := 0
+	iterations := 0
+	for {
+		verdict, issues, err := a.runDirectiveReview(ctx, task, env, lastResult)
+		if err != nil {
+			return nil, err
+		}
+		iterations++
+		lastVerdict, lastIssues = verdict, issues
+		predicateHolds := a.reviseBody != nil && a.revisePredicate != nil && a.revisePredicate(env)
+		a.emitIteration(ctx, iterations, verdict == "pass", predicateHolds, 0, 0, bodyRuns)
+		if !predicateHolds {
+			break
+		}
+		if bodyRuns >= MaxRevisionCycles {
+			a.emitRevisionCapped(ctx, iterations)
+			break
+		}
+		bodyRuns++
+		env.SetWorkingValueWithClass("reflection.revise_cycle", bodyRuns, contextdata.MemoryClassTask)
+		lastResult, err = a.reviseBody(ctx, env)
+		if err != nil {
+			return nil, err
+		}
+	}
+	env.SetWorkingValueWithClass("reflection.iteration", iterations, contextdata.MemoryClassTask)
+	a.emitCompleted(ctx, true, iterations)
+	return &execution.Result{
+		NodeID:  "reflection_directive",
+		Success: true,
+		Data: execution.NewToolResultPayload(map[string]any{
+			"review":        lastVerdict,
+			"review_issues": lastIssues,
+			"revisions":     bodyRuns,
+		}),
+	}, nil
+}
+
+// runDelegateWork executes the primary work through the delegate with state
+// isolation, reusing the graph's delegate node (clone → execute → merge).
+func (a *ReflectionAgent) runDelegateWork(ctx context.Context, task *execution.Task, env *contextdata.Envelope) (*execution.Result, error) {
+	node := &reflectionDelegateNode{id: "reflection_work", agent: a, task: task}
+	return node.Execute(ctx, env)
+}
+
+// runDirectiveReview issues one review model call and writes the verdict to the
+// ephemeral scratch overlay (scratch.review / scratch.review_issues), which
+// predicates route on (D5). The scratch namespace is never grounded.
+func (a *ReflectionAgent) runDirectiveReview(ctx context.Context, task *execution.Task, env *contextdata.Envelope, lastResult *execution.Result) (string, []string, error) {
+	resp, err := a.Reviewer.Chat(ctx, []model.Message{
+		{Role: "system", Content: directiveReviewSystemPrompt},
+		{Role: "user", Content: directiveReviewUserPrompt(taskInstruction(task), a.reviewCriteria, compactResultForReview(lastResult))},
+	}, &model.LLMOptions{
+		Model:       a.modelID(),
+		Temperature: 0,
+		MaxTokens:   512,
+	})
+	if err != nil {
+		return "", nil, err
+	}
+	verdict, issues, err := decodeReviewVerdict(resp.Text)
+	if err != nil {
+		return "", nil, fmt.Errorf("%w: %v", ErrInvalidReview, err)
+	}
+	env.SetWorkingValueWithClass("scratch.review", verdict, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("scratch.review_issues", issues, contextdata.MemoryClassTask)
+	a.emitReviewed(ctx, verdict, issues)
+	return verdict, issues, nil
+}
+
+const directiveReviewSystemPrompt = `You are a review agent. Judge whether the work satisfies the criterion. Reply with ONLY a JSON object, no prose.`
+
+func directiveReviewUserPrompt(instruction, criterion string, result map[string]any) string {
+	return fmt.Sprintf(`Task: %s
+Criterion: %s
+Work result: %v
+Return JSON: {"verdict":"pass"|"fail"|"issues","issues":["..."]}`, instruction, criterion, result)
+}
+
+// decodeReviewVerdict strictly parses a review verdict. The vocabulary is
+// {pass, fail, issues} (D5): "issues" is the revision-needed signal that the
+// canonical `scratch.review contains issues` predicate routes on; any other
+// value is invalid model output.
+func decodeReviewVerdict(raw string) (string, []string, error) {
+	var wire struct {
+		Verdict string   `json:"verdict"`
+		Issues  []string `json:"issues"`
+	}
+	if err := json.Unmarshal([]byte(reactpkg.ExtractJSON(raw)), &wire); err != nil {
+		return "", nil, fmt.Errorf("review JSON decode: %w", err)
+	}
+	verdict := strings.ToLower(strings.TrimSpace(wire.Verdict))
+	switch verdict {
+	case "pass", "fail", "issues":
+	default:
+		return "", nil, fmt.Errorf("review verdict %q is not pass|fail|issues", wire.Verdict)
+	}
+	return verdict, wire.Issues, nil
+}
+
+func taskInstruction(task *execution.Task) string {
+	if task == nil {
+		return ""
+	}
+	return task.Instruction
+}
+
+func (a *ReflectionAgent) modelID() string {
+	if a == nil || a.Config == nil {
+		return ""
+	}
+	return a.Config.Model
 }
 
 // BuildGraph builds the review workflow.
@@ -197,7 +345,8 @@ func (n *reflectionDecisionNode) Execute(ctx context.Context, env *contextdata.E
 	approve := review.Approve && assessment.Allowed
 	revise := !approve && iter < n.agent.maxIterations
 	contextdata.SetTyped(env, "reflection.revise", revise)
-	n.agent.emitIteration(ctx, iter, approve, revise, assessment.IssueScore, assessment.BlockingIssueCount)
+	reviseCycle, _ := contextdata.GetTyped[int](env, "reflection.revise_cycle")
+	n.agent.emitIteration(ctx, iter, approve, revise, assessment.IssueScore, assessment.BlockingIssueCount, reviseCycle)
 	return &execution.Result{
 		NodeID:  n.id,
 		Success: true,

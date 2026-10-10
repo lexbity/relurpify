@@ -24,8 +24,25 @@ func TestReflectionContractRegistered(t *testing.T) {
 	if len(c.Composes) != 1 || c.Composes[0] != "react" {
 		t.Fatalf("reflection composes = %v, want [react]", c.Composes)
 	}
-	if got := c.DirectiveNames(); len(got) != 0 {
-		t.Fatalf("reflection directive names = %v, want none (retired no-op vocabularies)", got)
+	want := []string{"review", "revise"}
+	got := c.DirectiveNames()
+	if len(got) != len(want) {
+		t.Fatalf("reflection directive names = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("reflection directive names = %v, want %v", got, want)
+		}
+	}
+	reviseSpec, ok := c.Directive("revise")
+	if !ok || !reviseSpec.Predicate || len(reviseSpec.Requires) != 1 || reviseSpec.Requires[0] != "review" {
+		t.Fatalf("reflection revise spec = %#v, want predicate + Requires [review]", reviseSpec)
+	}
+	if c.OrderRule() == nil {
+		t.Fatal("expected reflection to declare an order rule")
+	}
+	if required := c.RequiredNames(); len(required) != 0 {
+		t.Fatalf("reflection required directives = %v, want none (goal-only recipes preserved)", required)
 	}
 }
 

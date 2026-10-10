@@ -262,6 +262,14 @@ type ExecutionStep struct {
 	ClarificationConfig *ClarificationStepConfig
 	OnError             *surface.StepErrorPolicy
 	Config              map[string]any
+	// RevisePredicate is the compiled `revise when` predicate of a reflection
+	// step (Wave 3 D5). It is runtime plumbing, excluded from JSON so the DSL
+	// goldens do not change.
+	RevisePredicate *Predicate `json:"-"`
+	// ReviseBody is the lowered `revise` body of a reflection step: the nested
+	// run/delegate items executed sequentially in-process when the predicate
+	// holds. Runtime plumbing, excluded from JSON.
+	ReviseBody []ExecutionStep `json:"-"`
 }
 
 // ToSurfaceStep projects the typed ExecutionStep back to the surface

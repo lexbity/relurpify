@@ -74,6 +74,10 @@ var conformanceRunners = map[string]conformanceRunner{ //nolint:gochecknoglobals
 	"htn/authored_decomposition_order":          runHTNAuthoredDecompositionOrder,
 	"htn/task_capability_pin":                   runHTNTaskCapabilityPin,
 	"htn/authored_resume":                       runHTNAuthoredResume,
+	"reflection/review_writes_scratch":          runReflectionReviewWritesScratch,
+	"reflection/revise_fires_on_predicate":      runReflectionReviseFiresOnPredicate,
+	"reflection/revision_cap_bounded":           runReflectionRevisionCapBounded,
+	"reflection/review_pass_ends_loop":          runReflectionReviewPassEndsLoop,
 }
 
 // runReactUntilBounds proves the `until` directive caps the react loop budget:
@@ -413,6 +417,89 @@ func runHTNAuthoredResume(t *testing.T) {
 	}
 }
 
+// runReflectionReviewWritesScratch proves the restored `review` directive
+// writes the verdict to the ephemeral scratch namespace.
+func runReflectionReviewWritesScratch(t *testing.T) {
+	t.Helper()
+	reg := registry.NewRegistry()
+	mdl := &conformanceRecordingModel{
+		text:      "acknowledged",
+		chatQueue: []string{`{"verdict":"issues","issues":["missing evidence"]}`},
+	}
+	env := runFixture(t, "reflection_review.erpe", paradigmDeps(mdl, reg))
+
+	if verdict, _ := contextdata.GetTyped[string](env, "scratch.review"); verdict != "issues" {
+		t.Fatalf("scratch.review = %q, want issues", verdict)
+	}
+	issues, ok := contextdata.GetTyped[any](env, "scratch.review_issues")
+	if !ok || fmt.Sprint(issues) != "[missing evidence]" {
+		t.Fatalf("scratch.review_issues = %v", issues)
+	}
+}
+
+// runReflectionReviseFiresOnPredicate proves the revise body runs exactly once
+// when scratch.review contains issues and the loop re-reviews to a pass.
+func runReflectionReviseFiresOnPredicate(t *testing.T) {
+	t.Helper()
+	reg := registry.NewRegistry()
+	mdl := &conformanceRecordingModel{
+		text:      "acknowledged",
+		chatQueue: []string{`{"verdict":"issues","issues":["a"]}`, `{"verdict":"pass","issues":[]}`},
+	}
+	env := runFixture(t, "reflection_revise.erpe", paradigmDeps(mdl, reg))
+
+	if verdict, _ := contextdata.GetTyped[string](env, "scratch.review"); verdict != "pass" {
+		t.Fatalf("scratch.review after re-review = %q, want pass", verdict)
+	}
+	// work react + body react (ChatWithTools) and two reviews (Chat) = 4 calls.
+	if got := mdl.callCount(); got != 4 {
+		t.Fatalf("model calls = %d, want 4 (work + review + body + re-review)", got)
+	}
+	if revisions, _ := contextdata.GetTyped[int](env, "state.reflection_revisions"); revisions != 1 {
+		t.Fatalf("captured state.reflection_revisions = %d, want 1", revisions)
+	}
+}
+
+// runReflectionRevisionCapBounded proves persistent issues run at most the
+// revision cap and the last verdict stands.
+func runReflectionRevisionCapBounded(t *testing.T) {
+	t.Helper()
+	reg := registry.NewRegistry()
+	mdl := &conformanceRecordingModel{
+		text:      "acknowledged",
+		chatQueue: []string{`{"verdict":"issues","issues":["a"]}`, `{"verdict":"issues","issues":["a"]}`, `{"verdict":"issues","issues":["a"]}`},
+	}
+	env := runFixture(t, "reflection_revise.erpe", paradigmDeps(mdl, reg))
+
+	if verdict, _ := contextdata.GetTyped[string](env, "scratch.review"); verdict != "issues" {
+		t.Fatalf("scratch.review at cap = %q, want issues (last verdict stands)", verdict)
+	}
+	if revisions, _ := contextdata.GetTyped[int](env, "state.reflection_revisions"); revisions != 2 {
+		t.Fatalf("captured state.reflection_revisions = %d, want 2 (MaxRevisionCycles)", revisions)
+	}
+}
+
+// runReflectionReviewPassEndsLoop proves a pass verdict ends the loop without
+// executing the revise body.
+func runReflectionReviewPassEndsLoop(t *testing.T) {
+	t.Helper()
+	reg := registry.NewRegistry()
+	mdl := &conformanceRecordingModel{
+		text:      "acknowledged",
+		chatQueue: []string{`{"verdict":"pass","issues":[]}`},
+	}
+	env := runFixture(t, "reflection_pass.erpe", paradigmDeps(mdl, reg))
+
+	if verdict, _ := contextdata.GetTyped[string](env, "scratch.review"); verdict != "pass" {
+		t.Fatalf("scratch.review = %q, want pass", verdict)
+	}
+	// work react (ChatWithTools) + one review (Chat) = 2 calls; the revise body
+	// never ran.
+	if got := mdl.callCount(); got != 2 {
+		t.Fatalf("model calls = %d, want 2 (work + review; no revise body)", got)
+	}
+}
+
 // newSequenceRegistry registers sequence-recording invocable
 // capabilities for the paradigm fixtures.
 func newSequenceRegistry(t *testing.T, order *[]string, ids ...string) *registry.CapabilityRegistry {
@@ -448,17 +535,25 @@ func (h *sequenceCapability) Invoke(_ context.Context, _ ports.State, _ map[stri
 	return &ports.ToolResult{Success: true, Data: map[string]any{"capability_id": h.id}}, nil
 }
 
-// conformanceRecordingModel records every Chat call's messages and returns a
-// fixed text, so conformance cases can distinguish planner from synthesizer
-// calls and inspect prompt content.
+// conformanceRecordingModel records every Chat call's messages and returns
+// responses so conformance cases can distinguish planner from synthesizer calls
+// and inspect prompt content. Chat draws from chatQueue when set (falling back
+// to text for repeats); ChatWithTools returns the fixed text, which makes a
+// react work delegate complete in one iteration.
 type conformanceRecordingModel struct {
-	mu    sync.Mutex
-	text  string
-	calls [][]model.Message
+	mu        sync.Mutex
+	text      string
+	chatQueue []string
+	chatIdx   int
+	calls     [][]model.Message
 }
 
 func (m *conformanceRecordingModel) Generate(ctx context.Context, _ string, options *model.LLMOptions) (*model.LLMResponse, error) {
-	return m.Chat(ctx, nil, options)
+	m.mu.Lock()
+	m.calls = append(m.calls, nil)
+	text := m.text
+	m.mu.Unlock()
+	return &model.LLMResponse{Text: text}, nil
 }
 
 func (m *conformanceRecordingModel) GenerateStream(_ context.Context, _ string, _ *model.LLMOptions) (<-chan string, error) {
@@ -470,12 +565,25 @@ func (m *conformanceRecordingModel) GenerateStream(_ context.Context, _ string, 
 func (m *conformanceRecordingModel) Chat(_ context.Context, messages []model.Message, _ *model.LLMOptions) (*model.LLMResponse, error) {
 	m.mu.Lock()
 	m.calls = append(m.calls, append([]model.Message(nil), messages...))
+	text := m.text
+	if len(m.chatQueue) > 0 {
+		idx := m.chatIdx
+		if idx >= len(m.chatQueue) {
+			idx = len(m.chatQueue) - 1
+		}
+		text = m.chatQueue[idx]
+		m.chatIdx++
+	}
 	m.mu.Unlock()
-	return &model.LLMResponse{Text: m.text}, nil
+	return &model.LLMResponse{Text: text}, nil
 }
 
 func (m *conformanceRecordingModel) ChatWithTools(ctx context.Context, messages []model.Message, _ []model.LLMToolSpec, options *model.LLMOptions) (*model.LLMResponse, error) {
-	return m.Chat(ctx, messages, options)
+	m.mu.Lock()
+	m.calls = append(m.calls, append([]model.Message(nil), messages...))
+	text := m.text
+	m.mu.Unlock()
+	return &model.LLMResponse{Text: text}, nil
 }
 
 func (m *conformanceRecordingModel) callCount() int {
@@ -684,6 +792,10 @@ var caseStatus = map[string]string{ //nolint:gochecknoglobals // immutable matri
 	"htn/authored_decomposition_order":          "implemented",
 	"htn/task_capability_pin":                   "implemented",
 	"htn/authored_resume":                       "implemented",
+	"reflection/review_writes_scratch":          "implemented",
+	"reflection/revise_fires_on_predicate":      "implemented",
+	"reflection/revision_cap_bounded":           "implemented",
+	"reflection/review_pass_ends_loop":          "implemented",
 }
 
 // restoredDirectives is the restoration audit (Wave 3): every (paradigm,
@@ -695,6 +807,7 @@ var restoredDirectives = []string{ //nolint:gochecknoglobals // immutable audit 
 	"rewoo/plan", "rewoo/step", "rewoo/synthesize",
 	"planner/plan", "planner/step", "planner/verify", "planner/summarize",
 	"htn/method", "htn/task",
+	"reflection/review", "reflection/revise",
 }
 
 // deletedDirectives is the implement-or-delete audit outcome (FR-6): every
@@ -705,7 +818,6 @@ var restoredDirectives = []string{ //nolint:gochecknoglobals // immutable audit 
 // paradigm/directive for pairs that were once declared, and bare keywords for
 // vocabulary never owned by a paradigm.
 var deletedDirectives = []string{ //nolint:gochecknoglobals // immutable audit result
-	"reflection/review", "reflection/revise",
 	"blackboard/source",
 	"detect", "clarify", "retry", "decompose", "solve",
 }

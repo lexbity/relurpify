@@ -26,15 +26,35 @@ func (a *ReflectionAgent) emit(ctx context.Context, eventType telemetry.EventTyp
 }
 
 // emitIteration records one review/decide pass: whether the reviewer approved,
-// whether the agent revises, and the assessment numbers behind the decision.
-func (a *ReflectionAgent) emitIteration(ctx context.Context, iteration int, approve, revise bool, issueScore float64, blockingIssues int) {
+// whether the agent revises, the assessment numbers behind the decision, and the
+// revise-cycle index (how many authored revise bodies have already run).
+func (a *ReflectionAgent) emitIteration(ctx context.Context, iteration int, approve, revise bool, issueScore float64, blockingIssues, reviseCycle int) {
 	a.emit(ctx, telemetry.EventReflectionIteration, "reflection iteration", map[string]any{
 		"iteration":       iteration,
 		"approve":         approve,
 		"revise":          revise,
 		"issue_score":     issueScore,
 		"blocking_issues": blockingIssues,
+		"revise_cycle":    reviseCycle,
 		"paradigm":        "reflection",
+	})
+}
+
+// emitReviewed records one directive-mode review verdict (reflection.reviewed).
+func (a *ReflectionAgent) emitReviewed(ctx context.Context, verdict string, issues []string) {
+	a.emit(ctx, telemetry.EventReflectionReviewed, "reflection reviewed", map[string]any{
+		"verdict":  verdict,
+		"issues":   issues,
+		"paradigm": "reflection",
+	})
+}
+
+// emitRevisionCapped records that the authored revise loop hit its bound; the
+// last verdict stands and the loop ends normally (a bound, not a malfunction).
+func (a *ReflectionAgent) emitRevisionCapped(ctx context.Context, iteration int) {
+	a.emit(ctx, telemetry.EventReflectionRevisionCapped, "reflection revision capped", map[string]any{
+		"iteration": iteration,
+		"paradigm":  "reflection",
 	})
 }
 

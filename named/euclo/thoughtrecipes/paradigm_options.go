@@ -1,13 +1,18 @@
 package thoughtrecipe
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
 	htnagent "codeburg.org/lexbit/relurpify/cognitionzoo/htn"
+	"codeburg.org/lexbit/relurpify/cognitionzoo/paradigm"
 	pl "codeburg.org/lexbit/relurpify/cognitionzoo/plan"
 	planneragent "codeburg.org/lexbit/relurpify/cognitionzoo/planner"
+	reflectionagent "codeburg.org/lexbit/relurpify/cognitionzoo/reflection"
 	rewooagent "codeburg.org/lexbit/relurpify/cognitionzoo/rewoo"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
+	execution "codeburg.org/lexbit/relurpify/execution"
 )
 
 // paradigm_options.go lowers a step's typed directive payloads into typed
@@ -147,6 +152,72 @@ func htnOptions(step ExecutionStep) ([]htnagent.Option, error) {
 		return nil, err
 	}
 	return []htnagent.Option{methodOption}, nil
+}
+
+// reflectionOptions lowers the reflection directive vocabulary (review/revise)
+// into the runner's option surface (D5). The review criterion drives the
+// directive-mode review phase; the revise predicate (compiled by the same
+// compiler route predicates use) and the lowered body steps form the bounded
+// in-process revise loop. Absent directives yield no options and the runner
+// keeps its library review loop (FR-9).
+func reflectionOptions(step ExecutionStep, deps *paradigm.Deps) ([]reflectionagent.Option, error) {
+	directives := step.Directives
+	reviewDirective, hasReview, err := AtMostOne(directives, "review")
+	if err != nil {
+		return nil, err
+	}
+	reviseDirective, hasRevise, err := AtMostOne(directives, "revise")
+	if err != nil {
+		return nil, err
+	}
+	if !hasReview && !hasRevise {
+		return nil, nil
+	}
+	opts := make([]reflectionagent.Option, 0, 2)
+	if hasReview {
+		criterion := directiveFirstText(reviewDirective)
+		if criterion == "" {
+			return nil, fmt.Errorf("reflection review requires a criterion")
+		}
+		opts = append(opts, reflectionagent.WithReviewCriteria(criterion))
+	}
+	if hasRevise {
+		if reviseDirective.Predicate == nil {
+			return nil, fmt.Errorf("reflection revise requires a when predicate")
+		}
+		predicate, err := NormalizeRoutePredicate(*reviseDirective.Predicate)
+		if err != nil {
+			return nil, err
+		}
+		condition := compilePredicate(*predicate)
+		if len(step.ReviseBody) == 0 {
+			return nil, fmt.Errorf("reflection revise requires at least one body step")
+		}
+		bodySteps := append([]ExecutionStep(nil), step.ReviseBody...)
+		opts = append(opts, reflectionagent.WithReviseCycle(
+			newReflectionReviseBody(bodySteps, deps),
+			func(env *contextdata.Envelope) bool { return condition(nil, env) },
+		))
+	}
+	return opts, nil
+}
+
+// newReflectionReviseBody wraps the lowered revise-body steps into the
+// in-process ReviseBodyFunc: each step runs sequentially through the shared
+// delegate execution core, so scoped registries, permission checks, and
+// Wave-1 grounding apply to body products automatically.
+func newReflectionReviseBody(steps []ExecutionStep, deps *paradigm.Deps) reflectionagent.ReviseBodyFunc {
+	return func(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
+		var last *execution.Result
+		for _, bodyStep := range steps {
+			result, err := ExecuteDelegateCore(ctx, deps, bodyStep, env)
+			if err != nil {
+				return result, err
+			}
+			last = result
+		}
+		return last, nil
+	}
 }
 
 // plannerOptions lowers the planner directive vocabulary

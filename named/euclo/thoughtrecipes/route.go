@@ -196,6 +196,10 @@ func lowerAgentExecutionDecl(kind StepKind, agent Identifier, items []ExecutionI
 	}
 	stepID := fmt.Sprintf("%s.%d.%d.%s.%d", kind.String(), agent.GetSpan().Start.Line, agent.GetSpan().Start.Column, sanitizeComponent(agentName), *index)
 	effectiveScopes := appendToolScopeFrames(copyToolScopeFrames(inheritedToolScopes), localToolScopes...)
+	reviseBody, revisePredicate, reviseErr := lowerReviseDirective(items, agents, index, effectiveScopes)
+	if reviseErr != nil {
+		return ExecutionStep{}, reviseErr
+	}
 	step := ExecutionStep{
 		ID:              stepID,
 		Kind:            kind,
@@ -234,6 +238,8 @@ func lowerAgentExecutionDecl(kind StepKind, agent Identifier, items []ExecutionI
 			step.Config["effective_tool_names"] = append([]string(nil), toolNames...)
 		}
 	}
+	step.ReviseBody = reviseBody
+	step.RevisePredicate = revisePredicate
 	*index++
 	return step, nil
 }

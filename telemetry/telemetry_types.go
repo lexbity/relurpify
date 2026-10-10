@@ -134,6 +134,11 @@ const (
 
 	EventReflectionIteration EventType = "reflection.iteration"
 	EventReflectionCompleted EventType = "reflection.completed"
+	// EventReflectionReviewed frames one directive-mode review verdict.
+	EventReflectionReviewed EventType = "reflection.reviewed"
+	// EventReflectionRevisionCapped marks the authored revise loop hitting its
+	// revision bound; the loop ends normally with the last verdict standing.
+	EventReflectionRevisionCapped EventType = "reflection.revision_capped"
 
 	EventPlannerPlanStarted   EventType = "planner.plan.started"
 	EventPlannerPlanCompleted EventType = "planner.plan.completed"

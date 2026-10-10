@@ -1,0 +1,7 @@
+thoughtrecipe reflection_review
+"Reflection review writes the verdict to the ephemeral scratch namespace."
+
+agent reviewer uses reflection
+
+run reviewer:
+  review "Check correctness, safety, and usefulness."

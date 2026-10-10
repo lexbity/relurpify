@@ -130,7 +130,11 @@ func (c *stepCore) buildAgent(task *execution.Task) (agentgraph.WorkflowExecutor
 		return htnagent.New(deps, htnruntime.NewMethodLibrary(), opts...), nil
 	case "reflection":
 		delegate := reactagent.New(deps, c.streamOptions()...)
-		return reflectionagent.New(deps, delegate), nil
+		reflectionOpts, err := reflectionOptions(c.step, deps)
+		if err != nil {
+			return nil, &paradigm.ErrContractViolation{Step: c.step.ID, Paradigm: c.step.Paradigm, Cause: err}
+		}
+		return reflectionagent.New(deps, delegate, reflectionOpts...), nil
 	case "blackboard":
 		return blackboardagent.New(deps, c.streamOptionsBlackboard()...), nil
 	case "chainer":

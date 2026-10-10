@@ -537,3 +537,60 @@ run decomposer:
 		t.Fatalf("error text %q missing the Requires violation", msg)
 	}
 }
+
+// TestReflectionCardinality proves the reflection load-time rules: `revise`
+// without `review` is a Requires error, `revise` before `review` is an order
+// error, and a `revise` block without a `when` predicate is a lowering (load)
+// error.
+func TestReflectionCardinality(t *testing.T) {
+	t.Run("revise requires review", func(t *testing.T) {
+		msg := contractErrorText(t, `thoughtrecipe reflection_missing_review
+"Missing review."
+
+agent reviewer uses reflection
+
+run reviewer:
+  revise when scratch.review contains issues:
+    delegate to planner:
+      goal "fix it"
+`)
+		if !strings.Contains(msg, `requires directive "review"`) {
+			t.Fatalf("error text %q missing the Requires violation", msg)
+		}
+	})
+
+	t.Run("revise before review", func(t *testing.T) {
+		msg := contractErrorText(t, `thoughtrecipe reflection_order
+"Order."
+
+agent reviewer uses reflection
+agent fixer uses react
+
+run reviewer:
+  revise when scratch.review contains issues:
+    delegate to fixer:
+      goal "fix it"
+  review "Check correctness."
+`)
+		if !strings.Contains(msg, "out of order") {
+			t.Fatalf("error text %q missing the order violation", msg)
+		}
+	})
+
+	t.Run("revise without predicate", func(t *testing.T) {
+		doc := mustParseDoc(t, `thoughtrecipe reflection_nopred
+"No predicate."
+
+agent reviewer uses reflection
+
+run reviewer:
+  review "Check correctness."
+  revise:
+    delegate to reviewer:
+      goal "fix it"
+`)
+		if _, err := LowerDocument(doc); err == nil {
+			t.Fatal("expected a lowering error for revise without a when predicate")
+		}
+	})
+}

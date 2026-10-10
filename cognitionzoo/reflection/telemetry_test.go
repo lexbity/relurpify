@@ -44,6 +44,18 @@ func (s *reflectionSink) types() []telemetry.EventType {
 	return out
 }
 
+func (s *reflectionSink) count(eventType telemetry.EventType) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	n := 0
+	for _, ev := range s.events {
+		if ev.Type == eventType {
+			n++
+		}
+	}
+	return n
+}
+
 func requireReflectionEvent(t *testing.T, sink *reflectionSink, eventType telemetry.EventType) {
 	t.Helper()
 	if !sink.hasType(eventType) {

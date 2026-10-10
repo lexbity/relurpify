@@ -47,6 +47,18 @@ declared:
       status: implemented
       cases:
         - react/until_bounds_iterations
+    - paradigm: reflection
+      directive: review
+      status: implemented
+      cases:
+        - reflection/review_writes_scratch
+        - reflection/review_pass_ends_loop
+    - paradigm: reflection
+      directive: revise
+      status: implemented
+      cases:
+        - reflection/revise_fires_on_predicate
+        - reflection/revision_cap_bounded
     - paradigm: rewoo
       directive: plan
       status: implemented
@@ -95,6 +107,18 @@ restored:
       status: implemented
       cases:
         - planner/verify_verdict_fields
+    - paradigm: reflection
+      directive: review
+      status: implemented
+      cases:
+        - reflection/review_writes_scratch
+        - reflection/review_pass_ends_loop
+    - paradigm: reflection
+      directive: revise
+      status: implemented
+      cases:
+        - reflection/revise_fires_on_predicate
+        - reflection/revision_cap_bounded
     - paradigm: rewoo
       directive: plan
       status: implemented
@@ -115,8 +139,6 @@ deleted:
     - clarify
     - decompose
     - detect
-    - reflection/review
-    - reflection/revise
     - retry
     - solve
 documented_directive_keywords:

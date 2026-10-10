@@ -1,0 +1,11 @@
+thoughtrecipe reflection_pass
+"Reflection pass verdict ends the loop without running the revise body."
+
+agent reviewer uses reflection
+agent fixer uses react
+
+run reviewer:
+  review "Check correctness, safety, and usefulness."
+  revise when scratch.review contains issues:
+    delegate to fixer:
+      goal "Fix the issues found by the review."
