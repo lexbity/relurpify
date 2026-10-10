@@ -53,6 +53,9 @@ func Decompose(task *execution.Task, method *Method) (*plan.Plan, error) {
 
 // DecomposeResolved converts a ResolvedMethod into a plan.Plan relative to the given task.
 // Each OperatorSpec becomes a PlanStep with the Executor as the Tool.
+// Authored methods (Wave 3 D4) are its primary caller: they resolve to a
+// ResolvedMethod directly, so this is the single decomposition for both the
+// library and the authored path (mode-blind after resolution).
 func DecomposeResolved(task *execution.Task, resolved *ResolvedMethod) (*plan.Plan, error) {
 	if resolved == nil || resolved.Method == nil {
 		return nil, fmt.Errorf("htn: no resolved method provided for decomposition")

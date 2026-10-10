@@ -1,0 +1,13 @@
+thoughtrecipe htn_authored
+"Authored htn method: tasks execute in declaration order with zero LLM decomposition."
+
+agent decomposer uses htn
+
+run decomposer:
+  method "full_analysis":
+    task "Explore structure":
+      do relurpic:htn_probe_a
+    task "Check layering":
+      do relurpic:htn_probe_b
+    task "Generate plan":
+      do relurpic:htn_probe_c

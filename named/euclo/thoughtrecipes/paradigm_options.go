@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	htnagent "codeburg.org/lexbit/relurpify/cognitionzoo/htn"
 	pl "codeburg.org/lexbit/relurpify/cognitionzoo/plan"
 	planneragent "codeburg.org/lexbit/relurpify/cognitionzoo/planner"
 	rewooagent "codeburg.org/lexbit/relurpify/cognitionzoo/rewoo"
@@ -94,6 +95,58 @@ func rewooStepCapability(step TypedDirective) (string, error) {
 		return "", fmt.Errorf("rewoo step %q requires a do clause", directiveFirstText(step))
 	}
 	return tool, nil
+}
+
+// htnOptions lowers the htn directive vocabulary (method/task) into the
+// runner's option surface. Authored methods are authoritative: exactly the
+// authored tasks run, in declaration order, with zero LLM decomposition calls
+// (D4). Each task's text is the sub-goal and an optional `do` clause pins the
+// capability it dispatches to. Absent directives yield no options and the
+// runner keeps its library method-lookup behavior (FR-9).
+func htnOptions(step ExecutionStep) ([]htnagent.Option, error) {
+	directives := step.Directives
+	methodDirective, hasMethod, err := AtMostOne(directives, "method")
+	if err != nil {
+		return nil, err
+	}
+	if !hasMethod {
+		if len(StepItems(directives, "task")) > 0 {
+			return nil, fmt.Errorf("htn task requires a method block")
+		}
+		return nil, nil
+	}
+	methodName := directiveFirstText(methodDirective)
+	if methodName == "" {
+		return nil, fmt.Errorf("htn method requires a name")
+	}
+	tasks := StepItems(methodDirective.Body, "task")
+	if len(tasks) == 0 {
+		return nil, fmt.Errorf("htn method %q requires at least one task", methodName)
+	}
+	// The contract admits nested directive blocks under `method`; the runner
+	// honours exactly the `task` clause (belt to the load-time shape check).
+	for _, body := range methodDirective.Body {
+		if strings.TrimSpace(body.Name) != "" && body.Name != "task" {
+			return nil, fmt.Errorf("htn method %q contains unsupported nested clause %q", methodName, body.Name)
+		}
+	}
+	authored := make([]htnagent.AuthoredTask, 0, len(tasks))
+	for i, task := range tasks {
+		text := directiveFirstText(task)
+		if text == "" {
+			return nil, fmt.Errorf("htn task %d requires text", i+1)
+		}
+		capability, err := doCapabilityID(task, "htn task")
+		if err != nil {
+			return nil, err
+		}
+		authored = append(authored, htnagent.AuthoredTask{Text: text, Capability: capability})
+	}
+	methodOption, err := htnagent.WithAuthoredMethod(methodName, authored)
+	if err != nil {
+		return nil, err
+	}
+	return []htnagent.Option{methodOption}, nil
 }
 
 // plannerOptions lowers the planner directive vocabulary

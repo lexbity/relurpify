@@ -1,0 +1,9 @@
+thoughtrecipe htn_pin
+"Authored htn task with a pinned capability."
+
+agent decomposer uses htn
+
+run decomposer:
+  method "pinned_method":
+    task "Inspect":
+      do relurpic:htn_probe_pin

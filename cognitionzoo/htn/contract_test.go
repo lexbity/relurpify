@@ -24,8 +24,22 @@ func TestHTNContractRegistered(t *testing.T) {
 	if len(c.Composes) != 1 || c.Composes[0] != "react" {
 		t.Fatalf("htn composes = %v, want [react]", c.Composes)
 	}
-	if got := c.DirectiveNames(); len(got) != 0 {
-		t.Fatalf("htn directive names = %v, want none (retired no-op vocabularies)", got)
+	want := []string{"method", "task"}
+	got := c.DirectiveNames()
+	if len(got) != len(want) {
+		t.Fatalf("htn directive names = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("htn directive names = %v, want %v", got, want)
+		}
+	}
+	taskSpec, ok := c.Directive("task")
+	if !ok || len(taskSpec.Requires) != 1 || taskSpec.Requires[0] != "method" {
+		t.Fatalf("htn task spec Requires = %v, want [method]", taskSpec.Requires)
+	}
+	if required := c.RequiredNames(); len(required) != 0 {
+		t.Fatalf("htn required directives = %v, want none (goal-only recipes preserved)", required)
 	}
 }
 

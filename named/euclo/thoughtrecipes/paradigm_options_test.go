@@ -157,3 +157,50 @@ func TestPlannerOptionsLowering(t *testing.T) {
 		t.Fatalf("plannerOptions(step without plan) error = %v, want requires-plan", err)
 	}
 }
+
+// TestHTNMethodCardinality pins the htn directive lowering: a method without
+// tasks or a name is a load error, a task outside a method is a load error, and
+// a valid authored method lowers to exactly one option.
+func TestHTNMethodCardinality(t *testing.T) {
+	methodWithoutTasks := ExecutionStep{
+		Paradigm:   "htn",
+		Directives: []TypedDirective{{Name: "method", TextArgs: []string{`"m"`}}},
+	}
+	if _, err := htnOptions(methodWithoutTasks); err == nil || !strings.Contains(err.Error(), "at least one task") {
+		t.Fatalf("method without tasks error = %v, want at-least-one-task", err)
+	}
+
+	methodWithoutName := ExecutionStep{
+		Paradigm: "htn",
+		Directives: []TypedDirective{
+			{Name: "method", Body: []TypedDirective{{Name: "task", TextArgs: []string{`"x"`}}}},
+		},
+	}
+	if _, err := htnOptions(methodWithoutName); err == nil || !strings.Contains(err.Error(), "requires a name") {
+		t.Fatalf("method without name error = %v, want requires-a-name", err)
+	}
+
+	taskWithoutMethod := ExecutionStep{
+		Paradigm:   "htn",
+		Directives: []TypedDirective{{Name: "task", TextArgs: []string{`"x"`}}},
+	}
+	if _, err := htnOptions(taskWithoutMethod); err == nil || !strings.Contains(err.Error(), "requires a method") {
+		t.Fatalf("task outside method error = %v, want requires-a-method", err)
+	}
+
+	valid := ExecutionStep{
+		Paradigm: "htn",
+		Directives: []TypedDirective{
+			{Name: "method", TextArgs: []string{`"full_analysis"`}, Body: []TypedDirective{
+				{Name: "task", TextArgs: []string{`"Explore"`}, Body: []TypedDirective{{Name: "do", TextArgs: []string{"relurpic:layer_check"}}}},
+			}},
+		},
+	}
+	opts, err := htnOptions(valid)
+	if err != nil {
+		t.Fatalf("htnOptions(valid): %v", err)
+	}
+	if len(opts) != 1 {
+		t.Fatalf("htnOptions(valid) = %d options, want 1", len(opts))
+	}
+}

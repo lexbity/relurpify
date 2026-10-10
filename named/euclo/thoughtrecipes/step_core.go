@@ -119,10 +119,15 @@ func (c *stepCore) buildAgent(task *execution.Task) (agentgraph.WorkflowExecutor
 		}
 		return planneragent.New(deps, append(c.streamOptionsPlanner(), plannerOpts...)...), nil
 	case "htn":
+		htnOpts, err := htnOptions(c.step)
+		if err != nil {
+			return nil, &paradigm.ErrContractViolation{Step: c.step.ID, Paradigm: c.step.Paradigm, Cause: err}
+		}
 		primitive := reactagent.New(deps, c.streamOptions()...)
-		return htnagent.New(deps, htnruntime.NewMethodLibrary(), append([]htnagent.Option{
-			htnagent.WithPrimitiveExec(primitive),
-		}, c.streamOptionsHTN()...)...), nil
+		opts := []htnagent.Option{htnagent.WithPrimitiveExec(primitive)}
+		opts = append(opts, htnOpts...)
+		opts = append(opts, c.streamOptionsHTN()...)
+		return htnagent.New(deps, htnruntime.NewMethodLibrary(), opts...), nil
 	case "reflection":
 		delegate := reactagent.New(deps, c.streamOptions()...)
 		return reflectionagent.New(deps, delegate), nil

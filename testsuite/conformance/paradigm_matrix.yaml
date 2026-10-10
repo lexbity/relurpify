@@ -5,6 +5,17 @@ declared:
       cases:
         - chainer/link_builds_chain
         - chainer/link_from_registry_prompt
+    - paradigm: htn
+      directive: method
+      status: implemented
+      cases:
+        - htn/authored_decomposition_order
+        - htn/authored_resume
+    - paradigm: htn
+      directive: task
+      status: implemented
+      cases:
+        - htn/task_capability_pin
     - paradigm: pipeline
       directive: ""
       status: honored
@@ -52,6 +63,17 @@ declared:
       cases:
         - rewoo/synthesize_guidance
 restored:
+    - paradigm: htn
+      directive: method
+      status: implemented
+      cases:
+        - htn/authored_decomposition_order
+        - htn/authored_resume
+    - paradigm: htn
+      directive: task
+      status: implemented
+      cases:
+        - htn/task_capability_pin
     - paradigm: planner
       directive: plan
       status: implemented
@@ -93,8 +115,6 @@ deleted:
     - clarify
     - decompose
     - detect
-    - htn/method
-    - htn/task
     - reflection/review
     - reflection/revise
     - retry

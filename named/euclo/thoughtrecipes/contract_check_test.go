@@ -520,3 +520,20 @@ run plan_runner:
 		}
 	})
 }
+
+// TestHTNTaskOutsideMethodRejected proves the D1 mixing rule at load: a `task`
+// clause without a `method` block is a Requires violation.
+func TestHTNTaskOutsideMethodRejected(t *testing.T) {
+	msg := contractErrorText(t, `thoughtrecipe htn_orphan
+"Orphan task."
+
+agent decomposer uses htn
+
+run decomposer:
+  task "x":
+    do relurpic:y
+`)
+	if !strings.Contains(msg, `requires directive "method"`) {
+		t.Fatalf("error text %q missing the Requires violation", msg)
+	}
+}

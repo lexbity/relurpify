@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	capability "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/cognitionzoo/htn/runtime"
@@ -89,6 +88,16 @@ type HTNAgent struct {
 	StreamMode      contextstream.Mode
 	StreamQuery     string
 	StreamMaxTokens int
+	// StreamTrigger is the compiler trigger wired into the run context before
+	// graph construction. A missing trigger skips context streaming entirely
+	// (disabled feature, not a failure).
+	StreamTrigger *contextstream.Trigger
+
+	// authoredMethod is a recipe-authored decomposition (Wave 3 D4). When set,
+	// Execute bypasses ClassifyTask and the method library entirely and
+	// decomposes to exactly the authored tasks, in declaration order, with zero
+	// LLM decomposition calls. Nil preserves the library lookup path (FR-9).
+	authoredMethod *runtime.Method
 
 	initialised bool
 
@@ -96,6 +105,69 @@ type HTNAgent struct {
 	// to the agent at construction time. It propagates to PrimitiveExec
 	// when that executor is a *react.ReActAgent.
 	SemanticContext execctx.AgentSemanticContext
+}
+
+// AuthoredTask is one recipe-authored HTN task (D4): its text is the sub-goal,
+// and an optional capability pins the tool the task dispatches to. A task
+// without a capability runs the primitive executor with the text as the goal.
+type AuthoredTask struct {
+	Text       string
+	Capability string
+}
+
+// authoredTaskType is the synthetic task type of an authored method. Authored
+// methods bypass the method library, so the type is provenance only; it exists
+// because the runtime contract requires a non-empty method and subtask type.
+const authoredTaskType execution.TaskType = "htn.authored"
+
+// buildAuthoredMethod lowers recipe-authored tasks into a runtime method. The
+// returned method is validated against the same runtime contract as a library
+// method, so a spec-invalid authored task is an option-construction error.
+func buildAuthoredMethod(name string, tasks []AuthoredTask) (*runtime.Method, error) {
+	methodName := strings.TrimSpace(name)
+	if methodName == "" {
+		return nil, fmt.Errorf("htn method name required")
+	}
+	if len(tasks) == 0 {
+		return nil, fmt.Errorf("htn method %q requires at least one task", methodName)
+	}
+	subtasks := make([]runtime.SubtaskSpec, 0, len(tasks))
+	var previous string
+	for i, task := range tasks {
+		text := strings.TrimSpace(task.Text)
+		if text == "" {
+			return nil, fmt.Errorf("htn task %d requires text", i+1)
+		}
+		executor := strings.TrimSpace(task.Capability)
+		if executor == "" {
+			executor = runtime.ExecutorReact
+		}
+		name := fmt.Sprintf("t%d", i+1)
+		spec := runtime.SubtaskSpec{
+			Name:        name,
+			Type:        authoredTaskType,
+			Instruction: text,
+			Executor:    executor,
+		}
+		// A linear dependency chain guarantees declaration-order execution: the
+		// plan executor runs ready steps serially when exactly one is ready at
+		// a time (a parallel-ready batch would use the primitive dispatcher's
+		// branch path and scramble order).
+		if previous != "" {
+			spec.DependsOn = []string{previous}
+		}
+		subtasks = append(subtasks, spec)
+		previous = name
+	}
+	method := &runtime.Method{
+		Name:     methodName,
+		TaskType: authoredTaskType,
+		Subtasks: subtasks,
+	}
+	if err := method.Validate(); err != nil {
+		return nil, err
+	}
+	return method, nil
 }
 
 // Initialize satisfies agentgraph.WorkflowExecutor. It wires configuration and ensures the
@@ -153,12 +225,8 @@ func (a *HTNAgent) Execute(ctx context.Context, task *execution.Task, env *conte
 	if env == nil {
 		env = contextdata.NewEnvelope("htn", "session")
 	}
-	workflowID := ""
-	runID := ""
 
-	surfaces := ResolveRuntimeSurfaces(nil)
-
-	// Classify task type if not already set.
+	// Classify task type if not already set (rule-based, never an LLM call).
 	resolvedTask := task
 	if task != nil && task.Type == "" {
 		resolvedTask = &execution.Task{
@@ -169,72 +237,63 @@ func (a *HTNAgent) Execute(ctx context.Context, task *execution.Task, env *conte
 			Metadata:    task.Metadata,
 		}
 	}
-	if surfaces.Workflow != nil {
-		if retrievalPayload, err := Hydrate(ctx, surfaces.Workflow, workflowID, RetrievalQuery{
-			StepFiles: TaskPaths(resolvedTask),
-		}); err != nil {
-			return nil, fmt.Errorf("htn: retrieval hydrate failed: %w", err)
-		} else if retrievalPayload != nil {
-			// Agent-specific runtime state publishing
-			// runtime.PublishWorkflowRetrieval(env, retrievalPayload, true)
-			resolvedTask = ApplyTaskRetrieval(resolvedTask, retrievalPayload)
-		}
-	}
-	// Agent-specific task state publishing
-	// runtime.PublishTaskState(env, resolvedTask)
 
-	// Execute streaming trigger before method decomposition
+	// Execute streaming trigger before method decomposition.
+	if a.StreamTrigger != nil {
+		ctx = contextstream.WithTrigger(ctx, a.StreamTrigger)
+	}
 	if err := a.executeStreamingTrigger(ctx, resolvedTask, env); err != nil {
 		return nil, fmt.Errorf("htn: streaming trigger failed: %w", err)
 	}
 
-	// Find matching method.
+	// Authored methods bypass the method library entirely (D4): the ingested
+	// decomposition is exactly the decomposition, with zero LLM calls and a
+	// resolved method that validates against the same runtime contract.
+	if a.authoredMethod != nil {
+		resolved := runtime.ResolveMethod(*a.authoredMethod)
+		if err := resolved.Validate(); err != nil {
+			a.planFailed(ctx, resolvedTask, err)
+			return nil, fmt.Errorf("htn: authored method invalid: %w", err)
+		}
+		return a.executeResolvedMethod(ctx, resolvedTask, &resolved, env, true)
+	}
+
+	// Find matching method from the library.
 	method := a.Methods.Find(resolvedTask)
 	if method == nil {
-		// No method — delegate directly to primitive executor.
-		// Agent-specific method state publishing
-		// runtime.PublishResolvedMethodState(env, nil)
-		// runtime.PublishTerminationState(env, "completed")
+		// No method — delegate directly to the primitive executor.
 		return a.delegateToPrimitive(ctx, resolvedTask, env)
 	}
 	resolvedMethod := runtime.ResolveMethod(*method)
-	// Agent-specific method state publishing
-	// runtime.PublishResolvedMethodState(env, &resolvedMethod)
+	return a.executeResolvedMethod(ctx, resolvedTask, &resolvedMethod, env, false)
+}
 
-	// Decompose into a plan using resolved method (includes operator metadata).
-	compiledPlan, err := runtime.DecomposeResolved(resolvedTask, &resolvedMethod)
+// executeResolvedMethod is the shared post-decomposition execution: preflight,
+// the plan-start lifecycle, the PlanExecutor over the primitive dispatcher, and
+// the execution-completed lifecycle. Authored methods additionally surface the
+// result contract (method, tasks_completed, tasks_total). Completed-step
+// resume flows through plan.completed_steps unchanged.
+func (a *HTNAgent) executeResolvedMethod(ctx context.Context, task *execution.Task, resolved *runtime.ResolvedMethod, env *contextdata.Envelope, authored bool) (*execution.Result, error) {
+	compiledPlan, err := runtime.DecomposeResolved(task, resolved)
 	if err != nil {
-		a.planFailed(ctx, resolvedTask, err)
+		a.planFailed(ctx, task, err)
 		return nil, fmt.Errorf("htn: decomposition failed: %w", err)
 	}
 
 	// Run preflight to check required capabilities.
 	preflightReport, preflightErr := runtime.PlanPreflight(compiledPlan, a.Tools)
-	// Agent-specific preflight state publishing
-	// runtime.PublishPreflightState(env, preflightReport, preflightErr)
 	if preflightErr != nil {
-		a.planFailed(ctx, resolvedTask, preflightErr)
+		a.planFailed(ctx, task, preflightErr)
 		return nil, fmt.Errorf("htn: %w", preflightErr)
 	}
 	_ = preflightReport
-	a.planStarted(ctx, resolvedTask, compiledPlan)
-
-	// Agent-specific plan state publishing
-	// runtime.PublishPlanState(env, compiledPlan)
-	// Agent-specific execution state loading
-	// executionState := runtime.LoadExecutionState(env)
-	executionState := runtime.ExecutionState{}
-	executionState.WorkflowID = workflowID
-	executionState.RunID = runID
-	// Agent-specific execution state publishing
-	// runtime.PublishExecutionState(env, executionState)
+	a.planStarted(ctx, task, compiledPlan)
 
 	// Execute via plan_executor.
 	stepIndexes := make(map[string]int, len(compiledPlan.Steps))
 	for idx, step := range compiledPlan.Steps {
 		stepIndexes[step.ID] = idx
 	}
-	var checkpointStore any
 	executor := &pl.PlanExecutor{
 		Options: pl.PlanExecutionOptions{
 			BuildStepTask:    a.buildPlanStepTask,
@@ -255,61 +314,39 @@ func (a *HTNAgent) Execute(ctx context.Context, task *execution.Task, env *conte
 				return &pl.StepRecovery{Diagnosis: diagnosis, Notes: notes}, nil
 			},
 			AfterStep: func(step pl.PlanStep, s *contextdata.Envelope, result *execution.Result) {
-				a.afterStep(ctx, step, s, result, checkpointStore, stepIndexes, surfaces.Workflow, workflowID, runID, resolvedTask)
+				a.afterStep(ctx, step, s, result, nil, stepIndexes, nil, "", "", task)
 			},
 		},
 	}
 
 	primitiveAgent := runtime.NewPrimitiveDispatcher(a.Tools, a.primitiveAgent())
-	if surfaces.Workflow != nil {
-		primitiveAgent = &recordingPrimitiveAgent{
-			delegate:   primitiveAgent,
-			workflow:   surfaces.Workflow,
-			workflowID: workflowID,
-			runID:      runID,
-		}
-	}
-	startTime := time.Now()
-	result, err := executor.Execute(ctx, primitiveAgent, resolvedTask, compiledPlan, env)
-	_ = time.Since(startTime) // executionDuration - used when persistence is re-enabled
+	result, err := executor.Execute(ctx, primitiveAgent, task, compiledPlan, env)
 	if err != nil {
-		a.executionCompleted(ctx, resolvedTask, false, 0, len(compiledPlan.Steps))
+		a.executionCompleted(ctx, task, false, 0, len(compiledPlan.Steps))
 		return nil, fmt.Errorf("htn: plan execution failed: %w", err)
 	}
-	// Agent-specific workflow status update
-	// if surfaces.Workflow != nil && workflowID != "" && runID != "" {
-	// 	_ = surfaces.Workflow.UpdateRunStatus(ctx, runID, memory.WorkflowRunStatusCompleted, timePtr(time.Now().UTC()))
-	// }
-	// StringSliceFromContext - now available in envelope
+
 	completed := env.StringSliceFromContext("plan.completed_steps")
 	if completed == nil {
 		completed = []string{}
 	}
-	// Agent-specific execution state loading
-	// executionState = runtime.LoadExecutionState(env)
-	executionState.WorkflowID = workflowID
-	executionState.RunID = runID
-	executionState.CompletedSteps = append([]string(nil), completed...)
-	executionState.CompletedStepCount = len(completed)
-	if compiledPlan != nil {
-		executionState.PlannedStepCount = len(compiledPlan.Steps)
+	a.executionCompleted(ctx, task, result != nil && result.Success, len(completed), len(compiledPlan.Steps))
+	if !authored {
+		return result, nil
 	}
-	// Agent-specific execution state publishing
-	// runtime.PublishExecutionState(env, executionState)
-	a.executionCompleted(ctx, resolvedTask, result != nil && result.Success,
-		executionState.CompletedStepCount, executionState.PlannedStepCount)
-	// Agent-specific termination state publishing
-	// runtime.PublishTerminationState(env, "completed")
 
-	// Workflow store persistence disabled - memory package being rebuilt
-	// if surfaces.Workflow != nil && workflowID != "" && runID != "" {
-	// 	success := result != nil && result.Success
-	// 	_ = a.persistHTNRunSummary(ctx, env, surfaces.Workflow, workflowID, runID, startTime, success, nil)
-	// 	_ = a.persistHTNMethodMetadata(ctx, env, surfaces.Workflow, workflowID, runID)
-	// 	_ = a.persistHTNExecutionMetrics(ctx, env, surfaces.Workflow, workflowID, runID, time.Second, executionDuration)
-	// }
-	// Agent-specific checkpoint state compaction
-	// compactHTNCheckpointState(env)
+	// Authored result contract: method, tasks_completed, tasks_total (D4).
+	fields := execution.ResultFields(result.Data)
+	if fields == nil {
+		fields = map[string]any{}
+	}
+	fields["method"] = resolved.Method.Name
+	fields["tasks_completed"] = len(completed)
+	fields["tasks_total"] = len(compiledPlan.Steps)
+	env.SetWorkingValueWithClass("htn.method", resolved.Method.Name, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("htn.tasks_completed", len(completed), contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass("htn.tasks_total", len(compiledPlan.Steps), contextdata.MemoryClassTask)
+	result.Data = execution.NewToolResultPayload(fields)
 	return result, nil
 }
 
@@ -495,6 +532,9 @@ func (a *HTNAgent) streamTriggerNode(task *execution.Task) agentgraph.Node {
 
 // executeStreamingTrigger runs the streaming trigger before method decomposition.
 func (a *HTNAgent) executeStreamingTrigger(ctx context.Context, task *execution.Task, env *contextdata.Envelope) error {
+	if contextstream.TriggerFromContext(ctx) == nil {
+		return nil
+	}
 	node := a.streamTriggerNode(task)
 	if node == nil {
 		return nil

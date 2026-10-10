@@ -38,6 +38,22 @@ func WithContextStreamMaxTokens(maxTokens int) Option {
 	}
 }
 
+// WithAuthoredMethod installs a recipe-authored decomposition: exactly the
+// authored tasks run, in declaration order, with zero LLM decomposition calls
+// (D4). The method is validated at construction, so a spec-invalid authored
+// task is an option-construction error the caller turns into a load error.
+func WithAuthoredMethod(name string, tasks []AuthoredTask) (Option, error) {
+	method, err := buildAuthoredMethod(name, tasks)
+	if err != nil {
+		return nil, err
+	}
+	return func(htn *HTNAgent) {
+		if htn != nil {
+			htn.authoredMethod = method
+		}
+	}, nil
+}
+
 // New builds an HTN agent with the given method library and options.
 func New(deps *paradigm.Deps, methods *runtime.MethodLibrary, opts ...Option) *HTNAgent {
 	agent := &HTNAgent{Methods: methods}
@@ -60,5 +76,6 @@ func (a *HTNAgent) InitializeDeps(deps *paradigm.Deps) error {
 	a.Model = deps.Model
 	a.Tools = deps.Registry
 	a.Config = deps.Config
+	a.StreamTrigger = deps.StreamTrigger
 	return a.Initialize(deps.Config)
 }

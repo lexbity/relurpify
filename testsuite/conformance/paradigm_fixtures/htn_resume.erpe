@@ -1,0 +1,11 @@
+thoughtrecipe htn_resume
+"Authored htn method with completed-step resume."
+
+agent decomposer uses htn
+
+run decomposer:
+  method "resume_method":
+    task "First task":
+      do relurpic:htn_probe_a
+    task "Second task":
+      do relurpic:htn_probe_b

@@ -71,6 +71,9 @@ var conformanceRunners = map[string]conformanceRunner{ //nolint:gochecknoglobals
 	"planner/generated_plan_bounded":            runPlannerGeneratedPlanBounded,
 	"planner/verify_verdict_fields":             runPlannerVerifyVerdictFields,
 	"planner/summarize_replaces_result":         runPlannerSummarizeReplacesResult,
+	"htn/authored_decomposition_order":          runHTNAuthoredDecompositionOrder,
+	"htn/task_capability_pin":                   runHTNTaskCapabilityPin,
+	"htn/authored_resume":                       runHTNAuthoredResume,
 }
 
 // runReactUntilBounds proves the `until` directive caps the react loop budget:
@@ -346,6 +349,70 @@ func runPlannerSummarizeReplacesResult(t *testing.T) {
 	}
 }
 
+// runHTNAuthoredDecompositionOrder proves the restored `method` directive:
+// authored tasks execute in declaration order with zero decomposition model
+// calls.
+func runHTNAuthoredDecompositionOrder(t *testing.T) {
+	t.Helper()
+	order := []string{}
+	reg := newSequenceRegistry(t, &order,
+		"euclo:cap.htn_probe_a", "euclo:cap.htn_probe_b", "euclo:cap.htn_probe_c")
+	mdl := &conformanceRecordingModel{text: "unused"}
+	env := runFixture(t, "htn_authored.erpe", paradigmDeps(mdl, reg))
+
+	if got := mdl.callCount(); got != 0 {
+		t.Fatalf("model calls = %d, want 0 (authored decomposition)", got)
+	}
+	want := []string{"euclo:cap.htn_probe_a", "euclo:cap.htn_probe_b", "euclo:cap.htn_probe_c"}
+	if len(order) != len(want) {
+		t.Fatalf("decomposed tasks executed = %v, want %v", order, want)
+	}
+	for i := range want {
+		if order[i] != want[i] {
+			t.Fatalf("task execution order = %v, want %v", order, want)
+		}
+	}
+	if method, _ := contextdata.GetTyped[string](env, "htn.method"); method != "full_analysis" {
+		t.Fatalf("htn.method = %q, want full_analysis", method)
+	}
+	if total, _ := contextdata.GetTyped[int](env, "htn.tasks_total"); total != 3 {
+		t.Fatalf("htn.tasks_total = %d, want 3", total)
+	}
+}
+
+// runHTNTaskCapabilityPin proves the restored `task` directive: a task's `do`
+// capability is the dispatched target.
+func runHTNTaskCapabilityPin(t *testing.T) {
+	t.Helper()
+	order := []string{}
+	reg := newSequenceRegistry(t, &order, "euclo:cap.htn_probe_pin")
+	mdl := &conformanceRecordingModel{text: "unused"}
+	env := runFixture(t, "htn_pin.erpe", paradigmDeps(mdl, reg))
+
+	if len(order) != 1 || order[0] != "euclo:cap.htn_probe_pin" {
+		t.Fatalf("capability invocations = %v, want [euclo:cap.htn_probe_pin]", order)
+	}
+	if completed, _ := contextdata.GetTyped[int](env, "htn.tasks_completed"); completed != 1 {
+		t.Fatalf("htn.tasks_completed = %d, want 1", completed)
+	}
+}
+
+// runHTNAuthoredResume proves completed tasks are not re-executed when
+// plan.completed_steps is pre-seeded.
+func runHTNAuthoredResume(t *testing.T) {
+	t.Helper()
+	order := []string{}
+	reg := newSequenceRegistry(t, &order, "euclo:cap.htn_probe_a", "euclo:cap.htn_probe_b")
+	mdl := &conformanceRecordingModel{text: "unused"}
+	env := contextdata.NewEnvelope("task-htn-resume", "session-conformance")
+	env.SetWorkingValueWithClass("plan.completed_steps", []string{"t1"}, contextdata.MemoryClassTask)
+	runFixtureInto(t, "htn_resume.erpe", paradigmDeps(mdl, reg), env)
+
+	if len(order) != 1 || order[0] != "euclo:cap.htn_probe_b" {
+		t.Fatalf("executed tasks = %v, want [euclo:cap.htn_probe_b] (t1 resumed)", order)
+	}
+}
+
 // newSequenceRegistry registers sequence-recording invocable
 // capabilities for the paradigm fixtures.
 func newSequenceRegistry(t *testing.T, order *[]string, ids ...string) *registry.CapabilityRegistry {
@@ -614,6 +681,9 @@ var caseStatus = map[string]string{ //nolint:gochecknoglobals // immutable matri
 	"planner/generated_plan_bounded":            "implemented",
 	"planner/verify_verdict_fields":             "implemented",
 	"planner/summarize_replaces_result":         "implemented",
+	"htn/authored_decomposition_order":          "implemented",
+	"htn/task_capability_pin":                   "implemented",
+	"htn/authored_resume":                       "implemented",
 }
 
 // restoredDirectives is the restoration audit (Wave 3): every (paradigm,
@@ -624,6 +694,7 @@ var caseStatus = map[string]string{ //nolint:gochecknoglobals // immutable matri
 var restoredDirectives = []string{ //nolint:gochecknoglobals // immutable audit result
 	"rewoo/plan", "rewoo/step", "rewoo/synthesize",
 	"planner/plan", "planner/step", "planner/verify", "planner/summarize",
+	"htn/method", "htn/task",
 }
 
 // deletedDirectives is the implement-or-delete audit outcome (FR-6): every
@@ -634,7 +705,6 @@ var restoredDirectives = []string{ //nolint:gochecknoglobals // immutable audit 
 // paradigm/directive for pairs that were once declared, and bare keywords for
 // vocabulary never owned by a paradigm.
 var deletedDirectives = []string{ //nolint:gochecknoglobals // immutable audit result
-	"htn/method", "htn/task",
 	"reflection/review", "reflection/revise",
 	"blackboard/source",
 	"detect", "clarify", "retry", "decompose", "solve",
