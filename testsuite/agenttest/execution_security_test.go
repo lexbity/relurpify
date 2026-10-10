@@ -21,6 +21,7 @@ func (f fakeRunner) Run(_ context.Context, req sandbox.CommandRequest) (*ports.C
 
 func validDescriptorWithWorkspace(t *testing.T, workspace string) *PreparedRunDescriptor {
 	t.Helper()
+	materializeRecipeWorkspace(t, workspace)
 	return &PreparedRunDescriptor{
 		RunID:                "r1",
 		SuitePath:            "/suite.yaml",

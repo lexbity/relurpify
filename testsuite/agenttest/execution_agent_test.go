@@ -46,7 +46,7 @@ func TestExecutorAgentInitializeFailureSurfaces(t *testing.T) {
 	deps := exec.assembleDeps(desc, exec.telemetry)
 	deps.Registry = nil
 
-	err := exec.createAgent(deps)
+	err := exec.createAgent(deps, desc.DerivedWorkspaceRoot)
 	if err == nil {
 		t.Fatal("expected error for nil registry, got nil")
 	}

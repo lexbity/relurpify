@@ -2,12 +2,16 @@ package euclo
 
 import (
 	"context"
+	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	registry "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/cognitionzoo/paradigm"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/named/euclo/grounding"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
@@ -31,6 +35,7 @@ var testRelurpicCapabilities = []string{ //nolint:gochecknoglobals // test fixtu
 }
 
 func TestAgentInitializeDoesNotPanic(t *testing.T) {
+	workspace := writeRecipeWorkspace(t)
 	deps := &paradigm.Deps{
 		Config: &execution.Config{
 			AgentSpec: &agentspec.AgentRuntimeSpec{
@@ -48,7 +53,7 @@ func TestAgentInitializeDoesNotPanic(t *testing.T) {
 		}
 	}()
 
-	err := agent.Initialize(nil)
+	err := initializeAgentIn(t, agent, workspace)
 	if err != nil {
 		t.Fatalf("agent.Initialize failed: %v", err)
 	}
@@ -97,10 +102,11 @@ func TestGroundingPortsUnwiredEmittedOnceForColdStart(t *testing.T) {
 	}
 	agent := New(deps, WithHITLBroker(testsupport.NewAutoApprovingBroker()), WithInteractionResolver(testhelper.NewPermissiveResolver()))
 
-	if err := agent.Initialize(nil); err != nil {
+	workspace := writeRecipeWorkspace(t)
+	if err := initializeAgentIn(t, agent, workspace); err != nil {
 		t.Fatalf("Initialize: %v", err)
 	}
-	if err := agent.Initialize(nil); err != nil {
+	if err := initializeAgentIn(t, agent, workspace); err != nil {
 		t.Fatalf("second Initialize: %v", err)
 	}
 
@@ -130,7 +136,7 @@ func TestGroundingPortsUnwiredAbsentWhenWired(t *testing.T) {
 		WithHITLBroker(testsupport.NewAutoApprovingBroker()), WithInteractionResolver(testhelper.NewPermissiveResolver()),
 	)
 
-	if err := agent.Initialize(nil); err != nil {
+	if err := initializeAgentIn(t, agent, writeRecipeWorkspace(t)); err != nil {
 		t.Fatalf("Initialize: %v", err)
 	}
 	if got := sink.count(telemetry.EventGroundingPortsUnwired); got != 0 {
@@ -171,4 +177,106 @@ func (s *recordingTelemetrySink) count(eventType telemetry.EventType) int {
 		}
 	}
 	return count
+}
+
+// TestInitializeResolvesWorkspaceFromDeps is FR-1: with no config override,
+// the recipe workspace comes from the embedding (IndexManager.WorkspacePath),
+// and the loaded registry is observable via ThoughtRecipeIDs.
+func TestInitializeResolvesWorkspaceFromDeps(t *testing.T) {
+	workspace := writeRecipeWorkspace(t)
+	deps := &paradigm.Deps{
+		Config: &execution.Config{
+			AgentSpec: &agentspec.AgentRuntimeSpec{
+				Capabilities: agentspec.AgentCapabilitiesSpec{Relurpic: append([]string{}, testRelurpicCapabilities...)},
+			},
+		},
+		Registry:     registry.NewRegistry(),
+		IndexManager: newTestIndexManager(t, workspace),
+	}
+	agent := New(deps)
+
+	if err := agent.Initialize(nil); err != nil {
+		t.Fatalf("Initialize: %v", err)
+	}
+	ids := agent.ThoughtRecipeIDs()
+	if len(ids) != 1 || ids[0] != "euclo.thoughtrecipe.probe" {
+		t.Fatalf("ThoughtRecipeIDs = %v, want [euclo.thoughtrecipe.probe]", ids)
+	}
+}
+
+// TestInitializeConfigWorkspaceOverridesDeps: the explicit config workspace
+// wins over the embedding workspace.
+func TestInitializeConfigWorkspaceOverridesDeps(t *testing.T) {
+	depsWorkspace := writeRecipeWorkspace(t)
+	overrideWorkspace := writeRecipeWorkspace(t)
+	deps := &paradigm.Deps{
+		Config: &execution.Config{
+			AgentSpec: &agentspec.AgentRuntimeSpec{
+				Capabilities: agentspec.AgentCapabilitiesSpec{Relurpic: append([]string{}, testRelurpicCapabilities...)},
+			},
+		},
+		Registry:     registry.NewRegistry(),
+		IndexManager: newTestIndexManager(t, depsWorkspace),
+	}
+	agent := New(deps)
+
+	if err := agent.Initialize(&execution.Config{Workspace: overrideWorkspace}); err != nil {
+		t.Fatalf("Initialize: %v", err)
+	}
+	// Both workspaces carry the same probe recipe, so resolve from the
+	// override path: corrupt the override's recipe and re-initialize a fresh
+	// agent to prove the override directory is the one read.
+	if err := os.WriteFile(
+		filepath.Join(overrideWorkspace, "relurpify_cfg", "euclo", "broken.erpe"),
+		[]byte("thoughtrecipe broken\n"), 0o644,
+	); err != nil {
+		t.Fatal(err)
+	}
+	agent2 := New(deps)
+	err := agent2.Initialize(&execution.Config{Workspace: overrideWorkspace})
+	if err == nil {
+		t.Fatal("expected Initialize to read the override workspace (broken recipe must fail the load)")
+	}
+}
+
+// TestInitializeMissingRecipeDirErrors: a resolved workspace without
+// relurpify_cfg/euclo is a boot error with the contract prefix, never a
+// silently empty registry.
+func TestInitializeMissingRecipeDirErrors(t *testing.T) {
+	deps := &paradigm.Deps{
+		Config: &execution.Config{
+			AgentSpec: &agentspec.AgentRuntimeSpec{
+				Capabilities: agentspec.AgentCapabilitiesSpec{Relurpic: append([]string{}, testRelurpicCapabilities...)},
+			},
+		},
+		Registry:     registry.NewRegistry(),
+		IndexManager: newTestIndexManager(t, t.TempDir()),
+	}
+	agent := New(deps)
+
+	err := agent.Initialize(nil)
+	if err == nil {
+		t.Fatal("expected error for workspace without relurpify_cfg/euclo")
+	}
+	if !strings.HasPrefix(err.Error(), "euclo: initialize: no recipes:") {
+		t.Fatalf("error %q does not carry the contract prefix", err)
+	}
+}
+
+// TestExecuteUninitializedErrors and TestBuildGraphUninitializedErrors: D-8
+// removed the lazy Initialize(nil) path — an uninitialized agent fails loudly.
+func TestExecuteUninitializedErrors(t *testing.T) {
+	agent := New(&paradigm.Deps{Registry: registry.NewRegistry()})
+	_, err := agent.Execute(context.Background(), &execution.Task{ID: "t"}, contextdata.NewEnvelope("t", "s"))
+	if err == nil || !strings.Contains(err.Error(), "euclo agent not initialized") {
+		t.Fatalf("Execute on uninitialized agent = %v, want not-initialized error", err)
+	}
+}
+
+func TestBuildGraphUninitializedErrors(t *testing.T) {
+	agent := New(&paradigm.Deps{Registry: registry.NewRegistry()})
+	_, err := agent.BuildGraph(context.Background(), &execution.Task{ID: "t"})
+	if err == nil || !strings.Contains(err.Error(), "euclo agent not initialized") {
+		t.Fatalf("BuildGraph on uninitialized agent = %v, want not-initialized error", err)
+	}
 }

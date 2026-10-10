@@ -1,12 +1,19 @@
 package thoughtrecipe
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 )
+
+// ErrNoRecipeDir reports that the resolved workspace has no
+// relurpify_cfg/euclo directory. After workspace-truth resolution (D-8) the
+// loader never sees a zero-value workspace, so a missing recipe directory is
+// a boot error, never a tolerated empty registry.
+var ErrNoRecipeDir = errors.New("no recipes")
 
 // Loader scans Euclo DSL thoughtrecipe sources from the workspace.
 type Loader struct {
@@ -64,9 +71,16 @@ func (l *Loader) WithCapabilityRegistry(reg CapabilityRegistryLookup) *Loader {
 // LoadWorkspace scans the Euclo source root under workspaceRoot and returns the
 // candidate thoughtrecipe files in lexical order.
 func (l *Loader) LoadWorkspace(workspaceRoot string) (*LoadResult, error) {
-	root := filepath.Join(strings.TrimSpace(workspaceRoot), ThoughtRecipeSourceRoot)
+	trimmedRoot := strings.TrimSpace(workspaceRoot)
+	if trimmedRoot == "" {
+		return nil, fmt.Errorf("recipe workspace root is required; refusing CWD-relative scan")
+	}
+	root := filepath.Join(trimmedRoot, ThoughtRecipeSourceRoot)
 	entries, err := os.ReadDir(root)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, fmt.Errorf("%w: %s missing under workspace %q", ErrNoRecipeDir, ThoughtRecipeSourceRoot, trimmedRoot)
+		}
 		return nil, fmt.Errorf("read euclo thoughtrecipe source root %q: %w", root, err)
 	}
 
@@ -80,7 +94,7 @@ func (l *Loader) LoadWorkspace(workspaceRoot string) (*LoadResult, error) {
 	sort.Strings(names)
 
 	result := &LoadResult{
-		Root:       strings.TrimSpace(workspaceRoot),
+		Root:       trimmedRoot,
 		SourceRoot: root,
 		Registry:   NewThoughtRecipeRegistry(),
 	}

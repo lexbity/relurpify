@@ -3,6 +3,8 @@ package services
 import (
 	"errors"
 	"io/fs"
+	"os"
+	"path/filepath"
 	"testing"
 
 	registry "codeburg.org/lexbit/relurpify/capability/registry"
@@ -84,7 +86,14 @@ func TestDefaultPromptRegistrarRegistersAndSkipsDuplicates(t *testing.T) {
 func TestDefaultThoughtRecipeLoaderLoadsRegistry(t *testing.T) {
 	var loader defaultThoughtRecipeLoader
 
-	result, err := loader.LoadAll(t.TempDir(), nil)
+	workspace := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(workspace, "relurpify_cfg", "euclo"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(workspace, "relurpify_cfg", "euclo", "probe.erpe"), []byte(testRecipeSource), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	result, err := loader.LoadAll(workspace, nil)
 	if err != nil {
 		t.Fatalf("LoadAll returned error: %v", err)
 	}
@@ -94,10 +103,36 @@ func TestDefaultThoughtRecipeLoaderLoadsRegistry(t *testing.T) {
 	if result.Registry == nil {
 		t.Fatal("expected non-nil registry")
 	}
-	if got := result.Registry.Count(); got != 0 {
-		t.Fatalf("expected empty registry, got %d thoughtrecipes", got)
+	if got := result.Registry.Count(); got != 1 {
+		t.Fatalf("expected 1 thoughtrecipe, got %d", got)
 	}
 }
+
+// TestDefaultThoughtRecipeLoaderMissingDirPropagates: the loader propagates
+// ErrNoRecipeDir instead of tolerating an absent recipe directory (D-8).
+func TestDefaultThoughtRecipeLoaderMissingDirPropagates(t *testing.T) {
+	var loader defaultThoughtRecipeLoader
+	_, err := loader.LoadAll(t.TempDir(), nil)
+	if !errors.Is(err, thoughtrecipepkg.ErrNoRecipeDir) {
+		t.Fatalf("error %v is not ErrNoRecipeDir", err)
+	}
+}
+
+// testRecipeSource is a minimal valid thoughtrecipe with no capability steps.
+const testRecipeSource = `thoughtrecipe euclo.thoughtrecipe.probe
+"Minimal probe recipe for loader tests."
+
+trigger as capability:
+  may read workspace
+
+input prompt: user.request
+
+agent worker uses react
+
+run worker:
+  from input.prompt
+  goal "Probe the workspace."
+`
 
 type stubCapabilityRegistrar struct {
 	called bool

@@ -73,9 +73,46 @@ func TestInstantiateAgentNilRegistry(t *testing.T) {
 	}
 }
 
-func TestEucloExecutesWithEmptyRegistry(t *testing.T) {
+// TestExecuteWithoutInitializeErrors: D-8 removed the lazy Initialize(nil)
+// path — an uninitialized agent fails loudly instead of self-initializing
+// against an ambiguous, CWD-dependent workspace.
+func TestExecuteWithoutInitializeErrors(t *testing.T) {
+	deps := &paradigm.Deps{
+		Registry: registry.NewRegistry(),
+		Model:    slice1Model{},
+	}
+	agent, err := instantiateAgent(deps, testsupport.NewAutoApprovingBroker(), testhelper.NewPermissiveResolver())
+	if err != nil {
+		t.Fatalf("instantiateAgent returned error: %v", err)
+	}
+
+	task := &execution.Task{
+		ID:          "slice-1-task",
+		Type:        "analysis",
+		Instruction: "hello",
+	}
+	env := contextdata.NewEnvelope(task.ID, "slice-1-session")
+
+	res, err := agent.Execute(context.Background(), task, env)
+	if err == nil || !strings.Contains(err.Error(), "euclo agent not initialized") {
+		t.Fatalf("Execute on uninitialized agent = (%#v, %v), want not-initialized error", res, err)
+	}
+	if res != nil {
+		t.Fatalf("Execute returned result %#v, want nil", res)
+	}
+}
+
+// TestEucloExecutesWithWorkspaceRecipes drives the full Execute path with the
+// recipe workspace resolved explicitly (D-8): recipes load from the declared
+// workspace, never the process CWD.
+func TestEucloExecutesWithWorkspaceRecipes(t *testing.T) {
 	tmp := t.TempDir()
-	t.Chdir(tmp)
+	if err := os.MkdirAll(filepath.Join(tmp, "relurpify_cfg", "euclo"), 0o755); err != nil {
+		t.Fatalf("mkdir recipe root: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(tmp, "relurpify_cfg", "euclo", "probe.erpe"), []byte(testRecipeSource), 0o644); err != nil {
+		t.Fatalf("write recipe: %v", err)
+	}
 
 	deps := &paradigm.Deps{
 		Registry: registry.NewRegistry(),
@@ -84,6 +121,9 @@ func TestEucloExecutesWithEmptyRegistry(t *testing.T) {
 	agent, err := instantiateAgent(deps, testsupport.NewAutoApprovingBroker(), testhelper.NewPermissiveResolver())
 	if err != nil {
 		t.Fatalf("instantiateAgent returned error: %v", err)
+	}
+	if err := agent.Initialize(&execution.Config{Workspace: tmp}); err != nil {
+		t.Fatalf("Initialize returned error: %v", err)
 	}
 
 	task := &execution.Task{
@@ -102,9 +142,24 @@ func TestEucloExecutesWithEmptyRegistry(t *testing.T) {
 	}
 }
 
+// testRecipeSource is a minimal valid thoughtrecipe with no capability steps.
+const testRecipeSource = `thoughtrecipe euclo.thoughtrecipe.probe
+"Minimal probe recipe for runtime boot tests."
+
+trigger as capability:
+  may read workspace
+
+input prompt: user.request
+
+agent worker uses react
+
+run worker:
+  from input.prompt
+  goal "Probe the workspace."
+`
+
 func TestEucloMalformedRecipeErrors(t *testing.T) {
 	tmp := t.TempDir()
-	t.Chdir(tmp)
 
 	sourceRoot := filepath.Join(tmp, "relurpify_cfg", "euclo")
 	if err := os.MkdirAll(sourceRoot, 0o700); err != nil {
@@ -121,6 +176,9 @@ func TestEucloMalformedRecipeErrors(t *testing.T) {
 	agent, err := instantiateAgent(deps, testsupport.NewAutoApprovingBroker(), testhelper.NewPermissiveResolver())
 	if err != nil {
 		t.Fatalf("instantiateAgent returned error: %v", err)
+	}
+	if err := agent.Initialize(&execution.Config{Workspace: tmp}); err == nil {
+		t.Fatal("Initialize unexpectedly succeeded with malformed recipe")
 	}
 
 	task := &execution.Task{

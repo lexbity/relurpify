@@ -105,7 +105,7 @@ func (e *PreparedRunExecutor) Execute(ctx context.Context, desc *PreparedRunDesc
 		return fmt.Errorf("model: %w", err)
 	}
 	deps := e.assembleDeps(desc, tel)
-	if err := e.createAgent(deps); err != nil {
+	if err := e.createAgent(deps, firstNonEmpty(desc.DerivedWorkspaceRoot, desc.WorkspaceRoot)); err != nil {
 		return fmt.Errorf("agent: %w", err)
 	}
 	task := &execution.Task{
@@ -366,7 +366,7 @@ func (e *PreparedRunExecutor) assembleDeps(desc *PreparedRunDescriptor, tel tele
 	}
 }
 
-func (e *PreparedRunExecutor) createAgent(deps *paradigm.Deps) error {
+func (e *PreparedRunExecutor) createAgent(deps *paradigm.Deps, workspace string) error {
 	agent := euclo.New(
 		deps,
 		euclo.WithCheckpointRepository(deps.AgentLifecycle),
@@ -377,7 +377,9 @@ func (e *PreparedRunExecutor) createAgent(deps *paradigm.Deps) error {
 		// never a production approval switch.
 		euclo.WithInteractionResolver(testhelper.NewPermissiveResolver()),
 	)
-	if err := agent.Initialize(nil); err != nil {
+	// D-8: recipe loading resolves from the explicit workspace — the derived
+	// workspace the harness materialized — never from the process CWD.
+	if err := agent.Initialize(&execution.Config{Workspace: workspace}); err != nil {
 		return err
 	}
 	e.agent = agent

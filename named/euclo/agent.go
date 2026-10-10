@@ -2,6 +2,7 @@ package euclo
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -110,7 +111,7 @@ func (a *Agent) Initialize(config *execution.Config) error {
 		return nil
 	}
 
-	if a.deps.Registry == nil {
+	if a.deps == nil || a.deps.Registry == nil {
 		return fmt.Errorf("workspace capability registry is nil")
 	}
 
@@ -131,15 +132,26 @@ func (a *Agent) Initialize(config *execution.Config) error {
 	// references resolve at load time (FR-28), which is only possible with
 	// the registry present. A nil registry here is a wiring bug, not a
 	// degraded mode.
-	if a.deps == nil || a.deps.Registry == nil {
-		return fmt.Errorf("agent capability registry is required to load thoughtrecipes")
-	}
+	//
+	// Workspace resolution (D-8): explicit config override first, then the
+	// embedding's declared workspace, then a hard error. The process working
+	// directory is never consulted — a CWD-dependent scan is how registries
+	// end up silently empty.
 	workspace := ""
 	if config != nil {
-		workspace = config.Workspace
+		workspace = strings.TrimSpace(config.Workspace)
+	}
+	if workspace == "" {
+		workspace = workspaceRootPath(a.deps)
+	}
+	if workspace == "" {
+		return fmt.Errorf("euclo: recipe workspace unresolved: config.Workspace empty and no IndexManager workspace")
 	}
 	loaded, err := registrar.LoadThoughtRecipes(workspace, services.CapabilityLookup(a.deps.Registry))
 	if err != nil {
+		if errors.Is(err, thoughtrecipe.ErrNoRecipeDir) {
+			return fmt.Errorf("euclo: initialize: %w", err)
+		}
 		return fmt.Errorf("failed to load thoughtrecipes: %w", err)
 	}
 	if loaded != nil && loaded.Registry != nil {
@@ -183,10 +195,11 @@ func (a *Agent) GroundingComposition() string {
 }
 
 func (a *Agent) Execute(ctx context.Context, task *execution.Task, env *contextdata.Envelope) (*execution.Result, error) {
+	// D-8: no lazy self-initialization. An uninitialized agent would resolve
+	// its recipe workspace from ambiguous state; callers that want lazy
+	// behavior initialize explicitly.
 	if !a.initialized {
-		if err := a.Initialize(nil); err != nil {
-			return nil, fmt.Errorf("failed to initialize agent: %w", err)
-		}
+		return nil, fmt.Errorf("euclo agent not initialized")
 	}
 
 	if a.deps.StreamTrigger != nil {
@@ -213,9 +226,7 @@ func (a *Agent) Execute(ctx context.Context, task *execution.Task, env *contextd
 
 func (a *Agent) BuildGraph(ctx context.Context, task *execution.Task) (*agentgraph.Graph, error) {
 	if !a.initialized {
-		if err := a.Initialize(nil); err != nil {
-			return nil, fmt.Errorf("failed to initialize agent: %w", err)
-		}
+		return nil, fmt.Errorf("euclo agent not initialized")
 	}
 
 	resumeClassification, resumeRouteSelection := a.resumeStateSnapshot()
@@ -277,6 +288,16 @@ func workspaceRootPath(deps *paradigm.Deps) string {
 		return ""
 	}
 	return strings.TrimSpace(deps.IndexManager.WorkspacePath())
+}
+
+// ThoughtRecipeIDs lists the loaded recipe IDs. Boot and harness surfaces read
+// this to prove the registry is populated; it deliberately does not expose
+// compiled plans.
+func (a *Agent) ThoughtRecipeIDs() []string {
+	if a == nil || a.thoughtrecipeRegistry == nil {
+		return nil
+	}
+	return a.thoughtrecipeRegistry.List()
 }
 
 func seedTaskEnvelope(env *contextdata.Envelope, task *execution.Task) {

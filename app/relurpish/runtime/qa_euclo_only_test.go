@@ -3,6 +3,7 @@ package runtime
 import (
 	"codeburg.org/lexbit/relurpify/governance/sandbox"
 	"context"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -97,9 +98,17 @@ func TestQA_NilRegistryNoPanic(t *testing.T) {
 	_, _ = instantiateAgent(deps, testsupport.NewAutoApprovingBroker(), testhelper.NewPermissiveResolver())
 }
 
-func TestQA_EucloExecutesEmptyRegistry(t *testing.T) {
+// TestQA_EucloExecutesWorkspaceRecipes: the QA-level Execute path with the
+// recipe workspace resolved explicitly (D-8) — the CWD-dependent empty
+// registry mode no longer exists.
+func TestQA_EucloExecutesWorkspaceRecipes(t *testing.T) {
 	tmp := t.TempDir()
-	t.Chdir(tmp)
+	if err := os.MkdirAll(filepath.Join(tmp, "relurpify_cfg", "euclo"), 0o755); err != nil {
+		t.Fatalf("mkdir recipe root: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(tmp, "relurpify_cfg", "euclo", "probe.erpe"), []byte(testRecipeSource), 0o644); err != nil {
+		t.Fatalf("write recipe: %v", err)
+	}
 
 	deps := &paradigm.Deps{
 		Registry: registry.NewRegistry(),
@@ -108,6 +117,9 @@ func TestQA_EucloExecutesEmptyRegistry(t *testing.T) {
 	agent, err := instantiateAgent(deps, testsupport.NewAutoApprovingBroker(), testhelper.NewPermissiveResolver())
 	if err != nil {
 		t.Fatalf("instantiateAgent failed: %v", err)
+	}
+	if err := agent.Initialize(&execution.Config{Workspace: tmp}); err != nil {
+		t.Fatalf("Initialize failed: %v", err)
 	}
 
 	task := &execution.Task{
@@ -127,7 +139,6 @@ func TestQA_EucloExecutesEmptyRegistry(t *testing.T) {
 
 func TestQA_MalformedRecipeErrorsNotSwallowed(t *testing.T) {
 	tmp := t.TempDir()
-	t.Chdir(tmp)
 
 	sourceRoot := filepath.Join(tmp, "relurpify_cfg", "euclo")
 	if err := fs.MkdirAllSecure(sourceRoot); err != nil {
@@ -144,6 +155,9 @@ func TestQA_MalformedRecipeErrorsNotSwallowed(t *testing.T) {
 	agent, err := instantiateAgent(deps, testsupport.NewAutoApprovingBroker(), testhelper.NewPermissiveResolver())
 	if err != nil {
 		t.Fatalf("instantiateAgent failed: %v", err)
+	}
+	if err := agent.Initialize(&execution.Config{Workspace: tmp}); err == nil {
+		t.Fatal("Initialize unexpectedly succeeded with malformed recipe")
 	}
 
 	task := &execution.Task{

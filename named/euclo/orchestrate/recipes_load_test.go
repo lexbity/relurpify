@@ -2,6 +2,7 @@ package orchestrate
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
@@ -54,4 +55,23 @@ var canonicalTestRecipeIDs = []string{
 	"euclo.thoughtrecipe.dep_upgrade",
 	"euclo.thoughtrecipe.test_synthesis",
 	"euclo.thoughtrecipe.extract_func",
+}
+
+// TestLoadWorkspaceMissingRecipeDirErrors pins the empty-vs-missing
+// distinction (§5.5): under a resolved, non-empty workspace the loader
+// returns typed ErrNoRecipeDir when relurpify_cfg/euclo is absent — the
+// os.ErrNotExist tolerance was deleted with CWD-relative loading (D-8).
+func TestLoadWorkspaceMissingRecipeDirErrors(t *testing.T) {
+	loader := thoughtrecipepkg.NewLoader()
+	_, err := loader.LoadWorkspace(t.TempDir())
+	if err == nil {
+		t.Fatal("expected ErrNoRecipeDir for workspace without relurpify_cfg/euclo")
+	}
+	if !errors.Is(err, thoughtrecipepkg.ErrNoRecipeDir) {
+		t.Fatalf("error %v is not ErrNoRecipeDir", err)
+	}
+
+	if _, err := loader.LoadWorkspace(""); err == nil {
+		t.Fatal("expected error for empty workspace root (CWD-relative scan forbidden)")
+	}
 }

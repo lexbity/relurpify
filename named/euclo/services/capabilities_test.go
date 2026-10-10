@@ -1,7 +1,6 @@
 package services
 
 import (
-	"path/filepath"
 	"sort"
 	"testing"
 
@@ -118,18 +117,5 @@ func TestDefaultPromptRegistrarNilRegistry(t *testing.T) {
 	var reg defaultPromptRegistrar
 	if err := reg.RegisterAll(nil); err != nil {
 		t.Fatalf("nil prompt registry must be a no-op: %v", err)
-	}
-}
-
-// TestDefaultThoughtRecipeLoaderMissingWorkspace covers the os.ErrNotExist
-// degradation branch: a missing workspace yields an empty registry, not an error.
-func TestDefaultThoughtRecipeLoaderMissingWorkspace(t *testing.T) {
-	var loader defaultThoughtRecipeLoader
-	result, err := loader.LoadAll(filepath.Join(t.TempDir(), "missing"), nil)
-	if err != nil {
-		t.Fatalf("missing workspace must degrade to an empty registry: %v", err)
-	}
-	if result == nil || result.Registry == nil {
-		t.Fatal("expected an empty registry result")
 	}
 }

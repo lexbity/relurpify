@@ -46,6 +46,9 @@ func TestBuildGraphReturnsGraph(t *testing.T) {
 		Registry: registry.NewRegistry(),
 	}
 	agent := New(deps, WithHITLBroker(testsupport.NewAutoApprovingBroker()), WithInteractionResolver(testhelper.NewPermissiveResolver()))
+	if err := initializeAgentIn(t, agent, writeRecipeWorkspace(t)); err != nil {
+		t.Fatalf("Initialize returned error: %v", err)
+	}
 
 	task := &execution.Task{
 		ID:          "test-task",
@@ -76,7 +79,7 @@ func TestResolverRequired(t *testing.T) {
 		Registry: registry.NewRegistry(),
 	}
 	agent := New(deps, WithHITLBroker(testsupport.NewAutoApprovingBroker()))
-	if err := agent.Initialize(nil); err != nil {
+	if err := initializeAgentIn(t, agent, writeRecipeWorkspace(t)); err != nil {
 		t.Fatalf("Initialize: %v", err)
 	}
 	task := &execution.Task{ID: "test-task", Type: "analysis", Instruction: "test instruction"}
@@ -151,7 +154,7 @@ func TestBuildGraphResumeStateSkipsIntake(t *testing.T) {
 		Registry: registry.NewRegistry(),
 	}
 	agent := New(deps, WithHITLBroker(testsupport.NewAutoApprovingBroker()), WithInteractionResolver(testhelper.NewPermissiveResolver()))
-	if err := agent.Initialize(nil); err != nil {
+	if err := initializeAgentIn(t, agent, writeRecipeWorkspace(t)); err != nil {
 		t.Fatalf("Initialize returned error: %v", err)
 	}
 	agent.deps.Registry = nil
@@ -194,7 +197,7 @@ func TestInitializeStoresConfig(t *testing.T) {
 	}
 	agent := New(deps, WithHITLBroker(testsupport.NewAutoApprovingBroker()), WithInteractionResolver(testhelper.NewPermissiveResolver()))
 
-	config := &execution.Config{}
+	config := &execution.Config{Workspace: writeRecipeWorkspace(t)}
 
 	err := agent.Initialize(config)
 	if err != nil {
