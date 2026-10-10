@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	planneragent "codeburg.org/lexbit/relurpify/cognitionzoo/planner"
 	rewooagent "codeburg.org/lexbit/relurpify/cognitionzoo/rewoo"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/context/knowledge"
@@ -51,6 +52,8 @@ func ClassifyFailure(err error) euclotypes.FailureKind {
 	case errors.Is(err, context.DeadlineExceeded):
 		return euclotypes.FailureModelUnavailable
 	case errors.Is(err, rewooagent.ErrRewooPlanInvalid):
+		return euclotypes.FailureModelInvalidOutput
+	case errors.Is(err, planneragent.ErrInvalidModelOutput):
 		return euclotypes.FailureModelInvalidOutput
 	default:
 		var denied *permissions.PermissionDeniedError

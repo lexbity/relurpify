@@ -467,3 +467,56 @@ run executor:
 		t.Fatalf("error text %q missing the nested-item rejection", msg)
 	}
 }
+
+// TestPlannerOrderAndCardinality proves the planner's load-time rules:
+// `step` without `plan` is a Requires error, `summarize` before `step` is an
+// order error, and two `verify` clauses violate non-repeatable cardinality.
+func TestPlannerOrderAndCardinality(t *testing.T) {
+	t.Run("step requires plan", func(t *testing.T) {
+		msg := contractErrorText(t, `thoughtrecipe planner_missing_plan
+"Missing plan."
+
+agent plan_runner uses planner
+
+run plan_runner:
+  step "x":
+    do relurpic:y
+`)
+		if !strings.Contains(msg, `requires directive "plan"`) {
+			t.Fatalf("error text %q missing the Requires violation", msg)
+		}
+	})
+
+	t.Run("summarize before step", func(t *testing.T) {
+		msg := contractErrorText(t, `thoughtrecipe planner_order
+"Order."
+
+agent plan_runner uses planner
+
+run plan_runner:
+  plan "p"
+  summarize "s"
+  step "x":
+    do relurpic:y
+`)
+		if !strings.Contains(msg, "out of order") {
+			t.Fatalf("error text %q missing the order violation", msg)
+		}
+	})
+
+	t.Run("duplicate verify", func(t *testing.T) {
+		msg := contractErrorText(t, `thoughtrecipe planner_dup
+"Duplicate."
+
+agent plan_runner uses planner
+
+run plan_runner:
+  plan "p"
+  verify "a"
+  verify "b"
+`)
+		if !strings.Contains(msg, "not repeatable") {
+			t.Fatalf("error text %q missing the cardinality violation", msg)
+		}
+	})
+}

@@ -1,0 +1,10 @@
+thoughtrecipe planner_summarize
+"Planner summarization: the result is replaced by a synthesized summary."
+
+agent plan_runner uses planner
+
+run plan_runner:
+  plan "Check the workspace."
+  step "Inspect":
+    do relurpic:planner_probe
+  summarize "Produce a concise report."

@@ -1,0 +1,7 @@
+thoughtrecipe planner_generated
+"Generated planner plan: one bounded, validated model call."
+
+agent plan_runner uses planner
+
+run plan_runner:
+  plan "List the checks needed."

@@ -138,6 +138,9 @@ const (
 	EventPlannerPlanStarted   EventType = "planner.plan.started"
 	EventPlannerPlanCompleted EventType = "planner.plan.completed"
 	EventPlannerPlanFailed    EventType = "planner.plan.failed"
+	// EventPlannerPhase frames each directive-mode phase boundary
+	// (plan/execute/verify/summarize) with its provenance origin.
+	EventPlannerPhase EventType = "planner.phase"
 )
 
 // Operational-failure and grounded-restore events (Wave 2 Phase 4). The

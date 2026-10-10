@@ -16,12 +16,29 @@ func TestPlannerContractRegistered(t *testing.T) {
 	if c.Shape != paradigm.ShapePlanExecute {
 		t.Fatalf("planner shape = %q, want %q", c.Shape, paradigm.ShapePlanExecute)
 	}
-	// The plan/step/verify/summarize vocabularies were never consumed by the
-	// planner runtime; per implement-or-delete they are retired, so the
-	// contract declares no directive clauses. Any directive a recipe carries
-	// in a planner run block is a load error, not a silent no-op.
-	if got := c.DirectiveNames(); len(got) != 0 {
-		t.Fatalf("planner directive names = %v, want none (retired no-op vocabularies)", got)
+	// The plan/step/verify/summarize vocabularies are restored as honored
+	// runner semantics (Wave 3). `plan` is deliberately not Required so a
+	// goal-only planner recipe keeps the library behavior (FR-9); `step`
+	// Requires `plan` (D1 mixing rule).
+	want := []string{"plan", "step", "verify", "summarize"}
+	got := c.DirectiveNames()
+	if len(got) != len(want) {
+		t.Fatalf("planner directive names = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("planner directive names = %v, want %v", got, want)
+		}
+	}
+	if c.OrderRule() == nil {
+		t.Fatal("expected planner to declare an order rule")
+	}
+	stepSpec, ok := c.Directive("step")
+	if !ok || len(stepSpec.Requires) != 1 || stepSpec.Requires[0] != "plan" {
+		t.Fatalf("planner step spec Requires = %v, want [plan]", stepSpec.Requires)
+	}
+	if required := c.RequiredNames(); len(required) != 0 {
+		t.Fatalf("planner required directives = %v, want none (goal-only recipes preserved)", required)
 	}
 }
 

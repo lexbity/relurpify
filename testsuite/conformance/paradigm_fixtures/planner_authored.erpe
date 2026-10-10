@@ -1,0 +1,11 @@
+thoughtrecipe planner_authored
+"Authored planner plan: deterministic steps with zero planning model calls."
+
+agent plan_runner uses planner
+
+run plan_runner:
+  plan "Identify the checks needed."
+  step "Check architecture":
+    do relurpic:planner_probe_a
+  step "Suggest targeted fixes":
+    do relurpic:planner_probe_b

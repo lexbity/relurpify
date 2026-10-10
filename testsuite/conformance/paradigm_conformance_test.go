@@ -59,13 +59,18 @@ type conformanceRunner func(t *testing.T)
 
 // conformanceRunners maps every declared ConformanceCase ID to its runner.
 var conformanceRunners = map[string]conformanceRunner{ //nolint:gochecknoglobals // immutable case table
-	"react/until_bounds_iterations":         runReactUntilBounds,
-	"chainer/link_builds_chain":             runChainerLinks,
-	"chainer/link_from_registry_prompt":     runChainerFromRegistryPrompt,
-	"pipeline/stages_execute_in_order":      runPipelineStages,
-	"rewoo/authored_plan_skips_planner":     runRewooAuthoredPlanSkipsPlanner,
-	"rewoo/authored_steps_execute_in_order": runRewooAuthoredStepsInOrder,
-	"rewoo/synthesize_guidance":             runRewooSynthesizeGuidance,
+	"react/until_bounds_iterations":             runReactUntilBounds,
+	"chainer/link_builds_chain":                 runChainerLinks,
+	"chainer/link_from_registry_prompt":         runChainerFromRegistryPrompt,
+	"pipeline/stages_execute_in_order":          runPipelineStages,
+	"rewoo/authored_plan_skips_planner":         runRewooAuthoredPlanSkipsPlanner,
+	"rewoo/authored_steps_execute_in_order":     runRewooAuthoredStepsInOrder,
+	"rewoo/synthesize_guidance":                 runRewooSynthesizeGuidance,
+	"planner/authored_plan_zero_planning_calls": runPlannerAuthoredPlanZeroPlanningCalls,
+	"planner/authored_steps_execute_in_order":   runPlannerAuthoredStepsInOrder,
+	"planner/generated_plan_bounded":            runPlannerGeneratedPlanBounded,
+	"planner/verify_verdict_fields":             runPlannerVerifyVerdictFields,
+	"planner/summarize_replaces_result":         runPlannerSummarizeReplacesResult,
 }
 
 // runReactUntilBounds proves the `until` directive caps the react loop budget:
@@ -174,7 +179,7 @@ func runPipelineStages(t *testing.T) {
 func runRewooAuthoredPlanSkipsPlanner(t *testing.T) {
 	t.Helper()
 	order := []string{}
-	reg := newRewooConformanceRegistry(t, &order, "euclo:cap.conformance_layer_check", "euclo:cap.conformance_fix")
+	reg := newSequenceRegistry(t, &order, "euclo:cap.conformance_layer_check", "euclo:cap.conformance_fix")
 	mdl := &conformanceRecordingModel{text: "synthesized"}
 	env := runFixture(t, "rewoo_authored.erpe", paradigmDeps(mdl, reg))
 
@@ -201,7 +206,7 @@ func runRewooAuthoredPlanSkipsPlanner(t *testing.T) {
 func runRewooAuthoredStepsInOrder(t *testing.T) {
 	t.Helper()
 	order := []string{}
-	reg := newRewooConformanceRegistry(t, &order, "euclo:cap.conformance_layer_check", "euclo:cap.conformance_fix")
+	reg := newSequenceRegistry(t, &order, "euclo:cap.conformance_layer_check", "euclo:cap.conformance_fix")
 	mdl := &conformanceRecordingModel{text: "synthesized"}
 	runFixture(t, "rewoo_authored.erpe", paradigmDeps(mdl, reg))
 
@@ -222,7 +227,7 @@ func runRewooAuthoredStepsInOrder(t *testing.T) {
 func runRewooSynthesizeGuidance(t *testing.T) {
 	t.Helper()
 	order := []string{}
-	reg := newRewooConformanceRegistry(t, &order, "euclo:cap.conformance_layer_check")
+	reg := newSequenceRegistry(t, &order, "euclo:cap.conformance_layer_check")
 	mdl := &conformanceRecordingModel{text: "synthesized"}
 	runFixture(t, "rewoo_guidance.erpe", paradigmDeps(mdl, reg))
 
@@ -239,9 +244,111 @@ func runRewooSynthesizeGuidance(t *testing.T) {
 	}
 }
 
-// newRewooConformanceRegistry registers sequence-recording invocable
-// capabilities for the rewoo fixtures.
-func newRewooConformanceRegistry(t *testing.T, order *[]string, ids ...string) *registry.CapabilityRegistry {
+// runPlannerAuthoredPlanZeroPlanningCalls proves the restored `plan` directive:
+// an authored plan+steps executes with zero planning-model calls and records
+// plan_origin=authored.
+func runPlannerAuthoredPlanZeroPlanningCalls(t *testing.T) {
+	t.Helper()
+	order := []string{}
+	reg := newSequenceRegistry(t, &order, "euclo:cap.planner_probe_a", "euclo:cap.planner_probe_b")
+	mdl := &conformanceRecordingModel{text: "unused"}
+	env := runFixture(t, "planner_authored.erpe", paradigmDeps(mdl, reg))
+
+	if got := mdl.callCount(); got != 0 {
+		t.Fatalf("model calls = %d, want 0 (authored plan; no verify/summarize)", got)
+	}
+	if origin, _ := contextdata.GetTyped[string](env, "planner.plan_origin"); origin != "authored" {
+		t.Fatalf("planner.plan_origin = %q, want authored", origin)
+	}
+	if len(order) != 2 {
+		t.Fatalf("executed steps = %d, want 2", len(order))
+	}
+}
+
+// runPlannerAuthoredStepsInOrder proves the restored `step` directive: authored
+// steps execute in declaration order.
+func runPlannerAuthoredStepsInOrder(t *testing.T) {
+	t.Helper()
+	order := []string{}
+	reg := newSequenceRegistry(t, &order, "euclo:cap.planner_probe_a", "euclo:cap.planner_probe_b")
+	mdl := &conformanceRecordingModel{text: "unused"}
+	runFixture(t, "planner_authored.erpe", paradigmDeps(mdl, reg))
+
+	want := []string{"euclo:cap.planner_probe_a", "euclo:cap.planner_probe_b"}
+	if len(order) != len(want) {
+		t.Fatalf("executed steps = %v, want %v", order, want)
+	}
+	for i := range want {
+		if order[i] != want[i] {
+			t.Fatalf("execution order = %v, want %v", order, want)
+		}
+	}
+}
+
+// runPlannerGeneratedPlanBounded proves a plan-only directive generates a
+// bounded plan with one model call and records plan_origin=generated.
+func runPlannerGeneratedPlanBounded(t *testing.T) {
+	t.Helper()
+	order := []string{}
+	reg := newSequenceRegistry(t, &order, "euclo:cap.planner_probe_a", "euclo:cap.planner_probe_b")
+	mdl := &conformanceRecordingModel{text: `{"goal":"checks","steps":[{"id":"s1","text":"first check","tool":"euclo:cap.planner_probe_a"},{"id":"s2","text":"second check","tool":"euclo:cap.planner_probe_b"}]}`}
+	env := runFixture(t, "planner_generated.erpe", paradigmDeps(mdl, reg))
+
+	if got := mdl.callCount(); got != 1 {
+		t.Fatalf("model calls = %d, want 1 (generated plan only)", got)
+	}
+	if origin, _ := contextdata.GetTyped[string](env, "planner.plan_origin"); origin != "generated" {
+		t.Fatalf("planner.plan_origin = %q, want generated", origin)
+	}
+	if len(order) != 2 {
+		t.Fatalf("executed steps = %v, want 2", order)
+	}
+}
+
+// runPlannerVerifyVerdictFields proves the restored `verify` directive writes
+// the verdict fields; a fail verdict is data, not an operational failure.
+func runPlannerVerifyVerdictFields(t *testing.T) {
+	t.Helper()
+	order := []string{}
+	reg := newSequenceRegistry(t, &order, "euclo:cap.planner_probe")
+	mdl := &conformanceRecordingModel{text: `{"verdict":"fail","issues":["missing evidence"]}`}
+	env := runFixture(t, "planner_verify.erpe", paradigmDeps(mdl, reg))
+
+	if verdict, _ := contextdata.GetTyped[string](env, "planner.verification"); verdict != "fail" {
+		t.Fatalf("planner.verification = %q, want fail", verdict)
+	}
+	issues, ok := contextdata.GetTyped[any](env, "planner.verification_issues")
+	if !ok {
+		t.Fatal("expected planner.verification_issues on the envelope")
+	}
+	if got := fmt.Sprint(issues); got != "[missing evidence]" {
+		t.Fatalf("planner.verification_issues = %v", issues)
+	}
+	if captured, _ := contextdata.GetTyped[string](env, "state.planner_verification"); captured != "fail" {
+		t.Fatalf("captured state.planner_verification = %q, want fail (capture binds the verification result field)", captured)
+	}
+}
+
+// runPlannerSummarizeReplacesResult proves the restored `summarize` directive
+// replaces result and preserves the pre-summary aggregate as result_raw.
+func runPlannerSummarizeReplacesResult(t *testing.T) {
+	t.Helper()
+	order := []string{}
+	reg := newSequenceRegistry(t, &order, "euclo:cap.planner_probe")
+	mdl := &conformanceRecordingModel{text: "final report text"}
+	env := runFixture(t, "planner_summarize.erpe", paradigmDeps(mdl, reg))
+
+	if result, _ := contextdata.GetTyped[string](env, "planner.result"); result != "final report text" {
+		t.Fatalf("planner.result = %q, want the synthesized summary", result)
+	}
+	if _, ok := contextdata.GetTyped[any](env, "planner.result_raw"); !ok {
+		t.Fatal("expected planner.result_raw (pre-summary aggregate)")
+	}
+}
+
+// newSequenceRegistry registers sequence-recording invocable
+// capabilities for the paradigm fixtures.
+func newSequenceRegistry(t *testing.T, order *[]string, ids ...string) *registry.CapabilityRegistry {
 	t.Helper()
 	reg := registry.NewRegistry()
 	for _, id := range ids {
@@ -495,13 +602,18 @@ type paradigmMatrix struct {
 // caseStatus annotates whether a case's effect predated this phase (honored)
 // or was implemented inside it (implemented).
 var caseStatus = map[string]string{ //nolint:gochecknoglobals // immutable matrix annotation
-	"react/until_bounds_iterations":         "implemented",
-	"chainer/link_builds_chain":             "implemented",
-	"chainer/link_from_registry_prompt":     "implemented",
-	"pipeline/stages_execute_in_order":      "honored",
-	"rewoo/authored_plan_skips_planner":     "implemented",
-	"rewoo/authored_steps_execute_in_order": "implemented",
-	"rewoo/synthesize_guidance":             "implemented",
+	"react/until_bounds_iterations":             "implemented",
+	"chainer/link_builds_chain":                 "implemented",
+	"chainer/link_from_registry_prompt":         "implemented",
+	"pipeline/stages_execute_in_order":          "honored",
+	"rewoo/authored_plan_skips_planner":         "implemented",
+	"rewoo/authored_steps_execute_in_order":     "implemented",
+	"rewoo/synthesize_guidance":                 "implemented",
+	"planner/authored_plan_zero_planning_calls": "implemented",
+	"planner/authored_steps_execute_in_order":   "implemented",
+	"planner/generated_plan_bounded":            "implemented",
+	"planner/verify_verdict_fields":             "implemented",
+	"planner/summarize_replaces_result":         "implemented",
 }
 
 // restoredDirectives is the restoration audit (Wave 3): every (paradigm,
@@ -511,6 +623,7 @@ var caseStatus = map[string]string{ //nolint:gochecknoglobals // immutable matri
 // invariant test enforces that and that no entry lingers in the deleted list.
 var restoredDirectives = []string{ //nolint:gochecknoglobals // immutable audit result
 	"rewoo/plan", "rewoo/step", "rewoo/synthesize",
+	"planner/plan", "planner/step", "planner/verify", "planner/summarize",
 }
 
 // deletedDirectives is the implement-or-delete audit outcome (FR-6): every
@@ -521,7 +634,6 @@ var restoredDirectives = []string{ //nolint:gochecknoglobals // immutable audit 
 // paradigm/directive for pairs that were once declared, and bare keywords for
 // vocabulary never owned by a paradigm.
 var deletedDirectives = []string{ //nolint:gochecknoglobals // immutable audit result
-	"planner/plan", "planner/step", "planner/verify", "planner/summarize",
 	"htn/method", "htn/task",
 	"reflection/review", "reflection/revise",
 	"blackboard/source",

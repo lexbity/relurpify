@@ -10,6 +10,27 @@ declared:
       status: honored
       cases:
         - pipeline/stages_execute_in_order
+    - paradigm: planner
+      directive: plan
+      status: implemented
+      cases:
+        - planner/authored_plan_zero_planning_calls
+        - planner/generated_plan_bounded
+    - paradigm: planner
+      directive: step
+      status: implemented
+      cases:
+        - planner/authored_steps_execute_in_order
+    - paradigm: planner
+      directive: summarize
+      status: implemented
+      cases:
+        - planner/summarize_replaces_result
+    - paradigm: planner
+      directive: verify
+      status: implemented
+      cases:
+        - planner/verify_verdict_fields
     - paradigm: react
       directive: until
       status: implemented
@@ -31,6 +52,27 @@ declared:
       cases:
         - rewoo/synthesize_guidance
 restored:
+    - paradigm: planner
+      directive: plan
+      status: implemented
+      cases:
+        - planner/authored_plan_zero_planning_calls
+        - planner/generated_plan_bounded
+    - paradigm: planner
+      directive: step
+      status: implemented
+      cases:
+        - planner/authored_steps_execute_in_order
+    - paradigm: planner
+      directive: summarize
+      status: implemented
+      cases:
+        - planner/summarize_replaces_result
+    - paradigm: planner
+      directive: verify
+      status: implemented
+      cases:
+        - planner/verify_verdict_fields
     - paradigm: rewoo
       directive: plan
       status: implemented
@@ -53,10 +95,6 @@ deleted:
     - detect
     - htn/method
     - htn/task
-    - planner/plan
-    - planner/step
-    - planner/summarize
-    - planner/verify
     - reflection/review
     - reflection/revise
     - retry

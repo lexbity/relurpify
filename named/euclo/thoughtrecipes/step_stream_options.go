@@ -7,6 +7,7 @@ import (
 	chaineragent "codeburg.org/lexbit/relurpify/cognitionzoo/chainer"
 	htnagent "codeburg.org/lexbit/relurpify/cognitionzoo/htn"
 	pipelineagent "codeburg.org/lexbit/relurpify/cognitionzoo/pipeline"
+	planneragent "codeburg.org/lexbit/relurpify/cognitionzoo/planner"
 	reactagent "codeburg.org/lexbit/relurpify/cognitionzoo/react"
 	rewooagent "codeburg.org/lexbit/relurpify/cognitionzoo/rewoo"
 	"codeburg.org/lexbit/relurpify/context/contextstream"
@@ -87,6 +88,22 @@ func (c *stepCore) streamOptionsPipeline() []pipelineagent.Option {
 		}
 		if c.step.Stream.MaxTokens > 0 {
 			opts = append(opts, pipelineagent.WithContextStreamMaxTokens(c.step.Stream.MaxTokens))
+		}
+	}
+	return opts
+}
+
+func (c *stepCore) streamOptionsPlanner() []planneragent.Option {
+	opts := make([]planneragent.Option, 0, 3)
+	if c.step.Stream != nil {
+		if mode := strings.TrimSpace(c.step.Stream.Mode); mode != "" {
+			opts = append(opts, planneragent.WithContextStreamMode(contextstream.Mode(mode)))
+		}
+		if query := strings.TrimSpace(c.step.Stream.QueryTemplate); query != "" {
+			opts = append(opts, planneragent.WithContextStreamQuery(query))
+		}
+		if c.step.Stream.MaxTokens > 0 {
+			opts = append(opts, planneragent.WithContextStreamMaxTokens(c.step.Stream.MaxTokens))
 		}
 	}
 	return opts

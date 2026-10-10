@@ -1,0 +1,11 @@
+thoughtrecipe planner_verify
+"Planner verification: a verdict after execution, capturable into state."
+
+agent plan_runner uses planner
+
+run plan_runner:
+  plan "Check the workspace."
+  step "Inspect":
+    do relurpic:planner_probe
+  verify "The inspection is complete."
+  capture verification -> state.planner_verification

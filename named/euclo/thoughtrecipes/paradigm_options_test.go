@@ -110,3 +110,50 @@ func TestRewooMissingPlanIsLoadError(t *testing.T) {
 		t.Fatalf("error = %v, want missing required directive", err)
 	}
 }
+
+// TestPlannerOptionsLowering pins the planner directive lowering: absent
+// directives yield no options, authored and generated plan modes both lower to
+// options, and `step` without `plan` is a builder-level load error (belt).
+func TestPlannerOptionsLowering(t *testing.T) {
+	absent, err := plannerOptions(ExecutionStep{Paradigm: "planner"})
+	if err != nil {
+		t.Fatalf("plannerOptions(absent): %v", err)
+	}
+	if len(absent) != 0 {
+		t.Fatalf("plannerOptions(absent) = %d options, want 0", len(absent))
+	}
+
+	authored, err := plannerOptions(ExecutionStep{
+		Paradigm: "planner",
+		Directives: []TypedDirective{
+			{Name: "plan", TextArgs: []string{`"Identify the checks."`}},
+			{Name: "step", TextArgs: []string{`"Check architecture"`}, Body: []TypedDirective{{Name: "do", TextArgs: []string{"relurpic:layer_check"}}}},
+			{Name: "verify", TextArgs: []string{`"The checks are complete."`}},
+			{Name: "summarize", TextArgs: []string{`"Produce a report."`}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("plannerOptions(authored): %v", err)
+	}
+	if len(authored) != 3 {
+		t.Fatalf("plannerOptions(authored) = %d options, want 3 (plan+verify+summarize)", len(authored))
+	}
+
+	generated, err := plannerOptions(ExecutionStep{
+		Paradigm:   "planner",
+		Directives: []TypedDirective{{Name: "plan", TextArgs: []string{`"List the checks."`}}},
+	})
+	if err != nil {
+		t.Fatalf("plannerOptions(generated): %v", err)
+	}
+	if len(generated) != 1 {
+		t.Fatalf("plannerOptions(generated) = %d options, want 1", len(generated))
+	}
+
+	if _, err := plannerOptions(ExecutionStep{
+		Paradigm:   "planner",
+		Directives: []TypedDirective{{Name: "step", TextArgs: []string{`"x"`}, Body: []TypedDirective{{Name: "do", TextArgs: []string{"relurpic:y"}}}}},
+	}); err == nil || !strings.Contains(err.Error(), "requires a plan") {
+		t.Fatalf("plannerOptions(step without plan) error = %v, want requires-plan", err)
+	}
+}

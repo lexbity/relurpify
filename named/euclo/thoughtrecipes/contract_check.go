@@ -60,7 +60,7 @@ func ValidateAgainstContracts(doc *ThoughtRecipeDocument, reg *paradigm.Contract
 			}
 		}
 	}
-	errs = append(errs, validateDocumentDirectiveOrder(doc, reg, agents)...)
+	errs = append(errs, validateDocumentBlockRules(doc, reg, agents)...)
 	return errs
 }
 
@@ -99,9 +99,7 @@ func ValidatePlanContracts(plan *ExecutionPlan, reg *paradigm.ContractRegistry) 
 			return
 		}
 		if contract, ok := reg.Lookup(paradigmName); ok {
-			if err := validateOrder(contract.Paradigm, step.Directives, contract.OrderRule()); err != nil {
-				errs = append(errs, err)
-			}
+			errs = append(errs, validateBlockRuleErrors(contract, step.Directives)...)
 		}
 		use, ok := uses[paradigmName]
 		if !ok {
@@ -438,6 +436,77 @@ func directiveNameSet(uses []contractDirectiveUse) map[string]bool {
 	return out
 }
 
+// validateBlockRuleErrors applies the per-block directive rules declared by a
+// contract: canonical order, Requires obligations (D1 mixing rule), and
+// non-repeatable cardinality. It operates on the directives of one
+// run/delegate block, so a rule violation is always attributable to an exact
+// source position.
+func validateBlockRuleErrors(contract *paradigm.Contract, directives []TypedDirective) []error {
+	if contract == nil || len(directives) == 0 {
+		return nil
+	}
+	var errs []error
+	if err := validateOrder(contract.Paradigm, directives, contract.OrderRule()); err != nil {
+		errs = append(errs, err)
+	}
+	errs = append(errs, validateDirectiveRequires(contract, directives)...)
+	errs = append(errs, validateDirectiveCardinality(contract, directives)...)
+	return errs
+}
+
+// validateDirectiveRequires enforces each directive's declared Requires set
+// against the directives present in the same block (e.g. planner `step`
+// requires `plan`).
+func validateDirectiveRequires(contract *paradigm.Contract, directives []TypedDirective) []error {
+	present := make(map[string]bool, len(directives))
+	for _, directive := range directives {
+		present[directive.Name] = true
+	}
+	var errs []error
+	for _, directive := range directives {
+		spec, ok := contract.Directive(directive.Name)
+		if !ok || len(spec.Requires) == 0 {
+			continue
+		}
+		for _, required := range spec.Requires {
+			if present[required] {
+				continue
+			}
+			errs = append(errs, &paradigm.ErrDirectiveRequires{
+				Paradigm:  contract.Paradigm,
+				Directive: directive.Name,
+				Requires:  required,
+				At:        locationFromSpan(directive.Span),
+			})
+		}
+	}
+	return errs
+}
+
+// validateDirectiveCardinality rejects a non-repeatable directive declared
+// more than once in a block (e.g. two `verify` clauses).
+func validateDirectiveCardinality(contract *paradigm.Contract, directives []TypedDirective) []error {
+	seen := make(map[string]bool, len(directives))
+	var errs []error
+	for _, directive := range directives {
+		spec, ok := contract.Directive(directive.Name)
+		if !ok || spec.Repeatable {
+			continue
+		}
+		if seen[directive.Name] {
+			errs = append(errs, &paradigm.ErrDirectiveShape{
+				Paradigm:  contract.Paradigm,
+				Directive: directive.Name,
+				Problem:   "declared more than once; this directive is not repeatable",
+				At:        locationFromSpan(directive.Span),
+			})
+			continue
+		}
+		seen[directive.Name] = true
+	}
+	return errs
+}
+
 // positiveIntArg reports whether raw is a positive integer, tolerating the
 // quoted form `"3"` that a StringLiteral argument renders as.
 func positiveIntArg(raw string) bool {
@@ -493,12 +562,12 @@ func validateOrder(paradigmName string, directives []TypedDirective, rule *parad
 	return nil
 }
 
-// validateDocumentDirectiveOrder walks every run/delegate block in the AST and
-// checks the declaration order of its top-level directives against the bound
-// contract's OrderRule. It is the load-time half of the ordering rule; the
-// plan-level half runs per compiled run/delegate step in ValidatePlanContracts
-// and additionally covers route and pipeline bodies.
-func validateDocumentDirectiveOrder(doc *ThoughtRecipeDocument, reg *paradigm.ContractRegistry, agents map[string]*contractAgentUse) []error {
+// validateDocumentBlockRules walks every run/delegate block in the AST and
+// applies the bound contract's per-block rules (order, Requires, cardinality).
+// It is the load-time half; the plan-level half runs per compiled run/delegate
+// step in ValidatePlanContracts and additionally covers route and pipeline
+// bodies.
+func validateDocumentBlockRules(doc *ThoughtRecipeDocument, reg *paradigm.ContractRegistry, agents map[string]*contractAgentUse) []error {
 	if doc == nil {
 		return nil
 	}
@@ -526,9 +595,7 @@ func validateDocumentDirectiveOrder(doc *ThoughtRecipeDocument, reg *paradigm.Co
 		if !ok {
 			return typed
 		}
-		if err := validateOrder(contract.Paradigm, typed, contract.OrderRule()); err != nil {
-			errs = append(errs, err)
-		}
+		errs = append(errs, validateBlockRuleErrors(contract, typed)...)
 		return typed
 	}
 	var walk func(items []ExecutionItem, agentName string)

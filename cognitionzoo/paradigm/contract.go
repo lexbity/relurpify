@@ -109,6 +109,12 @@ type DirectiveSpec struct {
 	Body        []BodyItem
 	Repeatable  bool
 	Required    bool
+	// Requires names directives that MUST also be present in the same
+	// run/delegate block whenever this directive is present (e.g. a planner
+	// `step` block requires a `plan`). Empty means no such obligation. It
+	// expresses the D1 mixing rule: authored structure without its governing
+	// objective is a load error, not a silent mode switch.
+	Requires []string
 }
 
 // ConformanceCase declares one executable conformance obligation for a
@@ -344,6 +350,13 @@ func validateContractIntrinsic(c Contract) []error {
 	}
 	// RequiredNames derives from DirectiveSpec.Required, so a required name is
 	// declared by construction; no separate cross-check exists here.
+	for _, spec := range c.Directives {
+		for _, required := range spec.Requires {
+			if _, ok := seen[required]; !ok {
+				errs = append(errs, fmt.Errorf("directive %q requires undeclared directive %q", spec.Name, required))
+			}
+		}
+	}
 	if c.Order != nil {
 		for _, name := range c.Order.Sequence {
 			if _, ok := seen[name]; !ok {
@@ -490,6 +503,21 @@ func (e *ErrDirectiveOrder) Error() string {
 	}
 	return locationPrefix(e.At) + fmt.Sprintf("directive %q in the %s paradigm contract is out of order: it must appear before %q (%s)",
 		e.Directive, e.Paradigm, e.After, afterLabel)
+}
+
+// ErrDirectiveRequires reports a directive that is present without another
+// directive it requires (e.g. a planner `step` without a `plan`). It is the
+// load-time expression of the D1 mixing rule.
+type ErrDirectiveRequires struct {
+	Paradigm  string
+	Directive string
+	Requires  string
+	At        ContractLocation
+}
+
+func (e *ErrDirectiveRequires) Error() string {
+	return locationPrefix(e.At) + fmt.Sprintf("directive %q requires directive %q in the %s paradigm contract",
+		e.Directive, e.Requires, e.Paradigm)
 }
 
 // ErrContractViolation is the runtime guard for a paradigm outside the

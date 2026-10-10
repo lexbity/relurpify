@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -24,6 +25,7 @@ import (
 	"codeburg.org/lexbit/relurpify/governance/policy"
 	"codeburg.org/lexbit/relurpify/governance/policyresolve"
 	"codeburg.org/lexbit/relurpify/model"
+	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
 
 // TaskPayload retrieves workflow retrieval payload from task context.
@@ -55,9 +57,20 @@ type PlannerAgent struct {
 	Tools           *capability.CapabilityRegistry
 	Memory          *memory.WorkingMemoryStore
 	Config          *execution.Config
+	StreamTrigger   *contextstream.Trigger
 	StreamMode      contextstream.Mode
 	StreamQuery     string
 	StreamMaxTokens int
+
+	// Directive-driven configuration (Wave 3 D3). The zero value preserves the
+	// library behavior exactly (FR-9): no directive options ⇒ no planOrigin,
+	// no authored steps, no verify/summarize model phases.
+	directiveMode        bool
+	planObjective        string
+	authoredSteps        []pl.PlanStep
+	generatedBound       int
+	verifyCriterion      string
+	summarizeInstruction string
 }
 
 // Initialize configures the agent.
@@ -71,6 +84,9 @@ func (a *PlannerAgent) Initialize(cfg *execution.Config) error {
 
 // Execute runs the planner workflow.
 func (a *PlannerAgent) Execute(ctx context.Context, task *execution.Task, env *contextdata.Envelope) (*execution.Result, error) {
+	if a.StreamTrigger != nil {
+		ctx = contextstream.WithTrigger(ctx, a.StreamTrigger)
+	}
 	graph, err := a.BuildGraph(ctx, task)
 	if err != nil {
 		a.planFailed(ctx, task, err)
@@ -111,16 +127,33 @@ func preservePlannerExecutionResult(env *contextdata.Envelope, result *execution
 	if fields == nil {
 		fields = map[string]any{}
 	}
-	if raw, ok := contextdata.GetTyped[any](env, "planner.results"); ok {
-		fields["results"] = raw
-	}
-	if raw, ok := contextdata.GetTyped[any](env, "planner.skipped_tools"); ok {
-		fields["skipped_tools"] = raw
-	}
-	if summary := strings.TrimSpace(envGetString(env, "planner.summary")); summary != "" {
-		fields["summary"] = summary
+	copyEnvelopeField(env, EnvelopeKeyResults, fields, ResultResults)
+	copyEnvelopeField(env, EnvelopeKeySkippedTools, fields, ResultSkippedTools)
+	copyEnvelopeField(env, EnvelopeKeyPlanOrigin, fields, ResultPlanOrigin)
+	copyEnvelopeField(env, EnvelopeKeyPlanObjective, fields, ResultPlanObjective)
+	copyEnvelopeField(env, EnvelopeKeyVerification, fields, ResultVerification)
+	copyEnvelopeField(env, EnvelopeKeyVerificationIssues, fields, ResultVerificationIssues)
+	copyEnvelopeField(env, EnvelopeKeyResult, fields, ResultResult)
+	copyEnvelopeField(env, EnvelopeKeyResultRaw, fields, ResultRaw)
+	copyEnvelopeField(env, EnvelopeKeyStepsCompleted, fields, ResultStepsCompleted)
+	if summary := strings.TrimSpace(envGetString(env, EnvelopeKeySummary)); summary != "" {
+		fields[ResultSummary] = summary
 	}
 	result.Data = execution.NewToolResultPayload(fields)
+}
+
+// copyEnvelopeField copies an envelope value into a result-field map under the
+// capture-facing name, when present and non-empty.
+func copyEnvelopeField(env *contextdata.Envelope, envelopeKey string, fields map[string]any, fieldName string) {
+	if env == nil {
+		return
+	}
+	if value, ok := contextdata.GetTyped[any](env, envelopeKey); ok {
+		if s, isString := value.(string); isString && strings.TrimSpace(s) == "" {
+			return
+		}
+		fields[fieldName] = value
+	}
 }
 
 func mirrorPlannerSummaryReference(env *contextdata.Envelope) {
@@ -229,7 +262,11 @@ func (a *PlannerAgent) BuildGraph(ctx context.Context, task *execution.Task) (*g
 	planNode := &plannerPlanNode{id: "planner_plan", agent: a, task: task}
 	execNode := &plannerExecuteNode{id: "planner_execute", agent: a}
 	verifyNode := &plannerVerifyNode{id: "planner_verify", agent: a, task: task}
-	streamNode := a.streamTriggerNode(task)
+	var summarizeNode *plannerSummarizeNode
+	if strings.TrimSpace(a.summarizeInstruction) != "" {
+		summarizeNode = &plannerSummarizeNode{id: "planner_summarize", agent: a, task: task}
+	}
+	streamNode := a.streamTriggerNode(ctx, task)
 	done := graph.NewTerminalNode("planner_done")
 	g := graph.NewGraph()
 	if a.Tools != nil {
@@ -240,11 +277,15 @@ func (a *PlannerAgent) BuildGraph(ctx context.Context, task *execution.Task) (*g
 			}
 		}
 	}
-	nodes := make([]graph.Node, 0, 5)
+	nodes := make([]graph.Node, 0, 6)
 	if streamNode != nil {
 		nodes = append(nodes, streamNode)
 	}
-	nodes = append(nodes, planNode, execNode, verifyNode, done)
+	nodes = append(nodes, planNode, execNode, verifyNode)
+	if summarizeNode != nil {
+		nodes = append(nodes, summarizeNode)
+	}
+	nodes = append(nodes, done)
 	for _, node := range nodes {
 		if err := g.AddNode(node); err != nil {
 			return nil, err
@@ -268,14 +309,28 @@ func (a *PlannerAgent) BuildGraph(ctx context.Context, task *execution.Task) (*g
 	if err := g.AddEdge(execNode.ID(), verifyNode.ID(), nil, false); err != nil {
 		return nil, err
 	}
+	if summarizeNode != nil {
+		if err := g.AddEdge(verifyNode.ID(), summarizeNode.ID(), nil, false); err != nil {
+			return nil, err
+		}
+		if err := g.AddEdge(summarizeNode.ID(), done.ID(), nil, false); err != nil {
+			return nil, err
+		}
+		return g, nil
+	}
 	if err := g.AddEdge(verifyNode.ID(), done.ID(), nil, false); err != nil {
 		return nil, err
 	}
 	return g, nil
 }
 
-func (a *PlannerAgent) streamTriggerNode(task *execution.Task) graph.Node {
+func (a *PlannerAgent) streamTriggerNode(ctx context.Context, task *execution.Task) graph.Node {
 	if a == nil {
+		return nil
+	}
+	// Context streaming is a disabled feature when no compiler trigger is
+	// wired, not a plan failure (the rewoo convention).
+	if contextstream.TriggerFromContext(ctx) == nil {
 		return nil
 	}
 	query := a.streamQuery(task)
@@ -336,6 +391,9 @@ func (n *plannerPlanNode) Type() graph.NodeType { return graph.NodeTypeSystem }
 // enough that contributors can tweak it without retraining anything.
 func (n *plannerPlanNode) Execute(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 	env.SetWorkingValueWithClass("execution_phase", "planning", contextdata.MemoryClassTask)
+	if n.agent != nil && n.agent.directiveMode {
+		return n.executeDirectivePlan(ctx, env)
+	}
 	extraPrompt := ""
 	if n.agent != nil && n.agent.Config != nil && n.agent.Config.AgentSpec != nil {
 		extraPrompt = strings.TrimSpace(n.agent.Config.AgentSpec.Prompt)
@@ -409,6 +467,200 @@ Use string step ids (UUID-safe).
 		"files":       plan.Files,
 		"adjustments": adjustments,
 	})}, nil
+}
+
+// executeDirectivePlan is the authored/generated directive-mode plan phase
+// (D1/D3). Authored steps are authoritative: they become the plan verbatim with
+// zero planning model calls. Generated mode makes exactly one bounded,
+// validated model call.
+func (n *plannerPlanNode) executeDirectivePlan(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
+	plan, origin, err := n.agent.resolveDirectivePlan(ctx, n.task, env)
+	if err != nil {
+		return nil, err
+	}
+	if err := pl.ValidatePlan(&plan); err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrInvalidModelOutput, err)
+	}
+	objective := n.agent.planObjectiveOr(n.task)
+	n.agent.emitPhase(ctx, "plan", origin)
+	env.SetWorkingValueWithClass(EnvelopeKeyPlan, plan, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass(EnvelopeKeyPlanOrigin, origin, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass(EnvelopeKeyPlanObjective, objective, contextdata.MemoryClassTask)
+	if n.agent.Memory != nil {
+		scope := n.agent.Memory.Scope(plannerUUID())
+		scope.Set(EnvelopeKeyPlan, plan, relurpctx.MemoryClassWorking)
+	}
+	return &execution.Result{NodeID: n.id, Success: true, Data: execution.NewToolResultPayload(map[string]any{
+		"plan":              plan,
+		"plan_steps":        plan.Steps,
+		ResultPlanOrigin:    origin,
+		ResultPlanObjective: objective,
+	})}, nil
+}
+
+// resolveDirectivePlan returns the plan for directive mode and its provenance.
+func (a *PlannerAgent) resolveDirectivePlan(ctx context.Context, task *execution.Task, env *contextdata.Envelope) (pl.Plan, string, error) {
+	if len(a.authoredSteps) > 0 {
+		steps := make([]pl.PlanStep, len(a.authoredSteps))
+		copy(steps, a.authoredSteps)
+		return pl.Plan{
+			ID:           "planner-plan",
+			Goal:         a.planObjectiveOr(task),
+			Steps:        steps,
+			Dependencies: map[string][]string{},
+			Files:        []string{},
+		}, planOriginAuthored, nil
+	}
+	return a.generatePlan(ctx, task, env)
+}
+
+// generatePlan makes exactly one bounded, validated model call producing the
+// plan structure. Invalid or out-of-bounds output is classified
+// model_invalid_output; the node-boundary protocol retries once.
+func (a *PlannerAgent) generatePlan(ctx context.Context, task *execution.Task, env *contextdata.Envelope) (pl.Plan, string, error) {
+	if a.Model == nil {
+		return pl.Plan{}, "", fmt.Errorf("planner agent missing model")
+	}
+	bound := a.generatedBound
+	if bound <= 0 {
+		bound = DefaultGeneratedPlanBound
+	}
+	resp, err := a.Model.Chat(ctx, []model.Message{
+		{Role: "system", Content: generatedPlanSystemPrompt},
+		{Role: "user", Content: generatedPlanUserPrompt(a.planObjectiveOr(task), a.callableToolNames(ctx), bound)},
+	}, &model.LLMOptions{
+		Model:       a.modelID(),
+		Temperature: 0,
+		MaxTokens:   1024,
+	})
+	if err != nil {
+		return pl.Plan{}, "", err
+	}
+	plan, err := decodeDirectivePlan(resp.Text, bound)
+	if err != nil {
+		return pl.Plan{}, "", fmt.Errorf("%w: %v", ErrInvalidModelOutput, err)
+	}
+	return plan, planOriginGenerated, nil
+}
+
+const generatedPlanSystemPrompt = `You are a planning agent. Break the task into a short sequence of concrete, ordered steps. Reply with ONLY a JSON object, no prose.`
+
+func generatedPlanUserPrompt(objective string, toolNames []string, bound int) string {
+	tools := "(none registered)"
+	if len(toolNames) > 0 {
+		tools = strings.Join(toolNames, "\n")
+	}
+	return fmt.Sprintf(`Objective: %s
+
+Available capabilities:
+%s
+
+Return JSON matching this schema:
+{"goal":"short restatement","steps":[{"id":"s1","text":"what this step does","tool":"exact capability id or empty"}]}
+
+Rules: at most %d steps; each step "text" at most %d characters; ids unique and non-empty.`, objective, tools, bound, MaxPlanStepTextChars)
+}
+
+// decodeDirectivePlan strictly decodes and bounds a generated plan.
+func decodeDirectivePlan(raw string, bound int) (pl.Plan, error) {
+	var wire struct {
+		Goal  string `json:"goal"`
+		Steps []struct {
+			ID     string         `json:"id"`
+			Text   string         `json:"text"`
+			Tool   string         `json:"tool"`
+			Params map[string]any `json:"params"`
+		} `json:"steps"`
+	}
+	if err := json.Unmarshal([]byte(plannerExtractJSON(raw)), &wire); err != nil {
+		return pl.Plan{}, fmt.Errorf("plan JSON decode: %w", err)
+	}
+	if len(wire.Steps) == 0 {
+		return pl.Plan{}, fmt.Errorf("plan has no steps")
+	}
+	if bound > 0 && len(wire.Steps) > bound {
+		return pl.Plan{}, fmt.Errorf("plan has %d steps, exceeding the %d-step bound", len(wire.Steps), bound)
+	}
+	seen := make(map[string]bool, len(wire.Steps))
+	steps := make([]pl.PlanStep, 0, len(wire.Steps))
+	for i, ws := range wire.Steps {
+		id := strings.TrimSpace(ws.ID)
+		if id == "" {
+			id = fmt.Sprintf("s%d", i+1)
+		}
+		if seen[id] {
+			return pl.Plan{}, fmt.Errorf("duplicate step id %q", id)
+		}
+		seen[id] = true
+		text := strings.TrimSpace(ws.Text)
+		if text == "" {
+			return pl.Plan{}, fmt.Errorf("step %q has empty text", id)
+		}
+		if len([]rune(text)) > MaxPlanStepTextChars {
+			return pl.Plan{}, fmt.Errorf("step %q text exceeds %d characters", id, MaxPlanStepTextChars)
+		}
+		steps = append(steps, pl.PlanStep{
+			ID:          id,
+			Description: text,
+			Tool:        strings.TrimSpace(ws.Tool),
+			Params:      ws.Params,
+		})
+	}
+	return pl.Plan{
+		ID:           "planner-plan",
+		Goal:         strings.TrimSpace(wire.Goal),
+		Steps:        steps,
+		Dependencies: map[string][]string{},
+		Files:        []string{},
+	}, nil
+}
+
+// planObjectiveOr returns the authored `plan` guidance, falling back to the
+// task instruction.
+func (a *PlannerAgent) planObjectiveOr(task *execution.Task) string {
+	if a != nil {
+		if objective := strings.TrimSpace(a.planObjective); objective != "" {
+			return objective
+		}
+	}
+	return taskInstructionText(task)
+}
+
+func (a *PlannerAgent) modelID() string {
+	if a == nil || a.Config == nil {
+		return ""
+	}
+	return a.Config.Model
+}
+
+// callableToolNames lists the registry's model-callable capability names.
+func (a *PlannerAgent) callableToolNames(ctx context.Context) []string {
+	if a == nil || a.Tools == nil {
+		return nil
+	}
+	tools := a.Tools.ModelCallableTools(ctx)
+	names := make([]string, 0, len(tools))
+	for _, tool := range tools {
+		if name := strings.TrimSpace(tool.Name()); name != "" {
+			names = append(names, name)
+		}
+	}
+	sort.Strings(names)
+	return names
+}
+
+// emitPhase records a planner phase boundary (planner.phase{phase,origin}).
+func (a *PlannerAgent) emitPhase(ctx context.Context, phase, origin string) {
+	a.emit(ctx, telemetry.EventPlannerPhase, "planner phase", map[string]any{
+		"phase":    phase,
+		"origin":   origin,
+		"paradigm": "planner",
+	})
+}
+
+// planOriginOf reads the recorded plan provenance from the envelope.
+func planOriginOf(env *contextdata.Envelope) string {
+	return strings.TrimSpace(envGetString(env, EnvelopeKeyPlanOrigin))
 }
 
 func formatPlannerWorkflowRetrieval(payload map[string]any) string {
@@ -539,52 +791,144 @@ func (n *plannerExecuteNode) Contract() graph.NodeContract {
 	}
 }
 
-// Execute iterates the generated plan and calls the requested tool for each
-// actionable step. Empty or unregistered tool names are skipped, which keeps
-// the planner tolerant of reasoning-only or partially-grounded steps the LLM
-// might propose before the step executor handles the real work.
+// Execute iterates the plan and calls the requested tool for each actionable
+// step. Empty or unregistered tool names are skipped, which keeps the planner
+// tolerant of reasoning-only or partially-grounded steps the LLM might propose
+// before the step executor handles the real work. In directive mode it also
+// honours completed-step resume: steps recorded in plan.completed_steps are not
+// re-executed.
 func (n *plannerExecuteNode) Execute(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 	env.SetWorkingValueWithClass("execution_phase", "executing", contextdata.MemoryClassTask)
-	value, ok := contextdata.GetTyped[any](env, "planner.plan")
+	value, ok := contextdata.GetTyped[any](env, EnvelopeKeyPlan)
 	if !ok {
 		return nil, fmt.Errorf("plan not available")
 	}
 	plan, _ := value.(pl.Plan)
+	if n.agent != nil && n.agent.directiveMode {
+		return n.executeDirective(ctx, env, plan)
+	}
+	return n.executeLibrary(ctx, env, plan)
+}
+
+// executeLibrary is the FR-9 library path: declaration-order tool execution
+// with no completed-step bookkeeping, exactly as before the directive surface
+// existed.
+func (n *plannerExecuteNode) executeLibrary(ctx context.Context, env *contextdata.Envelope, plan pl.Plan) (*execution.Result, error) {
 	var stepResults []map[string]any
 	var skippedTools []map[string]string
 	for _, step := range plan.Steps {
-		step.Params = resolvePlannerStepParams(env, step.Params)
-		step, _, _ = repairPlannerStep(n.agent.Tools, step)
-		if step.Tool == "" {
-			continue
+		outcome, err := n.runStep(ctx, env, step)
+		if err != nil {
+			return nil, err
 		}
-		if !n.agent.Tools.HasCapability(step.Tool) {
+		if outcome.skipped {
 			skippedTools = append(skippedTools, map[string]string{
 				"id":     step.ID,
 				"tool":   step.Tool,
 				"reason": "capability not registered",
 			})
-			continue
 		}
-		params := normalizePlannerStepParams(n.agent.Tools, step.Tool, step.Params)
-		result, err := n.agent.Tools.InvokeCapability(ctx, env.State(), step.Tool, params)
-		if err != nil {
-			return nil, err
+		if outcome.executed {
+			stepResults = append(stepResults, map[string]any{"id": step.ID, "output": outcome.output})
 		}
-		stepResults = append(stepResults, map[string]any{
-			"id":     step.ID,
-			"output": result.Data,
-		})
-		env.SetWorkingValueWithClass(fmt.Sprintf("planner.step.%s", step.ID), result.Data, contextdata.MemoryClassTask)
 	}
-	env.SetWorkingValueWithClass("planner.results", stepResults, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass(EnvelopeKeyResults, stepResults, contextdata.MemoryClassTask)
 	if len(skippedTools) > 0 {
-		env.SetWorkingValueWithClass("planner.skipped_tools", skippedTools, contextdata.MemoryClassTask)
+		env.SetWorkingValueWithClass(EnvelopeKeySkippedTools, skippedTools, contextdata.MemoryClassTask)
 	}
 	return &execution.Result{NodeID: n.id, Success: true, Data: execution.NewToolResultPayload(map[string]any{
 		"results":       stepResults,
 		"skipped_tools": skippedTools,
 	})}, nil
+}
+
+// executeDirective is the directive-mode path: it resumes from
+// plan.completed_steps, records completion after each step, and surfaces the
+// completed count.
+func (n *plannerExecuteNode) executeDirective(ctx context.Context, env *contextdata.Envelope, plan pl.Plan) (*execution.Result, error) {
+	completed := plannerCompletedStepIDs(env)
+	completedSet := make(map[string]bool, len(completed))
+	for _, id := range completed {
+		if id != "" {
+			completedSet[id] = true
+		}
+	}
+	var stepResults []map[string]any
+	var skippedTools []map[string]string
+	for _, step := range plan.Steps {
+		if completedSet[step.ID] {
+			if output, ok := contextdata.GetTyped[any](env, fmt.Sprintf("planner.step.%s", step.ID)); ok {
+				stepResults = append(stepResults, map[string]any{"id": step.ID, "output": output})
+			}
+			continue
+		}
+		outcome, err := n.runStep(ctx, env, step)
+		if err != nil {
+			return nil, err
+		}
+		if outcome.skipped {
+			skippedTools = append(skippedTools, map[string]string{
+				"id":     step.ID,
+				"tool":   step.Tool,
+				"reason": "capability not registered",
+			})
+		}
+		if outcome.executed {
+			stepResults = append(stepResults, map[string]any{"id": step.ID, "output": outcome.output})
+		}
+		completedSet[step.ID] = true
+		completed = append(completed, step.ID)
+	}
+	n.agent.emitPhase(ctx, "execute", planOriginOf(env))
+	env.SetWorkingValueWithClass(EnvelopeKeyCompletedSteps, completed, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass(EnvelopeKeyResults, stepResults, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass(EnvelopeKeyStepsCompleted, len(completedSet), contextdata.MemoryClassTask)
+	if len(skippedTools) > 0 {
+		env.SetWorkingValueWithClass(EnvelopeKeySkippedTools, skippedTools, contextdata.MemoryClassTask)
+	}
+	return &execution.Result{NodeID: n.id, Success: true, Data: execution.NewToolResultPayload(map[string]any{
+		"results":            stepResults,
+		"skipped_tools":      skippedTools,
+		ResultStepsCompleted: len(completedSet),
+	})}, nil
+}
+
+// plannerStepOutcome records what runStep did with one plan step.
+type plannerStepOutcome struct {
+	executed bool
+	skipped  bool
+	output   any
+}
+
+// runStep resolves a step's params, repairs its tool, and invokes the
+// capability when one is registered. A step with no tool is reasoning-only and
+// is skipped; an unregistered tool is reported as skipped. The step's output is
+// recorded under planner.step.<id> for aggregation and resume.
+func (n *plannerExecuteNode) runStep(ctx context.Context, env *contextdata.Envelope, step pl.PlanStep) (plannerStepOutcome, error) {
+	step.Params = resolvePlannerStepParams(env, step.Params)
+	step, _, _ = repairPlannerStep(n.agent.Tools, step)
+	if step.Tool == "" {
+		return plannerStepOutcome{}, nil
+	}
+	if !n.agent.Tools.HasCapability(step.Tool) {
+		return plannerStepOutcome{skipped: true}, nil
+	}
+	params := normalizePlannerStepParams(n.agent.Tools, step.Tool, step.Params)
+	result, err := n.agent.Tools.InvokeCapability(ctx, env.State(), step.Tool, params)
+	if err != nil {
+		return plannerStepOutcome{}, err
+	}
+	env.SetWorkingValueWithClass(fmt.Sprintf("planner.step.%s", step.ID), result.Data, contextdata.MemoryClassTask)
+	return plannerStepOutcome{executed: true, output: result.Data}, nil
+}
+
+// plannerCompletedStepIDs reads the completed-step resume set from the
+// envelope.
+func plannerCompletedStepIDs(env *contextdata.Envelope) []string {
+	if env == nil {
+		return nil
+	}
+	return env.StringSliceFromContext(EnvelopeKeyCompletedSteps)
 }
 
 func normalizePlannerStepParams(registry *capability.CapabilityRegistry, toolName string, params map[string]any) map[string]any {
@@ -662,21 +1006,191 @@ func (n *plannerVerifyNode) Type() graph.NodeType { return graph.NodeTypeObserva
 // messages without parsing the entire state map.
 func (n *plannerVerifyNode) Execute(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 	env.SetWorkingValueWithClass("execution_phase", "validating", contextdata.MemoryClassTask)
-	results, _ := contextdata.GetTyped[any](env, "planner.results")
-	_ = results
-	plan, _ := contextdata.GetTyped[pl.Plan](env, "planner.plan")
+	plan, _ := contextdata.GetTyped[pl.Plan](env, EnvelopeKeyPlan)
 	summary := fmt.Sprintf("Executed plan for task '%s' with %d steps.", n.task.Instruction, len(plan.Steps))
-	env.SetWorkingValueWithClass("planner.summary", summary, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass(EnvelopeKeySummary, summary, contextdata.MemoryClassTask)
 	if n.agent.Memory != nil {
-		n.agent.Memory.Scope(plannerUUID()).Set("planner.summary", summary, relurpctx.MemoryClassWorking)
+		n.agent.Memory.Scope(plannerUUID()).Set(EnvelopeKeySummary, summary, relurpctx.MemoryClassWorking)
+	}
+	fields := map[string]any{ResultSummary: summary}
+	if n.agent != nil && strings.TrimSpace(n.agent.verifyCriterion) != "" {
+		n.agent.emitPhase(ctx, "verify", planOriginOf(env))
+		verdict, issues, err := n.agent.runVerification(ctx, n.task, env, plan)
+		if err != nil {
+			return nil, err
+		}
+		fields[ResultVerification] = verdict
+		fields[ResultVerificationIssues] = issues
 	}
 	return &execution.Result{
 		NodeID:  n.id,
 		Success: true,
+		Data:    execution.NewToolResultPayload(fields),
+	}, nil
+}
+
+// runVerification issues one model call over the objective, the per-step
+// results, and the authored criterion. A verdict of pass|fail is data (the
+// recipe captures and routes on it); only an unparseable verdict is a
+// model_invalid_output failure.
+func (a *PlannerAgent) runVerification(ctx context.Context, task *execution.Task, env *contextdata.Envelope, plan pl.Plan) (string, []string, error) {
+	if a.Model == nil {
+		return "", nil, fmt.Errorf("planner agent missing model")
+	}
+	resp, err := a.Model.Chat(ctx, []model.Message{
+		{Role: "system", Content: verifySystemPrompt},
+		{Role: "user", Content: verifyUserPrompt(a.planObjectiveOr(task), plannerResultsSummary(env), a.verifyCriterion)},
+	}, &model.LLMOptions{
+		Model:       a.modelID(),
+		Temperature: 0,
+		MaxTokens:   512,
+	})
+	if err != nil {
+		return "", nil, err
+	}
+	verdict, issues, err := decodeVerdict(resp.Text)
+	if err != nil {
+		return "", nil, fmt.Errorf("%w: %v", ErrInvalidModelOutput, err)
+	}
+	env.SetWorkingValueWithClass(EnvelopeKeyVerification, verdict, contextdata.MemoryClassTask)
+	env.SetWorkingValueWithClass(EnvelopeKeyVerificationIssues, issues, contextdata.MemoryClassTask)
+	return verdict, issues, nil
+}
+
+const verifySystemPrompt = `You are a verification agent. Judge whether the executed plan satisfies the criterion. Reply with ONLY a JSON object, no prose.`
+
+func verifyUserPrompt(objective, results, criterion string) string {
+	return fmt.Sprintf(`Objective: %s
+
+Executed steps:
+%s
+Criterion: %s
+
+Return JSON: {"verdict":"pass"|"fail","issues":["..."]}`, objective, results, criterion)
+}
+
+// decodeVerdict strictly parses a verification verdict; any value other than
+// pass|fail is invalid.
+func decodeVerdict(raw string) (string, []string, error) {
+	var wire struct {
+		Verdict string   `json:"verdict"`
+		Issues  []string `json:"issues"`
+	}
+	if err := json.Unmarshal([]byte(plannerExtractJSON(raw)), &wire); err != nil {
+		return "", nil, fmt.Errorf("verdict JSON decode: %w", err)
+	}
+	verdict := strings.ToLower(strings.TrimSpace(wire.Verdict))
+	if verdict != "pass" && verdict != "fail" {
+		return "", nil, fmt.Errorf("verdict %q is not pass|fail", wire.Verdict)
+	}
+	return verdict, wire.Issues, nil
+}
+
+// plannerResultsSummary renders the recorded step results deterministically,
+// truncating each output so the verify/summarize prompts stay bounded.
+func plannerResultsSummary(env *contextdata.Envelope) string {
+	raw, ok := contextdata.GetTyped[any](env, EnvelopeKeyResults)
+	if !ok {
+		return "(no step results)"
+	}
+	results, ok := raw.([]map[string]any)
+	if !ok || len(results) == 0 {
+		return "(no step results)"
+	}
+	var b strings.Builder
+	for _, result := range results {
+		id := strings.TrimSpace(fmt.Sprint(result["id"]))
+		fmt.Fprintf(&b, "- %s: %s\n", id, truncate(fmt.Sprint(result["output"]), maxVerifyResultChars))
+	}
+	return b.String()
+}
+
+// plannerSummarizeNode replaces the run result with an authored-instruction
+// summary, preserving the pre-summary aggregate as result_raw (D3).
+type plannerSummarizeNode struct {
+	id    string
+	agent *PlannerAgent
+	task  *execution.Task
+}
+
+// ID returns the summarize node identifier.
+func (n *plannerSummarizeNode) ID() string { return n.id }
+
+// Type marks this node as an observation/synthesis phase.
+func (n *plannerSummarizeNode) Type() graph.NodeType { return graph.NodeTypeObservation }
+
+// Execute runs the single summarize model call.
+func (n *plannerSummarizeNode) Execute(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
+	env.SetWorkingValueWithClass("execution_phase", "summarizing", contextdata.MemoryClassTask)
+	aggregate := plannerAggregate(env)
+	env.SetWorkingValueWithClass(EnvelopeKeyResultRaw, aggregate, contextdata.MemoryClassTask)
+	n.agent.emitPhase(ctx, "summarize", planOriginOf(env))
+	summary, err := n.agent.runSummarize(ctx, n.task, env)
+	if err != nil {
+		return nil, err
+	}
+	env.SetWorkingValueWithClass(EnvelopeKeyResult, summary, contextdata.MemoryClassTask)
+	return &execution.Result{
+		NodeID:  n.id,
+		Success: true,
 		Data: execution.NewToolResultPayload(map[string]any{
-			"summary": summary,
+			ResultResult: summary,
+			ResultRaw:    aggregate,
 		}),
 	}, nil
+}
+
+// runSummarize makes the single summarize model call over the objective, the
+// authored instruction, and the executed step results.
+func (a *PlannerAgent) runSummarize(ctx context.Context, task *execution.Task, env *contextdata.Envelope) (string, error) {
+	if a.Model == nil {
+		return "", fmt.Errorf("planner agent missing model")
+	}
+	resp, err := a.Model.Chat(ctx, []model.Message{
+		{Role: "system", Content: summarizeSystemPrompt},
+		{Role: "user", Content: summarizeUserPrompt(a.planObjectiveOr(task), a.summarizeInstruction, plannerResultsSummary(env))},
+	}, &model.LLMOptions{
+		Model:       a.modelID(),
+		Temperature: 0.1,
+		MaxTokens:   512,
+	})
+	if err != nil {
+		return "", err
+	}
+	summary := strings.TrimSpace(resp.Text)
+	if summary == "" {
+		return "", fmt.Errorf("%w: summarize produced empty output", ErrInvalidModelOutput)
+	}
+	return summary, nil
+}
+
+const summarizeSystemPrompt = `You are a summarization agent. Produce the final answer for the task from the executed plan. No tool calls, no questions.`
+
+func summarizeUserPrompt(objective, instruction, results string) string {
+	return fmt.Sprintf(`Objective: %s
+
+Summarization instruction from recipe (authoritative):
+%s
+
+Executed steps:
+%s
+Compose the final answer.`, objective, instruction, results)
+}
+
+// plannerAggregate captures the pre-summary aggregate (step results, skipped
+// tools, and the verification summary) preserved as result_raw.
+func plannerAggregate(env *contextdata.Envelope) map[string]any {
+	out := map[string]any{}
+	if value, ok := contextdata.GetTyped[any](env, EnvelopeKeyResults); ok {
+		out[ResultResults] = value
+	}
+	if value, ok := contextdata.GetTyped[any](env, EnvelopeKeySkippedTools); ok {
+		out[ResultSkippedTools] = value
+	}
+	if summary := strings.TrimSpace(envGetString(env, EnvelopeKeySummary)); summary != "" {
+		out[ResultSummary] = summary
+	}
+	return out
 }
 
 // parsePlan pulls the JSON payload out of the model response. The helper keeps
