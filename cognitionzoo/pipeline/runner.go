@@ -8,6 +8,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/cognitionzoo/paradigm"
 	"codeburg.org/lexbit/relurpify/cognitionzoo/retry"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
@@ -103,6 +104,15 @@ func (r *Runner) executeStage(ctx context.Context, task *execution.Task, taskID 
 			result.ErrorText = err.Error()
 			result.FinishedAt = time.Now().UTC()
 			return result, err
+		}
+		streamed, err := paradigm.StreamedSection(ctx, env, "pipeline")
+		if err != nil {
+			result.ErrorText = err.Error()
+			result.FinishedAt = time.Now().UTC()
+			return result, err
+		}
+		if streamed != "" {
+			prompt += "\n\n" + streamed
 		}
 		result.Prompt = prompt
 

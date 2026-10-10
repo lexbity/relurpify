@@ -1,0 +1,8 @@
+thoughtrecipe htn_react_fallback
+"HTN leaf task without a `do` capability dispatches to the react primitive: the fallback path inherits the streamed-context rendering."
+
+agent decomposer uses htn
+
+run decomposer:
+  method "fallback_probe":
+    task "Think through the probe."

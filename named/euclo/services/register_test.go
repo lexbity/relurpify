@@ -71,14 +71,14 @@ func TestDefaultPromptRegistrarRegistersAndSkipsDuplicates(t *testing.T) {
 	if err := reg.RegisterAll(registry); err != nil {
 		t.Fatalf("first RegisterAll returned error: %v", err)
 	}
-	if got := registry.count(); got != 18 {
-		t.Fatalf("expected 18 prompt providers, got %d", got)
+	if got := registry.count(); got != 17 {
+		t.Fatalf("expected 17 prompt providers, got %d", got)
 	}
 
 	if err := reg.RegisterAll(registry); err != nil {
 		t.Fatalf("second RegisterAll returned error: %v", err)
 	}
-	if got := registry.count(); got != 18 {
+	if got := registry.count(); got != 17 {
 		t.Fatalf("expected duplicate registration to be skipped, got %d providers", got)
 	}
 }

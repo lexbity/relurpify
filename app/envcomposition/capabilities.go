@@ -234,4 +234,3 @@ func BuildMinimalToolRegistry(ctx context.Context, workspace string, runner fsan
 	}
 	return capReg, nil
 }
-

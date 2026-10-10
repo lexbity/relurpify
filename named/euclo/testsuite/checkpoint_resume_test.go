@@ -41,7 +41,7 @@ func TestEndToEndCheckpointResumeFromPersistedArtifact(t *testing.T) {
 	seedTask(firstEnv, task.Instruction, "resume.go")
 	runPreIngestion(t, firstEnv, dir, []string{"resume.go"})
 	firstEnv.RequestCheckpoint("materialize for resume", 5, true)
-	euclostate.SetStreamResult(firstEnv, nil)
+	firstEnv.SetWorkingValueWithClass(euclostate.KeyStreamResult, map[string]any{"request_id": "stream-resume"}, contextdata.MemoryClassTask)
 	if err := graph.Execute(ctxWithTrigger(context.Background()), firstEnv); err != nil {
 		t.Fatalf("first execute failed: %v", err)
 	}

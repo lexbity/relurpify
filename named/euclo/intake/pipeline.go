@@ -125,7 +125,14 @@ func (n *IntakePipelineNode) Execute(ctx context.Context, env *contextdata.Envel
 	env.SetWorkingValueWithClass(euclokeys.KeyFamilySelection, scoredClassification.WinningFamily, contextdata.MemoryClassTask)
 	env.SetWorkingValueWithClass(euclokeys.KeyNegativeConstraints, taskEnvelope.NegativeConstraintSeeds, contextdata.MemoryClassTask)
 	if streamResult != nil {
-		env.SetWorkingValueWithClass(euclokeys.KeyStreamResult, streamResult, contextdata.MemoryClassTask)
+		// Bounded summary only (node contract): full results live on the
+		// envelope slice where the substrate renderer reads them.
+		summary := map[string]any{"request_id": streamResult.Request.ID}
+		if streamResult.Compilation != nil {
+			summary["chunks"] = len(streamResult.Compilation.StreamedChunks)
+			summary["tokens"] = streamResult.Compilation.Record.FinalTokens
+		}
+		env.SetWorkingValueWithClass(euclokeys.KeyStreamResult, summary, contextdata.MemoryClassTask)
 	}
 
 	return &execution.Result{

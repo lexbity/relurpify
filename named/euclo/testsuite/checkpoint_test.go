@@ -4,10 +4,8 @@ import (
 	"context"
 	"errors"
 	"testing"
-	"time"
 
 	"codeburg.org/lexbit/relurpify/context/contextdata"
-	"codeburg.org/lexbit/relurpify/context/contextstream"
 	"codeburg.org/lexbit/relurpify/execution/agentlifecycle"
 	"codeburg.org/lexbit/relurpify/named/euclo/orchestrate"
 	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
@@ -147,17 +145,11 @@ func TestEndToEndCheckpointMaterialization(t *testing.T) {
 	seedTask(env, "add a cache to the handler", "checkpoint.go")
 	runPreIngestion(t, env, dir, []string{"checkpoint.go"})
 	env.RequestCheckpoint("materialize after streaming", 9, true)
-	euclostate.SetStreamResult(env, &contextstream.Result{
-		Request: contextstream.Request{
-			ID:   "stream-checkpoint",
-			Mode: contextstream.ModeBlocking,
-		},
-		Trim: contextstream.TrimMetadata{
-			ShortfallTokens: 2,
-		},
-		StartedAt:   time.Now().Add(-1 * time.Minute),
-		CompletedAt: time.Now(),
-	})
+	env.SetWorkingValueWithClass(euclostate.KeyStreamResult, map[string]any{
+		"request_id": "stream-checkpoint",
+		"chunks":     0,
+		"tokens":     0,
+	}, contextdata.MemoryClassTask)
 
 	rec := &recordingTelemetry{}
 	if err := graph.Execute(telemetry.WithTelemetry(context.Background(), rec), env); err != nil {

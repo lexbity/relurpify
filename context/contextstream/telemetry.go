@@ -2,6 +2,7 @@ package contextstream
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
@@ -99,4 +100,76 @@ func trimQueryString(text string) string {
 		return text
 	}
 	return text[:max] + "...(truncated)"
+}
+
+// EmitInjected reports a non-empty streamed section rendered into a model
+// call (§5.7). No-op without a sink in the context.
+func EmitInjected(ctx context.Context, paradigm, stepID string, stats RenderStats) {
+	tel := telemetry.TelemetryFromContext(ctx)
+	if tel == nil {
+		return
+	}
+	tel.Emit(telemetry.Event{
+		Type:      telemetry.EventContextStreamInjected,
+		Message:   "streamed context section rendered into model call",
+		Timestamp: time.Now().UTC(),
+		Metadata: map[string]any{
+			"chunks":           stats.Chunks,
+			"tokens":           stats.Tokens,
+			"bytes":            stats.Bytes,
+			"cache_hit":        stats.CacheHit,
+			"epoch":            stats.Epoch,
+			"paradigm":         paradigm,
+			"step_id":          stepID,
+			"rendered_version": StreamedSectionVersion,
+		},
+	})
+}
+
+// EmitInjectSkipped reports the zero-byte render path: an empty slice
+// (reason "empty_slice", legitimate) or a paradigm reaching a render without
+// integration (reason "paradigm_not_integrated", a bug report — CI makes it
+// impossible for the DSL-reachable set). No-op without a sink.
+func EmitInjectSkipped(ctx context.Context, reason, paradigm string) {
+	tel := telemetry.TelemetryFromContext(ctx)
+	if tel == nil {
+		return
+	}
+	tel.Emit(telemetry.Event{
+		Type:      telemetry.EventContextStreamInjectSkipped,
+		Message:   "streamed context section not rendered",
+		Timestamp: time.Now().UTC(),
+		Metadata: map[string]any{
+			"reason":   reason,
+			"paradigm": paradigm,
+		},
+	})
+}
+
+// EmitRenderError reports a D-10 renderer failure surfaced at a call site.
+// No-op without a sink.
+func EmitRenderError(ctx context.Context, err error) {
+	tel := telemetry.TelemetryFromContext(ctx)
+	if tel == nil {
+		return
+	}
+	tel.Emit(telemetry.Event{
+		Type:      telemetry.EventContextStreamRenderError,
+		Message:   "streamed context render failed",
+		Timestamp: time.Now().UTC(),
+		Metadata: map[string]any{
+			"error_kind": errorKind(err),
+		},
+	})
+}
+
+func errorKind(err error) string {
+	switch {
+	case errors.Is(err, ErrSliceBodyMissing):
+		return "body_missing"
+	case errors.Is(err, ErrSliceTokenMismatch):
+		return "token_mismatch"
+	default:
+		return "unknown"
+	}
 }

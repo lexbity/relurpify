@@ -96,11 +96,21 @@ func (n *StreamTriggerNode) Execute(ctx context.Context, env *contextdata.Envelo
 		}
 		result, err := trigger.RequestBlocking(ctx, req)
 		if result != nil {
-			if applyErr := contextstream.ApplyResult(env, result, epoch); applyErr != nil {
+			if applyErr := contextstream.ApplyResult(ctx, env, result, epoch); applyErr != nil {
 				return nil, applyErr
 			}
-			env.SetWorkingValueWithClass("contextstream.result", result, contextdata.MemoryClassTask)
-			env.SetWorkingValueWithClass("euclo.stream_result", result, contextdata.MemoryClassTask)
+			// Bounded summary only: the node contract caps working-state
+			// entries at 4096 bytes, and the full result's bodies live on the
+			// envelope slice where the renderer reads them.
+			summary := map[string]any{
+				"request_id": result.Request.ID,
+				"epoch":      epoch,
+			}
+			if result.Compilation != nil {
+				summary["chunks"] = len(result.Compilation.StreamedChunks)
+				summary["tokens"] = result.Compilation.Record.FinalTokens
+			}
+			env.SetWorkingValueWithClass("contextstream.result", summary, contextdata.MemoryClassTask)
 		}
 		if err != nil {
 			return nil, err

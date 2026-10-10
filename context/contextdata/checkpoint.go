@@ -87,6 +87,7 @@ func (e *Envelope) Clone() *Envelope {
 	e.mu.RLock()
 	taskID, sessionID, nodeID := e.TaskID, e.SessionID, e.NodeID
 	assemblyMetadata, createdAt := e.AssemblyMetadata, e.createdAt
+	streamed := copyStreamedSlice(e.streamed)
 	e.mu.RUnlock()
 
 	workingData := e.WorkingDataSnapshot()
@@ -100,6 +101,7 @@ func (e *Envelope) Clone() *Envelope {
 		Origins:           origins,
 		CheckpointRequest: nil,
 		AssemblyMetadata:  assemblyMetadata,
+		streamed:          streamed,
 		createdAt:         createdAt,
 	}
 	clone.References = refs

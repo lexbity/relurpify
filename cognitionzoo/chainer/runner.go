@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"text/template"
 
+	"codeburg.org/lexbit/relurpify/cognitionzoo/paradigm"
 	"codeburg.org/lexbit/relurpify/cognitionzoo/retry"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
@@ -59,6 +60,13 @@ func (r *chainRunner) Run(ctx context.Context, task *execution.Task, chain *Chai
 		systemPrompt, err := resolveSystemPrompt(link, task, env, r.Registry)
 		if err != nil {
 			return fmt.Errorf("chainer: resolve link %s: %w", link.Name, err)
+		}
+		streamed, err := paradigm.StreamedSection(ctx, env, "chainer")
+		if err != nil {
+			return fmt.Errorf("chainer: link %s: %w", link.Name, err)
+		}
+		if streamed != "" {
+			systemPrompt += "\n\n" + streamed
 		}
 		retries := 0
 		maxRetries := link.MaxRetries

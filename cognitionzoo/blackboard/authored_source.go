@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"codeburg.org/lexbit/relurpify/cognitionzoo/paradigm"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/context/knowledge"
 	execution "codeburg.org/lexbit/relurpify/execution"
@@ -241,7 +242,15 @@ func (a *BlackboardAgent) runSpecialist(ctx context.Context, env *contextdata.En
 	if a.Model == nil {
 		return nil, fmt.Errorf("blackboard: source %q requires a model (no do capability pinned)", source.Name)
 	}
+	streamed, err := paradigm.StreamedSection(ctx, env, "blackboard")
+	if err != nil {
+		return nil, err
+	}
 	var prompt strings.Builder
+	if streamed != "" {
+		prompt.WriteString(streamed)
+		prompt.WriteString("\n\n")
+	}
 	fmt.Fprintf(&prompt, "You are the blackboard knowledge source %q.\n", source.Name)
 	if strings.TrimSpace(goal) != "" {
 		fmt.Fprintf(&prompt, "Goal: %s\n", goal)

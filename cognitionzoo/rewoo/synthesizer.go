@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"codeburg.org/lexbit/relurpify/cognitionzoo/paradigm"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/model"
 )
@@ -21,8 +22,15 @@ func (a *RewooAgent) SynthesizeWithModel(ctx context.Context, env *contextdata.E
 	plan := planFromEnvelope(env)
 	results := stepResultsFromEnvelope(env)
 	a.emitLLMPhase(ctx, env, "synthesize", "llm")
+	streamed, err := paradigm.StreamedSection(ctx, env, "rewoo")
+	if err != nil {
+		return "", err
+	}
 	messages := []model.Message{
 		{Role: "system", Content: a.resolvePhasePrompt(ctx, synthPromptID, nil, env)},
+	}
+	if streamed != "" {
+		messages = append(messages, model.Message{Role: "system", Content: streamed})
 	}
 	if guidance := strings.TrimSpace(a.Options.SynthesizeGuidance); guidance != "" {
 		messages = append(messages, model.Message{Role: "system", Content: synthesizeGuidanceMessage(guidance)})

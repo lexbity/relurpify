@@ -556,12 +556,13 @@ type conformanceRecordingModel struct {
 	text      string
 	chatQueue []string
 	chatIdx   int
+	toolCalls []model.ToolCall
 	calls     [][]model.Message
 }
 
-func (m *conformanceRecordingModel) Generate(ctx context.Context, _ string, options *model.LLMOptions) (*model.LLMResponse, error) {
+func (m *conformanceRecordingModel) Generate(ctx context.Context, prompt string, options *model.LLMOptions) (*model.LLMResponse, error) {
 	m.mu.Lock()
-	m.calls = append(m.calls, nil)
+	m.calls = append(m.calls, []model.Message{{Role: "user", Content: prompt}})
 	text := m.text
 	m.mu.Unlock()
 	return &model.LLMResponse{Text: text}, nil
@@ -593,8 +594,18 @@ func (m *conformanceRecordingModel) ChatWithTools(ctx context.Context, messages 
 	m.mu.Lock()
 	m.calls = append(m.calls, append([]model.Message(nil), messages...))
 	text := m.text
+	toolCalls := m.toolCalls
 	m.mu.Unlock()
-	return &model.LLMResponse{Text: text}, nil
+	return &model.LLMResponse{Text: text, ToolCalls: toolCalls}, nil
+}
+
+// WithToolCalls makes ChatWithTools return the given tool calls so react-loop
+// fixtures drive their full path (stream matrix gate).
+func (m *conformanceRecordingModel) WithToolCalls(calls ...model.ToolCall) *conformanceRecordingModel {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.toolCalls = calls
+	return m
 }
 
 func (m *conformanceRecordingModel) callCount() int {

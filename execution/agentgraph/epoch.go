@@ -269,7 +269,7 @@ func (c *EpochCoordinator) awaitJobs(jobs []*contextstream.Job, nodeID string, e
 			}
 			if env, ok := contextdata.EnvelopeFrom(c.runCtx); ok {
 				if result != nil {
-					if applyErr := contextstream.ApplyResult(env, result, epoch); applyErr != nil && firstErr == nil {
+					if applyErr := contextstream.ApplyResult(c.runCtx, env, result, epoch); applyErr != nil && firstErr == nil {
 						firstErr = applyErr
 					}
 				}

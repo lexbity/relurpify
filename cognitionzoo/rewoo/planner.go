@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/cognitionzoo/paradigm"
 	"codeburg.org/lexbit/relurpify/cognitionzoo/react"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
@@ -71,10 +72,18 @@ func (a *RewooAgent) resolvePlan(ctx context.Context, task *execution.Task, env 
 		return nil, "", fmt.Errorf("rewoo: language model unavailable for planning")
 	}
 	a.emitLLMPhase(ctx, env, "plan", "llm")
-	resp, err := a.Model.Chat(ctx, []model.Message{
+	streamed, err := paradigm.StreamedSection(ctx, env, "rewoo")
+	if err != nil {
+		return nil, "", err
+	}
+	planMessages := []model.Message{
 		{Role: "system", Content: a.resolvePhasePrompt(ctx, planPromptID, task, env)},
-		{Role: "user", Content: planUserPrompt(task, a.planObjective(task), a.modelCallableToolNames(ctx))},
-	}, &model.LLMOptions{
+	}
+	if streamed != "" {
+		planMessages = append(planMessages, model.Message{Role: "system", Content: streamed})
+	}
+	planMessages = append(planMessages, model.Message{Role: "user", Content: planUserPrompt(task, a.planObjective(task), a.modelCallableToolNames(ctx))})
+	resp, err := a.Model.Chat(ctx, planMessages, &model.LLMOptions{
 		Model:       a.modelID(),
 		Temperature: 0,
 		MaxTokens:   1024,

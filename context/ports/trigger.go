@@ -20,12 +20,26 @@ type CompilationRequest struct {
 
 // CompilationResult is the context-owned view of a compilation result.
 type CompilationResult struct {
-	Context            string
+	// StreamedChunks is the ordered, body-carrying slice the backward pass
+	// delivers: one entry per streamed chunk in compiler rank order, bodies
+	// verbatim, summary-substituted entries flagged and carrying the summary
+	// body (D-1). It is the only content channel; there is no flat string.
+	StreamedChunks     []StreamedChunkView
 	ShortfallTokens    int
 	StreamedRefs       []string
 	SkippedStaleChunks []string
 	Substitutions      []SummarySubstitution
 	Record             CompilationRecord
+}
+
+// StreamedChunkView is one body-carrying entry of a compilation result.
+type StreamedChunkView struct {
+	ChunkID       string
+	ContentHash   string
+	Body          string // verbatim chunk content, as ranked by the compiler
+	TokenEstimate int
+	TrustClass    string // agentspec trust class label; "" when unset
+	IsSummary     bool   // summary-substituted chunk
 }
 
 // CompilationRecord captures metadata about a compilation.

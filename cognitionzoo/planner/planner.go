@@ -14,6 +14,7 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	capability "codeburg.org/lexbit/relurpify/capability/registry"
+	"codeburg.org/lexbit/relurpify/cognitionzoo/paradigm"
 	pl "codeburg.org/lexbit/relurpify/cognitionzoo/plan"
 	relurpctx "codeburg.org/lexbit/relurpify/context"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
@@ -426,7 +427,11 @@ func (n *plannerPlanNode) Execute(ctx context.Context, env *contextdata.Envelope
 			}
 		}
 	}
-	if streamed := formatPlannerStreamedContext(env); streamed != "" {
+	streamed, streamErr := paradigm.StreamedSection(ctx, env, "planner")
+	if streamErr != nil {
+		return nil, streamErr
+	}
+	if streamed != "" {
 		extraPrompt += "Streamed Context:\n" + streamed + "\n\n"
 	}
 	prompt := fmt.Sprintf(`You are a planning agent. Break this task into steps with dependencies.
@@ -525,10 +530,22 @@ func (a *PlannerAgent) generatePlan(ctx context.Context, task *execution.Task, e
 	if bound <= 0 {
 		bound = DefaultGeneratedPlanBound
 	}
-	resp, err := a.Model.Chat(ctx, []model.Message{
+	// The substrate's compiled slice renders exactly once, into the plan
+	// call's system slot (D-2); renderer inconsistencies fail the node (D-10).
+	streamed, err := paradigm.StreamedSection(ctx, env, "planner")
+	if err != nil {
+		return pl.Plan{}, "", err
+	}
+	planMessages := []model.Message{
 		{Role: "system", Content: generatedPlanSystemPrompt},
-		{Role: "user", Content: generatedPlanUserPrompt(a.planObjectiveOr(task), a.callableToolNames(ctx), bound)},
-	}, &model.LLMOptions{
+	}
+	if streamed != "" {
+		planMessages = append(planMessages, model.Message{Role: "system", Content: streamed})
+	}
+	planMessages = append(planMessages, model.Message{
+		Role: "user", Content: generatedPlanUserPrompt(a.planObjectiveOr(task), a.callableToolNames(ctx), bound),
+	})
+	resp, err := a.Model.Chat(ctx, planMessages, &model.LLMOptions{
 		Model:       a.modelID(),
 		Temperature: 0,
 		MaxTokens:   1024,
@@ -700,38 +717,6 @@ func formatPlannerWorkflowRetrieval(payload map[string]any) string {
 		sections = append(sections, "Evidence:\n"+strings.Join(lines, "\n"))
 	}
 	return strings.Join(sections, "\n")
-}
-
-func formatPlannerStreamedContext(env *contextdata.Envelope) string {
-	if env == nil {
-		return ""
-	}
-	streamed := env.ReferencesSnapshot().StreamedContext
-	if len(streamed) == 0 {
-		return ""
-	}
-	lines := make([]string, 0, len(streamed))
-	for _, ref := range streamed {
-		chunkID := strings.TrimSpace(string(ref.ChunkID))
-		if chunkID == "" {
-			continue
-		}
-		line := "- " + chunkID
-		if ref.Source != "" {
-			line += " [" + strings.TrimSpace(ref.Source) + "]"
-		}
-		if ref.Rank > 0 {
-			line += fmt.Sprintf(" rank=%d", ref.Rank)
-		}
-		if ref.IsSummary {
-			line += " summary"
-		}
-		lines = append(lines, line)
-	}
-	if len(lines) == 0 {
-		return ""
-	}
-	return strings.Join(lines, "\n")
 }
 
 func plannerWorkflowReference(result map[string]any) string {

@@ -8,6 +8,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/cognitionzoo/paradigm"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/execution/agentgraph"
@@ -52,14 +53,19 @@ func (n *reactThinkNode) Execute(ctx context.Context, env *contextdata.Envelope)
 			}),
 		}, nil
 	}
+	// The substrate's compiled slice renders exactly once per model call,
+	// into the system slot (D-2); renderer inconsistencies fail the node (D-10).
+	streamedSection, err := paradigm.StreamedSection(ctx, env, "react")
+	if err != nil {
+		return nil, err
+	}
 	var resp *model.LLMResponse
-	var err error
 	tools := n.agent.availableToolsForPhase(ctx, env, n.task)
 	recordActiveToolNames(env, tools)
 	useToolCalling := len(tools) > 0
 	streamCB := n.streamCallback()
 	if useToolCalling {
-		messages := n.ensureMessages(env, tools)
+		messages := n.ensureMessages(env, tools, streamedSection)
 		resp, err = n.agent.Model.ChatWithTools(ctx, messages, ports.LLMToolSpecsFromTools(tools), &model.LLMOptions{
 			Model:          n.agent.Config.Model,
 			Temperature:    0.1,
@@ -71,6 +77,9 @@ func (n *reactThinkNode) Execute(ctx context.Context, env *contextdata.Envelope)
 		}
 	} else {
 		prompt := n.resolvePrompt(env, tools)
+		if streamedSection != "" {
+			prompt += "\n\n" + streamedSection
+		}
 		resp, err = n.agent.Model.Generate(ctx, prompt, &model.LLMOptions{
 			Model:          n.agent.Config.Model,
 			Temperature:    0.1,
@@ -299,8 +308,11 @@ func (n *reactThinkNode) resolveSystemPrompt(tools []ports.Tool) string {
 }
 
 // ensureMessages seeds or extends the chat history for tool-calling iterations.
-func (n *reactThinkNode) ensureMessages(env *contextdata.Envelope, tools []ports.Tool) []model.Message {
+func (n *reactThinkNode) ensureMessages(env *contextdata.Envelope, tools []ports.Tool, streamedSection string) []model.Message {
 	systemPrompt := n.resolveSystemPrompt(tools)
+	if streamedSection != "" {
+		systemPrompt += "\n\n" + streamedSection
+	}
 	userPrompt := n.resolvePrompt(env, tools)
 	messages := getReactMessages(env)
 	if len(messages) == 0 {

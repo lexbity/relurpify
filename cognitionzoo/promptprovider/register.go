@@ -15,7 +15,6 @@ func RegisterAll(r prompt.Registry) error {
 		reactExternalStateProvider{},
 		reactDeclarativeMemoryProvider{},
 		reactWorkflowRetrievalProvider{},
-		reactStreamedContextProvider{},
 		reactObservationsProvider{},
 		reactHistoryProvider{},
 		reactContextFilesProvider{},

@@ -173,14 +173,21 @@ func (a *compilerTriggerAdapter) Compile(ctx context.Context, req contextports.C
 		skipped = append(skipped, string(id))
 	}
 	subs := make([]contextports.SummarySubstitution, 0, len(result.Substitutions))
+	summaryChunkIDs := make(map[string]struct{}, len(result.Substitutions))
 	for _, s := range result.Substitutions {
 		subs = append(subs, contextports.SummarySubstitution{
 			Original: string(s.OriginalChunkID),
 			Replaced: string(s.SummaryChunkID),
 			ChunkID:  string(s.OriginalChunkID),
 		})
+		summaryChunkIDs[string(s.SummaryChunkID)] = struct{}{}
+	}
+	streamedChunks, err := streamedChunkViews(result, summaryChunkIDs)
+	if err != nil {
+		return nil, err
 	}
 	return &contextports.CompilationResult{
+		StreamedChunks:     streamedChunks,
 		ShortfallTokens:    result.ShortfallTokens,
 		StreamedRefs:       streamedRefs,
 		SkippedStaleChunks: skipped,
@@ -191,4 +198,36 @@ func (a *compilerTriggerAdapter) Compile(ctx context.Context, req contextports.C
 			CacheHit:       record != nil && record.CacheHit,
 		},
 	}, nil
+}
+
+// streamedChunkViews zips the compiler's ranked references with the chunk
+// bodies it loaded, preserving rank order and flagging summary-substituted
+// entries. A reference without a body means the store lost a chunk between
+// rank and load — an internal inconsistency, so the adapter fails loud (D-10)
+// instead of delivering a silently truncated slice.
+func streamedChunkViews(result *compiler.CompilationResult, summaryChunkIDs map[string]struct{}) ([]contextports.StreamedChunkView, error) {
+	byID := make(map[knowledge.ChunkID]*knowledge.KnowledgeChunk, len(result.Chunks))
+	for i := range result.Chunks {
+		byID[result.Chunks[i].ID] = &result.Chunks[i]
+	}
+	views := make([]contextports.StreamedChunkView, 0, len(result.StreamedRefs))
+	for _, ref := range result.StreamedRefs {
+		chunk, ok := byID[knowledge.ChunkID(ref.ChunkID)]
+		if !ok || chunk == nil {
+			return nil, fmt.Errorf("compiler adapter: chunk %q is ranked for streaming but its body is missing", ref.ChunkID)
+		}
+		_, isSummary := summaryChunkIDs[string(chunk.ID)]
+		views = append(views, contextports.StreamedChunkView{
+			ChunkID:     string(chunk.ID),
+			ContentHash: chunk.ContentHash,
+			Body:        chunk.Body.Raw,
+			// The compiler's own per-chunk accounting (estimate at rank
+			// time) is authoritative and sums to Record.FinalTokens; the
+			// chunk's stored TokenEstimate is advisory metadata.
+			TokenEstimate: ref.TokenCount,
+			TrustClass:    string(chunk.TrustClass),
+			IsSummary:     isSummary,
+		})
+	}
+	return views, nil
 }

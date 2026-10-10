@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/cognitionzoo/paradigm"
 	reactpkg "codeburg.org/lexbit/relurpify/cognitionzoo/react"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
@@ -147,10 +148,22 @@ func (a *ReflectionAgent) runDelegateWork(ctx context.Context, task *execution.T
 // ephemeral scratch overlay (scratch.review / scratch.review_issues), which
 // predicates route on (D5). The scratch namespace is never grounded.
 func (a *ReflectionAgent) runDirectiveReview(ctx context.Context, task *execution.Task, env *contextdata.Envelope, lastResult *execution.Result) (string, []string, error) {
-	resp, err := a.Reviewer.Chat(ctx, []model.Message{
+	// The substrate's compiled slice renders exactly once, into the review's
+	// system slot (D-2); renderer inconsistencies fail the node (D-10).
+	streamed, err := paradigm.StreamedSection(ctx, env, "reflection")
+	if err != nil {
+		return "", nil, err
+	}
+	reviewMessages := []model.Message{
 		{Role: "system", Content: directiveReviewSystemPrompt},
-		{Role: "user", Content: directiveReviewUserPrompt(taskInstruction(task), a.reviewCriteria, compactResultForReview(lastResult))},
-	}, &model.LLMOptions{
+	}
+	if streamed != "" {
+		reviewMessages = append(reviewMessages, model.Message{Role: "system", Content: streamed})
+	}
+	reviewMessages = append(reviewMessages, model.Message{
+		Role: "user", Content: directiveReviewUserPrompt(taskInstruction(task), a.reviewCriteria, compactResultForReview(lastResult)),
+	})
+	resp, err := a.Reviewer.Chat(ctx, reviewMessages, &model.LLMOptions{
 		Model:       a.modelID(),
 		Temperature: 0,
 		MaxTokens:   512,

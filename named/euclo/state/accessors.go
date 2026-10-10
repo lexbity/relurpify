@@ -2,7 +2,6 @@ package state
 
 import (
 	"codeburg.org/lexbit/relurpify/context/contextdata"
-	"codeburg.org/lexbit/relurpify/context/contextstream"
 	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 	"codeburg.org/lexbit/relurpify/named/euclo/intake"
 	"codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
@@ -322,16 +321,6 @@ func GetStreamTokenUsage(env *contextdata.Envelope) (int, bool) {
 // SetStreamTokenUsage stores stream token usage.
 func SetStreamTokenUsage(env *contextdata.Envelope, usage int) {
 	contextdata.SetTyped(env, KeyStreamTokenUsage, usage)
-}
-
-// GetStreamResult retrieves the context stream result produced at intake.
-func GetStreamResult(env *contextdata.Envelope) (*contextstream.Result, bool) {
-	return contextdata.GetTyped[*contextstream.Result](env, KeyStreamResult)
-}
-
-// SetStreamResult stores the context stream result produced at intake.
-func SetStreamResult(env *contextdata.Envelope, result *contextstream.Result) {
-	contextdata.SetTyped(env, KeyStreamResult, result)
 }
 
 // GetDispatchRouteKind retrieves the dispatch route kind.

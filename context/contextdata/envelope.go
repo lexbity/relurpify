@@ -28,7 +28,11 @@ type Envelope struct {
 	Origins           map[string]OriginClass
 	CheckpointRequest *CheckpointRequest
 	AssemblyMetadata  AssemblyMeta
-	createdAt         time.Time
+	// streamed is the current backward-pass delivery (bodies transient, D-11);
+	// streamHistory is its redacted stamp trail. Both live behind mu.
+	streamed      *StreamedSlice
+	streamHistory []SliceStamp
+	createdAt     time.Time
 }
 
 // AssemblyMeta tracks compiler-specific metadata for envelope assembly.
