@@ -155,6 +155,7 @@ func (a *compilerTriggerAdapter) Compile(ctx context.Context, req contextports.C
 		Query:       query,
 		MaxTokens:   req.BudgetTokens,
 		EventLogSeq: req.EventLogSeq,
+		EpochID:     req.EpochID,
 		Metadata:    req.Metadata,
 	}
 	result, record, err := a.inner.Compile(ctx, innerReq)

@@ -100,6 +100,7 @@ func toCompilationRequest(req Request) contextports.CompilationRequest {
 		BudgetTokens: req.MaxTokens,
 		Mode:         string(req.Mode),
 		EventLogSeq:  req.EventLogSeq,
+		EpochID:      req.EpochID,
 		Metadata:     req.Metadata,
 	}
 }

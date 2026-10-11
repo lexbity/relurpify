@@ -43,6 +43,12 @@ type CompilationRequest struct {
 	ManifestID            string
 	PolicyBundleID        string
 	EventLogSeq           uint64
+	// EpochID is the memory-generation the compile reflects (owner ruling
+	// R-1). It is part of cache identity: an entry can only be served for
+	// the epoch it was compiled in, and a new epoch always misses. Epoch 0
+	// (cold / no-envelope compiles) is a legal shared key — every epoch-0
+	// compile of the same query reflects the same empty state.
+	EpochID               uint64
 	MaxTokens             int
 	BudgetShortfallPolicy string
 	Metadata              map[string]any
@@ -132,20 +138,23 @@ type SubstitutionDifference struct {
 	NewSubstitute knowledge.ChunkID
 }
 
-// CacheKey uniquely identifies a compilable context. Event-log sequence is
-// deliberately NOT part of cache identity: two compiles of the same logical
-// request (same query, manifest, policy) share an entry regardless of how
-// many events were appended between them. The sequence remains record
-// metadata (CompilationRecord.EventLogSeq) and digest input.
+// CacheKey uniquely identifies a compilable context. The key includes the
+// envelope epoch (owner ruling R-1, 2026-10-10): cache correctness is
+// structural (epoch-scoped), not TTL-based — a cached compilation reflects
+// exactly the knowledge state of the epoch it was compiled in, and a new
+// epoch always misses. TTL and capacity are memory bounds only. Event-log
+// sequence remains record metadata (CompilationRecord.EventLogSeq) and
+// digest input, not cache identity.
 type CacheKey struct {
 	QueryFingerprint        string
 	ManifestFingerprint     string
 	PolicyBundleFingerprint string
+	EpochFingerprint        string
 }
 
 // String returns a string representation of the cache key.
 func (k CacheKey) String() string {
-	return k.QueryFingerprint + ":" + k.ManifestFingerprint + ":" + k.PolicyBundleFingerprint
+	return k.QueryFingerprint + ":" + k.ManifestFingerprint + ":" + k.PolicyBundleFingerprint + ":" + k.EpochFingerprint
 }
 
 // CacheEntry stores a compiled result with its dependencies.

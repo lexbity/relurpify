@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -162,14 +163,17 @@ func (c *Compiler) compile(ctx context.Context, request CompilationRequest, opts
 	// Build cache key
 	cacheKey := c.buildCacheKey(request)
 
-	// Check cache first
+	// Check cache first. A hit returns the stored result WHOLESALE (owner
+	// ruling R-1): the struct copy shares its slices with the cached record,
+	// and every consumer (the trigger adapter, renderers) reads them
+	// read-only — no field-picking, or bodies/refs/substitutions/shortfall
+	// are silently stripped from the model's context. The epoch in the key
+	// makes the hit structurally correct: an entry can only be served for
+	// the epoch it was compiled in.
 	if !opts.noCache {
 		if cached := c.cache.get(cacheKey); cached != nil {
-			result := &CompilationResult{
-				Chunks:       cached.record.Result.Chunks,
-				RankedChunks: cached.record.Result.RankedChunks,
-				TotalTokens:  cached.record.Result.TotalTokens,
-			}
+			stored := cached.record.Result
+			result := &stored
 			record := &CompilationRecord{
 				RequestID:   c.newID(),
 				Timestamp:   c.now(),
@@ -529,6 +533,7 @@ func (c *Compiler) buildCacheKey(request CompilationRequest) CacheKey {
 		QueryFingerprint:        c.fingerprint(mustJSON(request.Query)),
 		ManifestFingerprint:     c.fingerprint(request.ManifestID),
 		PolicyBundleFingerprint: c.fingerprint(request.PolicyBundleID),
+		EpochFingerprint:        c.fingerprint(strconv.FormatUint(request.EpochID, 10)),
 	}
 }
 

@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/context/contextstream"
 	"codeburg.org/lexbit/relurpify/context/knowledge"
 	"codeburg.org/lexbit/relurpify/context/knowledge/graphdb"
 	"codeburg.org/lexbit/relurpify/context/knowledge/retrieval"
@@ -106,6 +107,51 @@ func TestBuildKnowledgeRuntimeWiresOneBus(t *testing.T) {
 		}
 		return false
 	}, 2*time.Second, time.Millisecond, "retriever must consume the runtime bus")
+}
+
+// TestAdapterOnCacheHitDeliversBodies is the P1 regression test: two
+// compiles through the trigger adapter, the second a cache hit, must both
+// produce non-empty StreamedChunks with identical bodies — the hit result is
+// delivered wholesale, never field-picked (ruling R-1).
+func TestAdapterOnCacheHitDeliversBodies(t *testing.T) {
+	ctx := context.Background()
+	engine, err := graphdb.Open(ctx, graphdb.DefaultOptions(t.TempDir()))
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, engine.Close(ctx)) })
+
+	runtime, err := BuildKnowledgeRuntime(KnowledgeRuntimeInput{GraphDB: engine})
+	require.NoError(t, err)
+	t.Cleanup(runtime.Close)
+
+	_, err = runtime.KnowledgeStore.Save(ctx, knowledge.KnowledgeChunk{
+		ID:          "chunk:hitbody",
+		WorkspaceID: "ws",
+		TrustClass:  agentspec.TrustClassBuiltinTrusted,
+		Body:        knowledge.ChunkBody{Raw: "hit body term", Fields: map[string]any{"content": "hit body term"}},
+	})
+	require.NoError(t, err)
+
+	req := contextstream.Request{
+		ID:        "hit-probe",
+		Query:     retrieval.RetrievalQuery{Text: "hitbody"},
+		MaxTokens: 1000,
+		EpochID:   5,
+	}
+	first, err := runtime.StreamTrigger.RequestBlocking(ctx, req)
+	require.NoError(t, err)
+	require.NotNil(t, first.Compilation)
+	require.False(t, first.Record.CacheHit)
+	require.NotEmpty(t, first.Compilation.StreamedChunks, "the miss must carry chunk views")
+
+	second, err := runtime.StreamTrigger.RequestBlocking(ctx, req)
+	require.NoError(t, err)
+	require.NotNil(t, second.Compilation)
+	require.True(t, second.Record.CacheHit, "the second identical compile must hit the cache")
+	require.NotEmpty(t, second.Compilation.StreamedChunks, "a cache hit must still deliver chunk views with bodies")
+
+	require.Equal(t, first.Compilation.StreamedChunks, second.Compilation.StreamedChunks,
+		"the hit's chunk views must be byte-identical to the miss's")
+	require.Equal(t, first.Compilation.StreamedRefs, second.Compilation.StreamedRefs)
 }
 
 // TestBuildKnowledgeRuntimeWiresGroundingInvalidationAndHealth proves the

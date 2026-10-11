@@ -18,10 +18,14 @@ const (
 
 // Request describes a compiler-triggered context streaming request.
 type Request struct {
-	ID                    string
-	Query                 retrieval.RetrievalQuery
-	MaxTokens             int
-	EventLogSeq           uint64
+	ID          string
+	Query       retrieval.RetrievalQuery
+	MaxTokens   int
+	EventLogSeq uint64
+	// EpochID is the envelope's memory-generation at request-build time
+	// (owner ruling R-1). It rides the request into the compiler's cache
+	// identity; builders stamp it from AssemblyMetadataSnapshot().EpochID.
+	EpochID               uint64
 	BudgetShortfallPolicy string
 	Mode                  Mode
 	Metadata              map[string]any

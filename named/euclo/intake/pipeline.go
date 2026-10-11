@@ -82,7 +82,7 @@ func (n *IntakePipelineNode) Execute(ctx context.Context, env *contextdata.Envel
 	taskEnvelope.Interpretation = interpretation
 
 	family, _ := n.lookupFamily(scoredClassification.WinningFamily)
-	streamResult := n.maybeStreamContext(ctx, family.RetrievalTemplate, taskEnvelope)
+	streamResult := n.maybeStreamContext(ctx, family.RetrievalTemplate, taskEnvelope, env.AssemblyMetadataSnapshot().EpochID)
 	intent := &IntentClassification{
 		WinningFamily:        scoredClassification.WinningFamily,
 		FamilyCandidates:     append([]families.FamilyCandidate(nil), scoredClassification.FamilyCandidates...),
@@ -170,7 +170,7 @@ func (n *IntakePipelineNode) effectiveStreamMode() contextstream.Mode {
 	return mode
 }
 
-func (n *IntakePipelineNode) maybeStreamContext(ctx context.Context, templateStr string, envelope *TaskEnvelope) *contextstream.Result {
+func (n *IntakePipelineNode) maybeStreamContext(ctx context.Context, templateStr string, envelope *TaskEnvelope, epochID uint64) *contextstream.Result {
 	if n == nil || n.streamTrigger == nil || strings.TrimSpace(templateStr) == "" {
 		return nil
 	}
@@ -181,6 +181,11 @@ func (n *IntakePipelineNode) maybeStreamContext(ctx context.Context, templateStr
 		return nil
 	}
 	req.ID = "stream-req-" + n.id
+	// The intake compile is part of the run's memory order: its request
+	// carries the envelope epoch so the compiler's epoch-scoped cache keys
+	// it correctly (the delivery rewrite of the intake path is separate
+	// work; this only makes its cache identity honest).
+	req.EpochID = epochID
 	req.Metadata = map[string]any{
 		"intake_node_id":  n.id,
 		"family_template": templateStr,

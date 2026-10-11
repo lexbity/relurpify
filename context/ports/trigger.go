@@ -16,6 +16,11 @@ type CompilationRequest struct {
 	// compilation records stay attributable to their creating run.
 	EventLogSeq uint64
 	Metadata    map[string]any
+	// EpochID is the memory-generation the compile reflects. It is part of
+	// the compile identity (owner ruling R-1): the request's epoch is part of
+	// the cache key, so a cached compilation can only be served for the epoch
+	// it was compiled in, and a new epoch always misses.
+	EpochID uint64 `json:"epoch_id,omitempty"`
 }
 
 // CompilationResult is the context-owned view of a compilation result.

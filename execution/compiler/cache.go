@@ -14,11 +14,21 @@ const (
 	// compilationCacheCap bounds in-memory compilation results.
 	compilationCacheCap = 256
 	// compilationCacheTTL bounds staleness when an invalidation event was
-	// dropped by the lossy event bus.
+	// dropped by the lossy event bus. TTL and capacity are MEMORY BOUNDS
+	// ONLY (owner ruling R-1): cache correctness is structural, carried by
+	// the epoch in the cache key — an entry can never be served for a
+	// different epoch than it was compiled in, so no TTL can ever paper over
+	// a wrong hit.
 	compilationCacheTTL = 5 * time.Minute
 	// invalidatedChunksCap bounds the invalidated-chunk set.
 	invalidatedChunksCap = 4096
 )
+
+// NFR-2 memory bound: cached results now carry chunk bodies (wholesale hits,
+// ruling R-1). Worst case is the cap (256) × 2× token budget (≤ 64 KB at
+// 8192 tokens) ≈ 16 MB RSS — bounded by the slice budget itself; a benchmark
+// measurement of the compiler process under a full 256-entry body-bearing
+// cache recorded the delta well under the 32 MB ceiling (2026-10-10, Phase 1).
 
 // cacheEntry is the in-memory compilation cache record. Access statistics
 // are atomics: the read path never mutates shared state under a read lock.
