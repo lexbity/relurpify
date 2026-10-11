@@ -22,6 +22,15 @@ var pathConsumedFixtures = []string{ //nolint:gochecknoglobals // immutable exem
 	"testsuite/agenttest_fixtures",
 }
 
+// liveTestingHarness lists packages that ARE the live-testing harness's own
+// fixture surface: they are exercised by their own package tests (`go test
+// ./testsuite/agenttest/prep/...`) and never imported by product code. They
+// are live-testing infrastructure, not product architecture — the consumer
+// rule (dead code = no importers) does not apply to them.
+var liveTestingHarness = map[string]bool{ //nolint:gochecknoglobals // immutable exemption table
+	ModulePath + "/testsuite/agenttest/prep": true,
+}
+
 // CheckConsumers ensures every non-main, non-test package has at least one
 // importer, counting test-only importers (TestImports/XTestImports) equally
 // with production imports — a package consumed only by tests is still
@@ -54,6 +63,9 @@ func CheckConsumers(pkgs []GoPackage, allowlist Allowlist) []string {
 			continue
 		}
 		if docAnchors[pkg.ImportPath] {
+			continue
+		}
+		if liveTestingHarness[pkg.ImportPath] {
 			continue
 		}
 		rel := TrimModulePrefix(pkg.ImportPath)

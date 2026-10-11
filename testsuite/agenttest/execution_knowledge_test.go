@@ -138,8 +138,12 @@ func TestHarnessForwardPassGroundsAtBarrier(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BuildThoughtRecipeGraph: %v", err)
 	}
-	graph.SetGrounder(deps.Grounder)
-	graph.SetDrain(deps.EpochDrain)
+	if err := graph.SetGrounder(deps.Grounder); err != nil {
+		t.Fatalf("SetGrounder: %v", err)
+	}
+	if err := graph.SetDrain(deps.EpochDrain); err != nil {
+		t.Fatalf("SetDrain: %v", err)
+	}
 
 	env := contextdata.NewEnvelope("task-harness-capture", "session-harness-capture")
 	env.SetWorkingValueWithClass("state.note", "harness-seed-note", contextdata.MemoryClassTask)

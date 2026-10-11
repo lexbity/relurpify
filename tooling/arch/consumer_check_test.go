@@ -131,3 +131,15 @@ func TestCheckConsumers_allowlist(t *testing.T) {
 		t.Errorf("expected allowlist to exempt consumer violation, got %v", violations)
 	}
 }
+
+func TestCheckConsumers_liveTestingHarnessExempt(t *testing.T) {
+	pkgs := []GoPackage{
+		// The agenttest prep harness is live-testing infrastructure: it is
+		// driven by its own package tests, never imported by product code.
+		{ImportPath: ModulePath + "/testsuite/agenttest/prep", Name: "prep", GoFiles: []string{"dryrun.go"}},
+	}
+	violations := CheckConsumers(pkgs, Allowlist{})
+	if len(violations) != 0 {
+		t.Fatalf("live-testing harness packages must be exempt, got %v", violations)
+	}
+}

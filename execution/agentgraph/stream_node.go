@@ -2,6 +2,7 @@ package agentgraph
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -96,8 +97,15 @@ func (n *StreamTriggerNode) Execute(ctx context.Context, env *contextdata.Envelo
 		}
 		result, err := trigger.RequestBlocking(ctx, req)
 		if result != nil {
-			if applyErr := contextstream.ApplyResult(ctx, env, result, epoch); applyErr != nil {
-				return nil, applyErr
+			if applyErr := contextstream.ApplyResult(env, result, epoch); applyErr != nil {
+				var dropped *contextstream.ErrStaleApplyDropped
+				if !errors.As(applyErr, &dropped) {
+					return nil, applyErr
+				}
+				// A stale drop is the designed behavior (D-3): the result
+				// mutated nothing. The node ctx carries the run's telemetry
+				// sink, so the drop is reported here; the node succeeds.
+				contextstream.EmitStaleApplyDropped(ctx, dropped.CurrentEpoch, dropped.GotEpoch, dropped.RequestID)
 			}
 			// Bounded summary only: the node contract caps working-state
 			// entries at 4096 bytes, and the full result's bodies live on the

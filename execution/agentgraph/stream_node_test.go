@@ -154,19 +154,20 @@ func TestContextStreamNodeBlockingLandsSlice(t *testing.T) {
 	require.Contains(t, section, "the grounded body")
 }
 
-// TestContextStreamNodeEpochRegressedBackgroundDrops proves the D-4 guard at
-// the barrier: a background job whose epoch is older than the stored slice is
-// dropped with contextstream.stale_apply_dropped, never rendered.
+// TestContextStreamNodeEpochRegressedBackgroundDrops proves the D-3 guard:
+// a background job whose epoch is older than the stored slice returns the
+// typed ErrStaleApplyDropped sentinel and mutates nothing; the coordinator
+// (not ApplyResult) owns the stale_apply_dropped emission (see
+// epoch_telemetry_test.go for the barrier-path emission).
 func TestContextStreamNodeEpochRegressedBackgroundDrops(t *testing.T) {
-	sink := &recordingEpochTelemetry{}
-	ctx := telemetry.WithTelemetry(context.Background(), sink)
-
 	env := contextdata.NewEnvelope("task-1", "session-1")
 	// A newer blocking slice (epoch 5) is already stored.
 	env.SetStreamedSlice(&contextdata.StreamedSlice{
 		RequestID: "req-blocking", Epoch: 5, FinalTokens: 10,
 		Chunks: []contextdata.StreamedChunk{{ChunkID: "chunk-new", Body: "new", TokenEstimate: 10}},
 	})
+	env.AddStreamedContextReference(contextdata.ChunkReference{ChunkID: "chunk-new"})
+	beforeMeta := env.AssemblyMetadataSnapshot()
 
 	older := &contextstream.Result{
 		Request: contextstream.Request{ID: "req-old"},
@@ -177,11 +178,17 @@ func TestContextStreamNodeEpochRegressedBackgroundDrops(t *testing.T) {
 			Record: contextports.CompilationRecord{ID: "req-old", FinalTokens: 10},
 		},
 	}
-	require.NoError(t, contextstream.ApplyResult(ctx, env, older, 4))
+	err := contextstream.ApplyResult(env, older, 4)
+	var dropped *contextstream.ErrStaleApplyDropped
+	require.ErrorAs(t, err, &dropped, "a stale apply must return the typed sentinel")
+	require.Equal(t, uint64(5), dropped.CurrentEpoch)
+	require.Equal(t, uint64(4), dropped.GotEpoch)
+	require.Equal(t, "req-old", dropped.RequestID)
 
 	slice := env.StreamedSliceSnapshot()
 	require.Equal(t, "req-blocking", slice.RequestID, "older background apply must not replace the slice")
-	require.Equal(t, 1, sink.count(telemetry.EventContextStreamStaleApplyDropped))
+	require.Equal(t, []contextdata.ChunkID{"chunk-new"}, env.StreamedChunkIDs(), "stale apply must not add refs")
+	require.Equal(t, beforeMeta, env.AssemblyMetadataSnapshot(), "stale apply must not touch assembly metadata")
 }
 
 type recordingEpochTelemetry struct {

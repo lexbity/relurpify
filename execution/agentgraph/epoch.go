@@ -55,11 +55,46 @@ func EpochCoordinatorFromContext(ctx context.Context) *EpochCoordinator {
 // EpochCoordinator owns the run's epoch lifecycle: capture grounding and
 // background stream jobs land at epoch barriers, and nothing mutates a closed
 // epoch. It implements CaptureSink so recipe capture execution enqueues into it.
+//
+// State machine (D2, normative). The coordinator uses the opening-epoch
+// convention — the tree's established numbering, origin 1 — which is
+// behaviorally identical to a last-closed counter initialized at 0:
+//
+//	c.epoch  = the epoch the next barrier will CLOSE (the opening epoch);
+//	           the last closed epoch is c.epoch-1
+//	env.AssemblyMetadata.EpochID mirrors c.epoch after each close
+//
+//	EnqueueCapture(item):   under c.mu:   item.Epoch = c.epoch + (1 if a flush
+//	                                      is in flight else 0)
+//	                          Items enqueued during an in-flight flush belong to
+//	                          the NEXT barrier, never the one mid-flight.
+//	TrackStreamJob(job):    under c.mu (unchanged registration)
+//	CloseEpochIfPending:    barrierMu serializes whole barriers; under c.mu:
+//	                        take items+jobs (atomic swap), epoch := c.epoch,
+//	                        inFlush = true
+//	                        outside all locks: flush grounding (one retry,
+//	                        250 ms) → await jobs (2 s) → drain (50 ms)
+//	                        under c.mu: inFlush = false; on success
+//	                        c.epoch = epoch + 1 (a grounding failure aborts
+//	                        before the close; an await failure closes and
+//	                        then propagates — failure semantics unchanged)
+//	FinalEpoch:             the barrier taken unconditionally, idempotent
+//
+// Concurrent barriers serialize on barrierMu: the second takes nothing
+// already taken and cannot double-close. c.epoch is read and written only
+// under c.mu — there is no unlocked read anywhere.
 type EpochCoordinator struct {
-	mu        sync.Mutex
-	epoch     uint64
-	items     []knowledge.GroundingItem
-	jobs      []*contextstream.Job
+	mu      sync.Mutex
+	epoch   uint64
+	inFlush bool
+	items   []knowledge.GroundingItem
+	jobs    []*contextstream.Job
+
+	// barrierMu serializes whole close operations so two concurrent barriers
+	// (parallel branches share the parent coordinator) cannot interleave
+	// take/flush/close. c.mu is never held across flush work.
+	barrierMu sync.Mutex
+
 	runCtx    context.Context
 	ground    Grounder
 	tel       telemetry.Telemetry
@@ -104,7 +139,8 @@ func (c *EpochCoordinator) RunContext() context.Context {
 	return c.runCtx
 }
 
-// EpochID returns the current (opening) epoch number.
+// EpochID returns the current (opening) epoch number: the epoch the next
+// barrier will close. Guarded by c.mu like every other epoch read.
 func (c *EpochCoordinator) EpochID() uint64 {
 	if c == nil {
 		return 0
@@ -114,8 +150,10 @@ func (c *EpochCoordinator) EpochID() uint64 {
 	return c.epoch
 }
 
-// EnqueueCapture is the phase-1 capture hand-off: stamp the current epoch and
-// queue the item for the next barrier.
+// EnqueueCapture is the phase-1 capture hand-off: stamp the epoch that will
+// carry the item and queue it for the next barrier. While a flush is in
+// flight the stamp targets the FOLLOWING epoch (D2): items enqueued mid-flush
+// belong to the next barrier, never the one being closed.
 func (c *EpochCoordinator) EnqueueCapture(item knowledge.GroundingItem) {
 	if c == nil {
 		return
@@ -123,6 +161,9 @@ func (c *EpochCoordinator) EnqueueCapture(item knowledge.GroundingItem) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	item.Epoch = c.epoch
+	if c.inFlush {
+		item.Epoch = c.epoch + 1
+	}
 	c.items = append(c.items, item)
 }
 
@@ -147,22 +188,17 @@ func (c *EpochCoordinator) Pending() (int, int) {
 }
 
 // CloseEpochIfPending is the epoch barrier: a cheap no-op when the epoch is
-// clean, otherwise flush → await → drain → open the next epoch.
+// clean, otherwise flush → await → drain → close the epoch and open the next.
+// Whole barriers serialize on barrierMu, so two concurrent barriers cannot
+// double-flush or double-close (D2); each takes only what is pending when it
+// holds the barrier lock.
 func (c *EpochCoordinator) CloseEpochIfPending(nodeID string) error {
 	if c == nil {
 		return nil
 	}
-	c.mu.Lock()
-	if len(c.items) == 0 && len(c.jobs) == 0 {
-		c.mu.Unlock()
-		return nil
-	}
-	items := c.items
-	jobs := c.jobs
-	c.items = nil
-	c.jobs = nil
-	c.mu.Unlock()
-	return c.flushEpoch(nodeID, items, jobs)
+	c.barrierMu.Lock()
+	defer c.barrierMu.Unlock()
+	return c.barrier(nodeID, false)
 }
 
 // FinalEpoch always closes the run: it flushes whatever exists and stamps the
@@ -172,26 +208,48 @@ func (c *EpochCoordinator) FinalEpoch(nodeID string) error {
 	if c == nil {
 		return nil
 	}
+	c.barrierMu.Lock()
+	defer c.barrierMu.Unlock()
+	return c.barrier(nodeID, true)
+}
+
+// barrier is the one close path, run under barrierMu. unconditional closes
+// the run's final epoch even when the queues are empty; otherwise an empty
+// epoch is a cheap no-op.
+func (c *EpochCoordinator) barrier(nodeID string, unconditional bool) error {
 	c.mu.Lock()
+	if !unconditional && len(c.items) == 0 && len(c.jobs) == 0 {
+		c.mu.Unlock()
+		return nil
+	}
 	if c.finalized {
 		c.mu.Unlock()
 		return nil
 	}
-	c.finalized = true
+	if unconditional {
+		c.finalized = true
+	}
 	items := c.items
 	jobs := c.jobs
 	c.items = nil
 	c.jobs = nil
+	epoch := c.epoch
+	c.inFlush = true
 	c.mu.Unlock()
-	if len(items) == 0 && len(jobs) == 0 {
-		return nil
+
+	err := c.flushEpoch(nodeID, epoch, items, jobs)
+
+	c.mu.Lock()
+	c.inFlush = false
+	if err == nil {
+		c.epoch = epoch + 1
 	}
-	return c.flushEpoch(nodeID, items, jobs)
+	c.mu.Unlock()
+	return err
 }
 
-func (c *EpochCoordinator) flushEpoch(nodeID string, items []knowledge.GroundingItem, jobs []*contextstream.Job) error {
+func (c *EpochCoordinator) flushEpoch(nodeID string, epoch uint64, items []knowledge.GroundingItem, jobs []*contextstream.Job) error {
 	started := time.Now()
-	epoch := c.epoch
 
 	var groundErr error
 	if len(items) > 0 {
@@ -208,7 +266,11 @@ func (c *EpochCoordinator) flushEpoch(nodeID string, items []knowledge.Grounding
 		}
 		c.emitGrounded(nodeID, epoch, report)
 	}
-	if err := c.awaitJobs(jobs, nodeID, epoch); err != nil && groundErr == nil {
+	// awaitJobs errors are barrier failures exactly like grounding errors;
+	// the first one wins. Unlike a grounding failure (which aborts before
+	// the close), an await failure still closes the epoch: the jobs' fate is
+	// recorded, the memory order advances, and the error propagates.
+	if err := c.awaitJobs(jobs, nodeID, epoch); err != nil {
 		groundErr = err
 	}
 	if c.drain != nil {
@@ -253,7 +315,9 @@ func (c *EpochCoordinator) wrapGroundingError(nodeID string, epoch uint64, err e
 
 // awaitJobs lands completed background stream jobs before the epoch closes.
 // A job still running at the deadline is abandoned and its partial result is
-// not applied.
+// not applied. A stale-dropped apply (ErrStaleApplyDropped) is the designed
+// drop, not a failure: the coordinator emits contextstream.stale_apply_dropped
+// through its own sink — the barrier path's ctx carries no sink of its own.
 func (c *EpochCoordinator) awaitJobs(jobs []*contextstream.Job, nodeID string, epoch uint64) error {
 	if len(jobs) == 0 {
 		return nil
@@ -269,8 +333,13 @@ func (c *EpochCoordinator) awaitJobs(jobs []*contextstream.Job, nodeID string, e
 			}
 			if env, ok := contextdata.EnvelopeFrom(c.runCtx); ok {
 				if result != nil {
-					if applyErr := contextstream.ApplyResult(c.runCtx, env, result, epoch); applyErr != nil && firstErr == nil {
-						firstErr = applyErr
+					if applyErr := contextstream.ApplyResult(env, result, epoch); applyErr != nil {
+						var dropped *contextstream.ErrStaleApplyDropped
+						if errors.As(applyErr, &dropped) {
+							c.emitStaleApplyDropped(nodeID, dropped)
+						} else if firstErr == nil {
+							firstErr = applyErr
+						}
 					}
 				}
 				if err != nil {
@@ -286,6 +355,17 @@ func (c *EpochCoordinator) awaitJobs(jobs []*contextstream.Job, nodeID string, e
 		}
 	}
 	return firstErr
+}
+
+// emitStaleApplyDropped reports a guard rejection observed at the barrier
+// through the coordinator's constructor-injected sink (nil-safe).
+func (c *EpochCoordinator) emitStaleApplyDropped(nodeID string, dropped *contextstream.ErrStaleApplyDropped) {
+	c.emit(c.runCtx, telemetry.EventContextStreamStaleApplyDropped, "stale stream result dropped by epoch guard", map[string]any{
+		"node_id":       nodeID,
+		"current_epoch": dropped.CurrentEpoch,
+		"result_epoch":  dropped.GotEpoch,
+		"request_id":    dropped.RequestID,
+	})
 }
 
 func (c *EpochCoordinator) emitGrounded(nodeID string, epoch uint64, report knowledge.GroundingReport) {

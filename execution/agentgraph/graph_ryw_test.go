@@ -78,7 +78,7 @@ func newRYWGroundingStore(t *testing.T) (*knowledge.ChunkStore, *knowledge.Groun
 func TestGraphReadYourWritesAcrossEpochs(t *testing.T) {
 	store, grounder := newRYWGroundingStore(t)
 	graph := NewGraph()
-	graph.SetGrounder(grounder)
+	require.NoError(t, graph.SetGrounder(grounder))
 	require.NoError(t, graph.AddNode(&captureNode{id: "capture"}))
 	require.NoError(t, graph.AddNode(&checkNode{id: "check", store: store}))
 	require.NoError(t, graph.SetStart("capture"))
@@ -102,7 +102,7 @@ func TestGraphReadYourWritesAcrossEpochs(t *testing.T) {
 func TestGraphSequentialRunsDoNotLeakGoroutines(t *testing.T) {
 	_, grounder := newRYWGroundingStore(t)
 	graph := NewGraph()
-	graph.SetGrounder(grounder)
+	require.NoError(t, graph.SetGrounder(grounder))
 	require.NoError(t, graph.AddNode(&captureNode{id: "capture"}))
 	require.NoError(t, graph.SetStart("capture"))
 
@@ -139,7 +139,7 @@ func (r *recordingGraphTelemetry) count(kind fwtelemetry.EventType) int {
 // as an errors.Is(ErrGroundingFailed) run error, never a silent drop.
 func TestGraphGroundingFailureFailsTheRun(t *testing.T) {
 	graph := NewGraph()
-	graph.SetGrounder(&failingGrounder{})
+	require.NoError(t, graph.SetGrounder(&failingGrounder{}))
 	require.NoError(t, graph.AddNode(&captureNode{id: "capture"}))
 	require.NoError(t, graph.SetStart("capture"))
 

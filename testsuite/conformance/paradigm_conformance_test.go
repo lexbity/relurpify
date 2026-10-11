@@ -704,7 +704,9 @@ func tryRunFixtureInto(t *testing.T, name string, deps *paradigm.Deps, env *cont
 		t.Fatalf("BuildThoughtRecipeGraph(%s): %v", name, err)
 	}
 	if grounder != nil {
-		graph.SetGrounder(grounder)
+		if err := graph.SetGrounder(grounder); err != nil {
+			return err
+		}
 	}
 	ctx := context.Background()
 	if _, err := graph.Execute(ctx, env); err != nil {

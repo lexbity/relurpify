@@ -264,9 +264,13 @@ func (a *Agent) BuildGraph(ctx context.Context, task *execution.Task) (*agentgra
 	// invalidation subscriber at each barrier.
 	if a.deps != nil {
 		if a.deps.Grounder != nil {
-			graph.SetGrounder(a.deps.Grounder)
+			if err := graph.SetGrounder(a.deps.Grounder); err != nil {
+				return nil, fmt.Errorf("wire grounder: %w", err)
+			}
 		}
-		graph.SetDrain(a.deps.EpochDrain)
+		if err := graph.SetDrain(a.deps.EpochDrain); err != nil {
+			return nil, fmt.Errorf("wire epoch drain: %w", err)
+		}
 	}
 
 	start := "euclo.intake"

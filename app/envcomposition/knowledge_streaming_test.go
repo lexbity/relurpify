@@ -97,7 +97,7 @@ func TestApplyResultLandsSliceThroughTrigger(t *testing.T) {
 	require.NoError(t, err)
 
 	env := contextdata.NewEnvelope("t", "s")
-	require.NoError(t, contextstream.ApplyResult(ctx, env, result, 1))
+	require.NoError(t, contextstream.ApplyResult(env, result, 1))
 
 	section, stats, err := contextstream.RenderStreamedSection(env)
 	require.NoError(t, err)

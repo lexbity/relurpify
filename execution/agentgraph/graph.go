@@ -135,20 +135,31 @@ func (g *Graph) SetTelemetry(t telemetry.Telemetry) error {
 
 // SetGrounder wires the durable grounding boundary the epoch coordinator flushes
 // through. Without a grounder the run carries no coordinator; a recipe declaring
-// capture fails graph build instead of reaching execution.
-func (g *Graph) SetGrounder(grounder Grounder) {
+// capture fails graph build instead of reaching execution. Returns
+// ErrGraphSealed after Execute has sealed the graph — post-seal mutation would
+// race the execution loop reading these fields.
+func (g *Graph) SetGrounder(grounder Grounder) error {
 	g.mu.Lock()
 	defer g.mu.Unlock()
+	if g.sealed {
+		return ErrGraphSealed
+	}
 	g.grounder = grounder
+	return nil
 }
 
 // SetDrain installs the invalidation subscriber's bounded drain, which the
 // epoch barrier calls after flushing grounding so the next node's context
 // compilation observes landed knowledge events. Nil disables the drain step.
-func (g *Graph) SetDrain(drain func(time.Duration)) {
+// Returns ErrGraphSealed after Execute has sealed the graph.
+func (g *Graph) SetDrain(drain func(time.Duration)) error {
 	g.mu.Lock()
 	defer g.mu.Unlock()
+	if g.sealed {
+		return ErrGraphSealed
+	}
 	g.drain = drain
+	return nil
 }
 
 func (g *Graph) invalidateStructureLocked() {
@@ -350,8 +361,24 @@ func (g *Graph) Execute(ctx context.Context, env *contextdata.Envelope) (result 
 		ownsCoordinator = true
 	}
 	if ownsCoordinator {
-		// Safety net: flush what exists even on panic paths (idempotent).
-		defer func() { _ = coord.FinalEpoch("") }()
+		// Safety net: flush what exists even on error/panic paths
+		// (idempotent). A grounding failure here is never silent: when a
+		// node error is already propagating the final-flush failure cannot
+		// become the run's error, so it is emitted on the graph's telemetry
+		// sink instead — swallowed, it would lose grounded work invisibly.
+		defer func() {
+			if finalErr := coord.FinalEpoch(""); finalErr != nil && err != nil {
+				g.emit(ctx, telemetry.Event{
+					Type:    telemetry.EventCaptureGroundFailed,
+					TaskID:  taskID,
+					Message: "final epoch flush failed: " + finalErr.Error(),
+					Metadata: map[string]any{
+						"deferred": true,
+					},
+					Timestamp: time.Now().UTC(),
+				})
+			}
+		}()
 	}
 
 	if g.startNodeID == "" {

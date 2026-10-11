@@ -16,29 +16,74 @@ import (
 // applying node rather than bloating the envelope.
 const streamedSliceByteBudgetFactor = 2
 
+// ErrStaleApplyDropped is the typed sentinel ApplyResult returns when the
+// epoch guard rejects a result as stale (D-4, guard-first): the result
+// mutated NOTHING — no refs, no gaps, no slice, no metadata — and the drop is
+// the designed behavior, not a failure. Callers distinguish it with
+// errors.As and emit contextstream.stale_apply_dropped on their own sink.
+type ErrStaleApplyDropped struct {
+	CurrentEpoch uint64
+	GotEpoch     uint64
+	RequestID    string
+}
+
+func (e *ErrStaleApplyDropped) Error() string {
+	return fmt.Sprintf("contextstream: stale apply dropped: result epoch %d is older than current slice epoch %d (request %q)",
+		e.GotEpoch, e.CurrentEpoch, e.RequestID)
+}
+
 // ApplyResult writes streamed refs and the compiled slice into an envelope,
 // merging into the existing assembly metadata instead of replacing it. The
-// slice is stored under the epoch guard (D-4): a result whose epoch is older
-// than the stored slice's is dropped — never rendered — and counted via
-// contextstream.stale_apply_dropped. The epoch is stamped so every applied
-// compilation is attributable to a memory state.
-func ApplyResult(ctx context.Context, env *contextdata.Envelope, result *Result, epoch uint64) error {
+// epoch guard is the FIRST statement over compilation content (D-3): a
+// result whose epoch is older than the stored slice's is dropped as-is and
+// reported through the typed ErrStaleApplyDropped sentinel — the envelope is
+// byte-identical after a stale apply. Equal-epoch re-application (node
+// retry) is a replace, idempotent by content. Streamed refs dedup by chunk
+// ID against the current reference set, so re-applied compilations cannot
+// accumulate the reference list. AssemblyMetadata.EpochID never regresses
+// (max semantics under update); the epoch is stamped so every applied
+// compilation is attributable to a memory state. Emission of
+// contextstream.stale_apply_dropped belongs to the caller (the coordinator
+// and the stream node own sinks; a dropped result here returns, it does not
+// report).
+func ApplyResult(env *contextdata.Envelope, result *Result, epoch uint64) error {
 	if env == nil || result == nil {
 		return nil
 	}
 	if result.Compilation != nil {
+		if current := env.StreamedSliceSnapshot(); current != nil && epoch < current.Epoch {
+			return &ErrStaleApplyDropped{
+				CurrentEpoch: current.Epoch,
+				GotEpoch:     epoch,
+				RequestID:    result.Request.ID,
+			}
+		}
+		seen := make(map[contextdata.ChunkID]struct{})
+		for _, ref := range env.ReferencesSnapshot().StreamedContext {
+			seen[ref.ChunkID] = struct{}{}
+		}
 		for _, ref := range result.Compilation.StreamedRefs {
-			env.AddStreamedContextReference(contextdata.ChunkReference{ChunkID: contextdata.ChunkID(ref)})
+			id := contextdata.ChunkID(ref)
+			if id == "" {
+				continue
+			}
+			if _, dup := seen[id]; dup {
+				continue
+			}
+			seen[id] = struct{}{}
+			env.AddStreamedContextReference(contextdata.ChunkReference{ChunkID: id})
 		}
 		ApplyStaleGaps(env, result.Compilation)
-		if err := applyStreamedSlice(ctx, env, result.Compilation, epoch); err != nil {
+		if err := applyStreamedSlice(env, result.Compilation, epoch); err != nil {
 			return err
 		}
 	}
 	if result.Record != nil {
 		env.UpdateAssemblyMetadata(func(meta contextdata.AssemblyMeta) contextdata.AssemblyMeta {
 			meta.CompilationID = result.Record.ID
-			meta.EpochID = epoch
+			if epoch > meta.EpochID {
+				meta.EpochID = epoch
+			}
 			return meta
 		})
 	}
@@ -56,15 +101,11 @@ func ApplyResult(ctx context.Context, env *contextdata.Envelope, result *Result,
 }
 
 // applyStreamedSlice builds the envelope's StreamedSlice from the typed
-// compilation result and stores it under the epoch guard. A zero-chunk
-// compilation stores an empty slice: it is a legitimate state (D-3) that the
-// renderer turns into zero prompt bytes.
-func applyStreamedSlice(ctx context.Context, env *contextdata.Envelope, compilation *contextports.CompilationResult, epoch uint64) error {
-	if current := env.StreamedSliceSnapshot(); current != nil && epoch < current.Epoch {
-		EmitStaleApplyDropped(ctx, current.Epoch, epoch, current.RequestID)
-		return nil
-	}
-
+// compilation result. The epoch guard lives in ApplyResult (guard-first, D-3);
+// by the time this runs the result is current or equal-epoch (a replace). A
+// zero-chunk compilation stores an empty slice: it is a legitimate state
+// (D-3) that the renderer turns into zero prompt bytes.
+func applyStreamedSlice(env *contextdata.Envelope, compilation *contextports.CompilationResult, epoch uint64) error {
 	slice := &contextdata.StreamedSlice{
 		RequestID:  compilation.Record.ID,
 		Epoch:      epoch,
