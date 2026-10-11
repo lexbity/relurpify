@@ -46,6 +46,46 @@ func materializeRecipeWorkspace(t *testing.T, workspace string) {
 	}
 }
 
+// copyToolManifests copies the repo's relurpify_cfg/tools tree into the
+// workspace so the composed registry holds the declared tool vocabulary.
+func copyToolManifests(t *testing.T, workspace string) {
+	t.Helper()
+	src := filepath.Join("..", "..", "relurpify_cfg", "tools")
+	dst := filepath.Join(workspace, "relurpify_cfg", "tools")
+	if err := os.MkdirAll(dst, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	entries, err := os.ReadDir(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		inner, err := os.ReadDir(filepath.Join(src, entry.Name()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		sub := filepath.Join(dst, entry.Name())
+		if err := os.MkdirAll(sub, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		for _, f := range inner {
+			if f.IsDir() || filepath.Ext(f.Name()) != ".yaml" {
+				continue
+			}
+			contents, err := os.ReadFile(filepath.Join(src, entry.Name(), f.Name()))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(sub, f.Name()), contents, 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+}
+
 // copyCanonicalRecipes copies the repo's canonical relurpify_cfg/euclo recipes
 // into the workspace so boots see the full canonical set.
 func copyCanonicalRecipes(t *testing.T, workspace string) {
@@ -82,6 +122,10 @@ func copyCanonicalRecipes(t *testing.T, workspace string) {
 func TestExecutorBootsWithWorkspaceRecipesFromNonRepoCWD(t *testing.T) {
 	ws := t.TempDir()
 	copyCanonicalRecipes(t, ws)
+	// A real operator workspace also carries the tool manifests the recipes'
+	// declared vocabulary resolves against (the wave-5 contract: declared
+	// names must resolve, and resolution needs the composed tools).
+	copyToolManifests(t, ws)
 	desc := validDescriptorWithWorkspace(t, ws)
 	exec := (&PreparedRunExecutor{}).WithRunnerOverride(fakeRunner{})
 

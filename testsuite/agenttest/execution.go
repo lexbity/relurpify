@@ -1,6 +1,17 @@
 package agenttest
 
 import (
+	// Native go_native tool constructor registrations: the production runtime
+	// wires these in app/relurpish/runtime (tool_activation.go); the test
+	// executor composes the same registry and needs the same vocabulary.
+	_ "codeburg.org/lexbit/relurpify/platform/tools/native/fs"
+	_ "codeburg.org/lexbit/relurpify/platform/tools/native/git"
+	_ "codeburg.org/lexbit/relurpify/platform/tools/native/langgo"
+	_ "codeburg.org/lexbit/relurpify/platform/tools/native/langjs"
+	_ "codeburg.org/lexbit/relurpify/platform/tools/native/langpython"
+	_ "codeburg.org/lexbit/relurpify/platform/tools/native/langrust"
+	_ "codeburg.org/lexbit/relurpify/platform/tools/native/lsp"
+	_ "codeburg.org/lexbit/relurpify/platform/tools/native/search"
 	"context"
 	"errors"
 	"fmt"

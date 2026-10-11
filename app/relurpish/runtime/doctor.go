@@ -14,16 +14,17 @@ import (
 	"syscall"
 	"time"
 
-	capabilityagentspec "codeburg.org/lexbit/relurpify/capability/agentspec"
-	capabilitydescriptor "codeburg.org/lexbit/relurpify/capability/descriptor"
+	capabilityfs "codeburg.org/lexbit/relurpify/capability/fs"
 	platformfs "codeburg.org/lexbit/relurpify/capability/fs"
+	capabilityports "codeburg.org/lexbit/relurpify/capability/ports"
 	capabilityregistry "codeburg.org/lexbit/relurpify/capability/registry"
+	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
 	"codeburg.org/lexbit/relurpify/governance/policy"
 	"codeburg.org/lexbit/relurpify/named/euclo/euclocontract"
+	euclorelurpicabilities "codeburg.org/lexbit/relurpify/named/euclo/relurpicabilities"
 	eucloservices "codeburg.org/lexbit/relurpify/named/euclo/services"
 	thoughtrecipes "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
 	"codeburg.org/lexbit/relurpify/platform/llm"
-	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 	cfgsecurity "codeburg.org/lexbit/relurpify/userconfig/config/security"
 	"codeburg.org/lexbit/relurpify/userconfig/modelselect"
@@ -671,21 +672,32 @@ type recipesCheckResult struct {
 func checkCanonicalRecipes(workspace string) recipesCheckResult {
 	result := recipesCheckResult{}
 	// Diagnostics have no live runtime registry; seed a static capability
-	// view from the self-declared euclo set so `do relurpic:` references in
-	// the canonical recipes resolve exactly as they would at run time.
+	// view the way the runtime composes one: the real file tools plus the
+	// shipped relurpic capability set (registered invocably, so bare
+	// declared names like "test_run" resolve exactly as they would at run
+	// time — the wave-5 declared-vocabulary contract).
 	caps := capabilityregistry.NewRegistry()
-	for _, capID := range eucloservices.EucloCapabilityIDs() {
-		desc := capabilitydescriptor.CapabilityDescriptor{
-			ID:           capID,
-			Name:         capID,
-			Kind:         capabilityagentspec.CapabilityKindTool,
-			Availability: capabilitydescriptor.AvailabilitySpec{Available: true},
-		}
-		if err := caps.RegisterCapability(context.Background(), desc); err != nil {
+	for _, tool := range []capabilityports.Tool{
+		&capabilityfs.ReadFileTool{BasePath: workspace},
+		&capabilityfs.ListFilesTool{BasePath: workspace},
+		&capabilityfs.SearchInFilesTool{BasePath: workspace},
+		&capabilityfs.WriteFileTool{BasePath: workspace},
+		&capabilityfs.EditFileTool{BasePath: workspace},
+	} {
+		if err := caps.Register(context.Background(), tool); err != nil {
 			result.errText = fmt.Sprintf("seed capability view: %v", err)
 			result.missing = append(result.missing, canonicalRecipeIDs...)
 			return result
 		}
+	}
+	if err := euclorelurpicabilities.RegisterAll(euclorelurpicabilities.RegistrationDeps{
+		Registry:  caps,
+		Declared:  eucloservices.EucloCapabilityIDs(),
+		Workspace: workspace,
+	}); err != nil {
+		result.errText = fmt.Sprintf("seed capability view: %v", err)
+		result.missing = append(result.missing, canonicalRecipeIDs...)
+		return result
 	}
 	loader := thoughtrecipes.NewLoader().WithCapabilityRegistry(eucloservices.CapabilityLookup(caps))
 	loadResult, err := loader.LoadWorkspace(workspace)
