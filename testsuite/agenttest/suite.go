@@ -53,6 +53,12 @@ type SuiteSpec struct {
 	Cases     []CaseSpec         `yaml:"cases"`
 }
 
+// SuiteExecutionSpec carries the suite-level execution knobs. Timeout is the
+// suite-wide default case execution bound (D9.2): each case's own timeout
+// overrides it, the CLI --timeout applies when neither is set, and the
+// 15-minute default applies when nothing is set. A literal 0 disables the
+// bound. It is consumed via the descriptor's EffectiveTimeout — the old
+// parse-and-discard is dead.
 type SuiteExecutionSpec struct {
 	Profile     string `yaml:"profile,omitempty"`
 	Strict      bool   `yaml:"strict,omitempty"`
@@ -314,7 +320,6 @@ type TokenBudgetHint struct {
 
 type CaseOverrideSpec struct {
 	MaxIterations        int                            `yaml:"max_iterations,omitempty"`
-	BootstrapTimeout     string                         `yaml:"bootstrap_timeout,omitempty"`
 	Model                *ModelSpec                     `yaml:"model,omitempty"`
 	Recording            *RecordingSpec                 `yaml:"recording,omitempty"`
 	Workspace            *WorkspaceSpec                 `yaml:"workspace,omitempty"`
@@ -519,9 +524,6 @@ func (s *Suite) Validate() error {
 		}
 		if c.Overrides.MaxIterations < 0 {
 			return fmt.Errorf("suite case[%s] overrides.max_iterations must be >= 0", c.Name)
-		}
-		if _, err := parseCaseTimeout(c.Overrides.BootstrapTimeout); err != nil {
-			return fmt.Errorf("suite case[%s] overrides.bootstrap_timeout invalid: %w", c.Name, err)
 		}
 		if c.Overrides.Recording != nil {
 			if err := validateRecordingSpec(*c.Overrides.Recording, fmt.Sprintf("suite case[%s] overrides.recording", c.Name)); err != nil {

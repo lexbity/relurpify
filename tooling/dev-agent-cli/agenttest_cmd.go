@@ -52,26 +52,25 @@ func newAgentTestRunCmd() *cobra.Command {
 	var strict bool
 	var includeQuarantined bool
 	var outDir string
-	var sandbox bool
 	var timeout time.Duration
-	var bootstrapTimeout time.Duration
 	var skipASTIndex bool
 	var maxRetries int
 	var model string
 	var endpoint string
 	var maxIterations int
 	var debugLLM bool
-	var debugAgent bool
 	var backendReset string
 	var backendBin string
 	var backendService string
-	var backendResetBetween bool
 	var backendResetOn []string
 
 	cmd := &cobra.Command{
 		Use:   "run",
 		Short: "Run one or more agent testsuites",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if maxRetries < 0 {
+				return fmt.Errorf("--max-retries must be >= 0")
+			}
 			ws := ensureWorkspace()
 			selectedSuites := suites
 			if len(selectedSuites) == 0 {
@@ -98,27 +97,25 @@ func newAgentTestRunCmd() *cobra.Command {
 			if len(loadedSuites) == 0 {
 				return fmt.Errorf("no testsuites matched the requested filters")
 			}
+			timeoutSet := cmd.Flags().Changed("timeout")
 			opts := agenttest.RunOptions{
-				TargetWorkspace:     ws,
-				OutputDir:           outDir,
-				Sandbox:             sandbox,
-				Timeout:             timeout,
-				BootstrapTimeout:    bootstrapTimeout,
-				SkipASTIndex:        skipASTIndex,
-				Profile:             profile,
-				Strict:              strict,
-				MaxRetries:          maxRetries,
-				SharedRoot:          config.ResolveSharedRoot(""),
-				ModelOverride:       model,
-				EndpointOverride:    endpoint,
-				MaxIterations:       maxIterations,
-				DebugLLM:            debugLLM,
-				DebugAgent:          debugAgent,
-				BackendReset:        backendReset,
-				BackendBinary:       backendBin,
-				BackendService:      backendService,
-				BackendResetBetween: backendResetBetween,
-				BackendResetOn:      backendResetOn,
+				TargetWorkspace:  ws,
+				OutputDir:        outDir,
+				Timeout:          timeout,
+				TimeoutSet:       timeoutSet,
+				SkipASTIndex:     skipASTIndex,
+				Profile:          profile,
+				Strict:           strict,
+				MaxRetries:       maxRetries,
+				SharedRoot:       config.ResolveSharedRoot(""),
+				ModelOverride:    model,
+				EndpointOverride: endpoint,
+				MaxIterations:    maxIterations,
+				DebugLLM:         debugLLM,
+				BackendReset:     backendReset,
+				BackendBinary:    backendBin,
+				BackendService:   backendService,
+				BackendResetOn:   backendResetOn,
 			}
 			runner := newAgentTestRunnerFn()
 			for _, suite := range loadedSuites {
@@ -141,26 +138,23 @@ func newAgentTestRunCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&strict, "strict", false, "Fail the process if any non-skipped case fails")
 	cmd.Flags().BoolVar(&includeQuarantined, "include-quarantined", false, "Include suites marked quarantined")
 	cmd.Flags().StringVar(&outDir, "out", "", "Output directory for run artifacts")
-	cmd.Flags().BoolVar(&sandbox, "sandbox", true, "Run tool execution via gVisor/docker")
-	cmd.Flags().DurationVar(&timeout, "timeout", 45*time.Second, "Per-case timeout")
-	cmd.Flags().DurationVar(&bootstrapTimeout, "bootstrap-timeout", 30*time.Second, "Per-case bootstrap timeout")
+	cmd.Flags().DurationVar(&timeout, "timeout", 15*time.Minute, "Per-case execution timeout; 0 disables")
 	cmd.Flags().BoolVar(&skipASTIndex, "skip-ast-index", true, "Skip AST/bootstrap indexing during setup")
-	cmd.Flags().IntVar(&maxRetries, "max-retries", 3, "Maximum retry attempts per case")
+	cmd.Flags().IntVar(&maxRetries, "max-retries", 3, "Maximum retry attempts per case (0 disables retries)")
 	cmd.Flags().StringVar(&model, "model", "", "Override model name for all cases")
 	cmd.Flags().StringVar(&endpoint, "endpoint", "", "Override inference endpoint for all cases")
 	cmd.Flags().IntVar(&maxIterations, "max-iterations", 8, "Override max iterations for agent loops")
 	cmd.Flags().BoolVar(&debugLLM, "debug-llm", false, "Enable verbose LLM telemetry logging")
-	cmd.Flags().BoolVar(&debugAgent, "debug-agent", false, "Enable verbose agent debug logging")
 	cmd.Flags().StringVar(&backendReset, "backend-reset", "none", "Reset strategy: none|model|server")
 	cmd.Flags().StringVar(&backendBin, "backend-bin", "ollama", "Inference backend CLI binary name/path")
 	cmd.Flags().StringVar(&backendService, "backend-service", "ollama", "systemd service name for backend restarts")
-	cmd.Flags().BoolVar(&backendResetBetween, "backend-reset-between", false, "Reset before each case")
 	cmd.Flags().StringArrayVar(&backendResetOn, "backend-reset-on", []string{
 		"(?i)context deadline exceeded",
 		"(?i)connection reset",
-		"(?i)EOF",
-		"(?i)too many requests",
-	}, "Regex patterns that trigger backend reset+retry (repeatable)")
+	}, "Retry on errors matching <regex> and reset the backend (repeatable)")
+
+	_ = cmd.MarkFlagRequired("suite") //nolint:errcheck // advisory usage hint; empty --suite discovers
+
 	return cmd
 }
 

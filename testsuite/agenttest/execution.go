@@ -134,10 +134,11 @@ func (e *PreparedRunExecutor) Execute(ctx context.Context, desc *PreparedRunDesc
 		applyRecordedTelemetry(&report, events)
 		writeCaseTelemetryArtifacts(desc, &report, events)
 	}
-	if reportPath := caseReportPath(desc); reportPath != "" {
-		if werr := WriteCaseReport(reportPath, report); werr != nil {
-			_ = werr
-		}
+	// The report contract (R-7): a case report that cannot be written fails
+	// the case — an unwritable report is indistinguishable from a missing
+	// one, and the runner trusts only an existing, parseable report.
+	if err := writeCaseReportOrFail(desc, report); err != nil {
+		return err
 	}
 	if report.Output != "" {
 		_, _ = io.Copy(out, strings.NewReader(report.Output))
@@ -424,6 +425,17 @@ const (
 	resetStrategyServer = "server"
 )
 
+// ErrCaseTimeout is the typed infra failure when a case exceeds its
+// effective execution timeout (D9.2): no substring sniffing — the context
+// boundary produces the class.
+type ErrCaseTimeout struct {
+	After time.Duration
+}
+
+func (e *ErrCaseTimeout) Error() string {
+	return fmt.Sprintf("case timeout: execution exceeded %s", e.After)
+}
+
 func (e *PreparedRunExecutor) executeWithRetry(ctx context.Context, desc *PreparedRunDescriptor, task *execution.Task, env *contextdata.Envelope, out io.Writer) (*execution.Result, int, []string, error) {
 	var (
 		result      *execution.Result
@@ -433,7 +445,30 @@ func (e *PreparedRunExecutor) executeWithRetry(ctx context.Context, desc *Prepar
 	)
 	exec := e.currentExecutor()
 	for attempt := 0; attempt <= desc.MaxRetries; attempt++ {
-		result, err = exec.Execute(ctx, task, env)
+		// The effective timeout bounds EACH attempt (D9.2): a retry gets a
+		// fresh budget, and expiry classifies as the typed timeout infra
+		// failure with agenttest.case_timeout emitted. Zero disables.
+		attemptCtx := ctx
+		if desc.EffectiveTimeout > 0 {
+			var cancel context.CancelFunc
+			attemptCtx, cancel = context.WithTimeout(ctx, desc.EffectiveTimeout)
+			cancelled := false
+			defer func() {
+				if !cancelled {
+					cancel()
+				}
+			}()
+			defer func() { cancelled = true }()
+		}
+		result, err = exec.Execute(attemptCtx, task, env)
+		if err != nil && attemptCtx.Err() == context.DeadlineExceeded && ctx.Err() == nil {
+			after := desc.EffectiveTimeout
+			err = &ErrCaseTimeout{After: after}
+			e.emitCaseEvent(ctx, telemetry.EventAgentTestCaseTimeout, "case execution timed out", map[string]any{
+				"after":   after.String(),
+				"attempt": attempt + 1,
+			})
+		}
 		if err == nil {
 			break
 		}
@@ -568,11 +603,18 @@ func (e *PreparedRunExecutor) buildCaseReport(desc *PreparedRunDescriptor, resul
 		if report.Error == "" {
 			report.Error = execErr.Error()
 		}
+		var timeout *ErrCaseTimeout
 		var unanswered *ErrUnansweredFrame
-		if errors.As(execErr, &unanswered) {
+		switch {
+		case errors.As(execErr, &timeout):
+			report.FailureKind = "timeout"
+			report.ClassifiedBy = "typed"
+		case errors.As(execErr, &unanswered):
 			report.FailureKind = "unanswered_frame"
-		} else {
+			report.ClassifiedBy = "typed"
+		default:
 			report.FailureKind = classifyFailure(execErr)
+			report.ClassifiedBy = "heuristic"
 		}
 	}
 	return report
@@ -603,6 +645,30 @@ func (e *PreparedRunExecutor) WithRunnerOverride(r sandbox.CommandRunner) *Prepa
 func (e *PreparedRunExecutor) WithAgentOverride(a agentgraph.WorkflowExecutor) *PreparedRunExecutor {
 	e.agentOverride = a
 	return e
+}
+
+// writeCaseReportOrFail persists the case report; a write failure fails the
+// case (FR-24) — the runner trusts only a report that actually exists.
+func writeCaseReportOrFail(desc *PreparedRunDescriptor, report CaseReport) error {
+	reportPath := caseReportPath(desc)
+	if reportPath == "" {
+		return nil
+	}
+	if err := WriteCaseReport(reportPath, report); err != nil {
+		return fmt.Errorf("write case report: %w", err)
+	}
+	return nil
+}
+
+// emitCaseEvent surfaces case-lifecycle events (timeouts, missing reports)
+// on the executor's telemetry sink; nil-safe.
+func (e *PreparedRunExecutor) emitCaseEvent(ctx context.Context, t telemetry.EventType, message string, metadata map[string]any) {
+	if e == nil || e.telemetry == nil {
+		return
+	}
+	ev := telemetry.Event{Type: t, Message: message, Timestamp: time.Now().UTC(), Metadata: metadata}
+	telemetry.StampCorrelation(ctx, &ev)
+	e.telemetry.Emit(ev)
 }
 
 func inferTaskType(desc *PreparedRunDescriptor) string {

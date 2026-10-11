@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
 	"codeburg.org/lexbit/relurpify/capability/fs"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
@@ -20,54 +21,57 @@ const (
 // PreparedRunDescriptor is the persisted handoff between agenttest setup and
 // the CLI execution surface.
 type PreparedRunDescriptor struct {
-	RunID                 string                       `json:"run_id"`
-	SuitePath             string                       `json:"suite_path"`
-	SuiteName             string                       `json:"suite_name"`
-	CaseName              string                       `json:"case_name"`
-	AgentName             string                       `json:"agent_name"`
-	Instruction           string                       `json:"instruction,omitempty"`
+	RunID       string `json:"run_id"`
+	SuitePath   string `json:"suite_path"`
+	SuiteName   string `json:"suite_name"`
+	CaseName    string `json:"case_name"`
+	AgentName   string `json:"agent_name"`
+	Instruction string `json:"instruction,omitempty"`
 	// InteractionScript is the case's ordered ask-driving script (D8): each
 	// paused frame consumes the next unconsumed entry's Action as the answer.
-	InteractionScript []InteractionScriptStep `json:"interaction_script,omitempty"`
-	WorkspaceRoot         string                       `json:"workspace_root"`
-	RunRoot               string                       `json:"run_root"`
-	DerivedWorkspaceRoot  string                       `json:"derived_workspace_root"`
-	ConfigPath            string                       `json:"config_path"`
-	AgentsDir             string                       `json:"agents_dir"`
-	LogsDir               string                       `json:"logs_dir"`
-	TelemetryDir          string                       `json:"telemetry_dir"`
-	SetupDir              string                       `json:"setup_dir"`
-	ExecutionDir          string                       `json:"execution_dir"`
-	SetupLogsDir          string                       `json:"setup_logs_dir,omitempty"`
-	SetupTelemetryDir     string                       `json:"setup_telemetry_dir,omitempty"`
-	SetupArtifactsDir     string                       `json:"setup_artifacts_dir,omitempty"`
-	ExecutionLogsDir      string                       `json:"execution_logs_dir,omitempty"`
-	ExecutionTelemetryDir string                       `json:"execution_telemetry_dir,omitempty"`
-	ExecutionArtifactsDir string                       `json:"execution_artifacts_dir,omitempty"`
-	VerificationDir       string                       `json:"verification_dir,omitempty"`
-	ServiceResetStrategy  string                       `json:"service_reset_strategy,omitempty"`
-	ServiceResetBetween   bool                         `json:"service_reset_between,omitempty"`
-	BackendSelection      string                       `json:"backend_selection"`
-	BackendProvider       string                       `json:"backend_provider,omitempty"`
-	BackendFamily         string                       `json:"backend_family,omitempty"`
-	BackendEndpoint       string                       `json:"backend_endpoint,omitempty"`
-	BackendBinary         string                       `json:"backend_binary,omitempty"`
-	BackendService        string                       `json:"backend_service,omitempty"`
-	BackendResetStrategy  string                       `json:"backend_reset_strategy,omitempty"`
-	BackendResetOn        []string                     `json:"backend_reset_on,omitempty"`
-	BackendMatrix         []PreparedBackendTarget      `json:"backend_matrix,omitempty"`
-	ModelName             string                       `json:"model_name,omitempty"`
-	RecordingMode         string                       `json:"recording_mode,omitempty"`
-	TapePath              string                       `json:"tape_path,omitempty"`
-	SkipASTIndex          bool                         `json:"skip_ast_index"`
-	StrictMode            bool                         `json:"strict_mode"`
-	MaxIterations         int                          `json:"max_iterations"`
-	MaxRetries            int                          `json:"max_retries"`
-	SandboxBackend        string                       `json:"sandbox_backend,omitempty"`
-	SetupOverlays         []PreparedRunOverlay         `json:"setup_overlays,omitempty"`
-	SeededState           map[string]any               `json:"seeded_state,omitempty"`
-	Verification          PreparedVerificationContract `json:"verification"`
-	ExpectedArtifacts     []string                     `json:"expected_artifacts,omitempty"`
+	InteractionScript     []InteractionScriptStep `json:"interaction_script,omitempty"`
+	WorkspaceRoot         string                  `json:"workspace_root"`
+	RunRoot               string                  `json:"run_root"`
+	DerivedWorkspaceRoot  string                  `json:"derived_workspace_root"`
+	ConfigPath            string                  `json:"config_path"`
+	AgentsDir             string                  `json:"agents_dir"`
+	LogsDir               string                  `json:"logs_dir"`
+	TelemetryDir          string                  `json:"telemetry_dir"`
+	SetupDir              string                  `json:"setup_dir"`
+	ExecutionDir          string                  `json:"execution_dir"`
+	SetupLogsDir          string                  `json:"setup_logs_dir,omitempty"`
+	SetupTelemetryDir     string                  `json:"setup_telemetry_dir,omitempty"`
+	SetupArtifactsDir     string                  `json:"setup_artifacts_dir,omitempty"`
+	ExecutionLogsDir      string                  `json:"execution_logs_dir,omitempty"`
+	ExecutionTelemetryDir string                  `json:"execution_telemetry_dir,omitempty"`
+	ExecutionArtifactsDir string                  `json:"execution_artifacts_dir,omitempty"`
+	VerificationDir       string                  `json:"verification_dir,omitempty"`
+	ServiceResetStrategy  string                  `json:"service_reset_strategy,omitempty"`
+	BackendSelection      string                  `json:"backend_selection"`
+	BackendProvider       string                  `json:"backend_provider,omitempty"`
+	BackendFamily         string                  `json:"backend_family,omitempty"`
+	BackendEndpoint       string                  `json:"backend_endpoint,omitempty"`
+	BackendBinary         string                  `json:"backend_binary,omitempty"`
+	BackendService        string                  `json:"backend_service,omitempty"`
+	BackendResetStrategy  string                  `json:"backend_reset_strategy,omitempty"`
+	BackendResetOn        []string                `json:"backend_reset_on,omitempty"`
+	BackendMatrix         []PreparedBackendTarget `json:"backend_matrix,omitempty"`
+	ModelName             string                  `json:"model_name,omitempty"`
+	RecordingMode         string                  `json:"recording_mode,omitempty"`
+	TapePath              string                  `json:"tape_path,omitempty"`
+	SkipASTIndex          bool                    `json:"skip_ast_index"`
+	StrictMode            bool                    `json:"strict_mode"`
+	MaxIterations         int                     `json:"max_iterations"`
+	// EffectiveTimeout bounds each execution attempt (D9.2). Zero means
+	// DISABLED — only an explicit literal 0 in the effective choice lands
+	// here as zero; the resolution never substitutes a default for it.
+	EffectiveTimeout  time.Duration                `json:"effective_timeout,omitempty"`
+	MaxRetries        int                          `json:"max_retries"`
+	SandboxBackend    string                       `json:"sandbox_backend,omitempty"`
+	SetupOverlays     []PreparedRunOverlay         `json:"setup_overlays,omitempty"`
+	SeededState       map[string]any               `json:"seeded_state,omitempty"`
+	Verification      PreparedVerificationContract `json:"verification"`
+	ExpectedArtifacts []string                     `json:"expected_artifacts,omitempty"`
 
 	// resetPatterns is the compiled form of BackendResetOn. It is derived in
 	// Normalize (the prepare path) and never persisted: an invalid pattern
@@ -186,7 +190,6 @@ func BuildPreparedRunDescriptor(suite *Suite, c CaseSpec, model ModelSpec, opts 
 		ExecutionArtifactsDir: artifacts.ExecutionArtifactsDir,
 		VerificationDir:       artifacts.VerificationDir,
 		ServiceResetStrategy:  firstNonEmpty(opts.BackendReset, selected.ResetStrategy),
-		ServiceResetBetween:   opts.BackendResetBetween,
 		BackendSelection:      backendSelection,
 		BackendProvider:       selected.Provider,
 		BackendFamily:         selected.Family,
@@ -202,7 +205,8 @@ func BuildPreparedRunDescriptor(suite *Suite, c CaseSpec, model ModelSpec, opts 
 		SkipASTIndex:          opts.SkipASTIndex,
 		StrictMode:            suite.IsStrictRun(opts.Profile, opts.Strict),
 		MaxIterations:         resolveCaseMaxIterations(opts, c),
-		MaxRetries:            resolveCaseMaxRetries(opts),
+		EffectiveTimeout:      EffectiveTimeout(c.Timeout, suite.Spec.Execution.Timeout, opts.Timeout, opts.TimeoutSet),
+		MaxRetries:            opts.MaxRetries,
 		SetupOverlays:         setupOverlays,
 		SeededState:           seededState,
 		Verification:          verification,

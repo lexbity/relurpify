@@ -27,18 +27,6 @@ func failedCaseReport(startedAt time.Time, name, model, modelSource, manifestMod
 	}
 }
 
-// resolveCaseMaxRetries resolves the maximum retry count from RunOptions.
-func resolveCaseMaxRetries(opts RunOptions) int {
-	switch {
-	case opts.MaxRetries == 0:
-		return 3
-	case opts.MaxRetries < 0:
-		return 0
-	default:
-		return opts.MaxRetries
-	}
-}
-
 func resolveTemplateProfile(suite *Suite, c CaseSpec) string {
 	templateProfile := suite.Spec.Workspace.TemplateProfile
 	if c.Overrides.Workspace != nil && c.Overrides.Workspace.TemplateProfile != "" {

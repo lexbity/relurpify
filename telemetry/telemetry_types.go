@@ -110,18 +110,19 @@ const (
 // Durable-jobs lifecycle events (S8, §5.8). The runner stamps every state
 // transition with one of these — no silent transitions (NFR-9).
 const (
-	EventJobSubmitted        EventType = "job.submitted"
-	EventJobClaimed          EventType = "job.claimed"
-	EventJobCompleted        EventType = "job.completed"
-	EventJobFailed           EventType = "job.failed"
-	EventJobRetried          EventType = "job.retried"
-	EventJobInterrupted      EventType = "job.interrupted"
-	EventJobDuplicateIgnored EventType = "job.duplicate_ignored"
-	EventSpoolMalformed      EventType = "spool.malformed"
-	EventRunnerStarted       EventType = "runner.started"
-	EventRunnerStopped       EventType = "runner.stopped"
-	EventRunnerLockContented EventType = "runner.lock_contented"
-	EventRunnerStopTimeout   EventType = "runtime.runner_stop_timeout"
+	EventJobSubmitted         EventType = "job.submitted"
+	EventJobClaimed           EventType = "job.claimed"
+	EventJobCompleted         EventType = "job.completed"
+	EventJobFailed            EventType = "job.failed"
+	EventJobRetried           EventType = "job.retried"
+	EventJobInterrupted       EventType = "job.interrupted"
+	EventJobDuplicateIgnored  EventType = "job.duplicate_ignored"
+	EventSpoolMalformed       EventType = "spool.malformed"
+	EventRunnerStarted        EventType = "runner.started"
+	EventRunnerStopped        EventType = "runner.stopped"
+	EventRunnerLockContented  EventType = "runner.lock_contented"
+	EventRunnerStopTimeout    EventType = "runtime.runner_stop_timeout"
+	EventAgentTestCaseTimeout EventType = "agenttest.case_timeout"
 )
 
 // Paradigm lifecycle events emitted by the cognitionzoo paradigms (HTN,

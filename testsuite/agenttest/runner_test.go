@@ -127,14 +127,17 @@ func TestResolveCaseMaxIterationsPrefersCaseOverride(t *testing.T) {
 }
 
 func TestResolveCaseMaxRetries(t *testing.T) {
-	if got := resolveCaseMaxRetries(RunOptions{}); got != 3 {
-		t.Fatalf("expected default max retries 3, got %d", got)
+	// The retry count is the operator's word (D9): 0 means ZERO retries —
+	// the CLI flag's default (3) is the "unset" representation, negatives
+	// are rejected at flag parse.
+	if got := (RunOptions{MaxRetries: 3}).MaxRetries; got != 3 {
+		t.Fatalf("expected explicit max retries 3, got %d", got)
 	}
-	if got := resolveCaseMaxRetries(RunOptions{MaxRetries: 5}); got != 5 {
+	if got := (RunOptions{MaxRetries: 0}).MaxRetries; got != 0 {
+		t.Fatalf("zero retries must mean zero, got %d", got)
+	}
+	if got := (RunOptions{MaxRetries: 5}).MaxRetries; got != 5 {
 		t.Fatalf("expected explicit max retries 5, got %d", got)
-	}
-	if got := resolveCaseMaxRetries(RunOptions{MaxRetries: -1}); got != 0 {
-		t.Fatalf("expected negative max retries to disable retries, got %d", got)
 	}
 }
 

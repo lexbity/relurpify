@@ -1,6 +1,7 @@
 package agenttest
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -61,9 +62,33 @@ func VerifyPreparedRun(ctx context.Context, prepared *PreparedRun, caseReport Ca
 	}
 	for _, check := range artifactChecks {
 		passed := strings.TrimSpace(check.path) != ""
+		message := check.path
 		if passed {
 			if _, err := os.Stat(check.path); err != nil {
 				passed = false
+				report.Success = false
+			}
+		}
+		// The report contract (FR-24): report.json must exist, be non-empty,
+		// and parse — a zero-byte or garbage report is a verification
+		// FAILURE naming the artifact and the reason, never a pass.
+		if check.name == "execution report" && passed {
+			data, readErr := os.ReadFile(filepath.Clean(check.path))
+			switch {
+			case readErr != nil:
+				passed = false
+				message = fmt.Sprintf("%s: unreadable: %v", check.path, readErr)
+			case len(bytes.TrimSpace(data)) == 0:
+				passed = false
+				message = check.path + ": empty report (the executor wrote nothing)"
+			default:
+				var decoded CaseReport
+				if err := json.Unmarshal(data, &decoded); err != nil {
+					passed = false
+					message = fmt.Sprintf("%s: unparsable report: %v", check.path, err)
+				}
+			}
+			if !passed {
 				report.Success = false
 			}
 		}
@@ -71,7 +96,7 @@ func VerifyPreparedRun(ctx context.Context, prepared *PreparedRun, caseReport Ca
 			AssertionID: "prepared_run.artifact[" + check.name + "]",
 			Tier:        "outcome",
 			Passed:      passed,
-			Message:     check.path,
+			Message:     message,
 		})
 	}
 

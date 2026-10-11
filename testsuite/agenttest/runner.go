@@ -19,33 +19,34 @@ import (
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
+// RunOptions carries the invocation-level knobs. Every flag a `--help` lists
+// has a consumer here — the dead flags (sandbox, lanes, bootstrap-timeout,
+// debug-agent, backend-reset-between) were deleted with their plumbing (D9).
 type RunOptions struct {
-	TargetWorkspace  string
-	OutputDir        string
-	Sandbox          bool
-	Timeout          time.Duration
-	BootstrapTimeout time.Duration
-	SkipASTIndex     bool
-	Profile          string
-	Strict           bool
-	MaxRetries       int
+	TargetWorkspace string
+	OutputDir       string
+	// Timeout is the CLI-level per-case execution timeout (D9.2): the
+	// effective timeout resolves case > suite > CLI > the 15-minute
+	// default; a literal 0 in the effective choice disables the bound.
+	Timeout      time.Duration
+	TimeoutSet   bool
+	SkipASTIndex bool
+	Profile      string
+	Strict       bool
+	MaxRetries   int
 
 	ModelOverride    string
 	EndpointOverride string
 
 	MaxIterations int
 	DebugLLM      bool
-	DebugAgent    bool
 
-	BackendReset        string   // none|model|server
-	BackendBinary       string   // default: ollama
-	BackendService      string   // default: ollama
-	BackendResetOn      []string // regexes matched against error to trigger reset+retry
-	BackendResetBetween bool     // reset before each case
+	BackendReset   string   // none|model|server
+	BackendBinary  string   // default: ollama
+	BackendService string   // default: ollama
+	BackendResetOn []string // regexes matched against error to trigger reset+retry
 
 	SharedRoot string
-
-	Lane string // optional tag-lane filter for multi-suite runs
 }
 
 type SuiteReport struct {
@@ -92,6 +93,7 @@ type CaseReport struct {
 	Success             bool
 	Error               string
 	FailureKind         string
+	ClassifiedBy        string `json:"classified_by,omitempty"`
 	Attempts            int
 	RetryCount          int
 	RetryTriggeredBy    []string
@@ -246,13 +248,10 @@ var PreparedRunExecutorFn = func(ctx context.Context, descriptorPath, _, _ strin
 var PreparedRunVerifierFn = VerifyPreparedRun //nolint:gochecknoglobals // dependency-injection seam replaced by tests
 
 type runCaseLayout struct {
-	ArtifactsDir        string
-	TmpDir              string
-	TelemetryPath       string
-	LogPath             string
-	TapePath            string
-	InteractionTapePath string
-	WorkspaceDir        string
+	ArtifactsDir string
+	TmpDir       string
+	TapePath     string
+	WorkspaceDir string
 }
 
 func (r *Runner) RunSuite(ctx context.Context, suite *Suite, opts RunOptions) (*SuiteReport, error) {
@@ -375,7 +374,10 @@ func (r *Runner) runPreparedCase(ctx context.Context, suite *Suite, c CaseSpec, 
 	// calls, token usage, phase metrics, changed files, security observations)
 	// survive into the suite report — the harness loop is closed at this point
 	// (FR-8).
-	executed := loadExecutorCaseReport(prepared.Descriptor)
+	executed, loadErr := loadExecutorCaseReport(prepared.Descriptor)
+	if loadErr != nil {
+		return failedCaseReport(caseStartedAt, c.Name, model.Name, "", prepared.Descriptor.BackendFamily, prepared.Descriptor.BackendEndpoint, "", prepared.Artifacts.DescriptorPath(), layout.WorkspaceDir, layout.ArtifactsDir, loadErr.Error(), "infra", 1)
+	}
 	executed.Output = output.String()
 
 	verification, err := PreparedRunVerifierFn(ctx, prepared, executed, suite, c, nil)
@@ -388,27 +390,39 @@ func (r *Runner) runPreparedCase(ctx context.Context, suite *Suite, c CaseSpec, 
 	return applyOSBEvaluation(report, c, prepared.Descriptor)
 }
 
+// errReportMissing / errReportUnparsable are the typed infra failures of the
+// report contract (R-7, FR-24): the runner trusts ONLY a non-empty, parseable
+// report.json — a crashed executor is an infra-class failure with the crash
+// class in the report, never a pass.
+var (
+	errReportMissing    = errors.New("executor report_missing: the executor wrote no case report")
+	errReportUnparsable = errors.New("executor report_unparsable: the case report is not parseable")
+)
+
 // loadExecutorCaseReport reads the case report the executor wrote from its
-// recorded telemetry. A missing or unreadable report falls back to a neutral,
-// successful report so overridden executor functions cannot regress the runner.
-func loadExecutorCaseReport(desc *PreparedRunDescriptor) CaseReport {
-	report := CaseReport{Success: true}
+// recorded telemetry. A missing or unparsable report is a typed failure, not
+// a neutral pass.
+func loadExecutorCaseReport(desc *PreparedRunDescriptor) (CaseReport, error) {
+	report := CaseReport{}
 	if desc == nil {
-		return report
+		return report, errReportMissing
 	}
 	path := caseReportPath(desc)
 	if path == "" {
-		return report
+		return report, errReportMissing
 	}
 	data, err := os.ReadFile(filepath.Clean(path))
 	if err != nil {
-		return report
+		return report, fmt.Errorf("%w: %v", errReportMissing, err)
+	}
+	if len(bytes.TrimSpace(data)) == 0 {
+		return report, errReportUnparsable
 	}
 	var loaded CaseReport
 	if err := json.Unmarshal(data, &loaded); err != nil {
-		return report
+		return report, fmt.Errorf("%w: %v", errReportUnparsable, err)
 	}
-	return loaded
+	return loaded, nil
 }
 
 // assembleCaseReport merges the executor's telemetry-derived report with the
@@ -636,13 +650,10 @@ func newRunCaseLayout(outDir, caseName, modelName string) runCaseLayout {
 	artifactsDir := filepath.Join(outDir, "artifacts", caseKey)
 	tmpDir := filepath.Join(outDir, "tmp", caseKey)
 	return runCaseLayout{
-		ArtifactsDir:        artifactsDir,
-		TmpDir:              tmpDir,
-		TelemetryPath:       filepath.Join(outDir, "telemetry", caseKey+".jsonl"),
-		LogPath:             filepath.Join(outDir, "logs", caseKey+".log"),
-		TapePath:            filepath.Join(artifactsDir, "tape.jsonl"),
-		InteractionTapePath: filepath.Join(artifactsDir, "interaction.tape.jsonl"),
-		WorkspaceDir:        filepath.Join(tmpDir, "workspace"),
+		ArtifactsDir: artifactsDir,
+		TmpDir:       tmpDir,
+		TapePath:     filepath.Join(artifactsDir, "tape.jsonl"),
+		WorkspaceDir: filepath.Join(tmpDir, "workspace"),
 	}
 }
 

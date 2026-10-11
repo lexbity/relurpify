@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/context/contextdata"
-	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	execution "codeburg.org/lexbit/relurpify/execution"
+	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 )
 
 // ErrUnansweredFrame is the typed case failure when a run paused on a DSL ask

@@ -76,12 +76,14 @@ func touchPreparedRunArtifactFiles(desc *PreparedRunDescriptor) error {
 		return fmt.Errorf("descriptor required")
 	}
 	ap := desc.ArtifactPaths()
+	// report.json is deliberately NOT pre-created (FR-24): the runner trusts
+	// only a report the executor actually wrote — a zero-byte pre-created
+	// file would pass existence checks and fake a pass.
 	paths := []string{
 		ap.SetupLog,
 		ap.SetupTelemetry,
 		ap.ExecutionLog,
 		ap.ExecutionTelemetry,
-		ap.Report,
 		ap.Verification,
 	}
 	for _, path := range paths {

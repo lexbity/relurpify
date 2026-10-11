@@ -3,6 +3,7 @@ package agenttest
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -12,14 +13,11 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/fs"
 )
 
-func TestLoadExecutorCaseReportFallsBackWhenMissing(t *testing.T) {
+func TestLoadExecutorCaseReportFailsWhenMissing(t *testing.T) {
 	desc := &PreparedRunDescriptor{ExecutionDir: filepath.Join(t.TempDir(), "execution")}
-	report := loadExecutorCaseReport(desc)
-	if !report.Success {
-		t.Fatal("missing report should fall back to a successful case report")
-	}
-	if report.Name != "" {
-		t.Fatalf("fallback report should not fabricate a name, got %q", report.Name)
+	_, err := loadExecutorCaseReport(desc)
+	if !errors.Is(err, errReportMissing) {
+		t.Fatalf("missing report = %v, want errReportMissing (R-7: the runner never trusts absence)", err)
 	}
 }
 
@@ -36,7 +34,10 @@ func TestLoadExecutorCaseReportReadsPopulatedReport(t *testing.T) {
 		t.Fatal(err)
 	}
 	desc := &PreparedRunDescriptor{ExecutionDir: dir}
-	loaded := loadExecutorCaseReport(desc)
+	loaded, loadErr := loadExecutorCaseReport(desc)
+	if loadErr != nil {
+		t.Fatal(loadErr)
+	}
 	if loaded.Name != "smoke" || loaded.Success != false {
 		t.Fatalf("unexpected loaded report: %+v", loaded)
 	}
@@ -46,9 +47,9 @@ func TestLoadExecutorCaseReportReadsPopulatedReport(t *testing.T) {
 }
 
 func TestLoadExecutorCaseReportNilDescriptor(t *testing.T) {
-	report := loadExecutorCaseReport(nil)
-	if !report.Success {
-		t.Fatal("nil descriptor should fall back to a successful report")
+	_, err := loadExecutorCaseReport(nil)
+	if !errors.Is(err, errReportMissing) {
+		t.Fatalf("nil descriptor = %v, want errReportMissing", err)
 	}
 }
 
