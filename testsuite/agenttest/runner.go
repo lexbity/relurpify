@@ -76,6 +76,12 @@ type SuiteReport struct {
 	// BaselinesDir is the SOURCE workspace's baselines directory (R-5a):
 	// benchmark comparisons resolve here, never inside the derived copy.
 	BaselinesDir string `json:"baselines_dir,omitempty"`
+	// RunRoot is this run's artifact root inside the workspace state tree.
+	RunRoot string `json:"run_root,omitempty"`
+	// SourceRun is the workspace-relative reference to RunRoot recorded in
+	// promoted baselines (R-5): the provenance of every baseline snapshot.
+	// Empty when RunRoot is outside the invoking workspace.
+	SourceRun string `json:"source_run,omitempty"`
 }
 
 type CaseReport struct {
@@ -250,13 +256,15 @@ type Runner struct {
 	Telemetry telemetry.Telemetry
 }
 
-// PromoteBaselines writes a baseline file per executed case report
-// (D10.2). Baselines are a deliberate snapshot: an existing file is
-// overwritten. With dryRun the paths + metric summaries are printed and
-// nothing is written. A write failure is returned to the caller but is
-// non-fatal to the run's exit code by contract — baselines are an operator
-// artifact, not evidence (the asymmetry with the case-report contract is
-// deliberate).
+// PromoteBaselines writes the baseline documents for one executed run
+// (D10.2): one schema-v1 per-case file (metrics, plus the benchmark score
+// when the run scored the case) and, for benchmark-classified suites, the
+// suite-level score snapshot. Baselines are a deliberate snapshot: an
+// existing file is overwritten. With dryRun the paths + metric summaries
+// are printed and nothing is written. A write failure is returned to the
+// caller but is non-fatal to the run's exit code by contract — baselines
+// are an operator artifact, not evidence (the asymmetry with the
+// case-report contract is deliberate).
 func PromoteBaselines(w io.Writer, suite *Suite, report *SuiteReport, sourceRun string, dryRun bool) error {
 	if suite == nil || report == nil {
 		return fmt.Errorf("agenttest: suite and report required")
@@ -265,6 +273,7 @@ func PromoteBaselines(w io.Writer, suite *Suite, report *SuiteReport, sourceRun 
 	if strings.TrimSpace(baselinesDir) == "" {
 		return fmt.Errorf("agenttest: baselines dir unresolved")
 	}
+	sourceRun = strings.TrimSpace(sourceRun)
 	var firstErr error
 	for i := range report.Cases {
 		cr := &report.Cases[i]
@@ -273,21 +282,95 @@ func PromoteBaselines(w io.Writer, suite *Suite, report *SuiteReport, sourceRun 
 		}
 		path := BaselinePath(baselinesDir, suite.Metadata.Name, cr.Name, cr.Model)
 		baseline := BuildBaselineFile(suite.Metadata.Name, *cr, sourceRun, time.Now().UTC())
+		if score := benchmarkScoreForCase(report.Benchmark, cr.Name, cr.Model); score != nil {
+			baseline.Score = score
+		}
 		if dryRun {
-			_, _ = fmt.Fprintf(w, "would write %s (tokens=%d tool_calls=%d duration_ms=%d)\n",
-				path, baseline.Metrics.TotalTokens, baseline.Metrics.ToolCalls, baseline.Metrics.DurationMS)
+			baselinePrintf(w, "would write %s (tokens=%d tool_calls=%d)\n",
+				path, baseline.Metrics.TotalTokens, baseline.Metrics.ToolCalls)
 			continue
 		}
 		if err := WriteBaseline(path, baseline); err != nil {
-			if firstErr == nil {
-				firstErr = err
-			}
-			_, _ = fmt.Fprintf(w, "baseline write failed for %s: %v\n", path, err)
+			firstErr = errors.Join(firstErr, err)
+			baselinePrintf(w, "baseline write failed for %s: %v\n", path, err)
 			continue
 		}
-		_, _ = fmt.Fprintf(w, "wrote %s\n", path)
+		baselinePrintf(w, "wrote %s\n", path)
 	}
+	if report.Benchmark == nil {
+		return firstErr
+	}
+	suitePath := SuiteBaselinePath(baselinesDir, suite.Metadata.Name)
+	suiteBaseline := &SuiteBaselineFile{
+		Schema:     BaselineSchemaV1,
+		Suite:      strings.TrimSpace(suite.Metadata.Name),
+		CapturedAt: time.Now().UTC(),
+		SourceRun:  sourceRun,
+		Score: BaselineScore{
+			OverallScore:      report.Benchmark.Summary.OverallScore,
+			DimensionScores:   copyDimensionScores(report.Benchmark.Summary.DimensionScores),
+			ScoreFamily:       report.Benchmark.ScoreFamily,
+			VarianceThreshold: report.Benchmark.VarianceThreshold,
+		},
+	}
+	if dryRun {
+		baselinePrintf(w, "would write %s (overall_score=%.2f)\n", suitePath, suiteBaseline.Score.OverallScore)
+		return firstErr
+	}
+	if err := WriteSuiteBaseline(suitePath, suiteBaseline); err != nil {
+		firstErr = errors.Join(firstErr, err)
+		baselinePrintf(w, "suite baseline write failed for %s: %v\n", suitePath, err)
+		return firstErr
+	}
+	baselinePrintf(w, "wrote %s\n", suitePath)
 	return firstErr
+}
+
+// benchmarkScoreForCase finds the benchmark case score for one (case, model)
+// pair in the run's benchmark report. Nil when the run produced no benchmark
+// report or no matching score — a non-benchmark run baselines metrics only.
+// The variance threshold is suite-level configuration: the comparison side
+// reads it back from the same place.
+func benchmarkScoreForCase(report *BenchmarkReport, caseName, modelName string) *BaselineScore {
+	if report == nil {
+		return nil
+	}
+	for _, score := range report.Cases {
+		if score.Name != caseName || score.Model != modelName {
+			continue
+		}
+		out := &BaselineScore{
+			OverallScore:      score.OverallScore,
+			ScoreFamily:       score.ScoreFamily,
+			VarianceThreshold: report.VarianceThreshold,
+		}
+		if len(score.DimensionScores) > 0 {
+			out.DimensionScores = make(map[string]float64, len(score.DimensionScores))
+			for _, dim := range score.DimensionScores {
+				out.DimensionScores[dim.Name] = dim.Score
+			}
+		}
+		return out
+	}
+	return nil
+}
+
+func copyDimensionScores(in map[string]float64) map[string]float64 {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make(map[string]float64, len(in))
+	for k, v := range in {
+		out[k] = v
+	}
+	return out
+}
+
+func baselinePrintf(w io.Writer, format string, args ...any) {
+	if w == nil {
+		return
+	}
+	_, _ = fmt.Fprintf(w, format, args...)
 }
 
 // baselineEmitter adapts the runner's telemetry sink to the compare path.
@@ -296,6 +379,26 @@ func (r *Runner) baselineEmitter() baselineEventEmitter {
 		return nil
 	}
 	return runnerBaselineEmitter{r}
+}
+
+// sourceRunReference is the workspace-relative reference to a run's artifact
+// root recorded in promoted baselines (R-5: source_run is provenance, not a
+// decoration). A run root outside the invoking workspace has no relative
+// reference and is recorded by its absolute path.
+func sourceRunReference(workspaceRoot, runRoot string) string {
+	workspaceRoot = strings.TrimSpace(workspaceRoot)
+	runRoot = strings.TrimSpace(runRoot)
+	if runRoot == "" {
+		return ""
+	}
+	if workspaceRoot == "" {
+		return runRoot
+	}
+	rel, err := filepath.Rel(workspaceRoot, runRoot)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return runRoot
+	}
+	return rel
 }
 
 type runnerBaselineEmitter struct{ r *Runner }
@@ -399,6 +502,8 @@ func (r *Runner) RunSuite(ctx context.Context, suite *Suite, opts RunOptions) (*
 		}
 	}
 	report.BaselinesDir = BaselinesDir(targetWorkspace)
+	report.RunRoot = outDir
+	report.SourceRun = sourceRunReference(targetWorkspace, outDir)
 	report.Performance = SummarizePerformance(report.Cases)
 
 	// Populate the OSB benchmark summary.

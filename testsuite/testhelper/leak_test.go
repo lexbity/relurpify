@@ -23,20 +23,23 @@ func TestWaitForGoroutineSettleSettles(t *testing.T) {
 }
 
 // TestWaitForGoroutineSettleDetectsLeak proves the settle core reports failure
-// when a goroutine outlives the timeout.
+// when goroutines outlive the timeout. The leak is spawned with a margin over
+// the settle tolerance: a coincidental transient goroutine exiting inside the
+// window must not erase the leak signal (that coincidence made this test
+// flaky under a loaded sweep).
 func TestWaitForGoroutineSettleDetectsLeak(t *testing.T) {
 	stop := make(chan struct{})
 	defer close(stop)
-	started := make(chan struct{}, 3)
+	started := make(chan struct{}, 8)
 
 	baseline := runtime.NumGoroutine()
-	for i := 0; i < 3; i++ {
+	for i := 0; i < 8; i++ {
 		go func() {
 			started <- struct{}{}
 			<-stop
 		}()
 	}
-	for i := 0; i < 3; i++ {
+	for i := 0; i < 8; i++ {
 		<-started
 	}
 

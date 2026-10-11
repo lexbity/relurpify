@@ -205,18 +205,22 @@ and rerecord planning:
 
 ```bash
 # Promote a completed run into golden tape fixtures
-./dev-agent agenttest promote --suite testsuite/agenttests/euclo.code.testsuite.yaml --run relurpify_cfg/test_runs/euclo/<run_id> --case basic_edit_task
+./dev-agent agenttest promote --suite testsuite/agenttests/euclo.code.testsuite.yaml --run <run_dir> --case basic_edit_task
 
 # Report current tape and baseline coverage
 ./dev-agent agenttest report --agent euclo
 
 # Plan rerecording for missing or stale fixtures
 ./dev-agent agenttest rerecord --agent euclo
+
+# Run a suite and write per-case performance baselines (workspace state)
+./dev-agent agenttest baseline --suite testsuite/agenttests/euclo.code.testsuite.yaml
 ```
 
 ### Output Artifacts
 
-Each run writes to the active workspace's `relurpify_cfg/test_runs/{agent}/{run_id}/`:
+Each run writes to the active workspace's runtime state tree at
+`.relurpify_state/test_run/<run_id>/` (override with `--out`):
 
 ```
 report.json                     # SuiteReport — overall results
@@ -225,7 +229,9 @@ artifacts/{case}__{model}/
   tape.jsonl                    # LLM interaction tape (if recording enabled)
   context.snapshot.json         # Full task context state at completion
   token_usage.json              # Prompt/completion/total tokens + LLM call count
-  framework_perf.json           # Framework hot-path counters (rescans, reads, etc.)
+  framework_perf.json           # Per-case framework hot-path counters (the runner resets the
+                                # process counters before each case, so this is that case's
+                                # activity — not the process lifetime)
   phase_metrics.json            # Per-phase duration, tokens, LLM calls
   memory_outcome.json           # Memory/workflow record counts
   changed_files.json            # Files modified during the case

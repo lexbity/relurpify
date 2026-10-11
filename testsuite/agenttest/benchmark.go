@@ -2,6 +2,7 @@ package agenttest
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -10,17 +11,6 @@ import (
 
 	"codeburg.org/lexbit/relurpify/capability/fs"
 )
-
-type BenchmarkBaseline struct {
-	SuiteName         string             `json:"suite_name"`
-	RecordedAt        string             `json:"recorded_at,omitempty"`
-	ScoreFamily       string             `json:"score_family,omitempty"`
-	ScoreDimensions   []string           `json:"score_dimensions,omitempty"`
-	ComparisonWindow  string             `json:"comparison_window,omitempty"`
-	VarianceThreshold float64            `json:"variance_threshold,omitempty"`
-	OverallScore      float64            `json:"overall_score"`
-	DimensionScores   map[string]float64 `json:"dimension_scores,omitempty"`
-}
 
 type BenchmarkComparisonReport struct {
 	RunClass          string  `json:"run_class"`
@@ -32,8 +22,12 @@ type BenchmarkComparisonReport struct {
 	BaselineScore     float64 `json:"baseline_score,omitempty"`
 	ActualScore       float64 `json:"actual_score,omitempty"`
 	Delta             float64 `json:"delta,omitempty"`
-	WithinVariance    bool    `json:"within_variance"`
-	Message           string  `json:"message,omitempty"`
+	// WithinVariance is FALSE unless a baseline was found AND the configured
+	// variance threshold admits the delta: the "missing → within variance"
+	// default is deleted (D10.4) — an absent baseline is absence, never a
+	// silent pass.
+	WithinVariance bool   `json:"within_variance"`
+	Message        string `json:"message,omitempty"`
 }
 
 type BenchmarkCaseDimensionScore struct {
@@ -58,8 +52,11 @@ type BenchmarkCaseScore struct {
 	BaselineFound   bool                          `json:"baseline_found"`
 	BaselineScore   float64                       `json:"baseline_score,omitempty"`
 	ScoreDelta      float64                       `json:"score_delta,omitempty"`
-	WithinVariance  bool                          `json:"within_variance"`
-	Message         string                        `json:"message,omitempty"`
+	// WithinVariance is FALSE unless a baseline was found AND the baseline's
+	// variance threshold admits the delta — absence is never "within
+	// variance" (D10.4).
+	WithinVariance bool   `json:"within_variance"`
+	Message        string `json:"message,omitempty"`
 }
 
 type BenchmarkSummary struct {
@@ -126,24 +123,24 @@ var benchmarkDimensionWeights = map[string]map[string]float64{ //nolint:gocheckn
 	},
 }
 
-// BenchmarkBaselineFilePath resolves the suite-level OSB baseline under the
-// workspace's baselines directory — the SOURCE workspace's state tree
-// (R-5a). The old resolution inside the ephemeral derived copy could never
-// find a written baseline: the comparison always took the missing branch.
-func BenchmarkBaselineFilePath(workspace, suiteName string) string {
-	return filepath.Join(BaselinesDir(workspace), "osb", SanitizeName(suiteName), "benchmark.baseline.json")
-}
+// Benchmark artifacts: the per-case score/comparison documents the benchmark
+// scorer writes beside each case's other artifacts.
+const (
+	BenchmarkReportFileName     = "benchmark_report.json"
+	BenchmarkCaseScoreFileName  = "benchmark_score.json"
+	BenchmarkCaseComparisonName = "benchmark_comparison.json"
+)
 
 func BenchmarkReportFilePath(outDir string) string {
-	return filepath.Join(outDir, "benchmark_report.json")
+	return filepath.Join(outDir, BenchmarkReportFileName)
 }
 
 func BenchmarkCaseScoreFilePath(artifactsDir string) string {
-	return filepath.Join(artifactsDir, "benchmark_score.json")
+	return filepath.Join(artifactsDir, BenchmarkCaseScoreFileName)
 }
 
 func BenchmarkCaseComparisonFilePath(artifactsDir string) string {
-	return filepath.Join(artifactsDir, "benchmark_comparison.json")
+	return filepath.Join(artifactsDir, BenchmarkCaseComparisonName)
 }
 
 func BuildBenchmarkReport(suite *Suite, suiteReport *SuiteReport) (*BenchmarkReport, error) {
@@ -173,21 +170,21 @@ func BuildBenchmarkReport(suite *Suite, suiteReport *SuiteReport) (*BenchmarkRep
 
 	report := &BenchmarkReport{
 		RunClass:          "benchmark",
-		Workspace:         suiteReport.BaselinesDir,
+		Workspace:         benchmarkReportWorkspace(suiteReport),
 		SuitePath:         suite.SourcePath,
 		SuiteName:         suite.Metadata.Name,
 		ScoreFamily:       family,
 		ScoreDimensions:   append([]string(nil), dimensions...),
 		ComparisonWindow:  meta.ComparisonWindow,
 		VarianceThreshold: meta.VarianceThreshold,
-		Success:           true,
+		Success:           benchmarkReportSuccess(suiteReport),
 	}
 	report.Summary.DimensionScores = map[string]float64{}
 	report.Summary.ArtifactCoverage = map[string]float64{}
 	report.Comparison = BenchmarkComparisonReport{
 		RunClass:          "benchmark",
 		SuiteName:         suite.Metadata.Name,
-		BaselinePath:      BenchmarkBaselineFilePath(suiteReport.BaselinesDir, suite.Metadata.Name),
+		BaselinePath:      SuiteBaselinePath(suiteReport.BaselinesDir, suite.Metadata.Name),
 		ComparisonWindow:  meta.ComparisonWindow,
 		VarianceThreshold: meta.VarianceThreshold,
 	}
@@ -200,11 +197,16 @@ func BuildBenchmarkReport(suite *Suite, suiteReport *SuiteReport) (*BenchmarkRep
 	for _, cr := range suiteReport.Cases {
 		caseScore := scoreBenchmarkCase(family, weights, artifactsByName, cr, suiteReport.BaselinesDir, suite.Metadata.Name)
 		report.Cases = append(report.Cases, caseScore)
-		if data, err := json.MarshalIndent(caseScore, "", "  "); err == nil {
-			_ = fs.WriteFileSecure(BenchmarkCaseScoreFilePath(cr.ArtifactsDir), data)
-		}
-		if data, err := json.MarshalIndent(caseScore.comparison(), "", "  "); err == nil {
-			_ = fs.WriteFileSecure(BenchmarkCaseComparisonFilePath(cr.ArtifactsDir), data)
+		// The per-case artifacts land beside that case's other artifacts. A
+		// case with no artifacts dir (an in-memory report) has nowhere to
+		// write: a join against "" would drop the file into the process CWD.
+		if strings.TrimSpace(cr.ArtifactsDir) != "" {
+			if data, err := json.MarshalIndent(caseScore, "", "  "); err == nil {
+				_ = fs.WriteFileSecure(BenchmarkCaseScoreFilePath(cr.ArtifactsDir), data)
+			}
+			if data, err := json.MarshalIndent(caseScore.comparison(), "", "  "); err == nil {
+				_ = fs.WriteFileSecure(BenchmarkCaseComparisonFilePath(cr.ArtifactsDir), data)
+			}
 		}
 		if cr.Model != "" {
 			modelSet[cr.Model] = struct{}{}
@@ -244,24 +246,41 @@ func BuildBenchmarkReport(suite *Suite, suiteReport *SuiteReport) (*BenchmarkRep
 	report.Summary.UniqueModels = sortedSetKeys(modelSet)
 	report.Summary.UniqueProviders = sortedSetKeys(providerSet)
 	report.Comparison.ActualScore = report.Summary.OverallScore
-	if baseline, err := LoadBenchmarkBaseline(report.Comparison.BaselinePath); err == nil && baseline != nil {
+	baseline, baselineErr := LoadSuiteBaseline(report.Comparison.BaselinePath)
+	switch {
+	case errors.Is(baselineErr, ErrBaselineNotFound):
+		// Absence is recorded as absence (D10.4): no "missing → within
+		// variance" default that makes the comparison unfalsifiable.
+		report.Comparison.Message = "baseline missing"
+	case baselineErr != nil:
+		report.Comparison.Message = fmt.Sprintf("baseline unreadable: %v", baselineErr)
+	case meta.VarianceThreshold <= 0:
 		report.Comparison.BaselineFound = true
-		report.Comparison.BaselineScore = baseline.OverallScore
-		report.Comparison.Delta = report.Comparison.ActualScore - baseline.OverallScore
-		if meta.VarianceThreshold > 0 {
-			report.Comparison.WithinVariance = absFloat64(report.Comparison.Delta) <= meta.VarianceThreshold
-		}
+		report.Comparison.BaselineScore = baseline.Score.OverallScore
+		report.Comparison.Delta = report.Comparison.ActualScore - baseline.Score.OverallScore
+		report.Comparison.Message = "variance threshold not configured"
+	default:
+		report.Comparison.BaselineFound = true
+		report.Comparison.BaselineScore = baseline.Score.OverallScore
+		report.Comparison.Delta = report.Comparison.ActualScore - baseline.Score.OverallScore
+		report.Comparison.WithinVariance = absFloat64(report.Comparison.Delta) <= meta.VarianceThreshold
 		if report.Comparison.WithinVariance {
 			report.Comparison.Message = "within variance threshold"
 		} else {
 			report.Comparison.Message = "outside variance threshold"
 		}
-	} else {
-		// Absence is recorded as absence (D10.4): no "missing → within
-		// variance" default that makes the comparison unfalsifiable.
-		report.Comparison.Message = "baseline missing"
 	}
 	return report, nil
+}
+
+// benchmarkReportSuccess records the only honest meaning of a benchmark
+// report's success: every case in the suite passed. It is a report field,
+// not a gate — comparisons are report-only (R-5c).
+func benchmarkReportSuccess(suiteReport *SuiteReport) bool {
+	if suiteReport == nil || len(suiteReport.Cases) == 0 {
+		return false
+	}
+	return suiteReport.FailedCases == 0
 }
 
 func benchmarkReportWorkspace(report *SuiteReport) string {
@@ -285,7 +304,6 @@ func scoreBenchmarkCase(family string, weights map[string]float64, artifacts map
 		Endpoint:       cr.Endpoint,
 		ScoreFamily:    family,
 		ArtifactChecks: map[string]bool{},
-		WithinVariance: true,
 		Message:        "scored benchmark case",
 	}
 	if cr.Skipped {
@@ -321,17 +339,30 @@ func scoreBenchmarkCase(family string, weights map[string]float64, artifacts map
 	if totalWeight > 0 {
 		score.OverallScore = (weighted / totalWeight) * 100
 	}
-	score.BaselinePath = BenchmarkCaseBaselineFilePath(baselinesDir, suiteName, cr.Name, cr.Model)
-	if baseline, err := LoadBenchmarkBaseline(score.BaselinePath); err == nil && baseline != nil {
+	// The score baseline is the SAME per-case baseline document the metrics
+	// compare reads (one producer, one consumer): an absent baseline — or a
+	// baseline without a score block — is absence, never "within variance"
+	// (D10.4).
+	score.BaselinePath = BaselinePath(baselinesDir, suiteName, cr.Name, cr.Model)
+	baseline, baselineErr := LoadBaseline(score.BaselinePath)
+	switch {
+	case errors.Is(baselineErr, ErrBaselineNotFound):
+		score.Message = "baseline missing"
+	case baselineErr != nil:
+		score.Message = fmt.Sprintf("baseline unreadable: %v", baselineErr)
+	case baseline.Score == nil:
+		score.Message = "baseline has no score"
+	default:
 		score.BaselineFound = true
-		score.BaselineScore = baseline.OverallScore
-		score.ScoreDelta = score.OverallScore - baseline.OverallScore
-		if baseline.VarianceThreshold > 0 {
-			score.WithinVariance = absFloat64(score.ScoreDelta) <= baseline.VarianceThreshold
-		}
-		if score.WithinVariance {
+		score.BaselineScore = baseline.Score.OverallScore
+		score.ScoreDelta = score.OverallScore - baseline.Score.OverallScore
+		switch {
+		case baseline.Score.VarianceThreshold <= 0:
+			score.Message = "variance threshold not configured"
+		case absFloat64(score.ScoreDelta) <= baseline.Score.VarianceThreshold:
+			score.WithinVariance = true
 			score.Message = "within case variance"
-		} else {
+		default:
 			score.Message = "outside case variance"
 		}
 	}
@@ -579,46 +610,11 @@ func benchmarkFamilyForSuite(suite *Suite) string {
 	}
 }
 
-// BenchmarkCaseBaselineFilePath resolves a case's OSB score baseline under
-// the SOURCE workspace's baselines directory (R-5a). The old resolution
-// inside the case's freshly-created artifacts dir could never hold a
-// baseline: the comparison always took the missing branch.
-func BenchmarkCaseBaselineFilePath(baselinesDir, suiteName, caseName, modelName string) string {
-	if strings.TrimSpace(baselinesDir) == "" {
-		return ""
-	}
-	return filepath.Join(BaselinesDir(baselinesDir), "osb", SanitizeName(suiteName),
-		SanitizeName(caseName)+"__"+SanitizeName(modelName)+".score.baseline.json")
-}
-
-func LoadBenchmarkBaseline(path string) (*BenchmarkBaseline, error) {
-	data, err := os.ReadFile(filepath.Clean(path))
-	if err != nil {
-		return nil, err
-	}
-	var baseline BenchmarkBaseline
-	if err := json.Unmarshal(data, &baseline); err != nil {
-		return nil, err
-	}
-	return &baseline, nil
-}
-
 func absFloat64(v float64) float64 {
 	if v < 0 {
 		return -v
 	}
 	return v
-}
-
-func copyFloatMap(values map[string]float64) map[string]float64 {
-	if len(values) == 0 {
-		return nil
-	}
-	out := make(map[string]float64, len(values))
-	for k, v := range values {
-		out[k] = v
-	}
-	return out
 }
 
 func sortedSetKeys(set map[string]struct{}) []string {

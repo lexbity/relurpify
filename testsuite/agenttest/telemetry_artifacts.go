@@ -28,6 +28,14 @@ func writeCaseTelemetryArtifacts(desc *PreparedRunDescriptor, report *CaseReport
 	if report != nil && len(report.ChangedFiles) > 0 {
 		writeJSONArtifact(filepath.Join(dir, "changed_files.json"), report.ChangedFiles)
 	}
+	// D10.5: the artifact carries the SAME per-case snapshot the report
+	// carries — the runner resets the counters before the case executes, so
+	// framework_perf.json is this case's activity, not the process lifetime
+	// (a second live read could disagree with the report it documents).
+	if report != nil {
+		writeJSONArtifact(filepath.Join(dir, "framework_perf.json"), report.FrameworkPerf)
+		return
+	}
 	writeJSONArtifact(filepath.Join(dir, "framework_perf.json"), perfstats.Get())
 }
 

@@ -210,7 +210,7 @@ func BuildPreparedRunDescriptor(suite *Suite, c CaseSpec, model ModelSpec, opts 
 		StrictMode:            suite.IsStrictRun(opts.Profile, opts.Strict),
 		MaxIterations:         resolveCaseMaxIterations(opts, c),
 		EffectiveTimeout:      EffectiveTimeout(c.Timeout, suite.Spec.Execution.Timeout, opts.Timeout, opts.TimeoutSet),
-		BaselineDir:           BaselinesDir(opts.TargetWorkspace),
+		BaselineDir:           BaselinesDir(targetWorkspace),
 		MaxRetries:            opts.MaxRetries,
 		SetupOverlays:         setupOverlays,
 		SeededState:           seededState,
@@ -263,6 +263,10 @@ func (d *PreparedRunDescriptor) Normalize() error {
 	d.ModelName = strings.TrimSpace(d.ModelName)
 	d.RecordingMode = strings.TrimSpace(d.RecordingMode)
 	d.TapePath = strings.TrimSpace(d.TapePath)
+	// BaselineDir is an absolute source-workspace path from every producer;
+	// a relative value would resolve against the loading process's CWD and
+	// silently compare against a different tree.
+	d.BaselineDir = cleanAbsolutePath(strings.TrimSpace(d.BaselineDir))
 	d.SandboxBackend = strings.TrimSpace(d.SandboxBackend)
 	d.SetupOverlays = normalizePreparedRunOverlays(d.SetupOverlays)
 	d.ExpectedArtifacts = UniqueStrings(d.ExpectedArtifacts)

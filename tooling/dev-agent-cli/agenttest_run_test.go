@@ -16,9 +16,10 @@ type fakeAgentTestRunner struct {
 	calls int
 }
 
-const rootAgentTestName = "agenttest"
 const (
+	rootAgentTestName = "agenttest"
 	runCmdName        = "run"
+	baselineCmdName   = "baseline"
 	promoteCmdName    = "promote"
 	reportCmdName     = "report"
 	rerecordCmdName   = "rerecord"

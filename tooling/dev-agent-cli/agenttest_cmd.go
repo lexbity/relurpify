@@ -19,6 +19,120 @@ type agentTestRunner interface {
 	RunSuite(context.Context, *agenttest.Suite, agenttest.RunOptions) (*agenttest.SuiteReport, error)
 }
 
+// agentTestRunFlags is the shared flag set of `agenttest run` and
+// `agenttest baseline`. Baseline MUST run the suite exactly as run does —
+// same executor, same reports, same defaults (D10.2) — so both commands bind
+// the identical flags through this one struct.
+type agentTestRunFlags struct {
+	suites            []string
+	agentName         string
+	caseNames         []string
+	tags              []string
+	tier              string
+	profile           string
+	strict            bool
+	includeQuarantine bool
+	outDir            string
+	timeout           time.Duration
+	skipASTIndex      bool
+	maxRetries        int
+	model             string
+	endpoint          string
+	maxIterations     int
+	debugLLM          bool
+	backendReset      string
+	backendBin        string
+	backendService    string
+	backendResetOn    []string
+}
+
+func (f *agentTestRunFlags) bind(cmd *cobra.Command) {
+	cmd.Flags().StringArrayVar(&f.suites, "suite", nil, "Path to a testsuite YAML (repeatable)")
+	cmd.Flags().StringVar(&f.agentName, "agent", "", "Run suites matching <agent> in testsuite/agenttests/")
+	cmd.Flags().StringArrayVar(&f.caseNames, "case", nil, "Only run cases by name (repeatable)")
+	cmd.Flags().StringArrayVar(&f.tags, "tag", nil, "Only run cases carrying at least one matching tag (repeatable)")
+	cmd.Flags().StringVar(&f.tier, "tier", "", "Only run suites in the requested tier (smoke|stable|live-flaky|quarantined)")
+	cmd.Flags().StringVar(&f.profile, "profile", "", "Override execution profile (live|record|replay|developer-live|ci-live|ci-replay)")
+	cmd.Flags().BoolVar(&f.strict, "strict", false, "Fail the process if any non-skipped case fails")
+	cmd.Flags().BoolVar(&f.includeQuarantine, "include-quarantined", false, "Include suites marked quarantined")
+	cmd.Flags().StringVar(&f.outDir, "out", "", "Output directory for run artifacts")
+	cmd.Flags().DurationVar(&f.timeout, "timeout", 15*time.Minute, "Per-case execution timeout; 0 disables")
+	cmd.Flags().BoolVar(&f.skipASTIndex, "skip-ast-index", true, "Skip AST/bootstrap indexing during setup")
+	cmd.Flags().IntVar(&f.maxRetries, "max-retries", 3, "Maximum retry attempts per case (0 disables retries)")
+	cmd.Flags().StringVar(&f.model, "model", "", "Override model name for all cases")
+	cmd.Flags().StringVar(&f.endpoint, "endpoint", "", "Override inference endpoint for all cases")
+	cmd.Flags().IntVar(&f.maxIterations, "max-iterations", 8, "Override max iterations for agent loops")
+	cmd.Flags().BoolVar(&f.debugLLM, "debug-llm", false, "Enable verbose LLM telemetry logging")
+	cmd.Flags().StringVar(&f.backendReset, "backend-reset", "none", "Reset strategy: none|model|server")
+	cmd.Flags().StringVar(&f.backendBin, "backend-bin", "ollama", "Inference backend CLI binary name/path")
+	cmd.Flags().StringVar(&f.backendService, "backend-service", "ollama", "systemd service name for backend restarts")
+	cmd.Flags().StringArrayVar(&f.backendResetOn, "backend-reset-on", []string{
+		"(?i)context deadline exceeded",
+		"(?i)connection reset",
+	}, "Retry on errors matching <regex> and reset the backend (repeatable)")
+}
+
+// options builds the run options both commands execute with. writeBaselines
+// is set only by the baseline command (D10.2). A negative retry budget is a
+// spec error, not a runtime surprise (D9.4): both commands reject it.
+func (f *agentTestRunFlags) options(cmd *cobra.Command, ws string, writeBaselines, baselinesDryRun bool) (agenttest.RunOptions, error) {
+	if f.maxRetries < 0 {
+		return agenttest.RunOptions{}, fmt.Errorf("--max-retries must be >= 0")
+	}
+	return agenttest.RunOptions{
+		TargetWorkspace:  ws,
+		OutputDir:        f.outDir,
+		Timeout:          f.timeout,
+		TimeoutSet:       cmd.Flags().Changed("timeout"),
+		SkipASTIndex:     f.skipASTIndex,
+		Profile:          f.profile,
+		Strict:           f.strict,
+		MaxRetries:       f.maxRetries,
+		SharedRoot:       config.ResolveSharedRoot(""),
+		ModelOverride:    f.model,
+		EndpointOverride: f.endpoint,
+		MaxIterations:    f.maxIterations,
+		DebugLLM:         f.debugLLM,
+		BackendReset:     f.backendReset,
+		BackendBinary:    f.backendBin,
+		BackendService:   f.backendService,
+		BackendResetOn:   f.backendResetOn,
+		WriteBaselines:   writeBaselines,
+		BaselinesDryRun:  baselinesDryRun,
+	}, nil
+}
+
+// loadSuites resolves and loads the selected suites for the given flags,
+// applying the case/tag filters so the runner sees only what was asked for.
+func (f *agentTestRunFlags) loadSuites(ws string) ([]*agenttest.Suite, error) {
+	selected := f.suites
+	if len(selected) == 0 {
+		selected = discoverSuites(ws, f.agentName)
+	}
+	if len(selected) == 0 {
+		return nil, fmt.Errorf("no testsuites found; pass --suite <path> or add suites to testsuite/agenttests/")
+	}
+	loaded := make([]*agenttest.Suite, 0, len(selected))
+	for _, suitePath := range selected {
+		suite, err := agenttest.LoadSuite(suitePath)
+		if err != nil {
+			return nil, err
+		}
+		if !shouldRunAgentTestSuite(suite, f.tier, f.profile, f.includeQuarantine) {
+			continue
+		}
+		suite, err = filterAgentTestSuiteCases(suite, f.caseNames, f.tags)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", suitePath, err)
+		}
+		loaded = append(loaded, suite)
+	}
+	if len(loaded) == 0 {
+		return nil, fmt.Errorf("no testsuites matched the requested filters")
+	}
+	return loaded, nil
+}
+
 // runSuitesWithRunner executes the selected suites with the given options and
 // prints the per-suite line; shared by `run` and `baseline`.
 func runSuitesWithRunner(cmd *cobra.Command, runner agentTestRunner, loadedSuites []*agenttest.Suite, opts agenttest.RunOptions) error {
@@ -28,14 +142,17 @@ func runSuitesWithRunner(cmd *cobra.Command, runner agentTestRunner, loadedSuite
 			return err
 		}
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s [%s]: %d/%d passed (%d infra, %d assertion)\n", filepath.Base(suite.SourcePath), rep.Profile, rep.PassedCases, rep.PassedCases+rep.FailedCases, rep.InfraFailures, rep.AssertFailures)
-		if opts.WriteBaselines {
-			sourceRun := agenttest.BaselinesSourceRun(opts.OutputDir, rep.RunID)
-			if err := agenttest.PromoteBaselines(cmd.OutOrStdout(), suite, rep, sourceRun, opts.BaselinesDryRun); err != nil {
-				// Baselines are an operator artifact, not evidence: a write
-				// failure is printed and non-fatal to the run's exit code
-				// (D10.2, deliberate asymmetry with the report contract).
-				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "baseline promotion incomplete: %v\n", err)
-			}
+		if line, ok := agenttest.FormatBaselineCompareLine(rep); ok {
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "  %s\n", line)
+		}
+		if !opts.WriteBaselines {
+			continue
+		}
+		if err := agenttest.PromoteBaselines(cmd.OutOrStdout(), suite, rep, rep.SourceRun, opts.BaselinesDryRun); err != nil {
+			// Baselines are an operator artifact, not evidence: a write
+			// failure is printed and non-fatal to the run's exit code
+			// (D10.2, deliberate asymmetry with the report contract).
+			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "baseline promotion incomplete: %v\n", err)
 		}
 	}
 	return nil
@@ -47,6 +164,7 @@ var newAgentTestRunnerFn = func() agentTestRunner { //nolint:gochecknoglobals //
 
 const (
 	agentTestRunName      = "run"
+	agentTestBaselineName = "baseline"
 	agentTestPromoteName  = "promote"
 	agentTestReportName   = "report"
 	agentTestRerecordName = "rerecord"
@@ -66,110 +184,25 @@ func newAgentTestCmd() *cobra.Command {
 }
 
 func newAgentTestRunCmd() *cobra.Command {
-	var suites []string
-	var agentName string
-	var caseName string
-	var tags []string
-	var tier string
-	var profile string
-	var strict bool
-	var includeQuarantined bool
-	var outDir string
-	var timeout time.Duration
-	var skipASTIndex bool
-	var maxRetries int
-	var model string
-	var endpoint string
-	var maxIterations int
-	var debugLLM bool
-	var backendReset string
-	var backendBin string
-	var backendService string
-	var backendResetOn []string
-
+	var flags agentTestRunFlags
 	cmd := &cobra.Command{
 		Use:   "run",
 		Short: "Run one or more agent testsuites",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if maxRetries < 0 {
-				return fmt.Errorf("--max-retries must be >= 0")
-			}
 			ws := ensureWorkspace()
-			selectedSuites := suites
-			if len(selectedSuites) == 0 {
-				selectedSuites = discoverSuites(ws, agentName)
+			loadedSuites, err := flags.loadSuites(ws)
+			if err != nil {
+				return err
 			}
-			if len(selectedSuites) == 0 {
-				return fmt.Errorf("no testsuites found; pass --suite <path> or add suites to testsuite/agenttests/")
-			}
-			loadedSuites := make([]*agenttest.Suite, 0, len(selectedSuites))
-			for _, suitePath := range selectedSuites {
-				suite, err := agenttest.LoadSuite(suitePath)
-				if err != nil {
-					return err
-				}
-				if !shouldRunAgentTestSuite(suite, tier, profile, includeQuarantined) {
-					continue
-				}
-				suite, err = filterAgentTestSuiteCases(suite, caseName, tags)
-				if err != nil {
-					return fmt.Errorf("%s: %w", suitePath, err)
-				}
-				loadedSuites = append(loadedSuites, suite)
-			}
-			if len(loadedSuites) == 0 {
-				return fmt.Errorf("no testsuites matched the requested filters")
-			}
-			timeoutSet := cmd.Flags().Changed("timeout")
-			opts := agenttest.RunOptions{
-				TargetWorkspace:  ws,
-				OutputDir:        outDir,
-				Timeout:          timeout,
-				TimeoutSet:       timeoutSet,
-				SkipASTIndex:     skipASTIndex,
-				Profile:          profile,
-				Strict:           strict,
-				MaxRetries:       maxRetries,
-				SharedRoot:       config.ResolveSharedRoot(""),
-				ModelOverride:    model,
-				EndpointOverride: endpoint,
-				MaxIterations:    maxIterations,
-				DebugLLM:         debugLLM,
-				BackendReset:     backendReset,
-				BackendBinary:    backendBin,
-				BackendService:   backendService,
-				BackendResetOn:   backendResetOn,
+			opts, err := flags.options(cmd, ws, false, false)
+			if err != nil {
+				return err
 			}
 			return runSuitesWithRunner(cmd, newAgentTestRunnerFn(), loadedSuites, opts)
 		},
 	}
-
-	cmd.Flags().StringArrayVar(&suites, "suite", nil, "Path to a testsuite YAML (repeatable)")
-	cmd.Flags().StringVar(&agentName, "agent", "", "Run suites matching <agent> in testsuite/agenttests/")
-	cmd.Flags().StringVar(&caseName, "case", "", "Only run a single case by name")
-	cmd.Flags().StringArrayVar(&tags, "tag", nil, "Only run cases carrying at least one matching tag (repeatable)")
-	cmd.Flags().StringVar(&tier, "tier", "", "Only run suites in the requested tier (smoke|stable|live-flaky|quarantined)")
-	cmd.Flags().StringVar(&profile, "profile", "", "Override execution profile (live|record|replay|developer-live|ci-live|ci-replay)")
-	cmd.Flags().BoolVar(&strict, "strict", false, "Fail the process if any non-skipped case fails")
-	cmd.Flags().BoolVar(&includeQuarantined, "include-quarantined", false, "Include suites marked quarantined")
-	cmd.Flags().StringVar(&outDir, "out", "", "Output directory for run artifacts")
-	cmd.Flags().DurationVar(&timeout, "timeout", 15*time.Minute, "Per-case execution timeout; 0 disables")
-	cmd.Flags().BoolVar(&skipASTIndex, "skip-ast-index", true, "Skip AST/bootstrap indexing during setup")
-	cmd.Flags().IntVar(&maxRetries, "max-retries", 3, "Maximum retry attempts per case (0 disables retries)")
-	cmd.Flags().StringVar(&model, "model", "", "Override model name for all cases")
-	cmd.Flags().StringVar(&endpoint, "endpoint", "", "Override inference endpoint for all cases")
-	cmd.Flags().IntVar(&maxIterations, "max-iterations", 8, "Override max iterations for agent loops")
-	cmd.Flags().BoolVar(&debugLLM, "debug-llm", false, "Enable verbose LLM telemetry logging")
-	cmd.Flags().StringVar(&backendReset, "backend-reset", "none", "Reset strategy: none|model|server")
-	cmd.Flags().StringVar(&backendBin, "backend-bin", "ollama", "Inference backend CLI binary name/path")
-	cmd.Flags().StringVar(&backendService, "backend-service", "ollama", "systemd service name for backend restarts")
-	cmd.Flags().StringArrayVar(&backendResetOn, "backend-reset-on", []string{
-		"(?i)context deadline exceeded",
-		"(?i)connection reset",
-	}, "Retry on errors matching <regex> and reset the backend (repeatable)")
-
+	flags.bind(cmd)
 	_ = cmd.MarkFlagRequired("suite") //nolint:errcheck // advisory usage hint; empty --suite discovers
-
 	return cmd
 }
 
@@ -426,14 +459,20 @@ func writef(out io.Writer, format string, args ...any) error {
 	return err
 }
 
-func filterAgentTestSuiteCases(suite *agenttest.Suite, caseName string, tags []string) (*agenttest.Suite, error) {
+func filterAgentTestSuiteCases(suite *agenttest.Suite, caseNames []string, tags []string) (*agenttest.Suite, error) {
 	if suite == nil {
 		return nil, fmt.Errorf("suite required")
+	}
+	wanted := make([]string, 0, len(caseNames))
+	for _, name := range caseNames {
+		if trimmed := strings.TrimSpace(name); trimmed != "" {
+			wanted = append(wanted, trimmed)
+		}
 	}
 	filtered := *suite
 	filtered.Spec.Cases = nil
 	for _, c := range suite.Spec.Cases {
-		if strings.TrimSpace(caseName) != "" && !strings.EqualFold(strings.TrimSpace(c.Name), strings.TrimSpace(caseName)) {
+		if len(wanted) > 0 && !matchesAnyCaseName(c.Name, wanted) {
 			continue
 		}
 		if len(tags) > 0 && !c.MatchesAnyTag(tags) {
@@ -445,6 +484,15 @@ func filterAgentTestSuiteCases(suite *agenttest.Suite, caseName string, tags []s
 		return nil, fmt.Errorf("no cases matched the requested filters")
 	}
 	return &filtered, nil
+}
+
+func matchesAnyCaseName(name string, wanted []string) bool {
+	for _, candidate := range wanted {
+		if strings.EqualFold(strings.TrimSpace(name), candidate) {
+			return true
+		}
+	}
+	return false
 }
 
 func shouldRunAgentTestSuite(suite *agenttest.Suite, tier, profile string, includeQuarantined bool) bool {
@@ -489,63 +537,31 @@ func sanitizeName(name string) string {
 }
 
 // newAgentTestBaselineCmd runs the suite exactly as `run` does and promotes
-// the executed per-case metrics into baseline files (D10.2, ruling R-5).
+// the executed per-case metrics (plus benchmark scores, when the suite is
+// benchmark-classified) into baseline files (D10.2, ruling R-5). An existing
+// baseline is overwritten — baselines are a deliberate snapshot, not an
+// accumulator.
 func newAgentTestBaselineCmd() *cobra.Command {
-	var suites []string
-	var agentName string
-	var caseName string
-	var model string
-	var outDir string
-	var timeout time.Duration
+	var flags agentTestRunFlags
 	var dryRun bool
 
 	cmd := &cobra.Command{
-		Use:   "baseline --suite <path> [--case <name>]...",
+		Use:   agentTestBaselineName + " --suite <path> [--case <name>]...",
 		Short: "Run a suite and write per-case performance baselines",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ws := ensureWorkspace()
-			if len(suites) == 0 {
-				suites = discoverSuites(ws, agentName)
+			loadedSuites, err := flags.loadSuites(ws)
+			if err != nil {
+				return err
 			}
-			if len(suites) == 0 {
-				return fmt.Errorf("no testsuites found; pass --suite <path>")
-			}
-			loadedSuites := make([]*agenttest.Suite, 0, len(suites))
-			for _, suitePath := range suites {
-				suite, err := agenttest.LoadSuite(suitePath)
-				if err != nil {
-					return err
-				}
-				suite, err = filterAgentTestSuiteCases(suite, caseName, nil)
-				if err != nil {
-					return fmt.Errorf("%s: %w", suitePath, err)
-				}
-				loadedSuites = append(loadedSuites, suite)
-			}
-			if len(loadedSuites) == 0 {
-				return fmt.Errorf("no testsuites matched the requested filters")
-			}
-			opts := agenttest.RunOptions{
-				TargetWorkspace: ws,
-				OutputDir:       outDir,
-				Timeout:         timeout,
-				TimeoutSet:      cmd.Flags().Changed("timeout"),
-				SharedRoot:      config.ResolveSharedRoot(""),
-				ModelOverride:   model,
-				WriteBaselines:  true,
-				BaselinesDryRun: dryRun,
+			opts, err := flags.options(cmd, ws, true, dryRun)
+			if err != nil {
+				return err
 			}
 			return runSuitesWithRunner(cmd, newAgentTestRunnerFn(), loadedSuites, opts)
 		},
 	}
-
-	cmd.Flags().StringArrayVar(&suites, "suite", nil, "Path to a testsuite YAML (required; repeatable)")
-	cmd.Flags().StringVar(&agentName, "agent", "", "Resolve suites matching <agent> in testsuite/agenttests/")
-	cmd.Flags().StringVar(&caseName, "case", "", "Baseline a single case by name (repeat with --suite for multiple)")
-	cmd.Flags().StringVar(&model, "model", "", "Override model name for all cases")
-	cmd.Flags().StringVar(&outDir, "out", "", "Output directory for the producing run's artifacts")
-	cmd.Flags().DurationVar(&timeout, "timeout", 15*time.Minute, "Per-case execution timeout; 0 disables")
+	flags.bind(cmd)
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Print the baseline files that would be written; write nothing")
-
 	return cmd
 }
