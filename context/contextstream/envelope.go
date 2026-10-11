@@ -51,9 +51,17 @@ func ApplyResult(env *contextdata.Envelope, result *Result, epoch uint64) error 
 		return nil
 	}
 	if result.Compilation != nil {
-		if current := env.StreamedSliceSnapshot(); current != nil && epoch < current.Epoch {
+		// The stale floor is the envelope's memory order: the current slice's
+		// epoch when one exists, otherwise the assembly metadata's epoch (an
+		// envelope can have advanced through barriers without ever holding a
+		// slice — a late result from before those barriers must still drop).
+		floor := env.AssemblyMetadataSnapshot().EpochID
+		if current := env.StreamedSliceSnapshot(); current != nil && current.Epoch > floor {
+			floor = current.Epoch
+		}
+		if epoch < floor {
 			return &ErrStaleApplyDropped{
-				CurrentEpoch: current.Epoch,
+				CurrentEpoch: floor,
 				GotEpoch:     epoch,
 				RequestID:    result.Request.ID,
 			}

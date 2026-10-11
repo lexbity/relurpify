@@ -52,6 +52,12 @@ type Config struct {
 	AuditLimit                 int
 	AuditEnforcement           string // "strict" (default) | "best_effort"
 	HITLTimeout                time.Duration
+	// HITLMode selects the approval posture: "governed" (default) blocks on a
+	// human decision; "permissive" (--hitl-mode permissive) auto-approves
+	// every request, audited per decision and surfaced by the doctor. The
+	// sandbox and capability enforcement are unaffected — only the
+	// human-approval boundary opens.
+	HITLMode                   string
 	Editor                     string
 	SubprocessToolFactory      func(ports.ToolManifest) any
 	ModelFactoryWrapper        func(model.ModelFactory) model.ModelFactory
@@ -159,6 +165,12 @@ func (c *Config) Normalize() error {
 	}
 	if c.HITLTimeout <= 0 {
 		c.HITLTimeout = 30 * time.Second
+	}
+	if strings.TrimSpace(c.HITLMode) == "" {
+		c.HITLMode = fauthorization.HITLModeGoverned
+	}
+	if c.HITLMode != fauthorization.HITLModeGoverned && c.HITLMode != fauthorization.HITLModePermissive {
+		return fmt.Errorf("hitl mode %q invalid (want %q or %q)", c.HITLMode, fauthorization.HITLModeGoverned, fauthorization.HITLModePermissive)
 	}
 	return nil
 }

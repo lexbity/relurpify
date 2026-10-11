@@ -102,18 +102,56 @@ type EpochCoordinator struct {
 	drain     func(time.Duration)
 	finalized bool
 	deadline  time.Duration
+	// runID is the run's compile identity (with the epoch): epoch counters
+	// are per-run, so the compiler cache keys on (RunID, EpochID) to make
+	// cross-run hits structurally impossible. Seeded into the envelope's
+	// AssemblyMetadata at construction so every request builder reads one
+	// consistent source.
+	runID string
 }
 
 // NewEpochCoordinator creates the run-scoped coordinator. runCtx must carry
 // the run envelope (contextdata.WithEnvelope) and outlive every node.
 func NewEpochCoordinator(runCtx context.Context, ground Grounder, tel telemetry.Telemetry) *EpochCoordinator {
-	return &EpochCoordinator{
+	c := &EpochCoordinator{
 		epoch:    1,
 		runCtx:   runCtx,
 		ground:   ground,
 		tel:      tel,
 		deadline: defaultStreamJobDeadline,
+		runID:    telemetry.NewRunID(),
 	}
+	// Seed the envelope so the compile identity (RunID, EpochID) is visible
+	// to every request builder from the first compile — before any barrier
+	// has closed — and so the metadata mirror and the request stamp can never
+	// disagree. A fresh envelope's opening epoch is 1; epoch 0 is reserved
+	// for scope-less compiles (no run coordinator), which share a namespace
+	// by construction because no coordinator means no barriers and no
+	// grounding. An envelope that already carries an epoch (the pause/resume
+	// path re-enters a graph on a surviving envelope) is ADOPTED, not
+	// rewound: the counter continues from its memory order and only the RunID
+	// is replaced — a restarted counter would re-stamp pre-pause epochs and
+	// the stale guard would drop every post-resume compile.
+	if env, ok := contextdata.EnvelopeFrom(runCtx); env != nil && ok {
+		if adopted := env.AssemblyMetadataSnapshot().EpochID; adopted > c.epoch {
+			c.epoch = adopted
+		}
+		env.UpdateAssemblyMetadata(func(m contextdata.AssemblyMeta) contextdata.AssemblyMeta {
+			m.EpochID = c.epoch
+			m.RunID = c.runID
+			return m
+		})
+	}
+	return c
+}
+
+// RunID returns the run's compile identity. Empty only for zero-value
+// coordinators (tests); a constructed coordinator always carries one.
+func (c *EpochCoordinator) RunID() string {
+	if c == nil {
+		return ""
+	}
+	return c.runID
 }
 
 // SetDrain installs the invalidation subscription's subscriber-side drain.

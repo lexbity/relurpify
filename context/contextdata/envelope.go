@@ -43,6 +43,11 @@ type AssemblyMeta struct {
 	ShortfallTokens int
 	AssembledAt     time.Time
 	EpochID         uint64
+	// RunID is the owning run's identity, seeded by the run's epoch
+	// coordinator. It is part of the compile identity (with EpochID): the
+	// compiler cache must never serve an entry across runs, whose epoch
+	// counters are independent and therefore not comparable.
+	RunID string
 }
 
 type contextKey struct{}

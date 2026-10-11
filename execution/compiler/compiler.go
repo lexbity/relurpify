@@ -534,6 +534,7 @@ func (c *Compiler) buildCacheKey(request CompilationRequest) CacheKey {
 		ManifestFingerprint:     c.fingerprint(request.ManifestID),
 		PolicyBundleFingerprint: c.fingerprint(request.PolicyBundleID),
 		EpochFingerprint:        c.fingerprint(strconv.FormatUint(request.EpochID, 10)),
+		RunFingerprint:          c.fingerprint(request.RunID),
 	}
 }
 

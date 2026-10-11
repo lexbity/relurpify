@@ -40,6 +40,13 @@ type Backend struct {
 	mu                sync.Mutex
 	cachedContextSize int
 	contextSizeLoaded bool
+	// serverCapability is the model's context length as the SERVER reports
+	// it (/api/show), kept separately from cachedContextSize: that cache can
+	// hold the profile's budget override (ModelContextSize's documented
+	// override-first rule), while the served-window derivation needs the
+	// true capability to clamp against.
+	serverCapability int
+	capabilityLoaded bool
 }
 
 type managedModel struct {
@@ -53,9 +60,53 @@ func NewBackend(cfg Config, apiKey string) *Backend {
 	return &Backend{client: client, cfg: cfg, apiKey: strings.TrimSpace(apiKey)}
 }
 
-// Model returns the underlying language model client.
+// Model returns the underlying language model client. The returned model
+// derives the served context window per call (num_ctx = min(profile budget,
+// server-discovered capability)): without it the server applies its own
+// default window and silently truncates prompts regardless of the
+// configured budget — nothing consumed the discovery path before.
 func (b *Backend) Model() LanguageModel {
-	return managedModel{client: b.client}
+	return &contextWindowModel{managedModel: managedModel{client: b.client}, backend: b}
+}
+
+// contextWindowModel stamps the derived served window onto every call whose
+// options do not carry an explicit ContextWindow.
+type contextWindowModel struct {
+	managedModel
+	backend *Backend
+}
+
+// resolveContextWindow derives the served window in tokens:
+// min(profile budget when configured, server-discovered capability). Zero on
+// both sides leaves the transport default (the server is unreachable or
+// reports nothing — we never guess a window we cannot support).
+func (m *contextWindowModel) resolveContextWindow() int {
+	budget := m.client.ContextSize()
+	capability := m.backend.serverContextCapability()
+	switch {
+	case budget > 0 && capability > 0:
+		return min(budget, capability)
+	case budget > 0:
+		return budget
+	default:
+		return capability
+	}
+}
+
+func (m *contextWindowModel) applyWindow(options *LLMOptions) *LLMOptions {
+	window := m.resolveContextWindow()
+	if window <= 0 {
+		return options
+	}
+	if options == nil {
+		return &LLMOptions{ContextWindow: window}
+	}
+	if options.ContextWindow > 0 {
+		return options // an explicit caller window wins
+	}
+	cloned := *options
+	cloned.ContextWindow = window
+	return &cloned
 }
 
 // Embedder returns a transport-backed embedder when embedding is enabled.
@@ -109,6 +160,33 @@ func (b *Backend) ModelContextSize(ctx context.Context) (int, error) {
 	}
 	b.storeModelContextSize(size)
 	return size, nil
+}
+
+// serverContextCapability returns the model's context length as the SERVER
+// reports it, bypassing the profile-budget override that ModelContextSize
+// documents. Discovery failure returns 0 (never a guess) and is retried on a
+// later call — a backend that is down at boot may be up by the first chat.
+func (b *Backend) serverContextCapability() int {
+	if b == nil || b.client == nil {
+		return 0
+	}
+	b.mu.Lock()
+	if b.capabilityLoaded {
+		capability := b.serverCapability
+		b.mu.Unlock()
+		return capability
+	}
+	b.mu.Unlock()
+
+	size, err := b.discoverModelContextSize(context.Background())
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if err != nil || size <= 0 {
+		return 0 // stay unloaded: retry on the next call
+	}
+	b.serverCapability = size
+	b.capabilityLoaded = true
+	return size
 }
 
 // Health checks backend reachability and model listing availability.
@@ -387,6 +465,25 @@ func (m managedModel) Chat(ctx context.Context, messages []Message, options *LLM
 
 func (m managedModel) ChatWithTools(ctx context.Context, messages []Message, tools []LLMToolSpec, options *LLMOptions) (*LLMResponse, error) {
 	return m.client.ChatWithTools(ctx, messages, tools, options)
+}
+
+// The context-window overrides: every call path stamps the derived served
+// window before delegating to the transport.
+
+func (m *contextWindowModel) Generate(ctx context.Context, prompt string, options *LLMOptions) (*LLMResponse, error) {
+	return m.client.Generate(ctx, prompt, m.applyWindow(options))
+}
+
+func (m *contextWindowModel) GenerateStream(ctx context.Context, prompt string, options *LLMOptions) (<-chan string, error) {
+	return m.client.GenerateStream(ctx, prompt, m.applyWindow(options))
+}
+
+func (m *contextWindowModel) Chat(ctx context.Context, messages []Message, options *LLMOptions) (*LLMResponse, error) {
+	return m.client.Chat(ctx, messages, m.applyWindow(options))
+}
+
+func (m *contextWindowModel) ChatWithTools(ctx context.Context, messages []Message, tools []LLMToolSpec, options *LLMOptions) (*LLMResponse, error) {
+	return m.client.ChatWithTools(ctx, messages, tools, m.applyWindow(options))
 }
 
 func (m managedModel) ToolRepairStrategy() string {

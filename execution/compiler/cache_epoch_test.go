@@ -181,3 +181,58 @@ func TestCacheHitEquivalenceProperty(t *testing.T) {
 		require.Equal(t, content, hit.Chunks[0].Body.Raw, "iteration %d", i)
 	}
 }
+
+// TestCacheRunScopePreventsCrossRunHits: run-local epoch counters are not
+// comparable across runs — and a resumed run restarts its counter — so an
+// entry compiled under one run must never be served to another, regardless of
+// epoch equality. The audit's epoch-0 finding (every run's pre-barrier
+// compiles sharing one key) is this test's target.
+func TestCacheRunScopePreventsCrossRunHits(t *testing.T) {
+	ids := []knowledge.ChunkID{"chunk:r1"}
+	contents := map[string]string{"chunk:r1": "cross-run body"}
+	c, store, _ := newEpochTestCompiler(t, ids)
+	now := time.Unix(1000, 0)
+	for _, id := range ids {
+		saveTrustedChunk(t, store, string(id), contents[string(id)], now)
+	}
+
+	reqA := CompilationRequest{
+		Query:     retrieval.RetrievalQuery{Text: "cross-run probe"},
+		MaxTokens: 4096,
+		EpochID:   1,
+		RunID:     "run-A",
+	}
+	missA, missRecordA, err := c.Compile(context.Background(), reqA)
+	require.NoError(t, err)
+	require.False(t, missRecordA.CacheHit)
+	require.Len(t, missA.Chunks, 1)
+
+	hitA, hitRecordA, err := c.Compile(context.Background(), reqA)
+	require.NoError(t, err)
+	require.True(t, hitRecordA.CacheHit, "same run, same epoch: hit")
+	require.Equal(t, missA, hitA)
+
+	// A different run at the SAME epoch must miss — its epoch means a
+	// different memory state.
+	reqB := reqA
+	reqB.RunID = "run-B"
+	_, recordB, err := c.Compile(context.Background(), reqB)
+	require.NoError(t, err)
+	require.False(t, recordB.CacheHit, "a different run at the same epoch must never hit run A's entry")
+
+	// A resumed run (fresh identity, counter restarted to the same opening
+	// epoch) must also miss.
+	reqResume := reqA
+	reqResume.RunID = "run-A-resumed"
+	_, recordResume, err := c.Compile(context.Background(), reqResume)
+	require.NoError(t, err)
+	require.False(t, recordResume.CacheHit, "a resumed run's opening epoch must never hit the paused run's entry")
+
+	// Scope-less compiles (no run coordinator) keep a shared namespace by
+	// construction: nothing can ground without a coordinator.
+	reqScopeless := reqA
+	reqScopeless.RunID = ""
+	_, recordScopeless, err := c.Compile(context.Background(), reqScopeless)
+	require.NoError(t, err)
+	require.False(t, recordScopeless.CacheHit)
+}

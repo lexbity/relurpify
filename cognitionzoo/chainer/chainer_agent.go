@@ -2,6 +2,7 @@ package chainer
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -172,18 +173,44 @@ func (a *ChainerAgent) executeStreamingTrigger(ctx context.Context, task *execut
 	if trigger == nil {
 		return nil
 	}
+	taskID := ""
+	if task != nil {
+		taskID = task.ID
+	}
 	req := contextstream.Request{
-		ID:        "chainer_stream",
+		ID:        "chainer." + taskID,
 		MaxTokens: a.streamMaxTokens(),
 		Mode:      a.streamMode(),
 		Query:     retrieval.RetrievalQuery{Text: query},
+	}
+	// The chainer compile is part of the run's memory order: the request
+	// carries the envelope's compile identity (epoch + run scope) so the
+	// compiler's cache keys it correctly and can never serve it across runs.
+	var epoch uint64
+	if env != nil {
+		meta := env.AssemblyMetadataSnapshot()
+		epoch = meta.EpochID
+		req.EpochID = meta.EpochID
+		req.RunID = meta.RunID
+		req.EventLogSeq = meta.EventLogSeq
 	}
 	result, err := trigger.RequestBlocking(ctx, req)
 	if err != nil {
 		return err
 	}
 	if env != nil {
-		env.SetWorkingValueWithClass("chainer.stream.result", result, contextdata.MemoryClassTask)
+		// Deliver through the substrate (the link prompts render the
+		// envelope slice via the shared renderer seam); working state holds
+		// the bounded summary only — never the compiled bodies.
+		if err := contextstream.ApplyResult(env, result, epoch); err != nil {
+			var dropped *contextstream.ErrStaleApplyDropped
+			if !errors.As(err, &dropped) {
+				return fmt.Errorf("chainer stream apply: %w", err)
+			}
+			// Designed drop: a newer compilation already owns the slice.
+			contextstream.EmitStaleApplyDropped(ctx, dropped.CurrentEpoch, dropped.GotEpoch, dropped.RequestID)
+		}
+		env.SetWorkingValueWithClass("chainer.stream.result", contextstream.SummaryOf(result), contextdata.MemoryClassTask)
 		env.SetWorkingValueWithClass("chainer.stream.query", query, contextdata.MemoryClassTask)
 	}
 	return nil

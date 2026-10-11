@@ -21,6 +21,12 @@ type CompilationRequest struct {
 	// the cache key, so a cached compilation can only be served for the epoch
 	// it was compiled in, and a new epoch always misses.
 	EpochID uint64 `json:"epoch_id,omitempty"`
+	// RunID scopes the compile identity to its owning run: run-local epoch
+	// counters are not comparable across runs, so the cache must never serve
+	// an entry across runs. Empty only for scope-less compiles (no run
+	// coordinator), which share a namespace because nothing can ground
+	// without one.
+	RunID string `json:"run_id,omitempty"`
 }
 
 // CompilationResult is the context-owned view of a compilation result.

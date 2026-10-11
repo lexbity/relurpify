@@ -102,6 +102,11 @@ func newRootCmd() *cobra.Command {
 	root.PersistentFlags().StringVar(&cfg.Sandbox.RunscPath, "runsc", cfg.Sandbox.RunscPath, "runsc binary path")
 	root.PersistentFlags().StringVar(&cfg.Sandbox.ContainerRuntime, "container-runtime", cfg.Sandbox.ContainerRuntime, "Container runtime (docker/containerd)")
 	root.PersistentFlags().StringVar(&cfg.Sandbox.Platform, "sandbox-platform", cfg.Sandbox.Platform, "Sandbox platform hint (gVisor: kvm/ptrace)")
+	// Permissive HITL posture (operator ruling 2026-10-11): --hitl-mode
+	// permissive auto-approves every human-approval request, audited per
+	// decision and surfaced by the doctor. Sandbox and capability enforcement
+	// are unaffected. Governed is the default and the shipped posture.
+	root.PersistentFlags().StringVar(&cfg.HITLMode, "hitl-mode", cfg.HITLMode, "HITL approval posture (governed or permissive; governed blocks on a human, permissive auto-approves with audit)")
 
 	root.AddCommand(newDoctorCmd(), newStatusCmd(), newChatCmd())
 	return root

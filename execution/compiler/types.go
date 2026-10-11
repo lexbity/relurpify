@@ -46,9 +46,14 @@ type CompilationRequest struct {
 	// EpochID is the memory-generation the compile reflects (owner ruling
 	// R-1). It is part of cache identity: an entry can only be served for
 	// the epoch it was compiled in, and a new epoch always misses. Epoch 0
-	// (cold / no-envelope compiles) is a legal shared key — every epoch-0
-	// compile of the same query reflects the same empty state.
-	EpochID               uint64
+	// is reserved for scope-less compiles (no run coordinator), which share
+	// a namespace because nothing can ground without one.
+	EpochID uint64
+	// RunID scopes the compile identity to its owning run (with EpochID):
+	// run-local epoch counters are not comparable across runs — and a resumed
+	// run restarts its counter — so the cache must never serve an entry
+	// across runs regardless of epoch equality.
+	RunID                 string
 	MaxTokens             int
 	BudgetShortfallPolicy string
 	Metadata              map[string]any
@@ -150,11 +155,17 @@ type CacheKey struct {
 	ManifestFingerprint     string
 	PolicyBundleFingerprint string
 	EpochFingerprint        string
+	// RunFingerprint scopes the key to the owning run: run-local epoch
+	// counters are not comparable across runs (and a resumed run restarts
+	// its counter), so a cached compilation must never be served across
+	// runs regardless of epoch equality. Empty fingerprints share the
+	// scope-less namespace (no run coordinator ⇒ no barriers, no grounding).
+	RunFingerprint string
 }
 
 // String returns a string representation of the cache key.
 func (k CacheKey) String() string {
-	return k.QueryFingerprint + ":" + k.ManifestFingerprint + ":" + k.PolicyBundleFingerprint + ":" + k.EpochFingerprint
+	return k.QueryFingerprint + ":" + k.ManifestFingerprint + ":" + k.PolicyBundleFingerprint + ":" + k.EpochFingerprint + ":" + k.RunFingerprint
 }
 
 // CacheEntry stores a compiled result with its dependencies.

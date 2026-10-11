@@ -222,7 +222,7 @@ func buildNodes(ctx context.Context, in buildNodeInput) ([]agentgraph.Node, erro
 		in.famReg,
 		in.maxTokens,
 		intakeTrigger,
-	)
+	).WithTier2Model(in.tier2Model)
 	intakeNode := newStageNode("euclo.intake", agentgraph.NodeTypeSystem, func(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 		seedDefaultTask(env)
 		return intakePipeline.Execute(ctx, env)

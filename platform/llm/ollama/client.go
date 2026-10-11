@@ -271,6 +271,12 @@ func (c *Client) applyOptions(payload map[string]any, options *LLMOptions) {
 	if options.MaxTokens != 0 {
 		opts["num_predict"] = options.MaxTokens
 	}
+	// num_ctx is the served context window: without it the server applies
+	// its own (often far smaller) default and silently truncates the prompt
+	// no matter what the profile budgeted.
+	if options.ContextWindow > 0 {
+		opts["num_ctx"] = options.ContextWindow
+	}
 	if options.Stop != nil {
 		opts["stop"] = options.Stop
 	}

@@ -25,7 +25,13 @@ type Request struct {
 	// EpochID is the envelope's memory-generation at request-build time
 	// (owner ruling R-1). It rides the request into the compiler's cache
 	// identity; builders stamp it from AssemblyMetadataSnapshot().EpochID.
-	EpochID               uint64
+	EpochID uint64
+	// RunID is the owning run's identity (with EpochID, part of the compile
+	// identity): run-local epoch counters are not comparable across runs, so
+	// the cache must never serve an entry across runs. Builders stamp it from
+	// AssemblyMetadataSnapshot().RunID (seeded by the epoch coordinator);
+	// empty only for scope-less compiles with no run coordinator.
+	RunID                 string
 	BudgetShortfallPolicy string
 	Mode                  Mode
 	Metadata              map[string]any

@@ -101,6 +101,7 @@ func toCompilationRequest(req Request) contextports.CompilationRequest {
 		Mode:         string(req.Mode),
 		EventLogSeq:  req.EventLogSeq,
 		EpochID:      req.EpochID,
+		RunID:        req.RunID,
 		Metadata:     req.Metadata,
 	}
 }

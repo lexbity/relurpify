@@ -17,6 +17,10 @@ const (
 	SignalKindUserThoughtRecipe SignalKind = "user_thoughtrecipe"
 	SignalKindNegative          SignalKind = "negative"
 	SignalKindDefault           SignalKind = "default"
+	// SignalKindFamilyTiebreak records a family tie resolved by the bounded
+	// model disambiguator (option A): the deterministic scorer tied its top
+	// two families and the model picked within that pair.
+	SignalKindFamilyTiebreak SignalKind = "family_tiebreak"
 )
 
 // ClassificationSignal represents a detected signal for family classification.
@@ -177,6 +181,10 @@ type ScoredClassification struct {
 	Ambiguous           bool
 	Signals             []ClassificationSignal
 	NegativeConstraints []string
+	// DisambiguationSource is set when a family tie was resolved by the
+	// bounded model disambiguator ("model_family_tiebreak"); empty means the
+	// deterministic result stands untouched.
+	DisambiguationSource string
 }
 
 // ClassifyTaskScored performs tier-1 classification using signal scoring.

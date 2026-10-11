@@ -11,6 +11,7 @@ import (
 	"codeburg.org/lexbit/relurpify/context/contextstream"
 	execution "codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/execution/agentgraph"
+	"codeburg.org/lexbit/relurpify/model"
 	"codeburg.org/lexbit/relurpify/named/euclo/euclokeys"
 	"codeburg.org/lexbit/relurpify/named/euclo/families"
 	"codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
@@ -31,6 +32,11 @@ type IntakePipelineNode struct {
 	registry        *families.KeywordFamilyRegistry
 	maxStreamTokens int
 	streamTrigger   StreamTrigger
+	// tier2Model is the bounded family tie-break model (option A): consulted
+	// ONLY when the deterministic classifier marks the classification
+	// ambiguous with at least two tied candidates. Nil (or model failure)
+	// keeps the deterministic result and its clarification posture.
+	tier2Model model.LanguageModel
 }
 
 // NewIntakePipelineNode creates a new intake pipeline node.
@@ -41,6 +47,14 @@ func NewIntakePipelineNode(id string, registry *families.KeywordFamilyRegistry, 
 		maxStreamTokens: maxStreamTokens,
 		streamTrigger:   trigger,
 	}
+}
+
+// WithTier2Model installs the family tie-break model.
+func (n *IntakePipelineNode) WithTier2Model(lm model.LanguageModel) *IntakePipelineNode {
+	if n != nil {
+		n.tier2Model = lm
+	}
+	return n
 }
 
 // ID returns the node ID.
@@ -90,6 +104,7 @@ func (n *IntakePipelineNode) Execute(ctx context.Context, env *contextdata.Envel
 	}
 
 	scoredClassification := ClassifyTaskScored(taskEnvelope, n.registry, nil)
+	scoredClassification = n.disambiguateFamilyTie(ctx, scoredClassification, taskEnvelope.Instruction)
 	interpretation := BuildIntentInterpretation(intentEvidence, scoredClassification)
 	taskEnvelope.Interpretation = interpretation
 
@@ -98,6 +113,10 @@ func (n *IntakePipelineNode) Execute(ctx context.Context, env *contextdata.Envel
 	if streamErr != nil {
 		return nil, streamErr
 	}
+	classificationSource := "deterministic"
+	if scoredClassification.DisambiguationSource != "" {
+		classificationSource = scoredClassification.DisambiguationSource
+	}
 	intent := &IntentClassification{
 		WinningFamily:        scoredClassification.WinningFamily,
 		FamilyCandidates:     append([]families.FamilyCandidate(nil), scoredClassification.FamilyCandidates...),
@@ -105,9 +124,9 @@ func (n *IntakePipelineNode) Execute(ctx context.Context, env *contextdata.Envel
 		Ambiguous:            scoredClassification.Ambiguous,
 		Signals:              append([]ClassificationSignal(nil), scoredClassification.Signals...),
 		NegativeConstraints:  append([]string(nil), taskEnvelope.NegativeConstraintSeeds...),
-		ClassificationSource: "deterministic",
+		ClassificationSource: classificationSource,
 		MixedIntent:          len(scoredClassification.FamilyCandidates) > 1,
-		ReasonCodes:          generateReasonCodes(scoredClassification, taskEnvelope, "deterministic"),
+		ReasonCodes:          generateReasonCodes(scoredClassification, taskEnvelope, classificationSource),
 	}
 	if family.ID != "" {
 		intent.EditPermitted = family.DefaultHITLPolicy != families.HITLPolicyAlways
@@ -191,9 +210,11 @@ func (n *IntakePipelineNode) maybeStreamContext(ctx context.Context, env *contex
 	}
 	req.ID = "stream-req-" + n.id
 	// The intake compile is part of the run's memory order: its request
-	// carries the envelope epoch so the compiler's epoch-scoped cache keys
-	// it correctly.
-	req.EpochID = env.AssemblyMetadataSnapshot().EpochID
+	// carries the envelope's compile identity (epoch + run scope) so the
+	// compiler's cache keys it correctly and can never serve it across runs.
+	meta := env.AssemblyMetadataSnapshot()
+	req.EpochID = meta.EpochID
+	req.RunID = meta.RunID
 	req.Metadata = map[string]any{
 		"intake_node_id":  n.id,
 		"family_template": templateStr,

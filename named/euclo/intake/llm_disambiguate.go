@@ -27,6 +27,14 @@ const (
 	Tier2OutcomeUnavailable = "unavailable"
 )
 
+// tier2GenerationBudget bounds one disambiguation completion. Thinking-mode
+// models (gemma4 et al.) spend generation tokens on chain-of-thought before
+// the JSON lands in the response field — a tight budget truncates mid-thought
+// (done_reason "length") and every disambiguation degrades to unparseable.
+// 512 tokens covers the thought plus the answer; the prompt itself is
+// bounded by the caller.
+const tier2GenerationBudget = 512
+
 // CandidateRef is one deterministic candidate presented to the Tier-2
 // disambiguator. The ref carries only public candidate metadata — never raw
 // user text.
@@ -64,7 +72,7 @@ func DisambiguateWithLLM(ctx context.Context, lm model.LanguageModel, utterance,
 	}
 
 	prompt := BuildDisambiguationPrompt(utterance, familyID, streamedContext, refs)
-	resp, err := lm.Generate(ctx, prompt, &model.LLMOptions{MaxTokens: 128, Temperature: 0.1})
+	resp, err := lm.Generate(ctx, prompt, &model.LLMOptions{MaxTokens: tier2GenerationBudget, Temperature: 0.1})
 	outcome.Latency = time.Since(start)
 	outcome.Model = modelName(lm)
 	if err != nil {

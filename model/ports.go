@@ -37,6 +37,12 @@ type LLMOptions struct {
 	Stop           []string
 	TopP           float64
 	Stream         bool
+	// ContextWindow is the served context window in tokens (ollama num_ctx).
+	// Zero means the transport default — for the ollama transport the
+	// backend derives it per call as min(profile budget, server-discovered
+	// capability) so the configured budget is what the server actually
+	// attends to, never the server's silent default window.
+	ContextWindow  int            `json:",omitempty"`
 	Config         map[string]any `json:",omitempty"`
 	StreamCallback func(string)   `json:"-"`
 }

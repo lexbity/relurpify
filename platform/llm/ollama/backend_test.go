@@ -238,13 +238,27 @@ func TestClient_NormalizeUsageEstimationFallback(t *testing.T) {
 }
 
 func TestBackend_Chat_RoundTrip(t *testing.T) {
+	// The first model call performs capability discovery (/api/show, then
+	// cached); the chat itself goes to /api/chat carrying the derived
+	// num_ctx window (min of no profile budget and the discovered 4096).
+	chatSeen := false
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/api/chat", r.URL.Path)
-		body, _ := io.ReadAll(r.Body)
-		assert.Contains(t, string(body), `"messages"`)
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"text": "response",
-		})
+		switch r.URL.Path {
+		case "/api/show":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"model_info": map[string]any{"llama.context_length": 4096},
+			})
+		case "/api/chat":
+			chatSeen = true
+			body, _ := io.ReadAll(r.Body)
+			assert.Contains(t, string(body), `"messages"`)
+			assert.Contains(t, string(body), `"num_ctx":4096`, "the derived served window rides the chat request")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"text": "response",
+			})
+		default:
+			t.Errorf("unexpected request path %q", r.URL.Path)
+		}
 	}))
 	defer srv.Close()
 
@@ -252,6 +266,7 @@ func TestBackend_Chat_RoundTrip(t *testing.T) {
 	resp, err := backend.Model().Chat(context.Background(), []model.Message{{Role: "user", Content: "ping"}}, nil)
 	require.NoError(t, err)
 	assert.Equal(t, "response", resp.Text)
+	assert.True(t, chatSeen)
 }
 
 func TestBackend_ChatWithTools_NativeDisabled(t *testing.T) {

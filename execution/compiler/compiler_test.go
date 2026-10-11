@@ -35,10 +35,11 @@ func TestCacheKeyString(t *testing.T) {
 		ManifestFingerprint:     "def456",
 		PolicyBundleFingerprint: "ghi789",
 		EpochFingerprint:        "jkl012",
+		RunFingerprint:          "mno345",
 	}
 
 	s := key.String()
-	expected := "abc123:def456:ghi789:jkl012"
+	expected := "abc123:def456:ghi789:jkl012:mno345"
 	if s != expected {
 		t.Errorf("expected %q, got %q", expected, s)
 	}

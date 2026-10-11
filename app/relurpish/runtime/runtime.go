@@ -324,6 +324,7 @@ func buildRuntime(ctx context.Context, cfg Config, secrets config.Secrets) (*Run
 		BaseFS:           cfg.Workspace,
 		StateDir:         config.DefaultWorkspaceStateDir(cfg.Workspace),
 		HITLTimeout:      cfg.HITLTimeout,
+		HITLMode:         cfg.HITLMode,
 		WorkspaceID:      filepath.Base(cfg.Workspace),
 		AgentName:        contract.AgentID,
 	})
@@ -1543,6 +1544,36 @@ func findInteractionFrame(env *contextdata.Envelope, frameID string) (*interacti
 		}
 	}
 	return nil, false
+}
+
+// PendingInteractionFrame returns the live run's unanswered interaction
+// frame, if any — the headless caller's window into the same surface the TUI
+// renders. A turn can complete successfully while a clarification or ask
+// frame awaits an answer; without this accessor a programmatic caller cannot
+// distinguish "the work is done" from "the agent is asking you something".
+func (r *Runtime) PendingInteractionFrame() *interaction.InteractionFrame {
+	if r == nil {
+		return nil
+	}
+	r.interactionMu.Lock()
+	defer r.interactionMu.Unlock()
+	for _, env := range r.interactionEnvelopes {
+		if env == nil {
+			continue
+		}
+		for _, key := range env.WorkingMemoryKeys() {
+			value, ok := contextdata.GetTyped[any](env, key)
+			if !ok {
+				continue
+			}
+			frame, ok := value.(*interaction.InteractionFrame)
+			if !ok || frame == nil || frame.Response != nil {
+				continue
+			}
+			return frame
+		}
+	}
+	return nil
 }
 
 func defaultInteractionAnswer(frame *interaction.InteractionFrame) string {

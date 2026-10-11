@@ -6,6 +6,15 @@ import (
 	"sync/atomic"
 )
 
+// logTarget boxes the swapped writer so every store shares one concrete
+// type. An unboxed atomic.Value panics on a second store of a different
+// concrete type: the process starts on *os.File (stderr) and the first
+// runtime repoint stores the workspace's rotating writer, which panicked
+// every boot that reached RepointStdlibLog.
+type logTarget struct {
+	w io.Writer
+}
+
 // StandardLogWriter is the swappable writer the process's stdlib logger writes
 // through. ReloadWorkspace repoints its target at the new runtime's log file,
 // so the global logger never writes into a closed file after a workspace
@@ -14,9 +23,9 @@ import (
 // The swap writer itself never closes: closing the file behind each target is
 // the owning runtime's business (its Workspace.Close). The target is read by
 // every Write, so a reader either sees the old target or the new one — never a
-// partially-`swapped Writer.
+// partially-swapped writer.
 type StandardLogWriter struct {
-	target atomic.Value // io.Writer
+	target atomic.Pointer[logTarget]
 }
 
 // NewStandardLogWriter constructs a swappable writer that begins writing to
@@ -28,6 +37,7 @@ func NewStandardLogWriter(initial io.Writer) *StandardLogWriter {
 }
 
 // Set atomically retargets the writer. A nil target resolves to stderr.
+// Targets of any concrete writer type are accepted.
 func (w *StandardLogWriter) Set(target io.Writer) {
 	if w == nil {
 		return
@@ -35,7 +45,7 @@ func (w *StandardLogWriter) Set(target io.Writer) {
 	if target == nil {
 		target = io.Writer(os.Stderr)
 	}
-	w.target.Store(target)
+	w.target.Store(&logTarget{w: target})
 }
 
 // Write implements io.Writer against the current target.
@@ -43,11 +53,11 @@ func (w *StandardLogWriter) Write(p []byte) (int, error) {
 	if w == nil {
 		return 0, nil
 	}
-	target, _ := w.target.Load().(io.Writer)
-	if target == nil {
+	t := w.target.Load()
+	if t == nil {
 		return 0, nil
 	}
-	return target.Write(p)
+	return t.w.Write(p)
 }
 
 // stdlibLogWriter is the process-wide swappable target the stdlib logger is

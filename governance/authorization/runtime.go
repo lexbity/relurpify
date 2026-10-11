@@ -60,11 +60,22 @@ type RuntimeConfig struct {
 	BaseFS             string
 	StateDir           string
 	HITLTimeout        time.Duration
+	// HITLMode selects the approval posture: "governed" (default) blocks on a
+	// human decision; "permissive" auto-approves every request with a
+	// per-decision audit record (explicit operator posture, --hitl-mode
+	// permissive). Anything else is a configuration error.
+	HITLMode string
 	// WorkspaceID and AgentName identify the agent for audit attribution. The
 	// registration ID is derived deterministically from them.
 	WorkspaceID string
 	AgentName   string
 }
+
+// HITL approval postures.
+const (
+	HITLModeGoverned   = "governed"
+	HITLModePermissive = "permissive"
+)
 
 // AgentRegistration stores runtime metadata. DocumentSnapshot and AgentSpec are
 // opaque carriers (see RuntimeConfig).
@@ -132,7 +143,37 @@ func RegisterAgent(ctx context.Context, cfg RuntimeConfig) (*AgentRegistration, 
 		closeChain()
 		return nil, fmt.Errorf("sandbox verification failed: %w", err)
 	}
-	hitl := NewHITLBroker(cfg.HITLTimeout, nil)
+	// Approval posture: governed (default) blocks on a human; permissive
+	// auto-approves with a per-decision audit record. The audit hook closes
+	// over the agent's chain logger, so auto-approvals are forensics-grade,
+	// not log noise.
+	hitlMode := cfg.HITLMode
+	if hitlMode == "" {
+		hitlMode = HITLModeGoverned
+	}
+	if hitlMode != HITLModeGoverned && hitlMode != HITLModePermissive {
+		closeChain()
+		return nil, fmt.Errorf("hitl mode %q invalid (want %q or %q)", hitlMode, HITLModeGoverned, HITLModePermissive)
+	}
+	var hitl *HITLBroker
+	if hitlMode == HITLModePermissive {
+		hitl = NewAutoApprovingHITLBroker(cfg.HITLTimeout, nil, func(req PermissionRequest, decision PermissionDecision) {
+			_ = audit.Log(ctx, policy.AuditRecord{
+				AgentID:    cfg.AgentName,
+				Action:     "hitl.auto_approve",
+				Type:       "hitl",
+				Permission: req.Permission.Action + ":" + req.Permission.Resource,
+				Result:     "approved",
+				Metadata: map[string]any{
+					"request_id":  decision.RequestID,
+					"approved_by": decision.ApprovedBy,
+					"reason":      decision.Reason,
+				},
+			})
+		})
+	} else {
+		hitl = NewHITLBroker(cfg.HITLTimeout, nil)
+	}
 	var permManager *PermissionManager
 	if len(effectivePerms.FileSystem) > 0 ||
 		len(effectivePerms.Executables) > 0 ||

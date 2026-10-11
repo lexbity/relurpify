@@ -23,6 +23,7 @@ import (
 	eucloservices "codeburg.org/lexbit/relurpify/named/euclo/services"
 	thoughtrecipes "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
 	"codeburg.org/lexbit/relurpify/platform/llm"
+	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 	cfgsecurity "codeburg.org/lexbit/relurpify/userconfig/config/security"
 	"codeburg.org/lexbit/relurpify/userconfig/modelselect"
@@ -236,6 +237,11 @@ func BuildDoctorReport(ctx context.Context, cfg Config, secrets config.Secrets) 
 	deps = append(deps, probeWorkspaceDirectory(cfg.Workspace))
 	deps = append(deps, probeDiskSpace(cfg.Workspace, 256*1024*1024))
 	deps = append(deps, probeRunner(config.DefaultWorkspaceStateDir(cfg.Workspace)))
+	// HITL posture: governed is the shipped default; permissive is an explicit
+	// operator request (--hitl-mode permissive) that auto-approves every
+	// human-approval ask — surfaced here so the posture is impossible to
+	// miss. The sandbox and capability enforcement are unaffected.
+	deps = append(deps, probeHITLMode(cfg))
 	deps = append(deps, DependencyStatus{
 		Name:      "starter-templates",
 		Required:  true,
@@ -797,5 +803,32 @@ func probeRunner(stateDir string) DependencyStatus {
 			Details: fmt.Sprintf("degraded: %s (last heartbeat %s)",
 				reason, status.HeartbeatAt.Format(time.RFC3339)),
 		}
+	}
+}
+
+// probeHITLMode reports the approval posture: governed (shipped default) or
+// permissive (--hitl-mode permissive, auto-approves every human-approval ask
+// with a per-decision audit record). Permissive is a warning, never blocking —
+// it is an explicit operator choice, and the sandbox and capability
+// enforcement are unaffected.
+func probeHITLMode(cfg Config) DependencyStatus {
+	mode := strings.TrimSpace(cfg.HITLMode)
+	if mode == "" {
+		mode = fauthorization.HITLModeGoverned
+	}
+	if mode == fauthorization.HITLModePermissive {
+		return DependencyStatus{
+			Name:      "hitl_mode",
+			Required:  false,
+			Available: true,
+			Degraded:  true,
+			Details:   "permissive: human-approval requests auto-approve (audited); sandbox and capability enforcement unchanged",
+		}
+	}
+	return DependencyStatus{
+		Name:      "hitl_mode",
+		Required:  false,
+		Available: true,
+		Details:   "governed: human-approval requests block on a decision",
 	}
 }

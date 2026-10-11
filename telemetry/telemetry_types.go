@@ -58,6 +58,7 @@ const (
 	EventCaptureQuarantined             EventType = "capture.quarantined"
 	EventCaptureEpistemicsDowngraded    EventType = "capture.epistemics_downgraded"
 	EventCaptureGroundFailed            EventType = "capture.ground_failed"
+	EventIntentFamilyDisambiguation     EventType = "intent.family_disambiguation"
 	EventEpochClosed                    EventType = "epoch.closed"
 	EventStreamAbandoned                EventType = "contextstream.stream_abandoned"
 	EventContextStreamInjected          EventType = "contextstream.injected"
