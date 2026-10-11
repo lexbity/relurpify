@@ -34,6 +34,7 @@ func applyTier2Gate(ctx context.Context, env *contextdata.Envelope, req RouteReq
 		report.Request.FamilyID,
 		streamedContextForGate(env),
 		refs,
+		env.State(),
 	)
 	info := euclotypes.Tier2Info{
 		Used:        true,
@@ -57,16 +58,20 @@ func applyTier2Gate(ctx context.Context, env *contextdata.Envelope, req RouteReq
 	if outcome.Outcome != intake.Tier2OutcomeApplied {
 		return selected, decidedBy, info
 	}
-	if outcome.Confidence < tier2ConfidenceFloor {
-		info.Outcome = intake.Tier2OutcomeLowConfidence
-		return selected, decidedBy, info
-	}
-	adopted, ok := findAvailableCandidate(report.Candidates, outcome.CandidateID)
-	if !ok {
+	// FR-16: below the floor the model's in-set pick is adopted WITH the
+	// marker (mirroring the family tie-break semantics) — the live evidence
+	// showed the deterministic winner losing the tie the model had just
+	// resolved. Only rejected/unparseable/unavailable stand deterministic.
+	adopted, adoptable := findAvailableCandidate(report.Candidates, outcome.CandidateID)
+	if !adoptable {
 		// Defensive: the disambiguator already restricted the id to the ref
 		// set, but a non-available candidate must never be adopted.
 		info.Outcome = intake.Tier2OutcomeRejected
 		return selected, decidedBy, info
+	}
+	if outcome.Confidence < tier2ConfidenceFloor {
+		info.Outcome = intake.Tier2OutcomeLowConfidenceAdopted
+		return adopted, decidedByTier2, info
 	}
 	info.Outcome = intake.Tier2OutcomeApplied
 	return adopted, decidedByTier2, info

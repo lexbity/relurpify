@@ -200,6 +200,9 @@ func (r *Runner) generateStageResponse(ctx context.Context, task *execution.Task
 		resp, err := r.Options.Model.Generate(ctx, prompt, &model.LLMOptions{
 			Model: r.Options.ModelName,
 		})
+		if err == nil {
+			contextdata.RecordModelUsage(env.State(), resp.Usage)
+		}
 		return resp, false, err
 	}
 	resp, err := r.Options.Model.ChatWithTools(ctx, []model.Message{{
@@ -211,6 +214,7 @@ func (r *Runner) generateStageResponse(ctx context.Context, task *execution.Task
 	if err != nil {
 		return nil, false, err
 	}
+	contextdata.RecordModelUsage(env.State(), resp.Usage)
 	return resp, len(resp.ToolCalls) > 0, nil
 }
 

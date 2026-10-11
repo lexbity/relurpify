@@ -4,6 +4,7 @@ import (
 	"context"
 	"sort"
 	"strings"
+	"time"
 
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/descriptor"
@@ -101,7 +102,11 @@ func Dispatch(ctx context.Context, env *contextdata.Envelope, req RouteRequest, 
 		if result.FallbackTaken && result.FallbackID != "" {
 			reporting.EmitRouteFallback(ctx, taskID(env), sessionID(env), primaryRouteID(req), result.FallbackID, "primary route unavailable")
 		}
-		reporting.EmitRouteCompleted(ctx, taskID(env), sessionID(env), result.RouteKind, result.RouteID, reporting.RouteOutcomeSuccess, result.ArtifactKinds, 0)
+		// D9: euclo.route.completed moved to route completion (the report
+		// node) with real elapsed. The selection-time emit claimed success
+		// with elapsed_ms:0 before the route executed — a lie deleted, not
+		// relocated conditionally.
+		euclostate.SetRouteSelectedAt(env, time.Now().UTC())
 	}
 	if env != nil {
 		applyRouteResultToEnvelope(env, result)

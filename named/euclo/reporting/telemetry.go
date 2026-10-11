@@ -208,6 +208,12 @@ func (n *TelemetryNode) Execute(ctx context.Context, env *contextdata.Envelope) 
 		tel = NewEucloTelemetry(telemetry.TelemetryFromContext(ctx))
 	}
 	planIDStr, _ := contextdata.GetTyped[string](env, "euclo.projection.plan_id")
+	// D7: the run's honest counters — model usage accumulated at the
+	// model-invocation boundary, steps from the execution aggregate. The
+	// hardcoded zeros are gone: a turn that invoked the model reports real
+	// calls and tokens; 0/0 means genuinely no model call.
+	modelUsage := contextdata.ModelUsageFromEnv(env)
+	stepCount, _ := contextdata.GetTyped[int](env, "euclo.execution.step_total")
 	if tel != nil {
 		if mutation, ok := contextdata.GetTyped[*graphdb.MutationResult](env, "euclo.projection.mutation_result"); ok && mutation != nil {
 			tel.EmitProjectionCompleted(ctx, EventProjectionCompleted{
@@ -240,7 +246,7 @@ func (n *TelemetryNode) Execute(ctx context.Context, env *contextdata.Envelope) 
 				Seq:        0,
 				OccurredAt: time.Now().UTC(),
 			},
-			StepCount: 0,
+			StepCount: stepCount,
 		})
 		tel.EmitVerifyComplete(ctx, EventVerifyComplete{
 			EventHeader: EventHeader{
@@ -252,6 +258,25 @@ func (n *TelemetryNode) Execute(ctx context.Context, env *contextdata.Envelope) 
 			Outcome: string(outcome.Category),
 			Summary: outcome.Reason,
 		})
+		// D9: euclo.route.completed fires here — at route completion — with
+		// the real elapsed since route selection and the actual outcome. The
+		// selection-time emit (elapsed_ms:0, success-before-execution) is
+		// gone.
+		if selection, ok := state.GetRouteSelection(env); ok && selection != nil {
+			routeID := selection.ThoughtRecipeID
+			if routeID == "" {
+				routeID = selection.CapabilityID
+			}
+			elapsed := time.Duration(0)
+			if selectedAt, ok := state.GetRouteSelectedAt(env); ok {
+				elapsed = time.Since(selectedAt)
+			}
+			routeOutcome := RouteOutcomeFailure
+			if outcome.Completed {
+				routeOutcome = RouteOutcomeSuccess
+			}
+			EmitRouteCompleted(ctx, env.TaskIDSnapshot(), env.SessionIDSnapshot(), string(selection.RouteKind), routeID, routeOutcome, nil, elapsed)
+		}
 		tel.EmitExecutionComplete(ctx, EventExecutionComplete{
 			EventHeader: EventHeader{
 				TaskID:     env.TaskIDSnapshot(),
@@ -261,9 +286,9 @@ func (n *TelemetryNode) Execute(ctx context.Context, env *contextdata.Envelope) 
 			},
 			Outcome:     string(outcome.Category),
 			OutcomeKind: outcome.Reason,
-			StepCount:   0,
-			LLMCalls:    0,
-			TokenUsage:  0,
+			StepCount:   stepCount,
+			LLMCalls:    modelUsage.Calls,
+			TokenUsage:  modelUsage.TokenUsage(),
 		})
 		if shouldEmitClarificationCompletion(env) {
 			tel.EmitClarificationCompleted(ctx, EventClarificationCompleted{

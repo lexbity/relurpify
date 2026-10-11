@@ -407,11 +407,21 @@ func NormalizeChoices(choices []string) []string {
 	if len(choices) == 0 {
 		return nil
 	}
+	// Single source of truth (FR-10): the choice list is deduplicated by
+	// value — slots are rendered from the same list, so a double-appended
+	// candidate must never surface twice in a frame.
+	seen := make(map[string]struct{}, len(choices))
 	out := make([]string, 0, len(choices))
 	for _, choice := range choices {
-		if trimmed := strings.TrimSpace(choice); trimmed != "" {
-			out = append(out, trimmed)
+		trimmed := strings.TrimSpace(choice)
+		if trimmed == "" {
+			continue
 		}
+		if _, dup := seen[trimmed]; dup {
+			continue
+		}
+		seen[trimmed] = struct{}{}
+		out = append(out, trimmed)
 	}
 	if len(out) == 0 {
 		return nil

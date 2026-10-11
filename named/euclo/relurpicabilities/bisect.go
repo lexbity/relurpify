@@ -1,6 +1,7 @@
 package relurpicabilities
 
 import (
+	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -108,7 +109,7 @@ func (h *BisectHandler) Invoke(ctx context.Context, env ports.State, args map[st
 	maxSteps, _ := intArg(args, "max_steps", 30)
 
 	if h.model != nil {
-		if result, err := h.runReactiveBisect(ctx, goodRef, badRef, testCommand, maxSteps); err == nil {
+		if result, err := h.runReactiveBisect(ctx, env, goodRef, badRef, testCommand, maxSteps); err == nil {
 			return result, nil
 		}
 	}
@@ -176,7 +177,7 @@ func (h *BisectHandler) runDeterministicBisect(ctx context.Context, goodRef, bad
 	}, nil
 }
 
-func (h *BisectHandler) runReactiveBisect(ctx context.Context, goodRef, badRef, testCommand string, maxSteps int) (*ports.ToolResult, error) {
+func (h *BisectHandler) runReactiveBisect(ctx context.Context, env ports.State, goodRef, badRef, testCommand string, maxSteps int) (*ports.ToolResult, error) {
 	// The model-guided path uses the same command primitives as the
 	// deterministic fallback, but lets the model decide which action to take
 	// next. If the model path fails to produce a valid plan, the caller falls
@@ -200,7 +201,7 @@ func (h *BisectHandler) runReactiveBisect(ctx context.Context, goodRef, badRef, 
 	}
 
 	for state.StepsTaken < maxSteps {
-		decision, err := h.nextBisectDecision(ctx, state)
+		decision, err := h.nextBisectDecision(ctx, env, state)
 		if err != nil {
 			return nil, err
 		}
@@ -316,7 +317,7 @@ type bisectSessionState struct {
 	Log            []string
 }
 
-func (h *BisectHandler) nextBisectDecision(ctx context.Context, state bisectSessionState) (bisectDecision, error) {
+func (h *BisectHandler) nextBisectDecision(ctx context.Context, env ports.State, state bisectSessionState) (bisectDecision, error) {
 	if h.model == nil {
 		return bisectDecision{}, nil
 	}
@@ -341,6 +342,7 @@ Return JSON only:
 	if err != nil {
 		return bisectDecision{}, err
 	}
+	contextdata.RecordModelUsage(env, resp.Usage)
 	var decision bisectDecision
 	if err := json.Unmarshal([]byte(reactpkg.ExtractJSON(resp.Text)), &decision); err != nil {
 		return bisectDecision{}, err

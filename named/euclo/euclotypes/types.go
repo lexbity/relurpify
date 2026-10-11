@@ -38,7 +38,7 @@ type RouteResolution struct {
 
 // Tier2Info records the bounded Tier-2 disambiguation attempt for one
 // selection. Used=false means the gate was not consulted (strong/explicit
-// match). Outcome is one of applied|rejected|unparseable|low_confidence|
+// match). Outcome is one of applied|rejected|unparseable|low_confidence|low_confidence_adopted|
 // unavailable.
 type Tier2Info struct {
 	Used        bool    `json:"used"`

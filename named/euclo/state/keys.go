@@ -79,6 +79,7 @@ const (
 	KeyRouteContinuation   = euclokeys.KeyRouteContinuation
 	KeyRouteCandidateCount = euclokeys.KeyRouteCandidateCount
 	KeyRouteFallbackTaken  = euclokeys.KeyRouteFallbackTaken
+	KeyRouteSelectedAt     = euclokeys.KeyRouteSelectedAt
 	KeyRouteFallbackID     = euclokeys.KeyRouteFallbackID
 	KeyRouteSkillFilter    = euclokeys.KeyRouteSkillFilter
 	KeyRouteOutcome        = euclokeys.KeyRouteOutcome

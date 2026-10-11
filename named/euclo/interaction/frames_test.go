@@ -1,6 +1,7 @@
 package interaction
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -151,5 +152,15 @@ func TestClarificationFrameResponseRoundTrip(t *testing.T) {
 	}
 	if turn.StateVersion != 9 {
 		t.Fatalf("turn state version = %d", turn.StateVersion)
+	}
+}
+
+// TestNormalizeChoicesDeduplicates pins FR-10: the frame choice list is
+// deduplicated by value — slots are rendered from the same list, so a
+// double-appended candidate must never surface twice in a frame.
+func TestNormalizeChoicesDeduplicates(t *testing.T) {
+	got := NormalizeChoices([]string{"debug", " migration ", "debug", "", "migration", "migration"})
+	if strings.Join(got, ",") != "debug,migration" {
+		t.Fatalf("choices = %v, want [debug migration]", got)
 	}
 }

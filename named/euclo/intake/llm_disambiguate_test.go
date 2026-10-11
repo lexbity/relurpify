@@ -22,7 +22,7 @@ func sampleRefs() []CandidateRef {
 // is applied; the confidence floor remains the caller's decision.
 func TestDisambiguateWithLLMInSetApplied(t *testing.T) {
 	m := &tier2FakeModel{text: `{"id": "euclo:cap.two", "confidence": 0.9}`}
-	outcome, err := DisambiguateWithLLM(context.Background(), m, "utterance", "debug", "", sampleRefs())
+	outcome, err := DisambiguateWithLLM(context.Background(), m, "utterance", "debug", "", sampleRefs(), nil)
 	if err != nil {
 		t.Fatalf("DisambiguateWithLLM: %v", err)
 	}
@@ -41,7 +41,7 @@ func TestDisambiguateWithLLMInSetApplied(t *testing.T) {
 // rejected, so the model can never select outside the deterministic pool.
 func TestDisambiguateWithLLMOutOfSetRejected(t *testing.T) {
 	m := &tier2FakeModel{text: `{"id": "euclo:cap.somewhere_else", "confidence": 0.95}`}
-	outcome, err := DisambiguateWithLLM(context.Background(), m, "", "", "", sampleRefs())
+	outcome, err := DisambiguateWithLLM(context.Background(), m, "", "", "", sampleRefs(), nil)
 	if err != nil {
 		t.Fatalf("DisambiguateWithLLM: %v", err)
 	}
@@ -54,7 +54,7 @@ func TestDisambiguateWithLLMOutOfSetRejected(t *testing.T) {
 func TestDisambiguateWithLLMUnparseable(t *testing.T) {
 	for _, text := range []string{"no json here", `{"confidence": 0.9}`, `{"id": ""}`, "{bad json}"} {
 		m := &tier2FakeModel{text: text}
-		outcome, err := DisambiguateWithLLM(context.Background(), m, "", "", "", sampleRefs())
+		outcome, err := DisambiguateWithLLM(context.Background(), m, "", "", "", sampleRefs(), nil)
 		if err != nil {
 			t.Fatalf("DisambiguateWithLLM(%q): %v", text, err)
 		}
@@ -67,7 +67,7 @@ func TestDisambiguateWithLLMUnparseable(t *testing.T) {
 // TestDisambiguateWithLLMUnavailable: model error/absence yields unavailable.
 func TestDisambiguateWithLLMUnavailable(t *testing.T) {
 	m := &tier2FakeModel{err: errors.New("provider down")}
-	outcome, err := DisambiguateWithLLM(context.Background(), m, "", "", "", sampleRefs())
+	outcome, err := DisambiguateWithLLM(context.Background(), m, "", "", "", sampleRefs(), nil)
 	if err == nil {
 		t.Fatal("expected the disambiguator to report the model error")
 	}
@@ -75,12 +75,12 @@ func TestDisambiguateWithLLMUnavailable(t *testing.T) {
 		t.Fatalf("outcome = %q, want unavailable", outcome.Outcome)
 	}
 
-	nilOutcome, nilErr := DisambiguateWithLLM(context.Background(), nil, "", "", "", sampleRefs())
+	nilOutcome, nilErr := DisambiguateWithLLM(context.Background(), nil, "", "", "", sampleRefs(), nil)
 	if nilErr == nil || nilOutcome.Outcome != Tier2OutcomeUnavailable {
 		t.Fatalf("nil model = %+v/%v, want unavailable + error", nilOutcome, nilErr)
 	}
 
-	emptyOutcome, emptyErr := DisambiguateWithLLM(context.Background(), m, "", "", "", nil)
+	emptyOutcome, emptyErr := DisambiguateWithLLM(context.Background(), m, "", "", "", nil, nil)
 	if emptyErr == nil || emptyOutcome.Outcome != Tier2OutcomeUnavailable {
 		t.Fatalf("empty refs = %+v/%v, want unavailable + error", emptyOutcome, emptyErr)
 	}
@@ -122,7 +122,7 @@ func TestDisambiguationPromptEmptyRefSet(t *testing.T) {
 
 func TestDisambiguateWithLLMRecordsLatencyAndModel(t *testing.T) {
 	m := &tier2FakeModel{text: `{"id": "euclo:cap.two", "confidence": 0.9}`}
-	outcome, err := DisambiguateWithLLM(context.Background(), m, "", "", "", sampleRefs())
+	outcome, err := DisambiguateWithLLM(context.Background(), m, "", "", "", sampleRefs(), nil)
 	if err != nil {
 		t.Fatalf("DisambiguateWithLLM: %v", err)
 	}

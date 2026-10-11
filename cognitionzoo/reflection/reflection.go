@@ -325,6 +325,7 @@ Result: %+v`, n.task.Instruction, reflectionReviewGuidance(n.agent, n.task), com
 	if err != nil {
 		return nil, err
 	}
+	contextdata.RecordModelUsage(env.State(), resp.Usage)
 	review, err := parseReview(resp.Text)
 	if err != nil {
 		return nil, err

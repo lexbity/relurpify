@@ -1,6 +1,7 @@
 package relurpicabilities
 
 import (
+	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -152,7 +153,7 @@ func (h *TargetedRefactorHandler) Invoke(ctx context.Context, env ports.State, a
 		if h.gen == nil {
 			return failResult("replacement text required when no model is available"), nil
 		}
-		replacement, err = h.generateReplacement(ctx, target, resolvedSourcePath, original, transformation)
+		replacement, err = h.generateReplacement(ctx, env, target, resolvedSourcePath, original, transformation)
 		if err != nil {
 			return failResult(fmt.Sprintf("generate replacement failed: %v", err)), nil
 		}
@@ -302,7 +303,7 @@ func (h *TargetedRefactorHandler) resolveTargetSource(target *ast.Node, fileHint
 	return "", "", fmt.Errorf("unable to resolve source path for symbol %q", target.Name)
 }
 
-func (h *TargetedRefactorHandler) generateReplacement(ctx context.Context, target *ast.Node, sourcePath, original, transformation string) (string, error) {
+func (h *TargetedRefactorHandler) generateReplacement(ctx context.Context, env ports.State, target *ast.Node, sourcePath, original, transformation string) (string, error) {
 	if h.gen == nil {
 		return "", fmt.Errorf("model unavailable")
 	}
@@ -326,6 +327,7 @@ Do not include markdown fences. Do not edit outside the selected block.`,
 	if err != nil {
 		return "", err
 	}
+	contextdata.RecordModelUsage(env, resp.Usage)
 	var proposal targetedRefactorProposal
 	if err := json.Unmarshal([]byte(reactpkg.ExtractJSON(resp.Text)), &proposal); err != nil {
 		return "", err

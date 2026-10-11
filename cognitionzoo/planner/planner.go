@@ -447,6 +447,7 @@ Use string step ids (UUID-safe).
 	if err != nil {
 		return nil, err
 	}
+	contextdata.RecordModelUsage(env.State(), resp.Usage)
 	env.AddInteraction(map[string]any{
 		"role":    "assistant",
 		"content": resp.Text,

@@ -79,6 +79,7 @@ const (
 	KeyRouteContinuation   = "euclo.route.continuation"
 	KeyRouteCandidateCount = "euclo.route.candidate_count"
 	KeyRouteFallbackTaken  = "euclo.route.fallback_taken"
+	KeyRouteSelectedAt     = "euclo.route.selected_at"
 	KeyRouteFallbackID     = "euclo.route.fallback_id"
 	KeyRouteSkillFilter    = "euclo.route.skill_filter"
 	KeyRouteOutcome        = "euclo.route.outcome"

@@ -126,9 +126,12 @@ func TestTier2GateOutOfSetKeepsDeterministicWinner(t *testing.T) {
 	}
 }
 
-// TestTier2GateLowConfidenceKeepsDeterministicWinner: an in-set id below the
-// confidence floor is recorded as low_confidence and does not win.
-func TestTier2GateLowConfidenceKeepsDeterministicWinner(t *testing.T) {
+// TestTier2GateLowConfidenceAdoptsWithMarker: an in-set id below the
+// confidence floor is ADOPTED with the low_confidence_adopted marker (FR-16,
+// mirroring the family tie-break semantics — the live evidence showed the
+// deterministic winner losing a tie the model had just resolved). Only
+// rejected/unparseable/unavailable leave the deterministic winner standing.
+func TestTier2GateLowConfidenceAdoptsWithMarker(t *testing.T) {
 	candidates := []CandidateRouteInfo{
 		availableCapability("euclo:cap.a", 70, nil),
 		availableCapability("euclo:cap.b", 62, nil),
@@ -138,11 +141,11 @@ func TestTier2GateLowConfidenceKeepsDeterministicWinner(t *testing.T) {
 	m := &tier2TestModel{text: `{"id": "euclo:cap.b", "confidence": 0.3}`}
 
 	got, _, info := applyTier2Gate(context.Background(), nil, RouteRequest{}, report, selected, report.DecidedBy, SelectionDeps{Tier2Model: m})
-	if info.Outcome != "low_confidence" {
-		t.Fatalf("outcome = %q, want low_confidence", info.Outcome)
+	if info.Outcome != "low_confidence_adopted" {
+		t.Fatalf("outcome = %q, want low_confidence_adopted", info.Outcome)
 	}
-	if got.RouteID != selected.RouteID {
-		t.Fatalf("low-confidence answer changed the selection to %q", got.RouteID)
+	if got.RouteID != "euclo:cap.b" {
+		t.Fatalf("selection = %q, want the model's in-set pick euclo:cap.b", got.RouteID)
 	}
 }
 

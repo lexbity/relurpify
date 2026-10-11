@@ -96,6 +96,7 @@ func (n *reactThinkNode) Execute(ctx context.Context, env *contextdata.Envelope)
 	if err != nil {
 		return nil, err
 	}
+	contextdata.RecordModelUsage(env.State(), resp.Usage)
 	if useToolCalling {
 		appendAssistantMessage(env, resp)
 	}
@@ -160,7 +161,7 @@ func (n *reactThinkNode) normalizeDecision(ctx context.Context, env *contextdata
 		repairStrategy = pm.ToolRepairStrategy()
 	}
 	if repairStrategy == "llm" {
-		repaired, repairErr := n.repairDecision(ctx, tools, resp.Text, useToolCalling)
+		repaired, repairErr := n.repairDecision(ctx, env, tools, resp.Text, useToolCalling)
 		if repairErr == nil {
 			if parsed, err := parseDecision(repaired); err == nil {
 				if parsed.Tool != "" {
@@ -173,7 +174,7 @@ func (n *reactThinkNode) normalizeDecision(ctx context.Context, env *contextdata
 	return decisionPayload{}, nil, fmt.Errorf("react decision unparseable (finish_reason=%q, strategy=%q): %.120s", resp.FinishReason, repairStrategy, resp.Text)
 }
 
-func (n *reactThinkNode) repairDecision(ctx context.Context, tools []ports.Tool, raw string, useToolCalling bool) (string, error) {
+func (n *reactThinkNode) repairDecision(ctx context.Context, env *contextdata.Envelope, tools []ports.Tool, raw string, useToolCalling bool) (string, error) {
 	schema := `Return ONLY valid JSON:
 {"thought":"short reasoning","action":"tool|complete","tool":"tool name or empty","arguments":{},"complete":true|false,"summary":"final answer when complete"}`
 	prompt := fmt.Sprintf("%s\nAllowed tools: %s\nOriginal response:\n%s", schema, strings.Join(toolNames(tools), ", "), raw)
@@ -185,6 +186,7 @@ func (n *reactThinkNode) repairDecision(ctx context.Context, tools []ports.Tool,
 	if err != nil {
 		return "", err
 	}
+	contextdata.RecordModelUsage(env.State(), resp.Usage)
 	_ = useToolCalling
 	return resp.Text, nil
 }

@@ -1,6 +1,8 @@
 package intake
 
 import (
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -21,8 +23,13 @@ const (
 	Tier2OutcomeRejected = "rejected"
 	// Tier2OutcomeUnparseable: the model response carried no usable JSON.
 	Tier2OutcomeUnparseable = "unparseable"
-	// Tier2OutcomeLowConfidence: an in-set id whose confidence is below the floor.
+	// Tier2OutcomeLowConfidence: an in-set id whose confidence is below the
+	// floor, standing down to the deterministic winner.
 	Tier2OutcomeLowConfidence = "low_confidence"
+	// Tier2OutcomeLowConfidenceAdopted: an in-set id below the floor that the
+	// caller adopted anyway — the live-evidence alignment: the model's pick
+	// carries a marker instead of being discarded (FR-16).
+	Tier2OutcomeLowConfidenceAdopted = "low_confidence_adopted"
 	// Tier2OutcomeUnavailable: the model was absent, errored, or timed out.
 	Tier2OutcomeUnavailable = "unavailable"
 )
@@ -61,7 +68,7 @@ type Tier2Outcome struct {
 // refs. The model can never select outside refs: any id not present in the set
 // is rejected. A model error, timeout, or absent model yields an `unavailable`
 // outcome and a non-nil error so the caller keeps the deterministic winner.
-func DisambiguateWithLLM(ctx context.Context, lm model.LanguageModel, utterance, familyID, streamedContext string, refs []CandidateRef) (Tier2Outcome, error) {
+func DisambiguateWithLLM(ctx context.Context, lm model.LanguageModel, utterance, familyID, streamedContext string, refs []CandidateRef, runState ports.State) (Tier2Outcome, error) {
 	start := time.Now()
 	outcome := Tier2Outcome{Outcome: Tier2OutcomeUnavailable}
 	if lm == nil {
@@ -77,6 +84,10 @@ func DisambiguateWithLLM(ctx context.Context, lm model.LanguageModel, utterance,
 	outcome.Model = modelName(lm)
 	if err != nil {
 		return outcome, fmt.Errorf("tier-2 model call failed: %w", err)
+	}
+
+	if err == nil && resp != nil {
+		contextdata.RecordModelUsage(runState, resp.Usage)
 	}
 
 	text := ""

@@ -63,7 +63,7 @@ func DisambiguateFamilies(ctx context.Context, lm model.LanguageModel, utterance
 		refs = append(refs, ref)
 	}
 
-	result, err := DisambiguateWithLLM(ctx, lm, utterance, "", "", refs)
+	result, err := DisambiguateWithLLM(ctx, lm, utterance, "", "", refs, nil)
 	outcome.Latency = result.Latency
 	if err != nil {
 		return outcome, err

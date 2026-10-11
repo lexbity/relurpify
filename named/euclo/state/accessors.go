@@ -7,6 +7,7 @@ import (
 	"codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	"codeburg.org/lexbit/relurpify/named/euclo/policy"
+	"time"
 )
 
 // --- Task and Intake ---
@@ -64,6 +65,17 @@ func GetRouteSelection(env *contextdata.Envelope) (*euclotypes.RouteSelection, b
 // SetRouteSelection stores the resolved route.
 func SetRouteSelection(env *contextdata.Envelope, rs *euclotypes.RouteSelection) {
 	contextdata.SetTyped(env, KeyRouteSelection, rs)
+}
+
+// SetRouteSelectedAt stamps the wall-clock moment route selection completed —
+// the start of the route-completion elapsed measurement (D9).
+func SetRouteSelectedAt(env *contextdata.Envelope, at time.Time) {
+	contextdata.SetTyped(env, KeyRouteSelectedAt, at)
+}
+
+// GetRouteSelectedAt returns the route-selection timestamp, if stamped.
+func GetRouteSelectedAt(env *contextdata.Envelope) (time.Time, bool) {
+	return contextdata.GetTyped[time.Time](env, KeyRouteSelectedAt)
 }
 
 // GetRouteResolution retrieves the selected route resolution record.
