@@ -23,6 +23,7 @@
 package jobsstore
 
 import (
+	"strings"
 	"context"
 	"encoding/json"
 	"errors"
@@ -134,7 +135,7 @@ func (s *store) Create(ctx context.Context, job jobs.Job) error {
 	if err != nil {
 		return fmt.Errorf("jobsstore: marshal: %w", err)
 	}
-	return s.retryTxn(func() error {
+	return s.retryTxnCtx(ctx, func() error {
 		return s.db.Update(func(txn *badger.Txn) error {
 			// Job-ID uniqueness: Create never overwrites.
 			if _, err := txn.Get(jobKey(job.ID)); err == nil {
@@ -157,7 +158,12 @@ func (s *store) Create(ctx context.Context, job jobs.Job) error {
 			if err := txn.Set(jobKey(job.ID), raw); err != nil {
 				return err
 			}
-			return txn.Set(readyIndexKey(job), []byte(job.ID))
+			// Only queued jobs are claimable: indexing any other state would
+			// make a completed/failed create immediately claimable (FR-21).
+			if job.State == jobs.StateQueued {
+				return txn.Set(readyIndexKey(job), []byte(job.ID))
+			}
+			return nil
 		})
 	})
 }
@@ -170,7 +176,7 @@ func (s *store) Update(ctx context.Context, job jobs.Job) error {
 	if err != nil {
 		return fmt.Errorf("jobsstore: marshal: %w", err)
 	}
-	return s.retryTxn(func() error {
+	return s.retryTxnCtx(ctx, func() error {
 		return s.db.Update(func(txn *badger.Txn) error {
 			old, err := s.loadTxn(txn, job.ID)
 			if err != nil {
@@ -263,7 +269,7 @@ func (s *store) Claim(ctx context.Context, worker string, queues []string, limit
 	}
 	now := time.Now().UTC()
 	var claimed []jobs.Job
-	err := s.retryTxn(func() error {
+	err := s.retryTxnCtx(ctx, func() error {
 		claimed = nil
 		return s.db.Update(func(txn *badger.Txn) error {
 			for _, queue := range queues {
@@ -346,7 +352,7 @@ func (s *store) AppendEvent(ctx context.Context, e jobs.Event) error {
 	if err := e.Valid(); err != nil {
 		return fmt.Errorf("jobsstore: append event: %w", err)
 	}
-	return s.retryTxn(func() error {
+	return s.retryTxnCtx(ctx, func() error {
 		return s.db.Update(func(txn *badger.Txn) error {
 			var seq uint64
 			item, err := txn.Get(eventSeqKey(e.JobID))
@@ -406,7 +412,7 @@ func (s *store) SaveCheckpoint(ctx context.Context, c jobs.Checkpoint) error {
 	if err != nil {
 		return fmt.Errorf("jobsstore: marshal: %w", err)
 	}
-	return s.retryTxn(func() error {
+	return s.retryTxnCtx(ctx, func() error {
 		return s.db.Update(func(txn *badger.Txn) error {
 			// Latest checkpoint per job: c:{jobID} holds exactly one.
 			if _, err := txn.Get(checkpointKey(c.JobID)); err == nil {
@@ -463,14 +469,22 @@ func (s *store) recover() error {
 		for ; it.ValidForPrefix(runningIndexPrefix()); it.Next() {
 			item := it.Item()
 			key := item.KeyCopy(nil)
-			var jobID string
-			if err := item.Value(func(v []byte) error { jobID = string(v); return nil }); err != nil {
+			var valueJobID string
+			if err := item.Value(func(v []byte) error { valueJobID = string(v); return nil }); err != nil {
 				return err
 			}
-			// key is w:{worker}:{jobID}
-			worker := string(key[len("w:"):])
-			if i := len(worker) - len(jobID) - 1; i >= 0 {
-				worker = worker[:i]
+			// The key is w:{worker}:{jobID} — the identity of record. The
+			// value's job ID only cross-checks: a value/key mismatch must
+			// delete the key's worker entry, never the value's.
+			worker, keyJobID, err := parseRunningIndexKey(string(key))
+			if err != nil {
+				return err
+			}
+			jobID := keyJobID
+			if valueJobID != keyJobID {
+				// Mismatched debris: recover under the key's identity, and
+				// the canonical-record check below no-ops the terminal case.
+				jobID = keyJobID
 			}
 			job, err := s.loadTxn(txn, jobID)
 			if err != nil {
@@ -495,7 +509,9 @@ func (s *store) recover() error {
 }
 
 func (s *store) recoverOne(worker string, job jobs.Job, now time.Time) error {
-	return s.retryTxn(func() error {
+	// Recovery runs at Open, before any request exists: the retry context is
+	// boot-scoped, not caller-scoped.
+	return s.retryTxnCtx(context.Background(), func() error {
 		return s.db.Update(func(txn *badger.Txn) error {
 			canonical, err := s.loadTxn(txn, job.ID)
 			if err != nil {
@@ -513,9 +529,11 @@ func (s *store) recoverOne(worker string, job jobs.Job, now time.Time) error {
 			if canonical.State != jobs.StateRunning {
 				return nil
 			}
-			// 1. interrupted → failed with an event.
+			// 1. interrupted → failed with an event. A recovery-terminal
+			// failure carries CompletedAt so the status totals see it (FR-19).
 			canonical.State = jobs.StateFailed
 			canonical.LastError = "interrupted by restart"
+			canonical.CompletedAt = now
 			canonical.UpdatedAt = now
 			if err := appendEventTxn(txn, jobs.Event{
 				ID:       newEventID(canonical.ID, "interrupted"),
@@ -534,10 +552,18 @@ func (s *store) recoverOne(worker string, job jobs.Job, now time.Time) error {
 			if err := txn.Set(jobKey(canonical.ID), raw); err != nil {
 				return err
 			}
-			// 2. Re-queue when attempts remain (at-least-once delivery).
+			// 2. Re-queue when attempts remain (at-least-once delivery). A
+			// stored checkpoint makes the requeue resumable: the token is the
+			// job ID, the handler's LoadCheckpoint key (D6, R-9).
 			if canonical.Attempt < max(maxAttempts(*canonical), 1) {
 				canonical.State = jobs.StateQueued
 				canonical.NextAttemptAt = now.Add(jobs.NextBackoff(canonical.Spec, canonical.Attempt))
+				canonical.CompletedAt = time.Time{}
+				resumed := false
+				if s.hasCheckpointTxn(txn, canonical.ID) {
+					canonical.ResumeToken = canonical.ID
+					resumed = true
+				}
 				canonical.UpdatedAt = now
 				raw, err = json.Marshal(*canonical)
 				if err != nil {
@@ -556,6 +582,7 @@ func (s *store) recoverOne(worker string, job jobs.Job, now time.Time) error {
 					State:    jobs.StateQueued,
 					Occurred: now,
 					Message:  "requeued after interruption",
+					Metadata: map[string]any{"resumed": resumed},
 				}); err != nil {
 					return err
 				}
@@ -563,6 +590,24 @@ func (s *store) recoverOne(worker string, job jobs.Job, now time.Time) error {
 			return nil
 		})
 	})
+}
+
+// parseRunningIndexKey splits the w:{worker}:{jobID} running-index key into
+// its parts. The key — not the stored value — is the identity of record.
+func parseRunningIndexKey(key string) (worker, jobID string, err error) {
+	rest := strings.TrimPrefix(key, "w:")
+	i := strings.LastIndex(rest, ":")
+	if i <= 0 || i == len(rest)-1 {
+		return "", "", fmt.Errorf("jobsstore: malformed running index key %q", key)
+	}
+	return rest[:i], rest[i+1:], nil
+}
+
+// hasCheckpointTxn reports whether a checkpoint exists for the job, inside
+// the caller's transaction.
+func (s *store) hasCheckpointTxn(txn *badger.Txn, jobID string) bool {
+	_, err := txn.Get(checkpointKey(jobID))
+	return err == nil
 }
 
 // maxAttempts resolves the effective attempt budget: MaxAttempts 0 means 1.
@@ -612,10 +657,17 @@ func errIsNotFound(err error) bool {
 		errors.Is(err, jobs.ErrCkptNotFound)
 }
 
-func (s *store) retryTxn(op func() error) error {
+// retryTxnCtx bounds optimistic-concurrency retries and honors cancellation
+// BETWEEN retries (FR-21): the check is retry-scoped, not txn-aborting — a
+// Badger transaction cannot be cancelled mid-flight, but a cancelled caller
+// never starts another one.
+func (s *store) retryTxnCtx(ctx context.Context, op func() error) error {
 	for i := 0; i < maxConflictRetries; i++ {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		err := op()
-		if err == badger.ErrConflict {
+		if errors.Is(err, badger.ErrConflict) {
 			continue
 		}
 		return err

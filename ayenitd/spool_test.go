@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"go.uber.org/goleak"
 
 	"codeburg.org/lexbit/relurpify/jobs"
 )
@@ -201,4 +202,53 @@ func TestSpoolWatcher_PollIntervalDrainsRepeatably(t *testing.T) {
 
 func spoolCorrelate(i int) string {
 	return "turn-" + string(rune('a'+i))
+}
+
+// TestSpoolStopJoins proves D7's join: Stop returns only after the loop
+// goroutine has exited — goleak stays clean and the runner's deferred store
+// close can never run under an in-flight drain.
+func TestSpoolStopJoins(t *testing.T) {
+	dirs := openSpoolDirs(t)
+	store := openTestJobsStore(t, t.TempDir())
+	w := newSpoolWatcher(dirs, store, nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	require.NoError(t, w.Start(ctx))
+	require.NoError(t, w.Stop())
+	cancel()
+	if closer, ok := store.(interface{ Close() error }); ok {
+		require.NoError(t, closer.Close())
+	}
+	// The watcher's loop goroutine is joined by Stop; the store is closed
+	// above — nothing this test spawned may remain.
+	goleak.VerifyNone(t)
+}
+
+// TestBootDebrisSweep proves the boot debris policy (D7): an old
+// pending/.<name>.tmp moves to failed/ for inspection; a fresh temp file —
+// a live write — stays; and ticks never scan temp files.
+func TestBootDebrisSweep(t *testing.T) {
+	dirs := openSpoolDirs(t)
+	store := openTestJobsStore(t, t.TempDir())
+
+	oldDebris := filepath.Join(dirs.Pending, ".job-old.job.json.tmp")
+	require.NoError(t, os.WriteFile(oldDebris, []byte("{}"), 0o600))
+	past := time.Now().Add(-2 * time.Hour)
+	require.NoError(t, os.Chtimes(oldDebris, past, past))
+	freshDebris := filepath.Join(dirs.Pending, ".job-fresh.job.json.tmp")
+	require.NoError(t, os.WriteFile(freshDebris, []byte("{}"), 0o600))
+
+	w := newSpoolWatcher(dirs, store, nil)
+	w.sweepPendingDebris(context.Background())
+
+	require.NoFileExists(t, oldDebris, "old crash debris swept from pending/")
+	require.FileExists(t, filepath.Join(dirs.Failed, "job-old.job.json.tmp"),
+		"debris retained in failed/ for inspection")
+	require.FileExists(t, freshDebris, "a fresh temp file belongs to a live write")
+}
+
+func openSpoolDirs(t *testing.T) SpoolDirs {
+	t.Helper()
+	dirs, err := OpenSpoolDirs(t.TempDir())
+	require.NoError(t, err)
+	return dirs
 }

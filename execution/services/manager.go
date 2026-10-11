@@ -73,6 +73,12 @@ type serviceManager struct {
 	Cancel   context.CancelFunc
 	Wg       sync.WaitGroup
 	Mu       sync.Mutex
+	// order is the registration sequence. StopAll stops in REVERSE
+	// registration order (LIFO): a service registered after another depends
+	// on it, so it must stop first — the runner registers spool-watcher →
+	// executor → status-writer, and the status writer's final drain flush
+	// must run after the executor has drained (Q16 flush-last, structural).
+	order []string
 }
 
 // NewServiceManager creates a new empty service registry ready for dynamic
@@ -118,6 +124,9 @@ func (sm *serviceManager) RegisterWithInfo(id string, s Service, info ServiceReg
 
 	sm.Mu.Lock()
 	defer sm.Mu.Unlock()
+	if _, exists := sm.Registry[id]; !exists {
+		sm.order = append(sm.order, id)
+	}
 	sm.Registry[id] = s
 	if sm.Statuses == nil {
 		sm.Statuses = make(map[string]string)
@@ -130,23 +139,31 @@ func (sm *serviceManager) RegisterWithInfo(id string, s Service, info ServiceReg
 	log.Printf("service manager: registered service %q", id)
 }
 
-// Deregister removes a service from the registry and stops it if already started.
+// Deregister removes a service from the registry and stops it if already
+// started. The stop runs OUTSIDE the manager lock (matching RegisterWithInfo):
+// a Stop that joins workers must never stall Snapshot/Get/Has.
 func (sm *serviceManager) Deregister(id string) {
 	sm.Mu.Lock()
-	defer sm.Mu.Unlock()
-
 	s, exists := sm.Registry[id]
+	if exists {
+		delete(sm.Registry, id)
+		delete(sm.Statuses, id)
+		delete(sm.Info, id)
+		for i, oid := range sm.order {
+			if oid == id {
+				sm.order = append(sm.order[:i], sm.order[i+1:]...)
+				break
+			}
+		}
+	}
+	sm.Mu.Unlock()
+
 	if !exists {
 		return
 	}
-
 	if err := s.Stop(); err != nil {
 		log.Printf("service manager: deregister error for %q: %v", id, err)
 	}
-
-	delete(sm.Registry, id)
-	delete(sm.Statuses, id)
-	delete(sm.Info, id)
 	log.Printf("service manager: deregistered service %q", id)
 }
 
@@ -189,14 +206,20 @@ func (sm *serviceManager) StopAll() error {
 		return nil
 	}
 	sm.Mu.Lock()
-	services := make(map[string]Service, len(sm.Registry))
-	for id, svc := range sm.Registry {
-		services[id] = svc
-	}
+	ordered := make([]string, len(sm.order))
+	copy(ordered, sm.order)
 	sm.Mu.Unlock()
 
 	var errs []error
-	for id, s := range services {
+	// LIFO: reverse registration order (see the order field's contract).
+	for i := len(ordered) - 1; i >= 0; i-- {
+		id := ordered[i]
+		sm.Mu.Lock()
+		s, exists := sm.Registry[id]
+		sm.Mu.Unlock()
+		if !exists {
+			continue
+		}
 		if err := sm.stopService(id, s); err != nil {
 			errs = append(errs, fmt.Errorf("service %s stop error: %w", id, err))
 		}
@@ -285,6 +308,7 @@ func (sm *serviceManager) Clear() error {
 	sm.Registry = make(map[string]Service)
 	sm.Statuses = make(map[string]string)
 	sm.Info = make(map[string]ServiceRegistrationInfo)
+	sm.order = nil
 	sm.Mu.Unlock()
 	return err
 }

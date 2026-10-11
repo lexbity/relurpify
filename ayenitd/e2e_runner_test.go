@@ -145,7 +145,7 @@ func TestRunnerE2E_SpoolToCompleted(t *testing.T) {
 		if !ok {
 			return false
 		}
-		for _, r := range status.Recent {
+		for _, r := range status.Jobs {
 			if r.CorrelateID == "e2e-boot-1" && r.State == string(jobs.StateCompleted) {
 				return true
 			}
@@ -167,14 +167,14 @@ func TestRunnerE2E_SpoolToCompleted(t *testing.T) {
 	require.NoError(t, json.Unmarshal(statusRaw, &status))
 	require.Equal(t, "e2e-runner", status.RunnerID)
 	require.False(t, status.HeartbeatAt.IsZero())
-	require.NotEmpty(t, status.Recent, "completed job appears in the recent window")
+	require.NotEmpty(t, status.Jobs, "completed job appears in the jobs sample")
 	var found bool
-	for _, r := range status.Recent {
+	for _, r := range status.Jobs {
 		if r.Kind == "knowledge.bootstrap" {
 			found = true
 		}
 	}
-	require.True(t, found, "bootstrap job must appear in recent: %+v", status.Recent)
+	require.True(t, found, "bootstrap job must appear in recent: %+v", status.Jobs)
 }
 
 // TestRunnerE2E_RecoverAfterHardStop is the kill -9 equivalent, staged
@@ -244,7 +244,7 @@ func TestRunnerE2E_RecoverAfterHardStop(t *testing.T) {
 		if !ok {
 			return false
 		}
-		for _, r := range status.Recent {
+		for _, r := range status.Jobs {
 			if r.CorrelateID == "e2e-recover-1" && r.State == string(jobs.StateCompleted) {
 				return true
 			}
@@ -338,7 +338,7 @@ func TestRunnerE2E_TelemetryJSONL(t *testing.T) {
 		if !ok {
 			return false
 		}
-		for _, r := range status.Recent {
+		for _, r := range status.Jobs {
 			if r.CorrelateID == "e2e-tel-1" && r.State == string(jobs.StateCompleted) {
 				return true
 			}

@@ -136,7 +136,11 @@ func TestExecutor_AttemptsExhaustedTerminal(t *testing.T) {
 
 func TestExecutor_TimeoutRetries(t *testing.T) {
 	store := openTestJobsStore(t, t.TempDir())
-	h := &fakeHandler{results: []error{context.DeadlineExceeded}, blockDur: 300 * time.Millisecond}
+	// The handler blocks past the attempt timeout and returns the expired
+	// context's error, as a real slow handler does — the timeout is the
+	// attempt ctx's, so it retries (an unexpired attempt ctx returning
+	// cancellation classifies as shutdown-interrupted instead).
+	h := &fakeHandler{blockDur: 300 * time.Millisecond}
 	stop := submitAndRun(t, store, jobs.Spec{
 		Kind: "slow", Payload: map[string]any{}, Queue: "knowledge", CorrelateID: "slow-1",
 		MaxAttempts: 2, Timeout: 50 * time.Millisecond, Backoff: time.Nanosecond,
@@ -170,12 +174,13 @@ func TestExecutor_CheckpointResume(t *testing.T) {
 	require.Len(t, list, 1)
 	require.Equal(t, jobs.StateCompleted, list[0].State)
 
-	// The executor persisted the handler's checkpoint and stamped the resume
-	// token on the job (Q15: the next attempt receives it via ResumeToken).
+	// The executor persisted the handler's checkpoint (Q15). The SUCCESS
+	// path no longer stamps a resume token (D6: the requeue rule owns the
+	// token; a completed job needs no resume).
 	saved, err := store.LoadCheckpoint(context.Background(), "job-cp-1")
 	require.NoError(t, err)
 	require.Equal(t, "token-1", saved.Token)
-	require.Equal(t, "token-1", list[0].ResumeToken)
+	require.Empty(t, list[0].ResumeToken, "a completed job carries no resume token")
 }
 
 func TestExecutor_UnknownKindTerminal(t *testing.T) {
@@ -318,4 +323,68 @@ func TestRun_CleanDrainWithDefaults(t *testing.T) {
 	_, err := os.Stat(stateDir + "/jobs/store")
 	require.NoError(t, err, "the default store dir is <state>/jobs/store")
 	require.NoError(t, os.MkdirAll(stateDir, 0o700))
+}
+
+// resumeRecordingHandler records every attempt's job and returns scripted
+// outcomes: fail with a checkpoint first, succeed on the resumed attempt.
+type resumeRecordingHandler struct {
+	mu    sync.Mutex
+	jobs  []jobs.Job
+	fails int
+}
+
+func (h *resumeRecordingHandler) Handle(_ context.Context, j jobs.Job) (jobs.Checkpoint, error) {
+	h.mu.Lock()
+	h.jobs = append(h.jobs, j)
+	attempt := len(h.jobs)
+	fails := h.fails
+	h.mu.Unlock()
+	if attempt == 1 {
+		return jobs.Checkpoint{
+			ID: j.ID + ":batch", JobID: j.ID, Token: j.ID,
+			State:   map[string]any{"last_chunk_id": "chunk-3"},
+			Created: time.Now().UTC(),
+		}, errors.New("transient sweep failure")
+	}
+	_ = fails
+	return jobs.Checkpoint{}, nil
+}
+
+// TestExecutor_FailPathCheckpointResumes proves the D6 chain end-to-end: an
+// attempt that fails AFTER returning a checkpoint persists it, the requeued
+// job carries ResumeToken == job.ID, and the resumed attempt receives the
+// checkpoint via the resume metadata — no hand-set tokens, the real requeue
+// path.
+func TestExecutor_FailPathCheckpointResumes(t *testing.T) {
+	store := openTestJobsStore(t, t.TempDir())
+	h := &resumeRecordingHandler{}
+	spec := jobs.Spec{
+		Kind: "sweep", Payload: map[string]any{}, Queue: "knowledge",
+		CorrelateID: "resume-chain", MaxAttempts: 3, Backoff: time.Nanosecond,
+	}
+	require.NoError(t, store.Create(context.Background(), jobs.Job{
+		ID: "job-chain", Spec: spec, State: jobs.StateQueued, CreatedAt: time.Now().UTC(),
+	}))
+	e := newExecutor(store, handlerRegistry{"sweep": h}, nil, 1, []string{"knowledge"})
+	e.now = noBackoff()
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	require.NoError(t, e.Start(ctx))
+	require.Eventually(t, func() bool {
+		list, err := store.List(context.Background(), jobs.Query{})
+		return err == nil && len(list) == 1 && list[0].State == jobs.StateCompleted
+	}, 10*time.Second, 20*time.Millisecond)
+	require.NoError(t, e.Stop())
+
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	require.Len(t, h.jobs, 2, "the job ran a failed attempt and a resumed attempt")
+	require.Empty(t, h.jobs[0].ResumeToken, "the first attempt is a cold start")
+	require.Equal(t, "job-chain", h.jobs[1].ResumeToken, "the requeue set the checkpoint token")
+	require.Equal(t, "job-chain:batch", h.jobs[1].Metadata["resume_checkpoint"],
+		"the resumed attempt loaded its checkpoint through the token")
+
+	saved, err := store.LoadCheckpoint(context.Background(), "job-chain")
+	require.NoError(t, err)
+	require.Contains(t, saved.State, "last_chunk_id", "the fail-path checkpoint persisted")
 }

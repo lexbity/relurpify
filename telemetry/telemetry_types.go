@@ -121,6 +121,7 @@ const (
 	EventRunnerStarted       EventType = "runner.started"
 	EventRunnerStopped       EventType = "runner.stopped"
 	EventRunnerLockContented EventType = "runner.lock_contented"
+	EventRunnerStopTimeout   EventType = "runtime.runner_stop_timeout"
 )
 
 // Paradigm lifecycle events emitted by the cognitionzoo paradigms (HTN,

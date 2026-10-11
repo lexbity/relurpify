@@ -9,6 +9,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"codeburg.org/lexbit/relurpify/context/jobsstore"
 	"codeburg.org/lexbit/relurpify/context/knowledge/ast"
 	"codeburg.org/lexbit/relurpify/context/knowledge/graphdb"
 	"codeburg.org/lexbit/relurpify/jobs"
@@ -208,7 +209,9 @@ func TestRefreshHandler_EvaluateUnreadableFile(t *testing.T) {
 }
 
 // openJobsCkpt opens an in-memory jobs store for handler checkpoint writes.
+// Test-only helper: kept out of the production build so knowledge importers
+// never drag the jobs store backend into their link graph.
 func openJobsCkpt(t *testing.T) (jobs.Store, error) {
 	t.Helper()
-	return jobsStoreOpenInMemory()
+	return jobsstore.Open(jobsstore.Options{InMemory: true})
 }

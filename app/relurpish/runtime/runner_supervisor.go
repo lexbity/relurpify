@@ -16,6 +16,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sync"
 	"syscall"
 	"time"
 
@@ -32,9 +33,12 @@ const (
 	spawnPollEvery = 200 * time.Millisecond
 )
 
-// childStopGrace bounds the quiesce stop: SIGTERM → 5 s → SIGKILL (S9 r2:
-// the stop runs as a quiesce step, not a bespoke kill inside rt.Close).
-const childStopGrace = 5 * time.Second
+// childStopGrace bounds the quiesce stop: SIGTERM → 25 s → SIGKILL. The 25 s
+// honors the runner's own 20 s drain window (NFR-2) end-to-end — SIGKILL at
+// 5 s silently voided the entire drain design and converted every app close
+// into crash recovery for in-flight jobs. (S9 r2: the stop runs as a quiesce
+// step, not a bespoke kill inside rt.Close.)
+const childStopGrace = 25 * time.Second
 
 // RunnerStatus mirrors ayenitd.RunnerStatus — the app reads status.json as
 // plain data and must not import the runner's binary packages for one struct.
@@ -69,17 +73,11 @@ func runnerAlive(status runnerStatus, now time.Time) bool {
 	if status.Draining {
 		return false
 	}
-	if now.Sub(status.HeartbeatAt) > runnerHeartbeatStale {
+	// ≥ 15 s is runner-down (FR-22): the comparison is inclusive.
+	if now.Sub(status.HeartbeatAt) >= runnerHeartbeatStale {
 		return false
 	}
 	return processAlive(status.PID)
-}
-
-func processAlive(pid int) bool {
-	if pid <= 0 {
-		return false
-	}
-	return syscall.Kill(pid, 0) == nil
 }
 
 // RunnerSupervisorConfig carries the spawn parameters.
@@ -118,14 +116,14 @@ func SuperviseRunner(ctx context.Context, cfg RunnerSupervisorConfig) (Dependenc
 	if err := awaitChildHeartbeat(cfg.StateDir, child.Pid, spawnWait); err != nil {
 		// Degrade, never abort boot. The child may still come up; the stop
 		// hook stays registered so Close reaps it either way.
-		return runnerDegradedStatus(fmt.Sprintf("runner heartbeat not observed within %s", spawnWait)), childStop(child), nil
+		return runnerDegradedStatus(fmt.Sprintf("runner heartbeat not observed within %s", spawnWait)), childStopWithGrace(child, cfg.Tel, childStopGrace), nil
 	}
 	return DependencyStatus{
 		Name:      "runner",
 		Required:  false,
 		Available: true,
 		Details:   fmt.Sprintf("spawned (pid %d)", child.Pid),
-	}, childStop(child), nil
+	}, childStopWithGrace(child, cfg.Tel, childStopGrace), nil
 }
 
 func runnerDegradedStatus(reason string) DependencyStatus {
@@ -213,24 +211,50 @@ func awaitChildHeartbeat(stateDir string, childPid int, wait time.Duration) erro
 	}
 }
 
-// childStop returns the quiesce step: SIGTERM → grace → SIGKILL, and the
-// wait reaps the child. Registered on the runtime's quiesce sequence so
-// Close stops the runner after the app's own services (S9 r2).
-func childStop(child *os.Process) func() {
+// childStop returns the quiesce step: SIGTERM → grace → SIGKILL, with the
+// child reaped by a dedicated waiter goroutine. The waiter records the exit
+// status under a mutex, so the liveness probe below reflects reality —
+// without it, an un-Waited child is a zombie and kill(pid,0) succeeds on it,
+// burning the whole grace on every stop (D7). A grace-exhausted kill emits
+// runtime.runner_stop_timeout (NFR-6). Registered on the runtime's quiesce
+// sequence so Close stops the runner after the app's own services (S9 r2).
+// childStop is the production quiesce step: the configured 25 s grace.
+func childStop(child *os.Process, tel telemetry.Telemetry) func() {
+	return childStopWithGrace(child, tel, childStopGrace)
+}
+
+// childStopWithGrace is childStop parameterized over the grace so tests can
+// exercise the SIGKILL path at millisecond scale.
+func childStopWithGrace(child *os.Process, tel telemetry.Telemetry, grace time.Duration) func() {
+	var (
+		mu       sync.Mutex
+		waitDone bool
+	)
+	release := make(chan struct{})
+	go func() {
+		childWait(child, release)
+		mu.Lock()
+		waitDone = true
+		mu.Unlock()
+	}()
+
 	return func() {
 		if child == nil {
 			return
 		}
 		_ = child.Signal(syscall.SIGTERM)
-		deadline := time.Now().Add(childStopGrace)
+		deadline := time.Now().Add(grace)
 		for {
-			if !processAlive(child.Pid) {
-				_, _ = child.Wait()
+			mu.Lock()
+			reaped := waitDone
+			mu.Unlock()
+			if reaped {
 				return
 			}
 			if time.Now().After(deadline) {
 				_ = child.Kill()
-				_, _ = child.Wait()
+				close(release)
+				emitRunnerStopTimeout(tel, child.Pid, grace)
 				return
 			}
 			time.Sleep(100 * time.Millisecond)
@@ -238,13 +262,30 @@ func childStop(child *os.Process) func() {
 	}
 }
 
-// runnerDependencyDetails is the status.json summary doctor renders when the
-// runner is up: IDs and counts only, never prompt content (§5.7).
-func runnerDependencyDetails(stateDir string) string {
-	status, ok := readRunnerStatus(stateDir)
-	if !ok {
-		return "no status"
+// childWait waits for the child to exit, returning immediately when release
+// is closed (the SIGKILL path): the kill unblocks the wait, and the waiter
+// reaps whatever status the kill produced.
+func childWait(child *os.Process, release <-chan struct{}) {
+	waitc := make(chan struct{})
+	go func() {
+		_, _ = child.Wait()
+		close(waitc)
+	}()
+	select {
+	case <-waitc:
+	case <-release:
+		<-waitc
 	}
-	return fmt.Sprintf("runner %s pid %d heartbeat %s",
-		status.RunnerID, status.PID, status.HeartbeatAt.Format(time.RFC3339))
+}
+
+func emitRunnerStopTimeout(tel telemetry.Telemetry, pid int, grace time.Duration) {
+	if tel == nil {
+		return
+	}
+	tel.Emit(telemetry.Event{
+		Type:      telemetry.EventRunnerStopTimeout,
+		Message:   "runner stop grace exhausted; killed",
+		Timestamp: time.Now().UTC(),
+		Metadata:  map[string]any{"pid": pid, "grace": grace.String()},
+	})
 }

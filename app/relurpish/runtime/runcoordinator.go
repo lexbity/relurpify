@@ -38,6 +38,7 @@ func (r RunDrainReport) total() int {
 
 // runCoordinatorEntry is one registered in-flight run.
 type runCoordinatorEntry struct {
+	id     uint64 // registration identity; done() deletes only its own entry
 	ctx    context.Context
 	cancel context.CancelFunc
 }
@@ -52,6 +53,7 @@ type runCoordinatorEntry struct {
 // before draining, so a new run can never begin tearing down stores underneath.
 type RunCoordinator struct {
 	mu           sync.Mutex
+	nextID       uint64
 	closed       bool
 	parent       context.Context
 	cancelParent context.CancelFunc
@@ -99,9 +101,12 @@ func (c *RunCoordinator) SetDurations(drain, reap time.Duration) *RunCoordinator
 
 // Register a run under the coordinator-owned parent, keyed by task ID. It
 // returns the run context, a once-safe done function, and whether
-// registration succeeded. When the intake is closed (Close has begun), the
-// returned context is already cancelled and ok is false — the caller must not
-// start the run.
+// registration succeeded. Registration fails — ok is false, the context
+// arrives cancelled — when the intake is closed (Close has begun) or when a
+// LIVE run already holds the task ID (FR-22): a silent overwrite let the
+// first run's done() cancel the second run's context and delete its entry.
+// Identity: each entry carries its own cancellation, and done() deletes only
+// its own entry.
 func (c *RunCoordinator) Register(taskID string) (context.Context, func(), bool) {
 	if c == nil {
 		ctx, cancel := context.WithCancel(context.Background())
@@ -114,24 +119,35 @@ func (c *RunCoordinator) Register(taskID string) (context.Context, func(), bool)
 		c.mu.Unlock()
 		return ctx, func() {}, false
 	}
-	ctx, cancel := context.WithCancel(c.parent)
-	entry := &runCoordinatorEntry{ctx: ctx, cancel: cancel}
+	if _, live := c.runs[taskID]; live {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		c.mu.Unlock()
+		return ctx, func() {}, false
+	}
+	c.nextID++
+	entry := &runCoordinatorEntry{id: c.nextID}
+	entry.ctx, entry.cancel = context.WithCancel(c.parent)
 	c.runs[taskID] = entry
+	runCtx, runCancel := entry.ctx, entry.cancel
 	c.mu.Unlock()
 
 	var once sync.Once
 	done := func() {
 		once.Do(func() {
 			c.mu.Lock()
-			if e, ok := c.runs[taskID]; ok {
-				e.cancel()
+			// Delete only OUR entry (by registration identity): a same-ID
+			// successor's registration is never touched by an earlier run's
+			// completion. Our own context is cancelled unconditionally.
+			runCancel()
+			if e, ok := c.runs[taskID]; ok && e.id == entry.id {
 				delete(c.runs, taskID)
+				c.signalLocked()
 			}
-			c.signalLocked()
 			c.mu.Unlock()
 		})
 	}
-	return ctx, done, true
+	return runCtx, done, true
 }
 
 // Count reports the number of live registered runs.

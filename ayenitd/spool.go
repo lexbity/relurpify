@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 
 	"codeburg.org/lexbit/relurpify/jobs"
@@ -45,12 +46,11 @@ func OpenSpoolDirs(stateDir string) (SpoolDirs, error) {
 // hostile input: unknown fields are rejected, the Spec is validated before
 // ingestion, and malformed files land in failed/ untouched.
 type spoolFile struct {
-	CorrelateID string          `json:"correlate_id"`
-	SubmittedAt time.Time       `json:"submitted_at"`
-	Producer    string          `json:"producer"`
-	Spec        jobs.Spec       `json:"spec"`
-	TraceID     string          `json:"trace_id,omitempty"`
-	raw         json.RawMessage `json:"-"`
+	CorrelateID string    `json:"correlate_id"`
+	SubmittedAt time.Time `json:"submitted_at"`
+	Producer    string    `json:"producer"`
+	Spec        jobs.Spec `json:"spec"`
+	TraceID     string    `json:"trace_id,omitempty"`
 }
 
 // materialize builds the durable Job from the spool file: the store assigns
@@ -70,6 +70,12 @@ func (f spoolFile) materialize(now time.Time) jobs.Job {
 
 // spoolWatcher is the runner-internal service that drains pending/ into the
 // store. Its poll interval is 500 ms (NFR-1: submit→running p95 ≤ 3 s).
+// pendingDebrisAge bounds the boot debris sweep: `pending/.<name>.tmp` files
+// older than this are crash debris (a rename interrupted mid-ingest) and move
+// to failed/ for inspection; fresher temp files belong to a live write and
+// are left for the next tick.
+const pendingDebrisAge = time.Hour
+
 type spoolWatcher struct {
 	dirs      SpoolDirs
 	store     jobs.Store
@@ -77,6 +83,7 @@ type spoolWatcher struct {
 	pollEvery time.Duration
 
 	cancel context.CancelFunc
+	done   chan struct{}
 }
 
 func newSpoolWatcher(dirs SpoolDirs, store jobs.Store, tel telemetry.Telemetry) *spoolWatcher {
@@ -86,18 +93,26 @@ func newSpoolWatcher(dirs SpoolDirs, store jobs.Store, tel telemetry.Telemetry) 
 func (w *spoolWatcher) Start(ctx context.Context) error {
 	runCtx, cancel := context.WithCancel(ctx)
 	w.cancel = cancel
+	w.done = make(chan struct{})
 	go w.loop(runCtx)
 	return nil
 }
 
+// Stop cancels the loop and JOINS it (D7): the runner's deferred store close
+// must never run under an in-flight drain (a boot-recovery backlog can keep
+// a tick inside store.Create past Stop's return).
 func (w *spoolWatcher) Stop() error {
 	if w.cancel != nil {
 		w.cancel()
+	}
+	if w.done != nil {
+		<-w.done
 	}
 	return nil
 }
 
 func (w *spoolWatcher) loop(ctx context.Context) {
+	defer close(w.done)
 	interval := w.pollEvery
 	if interval <= 0 {
 		interval = 500 * time.Millisecond
@@ -105,7 +120,10 @@ func (w *spoolWatcher) loop(ctx context.Context) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	// Boot recovery first: claimed/ files that never made it into the store
-	// (crash between rename and Create) are re-ingested idempotently.
+	// (crash between rename and Create) are re-ingested idempotently, and
+	// pending/ temp debris older than the debris age moves to failed/
+	// (D7: ticks never scan temp files; boot does, once).
+	w.sweepPendingDebris(ctx)
 	w.drainOnce(ctx)
 	for {
 		select {
@@ -118,6 +136,35 @@ func (w *spoolWatcher) loop(ctx context.Context) {
 }
 
 // drainOnce runs one pending→claimed→store pipeline pass.
+// sweepPendingDebris moves crash debris out of pending/ at boot (D7): a
+// `.<name>.tmp` left by an interrupted rename is retained in failed/ for
+// inspection, consistent with the malformed-file policy. Fresh temp files
+// belong to a live write and are skipped; ticks never scan temp files.
+func (w *spoolWatcher) sweepPendingDebris(ctx context.Context) {
+	entries, err := os.ReadDir(w.dirs.Pending)
+	if err != nil {
+		return
+	}
+	cutoff := time.Now().Add(-pendingDebrisAge)
+	for _, entry := range entries {
+		name := entry.Name()
+		if !strings.HasPrefix(name, ".") || !strings.HasSuffix(name, ".tmp") {
+			continue
+		}
+		info, err := entry.Info()
+		if err != nil || info.ModTime().After(cutoff) {
+			continue
+		}
+		src := filepath.Join(w.dirs.Pending, name)
+		dst := filepath.Join(w.dirs.Failed, strings.TrimPrefix(name, "."))
+		if err := os.Rename(src, dst); err != nil {
+			w.emit(ctx, telemetry.EventSpoolMalformed, "spool debris sweep failed", map[string]any{
+				"src": src, "error": err.Error(),
+			})
+		}
+	}
+}
+
 func (w *spoolWatcher) drainOnce(ctx context.Context) {
 	entries, err := os.ReadDir(w.dirs.Pending)
 	if err != nil {

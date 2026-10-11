@@ -33,19 +33,34 @@ type Handler interface {
 	Handle(ctx context.Context, j Job) (Checkpoint, error)
 }
 
+// maxBackoffBase bounds the base before the shift so base<<shift can never
+// overflow int64 into a negative delay: a negative delay passes both caps and
+// produces a NextAttemptAt in the past — an immediate hot retry loop. The
+// bound is the exact overflow limit for the maximum shift (2^5), NOT the
+// backoff cap divided by 32 — clamping at cap/32 would silently rewrite the
+// documented 30 s default curve. Absurd (non-overflowing) bases are a
+// submission-policy question: Spec.Valid rejects backoffs over 24h, and
+// 24h << 5 ≈ 32 days, far inside int64.
+const maxBackoffBase = time.Duration(1)<<59 - 1
+
 // NextBackoff computes the retry delay after an attempt failed, per Q15:
 // base 30s when Spec.Backoff is unspecified, exponential ×2 per attempt,
 // capped at 32× the base and at 5 minutes. attempt is the number of the
-// attempt that just failed (1-based).
+// attempt that just failed (1-based). The base is clamped BEFORE the shift,
+// so the result can never wrap.
 func NextBackoff(spec Spec, attempt int) time.Duration {
 	base := spec.Backoff
 	if base <= 0 {
 		base = 30 * time.Second
 	}
+	if base > maxBackoffBase {
+		base = maxBackoffBase
+	}
 	if attempt < 1 {
 		attempt = 1
 	}
-	// 32× base is 2^5, so shift by min(attempt-1, 5).
+	// 32× base is 2^5, so shift by min(attempt-1, 5); base ≤ cap/32 keeps
+	// the shifted value within the cap and within int64.
 	shift := uint(attempt - 1)
 	if shift > 5 {
 		shift = 5

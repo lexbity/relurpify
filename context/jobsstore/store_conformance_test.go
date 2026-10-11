@@ -337,7 +337,7 @@ func TestRetryTxn_BoundedConflictRetries(t *testing.T) {
 	// A persistent conflict exhausts the bounded retries and surfaces an
 	// explicit error instead of spinning forever.
 	calls := 0
-	err = s.retryTxn(func() error {
+	err = s.retryTxnCtx(context.Background(), func() error {
 		calls++
 		return badger.ErrConflict
 	})
@@ -347,7 +347,7 @@ func TestRetryTxn_BoundedConflictRetries(t *testing.T) {
 
 	// A transient conflict followed by success retries and succeeds.
 	calls = 0
-	err = s.retryTxn(func() error {
+	err = s.retryTxnCtx(context.Background(), func() error {
 		calls++
 		if calls == 1 {
 			return badger.ErrConflict

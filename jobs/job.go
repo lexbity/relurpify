@@ -76,6 +76,9 @@ func (s Spec) Valid() error {
 	if s.Backoff < 0 {
 		return errors.New("backoff must be >= 0")
 	}
+	if s.Backoff > 24*time.Hour {
+		return errors.New("backoff must be <= 24h: an absurd backoff is a spec error, not a runtime surprise")
+	}
 	if s.Timeout < 0 {
 		return errors.New("timeout must be >= 0")
 	}

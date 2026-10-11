@@ -7,6 +7,7 @@ package ayenitd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -125,10 +126,6 @@ func (e *executor) runAttempt(ctx context.Context, job jobs.Job, workerID string
 				e.fail(ctx, job, fmt.Errorf("save checkpoint: %w", err), false)
 				return
 			}
-			job.ResumeToken = cp.Token
-			if job.ResumeToken == "" {
-				job.ResumeToken = cp.ID
-			}
 		}
 		now := e.now()
 		job.State = jobs.StateCompleted
@@ -150,12 +147,28 @@ func (e *executor) runAttempt(ctx context.Context, job jobs.Job, workerID string
 	}
 
 	// Shutdown cancellation is lifecycle, not failure: leave the job running
-	// so the next Open's recovery pass handles it (Q14).
-	if ctx.Err() != nil || (job.Spec.Timeout > 0 && handleErr == context.Canceled) {
+	// so the next Open's recovery pass handles it (Q14). The source decides:
+	// the run context being done is shutdown; the ATTEMPT context expiring
+	// is the job's own timeout and stays a retryable failure; and a
+	// cancellation error with neither context done classifies as
+	// interrupted — errors.Is so wrapped cancellations classify correctly.
+	attemptExpired := attemptCtx != ctx && attemptCtx.Err() != nil
+	if ctx.Err() != nil || (!attemptExpired && (errors.Is(handleErr, context.Canceled) || errors.Is(handleErr, context.DeadlineExceeded))) {
 		e.emit(ctx, telemetry.EventJobInterrupted, "attempt interrupted by shutdown", map[string]any{
 			"job_id": job.ID, "attempt": job.Attempt,
 		})
 		return
+	}
+
+	// A returned checkpoint is a resume promise regardless of attempt outcome
+	// (handler contract H3): persist it BEFORE the retry transition, so the
+	// requeued job's ResumeToken points at state that exists (D6, R-9).
+	if cp.State != nil {
+		if err := e.store.SaveCheckpoint(ctx, cp); err != nil {
+			e.emit(ctx, telemetry.EventJobFailed, "fail-path checkpoint save failed", map[string]any{
+				"job_id": job.ID, "error": err.Error(),
+			})
+		}
 	}
 
 	retry := job.Attempt < maxAttempts(job)
@@ -169,15 +182,22 @@ func (e *executor) fail(ctx context.Context, job jobs.Job, cause error, retry bo
 	now := e.now()
 	job.LastError = cause.Error()
 	job.UpdatedAt = now
+	resumed := false
 	if retry {
 		job.State = jobs.StateQueued
 		job.NextAttemptAt = now.Add(jobs.NextBackoff(job.Spec, job.Attempt))
+		// The requeue rule (D6): a requeue with a stored checkpoint is
+		// resumable — the token is the job ID, the handler's LoadCheckpoint
+		// key. Set BEFORE the transition so the queued record carries it.
+		if _, cpErr := e.store.LoadCheckpoint(ctx, job.ID); cpErr == nil {
+			job.ResumeToken = job.ID
+			resumed = true
+		}
 	} else {
 		job.State = jobs.StateFailed
 		job.CompletedAt = now
 	}
 	if err := e.store.Update(ctx, job); err != nil {
-		fmt.Println("DBG fail Update error:", err)
 		e.emit(ctx, telemetry.EventJobFailed, "failure transition failed", map[string]any{"job_id": job.ID, "error": err.Error()})
 		return
 	}
@@ -197,7 +217,7 @@ func (e *executor) fail(ctx context.Context, job jobs.Job, cause error, retry bo
 	}
 	e.emit(ctx, telemetryType, message, map[string]any{
 		"job_id": job.ID, "kind": job.Spec.Kind, "attempt": job.Attempt,
-		"error": cause.Error(), "retry": retry,
+		"error": cause.Error(), "retry": retry, "resumed": resumed,
 		"next_attempt_at": job.NextAttemptAt.Format(time.RFC3339),
 	})
 }

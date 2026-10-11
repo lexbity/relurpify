@@ -777,11 +777,20 @@ func probeRunner(stateDir string) DependencyStatus {
 			Details: fmt.Sprintf("attached (runner %s, pid %d)", status.RunnerID, status.PID),
 		}
 	default:
+		// The heartbeat is the primary signal: a stale heartbeat reports as
+		// stale even when the PID probe is also inconclusive. The liveness
+		// reason only explains a FRESH heartbeat on an unconfirmed process
+		// (the PID probe is a confirmability check — signal-0 narrowed by
+		// /proc cmdline on Linux — so a recycled PID is likewise "not
+		// confirmably alive").
 		reason := "heartbeat stale"
 		if status.Draining {
 			reason = "runner draining"
 		} else if !processAlive(status.PID) {
-			reason = "runner process is gone"
+			reason = "process not confirmably alive"
+		}
+		if time.Since(status.HeartbeatAt) >= runnerHeartbeatStale && !status.Draining {
+			reason = "heartbeat stale"
 		}
 		return DependencyStatus{
 			Name: "runner", Required: false, Available: false, Blocking: false,

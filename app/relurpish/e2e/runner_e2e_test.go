@@ -59,11 +59,11 @@ func repoRoot() (string, error) {
 // for one struct.
 type runnerStatusFile struct {
 	Draining bool `json:"draining"`
-	Recent   []struct {
+	Jobs     []struct {
 		CorrelateID string `json:"correlate_id"`
 		Kind        string `json:"kind"`
 		State       string `json:"state"`
-	} `json:"recent"`
+	} `json:"jobs"`
 }
 
 func readRunnerStatusFile(t *testing.T, stateDir string) (runnerStatusFile, bool) {
@@ -106,13 +106,13 @@ func TestBootAgainstSpawnedRunner(t *testing.T) {
 	}, 20*time.Second, 100*time.Millisecond, "the spawned runner must heartbeat status.json")
 
 	// The bootstrap submission drains and the job completes — observed via
-	// the status heartbeat's recent window.
+	// the status heartbeat's jobs sample.
 	require.Eventually(t, func() bool {
 		st, ok := readRunnerStatusFile(t, stateDir)
 		if !ok {
 			return false
 		}
-		for _, j := range st.Recent {
+		for _, j := range st.Jobs {
 			if j.Kind == "knowledge.bootstrap" && j.State == "completed" {
 				return true
 			}

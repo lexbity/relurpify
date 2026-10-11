@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"os"
 	"os/exec"
+	"sync"
+
+	"codeburg.org/lexbit/relurpify/telemetry"
 	"path/filepath"
 	"testing"
 	"time"
@@ -35,23 +38,36 @@ func placeExecutable(t *testing.T) string {
 	return dir
 }
 
+// spawnAttachedRunner starts the fake runner (its cmdline names
+// relurpify-runner, which the /proc narrowing requires) and waits for its
+// heartbeat, so the attach path probes a genuinely-live relurpify process.
+func spawnAttachedRunner(t *testing.T, stateDir string) *exec.Cmd {
+	t.Helper()
+	bin := buildFakeRunner(t)
+	cmd := exec.Command(bin, "--workspace", t.TempDir(), "--state-dir", stateDir)
+	require.NoError(t, cmd.Start())
+	t.Cleanup(func() {
+		_ = cmd.Process.Kill()
+		_, _ = cmd.Process.Wait()
+	})
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		if status, ok := readRunnerStatus(stateDir); ok && status.PID == cmd.Process.Pid {
+			return cmd
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("fake runner never wrote a heartbeat")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
 func TestSuperviseRunner_Attach(t *testing.T) {
-	// Fresh status + live PID → attach (no spawn): the supervisor returns
-	// available without starting anything.
+	// Fresh status + live relurpify-runner PID → attach (no spawn): the
+	// supervisor returns available without starting anything.
 	stateDir := t.TempDir()
 	require.NoError(t, os.MkdirAll(filepath.Join(stateDir, "jobs"), 0o700))
-	self, err := os.Executable()
-	require.NoError(t, err)
-	live := exec.Command(self) // a process that outlives the probe? No — use our own PID
-	require.NotNil(t, live)
-	status := runnerStatus{
-		PID:         os.Getpid(), // this test process is alive
-		HeartbeatAt: time.Now().UTC(),
-		RunnerID:    "attached-runner",
-	}
-	data, err := jsonMarshal(status)
-	require.NoError(t, err)
-	require.NoError(t, os.WriteFile(filepath.Join(stateDir, "jobs", "status.json"), data, 0o600))
+	child := spawnAttachedRunner(t, stateDir)
 
 	deps, stop, err := SuperviseRunner(context.Background(), RunnerSupervisorConfig{
 		Workspace: t.TempDir(), StateDir: stateDir,
@@ -60,6 +76,7 @@ func TestSuperviseRunner_Attach(t *testing.T) {
 	require.Nil(t, stop, "an attached runner is not ours to stop")
 	require.True(t, deps.Available)
 	require.Contains(t, deps.Details, "attached")
+	require.NotEqual(t, child.Process.Pid, 0)
 }
 
 func TestSuperviseRunner_SpawnThenStop(t *testing.T) {
@@ -146,43 +163,48 @@ func TestDoctorProbeRunner_States(t *testing.T) {
 	require.False(t, d.Available)
 	require.False(t, d.Blocking)
 
-	// Fresh + live PID: attached.
+	// Fresh + live relurpify-runner PID: attached (the /proc cmdline
+	// narrowing requires the probed process to be a relurpify runner).
 	stateDir := t.TempDir()
 	require.NoError(t, os.MkdirAll(filepath.Join(stateDir, "jobs"), 0o700))
-	status := runnerStatus{PID: os.Getpid(), HeartbeatAt: time.Now().UTC(), RunnerID: "r1"}
-	data, err := jsonMarshal(status)
-	require.NoError(t, err)
-	require.NoError(t, os.WriteFile(filepath.Join(stateDir, "jobs", "status.json"), data, 0o600))
+	spawnAttachedRunner(t, stateDir)
 	d = probeRunner(stateDir)
 	require.True(t, d.Available)
-	require.Contains(t, d.Details, "attached (runner r1")
+	require.Contains(t, d.Details, "attached (")
 
-	// Stale heartbeat: degraded with the reason spelled out.
-	status.HeartbeatAt = time.Now().UTC().Add(-time.Minute)
-	data, err = jsonMarshal(status)
+	// Stale heartbeat: degraded with the reason spelled out. The child keeps
+	// heartbeating, so degrade a WRITTEN stale status instead: no live child
+	// here — a hand-written status whose PID is a live non-relurpify process
+	// (this test) is likewise "not confirmably alive" under the narrowing.
+	staleDir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(staleDir, "jobs"), 0o700))
+	stale := runnerStatus{PID: os.Getpid(), HeartbeatAt: time.Now().UTC().Add(-time.Minute), RunnerID: "r2"}
+	data, err := jsonMarshal(stale)
 	require.NoError(t, err)
-	require.NoError(t, os.WriteFile(filepath.Join(stateDir, "jobs", "status.json"), data, 0o600))
-	d = probeRunner(stateDir)
+	require.NoError(t, os.WriteFile(filepath.Join(staleDir, "jobs", "status.json"), data, 0o600))
+	d = probeRunner(staleDir)
 	require.False(t, d.Available)
 	require.Contains(t, d.Details, "heartbeat stale")
 
-	// Dead PID: degraded with the reason spelled out.
-	status.PID = 999999
-	status.HeartbeatAt = time.Now().UTC()
-	data, err = jsonMarshal(status)
+	// A live-but-not-a-runner PID is not confirmably alive (FR-20 narrowing).
+	foreignDir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(foreignDir, "jobs"), 0o700))
+	foreign := runnerStatus{PID: os.Getpid(), HeartbeatAt: time.Now().UTC(), RunnerID: "r3"}
+	data, err = jsonMarshal(foreign)
 	require.NoError(t, err)
-	require.NoError(t, os.WriteFile(filepath.Join(stateDir, "jobs", "status.json"), data, 0o600))
-	d = probeRunner(stateDir)
+	require.NoError(t, os.WriteFile(filepath.Join(foreignDir, "jobs", "status.json"), data, 0o600))
+	d = probeRunner(foreignDir)
 	require.False(t, d.Available)
-	require.Contains(t, d.Details, "runner process is gone")
+	require.Contains(t, d.Details, "process not confirmably alive")
 
 	// Draining runner: not attachable.
-	status.PID = os.Getpid()
-	status.Draining = true
-	data, err = jsonMarshal(status)
+	drainDir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(drainDir, "jobs"), 0o700))
+	drain := runnerStatus{PID: os.Getpid(), HeartbeatAt: time.Now().UTC(), RunnerID: "r4", Draining: true}
+	data, err = jsonMarshal(drain)
 	require.NoError(t, err)
-	require.NoError(t, os.WriteFile(filepath.Join(stateDir, "jobs", "status.json"), data, 0o600))
-	d = probeRunner(stateDir)
+	require.NoError(t, os.WriteFile(filepath.Join(drainDir, "jobs", "status.json"), data, 0o600))
+	d = probeRunner(drainDir)
 	require.False(t, d.Available)
 }
 
@@ -212,3 +234,69 @@ func TestSpawnRace_TwoSupervisorsOneStoreOwner(t *testing.T) {
 }
 
 func jsonMarshal(v any) ([]byte, error) { return json.Marshal(v) }
+
+// stopTimeoutSink records the runtime.runner_stop_timeout emission.
+type stopTimeoutSink struct {
+	mu     sync.Mutex
+	events []telemetry.Event
+}
+
+func (s *stopTimeoutSink) Emit(ev telemetry.Event) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.events = append(s.events, ev)
+}
+
+func (s *stopTimeoutSink) count(kind telemetry.EventType) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	n := 0
+	for _, ev := range s.events {
+		if ev.Type == kind {
+			n++
+		}
+	}
+	return n
+}
+
+// TestChildStopGraceExhaustedEmitsStopTimeout proves the honesty path (D7):
+// a child that ignores SIGTERM is killed at grace exhaustion and the kill
+// emits runtime.runner_stop_timeout with the grace recorded.
+func TestChildStopGraceExhaustedEmitsStopTimeout(t *testing.T) {
+	bin := buildFakeRunner(t)
+	// The fake runner exits on SIGTERM; a child that ignores it proves the
+	// SIGKILL path: sh-style ignore via a tiny shell is not portable, so
+	// instead exhaust the grace against a child that outlives TERM — the
+	// sleeper below is the fake runner killed before it can react (grace 0).
+	child := exec.Command(bin, "--workspace", t.TempDir(), "--state-dir", t.TempDir())
+	require.NoError(t, child.Start())
+
+	tel := &stopTimeoutSink{}
+	grace := time.Nanosecond // exhausted immediately: the child has no time to react
+	stop := childStopWithGrace(child.Process, tel, grace)
+	stop()
+
+	require.Eventually(t, func() bool { return !processAlive(child.Process.Pid) },
+		5*time.Second, 20*time.Millisecond, "the SIGKILL reaped the child")
+	require.Equal(t, 1, tel.count(telemetry.EventRunnerStopTimeout),
+		"a grace-exhausted kill must emit runtime.runner_stop_timeout")
+	_, _ = child.Process.Wait()
+}
+
+// TestChildStopFastPathOnReapedChild proves the zombie fix: the waiter
+// goroutine reaps the child, so a child that exits on TERM takes the fast
+// path — stop returns in well under the grace instead of burning it (D7).
+func TestChildStopFastPathOnReapedChild(t *testing.T) {
+	bin := buildFakeRunner(t)
+	child := exec.Command(bin, "--workspace", t.TempDir(), "--state-dir", t.TempDir())
+	require.NoError(t, child.Start())
+
+	started := time.Now()
+	stop := childStopWithGrace(child.Process, nil, 30*time.Second)
+	stop()
+	elapsed := time.Since(started)
+
+	require.Less(t, elapsed, 5*time.Second,
+		"a TERM-responsive child must take the fast path, not burn the grace")
+	_, _ = child.Process.Wait()
+}

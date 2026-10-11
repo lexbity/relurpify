@@ -16,7 +16,10 @@ import (
 	"codeburg.org/lexbit/relurpify/jobs"
 )
 
-// RunnerStatus is the on-disk schema of <state>/jobs/status.json.
+// RunnerStatus is the on-disk schema of <state>/jobs/status.json (schema v2,
+// owner ruling R-8): the `jobs` field is a bounded sample of up to 20 jobs in
+// JOB-ID order — it is not a recency window; a renamed field must not carry a
+// lie. Consumers: the doctor and human operators.
 type RunnerStatus struct {
 	RunnerID    string                 `json:"runner_id"`
 	PID         int                    `json:"pid"`
@@ -26,7 +29,7 @@ type RunnerStatus struct {
 	StoreDir    string                 `json:"store_dir"`
 	Queues      map[string]QueueTotals `json:"queues"`
 	Totals      Totals                 `json:"totals"`
-	Recent      []RecentJob            `json:"recent"`
+	Jobs        []RecentJob            `json:"jobs"`
 }
 
 // QueueTotals counts a single queue's live jobs.
@@ -43,7 +46,7 @@ type Totals struct {
 	Failed24h    int `json:"failed_24h"`
 }
 
-// RecentJob is one entry of the last-20-jobs window.
+// RecentJob is one entry of the job-ID-order bounded sample.
 type RecentJob struct {
 	ID          string    `json:"id"`
 	CorrelateID string    `json:"correlate_id,omitempty"`
@@ -67,6 +70,7 @@ type statusWriter struct {
 	drained bool
 
 	cancel context.CancelFunc
+	done   chan struct{}
 }
 
 func newStatusWriter(stateDir, storeDir, runnerID string, store jobs.Store, every time.Duration) *statusWriter {
@@ -82,15 +86,25 @@ func newStatusWriter(stateDir, storeDir, runnerID string, store jobs.Store, ever
 func (w *statusWriter) Start(ctx context.Context) error {
 	runCtx, cancel := context.WithCancel(ctx)
 	w.cancel = cancel
+	w.done = make(chan struct{})
 	go w.loop(runCtx)
 	return nil
 }
 
+// Stop cancels the ticker loop and JOINS it before the final drain flush
+// (D7): writeOnce is single-writer by construction — the join guarantees the
+// ticker can never race the final flush onto the same temp file, so
+// status.json cannot tear.
 func (w *statusWriter) Stop() error {
 	if w.cancel != nil {
 		w.cancel()
 	}
-	// Final drain flush with draining=true (Q16 shutdown contract).
+	if w.done != nil {
+		<-w.done
+	}
+	// Final drain flush with draining=true (Q16 shutdown contract); under
+	// the LIFO stop order this runs after the executor has drained, so the
+	// last status.json shows post-drain counts.
 	w.mu.Lock()
 	w.drained = true
 	w.mu.Unlock()
@@ -99,6 +113,7 @@ func (w *statusWriter) Stop() error {
 }
 
 func (w *statusWriter) loop(ctx context.Context) {
+	defer close(w.done)
 	ticker := time.NewTicker(w.every)
 	defer ticker.Stop()
 	for {
@@ -155,7 +170,7 @@ func (w *statusWriter) writeOnce() error {
 			recent = recent[len(recent)-20:]
 		}
 		for _, j := range recent {
-			status.Recent = append(status.Recent, RecentJob{
+			status.Jobs = append(status.Jobs, RecentJob{
 				ID: j.ID, CorrelateID: j.Spec.CorrelateID, Kind: j.Spec.Kind,
 				State: string(j.State), Attempt: j.Attempt, UpdatedAt: j.UpdatedAt,
 			})

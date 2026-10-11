@@ -27,7 +27,6 @@ import (
 type RunnerConfig struct {
 	Workspace       string        // workspace root the handlers operate on
 	StateDir        string        // <state>/jobs/{spool,status.json,logs}
-	StoreDir        string        // Badger directory (default <state>/jobs/store)
 	Queues          []string      // claim order
 	Workers         int           // executor worker pool (default 2)
 	RefreshInterval time.Duration // scheduled knowledge.refresh submission (0 = off, FR-23)

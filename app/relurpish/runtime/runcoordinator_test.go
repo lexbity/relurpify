@@ -173,3 +173,31 @@ func TestRunCoordinatorConcurrentLifecycle(t *testing.T) {
 	require.Zero(t, coord.Count())
 	require.Equal(t, 50, report.total())
 }
+
+// TestRunCoordinatorRejectsDuplicateLiveRegistration proves FR-22: a second
+// Register with the same live task ID is rejected (ok=false, context already
+// cancelled) instead of silently overwriting the live entry — the first
+// run's done() must never find the second run's entry.
+func TestRunCoordinatorRejectsDuplicateLiveRegistration(t *testing.T) {
+	c := newRunCoordinator(nil)
+	ctx1, done1, ok1 := c.Register("task-dup")
+	require.True(t, ok1)
+
+	ctx2, done2, ok2 := c.Register("task-dup")
+	require.False(t, ok2, "a live duplicate task ID is rejected")
+	require.Error(t, ctx2.Err(), "the refused registration's context is already cancelled")
+	done2() // refusing twice is safe
+
+	// The first run is untouched by the refused registration attempt.
+	require.NoError(t, ctx1.Err())
+
+	// done() deletes only its own entry: completing run 1 frees the ID, and
+	// a fresh registration succeeds with its own live context.
+	done1()
+	done1() // idempotent
+	ctx3, done3, ok3 := c.Register("task-dup")
+	require.True(t, ok3, "the ID is free once its owning run completed")
+	require.NoError(t, ctx3.Err())
+	done3()
+	require.Error(t, ctx3.Err())
+}
