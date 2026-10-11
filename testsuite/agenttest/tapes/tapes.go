@@ -543,7 +543,12 @@ type PromotionLineageRecord struct {
 	SourceRunDir      string    `json:"source_run_dir"`
 	SourceArtifacts   string    `json:"source_artifacts"`
 	DestinationTape   string    `json:"destination_tape,omitempty"`
-	CreatedAt         time.Time `json:"created_at"`
+	// Status records the lineage's honesty state: "" (healthy — the
+	// destination tape exists and replays) or "stale-awaiting-rerecord" (the
+	// tape was removed on a fingerprint mismatch; coverage is explicitly
+	// zero). Any other value fails the corpus cross-check.
+	Status    string    `json:"status,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 func loadSuiteReport(path string) (*agenttest.SuiteReport, error) {

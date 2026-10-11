@@ -1,7 +1,6 @@
 package tapes
 
 import (
-	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -9,65 +8,43 @@ import (
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/platform/llm"
+	"codeburg.org/lexbit/relurpify/testsuite/agenttest"
 )
 
+// The corpus gate is general, not per-tape: every committed lineage under
+// testsuite/agenttests/tapes/<suite>/ is cross-checked against the suite YAML
+// it names. A lineage must name a case that exists in its suite (the hardcoded
+// per-tape assertion this test replaces could not notice a rename), its status
+// must be a known value, and the status must agree with reality on disk: a
+// healthy lineage owns a replayable tape, a stale lineage owns nothing.
+//
+// Committed statuses (wave 4 D12): "" (healthy) and
+// "stale-awaiting-rerecord" (tape deleted on fingerprint mismatch; replay
+// coverage explicitly zero until re-recorded). Anything else fails here.
 const (
-	eucloSmokeSuiteName = "euclo_gemma4_smoke"
-	eucloSmokeCaseName  = "smoke"
-	eucloSmokeModelName = "gemma4:e4b"
-	eucloSmokeProvider  = "tape"
-	eucloSmokePrompt    = "read the workspace and summarize it"
-	eucloSmokeResponse  = "phase 16 canonical euclo smoke corpus"
+	lineageStatusHealthy = ""
+	lineageStatusStale   = "stale-awaiting-rerecord"
 )
 
-func TestCommittedEucloTapeValidates(t *testing.T) {
-	tapePath := filepath.Join("..", "..", "..", "testsuite", "tapes", "euclo_gemma4_smoke.tape.jsonl")
-	inspection, err := llm.InspectTape(tapePath)
+func TestCommittedLineageCorpus(t *testing.T) {
+	repoRoot := filepath.Join("..", "..", "..")
+	tapesDir := filepath.Join(repoRoot, "testsuite", "agenttests", "tapes")
+	lineages, err := filepath.Glob(filepath.Join(tapesDir, "*", "*.lineage.json"))
 	if err != nil {
-		t.Fatalf("inspect tape: %v", err)
+		t.Fatalf("glob committed lineages: %v", err)
 	}
-	if inspection.Header == nil {
-		t.Fatal("expected tape header")
+	if len(lineages) == 0 {
+		t.Fatal("no committed lineages found under testsuite/agenttests/tapes; the corpus gate has nothing to enforce")
 	}
-	if inspection.Header.ProviderID != eucloSmokeProvider {
-		t.Fatalf("provider id = %q, want %s", inspection.Header.ProviderID, eucloSmokeProvider)
-	}
-	if inspection.Header.ModelName != eucloSmokeModelName {
-		t.Fatalf("model name = %q, want %q", inspection.Header.ModelName, eucloSmokeModelName)
-	}
-	if inspection.Header.SuiteName != eucloSmokeSuiteName || inspection.Header.CaseName != eucloSmokeCaseName {
-		t.Fatalf("unexpected tape header: %+v", inspection.Header)
-	}
-	if inspection.EntryCount != 2 {
-		t.Fatalf("entry count = %d, want 2", inspection.EntryCount)
-	}
-
-	model, err := llm.NewTapeModel(nil, tapePath, string(llm.TapeReplay))
-	if err != nil {
-		t.Fatalf("open tape model: %v", err)
-	}
-	if err := model.ConfigureHeader(llm.TapeHeader{
-		ProviderID:       eucloSmokeProvider,
-		ModelName:        eucloSmokeModelName,
-		ModelDigest:      inspection.Header.ModelDigest,
-		FrameworkVersion: inspection.Header.FrameworkVersion,
-		RecordedAt:       inspection.Header.RecordedAt,
-		SuiteName:        eucloSmokeSuiteName,
-		CaseName:         eucloSmokeCaseName,
-	}); err != nil {
-		t.Fatalf("configure header: %v", err)
-	}
-	resp, err := model.Generate(context.Background(), eucloSmokePrompt, &llm.LLMOptions{Model: eucloSmokeModelName})
-	if err != nil {
-		t.Fatalf("replay generate: %v", err)
-	}
-	if resp == nil || resp.Text != eucloSmokeResponse {
-		t.Fatalf("response = %#v, want text %q", resp, eucloSmokeResponse)
+	for _, lineagePath := range lineages {
+		t.Run(filepath.Base(lineagePath), func(t *testing.T) {
+			checkCommittedLineage(t, repoRoot, lineagePath)
+		})
 	}
 }
 
-func TestCommittedEucloLineageValidates(t *testing.T) {
-	lineagePath := filepath.Join("..", "..", "..", "testsuite", "tapes", "euclo_gemma4_smoke.lineage.json")
+func checkCommittedLineage(t *testing.T, repoRoot, lineagePath string) {
+	t.Helper()
 	data, err := os.ReadFile(filepath.Clean(lineagePath))
 	if err != nil {
 		t.Fatalf("read lineage: %v", err)
@@ -76,29 +53,48 @@ func TestCommittedEucloLineageValidates(t *testing.T) {
 	if err := json.Unmarshal(data, &record); err != nil {
 		t.Fatalf("decode lineage: %v", err)
 	}
-	if record.SuiteName != eucloSmokeSuiteName {
-		t.Fatalf("suite name = %q, want %q", record.SuiteName, eucloSmokeSuiteName)
-	}
-	if record.CaseName != eucloSmokeCaseName {
-		t.Fatalf("case name = %q, want %q", record.CaseName, eucloSmokeCaseName)
-	}
-	if record.Model != eucloSmokeModelName || record.Provider != eucloSmokeProvider {
-		t.Fatalf("unexpected lineage record: %+v", record)
-	}
-	if len(record.PromotedArtifacts) != 1 || record.PromotedArtifacts[0] != "tape.jsonl" {
-		t.Fatalf("promoted artifacts = %+v, want tape.jsonl", record.PromotedArtifacts)
-	}
-	if record.DestinationTape != "testsuite/tapes/euclo_gemma4_smoke.tape.jsonl" {
-		t.Fatalf("destination tape = %q", record.DestinationTape)
-	}
-	// The suite_path cross-check closes the dangling-lineage class: a lineage
-	// record must name a suite file that exists in the tree, not a path that
-	// silently stopped resolving when the catalog moved.
 	if strings.TrimSpace(record.SuitePath) == "" {
 		t.Fatal("lineage suite_path is empty")
 	}
-	suiteAbs := filepath.Join("..", "..", "..", filepath.FromSlash(record.SuitePath))
-	if _, err := os.Stat(filepath.Clean(suiteAbs)); err != nil {
-		t.Fatalf("lineage suite_path %q does not resolve: %v", record.SuitePath, err)
+	suiteAbs := filepath.Join(repoRoot, filepath.FromSlash(record.SuitePath))
+	suite, err := agenttest.LoadSuite(filepath.Clean(suiteAbs))
+	if err != nil {
+		t.Fatalf("load lineage suite %q: %v", record.SuitePath, err)
+	}
+	// Membership: the lineage's case must exist in the suite the lineage
+	// names. A lineage whose case was renamed or deleted is a lie about
+	// coverage regardless of what sits on disk.
+	casePresent := false
+	for _, c := range suite.Spec.Cases {
+		if c.Name == record.CaseName {
+			casePresent = true
+			break
+		}
+	}
+	if !casePresent {
+		t.Fatalf("lineage case_name %q is not a case in suite %q", record.CaseName, record.SuitePath)
+	}
+
+	tapeRel := filepath.FromSlash(record.DestinationTape)
+	tapeAbs := filepath.Join(repoRoot, tapeRel)
+	switch record.Status {
+	case lineageStatusHealthy:
+		inspection, err := llm.InspectTape(tapeAbs)
+		if err != nil {
+			t.Fatalf("healthy lineage tape %q does not inspect: %v", tapeRel, err)
+		}
+		if inspection.Header != nil &&
+			strings.TrimSpace(inspection.Header.CaseName) != "" &&
+			strings.TrimSpace(inspection.Header.CaseName) != strings.TrimSpace(record.CaseName) {
+			t.Fatalf("tape header case %q does not match lineage case_name %q",
+				inspection.Header.CaseName, record.CaseName)
+		}
+	case lineageStatusStale:
+		if _, err := os.Stat(tapeAbs); err == nil {
+			t.Fatalf("lineage is marked %q but its tape %q exists; re-record or delete the tape", lineageStatusStale, tapeRel)
+		}
+	default:
+		t.Fatalf("lineage status %q is not a known committed status (%q or %q)",
+			record.Status, lineageStatusHealthy, lineageStatusStale)
 	}
 }

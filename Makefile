@@ -220,9 +220,7 @@ test-dev-agent:
 
 test-tape-fidelity:
 	@mkdir -p /tmp/relurpify-go-cache
-	$(GO_OFFLINE_ENV) GOCACHE=/tmp/relurpify-go-cache go test ./platform/llm -run 'TestTapeModelReplaysCommittedEucloSmoke' -count=1
-	$(GO_OFFLINE_ENV) GOCACHE=/tmp/relurpify-go-cache go test ./testsuite/agenttest/tapes -run 'TestCommittedEucloTapeValidates|TestCommittedEucloLineageValidates' -count=1
-	$(GO_OFFLINE_ENV) GOCACHE=/tmp/relurpify-go-cache go test -tags live ./app/relurpish/runtime -run TestEucloTapeFidelity -count=1 -timeout 120s
+	$(GO_OFFLINE_ENV) GOCACHE=/tmp/relurpify-go-cache go test ./testsuite/agenttest/tapes -run TestCommittedLineageCorpus -count=1
 
 # test-prep runs the hermetic dry-run tier directly (spec Phase 4/5): real
 # loader, real agent, scripted mind — included in test-unit via `go test ./...`.

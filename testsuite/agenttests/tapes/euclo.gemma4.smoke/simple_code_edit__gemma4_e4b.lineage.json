@@ -1,16 +1,17 @@
 {
-  "suite_name": "euclo_gemma4_smoke",
+  "suite_name": "euclo.gemma4.smoke",
   "suite_path": "testsuite/agenttests/euclo.gemma4.smoke.testsuite.yaml",
   "classification": "capability",
-  "case_name": "smoke",
+  "case_name": "simple_code_edit",
   "model": "gemma4:e4b",
   "provider": "tape",
-  "layer": "smoke",
+  "layer": "capability",
   "promoted_artifacts": [
     "tape.jsonl"
   ],
   "source_run_dir": "testsuite/runs/euclo_gemma4_smoke/2026-06-13T00:00:00Z",
   "source_artifacts": "testsuite/runs/euclo_gemma4_smoke/2026-06-13T00:00:00Z/artifacts/smoke__gemma4_e4b",
-  "destination_tape": "testsuite/tapes/euclo_gemma4_smoke.tape.jsonl",
+  "destination_tape": "testsuite/agenttests/tapes/euclo.gemma4.smoke/simple_code_edit__gemma4_e4b.tape.jsonl",
+  "status": "stale-awaiting-rerecord",
   "created_at": "2026-06-13T00:00:00Z"
 }

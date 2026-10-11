@@ -87,6 +87,15 @@ func newSandboxCommandRunner(config *CommandRunnerConfig, runtime SandboxRuntime
 		return nil, fmt.Errorf("resolve workspace: %w", err)
 	}
 	absWorkspace = filepath.Clean(absWorkspace)
+	// The containment check compares protected paths (already
+	// EvalSymlinks-resolved) against this root; the root must be resolved by
+	// the same rule or a symlinked workspace fails its own interior mounts
+	// as `protected_path_escaped`. A nonexistent root is a construction error.
+	realWorkspace, err := filepath.EvalSymlinks(absWorkspace)
+	if err != nil {
+		return nil, fmt.Errorf("resolve workspace %s: %w", absWorkspace, err)
+	}
+	absWorkspace = realWorkspace
 	return &SandboxCommandRunner{
 		config:          runtime.RunConfig(),
 		rt:              runtime,

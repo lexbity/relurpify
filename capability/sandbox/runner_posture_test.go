@@ -200,6 +200,45 @@ func TestRunnerPosture_ProtectedPathSelfSkipped(t *testing.T) {
 	require.Equal(t, ws, ev.Metadata["resolved"])
 }
 
+// TestRunnerPosture_SymlinkedWorkspaceMountsInteriorProtectedPath: the
+// workspace root itself reached through a symlink — the containment check
+// compares resolved-to-resolved, so an interior protected path mounts exactly
+// once and no `protected_path_escaped` fires (D11; fails on a root that is
+// only Abs+Clean'd while protected paths are EvalSymlinks'd).
+func TestRunnerPosture_SymlinkedWorkspaceMountsInteriorProtectedPath(t *testing.T) {
+	realRoot := t.TempDir()
+	ws := filepath.Join(t.TempDir(), "workspace-link")
+	require.NoError(t, os.Symlink(realRoot, ws))
+	require.NoError(t, os.MkdirAll(filepath.Join(realRoot, ".git"), 0o750))
+
+	sink := &commandRecordingSink{}
+	rt := NewSandboxRuntime(sandbox.SandboxConfig{})
+	require.NoError(t, rt.ApplyPolicy(context.Background(), sandbox.SandboxPolicy{
+		ProtectedPaths: []string{filepath.Join(ws, ".git")},
+	}))
+	runner, err := NewSandboxCommandRunner(&CommandRunnerConfig{Workspace: ws, Events: sink}, rt)
+	require.NoError(t, err)
+
+	require.Equal(t, realRoot, runner.workspace, "construction must resolve the workspace root")
+	mounts := runner.protectedMounts(context.Background())
+	require.Len(t, mounts, 1, "interior protected path must mount exactly once: %v", mounts)
+	require.Equal(t, filepath.Join(realRoot, ".git")+":/workspace/.git:ro", mounts[0])
+	_, escaped := sink.Find(telemetry.EventSandboxProtectedPathEscaped)
+	require.False(t, escaped, "a path inside a symlinked workspace is not an escape")
+}
+
+// TestRunnerPosture_NonexistentWorkspaceRejected: with the root resolved at
+// construction, a workspace that does not exist is a typed construction error,
+// not a late mount-time surprise.
+func TestRunnerPosture_NonexistentWorkspaceRejected(t *testing.T) {
+	rt := NewSandboxRuntime(sandbox.SandboxConfig{})
+	require.NoError(t, rt.ApplyPolicy(context.Background(), sandbox.SandboxPolicy{}))
+	missing := filepath.Join(t.TempDir(), "absent")
+	_, err := NewSandboxCommandRunner(&CommandRunnerConfig{Workspace: missing}, rt)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "resolve workspace")
+}
+
 // TestRunnerPosture_ImageDigestResolution covers D-13 precedence against the
 // fake docker daemon: explicit ref, configured digest, local inspect, unpinned.
 func TestRunnerPosture_ImageDigestResolution(t *testing.T) {
