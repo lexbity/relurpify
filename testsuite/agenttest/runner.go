@@ -105,6 +105,9 @@ type CaseReport struct {
 	BaselinePath        string               `json:"baseline_path,omitempty"`
 	BaselineFound       bool                 `json:"baseline_found,omitempty"`
 	PerformanceWarnings []PerformanceWarning `json:"performance_warnings,omitempty"`
+	// Frames records the interaction_script pairs the driver executed (D8):
+	// every (frame, answer) the harness drove, in order.
+	Frames []interactionFrameRecord `json:"frames,omitempty"`
 	// Latency tracking for tool execution.
 	ToolLatencies   map[string]LatencyStats `json:"tool_latencies,omitempty"`
 	TotalToolTimeMs int64                   `json:"total_tool_time_ms,omitempty"`

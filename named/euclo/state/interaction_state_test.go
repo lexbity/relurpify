@@ -25,17 +25,6 @@ func TestInteractionFrameSeq_RoundTrip(t *testing.T) {
 	}
 }
 
-func TestInteractionFrameRequested_DefaultFalse(t *testing.T) {
-	env := contextdata.NewEnvelope("task-1", "")
-	if state.GetInteractionFrameRequested(env) {
-		t.Fatal("expected false for absent key")
-	}
-	state.SetInteractionFrameRequested(env, true)
-	if !state.GetInteractionFrameRequested(env) {
-		t.Fatal("expected true after Set")
-	}
-}
-
 func TestInteractionResumeNodeID_RoundTrip(t *testing.T) {
 	env := contextdata.NewEnvelope("task-1", "")
 	state.SetInteractionResumeNodeID(env, "clarification-gate")

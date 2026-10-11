@@ -57,7 +57,6 @@ func (n *AskNode) Execute(ctx context.Context, env *contextdata.Envelope) (*exec
 			}
 			contextdata.SetTyped(env, askFrameKey(n.step.ID), frame)
 		}
-		state.SetInteractionFrameRequested(env, true)
 		state.SetInteractionResumeNodeID(env, n.id)
 		stepResult = &execution.Result{
 			NodeID:  n.id,
@@ -96,7 +95,6 @@ func (n *AskNode) Execute(ctx context.Context, env *contextdata.Envelope) (*exec
 	}
 	n.writeStepMetadata(env)
 	state.SetInteractionResumeNodeID(env, "")
-	state.SetInteractionFrameRequested(env, false)
 	contextdata.SetTyped(env, askFrameKey(n.step.ID), frame)
 	contextdata.SetTyped(env, "euclo.execution.step."+n.step.ID+".result", stepResult.Data)
 	contextdata.SetTyped(env, "euclo.execution.step."+n.step.ID+".success", true)

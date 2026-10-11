@@ -1351,20 +1351,49 @@ func (r *Runtime) submitTurn(ctx context.Context, instruction string, taskType e
 	return r.RunTask(ctx, task)
 }
 
+// ErrFrameNotFound reports an answer attempt for a task or frame the runtime
+// does not hold (D8: answers are typed, never silent string errors).
+type ErrFrameNotFound struct {
+	TaskID  string
+	FrameID string
+}
+
+func (e *ErrFrameNotFound) Error() string {
+	return fmt.Sprintf("interaction frame %q for task %q not found", e.FrameID, e.TaskID)
+}
+
+// ErrFrameAlreadyResolved reports an answer attempt for a frame that already
+// carries a response (D8): answers are WRITE-ONCE — a second answer never
+// overwrites the human's first decision, which is the exactly-once property
+// at the answer boundary that pause semantics alone never had.
+type ErrFrameAlreadyResolved struct {
+	TaskID  string
+	FrameID string
+}
+
+func (e *ErrFrameAlreadyResolved) Error() string {
+	return fmt.Sprintf("interaction frame %q for task %q is already answered", e.FrameID, e.TaskID)
+}
+
 // ResolveInteractionFrame writes a UI response back into the live envelope for
 // the given task and frame, then persists Euclo clarification state when the
-// frame is clarification-scoped.
+// frame is clarification-scoped. Validation is typed: an unknown task or
+// frame returns *ErrFrameNotFound; a frame that already carries a response
+// returns *ErrFrameAlreadyResolved and the envelope is left byte-identical.
 func (r *Runtime) ResolveInteractionFrame(ctx context.Context, taskID, frameID, choice, freetext string) error {
 	if r == nil {
 		return fmt.Errorf("runtime unavailable")
 	}
 	env := r.interactionEnvelope(taskID)
 	if env == nil {
-		return fmt.Errorf("interaction envelope for task %q not available", taskID)
+		return &ErrFrameNotFound{TaskID: strings.TrimSpace(taskID), FrameID: strings.TrimSpace(frameID)}
 	}
 	frame, ok := findInteractionFrame(env, frameID)
 	if !ok || frame == nil {
-		return fmt.Errorf("interaction frame %q not found", frameID)
+		return &ErrFrameNotFound{TaskID: strings.TrimSpace(taskID), FrameID: strings.TrimSpace(frameID)}
+	}
+	if frame.Response != nil {
+		return &ErrFrameAlreadyResolved{TaskID: strings.TrimSpace(taskID), FrameID: strings.TrimSpace(frameID)}
 	}
 	answer := strings.TrimSpace(choice)
 	if answer == "" {
@@ -1440,7 +1469,6 @@ func (r *Runtime) persistInteractionResolution(ctx context.Context, env *context
 		return nil
 	}
 	if frame.Type != interaction.FrameIntentClarification {
-		env.SetWorkingValueWithClass("euclo.interaction.frame_requested", false, contextdata.MemoryClassTask)
 		return nil
 	}
 	store := intentcontext.NewStateStore()
@@ -1464,7 +1492,6 @@ func (r *Runtime) persistInteractionResolution(ctx context.Context, env *context
 	if err := store.Write(ctx, env, state); err != nil {
 		return err
 	}
-	env.SetWorkingValueWithClass("euclo.interaction.frame_requested", false, contextdata.MemoryClassTask)
 	return nil
 }
 
@@ -1485,6 +1512,10 @@ func (r *Runtime) resumeInteractionTask(ctx context.Context, env *contextdata.En
 	}
 	agent := r.ActiveAgent()
 	if agent == nil {
+		// Resume-path parity with executeTask (D8): a nil-agent rejection
+		// emits task.rejected — the degradation may never be silent just
+		// because the task arrived through the resume door.
+		r.emitTaskRejected(ctx, task.ID, "runtime degraded: "+r.degradationReason())
 		return nil, &ErrRuntimeDegraded{Reason: r.degradationReason()}
 	}
 	return agent.Execute(r.beginTurn(ctx, env), task, env)

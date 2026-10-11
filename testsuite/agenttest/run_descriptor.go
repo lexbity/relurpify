@@ -26,6 +26,9 @@ type PreparedRunDescriptor struct {
 	CaseName              string                       `json:"case_name"`
 	AgentName             string                       `json:"agent_name"`
 	Instruction           string                       `json:"instruction,omitempty"`
+	// InteractionScript is the case's ordered ask-driving script (D8): each
+	// paused frame consumes the next unconsumed entry's Action as the answer.
+	InteractionScript []InteractionScriptStep `json:"interaction_script,omitempty"`
 	WorkspaceRoot         string                       `json:"workspace_root"`
 	RunRoot               string                       `json:"run_root"`
 	DerivedWorkspaceRoot  string                       `json:"derived_workspace_root"`
@@ -165,6 +168,7 @@ func BuildPreparedRunDescriptor(suite *Suite, c CaseSpec, model ModelSpec, opts 
 		CaseName:              strings.TrimSpace(c.Name),
 		AgentName:             strings.TrimSpace(suite.Spec.AgentName),
 		Instruction:           strings.TrimSpace(c.Prompt),
+		InteractionScript:     append([]InteractionScriptStep(nil), c.InteractionScript...),
 		WorkspaceRoot:         targetWorkspace,
 		RunRoot:               artifacts.RunRoot,
 		DerivedWorkspaceRoot:  artifacts.SetupWorkspaceDir,

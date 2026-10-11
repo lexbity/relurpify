@@ -9,6 +9,7 @@ import (
 	"codeburg.org/lexbit/relurpify/governance/authorization"
 	govpolicy "codeburg.org/lexbit/relurpify/governance/policy"
 	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
+	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	"codeburg.org/lexbit/relurpify/named/euclo/orchestrate"
 	"codeburg.org/lexbit/relurpify/named/euclo/policy"
 	"codeburg.org/lexbit/relurpify/named/euclo/state"
@@ -119,8 +120,11 @@ func TestDryRunEndToEndAmbiguousInteractionAndHITL(t *testing.T) {
 	}
 	<-done
 
-	if !mustBoolValue(t, env, "euclo.interaction.frame_requested") {
-		t.Fatal("expected interaction frame to be requested")
+	// The write-only frame-requested flag was deleted (D8); the surviving
+	// contract is the frame itself: a policy-frame run must have produced at
+	// least one interaction frame on the envelope.
+	if !envelopeHasInteractionFrame(t, env) {
+		t.Fatal("expected an interaction frame on the envelope")
 	}
 	if !mustBoolValue(t, env, "euclo.hitl_triggered") {
 		t.Fatal("expected HITL to be triggered")
@@ -128,4 +132,18 @@ func TestDryRunEndToEndAmbiguousInteractionAndHITL(t *testing.T) {
 	if !mustBoolValue(t, env, "euclo.execution.completed") {
 		t.Fatal("expected execution to complete after HITL approval")
 	}
+}
+
+// envelopeHasInteractionFrame scans the envelope's working memory for any
+// interaction frame — the durable artifact of a frame-requesting run.
+func envelopeHasInteractionFrame(t *testing.T, env *contextdata.Envelope) bool {
+	t.Helper()
+	for _, key := range env.WorkingMemoryKeys() {
+		if value, ok := contextdata.GetTyped[any](env, key); ok {
+			if frame, ok := value.(*interaction.InteractionFrame); ok && frame != nil {
+				return true
+			}
+		}
+	}
+	return false
 }

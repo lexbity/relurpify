@@ -14,18 +14,6 @@ func SetInteractionFrameSeq(env *contextdata.Envelope, seq int) {
 	contextdata.SetTyped(env, KeyInteractionFrameSeq, seq)
 }
 
-// GetInteractionFrameRequested reports whether an interaction frame has been requested
-// in the current execution cycle.
-func GetInteractionFrameRequested(env *contextdata.Envelope) bool {
-	v, _ := contextdata.GetTyped[bool](env, KeyInteractionFrameRequested)
-	return v
-}
-
-// SetInteractionFrameRequested marks whether an interaction frame has been requested.
-func SetInteractionFrameRequested(env *contextdata.Envelope, requested bool) {
-	contextdata.SetTyped(env, KeyInteractionFrameRequested, requested)
-}
-
 // GetInteractionResumeNodeID returns the graph node ID at which execution should resume
 // after an interaction pause.
 func GetInteractionResumeNodeID(env *contextdata.Envelope) string {

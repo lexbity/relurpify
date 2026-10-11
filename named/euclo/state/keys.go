@@ -123,7 +123,6 @@ const (
 // Callers should prefer the typed accessors in interaction_state.go.
 const (
 	KeyInteractionFrameSeq           = euclokeys.KeyInteractionFrameSeq
-	KeyInteractionFrameRequested     = euclokeys.KeyInteractionFrameRequested
 	KeyInteractionClarificationFrame = euclokeys.KeyInteractionClarificationFrame
 	KeyInteractionResumeNodeID       = euclokeys.KeyInteractionResumeNodeID
 	KeyInteractionPause              = euclokeys.KeyInteractionPause

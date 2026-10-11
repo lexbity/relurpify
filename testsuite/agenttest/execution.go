@@ -2,6 +2,7 @@ package agenttest
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -115,8 +116,19 @@ func (e *PreparedRunExecutor) Execute(ctx context.Context, desc *PreparedRunDesc
 	}
 	env := contextdata.NewEnvelope(desc.RunID, desc.RunID)
 	result, attempts, triggeredBy, execErr := e.executeWithRetry(ctx, desc, task, env, out)
+	// D8: drive the case's interaction_script through any paused outcome.
+	// The driver answers pending ask frames per the script and resumes; an
+	// unscripted pause fails the case typed unanswered_frame.
+	result, frames, driveErr := e.driveInteractionScript(ctx, desc, task, env, result, out)
+	if driveErr != nil && execErr == nil {
+		execErr = driveErr
+		if result != nil {
+			result.Success = false
+		}
+	}
 	verifications := e.runVerification(ctx, desc)
 	report := e.buildCaseReport(desc, result, execErr, attempts, triggeredBy, verifications, startedAt)
+	report.Frames = frames
 	if e.recorder != nil {
 		events := e.recorder.Events()
 		applyRecordedTelemetry(&report, events)
@@ -556,7 +568,12 @@ func (e *PreparedRunExecutor) buildCaseReport(desc *PreparedRunDescriptor, resul
 		if report.Error == "" {
 			report.Error = execErr.Error()
 		}
-		report.FailureKind = classifyFailure(execErr)
+		var unanswered *ErrUnansweredFrame
+		if errors.As(execErr, &unanswered) {
+			report.FailureKind = "unanswered_frame"
+		} else {
+			report.FailureKind = classifyFailure(execErr)
+		}
 	}
 	return report
 }

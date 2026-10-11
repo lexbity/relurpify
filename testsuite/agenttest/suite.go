@@ -107,6 +107,11 @@ type CaseSpec struct {
 	CapabilityDirectRun *CapabilityDirectRunSpec `yaml:"capability_direct_run,omitempty"`
 }
 
+// InteractionScriptStep is one entry of a case's ask-driving script (D8).
+// The driver consumes Action as the answer written onto the next paused
+// frame (Text optional freetext); Phase and Kind are advisory labels the
+// driver does not branch on (R-4: no schema growth beyond the existing
+// surface).
 type InteractionScriptStep struct {
 	Phase  string `yaml:"phase,omitempty"`
 	Kind   string `yaml:"kind,omitempty"`

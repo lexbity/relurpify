@@ -126,7 +126,6 @@ const (
 // Interaction frame state keys.
 const (
 	KeyInteractionFrameSeq           = "euclo.interaction.frame_seq"
-	KeyInteractionFrameRequested     = "euclo.interaction.frame_requested"
 	KeyInteractionClarificationFrame = "euclo.interaction.clarification_frame"
 	KeyInteractionResumeNodeID       = "euclo.interaction.resume_node_id"
 	KeyInteractionPause              = "euclo.interaction.pause"

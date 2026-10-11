@@ -279,7 +279,6 @@ func buildNodes(ctx context.Context, in buildNodeInput) ([]agentgraph.Node, erro
 	interactionFrameNode := newStageNode("euclo.interaction_frame", agentgraph.NodeTypeSystem, func(_ context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 		if env != nil {
 			seedPolicyDefaults(env)
-			euclostate.SetInteractionFrameRequested(env, true)
 		}
 		return &execution.Result{
 			NodeID:  "euclo.interaction_frame",
