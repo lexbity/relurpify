@@ -13,6 +13,7 @@ import (
 	capfs "codeburg.org/lexbit/relurpify/capability/fs"
 	"codeburg.org/lexbit/relurpify/cognitionzoo/paradigm"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
+	"codeburg.org/lexbit/relurpify/context/knowledge/retrieval"
 	"codeburg.org/lexbit/relurpify/context/knowledge"
 	"codeburg.org/lexbit/relurpify/context/knowledge/memory"
 	"codeburg.org/lexbit/relurpify/context/persistence"
@@ -165,6 +166,27 @@ func Run(ctx context.Context, cfg DryRunConfig) (*DryRunReport, error) {
 		}
 		if len(ground.Grounded) != 1 {
 			return nil, fmt.Errorf("prep: seed chunk %d not grounded: %+v", i, ground)
+		}
+	}
+
+	// Settle the retriever's event subscription: seed grounding publishes
+	// chunk events on the bus, and the retriever's consumer goroutine
+	// invalidates its snapshot generation asynchronously. The intake compile
+	// is the FIRST retrieval of the run — without a deterministic settle it
+	// races the consumer and misses the seeds. Poll until a probe retrieval
+	// surfaces the last-seeded body (bounded), so the intake delivery the
+	// suite asserts is the run's real behavior, not a race outcome.
+	if len(cfg.SeedChunks) > 0 {
+		deadline := time.Now().Add(2 * time.Second)
+		for {
+			result, err := kn.Retriever.Retrieve(ctx, retrieval.RetrievalQuery{
+				Text: cfg.SeedChunks[len(cfg.SeedChunks)-1].Body,
+			})
+			settled := err == nil && result != nil && len(result.Ranked) > 0
+			if settled || time.Now().After(deadline) {
+				break
+			}
+			time.Sleep(time.Millisecond)
 		}
 	}
 

@@ -77,7 +77,9 @@ func TestBuildStreamRequestUsesFamilyAnchor(t *testing.T) {
 func TestBuildStreamRequestMode(t *testing.T) {
 	templateStr := "context for: {{.Instruction}}"
 	instruction := "review code"
-	mode := contextstream.ModeBackground
+	// Intake is a blocking-only producer (D5): ModeBlocking is the only mode
+	// the builder is ever called with.
+	mode := contextstream.ModeBlocking
 
 	req := BuildStreamRequestWithTemplate(templateStr, instruction, &TaskEnvelope{}, 1000, mode)
 
@@ -135,45 +137,12 @@ func TestBuildStreamRequestIncludesEnvelopeAnchors(t *testing.T) {
 	}
 }
 
-func TestBuildStreamRequestBackgroundModeEnforcement(t *testing.T) {
-	// This test requires BuildStreamRequest with classification source
-	// The mode enforcement logic is tested separately.
-	// The actual enforcement will be in the pipeline node
-	templateStr := "context for: {{.Instruction}}"
-	instruction := "fix the bug"
-
-	// Default mode is background
-	req := BuildStreamRequestWithTemplate(templateStr, instruction, &TaskEnvelope{}, 1000, contextstream.ModeBackground)
-
-	if req == nil {
-		t.Fatal("Expected non-nil request")
-	}
-
-	// Mode enforcement will be in pipeline node based on classification source
-	_ = req
-}
-
-func TestBuildStreamRequestBackgroundModeSafeWithHint(t *testing.T) {
-	// When ClassificationSource == "override", background mode is preserved
-	// This will be tested in the pipeline node
-	templateStr := "context for: {{.Instruction}}"
-	instruction := "fix the bug"
-
-	req := BuildStreamRequestWithTemplate(templateStr, instruction, &TaskEnvelope{}, 1000, contextstream.ModeBackground)
-
-	if req == nil {
-		t.Fatal("Expected non-nil request")
-	}
-
-	_ = req
-}
-
 func TestIntakePipelineNodeExecute(t *testing.T) {
 	registry := families.NewRegistry()
 	_ = families.RegisterBuiltins(registry)
 
 	trigger := &UniqueMockStreamTrigger{}
-	node := NewIntakePipelineNode("intake", registry, 1000, contextstream.ModeBlocking, trigger)
+	node := NewIntakePipelineNode("intake", registry, 1000, trigger)
 
 	env := contextdata.NewEnvelope("task-123", "session-456")
 	contextdata.SetTyped(env, euclokeys.KeyTaskInput, &execution.Task{Instruction: "analyze the codebase"})
@@ -240,14 +209,10 @@ func (m *UniqueMockStreamTrigger) RequestBlocking(ctx context.Context, req conte
 	return &contextstream.Result{}, nil
 }
 
-func (m *UniqueMockStreamTrigger) RequestBackground(ctx context.Context, req contextstream.Request) (*contextstream.Job, error) {
-	return &contextstream.Job{}, nil
-}
-
 func TestSomeTest(t *testing.T) {
 	registry := families.NewRegistry()
 	trigger := &UniqueMockStreamTrigger{}
-	node := NewIntakePipelineNode("test-node", registry, 100, contextstream.ModeBlocking, trigger)
+	node := NewIntakePipelineNode("test-node", registry, 100, trigger)
 	// Test logic
 	_ = node
 }

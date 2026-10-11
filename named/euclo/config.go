@@ -1,7 +1,6 @@
 package euclo
 
 import (
-	"codeburg.org/lexbit/relurpify/context/contextstream"
 	"codeburg.org/lexbit/relurpify/context/persistence"
 	contextports "codeburg.org/lexbit/relurpify/context/ports"
 	"codeburg.org/lexbit/relurpify/execution/agentlifecycle"
@@ -25,13 +24,6 @@ type EucloConfig struct {
 
 	// MaxStreamTokens is the token budget passed to context stream requests.
 	MaxStreamTokens int
-
-	// DefaultStreamMode controls blocking vs background for intake stream requests.
-	// Background mode is only safe when tier-2 classification is bypassed (e.g.
-	// context_hint override is present). When DefaultStreamMode is ModeBackground
-	// and no context_hint is present, Execute logs a warning and falls back to
-	// ModeBlocking for the tier-2 classification step.
-	DefaultStreamMode contextstream.Mode
 
 	// WorkspaceIngestionMode controls the default workspace scanning behavior.
 	// "files_only" (default): only ingest explicitly selected user files.
@@ -92,7 +84,6 @@ func DefaultConfig() EucloConfig {
 		ThoughtRecipeDirs:       []string{},
 		BuiltinFamilies:         true,
 		MaxStreamTokens:         8192,
-		DefaultStreamMode:       contextstream.ModeBlocking,
 		WorkspaceIngestionMode:  "files_only",
 		IngestionIncludeGlobs:   []string{},
 		IngestionExcludeGlobs:   []string{},

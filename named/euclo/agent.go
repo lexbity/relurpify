@@ -241,7 +241,6 @@ func (a *Agent) BuildGraph(ctx context.Context, task *execution.Task) (*agentgra
 		Paradigm:             a.deps,
 		StreamTrigger:        a.deps.StreamTrigger,
 		MaxStreamTokens:      a.config.MaxStreamTokens,
-		DefaultStreamMode:    a.config.DefaultStreamMode,
 		HITLBroker:           a.config.HITLBroker,
 		Checkpoints:          a.config.CheckpointRepository,
 		Persistence:          a.config.PersistenceWriter,

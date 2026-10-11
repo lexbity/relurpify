@@ -2,9 +2,9 @@ package agentgraph
 
 import (
 	"context"
+	"strings"
 	"errors"
 	"testing"
-	"time"
 
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/context/contextstream"
@@ -191,21 +191,20 @@ func TestCheckpointNodeContract(t *testing.T) {
 	}
 }
 
+// TestCheckpointNodeMirrorsStreamSummaryToEnvelope proves the summary
+// contract: the checkpoint reads the bounded summary map the context
+// producers write, populates the stream metadata keys from it, and the
+// snapshot artifact carries chunk/token counts — never a chunk body.
 func TestCheckpointNodeMirrorsStreamResultToEnvelope(t *testing.T) {
 	repo := &checkpointRepoStub{}
 	node := NewCheckpointNode("checkpoint-5").WithRepository(repo)
 	env := contextdata.NewEnvelope("task-5", "session-5")
 	env.RequestCheckpoint("stream checkpoint", 1, false)
-	env.SetWorkingValueWithClass("contextstream.result", &contextstream.Result{
-		Request: contextstream.Request{
-			ID:   "stream-2",
-			Mode: contextstream.ModeBackground,
-		},
-		StartedAt:   time.Now().Add(-1 * time.Minute),
-		CompletedAt: time.Now(),
-		Trim: contextstream.TrimMetadata{
-			ShortfallTokens: 0,
-		},
+	env.SetWorkingValueWithClass("contextstream.result", map[string]any{
+		"request_id": "stream-2",
+		"epoch":      uint64(3),
+		"chunks":     2,
+		"tokens":     616,
 	}, contextdata.MemoryClassTask)
 
 	result, err := node.Execute(context.Background(), env)
@@ -217,5 +216,21 @@ func TestCheckpointNodeMirrorsStreamResultToEnvelope(t *testing.T) {
 	}
 	if got, ok := contextdata.GetTyped[any](env, "checkpoint.snapshot"); !ok || got == nil {
 		t.Fatal("expected checkpoint snapshot to be written")
+	}
+	artifact := repo.artifact
+	for key, want := range map[string]any{
+		"stream_request_id": "stream-2",
+		"stream_chunks":     2,
+		"stream_tokens":     616,
+	} {
+		if got := artifact.SummaryMetadata[key]; got != want {
+			t.Fatalf("metadata[%s] = %v, want %v", key, got, want)
+		}
+	}
+	if artifact.SummaryMetadata["has_stream_result"] != true {
+		t.Fatal("has_stream_result must be set from the summary")
+	}
+	if strings.Contains(artifact.InlineRawText, "Body\":") {
+		t.Fatal("the checkpoint artifact must never carry a chunk body")
 	}
 }

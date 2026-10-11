@@ -260,14 +260,10 @@ func (m *MockStreamTrigger) RequestBlocking(ctx context.Context, req contextstre
 	return &contextstream.Result{}, nil
 }
 
-func (m *MockStreamTrigger) RequestBackground(ctx context.Context, req contextstream.Request) (*contextstream.Job, error) {
-	return &contextstream.Job{}, nil
-}
-
 func TestIntakePipelineNodeExecute_AllSteps(t *testing.T) {
 	registry := families.NewRegistry()
 	trigger := &MockStreamTrigger{}
-	node := NewIntakePipelineNode("test-node", registry, 100, contextstream.ModeBlocking, trigger)
+	node := NewIntakePipelineNode("test-node", registry, 100, trigger)
 	env := contextdata.NewEnvelope("test-task", "test-session")
 	contextdata.SetTyped(env, euclokeys.KeyTaskInput, &execution.Task{Instruction: "analyze code"})
 	result, err := node.Execute(context.Background(), env)
@@ -291,7 +287,7 @@ func TestIntakePipelineNodeExecute_AllSteps(t *testing.T) {
 func TestIntakePipelineNodeExecute_EdgeCases(t *testing.T) {
 	registry := families.NewRegistry()
 	trigger := &MockStreamTrigger{}
-	node := NewIntakePipelineNode("test-node", registry, 100, contextstream.ModeBlocking, trigger)
+	node := NewIntakePipelineNode("test-node", registry, 100, trigger)
 	env := contextdata.NewEnvelope("test-task", "test-session")
 	_, err := node.Execute(context.Background(), env) // No task input
 	if err == nil {

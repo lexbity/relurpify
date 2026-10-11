@@ -9,7 +9,6 @@ import (
 
 	relurpctx "codeburg.org/lexbit/relurpify/context"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
-	"codeburg.org/lexbit/relurpify/context/contextstream"
 	"codeburg.org/lexbit/relurpify/context/knowledge"
 	"codeburg.org/lexbit/relurpify/context/persistence"
 	contextports "codeburg.org/lexbit/relurpify/context/ports"
@@ -303,16 +302,21 @@ func (n *CheckpointNode) buildSnapshot(ctx context.Context, env *contextdata.Env
 		snapshot.Metadata["priority"] = reqPriority(req)
 		snapshot.Metadata["evict_working_memory"] = req.EvictWorkingMemory
 	}
-	if sr, ok := streamResult.(*contextstream.Result); ok && sr != nil {
+	// Stream state metadata reads the bounded summary map the context
+	// producers write (contextstream.SummaryOf) — the working entry is a
+	// summary by construction, never a full result, so no chunk body can
+	// reach the checkpoint artifact through it.
+	if summary, ok := streamResult.(map[string]any); ok && summary != nil {
 		snapshot.Metadata["has_stream_result"] = true
-		snapshot.Metadata["stream_request_id"] = sr.Request.ID
-		snapshot.Metadata["stream_mode"] = string(sr.Request.Mode)
-		snapshot.Metadata["shortfall_tokens"] = sr.Trim.ShortfallTokens
-		snapshot.Metadata["trimmed"] = sr.Trim.ShortfallTokens > 0 || len(sr.Trim.Substitutions) > 0
+		for _, key := range []string{"request_id", "epoch", "chunks", "tokens"} {
+			if value, ok := summary[key]; ok {
+				snapshot.Metadata["stream_"+key] = value
+			}
+		}
 	}
 	inline, err := json.Marshal(map[string]any{
 		"checkpoint_request": req,
-		"stream_result":      streamResult,
+		"stream_summary":     streamResult,
 		"working_data":       env.WorkingDataSnapshot(),
 		"references":         env.ReferencesSnapshot(),
 	})

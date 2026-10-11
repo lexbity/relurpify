@@ -76,10 +76,6 @@ func NewRootGraph(ctx context.Context, deps RootGraphDeps) (*RootGraph, error) {
 	if maxTokens <= 0 {
 		maxTokens = 8192
 	}
-	streamMode := deps.DefaultStreamMode
-	if streamMode == "" {
-		streamMode = contextstream.ModeBlocking
-	}
 	if famReg == nil {
 		famReg = defaultFamilyRegistry()
 	}
@@ -99,7 +95,6 @@ func NewRootGraph(ctx context.Context, deps RootGraphDeps) (*RootGraph, error) {
 		paradigmDeps:         paradigmDeps,
 		famReg:               famReg,
 		maxTokens:            maxTokens,
-		streamMode:           streamMode,
 		streamTrigger:        deps.StreamTrigger,
 		workspace:            deps.Workspace,
 		permissionManager:    deps.PermissionManager,
@@ -179,7 +174,6 @@ type buildNodeInput struct {
 	paradigmDeps         *paradigm.Deps
 	famReg               *families.KeywordFamilyRegistry
 	maxTokens            int
-	streamMode           contextstream.Mode
 	streamTrigger        *contextstream.Trigger
 	workspace            string
 	permissionManager    policy.PermissionManager
@@ -216,12 +210,18 @@ func buildNodes(ctx context.Context, in buildNodeInput) ([]agentgraph.Node, erro
 	if err := registerClarificationCapability(ctx, thoughtrecipeCapReg, thoughtrecipeReg); err != nil {
 		return nil, err
 	}
+	// A nil *contextstream.Trigger means "no compiler wired" (compiler-less
+	// runs are legitimate): normalize it to a nil interface so the intake
+	// node skips its stream step instead of failing on a typed-nil trigger.
+	var intakeTrigger intake.StreamTrigger
+	if in.streamTrigger != nil {
+		intakeTrigger = in.streamTrigger
+	}
 	intakePipeline := intake.NewIntakePipelineNode(
 		"euclo.intake",
 		in.famReg,
 		in.maxTokens,
-		in.streamMode,
-		in.streamTrigger,
+		intakeTrigger,
 	)
 	intakeNode := newStageNode("euclo.intake", agentgraph.NodeTypeSystem, func(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 		seedDefaultTask(env)

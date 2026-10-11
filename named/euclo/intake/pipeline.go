@@ -2,9 +2,11 @@ package intake
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
+	relurpctx "codeburg.org/lexbit/relurpify/context"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/context/contextstream"
 	execution "codeburg.org/lexbit/relurpify/execution"
@@ -14,30 +16,30 @@ import (
 	"codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
 )
 
-// StreamTrigger captures the subset of contextstream.Trigger behavior required by the intake node.
+// StreamTrigger captures the subset of contextstream.Trigger behavior required
+// by the intake node. Intake is a BLOCKING producer only (D5): the initial
+// context must land before the first prompt composes, so background semantics
+// — and their request interface surface — do not exist here.
 type StreamTrigger interface {
 	RequestBlocking(ctx context.Context, req contextstream.Request) (*contextstream.Result, error)
-	RequestBackground(ctx context.Context, req contextstream.Request) (*contextstream.Job, error)
 }
 
 // IntakePipelineNode coordinates normalization, evidence extraction,
 // interpretation, stream seeding, and clarification gating.
 type IntakePipelineNode struct {
-	id                string
-	registry          *families.KeywordFamilyRegistry
-	maxStreamTokens   int
-	defaultStreamMode contextstream.Mode
-	streamTrigger     StreamTrigger
+	id              string
+	registry        *families.KeywordFamilyRegistry
+	maxStreamTokens int
+	streamTrigger   StreamTrigger
 }
 
 // NewIntakePipelineNode creates a new intake pipeline node.
-func NewIntakePipelineNode(id string, registry *families.KeywordFamilyRegistry, maxStreamTokens int, defaultStreamMode contextstream.Mode, trigger StreamTrigger) *IntakePipelineNode {
+func NewIntakePipelineNode(id string, registry *families.KeywordFamilyRegistry, maxStreamTokens int, trigger StreamTrigger) *IntakePipelineNode {
 	return &IntakePipelineNode{
-		id:                id,
-		registry:          registry,
-		maxStreamTokens:   maxStreamTokens,
-		defaultStreamMode: defaultStreamMode,
-		streamTrigger:     trigger,
+		id:              id,
+		registry:        registry,
+		maxStreamTokens: maxStreamTokens,
+		streamTrigger:   trigger,
 	}
 }
 
@@ -49,11 +51,21 @@ func (n *IntakePipelineNode) Type() agentgraph.NodeType {
 	return agentgraph.NodeTypeSystem
 }
 
-// Contract returns the node contract.
+// Contract returns the node contract. The intake compile is a first-class
+// context producer (D5): its slice lands on the envelope, so the contract
+// declares the context side effect and bounds its working-state entries.
 func (n *IntakePipelineNode) Contract() agentgraph.NodeContract {
 	return agentgraph.NodeContract{
-		SideEffectClass: agentgraph.SideEffectNone,
+		SideEffectClass: agentgraph.SideEffectContext,
 		Idempotency:     agentgraph.IdempotencyReplaySafe,
+		ContextPolicy: relurpctx.StateBoundaryPolicy{
+			ReadKeys:                 []string{"task.*", "contextstream.*"},
+			WriteKeys:                []string{"contextstream.*"},
+			AllowedMemoryClasses:     []relurpctx.MemoryClass{relurpctx.MemoryClassWorking},
+			AllowedDataClasses:       []relurpctx.StateDataClass{relurpctx.StateDataClassTaskMetadata, relurpctx.StateDataClassStructuredState},
+			MaxStateEntryBytes:       4096,
+			MaxInlineCollectionItems: 16,
+		},
 	}
 }
 
@@ -82,7 +94,10 @@ func (n *IntakePipelineNode) Execute(ctx context.Context, env *contextdata.Envel
 	taskEnvelope.Interpretation = interpretation
 
 	family, _ := n.lookupFamily(scoredClassification.WinningFamily)
-	streamResult := n.maybeStreamContext(ctx, family.RetrievalTemplate, taskEnvelope, env.AssemblyMetadataSnapshot().EpochID)
+	streamResult, streamErr := n.maybeStreamContext(ctx, env, family.RetrievalTemplate, taskEnvelope)
+	if streamErr != nil {
+		return nil, streamErr
+	}
 	intent := &IntentClassification{
 		WinningFamily:        scoredClassification.WinningFamily,
 		FamilyCandidates:     append([]families.FamilyCandidate(nil), scoredClassification.FamilyCandidates...),
@@ -125,14 +140,10 @@ func (n *IntakePipelineNode) Execute(ctx context.Context, env *contextdata.Envel
 	env.SetWorkingValueWithClass(euclokeys.KeyFamilySelection, scoredClassification.WinningFamily, contextdata.MemoryClassTask)
 	env.SetWorkingValueWithClass(euclokeys.KeyNegativeConstraints, taskEnvelope.NegativeConstraintSeeds, contextdata.MemoryClassTask)
 	if streamResult != nil {
-		// Bounded summary only (node contract): full results live on the
-		// envelope slice where the substrate renderer reads them.
-		summary := map[string]any{"request_id": streamResult.Request.ID}
-		if streamResult.Compilation != nil {
-			summary["chunks"] = len(streamResult.Compilation.StreamedChunks)
-			summary["tokens"] = streamResult.Compilation.Record.FinalTokens
-		}
-		env.SetWorkingValueWithClass(euclokeys.KeyStreamResult, summary, contextdata.MemoryClassTask)
+		// Bounded summary only (FR-15): the full result's bodies live on the
+		// envelope slice where the renderer reads them; working state carries
+		// the shared summary shape the stream node writes.
+		env.SetWorkingValueWithClass(euclokeys.KeyStreamResult, contextstream.SummaryOf(streamResult), contextdata.MemoryClassTask)
 	}
 
 	return &execution.Result{
@@ -143,8 +154,7 @@ func (n *IntakePipelineNode) Execute(ctx context.Context, env *contextdata.Envel
 			"confidence":             scoredClassification.Confidence,
 			"ambiguous":              scoredClassification.Ambiguous,
 			"has_stream_result":      streamResult != nil,
-			"stream_result":          streamResult,
-			"stream_mode":            string(n.effectiveStreamMode()),
+			"stream_result":          contextstream.SummaryOf(streamResult),
 			"intent_evidence":        intentEvidence,
 			"interpretation":         interpretation,
 			"requires_clarification": intentEvidence != nil && intentEvidence.RequiresClarification,
@@ -162,52 +172,47 @@ func (n *IntakePipelineNode) lookupFamily(familyID string) (families.KeywordFami
 	return n.registry.Lookup(familyID)
 }
 
-func (n *IntakePipelineNode) effectiveStreamMode() contextstream.Mode {
-	mode := n.defaultStreamMode
-	if mode == "" {
-		return contextstream.ModeBlocking
-	}
-	return mode
-}
-
-func (n *IntakePipelineNode) maybeStreamContext(ctx context.Context, templateStr string, envelope *TaskEnvelope, epochID uint64) *contextstream.Result {
+// maybeStreamContext performs the intake compile on the BLOCKING path (D5):
+// intake must complete before the first prompt composes — background
+// semantics were always a lie here, and the immediate Wait proved it. The
+// result is a first-class context delivery: it lands on the envelope through
+// contextstream.ApplyResult, under the same epoch guard as every other
+// compile, so the FIRST model call renders it. A compile error fails the
+// node (the trigger-node rule); a stale-dropped apply is the designed drop
+// and is reported on the node ctx's telemetry sink.
+func (n *IntakePipelineNode) maybeStreamContext(ctx context.Context, env *contextdata.Envelope, templateStr string, envelope *TaskEnvelope) (*contextstream.Result, error) {
 	if n == nil || n.streamTrigger == nil || strings.TrimSpace(templateStr) == "" {
-		return nil
+		return nil, nil
 	}
 
-	mode := n.effectiveStreamMode()
-	req := BuildStreamRequestWithTemplate(templateStr, envelope.Instruction, envelope, n.maxStreamTokens, mode)
+	req := BuildStreamRequestWithTemplate(templateStr, envelope.Instruction, envelope, n.maxStreamTokens, contextstream.ModeBlocking)
 	if req == nil {
-		return nil
+		return nil, nil
 	}
 	req.ID = "stream-req-" + n.id
 	// The intake compile is part of the run's memory order: its request
 	// carries the envelope epoch so the compiler's epoch-scoped cache keys
-	// it correctly (the delivery rewrite of the intake path is separate
-	// work; this only makes its cache identity honest).
-	req.EpochID = epochID
+	// it correctly.
+	req.EpochID = env.AssemblyMetadataSnapshot().EpochID
 	req.Metadata = map[string]any{
 		"intake_node_id":  n.id,
 		"family_template": templateStr,
 	}
 
-	if mode == contextstream.ModeBackground {
-		job, err := n.streamTrigger.RequestBackground(ctx, *req)
-		if err != nil {
-			return &contextstream.Result{Request: *req, Err: err}
-		}
-		result, waitErr := job.Wait(ctx)
-		if waitErr != nil {
-			return &contextstream.Result{Request: *req, Err: waitErr}
-		}
-		return result
-	}
-
 	result, err := n.streamTrigger.RequestBlocking(ctx, *req)
 	if err != nil {
-		return &contextstream.Result{Request: *req, Err: err}
+		return nil, fmt.Errorf("intake compile: %w", err)
 	}
-	return result
+	if err := contextstream.ApplyResult(env, result, req.EpochID); err != nil {
+		var dropped *contextstream.ErrStaleApplyDropped
+		if !errors.As(err, &dropped) {
+			return nil, fmt.Errorf("intake apply: %w", err)
+		}
+		// Designed drop: a newer compilation already owns the envelope
+		// slice. Report it on the node ctx's sink; the node succeeds.
+		contextstream.EmitStaleApplyDropped(ctx, dropped.CurrentEpoch, dropped.GotEpoch, dropped.RequestID)
+	}
+	return result, nil
 }
 
 func taskFromEnvelope(env *contextdata.Envelope) (*execution.Task, error) {

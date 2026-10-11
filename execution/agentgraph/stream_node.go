@@ -107,18 +107,10 @@ func (n *StreamTriggerNode) Execute(ctx context.Context, env *contextdata.Envelo
 				// sink, so the drop is reported here; the node succeeds.
 				contextstream.EmitStaleApplyDropped(ctx, dropped.CurrentEpoch, dropped.GotEpoch, dropped.RequestID)
 			}
-			// Bounded summary only: the node contract caps working-state
+			// Bounded summary only (FR-15): the node contract caps working-state
 			// entries at 4096 bytes, and the full result's bodies live on the
 			// envelope slice where the renderer reads them.
-			summary := map[string]any{
-				"request_id": result.Request.ID,
-				"epoch":      epoch,
-			}
-			if result.Compilation != nil {
-				summary["chunks"] = len(result.Compilation.StreamedChunks)
-				summary["tokens"] = result.Compilation.Record.FinalTokens
-			}
-			env.SetWorkingValueWithClass("contextstream.result", summary, contextdata.MemoryClassTask)
+			env.SetWorkingValueWithClass("contextstream.result", contextstream.SummaryOf(result), contextdata.MemoryClassTask)
 		}
 		if err != nil {
 			return nil, err
