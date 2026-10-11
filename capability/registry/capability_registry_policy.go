@@ -3,6 +3,7 @@ package registry
 import (
 	"context"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -63,8 +64,11 @@ func (r *CapabilityRegistry) UseSandboxScope(scope *permissions.FileScopePolicy)
 	}
 	r.mu.Lock()
 	r.sandboxScope = scope
-	r.syncSandboxScopeAwareEntriesLocked()
+	stamped := r.syncSandboxScopeAwareEntriesLocked()
 	r.mu.Unlock()
+	if stamped > 0 {
+		log.Printf("sandbox scope stamped on %d tools", stamped)
+	}
 }
 
 func (r *CapabilityRegistry) setAllowedCapabilities(allowed []agentspec.CapabilitySelector, configured bool) {

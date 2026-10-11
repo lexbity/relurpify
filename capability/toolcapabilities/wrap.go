@@ -7,6 +7,7 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/governance/classification"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
 	governanceports "codeburg.org/lexbit/relurpify/governance/ports"
 	"codeburg.org/lexbit/relurpify/governance/risk"
 )
@@ -69,11 +70,35 @@ func wrapWithCapability(tool ports.Tool, manifest ports.ToolManifest) ports.Tool
 
 // Compile-time check that withCapability implements the required interfaces.
 var _ ports.Tool = (*withCapability)(nil)
+var _ ports.ToolUnwrapper = (*withCapability)(nil)
 var _ interface{ TrustClass() agentspec.TrustClass } = (*withCapability)(nil)
 var _ interface{ RiskClasses() []risk.RiskClass } = (*withCapability)(nil)
 var _ interface {
 	EffectClasses() []classification.EffectClass
 } = (*withCapability)(nil)
+
+// Unwrap exposes the decorated tool so registry stamping can reach the
+// concrete implementation (the decoration contract, capability/ports).
+func (w *withCapability) Unwrap() ports.Tool { return w.Tool }
+
+// SetSandboxScope forwards the sandbox-scope stamp to the decorated tool.
+// The scope lives on the concrete tool (its enforcement reads its own field),
+// never on this wrapper. Belt-and-braces depth-one forwarding: recursive
+// unwrap in the registry is the general path.
+func (w *withCapability) SetSandboxScope(scope *permissions.FileScopePolicy) {
+	if aware, ok := w.Tool.(interface {
+		SetSandboxScope(*permissions.FileScopePolicy)
+	}); ok {
+		aware.SetSandboxScope(scope)
+	}
+}
+
+// SetToolName forwards the tool-name stamp to the decorated tool.
+func (w *withCapability) SetToolName(name string) {
+	if aware, ok := w.Tool.(interface{ SetToolName(string) }); ok {
+		aware.SetToolName(name)
+	}
+}
 
 // Ensure the wrapped tool is available when wrapped.
 func (w *withCapability) IsAvailable(ctx context.Context) bool {

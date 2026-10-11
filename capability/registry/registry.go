@@ -206,10 +206,11 @@ func (r *CapabilityRegistry) localToolEntriesLocked() []*capabilityEntry {
 	return out
 }
 
-func (r *CapabilityRegistry) syncPermissionAwareEntriesLocked() {
+func (r *CapabilityRegistry) syncPermissionAwareEntriesLocked() int {
 	if r == nil {
-		return
+		return 0
 	}
+	stamped := 0
 	for _, entry := range r.entries {
 		if entry == nil {
 			continue
@@ -217,6 +218,7 @@ func (r *CapabilityRegistry) syncPermissionAwareEntriesLocked() {
 		if entry.legacyTool != nil {
 			if aware, ok := unwrapTool(entry.legacyTool).(PermissionAware); ok {
 				aware.SetPermissionManager(r.permissionManager, r.registeredAgentID)
+				stamped++
 			}
 			continue
 		}
@@ -225,14 +227,17 @@ func (r *CapabilityRegistry) syncPermissionAwareEntriesLocked() {
 		}
 		if aware, ok := unwrapCapabilityHandler(entry.handler).(PermissionAware); ok {
 			aware.SetPermissionManager(r.permissionManager, r.registeredAgentID)
+			stamped++
 		}
 	}
+	return stamped
 }
 
-func (r *CapabilityRegistry) syncAgentSpecAwareEntriesLocked(spec *agentspec.AgentRuntimeSpec, agentID string) {
+func (r *CapabilityRegistry) syncAgentSpecAwareEntriesLocked(spec *agentspec.AgentRuntimeSpec, agentID string) int {
 	if r == nil || spec == nil {
-		return
+		return 0
 	}
+	stamped := 0
 	for _, entry := range r.entries {
 		if entry == nil {
 			continue
@@ -240,6 +245,7 @@ func (r *CapabilityRegistry) syncAgentSpecAwareEntriesLocked(spec *agentspec.Age
 		if entry.legacyTool != nil {
 			if aware, ok := unwrapTool(entry.legacyTool).(AgentSpecAware); ok {
 				aware.SetAgentSpec(spec, agentID)
+				stamped++
 			}
 			continue
 		}
@@ -248,14 +254,21 @@ func (r *CapabilityRegistry) syncAgentSpecAwareEntriesLocked(spec *agentspec.Age
 		}
 		if aware, ok := unwrapCapabilityHandler(entry.handler).(AgentSpecAware); ok {
 			aware.SetAgentSpec(spec, agentID)
+			stamped++
 		}
 	}
+	return stamped
 }
 
-func (r *CapabilityRegistry) syncSandboxScopeAwareEntriesLocked() {
+// syncSandboxScopeAwareEntriesLocked stamps every registered entry with the
+// active sandbox scope and returns the number of entries that accepted the
+// stamp. A zero count with non-empty entries is legal (entries may not be
+// scope-aware); the composition-root gate, not this count, enforces reach.
+func (r *CapabilityRegistry) syncSandboxScopeAwareEntriesLocked() int {
 	if r == nil {
-		return
+		return 0
 	}
+	stamped := 0
 	for _, entry := range r.entries {
 		if entry == nil {
 			continue
@@ -263,6 +276,7 @@ func (r *CapabilityRegistry) syncSandboxScopeAwareEntriesLocked() {
 		if entry.legacyTool != nil {
 			if aware, ok := unwrapTool(entry.legacyTool).(SandboxScopeAware); ok {
 				aware.SetSandboxScope(r.sandboxScope)
+				stamped++
 			}
 			continue
 		}
@@ -271,8 +285,10 @@ func (r *CapabilityRegistry) syncSandboxScopeAwareEntriesLocked() {
 		}
 		if aware, ok := unwrapCapabilityHandler(entry.handler).(SandboxScopeAware); ok {
 			aware.SetSandboxScope(r.sandboxScope)
+			stamped++
 		}
 	}
+	return stamped
 }
 
 func (r *CapabilityRegistry) rebuildIndexesLocked() {

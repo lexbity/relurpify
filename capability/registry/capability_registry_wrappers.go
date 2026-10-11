@@ -85,6 +85,10 @@ type instrumentedTool struct {
 	registry *CapabilityRegistry
 }
 
+// Unwrap exposes the decorated tool (the decoration contract,
+// capability/ports.ToolUnwrapper) so stamping reaches the concrete tool.
+func (t *instrumentedTool) Unwrap() ports.Tool { return t.Tool }
+
 type instrumentCapabilityHandler struct {
 	handler    handler.CapabilityHandler
 	registry   *CapabilityRegistry
@@ -512,9 +516,22 @@ func emitCapabilitySecurityEvent(ctx context.Context, telemetry fwtelemetry.Tele
 	telemetry.Emit(ev)
 }
 
+// unwrapTool recurses through decorator wrappers (anything implementing
+// ports.ToolUnwrapper) down to the concrete tool, so SandboxScopeAware /
+// AgentSpecAware / PermissionAware stamps reach the implementation that
+// enforces them. Depth-capped; a nil Unwrap result is a decorator-contract
+// violation surfaced as a nil tool rather than a silently unstamped wrapper.
 func unwrapTool(tool ports.Tool) ports.Tool {
-	if wrapped, ok := tool.(*instrumentedTool); ok {
-		return wrapped.Tool
+	for depth := 0; depth < ports.MaxUnwrapDepth; depth++ {
+		u, ok := tool.(ports.ToolUnwrapper)
+		if !ok {
+			return tool
+		}
+		next := u.Unwrap()
+		if next == nil {
+			return nil
+		}
+		tool = next
 	}
 	return tool
 }
