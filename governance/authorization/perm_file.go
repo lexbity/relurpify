@@ -330,7 +330,14 @@ func (m *PermissionManager) StaticallyAllowsFileAccess(action ucperms.FileSystem
 	return !perm.HITLRequired
 }
 
-// CheckFilePermission implements permissions.FilePermissionChecker.
+// FilePermissionChecker is the file-matrix ask surface file tools consume:
+// a DecisionAsk on a file operation resolves through it (or denies when no
+// checker is stamped).
+type FilePermissionChecker interface {
+	CheckFilePermission(ctx context.Context, agentID, basePath, action, absPath string, matrix AgentFileMatrix) error
+}
+
+// CheckFilePermission implements FilePermissionChecker.
 // It validates a file operation against the agent's file matrix.
 func (m *PermissionManager) CheckFilePermission(ctx context.Context, agentID, basePath, action, absPath string, matrix AgentFileMatrix) error {
 	rel := absPath

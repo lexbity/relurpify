@@ -15,6 +15,7 @@ package e2e
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -43,6 +44,13 @@ func TestLiveRelurpishScratchTurn(t *testing.T) {
 		require.NoError(t, relurpishruntime.InitializeWorkspaceFromTemplates(relurpishruntime.ConfigForWorkspace(relurpishruntime.DefaultConfig(), abs), false))
 	}
 
+	// Each acceptance run starts with clean stream memory: the context-stream
+	// store (.relurpify_state/events.db) persists retrieved chunks across
+	// turns, and observations from earlier broken runs (e.g. stale sandbox
+	// denies) otherwise inject into every future turn. The audit chain under
+	// .relurpify_state/audit is separate and untouched.
+	require.NoError(t, os.RemoveAll(filepath.Join(abs, ".relurpify_state", "events.db")))
+
 	// Seed the recipe's designed TDD shape: hello.py misspells the greeting,
 	// and test_hello.py is a plain-python failing test (no pytest dependency)
 	// that pins "hello world". The debug_tdd_repair recipe's contract —
@@ -62,6 +70,9 @@ func TestLiveRelurpishScratchTurn(t *testing.T) {
 
 	rt, err := relurpishruntime.New(context.Background(), cfg, config.Secrets{})
 	require.NoError(t, err, "the production runtime must boot against the scratch workspace")
+	// Closed explicitly before the telemetry read below: the telemetry sink
+	// flushes at shutdown, and the verification-leg verdict must see the
+	// turn's own events.
 	defer func() { _ = rt.Close(context.Background()) }()
 
 	// Ground truth for the tool-scope investigation: what the composed
@@ -139,6 +150,15 @@ func TestLiveRelurpishScratchTurn(t *testing.T) {
 	}
 	t.Logf("audit chain under %s (auto-approvals found: %v) — inspect it alongside .relurpify_state/logs and telemetry", auditRoot, foundAutoApprove)
 
+	// The recipe's verification leg (do relurpic:test_run) runs after the
+	// repair. Its outcome is read from telemetry and named here, never
+	// hidden: the primary acceptance is the file fix above; a
+	// verification-leg failure is a named finding (wave-2 honesty taxonomy),
+	// not a papered-over pass.
+	require.NoError(t, rt.Close(context.Background()))
+	verdict := logVerificationLegOutcome(t, filepath.Join(abs, ".relurpify_state", "telemetry", "telemetry.jsonl"))
+	t.Logf("verification leg (relurpic:test_run) outcome: %s", verdict)
+
 	t.Logf("scratch workspace artifacts: %s/.relurpify_state/{logs,telemetry,audit}, test_runs under relurpify_cfg", abs)
 }
 
@@ -147,4 +167,48 @@ func firstNonEmptyEnv(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+// logVerificationLegOutcome reports the last capability step's outcome from
+// the run's telemetry: success, or the failure with its message named.
+func logVerificationLegOutcome(t *testing.T, telemetryPath string) string {
+	t.Helper()
+	data, readErr := os.ReadFile(telemetryPath)
+	if readErr != nil {
+		return "telemetry unavailable: " + readErr.Error()
+	}
+	verdict := "not observed"
+	lastFailure := ""
+	for _, line := range strings.Split(string(data), "\n") {
+		var event struct {
+			Type     string         `json:"type"`
+			Metadata map[string]any `json:"metadata"`
+		}
+		if err := json.Unmarshal([]byte(line), &event); err != nil {
+			continue
+		}
+		stepID, _ := event.Metadata["step_id"].(string)
+		if !strings.HasPrefix(stepID, "capability.") {
+			continue
+		}
+		switch event.Type {
+		case "euclo.step.completed":
+			if success, _ := event.Metadata["success"].(bool); success {
+				verdict = "passed"
+			}
+		case "step.operational_failure":
+			message, _ := event.Metadata["message"].(string)
+			kind, _ := event.Metadata["kind"].(string)
+			if message == "" && kind != "" {
+				message = "kind=" + kind
+			}
+			if message != "" {
+				lastFailure = message
+			}
+		}
+	}
+	if verdict != "passed" && lastFailure != "" {
+		verdict = "FAILED: " + lastFailure
+	}
+	return verdict
 }

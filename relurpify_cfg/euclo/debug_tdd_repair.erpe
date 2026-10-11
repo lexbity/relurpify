@@ -4,7 +4,7 @@ thoughtrecipe euclo.thoughtrecipe.debug_tdd_repair
 trigger as capability:
   may read workspace
   may write workspace
-  may invoke ["file_read", "grep", "test_run"]
+  may invoke ["file_read", "file_list", "grep", "test_run"]
   family ["debug"]
 
 input workspace: "**/*"
@@ -13,9 +13,9 @@ input prompt: user.request
 agent repairer uses react
 
 run repairer:
-  may invoke ["file_read", "grep", "test_run", "file_write"]
+  may invoke ["file_read", "file_list", "grep", "test_run", "file_write"]
   from input.workspace
-  goal "Find the failing test, repair the underlying cause, and re-run the test suite to verify."
+  goal """Find the failing test, repair the underlying cause, and re-run the test suite to verify. The user request is: {{ index . "task.instruction" }}"""
   capture result -> state.repair
 
 route:

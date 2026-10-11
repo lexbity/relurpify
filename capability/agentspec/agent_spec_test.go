@@ -1,6 +1,7 @@
 package agentspec
 
 import (
+	"codeburg.org/lexbit/relurpify/governance/authorization"
 	"strings"
 	"testing"
 )
@@ -54,9 +55,9 @@ func TestAgentRuntimeSpecValidateRejectsBashTypo(t *testing.T) {
 
 func TestAgentFilePermissionSetValidateRejectsTypo(t *testing.T) {
 	matrix := AgentFileMatrix{
-		Write: AgentFilePermissionSet{Default: AgentPermissionLevel("alow")},
+		Write: AgentFilePermissionSet{Default: "alow"},
 	}
-	if err := matrix.Validate(); err == nil {
+	if err := authorization.ValidateAgentFileMatrix(matrix); err == nil {
 		t.Fatal("expected a typo in file permission default to be rejected")
 	}
 }

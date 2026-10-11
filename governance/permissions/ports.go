@@ -21,11 +21,6 @@ type PermissionDeniedError struct {
 
 func (e *PermissionDeniedError) Error() string { return e.Message }
 
-// FilePermissionChecker checks filesystem access.
-type FilePermissionChecker interface {
-	CheckFilePermission(ctx context.Context, agentID, basePath, action, absPath string, matrix any) error
-}
-
 // NetworkPermissionChecker checks network access against an already-resolved
 // target. Callers resolve names first (ResolveTarget) so the pure decision
 // layer never performs I/O; an unresolved name is a denial, not an allow.

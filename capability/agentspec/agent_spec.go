@@ -2,10 +2,10 @@ package agentspec
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/capability/safety"
+	"codeburg.org/lexbit/relurpify/governance/authorization"
 	"codeburg.org/lexbit/relurpify/governance/classification"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/governance/risk"
@@ -209,20 +209,13 @@ func (b AgentBashPermissions) Validate() error {
 	return nil
 }
 
-// AgentFileMatrix scopes write/edit operations.
-type AgentFileMatrix struct {
-	Write AgentFilePermissionSet `yaml:"write" json:"write"`
-	Edit  AgentFilePermissionSet `yaml:"edit" json:"edit"`
-}
+// AgentFileMatrix scopes write/edit operations. Aliased to the canonical
+// governance/authorization vocabulary the file tools enforce through — the
+// runtime spec and the enforcement surface are one type, never a conversion.
+type AgentFileMatrix = authorization.AgentFileMatrix
 
 // AgentFilePermissionSet stores glob allow/deny rules.
-type AgentFilePermissionSet struct {
-	AllowPatterns     []string             `yaml:"allow_patterns" json:"allow_patterns"`
-	DenyPatterns      []string             `yaml:"deny_patterns" json:"deny_patterns"`
-	Default           AgentPermissionLevel `yaml:"default" json:"default"`
-	RequireApproval   bool                 `yaml:"require_approval" json:"require_approval"`
-	DocumentationOnly bool                 `yaml:"documentation_only" json:"documentation_only"`
-}
+type AgentFilePermissionSet = authorization.AgentFilePermissionSet
 
 // AgentInvocationSpec holds recursion data.
 type AgentInvocationSpec struct {
@@ -532,7 +525,7 @@ func (a *AgentRuntimeSpec) Validate() error {
 			return fmt.Errorf("orchestration.review.severity_weights[%s] must be >= 0", severity)
 		}
 	}
-	if err := a.Files.Validate(); err != nil {
+	if err := authorization.ValidateAgentFileMatrix(a.Files); err != nil {
 		return err
 	}
 	if err := a.Bash.Validate(); err != nil {
@@ -894,33 +887,6 @@ func (m AgentModelConfig) Validate() error {
 	}
 	if m.Provider == "" {
 		return fmt.Errorf("model provider required")
-	}
-	return nil
-}
-
-// Validate ensures file permission sets are consistent.
-func (f AgentFileMatrix) Validate() error {
-	if err := f.Write.validate("write"); err != nil {
-		return err
-	}
-	if err := f.Edit.validate("edit"); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (set AgentFilePermissionSet) validate(label string) error {
-	for _, pattern := range append([]string{}, append(set.AllowPatterns, set.DenyPatterns...)...) {
-		pattern = strings.TrimSpace(pattern)
-		if pattern == "" {
-			return fmt.Errorf("%s permission contains empty glob", label)
-		}
-		if strings.Contains(pattern, string(os.PathSeparator)+string(os.PathSeparator)) {
-			return fmt.Errorf("%s permission glob %s invalid", label, pattern)
-		}
-	}
-	if _, err := permissions.DecisionOr(string(set.Default), permissions.DecisionAsk); err != nil {
-		return fmt.Errorf("%s permission default %s invalid: %w", label, set.Default, err)
 	}
 	return nil
 }

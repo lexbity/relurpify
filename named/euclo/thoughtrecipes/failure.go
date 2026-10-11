@@ -137,7 +137,7 @@ func (c *stepCore) classifyAndRecord(ctx context.Context, env *contextdata.Envel
 	}
 
 	success := action == policyContinue || actionTaken == policyContinue
-	c.emitOperationalFailure(ctx, env, kind, action, actionTaken, askOutcome)
+	c.emitOperationalFailure(ctx, env, kind, action, actionTaken, askOutcome, err.Error())
 
 	data := map[string]any{
 		"failure_kind":    string(kind),
@@ -231,7 +231,7 @@ func (c *stepCore) writeStepFailureMetadata(env *contextdata.Envelope, kind eucl
 
 // emitOperationalFailure emits the step.operational_failure telemetry event
 // with the correlation identifiers already flowing through the node context.
-func (c *stepCore) emitOperationalFailure(ctx context.Context, env *contextdata.Envelope, kind euclotypes.FailureKind, action, actionTaken policyActionKind, askOutcome string) {
+func (c *stepCore) emitOperationalFailure(ctx context.Context, env *contextdata.Envelope, kind euclotypes.FailureKind, action, actionTaken policyActionKind, askOutcome, message string) {
 	sink := telemetry.TelemetryFromContext(ctx)
 	if sink == nil && c.deps != nil {
 		sink = c.deps.Telemetry
@@ -245,6 +245,9 @@ func (c *stepCore) emitOperationalFailure(ctx context.Context, env *contextdata.
 		"kind":         string(kind),
 		"on_error":     string(action),
 		"action_taken": string(actionTaken),
+	}
+	if message != "" {
+		metadata["message"] = message
 	}
 	if askOutcome != "" {
 		metadata["ask_outcome"] = askOutcome

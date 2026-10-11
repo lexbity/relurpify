@@ -106,12 +106,16 @@ func (a *ReActAgent) streamQuery(task *execution.Task) string {
 	return ""
 }
 
-// streamMaxTokens returns the max tokens for streaming, defaulting to 256.
+// streamMaxTokens returns the max tokens for the streamed-context slice.
+// The default must hold the tool observations the loop runs on: a 256-token
+// budget compiled them down to fragments (compiler.budget_exceeded) and the
+// model flew blind — "I haven't received the results" — while the repair
+// task wandered (the live scratch-turn finding).
 func (a *ReActAgent) streamMaxTokens() int {
 	if a.StreamMaxTokens > 0 {
 		return a.StreamMaxTokens
 	}
-	return 256
+	return 1024
 }
 
 // streamTriggerNode creates a streaming trigger node for the react agent.

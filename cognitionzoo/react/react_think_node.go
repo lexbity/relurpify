@@ -16,6 +16,12 @@ import (
 	"codeburg.org/lexbit/relurpify/model"
 )
 
+// decisionMaxTokens is the completion budget for one react decision. Thinking
+// models spend this budget on reasoning before emitting the decision JSON —
+// 512 truncated decisions mid-JSON (finish_reason=length), which the loop
+// then misread as completions.
+const decisionMaxTokens = 2048
+
 type reactThinkNode struct {
 	id    string
 	agent *ReActAgent
@@ -60,7 +66,7 @@ func (n *reactThinkNode) Execute(ctx context.Context, env *contextdata.Envelope)
 		return nil, err
 	}
 	var resp *model.LLMResponse
-	tools := n.agent.availableToolsForPhase(ctx, env, n.task)
+	tools := n.agent.availableTools(ctx)
 	recordActiveToolNames(env, tools)
 	useToolCalling := len(tools) > 0
 	streamCB := n.streamCallback()
@@ -69,7 +75,7 @@ func (n *reactThinkNode) Execute(ctx context.Context, env *contextdata.Envelope)
 		resp, err = n.agent.Model.ChatWithTools(ctx, messages, ports.LLMToolSpecsFromTools(tools), &model.LLMOptions{
 			Model:          n.agent.Config.Model,
 			Temperature:    0.1,
-			MaxTokens:      512,
+			MaxTokens:      decisionMaxTokens,
 			StreamCallback: streamCB,
 		})
 		if err == nil {
@@ -83,7 +89,7 @@ func (n *reactThinkNode) Execute(ctx context.Context, env *contextdata.Envelope)
 		resp, err = n.agent.Model.Generate(ctx, prompt, &model.LLMOptions{
 			Model:          n.agent.Config.Model,
 			Temperature:    0.1,
-			MaxTokens:      512,
+			MaxTokens:      decisionMaxTokens,
 			StreamCallback: streamCB,
 		})
 	}
@@ -144,27 +150,27 @@ func (n *reactThinkNode) normalizeDecision(ctx context.Context, env *contextdata
 	if err == nil && (parsed.Tool != "" || parsed.Complete) {
 		return parsed, nil, nil
 	}
-	// Check repair strategy
+	// An unparseable decision is never a completion. Synthesizing
+	// Complete:true here is how a length-truncated decision (thinking models
+	// consume the completion budget before the JSON) ended a repair step as
+	// "success" with no work done — the live scratch-turn failure. The
+	// iteration fails honestly and the loop's failure policy decides.
 	repairStrategy := "heuristic-only"
 	if pm, ok := n.agent.Model.(model.ProfiledModel); ok {
 		repairStrategy = pm.ToolRepairStrategy()
 	}
-	var repaired string
-	var repairErr error
 	if repairStrategy == "llm" {
-		repaired, repairErr = n.repairDecision(ctx, tools, resp.Text, useToolCalling)
+		repaired, repairErr := n.repairDecision(ctx, tools, resp.Text, useToolCalling)
+		if repairErr == nil {
+			if parsed, err := parseDecision(repaired); err == nil {
+				if parsed.Tool != "" {
+					return parsed, []model.ToolCall{{Name: parsed.Tool, Args: parsed.Arguments}}, nil
+				}
+				return parsed, nil, nil
+			}
+		}
 	}
-	if repairErr != nil || repairStrategy != "llm" {
-		return decisionPayload{Thought: trimToBudget(resp.Text, 220), Complete: true, Timestamp: time.Now().UTC()}, nil, nil
-	}
-	parsed, err = parseDecision(repaired)
-	if err != nil {
-		return decisionPayload{Thought: trimToBudget(resp.Text, 220), Complete: true, Timestamp: time.Now().UTC()}, nil, nil
-	}
-	if parsed.Tool != "" {
-		return parsed, []model.ToolCall{{Name: parsed.Tool, Args: parsed.Arguments}}, nil
-	}
-	return parsed, nil, nil
+	return decisionPayload{}, nil, fmt.Errorf("react decision unparseable (finish_reason=%q, strategy=%q): %.120s", resp.FinishReason, repairStrategy, resp.Text)
 }
 
 func (n *reactThinkNode) repairDecision(ctx context.Context, tools []ports.Tool, raw string, useToolCalling bool) (string, error) {

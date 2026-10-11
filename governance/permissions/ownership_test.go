@@ -15,7 +15,6 @@ import (
 // PermissionSet, PermissionDescriptor, … fails the build).
 var (
 	_ PermissionDeniedError    = PermissionDeniedError{}
-	_ FilePermissionChecker    = (FilePermissionChecker)(nil)
 	_ NetworkPermissionChecker = (NetworkPermissionChecker)(nil)
 	_ CapabilityChecker        = (CapabilityChecker)(nil)
 	_ Decision                 = DecisionAllow

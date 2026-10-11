@@ -56,7 +56,7 @@ const (
 
 type testFilePermissionChecker struct{}
 
-func (testFilePermissionChecker) CheckFilePermission(context.Context, string, string, string, string, any) error {
+func (testFilePermissionChecker) CheckFilePermission(context.Context, string, string, string, string, agentspec.AgentFileMatrix) error {
 	return nil
 }
 
@@ -851,7 +851,7 @@ func TestEnforceFileMatrix_DenyPattern(t *testing.T) {
 	matrix := agentspec.AgentFileMatrix{
 		Write: agentspec.AgentFilePermissionSet{
 			DenyPatterns: []string{secret_2},
-			Default:      agentspec.AgentPermissionAllow,
+			Default:      string(agentspec.AgentPermissionAllow),
 		},
 	}
 
@@ -865,7 +865,7 @@ func TestEnforceFileMatrix_AllowPattern(t *testing.T) {
 	matrix := agentspec.AgentFileMatrix{
 		Write: agentspec.AgentFilePermissionSet{
 			AllowPatterns: []string{goVar},
-			Default:       agentspec.AgentPermissionDeny,
+			Default:       string(agentspec.AgentPermissionDeny),
 		},
 	}
 
@@ -877,7 +877,7 @@ func TestEnforceFileMatrix_DefaultDeny(t *testing.T) {
 	dir := t.TempDir()
 	matrix := agentspec.AgentFileMatrix{
 		Write: agentspec.AgentFilePermissionSet{
-			Default: agentspec.AgentPermissionDeny,
+			Default: string(agentspec.AgentPermissionDeny),
 		},
 	}
 
@@ -1041,7 +1041,7 @@ func TestEnforceFileMatrix_RequireApproval_NoManager(t *testing.T) {
 	matrix := agentspec.AgentFileMatrix{
 		Write: agentspec.AgentFilePermissionSet{
 			RequireApproval: true,
-			Default:         agentspec.AgentPermissionAllow,
+			Default:         string(agentspec.AgentPermissionAllow),
 		},
 	}
 
@@ -1057,7 +1057,7 @@ func TestEnforceFileMatrix_EmptyBasePath(t *testing.T) {
 	matrix := agentspec.AgentFileMatrix{
 		Write: agentspec.AgentFilePermissionSet{
 			AllowPatterns: []string{goVar},
-			Default:       agentspec.AgentPermissionDeny,
+			Default:       string(agentspec.AgentPermissionDeny),
 		},
 	}
 
@@ -1077,7 +1077,7 @@ func TestEnforceFileMatrix_AllowMdForDocumentationOnly(t *testing.T) {
 	matrix := agentspec.AgentFileMatrix{
 		Write: agentspec.AgentFilePermissionSet{
 			DocumentationOnly: true,
-			Default:           agentspec.AgentPermissionAllow,
+			Default:           string(agentspec.AgentPermissionAllow),
 		},
 	}
 
@@ -1096,7 +1096,7 @@ func TestEnforceFileMatrix_EditAction(t *testing.T) {
 	matrix := agentspec.AgentFileMatrix{
 		Edit: agentspec.AgentFilePermissionSet{
 			AllowPatterns: []string{goVar},
-			Default:       agentspec.AgentPermissionDeny,
+			Default:       string(agentspec.AgentPermissionDeny),
 		},
 	}
 
@@ -1401,7 +1401,7 @@ func TestWriteFileTool_FileMatrixDeniesWrite(t *testing.T) {
 			Files: agentspec.AgentFileMatrix{
 				Write: agentspec.AgentFilePermissionSet{
 					DenyPatterns: []string{secret_2},
-					Default:      agentspec.AgentPermissionAllow,
+					Default:      string(agentspec.AgentPermissionAllow),
 				},
 			},
 		},
@@ -1426,7 +1426,7 @@ func TestCreateFileTool_FileMatrixDeniesWrite(t *testing.T) {
 			Files: agentspec.AgentFileMatrix{
 				Write: agentspec.AgentFilePermissionSet{
 					DenyPatterns: []string{secret_2},
-					Default:      agentspec.AgentPermissionAllow,
+					Default:      string(agentspec.AgentPermissionAllow),
 				},
 			},
 		},
@@ -1455,7 +1455,7 @@ func TestDeleteFileTool_FileMatrixDeniesWrite(t *testing.T) {
 			Files: agentspec.AgentFileMatrix{
 				Write: agentspec.AgentFilePermissionSet{
 					DenyPatterns: []string{secret_2},
-					Default:      agentspec.AgentPermissionAllow,
+					Default:      string(agentspec.AgentPermissionAllow),
 				},
 			},
 		},
@@ -1600,7 +1600,7 @@ func TestEnforceFileMatrix_AskPermissionNoManager(t *testing.T) {
 	matrix := agentspec.AgentFileMatrix{
 		Write: agentspec.AgentFilePermissionSet{
 			RequireApproval: true,
-			Default:         agentspec.AgentPermissionAllow,
+			Default:         string(agentspec.AgentPermissionAllow),
 		},
 	}
 

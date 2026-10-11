@@ -9,6 +9,8 @@ import (
 	"codeburg.org/lexbit/relurpify/governance/sandbox"
 	"context"
 	"errors"
+	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -24,19 +26,45 @@ import (
 
 const permissionMatchAll = "**"
 
-// AgentFilePermissionSet stores glob allow/deny rules.
+// AgentFilePermissionSet stores glob allow/deny rules. It is the canonical
+// file-matrix vocabulary: capability/agentspec aliases it, and the file
+// tools enforce through it (enforceFileMatrix).
 type AgentFilePermissionSet struct {
-	AllowPatterns     []string
-	DenyPatterns      []string
-	Default           string
-	RequireApproval   bool
-	DocumentationOnly bool
+	AllowPatterns     []string `yaml:"allow_patterns" json:"allow_patterns"`
+	DenyPatterns      []string `yaml:"deny_patterns" json:"deny_patterns"`
+	Default           string   `yaml:"default" json:"default"`
+	RequireApproval   bool     `yaml:"require_approval" json:"require_approval"`
+	DocumentationOnly bool     `yaml:"documentation_only" json:"documentation_only"`
 }
 
 // AgentFileMatrix scopes write/edit operations.
 type AgentFileMatrix struct {
-	Write AgentFilePermissionSet
-	Edit  AgentFilePermissionSet
+	Write AgentFilePermissionSet `yaml:"write" json:"write"`
+	Edit  AgentFilePermissionSet `yaml:"edit" json:"edit"`
+}
+
+// ValidateAgentFileMatrix ensures file permission sets are consistent.
+func ValidateAgentFileMatrix(f AgentFileMatrix) error {
+	if err := validateAgentFilePermissionSet("write", f.Write); err != nil {
+		return err
+	}
+	return validateAgentFilePermissionSet("edit", f.Edit)
+}
+
+func validateAgentFilePermissionSet(label string, set AgentFilePermissionSet) error {
+	for _, pattern := range append(append([]string{}, set.AllowPatterns...), set.DenyPatterns...) {
+		pattern = strings.TrimSpace(pattern)
+		if pattern == "" {
+			return fmt.Errorf("%s permission contains empty glob", label)
+		}
+		if strings.Contains(pattern, string(os.PathSeparator)+string(os.PathSeparator)) {
+			return fmt.Errorf("%s permission glob %s invalid", label, pattern)
+		}
+	}
+	if _, err := permissions.DecisionOr(string(set.Default), permissions.DecisionAsk); err != nil {
+		return fmt.Errorf("%s permission default %s invalid: %w", label, set.Default, err)
+	}
+	return nil
 }
 
 // ToolPermissions describes the permissions a tool requires.

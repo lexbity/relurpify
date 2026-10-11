@@ -12,6 +12,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/governance/authorization"
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/governance/policy"
 	"codeburg.org/lexbit/relurpify/model"
@@ -39,6 +40,13 @@ type AgentSpecAware interface {
 // sandbox-enforced file scope.
 type SandboxScopeAware interface {
 	SetSandboxScope(scope *permissions.FileScopePolicy)
+}
+
+// FilePermissionAware allows file tools to receive the permission manager's
+// file-matrix checker: a DecisionAsk inside the tool's file matrix resolves
+// through it, or denies when no checker was stamped.
+type FilePermissionAware interface {
+	SetPermissionManager(checker authorization.FilePermissionChecker, agentID string)
 }
 
 // CapabilityRegistry maintains framework-owned capability descriptors plus the
@@ -221,9 +229,16 @@ func (r *CapabilityRegistry) syncPermissionAwareEntriesLocked() int {
 			continue
 		}
 		if entry.legacyTool != nil {
-			if aware, ok := unwrapTool(entry.legacyTool).(PermissionAware); ok {
+			concrete := unwrapTool(entry.legacyTool)
+			if aware, ok := concrete.(PermissionAware); ok {
 				aware.SetPermissionManager(r.permissionManager, r.registeredAgentID)
 				stamped++
+			}
+			if aware, ok := concrete.(FilePermissionAware); ok {
+				if checker, ok := r.permissionManager.(authorization.FilePermissionChecker); ok {
+					aware.SetPermissionManager(checker, r.registeredAgentID)
+					stamped++
+				}
 			}
 			continue
 		}
@@ -623,13 +638,23 @@ func (r *CapabilityRegistry) prepareLegacyToolBatchEntryLocked(ctx context.Conte
 	if !matchesAnyCompiledCapabilitySelector(r.allowedMatchers, profile) {
 		return descriptor.CapabilityDescriptor{}, nil, nil
 	}
+	// Stamp through the decoration contract, not the raw wrapper: the tool
+	// here may be decorated (withCapability), and a direct type assertion on
+	// the wrapper silently missed the permission/agent-spec stamps (the F1
+	// class that left workspace writes asking an absent approver).
+	concrete := unwrapTool(tool)
 	if r.permissionManager != nil {
-		if aware, ok := tool.(PermissionAware); ok {
+		if aware, ok := concrete.(PermissionAware); ok {
 			aware.SetPermissionManager(r.permissionManager, r.registeredAgentID)
+		}
+		if aware, ok := concrete.(FilePermissionAware); ok {
+			if checker, ok := r.permissionManager.(authorization.FilePermissionChecker); ok {
+				aware.SetPermissionManager(checker, r.registeredAgentID)
+			}
 		}
 	}
 	if r.agentSpec != nil {
-		if aware, ok := tool.(AgentSpecAware); ok {
+		if aware, ok := concrete.(AgentSpecAware); ok {
 			aware.SetAgentSpec(r.agentSpec, r.registeredAgentID)
 		}
 	}

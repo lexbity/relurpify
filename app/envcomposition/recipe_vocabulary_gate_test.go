@@ -172,10 +172,20 @@ func TestReactStepToolScopeIsPureFunctionOfScope(t *testing.T) {
 	for _, tool := range child.CallableTools(context.Background()) {
 		exposed[tool.Name()] = true
 	}
-	t.Logf("repairer step %q declared=%v resolved=%v exposed=%v",
-		repairer.ID, repairer.Scope.AllowedToolNames(), allowed, exposed)
+	// The react agent consumes the execution catalog snapshot, not the live
+	// child enumeration — pin both surfaces (D6: no other filter may
+	// participate between the scoped registry and the model prompt).
+	catalogExposed := map[string]bool{}
+	if snapshot := child.CaptureExecutionCatalogSnapshot(context.Background()); snapshot != nil {
+		for _, tool := range snapshot.ModelCallableTools(context.Background()) {
+			catalogExposed[tool.Name()] = true
+		}
+	}
+	t.Logf("repairer step %q declared=%v resolved=%v exposed=%v catalogExposed=%v",
+		repairer.ID, repairer.Scope.AllowedToolNames(), allowed, exposed, catalogExposed)
 
 	for _, required := range []string{"file_read", "file_search", "file_write"} {
 		require.True(t, exposed[required], "repairer scoped registry must expose %s (declared scope: %v)", required, repairer.Scope.AllowedToolNames())
+		require.True(t, catalogExposed[required], "repairer execution catalog must expose %s to the react prompt (declared scope: %v)", required, repairer.Scope.AllowedToolNames())
 	}
 }

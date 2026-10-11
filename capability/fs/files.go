@@ -77,11 +77,11 @@ func shouldSkipGeneratedDir(name string) bool {
 type ReadFileTool struct {
 	scopedFileTool
 	BasePath string
-	manager  permissions.FilePermissionChecker
+	manager  authorization.FilePermissionChecker
 	agentID  string
 }
 
-func (t *ReadFileTool) SetPermissionManager(manager permissions.FilePermissionChecker, agentID string) {
+func (t *ReadFileTool) SetPermissionManager(manager authorization.FilePermissionChecker, agentID string) {
 	t.manager = manager
 	t.agentID = agentID
 }
@@ -154,11 +154,11 @@ type WriteFileTool struct {
 	BasePath string
 	Backup   bool
 	spec     *agentspec.AgentRuntimeSpec
-	manager  permissions.FilePermissionChecker
+	manager  authorization.FilePermissionChecker
 	agentID  string
 }
 
-func (t *WriteFileTool) SetPermissionManager(manager permissions.FilePermissionChecker, agentID string) {
+func (t *WriteFileTool) SetPermissionManager(manager authorization.FilePermissionChecker, agentID string) {
 	t.manager = manager
 	t.agentID = agentID
 }
@@ -253,11 +253,11 @@ type EditFileTool struct {
 	scopedFileTool
 	BasePath string
 	spec     *agentspec.AgentRuntimeSpec
-	manager  permissions.FilePermissionChecker
+	manager  authorization.FilePermissionChecker
 	agentID  string
 }
 
-func (t *EditFileTool) SetPermissionManager(manager permissions.FilePermissionChecker, agentID string) {
+func (t *EditFileTool) SetPermissionManager(manager authorization.FilePermissionChecker, agentID string) {
 	t.manager = manager
 	t.agentID = agentID
 }
@@ -437,11 +437,11 @@ func (t *EditFileTool) Rollback(ctx context.Context, token ports.RollbackToken) 
 type ListFilesTool struct {
 	scopedFileTool
 	BasePath string
-	manager  permissions.FilePermissionChecker
+	manager  authorization.FilePermissionChecker
 	agentID  string
 }
 
-func (t *ListFilesTool) SetPermissionManager(manager permissions.FilePermissionChecker, agentID string) {
+func (t *ListFilesTool) SetPermissionManager(manager authorization.FilePermissionChecker, agentID string) {
 	t.manager = manager
 	t.agentID = agentID
 }
@@ -540,11 +540,11 @@ func (t *ListFilesTool) Tags() []string {
 type SearchInFilesTool struct {
 	scopedFileTool
 	BasePath string
-	manager  permissions.FilePermissionChecker
+	manager  authorization.FilePermissionChecker
 	agentID  string
 }
 
-func (t *SearchInFilesTool) SetPermissionManager(manager permissions.FilePermissionChecker, agentID string) {
+func (t *SearchInFilesTool) SetPermissionManager(manager authorization.FilePermissionChecker, agentID string) {
 	t.manager = manager
 	t.agentID = agentID
 }
@@ -667,11 +667,11 @@ type CreateFileTool struct {
 	scopedFileTool
 	BasePath string
 	spec     *agentspec.AgentRuntimeSpec
-	manager  permissions.FilePermissionChecker
+	manager  authorization.FilePermissionChecker
 	agentID  string
 }
 
-func (t *CreateFileTool) SetPermissionManager(manager permissions.FilePermissionChecker, agentID string) {
+func (t *CreateFileTool) SetPermissionManager(manager authorization.FilePermissionChecker, agentID string) {
 	t.manager = manager
 	t.agentID = agentID
 }
@@ -739,11 +739,11 @@ type DeleteFileTool struct {
 	BasePath string
 	TrashDir string
 	spec     *agentspec.AgentRuntimeSpec
-	manager  permissions.FilePermissionChecker
+	manager  authorization.FilePermissionChecker
 	agentID  string
 }
 
-func (t *DeleteFileTool) SetPermissionManager(manager permissions.FilePermissionChecker, agentID string) {
+func (t *DeleteFileTool) SetPermissionManager(manager authorization.FilePermissionChecker, agentID string) {
 	t.manager = manager
 	t.agentID = agentID
 }
@@ -905,7 +905,7 @@ func copyFile(src, dst string) error {
 	return out.Close()
 }
 
-func enforceFileMatrix(ctx context.Context, checker permissions.FilePermissionChecker, agentID, basePath, action, absPath string, matrix agentspec.AgentFileMatrix) error {
+func enforceFileMatrix(ctx context.Context, checker authorization.FilePermissionChecker, agentID, basePath, action, absPath string, matrix agentspec.AgentFileMatrix) error {
 	rel := absPath
 	if basePath != "" {
 		if r, err := filepath.Rel(basePath, absPath); err == nil {

@@ -218,7 +218,7 @@ func (c *stepCore) executeCapability(ctx context.Context, env *contextdata.Envel
 			state.SetStepFailure(env, failure)
 			c.writeStepFailureMetadata(env, failureKind, policyActionKind(rawAction), policyActionKind(actionTaken))
 		}
-		c.emitOperationalFailure(ctx, env, failureKind, policyActionKind(rawAction), policyActionKind(actionTaken), askOutcome)
+		c.emitOperationalFailure(ctx, env, failureKind, policyActionKind(rawAction), policyActionKind(actionTaken), askOutcome, message)
 		data["failure_kind"] = string(failureKind)
 		if askOutcome != "" {
 			data["ask_outcome"] = askOutcome
