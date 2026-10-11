@@ -24,7 +24,7 @@ type recordingGrounder struct {
 	err     error
 }
 
-func (g *recordingGrounder) Ground(_ context.Context, items []knowledge.GroundingItem) (knowledge.GroundingReport, error) {
+func (g *recordingGrounder) Ground(_ context.Context, items []knowledge.GroundingItem, _ ...knowledge.GroundOption) (knowledge.GroundingReport, error) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	g.calls = append(g.calls, items)

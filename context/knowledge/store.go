@@ -76,16 +76,19 @@ func applyMergeRule(chunk *KnowledgeChunk, existing *KnowledgeChunk) mergeOutcom
 }
 
 // preparedChunk is one grounding batch member: a fully merged chunk plus its
-// provenance edges.
+// provenance edges and the producing node's ID (telemetry attribution follows
+// the grounding that happened, never a derived record).
 type preparedChunk struct {
 	chunk   KnowledgeChunk
+	nodeID  string    // the capture's producing node (emitGrounded attribution)
 	grounds []ChunkID // grounds edges: capture chunk → streamed context sources
 	derives []ChunkID // derives_from edges: capture chunk → forwarded sources
 }
 
 // GroundBatch writes every prepared chunk and its edges in one atomic graph
 // transaction. The chunks are already merged per the D3 rule; this method only
-// commits them together.
+// commits them together. It is the whole-batch helper for callers that own
+// the transaction boundary; the grounding service uses GroundBatchValidated.
 func (s *ChunkStore) GroundBatch(ctx context.Context, prepared []preparedChunk) error {
 	if s == nil || s.Graph == nil {
 		return errors.New("knowledge: chunk store graph is required")
@@ -93,11 +96,55 @@ func (s *ChunkStore) GroundBatch(ctx context.Context, prepared []preparedChunk) 
 	if len(prepared) == 0 {
 		return nil
 	}
+	batch, err := s.groundBatchFrom(prepared)
+	if err != nil {
+		return err
+	}
+	return s.Graph.ApplyBatch(ctx, batch)
+}
+
+// GroundBatchValidated is the grounding write under OCC (D4.1): each attempt
+// rebuilds the batch via build (fresh reads, fresh merge decision), commits
+// it, and applies it to memory only if verify — run inside the engine's apply
+// critical section, against current committed state — still accepts. Any
+// divergence re-runs the whole cycle, so concurrent identical grounds
+// serialize to one correct merge instead of a lost update.
+func (s *ChunkStore) GroundBatchValidated(ctx context.Context, build func(reload func(ChunkID) (*KnowledgeChunk, bool, error)) ([]preparedChunk, error), verify func(reload func(ChunkID) (*KnowledgeChunk, bool, error)) error) error {
+	if s == nil || s.Graph == nil {
+		return errors.New("knowledge: chunk store graph is required")
+	}
+	return s.Graph.ApplyBatchChecked(ctx,
+		func() (graphdb.GraphBatch, error) {
+			prepared, err := build(s.loadChunk)
+			if err != nil {
+				return graphdb.GraphBatch{}, err
+			}
+			return s.groundBatchFrom(prepared)
+		},
+		func(get graphdb.NodeGetter) error {
+			// In-section reload: decode the mirror directly — the apply
+			// critical section already holds the store lock, so a locked
+			// read here would deadlock.
+			return verify(func(id ChunkID) (*KnowledgeChunk, bool, error) {
+				if id == "" {
+					return nil, false, nil
+				}
+				node, ok := get(string(id))
+				if !ok {
+					return nil, false, nil
+				}
+				return decodeChunkNode(node)
+			})
+		})
+}
+
+// groundBatchFrom converts prepared chunks into one graph batch.
+func (s *ChunkStore) groundBatchFrom(prepared []preparedChunk) (graphdb.GraphBatch, error) {
 	batch := graphdb.GraphBatch{Nodes: make([]graphdb.NodeRecord, 0, len(prepared))}
 	for _, item := range prepared {
 		props, err := json.Marshal(item.chunk)
 		if err != nil {
-			return err
+			return graphdb.GraphBatch{}, err
 		}
 		batch.Nodes = append(batch.Nodes, graphdb.NodeRecord{
 			ID:       string(item.chunk.ID),
@@ -110,19 +157,19 @@ func (s *ChunkStore) GroundBatch(ctx context.Context, prepared []preparedChunk) 
 		for _, target := range item.grounds {
 			edge, err := groundingEdge(item.chunk.ID, target, EdgeKindGrounds, now)
 			if err != nil {
-				return err
+				return graphdb.GraphBatch{}, err
 			}
 			batch.Edges = append(batch.Edges, edge)
 		}
 		for _, target := range item.derives {
 			edge, err := groundingEdge(item.chunk.ID, target, EdgeKindDerivesFrom, now)
 			if err != nil {
-				return err
+				return graphdb.GraphBatch{}, err
 			}
 			batch.Edges = append(batch.Edges, edge)
 		}
 	}
-	return s.Graph.ApplyBatch(ctx, batch)
+	return batch, nil
 }
 
 // groundingEdge builds a graphdb edge record from a ChunkEdge-shaped link.
@@ -230,6 +277,13 @@ func (s *ChunkStore) loadChunk(id ChunkID) (*KnowledgeChunk, bool, error) {
 	if !ok {
 		return nil, false, nil
 	}
+	return decodeChunkNode(node)
+}
+
+// decodeChunkNode decodes a stored node record into a chunk. It is the decode
+// half of loadChunk, shared with the validated grounding write's in-section
+// reload (which reads the mirror without re-taking the store lock).
+func decodeChunkNode(node graphdb.NodeRecord) (*KnowledgeChunk, bool, error) {
 	var chunk KnowledgeChunk
 	if err := json.Unmarshal(node.Props, &chunk); err != nil {
 		return nil, false, err

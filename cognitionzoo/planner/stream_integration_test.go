@@ -151,6 +151,6 @@ func TestPlannerExecuteBackgroundContextStreamPublishesJobMetadata(t *testing.T)
 
 type plannerNoopGrounder struct{}
 
-func (plannerNoopGrounder) Ground(_ context.Context, _ []knowledge.GroundingItem) (knowledge.GroundingReport, error) {
+func (plannerNoopGrounder) Ground(_ context.Context, _ []knowledge.GroundingItem, _ ...knowledge.GroundOption) (knowledge.GroundingReport, error) {
 	return knowledge.GroundingReport{}, nil
 }

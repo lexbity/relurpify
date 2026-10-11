@@ -93,6 +93,12 @@ type refreshSweepCheckpoint struct {
 // (Q12 r3). Each chunk with a file_path is re-evaluated against current
 // workspace state — the file missing or modified after the chunk's
 // provenance timestamp marks it stale via the staleness manager.
+//
+// Staleness source, by owner ruling R-6 (2026-10-10): per-chunk mtime
+// evaluation STANDS. Wave 3 D11's coverage-hash wording is superseded for
+// the staleness source only — the batch/checkpoint machinery is unchanged —
+// and revisiting to MarkStaleByCoverageHash is a named follow-on, not a
+// defect.
 func NewRefreshHandler(store *ChunkStore, staleness *StalenessManager, workspaceRoot string, ckpt jobs.Store, tel telemetry.Telemetry) jobs.Handler {
 	return &refreshHandler{store: store, staleness: staleness, workspaceRoot: workspaceRoot, ckpt: ckpt, tel: tel, batch: 500}
 }

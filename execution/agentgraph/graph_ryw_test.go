@@ -152,6 +152,6 @@ func TestGraphGroundingFailureFailsTheRun(t *testing.T) {
 
 type failingGrounder struct{}
 
-func (failingGrounder) Ground(_ context.Context, _ []knowledge.GroundingItem) (knowledge.GroundingReport, error) {
+func (failingGrounder) Ground(_ context.Context, _ []knowledge.GroundingItem, _ ...knowledge.GroundOption) (knowledge.GroundingReport, error) {
 	return knowledge.GroundingReport{}, errors.New("store unavailable")
 }

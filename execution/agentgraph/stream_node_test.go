@@ -29,7 +29,7 @@ func (s *streamCompilerStub) Compile(ctx context.Context, request contextports.C
 // noopGrounder is a Grounder that accepts everything without storage.
 type noopGrounder struct{}
 
-func (noopGrounder) Ground(_ context.Context, _ []knowledge.GroundingItem) (knowledge.GroundingReport, error) {
+func (noopGrounder) Ground(_ context.Context, _ []knowledge.GroundingItem, _ ...knowledge.GroundOption) (knowledge.GroundingReport, error) {
 	return knowledge.GroundingReport{}, nil
 }
 

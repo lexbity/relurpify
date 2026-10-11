@@ -70,7 +70,12 @@ func (g *GroundingService) Reground(ctx context.Context, req RegroundRequest) (R
 	}
 	var pairs []capturePair
 	for _, chunk := range chunks {
-		if kind, _ := chunk.Body.Fields["kind"].(string); kind != string(groundingKind) {
+		// Provenance-select (FR-14): a chunk restores when it carries
+		// grounding records for the session/task — the fields the write
+		// boundary already stores. Chunk KIND is not the selector: the
+		// kind-string filter contradicted CaptureKindForOrigin at the write
+		// boundary (tool-origin captures are ChunkKindTool) and is deleted.
+		if len(chunk.GroundedBy) == 0 {
 			continue
 		}
 		if err := ctx.Err(); err != nil {

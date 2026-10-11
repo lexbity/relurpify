@@ -994,7 +994,7 @@ func newConformanceGroundingStore(t *testing.T) (*knowledge.ChunkStore, *knowled
 // admission, the R-6 detection leg).
 type failingConformanceGrounder struct{}
 
-func (f *failingConformanceGrounder) Ground(context.Context, []knowledge.GroundingItem) (knowledge.GroundingReport, error) {
+func (f *failingConformanceGrounder) Ground(_ context.Context, _ []knowledge.GroundingItem, _ ...knowledge.GroundOption) (knowledge.GroundingReport, error) {
 	return knowledge.GroundingReport{}, errors.New("injected admission failure")
 }
 

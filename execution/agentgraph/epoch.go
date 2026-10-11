@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 	"sync"
 	"time"
 
@@ -27,7 +28,7 @@ const (
 // Grounder is the durable write boundary the epoch barrier flushes through.
 // *knowledge.GroundingService satisfies it.
 type Grounder interface {
-	Ground(ctx context.Context, items []knowledge.GroundingItem) (knowledge.GroundingReport, error)
+	Ground(ctx context.Context, items []knowledge.GroundingItem, opts ...knowledge.GroundOption) (knowledge.GroundingReport, error)
 }
 
 type epochCoordinatorContextKey struct{}
@@ -301,7 +302,56 @@ func (c *EpochCoordinator) groundBatch(items []knowledge.GroundingItem) (knowled
 	if c.ground == nil {
 		return knowledge.GroundingReport{}, knowledge.ErrGroundingFailed
 	}
-	return c.ground.Ground(c.runCtx, items)
+	// Defense-in-depth wiring (FR-12): the coordinator supplies the given
+	// identity lookup from the envelope's origins snapshot at flush time, so
+	// a `given` capture whose value is not actually user-origin is
+	// downgraded at grounding no matter what the capture site claimed.
+	var opts []knowledge.GroundOption
+	if lookup := c.givenOriginLookup(); lookup != nil {
+		opts = append(opts, knowledge.WithGivenOriginLookup(lookup))
+	}
+	return c.ground.Ground(c.runCtx, items, opts...)
+}
+
+// givenOriginLookup builds the per-flush identity lookup: it resolves a
+// capture value against the envelope's working values and returns the origin
+// the envelope actually recorded for it. A value identity-equal to a
+// user-origin working value resolves as user; one recorded under llm or tool
+// origin resolves as that — which the grounding-side check treats as a
+// rejected `given` annotation. A value absent from the envelope resolves
+// not-found and the check defers to the capture site. Nil when there is no
+// envelope (degenerate coordinator constructions).
+func (c *EpochCoordinator) givenOriginLookup() knowledge.GivenOriginLookup {
+	env, ok := contextdata.EnvelopeFrom(c.runCtx)
+	if !ok {
+		return nil
+	}
+	origins := env.OriginsSnapshot()
+	if len(origins) == 0 {
+		return nil
+	}
+	values := env.Snapshot()
+	type originValue struct {
+		origin contextdata.OriginClass
+		value  any
+	}
+	known := make([]originValue, 0, len(origins))
+	for key, origin := range origins {
+		if value, ok := values[key]; ok {
+			known = append(known, originValue{origin: origin, value: value})
+		}
+	}
+	if len(known) == 0 {
+		return nil
+	}
+	return func(value any) (contextdata.OriginClass, bool) {
+		for _, candidate := range known {
+			if reflect.DeepEqual(candidate.value, value) {
+				return candidate.origin, true
+			}
+		}
+		return "", false
+	}
 }
 
 func (c *EpochCoordinator) wrapGroundingError(nodeID string, epoch uint64, err error) error {

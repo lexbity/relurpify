@@ -10,8 +10,10 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/context/knowledge"
+	"codeburg.org/lexbit/relurpify/context/knowledge/graphdb"
 	execution "codeburg.org/lexbit/relurpify/execution"
 	fwtelemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
@@ -31,7 +33,7 @@ type blockingGrounder struct {
 	once    sync.Once
 }
 
-func (g *blockingGrounder) Ground(_ context.Context, items []knowledge.GroundingItem) (knowledge.GroundingReport, error) {
+func (g *blockingGrounder) Ground(_ context.Context, items []knowledge.GroundingItem, _ ...knowledge.GroundOption) (knowledge.GroundingReport, error) {
 	g.once.Do(func() { close(g.entered) })
 	<-g.release
 	report := knowledge.GroundingReport{Grounded: make([]knowledge.GroundingEntry, len(items))}
@@ -125,7 +127,7 @@ type countingGrounder struct {
 	total atomic.Int64
 }
 
-func (g *countingGrounder) Ground(_ context.Context, items []knowledge.GroundingItem) (knowledge.GroundingReport, error) {
+func (g *countingGrounder) Ground(_ context.Context, items []knowledge.GroundingItem, _ ...knowledge.GroundOption) (knowledge.GroundingReport, error) {
 	g.total.Add(int64(len(items)))
 	report := knowledge.GroundingReport{Grounded: make([]knowledge.GroundingEntry, len(items))}
 	for i := range items {
@@ -189,4 +191,67 @@ func TestSetGrounderSealedAndSetDrainSealed(t *testing.T) {
 
 	require.ErrorIs(t, g.SetGrounder(&recordingGrounder{}), ErrGraphSealed)
 	require.ErrorIs(t, g.SetDrain(func(time.Duration) {}), ErrGraphSealed)
+}
+
+// TestCoordinatorSuppliesGivenOriginLookup proves FR-12's production wiring:
+// the epoch coordinator builds the per-flush given-identity lookup from the
+// envelope's origins snapshot. A `given` capture whose value is genuinely
+// user-origin grounds workspace-trusted; a `given` capture whose value is
+// NOT user-origin is downgraded at the barrier, whatever the capture site
+// claimed.
+func TestCoordinatorSuppliesGivenOriginLookup(t *testing.T) {
+	ground := func(t *testing.T, userValue, capturedValue string) (*knowledge.ChunkStore, *epochTelemetry) {
+		t.Helper()
+		env := contextdata.NewEnvelope("task-1", "session-1")
+		env.SetWorkingValueWithOrigin("state.user_note", userValue, contextdata.MemoryClassTask, contextdata.OriginUser)
+		tel := &epochTelemetry{}
+		engine, err := graphdb.Open(context.Background(), graphdb.DefaultOptions(t.TempDir()))
+		require.NoError(t, err)
+		t.Cleanup(func() { require.NoError(t, engine.Close(context.Background())) })
+		store := &knowledge.ChunkStore{Graph: engine}
+		service := knowledge.NewGroundingService(store, nil, nil, tel)
+		coord := NewEpochCoordinator(contextdata.WithEnvelope(context.Background(), env), service, tel)
+
+		item := captureItem(capturedValue)
+		item.Epistemics = knowledge.EpistemicGiven
+		item.Origin = contextdata.OriginUser
+		coord.EnqueueCapture(item)
+		require.NoError(t, coord.CloseEpochIfPending("node-a"))
+		chunks, err := store.FindByWorkspace("ws-1")
+		require.NoError(t, err)
+		require.Len(t, chunks, 1)
+		return store, tel
+	}
+
+	t.Run("genuine_user_given_trusted", func(t *testing.T) {
+		store, _ := ground(t, "verbatim user words", "verbatim user words")
+		chunks, err := store.FindByWorkspace("ws-1")
+		require.NoError(t, err)
+		require.Equal(t, agentspec.TrustClassWorkspaceTrusted, chunks[0].TrustClass,
+			"a given the lookup confirms is user-origin grounds workspace-trusted")
+	})
+
+	t.Run("mislabeled_given_downgraded", func(t *testing.T) {
+		// The pipeline records the captured value under its real (llm)
+		// origin; the recipe then claims it as user-given. The envelope
+		// carries both truths, and the lookup must side with the envelope.
+		env := contextdata.NewEnvelope("task-1", "session-1")
+		env.SetWorkingValueWithOrigin("state.user_note", "real user words", contextdata.MemoryClassTask, contextdata.OriginUser)
+		env.SetWorkingValueWithOrigin("state.x", "fabricated user words", contextdata.MemoryClassTask, contextdata.OriginLLM)
+		tel := &epochTelemetry{}
+		engine, err := graphdb.Open(context.Background(), graphdb.DefaultOptions(t.TempDir()))
+		require.NoError(t, err)
+		t.Cleanup(func() { require.NoError(t, engine.Close(context.Background())) })
+		store := &knowledge.ChunkStore{Graph: engine}
+		service := knowledge.NewGroundingService(store, nil, nil, tel)
+		coord := NewEpochCoordinator(contextdata.WithEnvelope(context.Background(), env), service, tel)
+
+		item := captureItem("fabricated user words")
+		item.Epistemics = knowledge.EpistemicGiven
+		item.Origin = contextdata.OriginUser
+		coord.EnqueueCapture(item)
+		require.NoError(t, coord.CloseEpochIfPending("node-a"))
+		require.Equal(t, 1, tel.count(fwtelemetry.EventCaptureEpistemicsDowngraded),
+			"the barrier-time identity check must reject the false given annotation")
+	})
 }

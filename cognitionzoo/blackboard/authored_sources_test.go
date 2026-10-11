@@ -353,7 +353,7 @@ func TestGroundingFailureFailsCycle(t *testing.T) {
 // failingGrounder always rejects the batch (fault-injected admission).
 type failingGrounder struct{}
 
-func (f *failingGrounder) Ground(context.Context, []knowledge.GroundingItem) (knowledge.GroundingReport, error) {
+func (f *failingGrounder) Ground(_ context.Context, _ []knowledge.GroundingItem, _ ...knowledge.GroundOption) (knowledge.GroundingReport, error) {
 	return knowledge.GroundingReport{}, fmt.Errorf("injected admission failure")
 }
 
