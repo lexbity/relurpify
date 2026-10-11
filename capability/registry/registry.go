@@ -164,6 +164,11 @@ type capabilityEntry struct {
 	legacyTool ports.Tool
 	providerID string
 	sessionID  string
+	// bareName is the invocable-capability's bare name (the ID suffix after
+	// the final ':') indexed so declared recipe vocabulary can use the bare
+	// form ("test_run" → "euclo:cap.test_run"). Empty for non-invocable
+	// entries.
+	bareName string
 }
 
 type RegistrationBatchItem struct {
@@ -306,6 +311,9 @@ func (r *CapabilityRegistry) rebuildIndexesLocked() {
 		if name != "" {
 			r.capabilityNameIndex[name] = append(r.capabilityNameIndex[name], id)
 		}
+		if entry.bareName != "" {
+			r.capabilityNameIndex[entry.bareName] = append(r.capabilityNameIndex[entry.bareName], id)
+		}
 		if entry.legacyTool != nil {
 			toolName := normalizeComparable(entry.legacyTool.Name())
 			if toolName != "" {
@@ -322,6 +330,9 @@ func (r *CapabilityRegistry) indexEntryLocked(id string, entry *capabilityEntry)
 	name := normalizeComparable(entry.descriptor.Name)
 	if name != "" {
 		r.capabilityNameIndex[name] = append(r.capabilityNameIndex[name], id)
+	}
+	if entry.bareName != "" {
+		r.capabilityNameIndex[entry.bareName] = append(r.capabilityNameIndex[entry.bareName], id)
 	}
 	if entry.legacyTool != nil {
 		toolName := normalizeComparable(entry.legacyTool.Name())
@@ -469,16 +480,31 @@ func (r *CapabilityRegistry) RegisterBatch(ctx context.Context, items []Registra
 	return nil
 }
 
+// filterDescriptorsByAllowlist restricts descriptors to an allowlist view's
+// permitted capability IDs.
+func (r *CapabilityRegistry) filterDescriptorsByAllowlist(all []descriptor.CapabilityDescriptor) []descriptor.CapabilityDescriptor {
+	if r.toolIDAllowlist == nil {
+		return all
+	}
+	filtered := make([]descriptor.CapabilityDescriptor, 0, len(all))
+	for _, desc := range all {
+		if r.isAllowlisted(desc.ID) {
+			filtered = append(filtered, desc)
+		}
+	}
+	return filtered
+}
+
 func (r *CapabilityRegistry) prepareBatchEntryLocked(ctx context.Context, item RegistrationBatchItem, seenIDs, seenToolNames map[string]struct{}) (descriptor.CapabilityDescriptor, *capabilityEntry, error) {
 	switch {
 	case item.LegacyTool != nil:
 		return r.prepareLegacyToolBatchEntryLocked(ctx, item.LegacyTool, seenIDs, seenToolNames)
 	case item.InvocableHandler != nil:
-		return r.prepareHandlerBatchEntryLocked(ctx, item.InvocableHandler, seenIDs)
+		return r.prepareHandlerBatchEntryLocked(ctx, item.InvocableHandler, seenIDs, true)
 	case item.PromptHandler != nil:
-		return r.prepareHandlerBatchEntryLocked(ctx, item.PromptHandler, seenIDs)
+		return r.prepareHandlerBatchEntryLocked(ctx, item.PromptHandler, seenIDs, false)
 	case item.ResourceHandler != nil:
-		return r.prepareHandlerBatchEntryLocked(ctx, item.ResourceHandler, seenIDs)
+		return r.prepareHandlerBatchEntryLocked(ctx, item.ResourceHandler, seenIDs, false)
 	case item.Descriptor.ID != "" || item.Descriptor.Name != "":
 		return r.prepareDescriptorBatchEntryLocked(item.Descriptor, seenIDs)
 	default:
@@ -513,7 +539,7 @@ func (r *CapabilityRegistry) prepareDescriptorBatchEntryLocked(desc descriptor.C
 	}, nil
 }
 
-func (r *CapabilityRegistry) prepareHandlerBatchEntryLocked(ctx context.Context, handler handler.CapabilityHandler, seenIDs map[string]struct{}) (descriptor.CapabilityDescriptor, *capabilityEntry, error) {
+func (r *CapabilityRegistry) prepareHandlerBatchEntryLocked(ctx context.Context, handler handler.CapabilityHandler, seenIDs map[string]struct{}, invocable bool) (descriptor.CapabilityDescriptor, *capabilityEntry, error) {
 	if handler == nil {
 		return descriptor.CapabilityDescriptor{}, nil, fmt.Errorf("capability handler required")
 	}
@@ -535,12 +561,29 @@ func (r *CapabilityRegistry) prepareHandlerBatchEntryLocked(ctx context.Context,
 	if !matchesAnyCompiledCapabilitySelector(r.allowedMatchers, profile) {
 		return descriptor.CapabilityDescriptor{}, nil, nil
 	}
+	// D3: invocable capabilities index their bare name (the ID suffix after
+	// the final ':') so declared recipe vocabulary resolves the bare form
+	// wherever the full ID resolves. A bare name already mapped to a
+	// different capability is a namespace collision — a registration error
+	// naming both holders, never a silent override.
+	bareName := ""
+	if invocable {
+		bareName = bareCapabilityName(desc.ID)
+		if bareName != "" {
+			for _, holder := range r.capabilityNameIndex[bareName] {
+				if holder != desc.ID {
+					return descriptor.CapabilityDescriptor{}, nil, fmt.Errorf("bare capability name %q already maps to %q (registering %q)", bareName, holder, desc.ID)
+				}
+			}
+		}
+	}
 	return desc, &capabilityEntry{
 		descriptor: desc,
 		profile:    profile,
 		handler:    r.wrapCapabilityHandlerPrepared(handler, desc, profile),
 		providerID: desc.Source.ProviderID,
 		sessionID:  desc.Source.SessionID,
+		bareName:   bareName,
 	}, nil
 }
 
@@ -624,8 +667,27 @@ func (r *CapabilityRegistry) All(ctx context.Context) []ports.Tool {
 	return r.CallableTools(ctx)
 }
 
-// CallableTools returns only tools exposed as callable to agents.
+// CallableTools returns only tools exposed as callable to agents. On an
+// allowlist view it delegates to the base registry and filters by the
+// allowlist — the scoped child's tool surface is the base's callable surface
+// ∩ the allowlist (D6), never empty-by-construction.
 func (r *CapabilityRegistry) CallableTools(ctx context.Context) []ports.Tool {
+	if r == nil {
+		return nil
+	}
+	if r.delegate != nil {
+		all := r.delegate.CallableTools(ctx)
+		if r.toolIDAllowlist == nil {
+			return all
+		}
+		filtered := make([]ports.Tool, 0, len(all))
+		for _, t := range all {
+			if desc, ok := r.delegate.GetCapability(t.Name()); ok && r.isAllowlisted(desc.ID) {
+				filtered = append(filtered, t)
+			}
+		}
+		return filtered
+	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	entries := r.localToolEntriesLocked()
@@ -642,8 +704,26 @@ func (r *CapabilityRegistry) CallableTools(ctx context.Context) []ports.Tool {
 	return res
 }
 
-// InspectableTools returns tools visible for operator inspection.
+// InspectableTools returns tools visible for operator inspection. On an
+// allowlist view it delegates to the base registry and filters by the
+// allowlist.
 func (r *CapabilityRegistry) InspectableTools() []ports.Tool {
+	if r == nil {
+		return nil
+	}
+	if r.delegate != nil {
+		all := r.delegate.InspectableTools()
+		if r.toolIDAllowlist == nil {
+			return all
+		}
+		filtered := make([]ports.Tool, 0, len(all))
+		for _, t := range all {
+			if desc, ok := r.delegate.GetCapability(t.Name()); ok && r.isAllowlisted(desc.ID) {
+				filtered = append(filtered, t)
+			}
+		}
+		return filtered
+	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	entries := r.localToolEntriesLocked()
@@ -657,7 +737,10 @@ func (r *CapabilityRegistry) InspectableTools() []ports.Tool {
 	return res
 }
 
-// GetCapability resolves a tool by either capability ID or public name.
+// GetCapability resolves a capability by ID or name in D1's normative order:
+// (1) exact capabilities-map hit, (2) registry name index — manifest public
+// names and bare invocable-capability names, (3) model-variant normalization
+// (DefaultToolNameNormalization), then unresolved.
 func (r *CapabilityRegistry) GetCapability(idOrName string) (descriptor.CapabilityDescriptor, bool) {
 	if r == nil {
 		return descriptor.CapabilityDescriptor{}, false
@@ -667,18 +750,27 @@ func (r *CapabilityRegistry) GetCapability(idOrName string) (descriptor.Capabili
 	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	idOrName = r.normalizeToolNameLocked(idOrName)
-	if capability, ok := r.capabilities[idOrName]; ok {
-		return capability, true
-	}
-	if ids := r.capabilityNameIndex[normalizeComparable(idOrName)]; len(ids) > 0 {
-		for _, id := range ids {
-			if capability, ok := r.capabilities[id]; ok {
-				return capability, true
+	resolve := func(name string) (descriptor.CapabilityDescriptor, bool) {
+		if capability, ok := r.capabilities[name]; ok {
+			return capability, true
+		}
+		if ids := r.capabilityNameIndex[normalizeComparable(name)]; len(ids) > 0 {
+			for _, id := range ids {
+				if capability, ok := r.capabilities[id]; ok {
+					return capability, true
+				}
 			}
 		}
+		return descriptor.CapabilityDescriptor{}, false
 	}
-	return descriptor.CapabilityDescriptor{}, false
+	if capability, ok := resolve(idOrName); ok {
+		return capability, true
+	}
+	normalized := r.normalizeToolNameLocked(idOrName)
+	if normalized == idOrName {
+		return descriptor.CapabilityDescriptor{}, false
+	}
+	return resolve(normalized)
 }
 
 // GetCoordinationTarget returns a non-hidden capability that is explicitly
@@ -704,6 +796,13 @@ func (r *CapabilityRegistry) AllCapabilities() []descriptor.CapabilityDescriptor
 
 // CallableCapabilities returns descriptors exposed as callable to agents.
 func (r *CapabilityRegistry) CallableCapabilities() []descriptor.CapabilityDescriptor {
+	if r == nil {
+		return nil
+	}
+	if r.delegate != nil {
+		all := r.delegate.CallableCapabilities()
+		return r.filterDescriptorsByAllowlist(all)
+	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	res := make([]descriptor.CapabilityDescriptor, 0, len(r.capabilities))
@@ -721,6 +820,16 @@ func (r *CapabilityRegistry) CallableCapabilities() []descriptor.CapabilityDescr
 func (r *CapabilityRegistry) CoordinationTargets(selectors ...agentspec.CapabilitySelector) []policy.DelegationTarget {
 	if r == nil {
 		return nil
+	}
+	if r.delegate != nil {
+		all := r.delegate.CoordinationTargets(selectors...)
+		out := make([]policy.DelegationTarget, 0, len(all))
+		for _, target := range all {
+			if desc, ok := r.delegate.GetCapability(target.CapabilityID()); ok && r.isAllowlisted(desc.ID) {
+				out = append(out, target)
+			}
+		}
+		return out
 	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -746,8 +855,16 @@ func (r *CapabilityRegistry) CoordinationTargets(selectors ...agentspec.Capabili
 	return out
 }
 
-// InspectableCapabilities returns non-hidden capability descriptors.
+// InspectableCapabilities returns non-hidden capability descriptors. On an
+// allowlist view it delegates to the base registry and filters by the
+// allowlist.
 func (r *CapabilityRegistry) InspectableCapabilities() []descriptor.CapabilityDescriptor {
+	if r == nil {
+		return nil
+	}
+	if r.delegate != nil {
+		return r.filterDescriptorsByAllowlist(r.delegate.InspectableCapabilities())
+	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	res := make([]descriptor.CapabilityDescriptor, 0, len(r.capabilities))

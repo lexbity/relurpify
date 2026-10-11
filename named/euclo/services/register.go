@@ -41,11 +41,11 @@ func (r *Registration) RegisterPromptProviders(reg prompt.Registry) error {
 
 // LoadThoughtRecipes loads all thoughtrecipes from the given workspace using the
 // provided capability registry for semantic validation.
-func (r *Registration) LoadThoughtRecipes(workspace string, caps thoughtrecipe.CapabilityRegistryLookup) (*thoughtrecipe.LoadResult, error) {
+func (r *Registration) LoadThoughtRecipes(workspace string, caps thoughtrecipe.ToolVocabularyLookup) (*thoughtrecipe.LoadResult, error) {
 	return r.thoughtrecipeLoader.LoadAll(workspace, caps)
 }
 
-func CapabilityLookup(reg *registry.CapabilityRegistry) thoughtrecipe.CapabilityRegistryLookup {
+func CapabilityLookup(reg *registry.CapabilityRegistry) thoughtrecipe.ToolVocabularyLookup {
 	if reg == nil {
 		return nil
 	}
@@ -95,9 +95,11 @@ type PromptRegistrar interface {
 	RegisterAll(registry prompt.Registry) error
 }
 
-// ThoughtRecipeLoader abstracts thoughtrecipe loading.
+// ThoughtRecipeLoader abstracts thoughtrecipe loading. The capability
+// parameter is the composed registry's vocabulary adapter — the single
+// declared-vocabulary catalog (FR-5).
 type ThoughtRecipeLoader interface {
-	LoadAll(workspace string, caps thoughtrecipe.CapabilityRegistryLookup) (*thoughtrecipe.LoadResult, error)
+	LoadAll(workspace string, caps thoughtrecipe.ToolVocabularyLookup) (*thoughtrecipe.LoadResult, error)
 }
 
 type capabilityLookupAdapter struct {
@@ -109,4 +111,18 @@ func (a capabilityLookupAdapter) Select(id string) (descriptor.CapabilityDescrip
 		return descriptor.CapabilityDescriptor{}, false
 	}
 	return a.reg.GetCapability(id)
+}
+
+func (a capabilityLookupAdapter) GetCapability(idOrName string) (descriptor.CapabilityDescriptor, bool) {
+	if a.reg == nil {
+		return descriptor.CapabilityDescriptor{}, false
+	}
+	return a.reg.GetCapability(idOrName)
+}
+
+func (a capabilityLookupAdapter) CallableCapabilityNames() []string {
+	if a.reg == nil {
+		return nil
+	}
+	return a.reg.CallableCapabilityNames()
 }

@@ -460,7 +460,7 @@ run writer:
 	if err := reg.RegisterLegacyTool(context.Background(), semanticTestTool{name: "file_search", available: true}); err != nil {
 		t.Fatalf("register file_search: %v", err)
 	}
-	if err := NewSymbolTable(doc).WithToolRegistry(reg).Resolve(); err != nil {
+	if err := NewSymbolTable(doc).WithCapabilityRegistry(reg).Resolve(); err != nil {
 		t.Fatalf("Resolve failed: %v", err)
 	}
 

@@ -2,6 +2,7 @@ package thoughtrecipe
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -91,19 +92,22 @@ run reviewer:
 		t.Fatalf("register file_search: %v", err)
 	}
 
-	st := NewSymbolTable(doc).WithToolRegistry(reg)
+	st := NewSymbolTable(doc).WithCapabilityRegistry(reg)
 	if err := st.Resolve(); err != nil {
 		t.Fatalf("Resolve failed: %v", err)
 	}
 
 	trigger := doc.Declarations[0].(*TriggerDecl)
-	if got, want := trigger.ToolPolicies[0].ResolvedToolNames, []string{"file_edit", "file_search", "file_write"}; !equalStrings(got, want) {
+	// D1: ResolvedToolNames carries the declared vocabulary verbatim — the
+	// registry maps model variants ("grep" → file_search) at scoping time,
+	// the load pass only verifies resolvability.
+	if got, want := trigger.ToolPolicies[0].ResolvedToolNames, []string{"file_edit", "grep", "file_write"}; !equalStrings(got, want) {
 		t.Fatalf("trigger resolved tool names = %#v, want %#v", got, want)
 	}
 
 	run := doc.Declarations[3].(*RunDecl)
 	policy := run.Items[0].(*ToolInvokePolicyDecl)
-	if got, want := policy.ResolvedToolNames, []string{"file_search", "file_edit"}; !equalStrings(got, want) {
+	if got, want := policy.ResolvedToolNames, []string{"grep", "file_edit"}; !equalStrings(got, want) {
 		t.Fatalf("run resolved tool names = %#v, want %#v", got, want)
 	}
 }
@@ -125,13 +129,18 @@ agent reviewer uses react
 		t.Fatalf("register file_search: %v", err)
 	}
 
-	err := NewSymbolTable(doc).WithToolRegistry(reg).Resolve()
-	if err == nil || !strings.Contains(err.Error(), "unknown tool") {
-		t.Fatalf("expected unknown tool error, got %v", err)
+	err := NewSymbolTable(doc).WithCapabilityRegistry(reg).Resolve()
+	var unresolved *ErrUnresolvedToolName
+	if !errors.As(err, &unresolved) || unresolved.Tool != "missing_tool" {
+		t.Fatalf("expected ErrUnresolvedToolName naming missing_tool, got %v", err)
 	}
 }
 
-func TestSymbolTableRejectsNonCallableTool(t *testing.T) {
+// TestSymbolTableAcceptsHiddenButResolvableTool pins the wave-5 contract
+// split: load validation checks RESOLUTION only (D1/D2); exposure is a
+// step-time filter (D6) applied by the registry's callable enumeration, never
+// a second load-time catalog opinion.
+func TestSymbolTableAcceptsHiddenButResolvableTool(t *testing.T) {
 	doc := mustParseDoc(t, `thoughtrecipe demo
 "Demo."
 
@@ -152,9 +161,8 @@ agent reviewer uses react
 		Access:   agentspec.CapabilityExposureHidden,
 	}})
 
-	err := NewSymbolTable(doc).WithToolRegistry(reg).Resolve()
-	if err == nil || !strings.Contains(err.Error(), "not callable") {
-		t.Fatalf("expected not callable error, got %v", err)
+	if err := NewSymbolTable(doc).WithCapabilityRegistry(reg).Resolve(); err != nil {
+		t.Fatalf("hidden but resolvable tool must pass load validation, got %v", err)
 	}
 }
 

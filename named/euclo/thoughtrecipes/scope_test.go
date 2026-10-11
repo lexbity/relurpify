@@ -327,6 +327,8 @@ route:
 
 type descriptorLookupFunc func(string) (descriptor.CapabilityDescriptor, bool)
 
-func (f descriptorLookupFunc) Select(id string) (descriptor.CapabilityDescriptor, bool) {
+func (f descriptorLookupFunc) GetCapability(id string) (descriptor.CapabilityDescriptor, bool) {
 	return f(id)
 }
+
+func (f descriptorLookupFunc) CallableCapabilityNames() []string { return nil }

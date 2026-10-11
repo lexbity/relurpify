@@ -5,9 +5,10 @@ import (
 	"errors"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/capability/agentspec"
-	"codeburg.org/lexbit/relurpify/capability/descriptor"
+	"codeburg.org/lexbit/relurpify/capability/fs"
+	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/capability/registry"
+	"codeburg.org/lexbit/relurpify/named/euclo/relurpicabilities"
 	"codeburg.org/lexbit/relurpify/named/euclo/services"
 	thoughtrecipepkg "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
 )
@@ -18,19 +19,27 @@ import (
 // takes.
 func TestCanonicalRecipesLoadClean(t *testing.T) {
 	caps := registry.NewRegistry()
-	for _, capID := range []string{
-		"euclo:cap.test_run", "euclo:cap.ast_query", "euclo:cap.code_review",
-		"euclo:cap.diff_summary",
+	// Declared vocabulary: the real file tools (capability/fs is the
+	// implementation the platform native registration wraps) plus the shipped
+	// relurpic capability set, registered the way the runtime does (FR-5).
+	// Registry coherence with the manifests is the composition gate's contract
+	// (app/envcomposition); this corpus gate exercises the loader.
+	for _, tool := range []ports.Tool{
+		&fs.ReadFileTool{BasePath: "../../../"},
+		&fs.SearchInFilesTool{BasePath: "../../../"},
+		&fs.WriteFileTool{BasePath: "../../../"},
+		&fs.EditFileTool{BasePath: "../../../"},
+		&fs.ListFilesTool{BasePath: "../../../"},
 	} {
-		desc := descriptor.CapabilityDescriptor{
-			ID:           capID,
-			Name:         capID,
-			Kind:         agentspec.CapabilityKindTool,
-			Availability: descriptor.AvailabilitySpec{Available: true},
+		if err := caps.Register(context.Background(), tool); err != nil {
+			t.Fatalf("register %s: %v", tool.Name(), err)
 		}
-		if err := caps.RegisterCapability(context.Background(), desc); err != nil {
-			t.Fatalf("register %s: %v", capID, err)
-		}
+	}
+	if err := relurpicabilities.RegisterAll(relurpicabilities.RegistrationDeps{
+		Registry: caps,
+		Declared: services.EucloCapabilityIDs(),
+	}); err != nil {
+		t.Fatalf("register relurpic capabilities: %v", err)
 	}
 	loader := thoughtrecipepkg.NewLoader().WithCapabilityRegistry(services.CapabilityLookup(caps))
 	result, err := loader.LoadWorkspace("../../../")

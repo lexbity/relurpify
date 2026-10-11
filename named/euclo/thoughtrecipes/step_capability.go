@@ -12,27 +12,39 @@ import (
 	"codeburg.org/lexbit/relurpify/named/euclo/state"
 )
 
-func (c *stepCore) scopedRegistry() *registry.CapabilityRegistry {
+// scopedRegistry returns the step's allowlist-scoped registry view. The step
+// tool list is a pure function of (compiled step scope) ∩ (registry
+// resolvable) (D6); an unresolvable declared name is a typed error — the
+// silent drop is deleted (D2).
+func (c *stepCore) scopedRegistry() (*registry.CapabilityRegistry, error) {
 	if c == nil || c.deps == nil || c.deps.Registry == nil {
-		return nil
+		return nil, nil
 	}
-	allowed := c.effectiveToolAllowlist()
+	allowed, err := c.effectiveToolAllowlist()
+	if err != nil {
+		return nil, err
+	}
 	if len(allowed) == 0 {
-		return nil
+		return nil, nil
 	}
-	return c.deps.Registry.WithAllowlist(allowed)
+	return c.deps.Registry.WithAllowlist(allowed), nil
 }
 
-func (c *stepCore) effectiveToolAllowlist() []string {
+// effectiveToolAllowlist resolves the step's declared tool vocabulary through
+// the capability registry (D1's resolver). Loaded recipes had every declared
+// name verified at load (D2), so an unresolved name here means a
+// programmatically constructed plan or a post-load registry change — it fails
+// loudly naming the tool, never a bare continue.
+func (c *stepCore) effectiveToolAllowlist() ([]string, error) {
 	if c == nil || c.deps == nil || c.deps.Registry == nil {
-		return nil
+		return nil, nil
 	}
 	if c.step.Scope.IsDenyAll() {
-		return []string{"__euclo__.deny_all__"}
+		return []string{"__euclo__.deny_all__"}, nil
 	}
 	names := c.step.Scope.AllowedToolNames()
 	if len(names) == 0 {
-		return nil
+		return nil, nil
 	}
 	allowed := make([]string, 0, len(names))
 	seen := make(map[string]struct{}, len(names))
@@ -42,11 +54,12 @@ func (c *stepCore) effectiveToolAllowlist() []string {
 			continue
 		}
 		desc, ok := c.deps.Registry.GetCapability(name)
-		if !ok {
-			continue
-		}
-		if desc.ID == "" {
-			continue
+		if !ok || desc.ID == "" {
+			return nil, &ErrUnresolvedToolName{
+				Step:    c.id,
+				Tool:    name,
+				Nearest: nearestVocabularyNames(name, c.deps.Registry.CallableCapabilityNames()),
+			}
 		}
 		if _, exists := seen[desc.ID]; exists {
 			continue
@@ -55,9 +68,9 @@ func (c *stepCore) effectiveToolAllowlist() []string {
 		allowed = append(allowed, desc.ID)
 	}
 	if len(allowed) == 0 {
-		return []string{"__euclo__.deny_all__"}
+		return []string{"__euclo__.deny_all__"}, nil
 	}
-	return allowed
+	return allowed, nil
 }
 
 func writeCapabilityMetadata(env *contextdata.Envelope, stepID, capabilityID string) {
@@ -76,7 +89,11 @@ func (c *stepCore) executeCapability(ctx context.Context, env *contextdata.Envel
 	if reg == nil {
 		return nil, fmt.Errorf("thoughtrecipe step %q: capability_id requires a registry", c.id)
 	}
-	if scoped := c.scopedRegistry(); scoped != nil {
+	scoped, err := c.scopedRegistry()
+	if err != nil {
+		return nil, err
+	}
+	if scoped != nil {
 		reg = scoped
 	}
 

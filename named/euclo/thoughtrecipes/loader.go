@@ -17,9 +17,14 @@ var ErrNoRecipeDir = errors.New("no recipes")
 
 // Loader scans Euclo DSL thoughtrecipe sources from the workspace.
 type Loader struct {
-	PromptRegistry     PromptRegistryLookup
-	RecipeRegistry     ThoughtRecipeRegistryLookup
-	CapabilityRegistry CapabilityRegistryLookup
+	PromptRegistry PromptRegistryLookup
+	RecipeRegistry ThoughtRecipeRegistryLookup
+	// CapabilityRegistry is the single declared-vocabulary catalog (D1/FR-5):
+	// `do relurpic` references, coordination metadata, and the D2
+	// `may invoke` load check all resolve through it. Production wiring
+	// passes the composed capability registry — the same instance step-time
+	// scoping resolves against.
+	CapabilityRegistry ToolVocabularyLookup
 }
 
 // LoadWarning captures a non-fatal loader diagnostic.
@@ -63,7 +68,7 @@ func (l *Loader) WithRecipeRegistry(reg ThoughtRecipeRegistryLookup) *Loader {
 }
 
 // WithCapabilityRegistry wires capability lookup into the loader's semantic checks.
-func (l *Loader) WithCapabilityRegistry(reg CapabilityRegistryLookup) *Loader {
+func (l *Loader) WithCapabilityRegistry(reg ToolVocabularyLookup) *Loader {
 	l.CapabilityRegistry = reg
 	return l
 }
@@ -98,6 +103,7 @@ func (l *Loader) LoadWorkspace(workspaceRoot string) (*LoadResult, error) {
 		SourceRoot: root,
 		Registry:   NewThoughtRecipeRegistry(),
 	}
+	result.Registry.WithToolVocabulary(l.CapabilityRegistry)
 
 	for _, name := range names {
 		entry := byName[name]

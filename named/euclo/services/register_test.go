@@ -157,7 +157,7 @@ type stubThoughtRecipeLoader struct {
 	result *thoughtrecipepkg.LoadResult
 }
 
-func (s *stubThoughtRecipeLoader) LoadAll(string, thoughtrecipepkg.CapabilityRegistryLookup) (*thoughtrecipepkg.LoadResult, error) {
+func (s *stubThoughtRecipeLoader) LoadAll(string, thoughtrecipepkg.ToolVocabularyLookup) (*thoughtrecipepkg.LoadResult, error) {
 	s.called = true
 	if s.result == nil {
 		s.result = &thoughtrecipepkg.LoadResult{Registry: thoughtrecipepkg.NewThoughtRecipeRegistry()}

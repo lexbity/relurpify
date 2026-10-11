@@ -1,7 +1,6 @@
 package thoughtrecipe
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"strconv"
@@ -10,22 +9,9 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/descriptor"
 	"codeburg.org/lexbit/relurpify/cognitionzoo/paradigm"
 
-	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/execution/prompt"
 	"codeburg.org/lexbit/relurpify/named/euclo/surface"
 )
-
-// CapabilityRegistryLookup is the minimal capability lookup contract required
-// by semantic validation.
-type CapabilityRegistryLookup interface {
-	Select(capabilityID string) (descriptor.CapabilityDescriptor, bool)
-}
-
-// ToolRegistryLookup exposes the callable tool surface for semantic validation.
-type ToolRegistryLookup interface {
-	GetCapability(idOrName string) (descriptor.CapabilityDescriptor, bool)
-	ModelCallableTools(ctx context.Context) []ports.Tool
-}
 
 // SemanticWarning captures a non-fatal semantic diagnostic.
 type SemanticWarning struct {
@@ -55,8 +41,7 @@ type SymbolTable struct {
 	declared    map[string]SourceSpan
 	trigger     *TriggerDecl
 	invocations []*CapabilityInvocation
-	capability  CapabilityRegistryLookup
-	tools       ToolRegistryLookup
+	capability  ToolVocabularyLookup
 	prompts     PromptRegistryLookup
 	recipes     ThoughtRecipeRegistryLookup
 	paradigms   *paradigm.ContractRegistry
@@ -79,18 +64,12 @@ func NewSymbolTable(doc *ThoughtRecipeDocument) *SymbolTable {
 	}
 }
 
-// WithCapabilityRegistry wires capability lookup into the symbol table.
-func (s *SymbolTable) WithCapabilityRegistry(reg CapabilityRegistryLookup) *SymbolTable {
+// WithCapabilityRegistry wires the capability registry into the symbol
+// table. It is the single declared-vocabulary catalog: `do relurpic`
+// references and `may invoke` tool names both resolve through its
+// GetCapability (D1).
+func (s *SymbolTable) WithCapabilityRegistry(reg ToolVocabularyLookup) *SymbolTable {
 	s.capability = reg
-	if tools, ok := reg.(ToolRegistryLookup); ok {
-		s.tools = tools
-	}
-	return s
-}
-
-// WithToolRegistry wires callable tool lookup into the symbol table.
-func (s *SymbolTable) WithToolRegistry(reg ToolRegistryLookup) *SymbolTable {
-	s.tools = reg
 	return s
 }
 
@@ -256,7 +235,7 @@ func (s *SymbolTable) resolveDeclarations() error {
 				return err
 			}
 		case *RouteDecl:
-			if err := s.resolveRouteDecl(node); err != nil {
+			if err := s.resolveRouteDecl(node, ""); err != nil {
 				return err
 			}
 		case *AskDecl:
@@ -264,7 +243,7 @@ func (s *SymbolTable) resolveDeclarations() error {
 				return err
 			}
 		case *PipelineDecl:
-			if err := s.resolvePipelineDecl(node); err != nil {
+			if err := s.resolvePipelineDecl(node, ""); err != nil {
 				return err
 			}
 		}
@@ -288,7 +267,7 @@ func (s *SymbolTable) resolveTriggerDecl(decl *TriggerDecl) error {
 		return err
 	}
 	for i := range decl.ToolPolicies {
-		if err := s.resolveToolInvokePolicyDecl(&decl.ToolPolicies[i]); err != nil {
+		if err := s.resolveToolInvokePolicyDecl(&decl.ToolPolicies[i], "trigger"); err != nil {
 			return err
 		}
 	}
@@ -302,11 +281,11 @@ func (s *SymbolTable) resolveTriggerDecl(decl *TriggerDecl) error {
 	return nil
 }
 
-func (s *SymbolTable) resolveToolInvokePolicyDecl(decl *ToolInvokePolicyDecl) error {
+func (s *SymbolTable) resolveToolInvokePolicyDecl(decl *ToolInvokePolicyDecl, stepLabel string) error {
 	if decl == nil {
 		return nil
 	}
-	names, err := s.resolveToolNames(decl)
+	names, err := s.resolveToolNames(decl, stepLabel)
 	if err != nil {
 		return err
 	}
@@ -314,7 +293,7 @@ func (s *SymbolTable) resolveToolInvokePolicyDecl(decl *ToolInvokePolicyDecl) er
 	return nil
 }
 
-func (s *SymbolTable) resolveToolNames(decl *ToolInvokePolicyDecl) ([]string, error) {
+func (s *SymbolTable) resolveToolNames(decl *ToolInvokePolicyDecl, stepLabel string) ([]string, error) {
 	if decl == nil {
 		return nil, fmt.Errorf("tool invoke policy is nil")
 	}
@@ -328,58 +307,26 @@ func (s *SymbolTable) resolveToolNames(decl *ToolInvokePolicyDecl) ([]string, er
 		return nil, fmt.Errorf("%s:%d:%d: tool name list is required", decl.GetSpan().Start.File, decl.GetSpan().Start.Line, decl.GetSpan().Start.Column)
 	}
 
+	// D2: every declared `may invoke` name must resolve in the capability
+	// registry. An unresolvable declaration is a load error naming recipe,
+	// step, and tool — never a silent in-step drop.
+	declared := make([]string, 0, len(entries))
 	seen := make(map[string]struct{}, len(entries))
-	resolved := make([]string, 0, len(entries))
-	if s.tools == nil {
-		for _, entry := range entries {
-			name := canonicalToolNameEntry(entry)
-			if name == "" {
-				return nil, fmt.Errorf("%s:%d:%d: empty tool name is not allowed", decl.GetSpan().Start.File, decl.GetSpan().Start.Line, decl.GetSpan().Start.Column)
-			}
-			if _, ok := seen[name]; ok {
-				continue
-			}
-			seen[name] = struct{}{}
-			resolved = append(resolved, name)
-		}
-		return resolved, nil
-	}
-
-	callable := make(map[string]struct{}, len(entries))
-	for _, tool := range s.tools.ModelCallableTools(context.Background()) {
-		name := strings.TrimSpace(tool.Name())
-		if name == "" {
-			continue
-		}
-		callable[name] = struct{}{}
-	}
-
 	for _, entry := range entries {
 		name := canonicalToolNameEntry(entry)
 		if name == "" {
 			return nil, fmt.Errorf("%s:%d:%d: empty tool name is not allowed", decl.GetSpan().Start.File, decl.GetSpan().Start.Line, decl.GetSpan().Start.Column)
 		}
-		desc, ok := s.tools.GetCapability(name)
-		if !ok {
-			return nil, fmt.Errorf("%s:%d:%d: unknown tool %q", decl.GetSpan().Start.File, decl.GetSpan().Start.Line, decl.GetSpan().Start.Column, name)
-		}
-		canonical := strings.TrimSpace(desc.Name)
-		if canonical == "" {
-			canonical = strings.TrimSpace(desc.ID)
-		}
-		if canonical == "" {
-			return nil, fmt.Errorf("%s:%d:%d: tool %q has no canonical name", decl.GetSpan().Start.File, decl.GetSpan().Start.Line, decl.GetSpan().Start.Column, name)
-		}
-		if _, ok := callable[canonical]; !ok {
-			return nil, fmt.Errorf("%s:%d:%d: tool %q is not callable in the active registry view", decl.GetSpan().Start.File, decl.GetSpan().Start.Line, decl.GetSpan().Start.Column, name)
-		}
-		if _, ok := seen[canonical]; ok {
+		if _, ok := seen[name]; ok {
 			continue
 		}
-		seen[canonical] = struct{}{}
-		resolved = append(resolved, canonical)
+		seen[name] = struct{}{}
+		declared = append(declared, name)
 	}
-	return resolved, nil
+	if err := ResolveDeclaredToolNames(s.Document.Name, stepLabel, declared, s.capability); err != nil {
+		return nil, err
+	}
+	return declared, nil
 }
 
 func canonicalToolNameEntry(expr ValueExpr) string {
@@ -422,14 +369,16 @@ func (s *SymbolTable) resolveRunLike(agentName string, items []ExecutionItem, sp
 		return fmt.Errorf("%s:%d:%d: unknown agent %q", span.Start.File, span.Start.Line, span.Start.Column, agentName)
 	}
 	for _, item := range items {
-		if err := s.resolveExecutionItem(item); err != nil {
+		if err := s.resolveExecutionItem(item, agentName); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (s *SymbolTable) resolveExecutionItem(item ExecutionItem) error {
+// resolveExecutionItem carries the enclosing step label so a declared tool
+// name that fails to resolve is reported against the step that declared it.
+func (s *SymbolTable) resolveExecutionItem(item ExecutionItem, stepLabel string) error {
 	switch node := item.(type) {
 	case *FromClause:
 		return s.resolveValueExpr(node.Source)
@@ -454,7 +403,7 @@ func (s *SymbolTable) resolveExecutionItem(item ExecutionItem) error {
 			}
 		}
 		for _, child := range node.Body {
-			if err := s.resolveExecutionItem(child); err != nil {
+			if err := s.resolveExecutionItem(child, stepLabel); err != nil {
 				return err
 			}
 		}
@@ -465,7 +414,7 @@ func (s *SymbolTable) resolveExecutionItem(item ExecutionItem) error {
 		}
 		return nil
 	case *ToolInvokePolicyDecl:
-		return s.resolveToolInvokePolicyDecl(node)
+		return s.resolveToolInvokePolicyDecl(node, stepLabel)
 	case *StreamClause:
 		return s.resolveStreamClause(node)
 	case *CaptureBlock:
@@ -475,11 +424,11 @@ func (s *SymbolTable) resolveExecutionItem(item ExecutionItem) error {
 	case *DelegateDecl:
 		return s.resolveRunLike(node.Agent.Value, node.Items, node.GetSpan())
 	case *RouteDecl:
-		return s.resolveRouteDecl(node)
+		return s.resolveRouteDecl(node, stepLabel)
 	case *AskDecl:
 		return s.resolveAskItems(node.Items)
 	case *PipelineDecl:
-		return s.resolvePipelineDecl(node)
+		return s.resolvePipelineDecl(node, stepLabel)
 	default:
 		return fmt.Errorf("%s:%d:%d: unsupported execution item %T", item.GetSpan().Start.File, item.GetSpan().Start.Line, item.GetSpan().Start.Column, item)
 	}
@@ -505,9 +454,12 @@ func (s *SymbolTable) resolveStreamClause(decl *StreamClause) error {
 	return nil
 }
 
-func (s *SymbolTable) resolveRouteDecl(decl *RouteDecl) error {
+func (s *SymbolTable) resolveRouteDecl(decl *RouteDecl, stepLabel string) error {
 	if decl == nil {
 		return nil
+	}
+	if stepLabel == "" {
+		stepLabel = "route"
 	}
 	for _, branch := range decl.Branches {
 		if !branch.IsElse {
@@ -516,7 +468,7 @@ func (s *SymbolTable) resolveRouteDecl(decl *RouteDecl) error {
 			}
 		}
 		for _, item := range branch.Body {
-			if err := s.resolveExecutionItem(item); err != nil {
+			if err := s.resolveExecutionItem(item, stepLabel); err != nil {
 				return err
 			}
 		}
@@ -597,7 +549,7 @@ func (s *SymbolTable) resolvePromptRef(ref *PromptRef, span SourceSpan, context 
 	return nil
 }
 
-func (s *SymbolTable) resolvePipelineDecl(decl *PipelineDecl) error {
+func (s *SymbolTable) resolvePipelineDecl(decl *PipelineDecl, stepLabel string) error {
 	if decl == nil {
 		return nil
 	}
@@ -613,7 +565,7 @@ func (s *SymbolTable) resolvePipelineDecl(decl *PipelineDecl) error {
 		}
 		seen[name] = stage.GetSpan()
 		for _, item := range stage.Body {
-			if err := s.resolveExecutionItem(item); err != nil {
+			if err := s.resolveExecutionItem(item, "pipeline stage "+name); err != nil {
 				return err
 			}
 		}
@@ -691,8 +643,8 @@ func (s *SymbolTable) resolveCapabilityInvocation(inv *CapabilityInvocation) err
 		return err
 	}
 	if s.capability != nil {
-		if _, ok := s.capability.Select(call.CapabilityID); !ok {
-			if _, ok := s.capability.Select(strings.TrimSpace(inv.Capability.Value)); !ok {
+		if _, ok := s.capability.GetCapability(call.CapabilityID); !ok {
+			if _, ok := s.capability.GetCapability(strings.TrimSpace(inv.Capability.Value)); !ok {
 				return fmt.Errorf("%s:%d:%d: unknown capability %q", inv.GetSpan().Start.File, inv.GetSpan().Start.Line, inv.GetSpan().Start.Column, inv.Capability.Value)
 			}
 		}
@@ -875,11 +827,11 @@ func (s *SymbolTable) lookupCapability(inv *CapabilityInvocation) (descriptor.Ca
 	}
 	capID := NormalizeCapabilityReference(inv.Capability.Value)
 	if capID != "" {
-		if desc, ok := s.capability.Select(capID); ok {
+		if desc, ok := s.capability.GetCapability(capID); ok {
 			return desc, true
 		}
 	}
-	if desc, ok := s.capability.Select(strings.TrimSpace(inv.Capability.Value)); ok {
+	if desc, ok := s.capability.GetCapability(strings.TrimSpace(inv.Capability.Value)); ok {
 		return desc, true
 	}
 	return descriptor.CapabilityDescriptor{}, false

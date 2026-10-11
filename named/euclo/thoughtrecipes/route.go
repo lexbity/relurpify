@@ -292,7 +292,7 @@ func capabilityStepScope(capabilityID string, lookup capabilityScopeLookup) Reso
 	if lookup == nil {
 		return scope
 	}
-	desc, ok := lookup.Select(capabilityID)
+	desc, ok := lookup.GetCapability(capabilityID)
 	if !ok || len(desc.Annotations) == 0 {
 		return scope
 	}

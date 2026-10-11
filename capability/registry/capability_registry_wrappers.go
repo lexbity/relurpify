@@ -516,22 +516,25 @@ func emitCapabilitySecurityEvent(ctx context.Context, telemetry fwtelemetry.Tele
 	telemetry.Emit(ev)
 }
 
-// unwrapTool recurses through decorator wrappers (anything implementing
-// ports.ToolUnwrapper) down to the concrete tool, so SandboxScopeAware /
-// AgentSpecAware / PermissionAware stamps reach the implementation that
-// enforces them. Depth-capped; a nil Unwrap result is a decorator-contract
-// violation surfaced as a nil tool rather than a silently unstamped wrapper.
+// unwrapTool walks decorator wrappers (anything implementing
+// ports.ToolUnwrapper) down to the concrete tool with an explicit stack, so
+// SandboxScopeAware / AgentSpecAware / PermissionAware stamps reach the
+// implementation that enforces them. Depth-capped; a nil Unwrap result is a
+// decorator-contract violation surfaced as a nil tool rather than a silently
+// unstamped wrapper.
 func unwrapTool(tool ports.Tool) ports.Tool {
-	for depth := 0; depth < ports.MaxUnwrapDepth; depth++ {
-		u, ok := tool.(ports.ToolUnwrapper)
-		if !ok {
-			return tool
-		}
-		next := u.Unwrap()
-		if next == nil {
+	stack := []ports.Tool{tool}
+	for depth := 0; depth < ports.MaxUnwrapDepth && len(stack) > 0; depth++ {
+		current := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		if current == nil {
 			return nil
 		}
-		tool = next
+		u, ok := current.(ports.ToolUnwrapper)
+		if !ok {
+			return current
+		}
+		stack = append(stack, u.Unwrap())
 	}
 	return tool
 }

@@ -6,10 +6,11 @@ import (
 	"path/filepath"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/capability/agentspec"
-	"codeburg.org/lexbit/relurpify/capability/descriptor"
+	"codeburg.org/lexbit/relurpify/capability/fs"
+	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/cognitionzoo/paradigm"
+	"codeburg.org/lexbit/relurpify/named/euclo/relurpicabilities"
 	"codeburg.org/lexbit/relurpify/named/euclo/services"
 	thoughtrecipe "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
 )
@@ -22,26 +23,34 @@ import (
 // validation; this is the NFR-12 "shipped recipes load" gate for the contract
 // change.
 func TestShippedRecipesLoadUnderContracts(t *testing.T) {
-	caps := registry.NewRegistry()
-	for _, capID := range []string{
-		"euclo:cap.test_run", "euclo:cap.ast_query", "euclo:cap.code_review",
-		"euclo:cap.diff_summary",
-	} {
-		desc := descriptor.CapabilityDescriptor{
-			ID:           capID,
-			Name:         capID,
-			Kind:         agentspec.CapabilityKindTool,
-			Availability: descriptor.AvailabilitySpec{Available: true},
-		}
-		if err := caps.RegisterCapability(context.Background(), desc); err != nil {
-			t.Fatalf("register %s: %v", capID, err)
-		}
-	}
-
 	// The loader scans <root>/relurpify_cfg/euclo; named/euclo sits two
 	// levels below the repository root, so the loader's working root is
 	// ../..
 	root := filepath.Join("..", "..")
+
+	caps := registry.NewRegistry()
+	// Declared vocabulary: the real file tools (capability/fs is the
+	// implementation the platform native registration wraps) plus the shipped
+	// relurpic capability set, registered the way the runtime does (FR-5).
+	// Registry coherence with the manifests is the composition gate's contract
+	// (app/envcomposition); this corpus gate exercises the loader.
+	for _, tool := range []ports.Tool{
+		&fs.ReadFileTool{BasePath: root},
+		&fs.SearchInFilesTool{BasePath: root},
+		&fs.WriteFileTool{BasePath: root},
+		&fs.EditFileTool{BasePath: root},
+		&fs.ListFilesTool{BasePath: root},
+	} {
+		if err := caps.Register(context.Background(), tool); err != nil {
+			t.Fatalf("register %s: %v", tool.Name(), err)
+		}
+	}
+	if err := relurpicabilities.RegisterAll(relurpicabilities.RegistrationDeps{
+		Registry: caps,
+		Declared: services.EucloCapabilityIDs(),
+	}); err != nil {
+		t.Fatalf("register relurpic capabilities: %v", err)
+	}
 	sourceRoot := filepath.Join(root, thoughtrecipe.ThoughtRecipeSourceRoot)
 	if _, err := os.Stat(sourceRoot); err != nil {
 		t.Fatalf("shipped recipe tree %q not found (run from repo root): %v", sourceRoot, err)

@@ -94,11 +94,11 @@ func TestCapabilityLookupAdapter(t *testing.T) {
 	if lookup == nil {
 		t.Fatal("expected non-nil lookup for a registry")
 	}
-	if _, ok := lookup.Select("euclo:cap.does_not_exist"); ok {
+	if _, ok := lookup.GetCapability("euclo:cap.does_not_exist"); ok {
 		t.Fatal("unknown capability must not be found")
 	}
 	adapter := capabilityLookupAdapter{reg: nil}
-	if _, ok := adapter.Select("anything"); ok {
+	if _, ok := adapter.GetCapability("anything"); ok {
 		t.Fatal("nil-inner adapter must report not found")
 	}
 }

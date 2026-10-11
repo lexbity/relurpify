@@ -186,7 +186,10 @@ func TestThoughtRecipeStepNodeBuildRuntimeContextClarificationState(t *testing.T
 	}
 	node := NewRunNode("clarify.step", &paradigm.Deps{}, step)
 
-	rctx := node.buildRuntimeContext(context.Background(), env)
+	rctx, errBuildCtx := node.buildRuntimeContext(context.Background(), env)
+	if errBuildCtx != nil {
+		t.Fatalf("buildRuntimeContext: %v", errBuildCtx)
+	}
 	clarState, ok := rctx.State[intentcontext.ClarificationStateKey].(*intentcontext.ClarificationState)
 	if !ok {
 		t.Fatalf("expected clarification state in prompt runtime, got %#v", rctx.State[intentcontext.ClarificationStateKey])
@@ -232,7 +235,10 @@ func TestThoughtRecipeStepNodeBuildRuntimeContextIncludesStepContext(t *testing.
 		Capture: []string{"output.result"},
 	}
 	node := NewRunNode("context.step", &paradigm.Deps{}, step)
-	rctx := node.buildRuntimeContext(context.Background(), env)
+	rctx, errBuildCtx := node.buildRuntimeContext(context.Background(), env)
+	if errBuildCtx != nil {
+		t.Fatalf("buildRuntimeContext: %v", errBuildCtx)
+	}
 
 	if got, ok := rctx.State["execution_step_context_stream_query"]; !ok || got != "find relevant symbols" {
 		t.Fatalf("stream query = %#v (ok=%v), want find relevant symbols", got, ok)
@@ -301,7 +307,10 @@ func TestThoughtRecipeStepNodeScopesRuntimeToolsFromEffectiveToolNames(t *testin
 		Scope:    AllowTools([]string{"file_write"}),
 	}
 	scopedNode := NewRunNode("scope.step", deps, scopedStep)
-	rctx := scopedNode.buildRuntimeContext(context.Background(), baseEnv)
+	rctx, errBuildCtx := scopedNode.buildRuntimeContext(context.Background(), baseEnv)
+	if errBuildCtx != nil {
+		t.Fatalf("buildRuntimeContext: %v", errBuildCtx)
+	}
 
 	if got, want := runtimeToolNames(rctx.Tools), []string{"file_write"}; !equalStringSlices(got, want) {
 		t.Fatalf("scoped runtime tools = %#v, want %#v", got, want)
@@ -310,7 +319,10 @@ func TestThoughtRecipeStepNodeScopesRuntimeToolsFromEffectiveToolNames(t *testin
 		t.Fatalf("scoped runtime capabilities = %#v, want %#v", got, want)
 	}
 
-	scopedRegistry := scopedNode.scopedRegistry()
+	scopedRegistry, errScoped := scopedNode.scopedRegistry()
+	if errScoped != nil {
+		t.Fatalf("scopedRegistry: %v", errScoped)
+	}
 	if scopedRegistry == nil {
 		t.Fatal("expected scoped registry")
 	}
@@ -330,11 +342,18 @@ func TestThoughtRecipeStepNodeScopesRuntimeToolsFromEffectiveToolNames(t *testin
 		Scope:    AllowTools(nil), // unrestricted
 	}
 	nextNode := NewRunNode("scope.next", deps, nextStep)
-	nextRctx := nextNode.buildRuntimeContext(context.Background(), baseEnv)
+	nextRctx, errBuildCtx := nextNode.buildRuntimeContext(context.Background(), baseEnv)
+	if errBuildCtx != nil {
+		t.Fatalf("buildRuntimeContext: %v", errBuildCtx)
+	}
 	if got, want := runtimeToolNames(nextRctx.Tools), []string{"file_read", "file_write"}; !equalStringSlices(got, want) {
 		t.Fatalf("unscoped runtime tools = %#v, want %#v", got, want)
 	}
-	if scoped := nextNode.scopedRegistry(); scoped != nil {
+	scoped, errScopedNext := nextNode.scopedRegistry()
+	if errScopedNext != nil {
+		t.Fatalf("scopedRegistry: %v", errScopedNext)
+	}
+	if scoped != nil {
 		t.Fatalf("expected no scoped registry for unbounded step, got %#v", scoped)
 	}
 }
@@ -424,7 +443,10 @@ func TestThoughtRecipeStepNodeWritesClarificationMetadata(t *testing.T) {
 	if got, ok := contextdata.GetTyped[any](env, "euclo.execution.step.extract.step.clarification_allowed_statuses"); !ok || got == nil {
 		t.Fatalf("expected allowed statuses in envelope, got %#v (ok=%v)", got, ok)
 	}
-	rctx := node.buildRuntimeContext(context.Background(), env)
+	rctx, errBuildCtx := node.buildRuntimeContext(context.Background(), env)
+	if errBuildCtx != nil {
+		t.Fatalf("buildRuntimeContext: %v", errBuildCtx)
+	}
 	if got := rctx.State["execution_step_type"]; got != "run" {
 		t.Fatalf("expected runtime step type metadata \"run\", got %#v", got)
 	}

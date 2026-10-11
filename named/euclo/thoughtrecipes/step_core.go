@@ -99,7 +99,11 @@ func (c *stepCore) buildTask(ctx context.Context, env *contextdata.Envelope) (*e
 
 func (c *stepCore) buildAgent(task *execution.Task) (agentgraph.WorkflowExecutor, error) {
 	deps := c.deps
-	if scopedRegistry := c.scopedRegistry(); scopedRegistry != nil {
+	scopedRegistry, err := c.scopedRegistry()
+	if err != nil {
+		return nil, err
+	}
+	if scopedRegistry != nil {
 		deps = depsWithRegistry(deps, scopedRegistry)
 	}
 

@@ -406,7 +406,7 @@ func (h *recordingCapabilityHandler) Invoke(ctx context.Context, env ports.State
 	}, nil
 }
 
-func compileThoughtRecipeFromSource(t *testing.T, source string, toolReg *regpkg.CapabilityRegistry, capReg thoughtrecipepkg.CapabilityRegistryLookup) (*thoughtrecipepkg.ThoughtRecipeRegistry, *thoughtrecipepkg.ExecutionPlan) {
+func compileThoughtRecipeFromSource(t *testing.T, source string, toolReg *regpkg.CapabilityRegistry, capReg thoughtrecipepkg.ToolVocabularyLookup) (*thoughtrecipepkg.ThoughtRecipeRegistry, *thoughtrecipepkg.ExecutionPlan) {
 	t.Helper()
 	doc, err := thoughtrecipepkg.ParseSource("scope_demo.euclo", source)
 	if err != nil {
@@ -414,7 +414,7 @@ func compileThoughtRecipeFromSource(t *testing.T, source string, toolReg *regpkg
 	}
 	symbols := thoughtrecipepkg.NewSymbolTable(doc)
 	if toolReg != nil {
-		symbols.WithToolRegistry(toolReg)
+		symbols.WithCapabilityRegistry(toolReg)
 	}
 	if capReg != nil {
 		symbols.WithCapabilityRegistry(capReg)
@@ -433,7 +433,7 @@ func compileThoughtRecipeFromSource(t *testing.T, source string, toolReg *regpkg
 	return registry, plan
 }
 
-func executeThoughtRecipeFromSource(t *testing.T, source string, runtimeReg, toolReg *regpkg.CapabilityRegistry, capReg thoughtrecipepkg.CapabilityRegistryLookup, nativeToolCalling bool) (*recordingThoughtRecipeModel, *contextdata.Envelope, *thoughtrecipepkg.ExecutionPlan) {
+func executeThoughtRecipeFromSource(t *testing.T, source string, runtimeReg, toolReg *regpkg.CapabilityRegistry, capReg thoughtrecipepkg.ToolVocabularyLookup, nativeToolCalling bool) (*recordingThoughtRecipeModel, *contextdata.Envelope, *thoughtrecipepkg.ExecutionPlan) {
 	t.Helper()
 	recipeRegistry, plan := compileThoughtRecipeFromSource(t, source, toolReg, capReg)
 	model := &recordingThoughtRecipeModel{nativeToolCalling: nativeToolCalling}

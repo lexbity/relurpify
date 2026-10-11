@@ -80,8 +80,10 @@ func (r *EucloCapabilityRegistry) RegisterCapability(desc descriptor.CapabilityD
 	return nil
 }
 
-// Select returns a capability descriptor by ID.
-func (r *EucloCapabilityRegistry) Select(capabilityID string) (descriptor.CapabilityDescriptor, bool) {
+// GetCapability returns a capability descriptor by ID. It is the seam the
+// thoughtrecipe semantic pass resolves both `do relurpic` references and the
+// declared `may invoke` vocabulary through.
+func (r *EucloCapabilityRegistry) GetCapability(capabilityID string) (descriptor.CapabilityDescriptor, bool) {
 	if r == nil {
 		return descriptor.CapabilityDescriptor{}, false
 	}
@@ -89,6 +91,22 @@ func (r *EucloCapabilityRegistry) Select(capabilityID string) (descriptor.Capabi
 	defer r.mu.RUnlock()
 	desc, ok := r.capabilities[capabilityID]
 	return desc, ok
+}
+
+// CallableCapabilityNames returns every registered capability ID, sorted —
+// the nearest-candidate source for unresolved-name load errors.
+func (r *EucloCapabilityRegistry) CallableCapabilityNames() []string {
+	if r == nil {
+		return nil
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	names := make([]string, 0, len(r.capabilities))
+	for id := range r.capabilities {
+		names = append(names, id)
+	}
+	sort.Strings(names)
+	return names
 }
 
 // FallbackForFamily returns the family's preferred fallback capability.

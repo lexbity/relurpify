@@ -22,6 +22,56 @@ type ThoughtRecipeRegistry struct {
 	mu             sync.RWMutex
 	thoughtrecipes map[string]*ThoughtRecipeEntry
 	order          []string
+	vocabulary     ToolVocabularyLookup
+}
+
+// WithToolVocabulary wires the declared-vocabulary catalog used by the
+// programmatic FR-14 arm: compiled plans registered through this registry
+// must resolve their full `may invoke` vocabulary against it.
+func (r *ThoughtRecipeRegistry) WithToolVocabulary(vocabulary ToolVocabularyLookup) *ThoughtRecipeRegistry {
+	if r != nil {
+		r.vocabulary = vocabulary
+	}
+	return r
+}
+
+// validatePlanToolVocabulary resolves every step's declared tool names
+// (steps, route branches, pipeline stages) against the wired vocabulary.
+func (r *ThoughtRecipeRegistry) validatePlanToolVocabulary(plan *ExecutionPlan) error {
+	if r == nil || r.vocabulary == nil || plan == nil {
+		return nil
+	}
+	recipeName := ""
+	if plan.ThoughtRecipe != nil {
+		recipeName = plan.ThoughtRecipe.Name
+	}
+	var walk func(steps []ExecutionStep) error
+	walk = func(steps []ExecutionStep) error {
+		for _, step := range steps {
+			if err := ResolveDeclaredToolNames(recipeName, step.ID, step.Scope.AllowedToolNames(), r.vocabulary); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	if err := walk(plan.Steps); err != nil {
+		return err
+	}
+	for _, group := range plan.Routes {
+		for _, branch := range group.Branches {
+			if err := walk(branch.Steps); err != nil {
+				return err
+			}
+		}
+	}
+	for _, pipeline := range plan.Pipelines {
+		for _, stage := range pipeline.Stages {
+			if err := walk(stage.Steps); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // NewThoughtRecipeRegistry creates a new thoughtrecipe registry.
@@ -62,6 +112,12 @@ func (r *ThoughtRecipeRegistry) registerThoughtRecipe(thoughtrecipe *surface.Tho
 	// so this is the belt that covers plans built in Go.
 	if plan != nil {
 		if err := ValidatePlanContracts(plan, paradigm.Registry); err != nil {
+			return false, err
+		}
+		// FR-14 programmatic arm: a plan whose declared tool vocabulary does
+		// not resolve in the capability registry is a registration error —
+		// the same loudness the loader applies at parse time (D2).
+		if err := r.validatePlanToolVocabulary(plan); err != nil {
 			return false, err
 		}
 	}

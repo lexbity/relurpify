@@ -357,6 +357,9 @@ func (r *CapabilityRegistry) InvocableCapabilities() []descriptor.CapabilityDesc
 	if r == nil {
 		return nil
 	}
+	if r.delegate != nil {
+		return r.filterDescriptorsByAllowlist(r.delegate.InvocableCapabilities())
+	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	res := make([]descriptor.CapabilityDescriptor, 0, len(r.entries))

@@ -12,7 +12,7 @@ import (
 // execution plan that can be consumed by the existing thoughtrecipe runtime.
 // capabilityScopeLookup resolves coordination metadata during lowering.
 // Nil means the step scope is exactly the named capability.
-type capabilityScopeLookup = CapabilityRegistryLookup
+type capabilityScopeLookup = ToolVocabularyLookup
 
 // LowerDocument lowers a document without a capability registry: standalone
 // capability steps scope to exactly the named capability.
@@ -22,7 +22,7 @@ func LowerDocument(doc *ThoughtRecipeDocument) (*ExecutionPlan, error) {
 
 // LowerDocumentWithRegistry lowers a document with a capability lookup so
 // manifest-declared coordination targets union into capability step scopes.
-func LowerDocumentWithRegistry(doc *ThoughtRecipeDocument, lookup CapabilityRegistryLookup) (*ExecutionPlan, error) {
+func LowerDocumentWithRegistry(doc *ThoughtRecipeDocument, lookup ToolVocabularyLookup) (*ExecutionPlan, error) {
 	if doc == nil {
 		return nil, fmt.Errorf("thoughtrecipe document is nil")
 	}

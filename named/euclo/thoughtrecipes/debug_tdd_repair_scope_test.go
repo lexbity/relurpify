@@ -48,10 +48,11 @@ route:
 	}
 
 	caps := staticCapabilityLookup{
-		"file_read":  descriptor.CapabilityDescriptor{ID: "file_read"},
-		"grep":       descriptor.CapabilityDescriptor{ID: "file_search"},
-		"test_run":   descriptor.CapabilityDescriptor{ID: "euclo:cap.test_run"},
-		"file_write": descriptor.CapabilityDescriptor{ID: "file_write"},
+		"file_read":          descriptor.CapabilityDescriptor{ID: "file_read"},
+		"grep":               descriptor.CapabilityDescriptor{ID: "file_search"},
+		"test_run":           descriptor.CapabilityDescriptor{ID: "euclo:cap.test_run"},
+		"euclo:cap.test_run": descriptor.CapabilityDescriptor{ID: "euclo:cap.test_run"},
+		"file_write":         descriptor.CapabilityDescriptor{ID: "file_write"},
 	}
 	loader := NewLoader().WithCapabilityRegistry(caps)
 	result, err := loader.LoadWorkspace(dir)

@@ -2,6 +2,8 @@ package thoughtrecipe
 
 import (
 	"context"
+
+	"codeburg.org/lexbit/relurpify/capability/fs"
 	"encoding/json"
 	"os"
 	"sort"
@@ -231,6 +233,31 @@ func (h *stubCapHandler) Invoke(ctx context.Context, env ports.State, args map[s
 func minimalTraceDeps(t *testing.T) (*paradigm.Deps, *regpkg.CapabilityRegistry) {
 	t.Helper()
 	reg := regpkg.NewRegistry()
+	// The declared vocabulary the golden recipes rely on: file tools and the
+	// capability IDs the recipes invoke. Since wave-5 (D2) an unresolvable
+	// declared name fails the step loudly, so the harness registers what the
+	// recipes declare instead of relying on the deleted silent drop.
+	ctx := context.Background()
+	for _, tool := range []ports.Tool{
+		&fs.ReadFileTool{BasePath: "."},
+		&fs.SearchInFilesTool{BasePath: "."},
+		&fs.WriteFileTool{BasePath: "."},
+		&fs.ListFilesTool{BasePath: "."},
+	} {
+		if err := reg.Register(ctx, tool); err != nil {
+			t.Fatalf("register %s: %v", tool.Name(), err)
+		}
+	}
+	for _, id := range []string{"euclo:cap.code_review", "euclo:cap.targeted_refactor", "euclo:cap.ast_query"} {
+		if err := reg.RegisterInvocableCapability(ctx, &stubCapHandler{
+			id: id,
+			fn: func(ctx context.Context, env ports.State, args map[string]any) (*ports.ToolResult, error) {
+				return &ports.ToolResult{Success: true, Data: map[string]any{"answer": "stub"}}, nil
+			},
+		}); err != nil {
+			t.Fatalf("register %s: %v", id, err)
+		}
+	}
 	deps := &paradigm.Deps{
 		Config: &execution.Config{
 			Name:  "golden-trace",

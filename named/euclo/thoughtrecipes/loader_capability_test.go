@@ -3,6 +3,7 @@ package thoughtrecipe
 import (
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 
@@ -126,7 +127,16 @@ func writeRecipe(t *testing.T, dir, name, content string) {
 
 type staticCapabilityLookup map[string]descriptor.CapabilityDescriptor
 
-func (s staticCapabilityLookup) Select(id string) (descriptor.CapabilityDescriptor, bool) {
-	d, ok := s[id]
+func (s staticCapabilityLookup) GetCapability(idOrName string) (descriptor.CapabilityDescriptor, bool) {
+	d, ok := s[idOrName]
 	return d, ok
+}
+
+func (s staticCapabilityLookup) CallableCapabilityNames() []string {
+	names := make([]string, 0, len(s))
+	for name := range s {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
 }

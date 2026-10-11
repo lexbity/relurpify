@@ -16,13 +16,19 @@ func (c *stepCore) resolveFromRegistry(ctx context.Context, env *contextdata.Env
 	if c.deps.PromptRegistry == nil {
 		return "", fmt.Errorf("no prompt registry available")
 	}
-	rctx := c.buildRuntimeContext(ctx, env)
+	rctx, err := c.buildRuntimeContext(ctx, env)
+	if err != nil {
+		return "", err
+	}
 	return c.deps.PromptRegistry.Resolve(c.step.PromptID, rctx)
 }
 
-func (c *stepCore) buildRuntimeContext(ctx context.Context, env *contextdata.Envelope) prompt.RuntimeContext {
+func (c *stepCore) buildRuntimeContext(ctx context.Context, env *contextdata.Envelope) (prompt.RuntimeContext, error) {
 	data := thoughtrecipeTemplateData(env, c.step)
-	scopedRegistry := c.scopedRegistry()
+	scopedRegistry, err := c.scopedRegistry()
+	if err != nil {
+		return prompt.RuntimeContext{}, err
+	}
 	runtime := prompt.NewRuntimeContext(env, c.step.Paradigm, "euclo").
 		WithVariable("instruction", c.renderTemplate(c.step.Prompt, data)).
 		WithVariable("question", func() string {
@@ -51,7 +57,7 @@ func (c *stepCore) buildRuntimeContext(ctx context.Context, env *contextdata.Env
 		runtime.Capabilities = c.deps.Registry.AllCapabilities()
 	}
 	runtime.AgentSpec = nil
-	return runtime
+	return runtime, nil
 }
 
 func (c *stepCore) stepRuntimeState(data map[string]any) map[string]any {
