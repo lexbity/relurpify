@@ -126,8 +126,12 @@ var benchmarkDimensionWeights = map[string]map[string]float64{ //nolint:gocheckn
 	},
 }
 
+// BenchmarkBaselineFilePath resolves the suite-level OSB baseline under the
+// workspace's baselines directory — the SOURCE workspace's state tree
+// (R-5a). The old resolution inside the ephemeral derived copy could never
+// find a written baseline: the comparison always took the missing branch.
 func BenchmarkBaselineFilePath(workspace, suiteName string) string {
-	return filepath.Join(workspace, "testsuite", "agenttests", "tapes", suiteName, "benchmark.baseline.json")
+	return filepath.Join(BaselinesDir(workspace), "osb", SanitizeName(suiteName), "benchmark.baseline.json")
 }
 
 func BenchmarkReportFilePath(outDir string) string {
@@ -169,7 +173,7 @@ func BuildBenchmarkReport(suite *Suite, suiteReport *SuiteReport) (*BenchmarkRep
 
 	report := &BenchmarkReport{
 		RunClass:          "benchmark",
-		Workspace:         benchmarkReportWorkspace(suiteReport),
+		Workspace:         suiteReport.BaselinesDir,
 		SuitePath:         suite.SourcePath,
 		SuiteName:         suite.Metadata.Name,
 		ScoreFamily:       family,
@@ -183,10 +187,9 @@ func BuildBenchmarkReport(suite *Suite, suiteReport *SuiteReport) (*BenchmarkRep
 	report.Comparison = BenchmarkComparisonReport{
 		RunClass:          "benchmark",
 		SuiteName:         suite.Metadata.Name,
-		BaselinePath:      BenchmarkBaselineFilePath(report.Workspace, suite.Metadata.Name),
+		BaselinePath:      BenchmarkBaselineFilePath(suiteReport.BaselinesDir, suite.Metadata.Name),
 		ComparisonWindow:  meta.ComparisonWindow,
 		VarianceThreshold: meta.VarianceThreshold,
-		WithinVariance:    true,
 	}
 
 	var totalScore float64
@@ -195,7 +198,7 @@ func BuildBenchmarkReport(suite *Suite, suiteReport *SuiteReport) (*BenchmarkRep
 	modelSet := map[string]struct{}{}
 	providerSet := map[string]struct{}{}
 	for _, cr := range suiteReport.Cases {
-		caseScore := scoreBenchmarkCase(family, weights, artifactsByName, cr)
+		caseScore := scoreBenchmarkCase(family, weights, artifactsByName, cr, suiteReport.BaselinesDir, suite.Metadata.Name)
 		report.Cases = append(report.Cases, caseScore)
 		if data, err := json.MarshalIndent(caseScore, "", "  "); err == nil {
 			_ = fs.WriteFileSecure(BenchmarkCaseScoreFilePath(cr.ArtifactsDir), data)
@@ -254,8 +257,9 @@ func BuildBenchmarkReport(suite *Suite, suiteReport *SuiteReport) (*BenchmarkRep
 			report.Comparison.Message = "outside variance threshold"
 		}
 	} else {
+		// Absence is recorded as absence (D10.4): no "missing → within
+		// variance" default that makes the comparison unfalsifiable.
 		report.Comparison.Message = "baseline missing"
-		report.Comparison.WithinVariance = true
 	}
 	return report, nil
 }
@@ -272,7 +276,7 @@ func benchmarkReportWorkspace(report *SuiteReport) string {
 	return ""
 }
 
-func scoreBenchmarkCase(family string, weights map[string]float64, artifacts map[string]struct{}, cr CaseReport) BenchmarkCaseScore {
+func scoreBenchmarkCase(family string, weights map[string]float64, artifacts map[string]struct{}, cr CaseReport, baselinesDir, suiteName string) BenchmarkCaseScore {
 	score := BenchmarkCaseScore{
 		RunClass:       "benchmark",
 		Name:           cr.Name,
@@ -317,7 +321,7 @@ func scoreBenchmarkCase(family string, weights map[string]float64, artifacts map
 	if totalWeight > 0 {
 		score.OverallScore = (weighted / totalWeight) * 100
 	}
-	score.BaselinePath = BenchmarkCaseBaselineFilePath(cr.ArtifactsDir, cr.Name, cr.Model)
+	score.BaselinePath = BenchmarkCaseBaselineFilePath(baselinesDir, suiteName, cr.Name, cr.Model)
 	if baseline, err := LoadBenchmarkBaseline(score.BaselinePath); err == nil && baseline != nil {
 		score.BaselineFound = true
 		score.BaselineScore = baseline.OverallScore
@@ -575,11 +579,16 @@ func benchmarkFamilyForSuite(suite *Suite) string {
 	}
 }
 
-func BenchmarkCaseBaselineFilePath(artifactsDir, caseName, modelName string) string {
-	if strings.TrimSpace(artifactsDir) == "" {
+// BenchmarkCaseBaselineFilePath resolves a case's OSB score baseline under
+// the SOURCE workspace's baselines directory (R-5a). The old resolution
+// inside the case's freshly-created artifacts dir could never hold a
+// baseline: the comparison always took the missing branch.
+func BenchmarkCaseBaselineFilePath(baselinesDir, suiteName, caseName, modelName string) string {
+	if strings.TrimSpace(baselinesDir) == "" {
 		return ""
 	}
-	return filepath.Join(artifactsDir, GoldenBaselineFilename(caseName, modelName)+".benchmark.json")
+	return filepath.Join(BaselinesDir(baselinesDir), "osb", SanitizeName(suiteName),
+		SanitizeName(caseName)+"__"+SanitizeName(modelName)+".score.baseline.json")
 }
 
 func LoadBenchmarkBaseline(path string) (*BenchmarkBaseline, error) {

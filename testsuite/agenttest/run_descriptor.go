@@ -65,7 +65,11 @@ type PreparedRunDescriptor struct {
 	// EffectiveTimeout bounds each execution attempt (D9.2). Zero means
 	// DISABLED — only an explicit literal 0 in the effective choice lands
 	// here as zero; the resolution never substitutes a default for it.
-	EffectiveTimeout  time.Duration                `json:"effective_timeout,omitempty"`
+	EffectiveTimeout time.Duration `json:"effective_timeout,omitempty"`
+	// BaselineDir is the SOURCE workspace's baselines directory (D10): the
+	// derived workspace carries the source path, never a copy — comparisons
+	// always read the operator's real baselines.
+	BaselineDir       string                       `json:"baseline_dir,omitempty"`
 	MaxRetries        int                          `json:"max_retries"`
 	SandboxBackend    string                       `json:"sandbox_backend,omitempty"`
 	SetupOverlays     []PreparedRunOverlay         `json:"setup_overlays,omitempty"`
@@ -206,6 +210,7 @@ func BuildPreparedRunDescriptor(suite *Suite, c CaseSpec, model ModelSpec, opts 
 		StrictMode:            suite.IsStrictRun(opts.Profile, opts.Strict),
 		MaxIterations:         resolveCaseMaxIterations(opts, c),
 		EffectiveTimeout:      EffectiveTimeout(c.Timeout, suite.Spec.Execution.Timeout, opts.Timeout, opts.TimeoutSet),
+		BaselineDir:           BaselinesDir(opts.TargetWorkspace),
 		MaxRetries:            opts.MaxRetries,
 		SetupOverlays:         setupOverlays,
 		SeededState:           seededState,

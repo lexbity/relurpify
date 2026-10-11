@@ -33,6 +33,7 @@ import (
 	euclopolicy "codeburg.org/lexbit/relurpify/named/euclo/policy"
 	"codeburg.org/lexbit/relurpify/platform/llm"
 	"codeburg.org/lexbit/relurpify/telemetry"
+	"codeburg.org/lexbit/relurpify/telemetry/perfstats"
 	"codeburg.org/lexbit/relurpify/testsuite/testhelper"
 	"codeburg.org/lexbit/relurpify/testsuite/testsupport"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
@@ -598,6 +599,10 @@ func (e *PreparedRunExecutor) buildCaseReport(desc *PreparedRunDescriptor, resul
 		report.Success = result.Success
 		report.Error = result.Error
 	}
+	// D10.5: the framework counters are per-case truth — the runner resets
+	// them before this case executes (sequential-case constraint), so the
+	// snapshot is this case's activity.
+	report.FrameworkPerf = perfstats.Get()
 	if execErr != nil {
 		report.Success = false
 		if report.Error == "" {

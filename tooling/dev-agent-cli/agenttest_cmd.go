@@ -19,6 +19,28 @@ type agentTestRunner interface {
 	RunSuite(context.Context, *agenttest.Suite, agenttest.RunOptions) (*agenttest.SuiteReport, error)
 }
 
+// runSuitesWithRunner executes the selected suites with the given options and
+// prints the per-suite line; shared by `run` and `baseline`.
+func runSuitesWithRunner(cmd *cobra.Command, runner agentTestRunner, loadedSuites []*agenttest.Suite, opts agenttest.RunOptions) error {
+	for _, suite := range loadedSuites {
+		rep, err := runner.RunSuite(cmd.Context(), suite, opts)
+		if err != nil {
+			return err
+		}
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s [%s]: %d/%d passed (%d infra, %d assertion)\n", filepath.Base(suite.SourcePath), rep.Profile, rep.PassedCases, rep.PassedCases+rep.FailedCases, rep.InfraFailures, rep.AssertFailures)
+		if opts.WriteBaselines {
+			sourceRun := agenttest.BaselinesSourceRun(opts.OutputDir, rep.RunID)
+			if err := agenttest.PromoteBaselines(cmd.OutOrStdout(), suite, rep, sourceRun, opts.BaselinesDryRun); err != nil {
+				// Baselines are an operator artifact, not evidence: a write
+				// failure is printed and non-fatal to the run's exit code
+				// (D10.2, deliberate asymmetry with the report contract).
+				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "baseline promotion incomplete: %v\n", err)
+			}
+		}
+	}
+	return nil
+}
+
 var newAgentTestRunnerFn = func() agentTestRunner { //nolint:gochecknoglobals // dependency-injection seam replaced by tests
 	return &agenttest.Runner{}
 }
@@ -36,6 +58,7 @@ func newAgentTestCmd() *cobra.Command {
 		Short: "Run YAML-driven agent test suites",
 	}
 	cmd.AddCommand(newAgentTestRunCmd())
+	cmd.AddCommand(newAgentTestBaselineCmd())
 	cmd.AddCommand(newAgentTestPromoteCmd())
 	cmd.AddCommand(newAgentTestReportCmd())
 	cmd.AddCommand(newAgentTestRerecordCmd())
@@ -117,15 +140,7 @@ func newAgentTestRunCmd() *cobra.Command {
 				BackendService:   backendService,
 				BackendResetOn:   backendResetOn,
 			}
-			runner := newAgentTestRunnerFn()
-			for _, suite := range loadedSuites {
-				rep, err := runner.RunSuite(cmd.Context(), suite, opts)
-				if err != nil {
-					return err
-				}
-				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s [%s]: %d/%d passed (%d infra, %d assertion)\n", filepath.Base(suite.SourcePath), rep.Profile, rep.PassedCases, rep.PassedCases+rep.FailedCases, rep.InfraFailures, rep.AssertFailures)
-			}
-			return nil
+			return runSuitesWithRunner(cmd, newAgentTestRunnerFn(), loadedSuites, opts)
 		},
 	}
 
@@ -471,4 +486,66 @@ func sanitizeName(name string) string {
 		return "agent"
 	}
 	return out
+}
+
+// newAgentTestBaselineCmd runs the suite exactly as `run` does and promotes
+// the executed per-case metrics into baseline files (D10.2, ruling R-5).
+func newAgentTestBaselineCmd() *cobra.Command {
+	var suites []string
+	var agentName string
+	var caseName string
+	var model string
+	var outDir string
+	var timeout time.Duration
+	var dryRun bool
+
+	cmd := &cobra.Command{
+		Use:   "baseline --suite <path> [--case <name>]...",
+		Short: "Run a suite and write per-case performance baselines",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ws := ensureWorkspace()
+			if len(suites) == 0 {
+				suites = discoverSuites(ws, agentName)
+			}
+			if len(suites) == 0 {
+				return fmt.Errorf("no testsuites found; pass --suite <path>")
+			}
+			loadedSuites := make([]*agenttest.Suite, 0, len(suites))
+			for _, suitePath := range suites {
+				suite, err := agenttest.LoadSuite(suitePath)
+				if err != nil {
+					return err
+				}
+				suite, err = filterAgentTestSuiteCases(suite, caseName, nil)
+				if err != nil {
+					return fmt.Errorf("%s: %w", suitePath, err)
+				}
+				loadedSuites = append(loadedSuites, suite)
+			}
+			if len(loadedSuites) == 0 {
+				return fmt.Errorf("no testsuites matched the requested filters")
+			}
+			opts := agenttest.RunOptions{
+				TargetWorkspace: ws,
+				OutputDir:       outDir,
+				Timeout:         timeout,
+				TimeoutSet:      cmd.Flags().Changed("timeout"),
+				SharedRoot:      config.ResolveSharedRoot(""),
+				ModelOverride:   model,
+				WriteBaselines:  true,
+				BaselinesDryRun: dryRun,
+			}
+			return runSuitesWithRunner(cmd, newAgentTestRunnerFn(), loadedSuites, opts)
+		},
+	}
+
+	cmd.Flags().StringArrayVar(&suites, "suite", nil, "Path to a testsuite YAML (required; repeatable)")
+	cmd.Flags().StringVar(&agentName, "agent", "", "Resolve suites matching <agent> in testsuite/agenttests/")
+	cmd.Flags().StringVar(&caseName, "case", "", "Baseline a single case by name (repeat with --suite for multiple)")
+	cmd.Flags().StringVar(&model, "model", "", "Override model name for all cases")
+	cmd.Flags().StringVar(&outDir, "out", "", "Output directory for the producing run's artifacts")
+	cmd.Flags().DurationVar(&timeout, "timeout", 15*time.Minute, "Per-case execution timeout; 0 disables")
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Print the baseline files that would be written; write nothing")
+
+	return cmd
 }

@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/capability/fs"
+	"codeburg.org/lexbit/relurpify/telemetry"
 	"codeburg.org/lexbit/relurpify/telemetry/perfstats"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
@@ -28,12 +29,17 @@ type RunOptions struct {
 	// Timeout is the CLI-level per-case execution timeout (D9.2): the
 	// effective timeout resolves case > suite > CLI > the 15-minute
 	// default; a literal 0 in the effective choice disables the bound.
-	Timeout      time.Duration
-	TimeoutSet   bool
-	SkipASTIndex bool
-	Profile      string
-	Strict       bool
-	MaxRetries   int
+	Timeout    time.Duration
+	TimeoutSet bool
+	// WriteBaselines promotes each executed case's metrics into baseline
+	// files after the suite completes (D10.2: `agenttest baseline`).
+	WriteBaselines bool
+	// BaselinesDryRun prints what would be written and writes nothing.
+	BaselinesDryRun bool
+	SkipASTIndex    bool
+	Profile         string
+	Strict          bool
+	MaxRetries      int
 
 	ModelOverride    string
 	EndpointOverride string
@@ -67,6 +73,9 @@ type SuiteReport struct {
 	Performance      PerformanceSummary   `json:"performance,omitempty"`
 	Benchmark        *BenchmarkReport     `json:"benchmark,omitempty"`
 	OSBBenchmark     *OSBBenchmarkSummary `json:"osb_benchmark,omitempty"` // OSB: benchmark summary
+	// BaselinesDir is the SOURCE workspace's baselines directory (R-5a):
+	// benchmark comparisons resolve here, never inside the derived copy.
+	BaselinesDir string `json:"baselines_dir,omitempty"`
 }
 
 type CaseReport struct {
@@ -90,21 +99,24 @@ type CaseReport struct {
 	Skipped    bool
 	SkipReason string
 
-	Success             bool
-	Error               string
-	FailureKind         string
-	ClassifiedBy        string `json:"classified_by,omitempty"`
-	Attempts            int
-	RetryCount          int
-	RetryTriggeredBy    []string
-	Output              string
-	ChangedFiles        []string
-	ToolCalls           map[string]int
-	TokenUsage          TokenUsageReport
-	MemoryOutcome       MemoryOutcomeReport
-	FrameworkPerf       perfstats.Snapshot   `json:"framework_perf,omitempty"`
-	PhaseMetrics        []PhaseMetric        `json:"phase_metrics,omitempty"`
-	BaselinePath        string               `json:"baseline_path,omitempty"`
+	Success          bool
+	Error            string
+	FailureKind      string
+	ClassifiedBy     string `json:"classified_by,omitempty"`
+	Attempts         int
+	RetryCount       int
+	RetryTriggeredBy []string
+	Output           string
+	ChangedFiles     []string
+	ToolCalls        map[string]int
+	TokenUsage       TokenUsageReport
+	MemoryOutcome    MemoryOutcomeReport
+	FrameworkPerf    perfstats.Snapshot `json:"framework_perf,omitempty"`
+	PhaseMetrics     []PhaseMetric      `json:"phase_metrics,omitempty"`
+	BaselinePath     string             `json:"baseline_path,omitempty"`
+	// Baseline is the report-only compare block against the case's stored
+	// baseline (D10): it MUST NOT gate Success (R-5c).
+	Baseline            *BaselineComparison  `json:"baseline,omitempty"`
 	BaselineFound       bool                 `json:"baseline_found,omitempty"`
 	PerformanceWarnings []PerformanceWarning `json:"performance_warnings,omitempty"`
 	// Frames records the interaction_script pairs the driver executed (D8):
@@ -232,6 +244,69 @@ type MemoryOutcomeReport struct {
 
 type Runner struct {
 	Logger *log.Logger
+	// Telemetry is the optional sink the baseline compare emits
+	// agenttest.baseline_compared{metric,delta} through; nil keeps the
+	// comparison silent in the report only.
+	Telemetry telemetry.Telemetry
+}
+
+// PromoteBaselines writes a baseline file per executed case report
+// (D10.2). Baselines are a deliberate snapshot: an existing file is
+// overwritten. With dryRun the paths + metric summaries are printed and
+// nothing is written. A write failure is returned to the caller but is
+// non-fatal to the run's exit code by contract — baselines are an operator
+// artifact, not evidence (the asymmetry with the case-report contract is
+// deliberate).
+func PromoteBaselines(w io.Writer, suite *Suite, report *SuiteReport, sourceRun string, dryRun bool) error {
+	if suite == nil || report == nil {
+		return fmt.Errorf("agenttest: suite and report required")
+	}
+	baselinesDir := report.BaselinesDir
+	if strings.TrimSpace(baselinesDir) == "" {
+		return fmt.Errorf("agenttest: baselines dir unresolved")
+	}
+	var firstErr error
+	for i := range report.Cases {
+		cr := &report.Cases[i]
+		if cr.Skipped {
+			continue
+		}
+		path := BaselinePath(baselinesDir, suite.Metadata.Name, cr.Name, cr.Model)
+		baseline := BuildBaselineFile(suite.Metadata.Name, *cr, sourceRun, time.Now().UTC())
+		if dryRun {
+			_, _ = fmt.Fprintf(w, "would write %s (tokens=%d tool_calls=%d duration_ms=%d)\n",
+				path, baseline.Metrics.TotalTokens, baseline.Metrics.ToolCalls, baseline.Metrics.DurationMS)
+			continue
+		}
+		if err := WriteBaseline(path, baseline); err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+			_, _ = fmt.Fprintf(w, "baseline write failed for %s: %v\n", path, err)
+			continue
+		}
+		_, _ = fmt.Fprintf(w, "wrote %s\n", path)
+	}
+	return firstErr
+}
+
+// baselineEmitter adapts the runner's telemetry sink to the compare path.
+func (r *Runner) baselineEmitter() baselineEventEmitter {
+	if r == nil || r.Telemetry == nil {
+		return nil
+	}
+	return runnerBaselineEmitter{r}
+}
+
+type runnerBaselineEmitter struct{ r *Runner }
+
+func (e runnerBaselineEmitter) EmitBaselineCompared(metric string, delta float64) {
+	e.r.Telemetry.Emit(telemetry.Event{
+		Type:      telemetry.EventAgentTestBaselineCompared,
+		Message:   "baseline compared",
+		Timestamp: time.Now().UTC(),
+		Metadata:  map[string]any{"metric": metric, "delta": delta},
+	})
 }
 
 // PreparedRunExecutorFn executes a prepared run descriptor through the CLI
@@ -323,6 +398,7 @@ func (r *Runner) RunSuite(ctx context.Context, suite *Suite, opts RunOptions) (*
 			}
 		}
 	}
+	report.BaselinesDir = BaselinesDir(targetWorkspace)
 	report.Performance = SummarizePerformance(report.Cases)
 
 	// Populate the OSB benchmark summary.
@@ -365,6 +441,13 @@ func (r *Runner) runPreparedCase(ctx context.Context, suite *Suite, c CaseSpec, 
 	}
 
 	var output bytes.Buffer
+	// D10.5: the framework-perf counters reset before each case's execution,
+	// so the executor's post-case snapshot (framework_perf.json and the
+	// report's FrameworkPerf) is THIS case's activity, not the process
+	// lifetime. Constraint: the runner owns its process and cases run
+	// sequentially — parallel case execution would need per-case perfscopes
+	// (named follow-on).
+	perfstats.Reset()
 	if err := PreparedRunExecutorFn(ctx, prepared.Artifacts.DescriptorPath(), caseRunRoot, "", &output); err != nil {
 		return failedCaseReport(caseStartedAt, c.Name, model.Name, "", prepared.Descriptor.BackendFamily, prepared.Descriptor.BackendEndpoint, "", prepared.Artifacts.DescriptorPath(), layout.WorkspaceDir, layout.ArtifactsDir, err.Error(), "infra", 1)
 	}
@@ -379,6 +462,11 @@ func (r *Runner) runPreparedCase(ctx context.Context, suite *Suite, c CaseSpec, 
 		return failedCaseReport(caseStartedAt, c.Name, model.Name, "", prepared.Descriptor.BackendFamily, prepared.Descriptor.BackendEndpoint, "", prepared.Artifacts.DescriptorPath(), layout.WorkspaceDir, layout.ArtifactsDir, loadErr.Error(), "infra", 1)
 	}
 	executed.Output = output.String()
+
+	// D10.4: compare against the case's stored baseline — report-only. A
+	// warning MUST NOT affect Success, exit codes, or OSB evaluation (R-5c).
+	baselinePath := BaselinePath(prepared.Descriptor.BaselineDir, suite.Metadata.Name, c.Name, model.Name)
+	CompareAgainstBaseline(&executed, baselinePath, r.baselineEmitter())
 
 	verification, err := PreparedRunVerifierFn(ctx, prepared, executed, suite, c, nil)
 	if err != nil {
