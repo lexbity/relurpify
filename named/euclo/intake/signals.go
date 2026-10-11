@@ -185,6 +185,9 @@ type ScoredClassification struct {
 	// bounded model disambiguator ("model_family_tiebreak"); empty means the
 	// deterministic result stands untouched.
 	DisambiguationSource string
+	// TiebreakLowConfidence marks an adopted tie-break whose self-reported
+	// confidence fell below the marker threshold — provenance, not a gate.
+	TiebreakLowConfidence bool
 }
 
 // ClassifyTaskScored performs tier-1 classification using signal scoring.

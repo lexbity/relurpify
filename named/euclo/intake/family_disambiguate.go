@@ -16,14 +16,17 @@ import (
 // two. The contract mirrors the route Tier-2 disambiguator (wave 2, D10):
 // set-restricted to the tied pair, confidence-floored, and the deterministic
 // winner stands on any failure — model absent, errored, out-of-set answer,
-// unparseable response, or confidence below the floor. The model never
-// creates a third option; it only chooses between the two the scorer
-// produced.
+// unparseable response. The model never creates a third option; it only
+// chooses between the two the scorer produced.
 const (
-	// FamilyDisambiguationConfidenceFloor is the minimum model confidence for
-	// an in-set answer to be adopted. Below it the deterministic winner (and
-	// its ambiguous flag) stands, preserving the clarification posture.
-	FamilyDisambiguationConfidenceFloor = 0.5
+	// FamilyDisambiguationConfidenceMark is the self-reported confidence above
+	// which an adopted in-set answer counts as confident. It is a MARKER
+	// threshold, not a gate: below it the answer still adopts with
+	// TiebreakLowConfidence set — live evidence (2026-10-11) showed small
+	// local models report uncalibrated confidence (gemma4:e4b answered
+	// correctly while reporting 0.0), so gating on it would discard correct
+	// disambiguations.
+	FamilyDisambiguationConfidenceMark = 0.5
 )
 
 // FamilyDisambiguation is the outcome of one bounded family tie-break
@@ -74,11 +77,16 @@ func DisambiguateFamilies(ctx context.Context, lm model.LanguageModel, utterance
 // disambiguateFamilyTie resolves a deterministic family tie through the
 // bounded model disambiguator. It fires ONLY when the scorer marked the
 // classification ambiguous with at least two tied candidates and a tie-break
-// model is composed. Adoption rules: the model's answer must be in the tied
-// pair with confidence at or above the floor — anything else (including a
-// nil model, an error, or an unavailable transport) keeps the deterministic
-// result untouched, preserving the clarification posture downstream. Every
-// attempt is reported on the node context's telemetry sink.
+// model is composed. Adoption rules: an IN-SET answer adopts the picked
+// family — self-reported confidence is provenance, not a gate (live evidence,
+// 2026-10-11: gemma4:e4b picked the correct family with sound reasoning while
+// reporting confidence 0.0; small local models do not produce calibrated
+// confidence, and a tie that the scorer itself could not separate is exactly
+// where semantic judgment is the better evidence). Out-of-set, unparseable,
+// and unavailable outcomes keep the deterministic result untouched,
+// preserving the clarification posture downstream. Answers below the
+// confidence mark adopt WITH a low-confidence marker in the reason codes.
+// Every attempt is reported on the node context's telemetry sink.
 func (n *IntakePipelineNode) disambiguateFamilyTie(ctx context.Context, scored *ScoredClassification, instruction string) *ScoredClassification {
 	if scored == nil || !scored.Ambiguous || len(scored.FamilyCandidates) < 2 {
 		return scored
@@ -93,7 +101,7 @@ func (n *IntakePipelineNode) disambiguateFamilyTie(ctx context.Context, scored *
 	if err != nil {
 		return scored
 	}
-	if outcome.Outcome != Tier2OutcomeApplied || outcome.Confidence < FamilyDisambiguationConfidenceFloor {
+	if outcome.Outcome != Tier2OutcomeApplied {
 		return scored
 	}
 
@@ -108,6 +116,7 @@ func (n *IntakePipelineNode) disambiguateFamilyTie(ctx context.Context, scored *
 		Weight:   outcome.Confidence,
 		Source:   "model_family_tiebreak",
 	})
+	adopted.TiebreakLowConfidence = outcome.Confidence < FamilyDisambiguationConfidenceMark
 	return &adopted
 }
 

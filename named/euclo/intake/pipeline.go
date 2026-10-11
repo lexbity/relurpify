@@ -117,6 +117,11 @@ func (n *IntakePipelineNode) Execute(ctx context.Context, env *contextdata.Envel
 	if scoredClassification.DisambiguationSource != "" {
 		classificationSource = scoredClassification.DisambiguationSource
 	}
+	reasonCodes := generateReasonCodes(scoredClassification, taskEnvelope, classificationSource)
+	if scoredClassification.TiebreakLowConfidence {
+		reasonCodes = append(reasonCodes,
+			"family_tiebreak_low_confidence:"+scoredClassification.WinningFamily)
+	}
 	intent := &IntentClassification{
 		WinningFamily:        scoredClassification.WinningFamily,
 		FamilyCandidates:     append([]families.FamilyCandidate(nil), scoredClassification.FamilyCandidates...),
@@ -126,7 +131,7 @@ func (n *IntakePipelineNode) Execute(ctx context.Context, env *contextdata.Envel
 		NegativeConstraints:  append([]string(nil), taskEnvelope.NegativeConstraintSeeds...),
 		ClassificationSource: classificationSource,
 		MixedIntent:          len(scoredClassification.FamilyCandidates) > 1,
-		ReasonCodes:          generateReasonCodes(scoredClassification, taskEnvelope, classificationSource),
+		ReasonCodes:          reasonCodes,
 	}
 	if family.ID != "" {
 		intent.EditPermitted = family.DefaultHITLPolicy != families.HITLPolicyAlways

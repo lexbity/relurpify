@@ -64,6 +64,20 @@ func TestLiveRelurpishScratchTurn(t *testing.T) {
 	require.NoError(t, err, "the production runtime must boot against the scratch workspace")
 	defer func() { _ = rt.Close(context.Background()) }()
 
+	// Ground truth for the tool-scope investigation: what the composed
+	// registry actually exposes to the agent, and what the recipe's declared
+	// vocabulary resolves to.
+	t.Logf("composed registry: %d callable, %d inspectable", len(rt.Tools.CallableCapabilities()), len(rt.Tools.InspectableCapabilities()))
+	for _, desc := range rt.Tools.InspectableCapabilities() {
+		if strings.Contains(desc.ID, "file") || strings.Contains(desc.ID, "test") {
+			t.Logf("  candidate %q", desc.ID)
+		}
+	}
+	for _, name := range []string{"file_read", "file_write", "test_run", "euclo:cap.test_run"} {
+		desc, ok := rt.Tools.GetCapability(name)
+		t.Logf("GetCapability(%q) resolved=%v id=%q", name, ok, desc.ID)
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 

@@ -139,19 +139,30 @@ func TestFamilyTieKeepsDeterministicOnUnparseable(t *testing.T) {
 	}
 }
 
-// TestFamilyTieFloorBoundary pins the confidence floor from both sides: 0.5
-// adopts, 0.49 keeps the deterministic result.
-func TestFamilyTieFloorBoundary(t *testing.T) {
-	atFloor, _, _, ctx := tiebreakFixture(t, `{"id": "migration", "confidence": 0.5}`)
-	adopted := atFloor.disambiguateFamilyTie(ctx, ambiguousTie(), "fix it")
-	require.Equal(t, "migration", adopted.WinningFamily, "exactly-at-floor adopts")
+// TestFamilyTieConfidenceIsProvenanceNotGate pins the live-earned semantics:
+// an in-set answer adopts at ANY self-reported confidence (gemma4:e4b picked
+// correctly while reporting 0.0 — self-reported confidence from small local
+// models is uncalibrated), with the low-confidence marker set below the mark.
+func TestFamilyTieConfidenceIsProvenanceNotGate(t *testing.T) {
+	atMark, _, _, ctx := tiebreakFixture(t, `{"id": "migration", "confidence": 0.5}`)
+	adopted := atMark.disambiguateFamilyTie(ctx, ambiguousTie(), "fix it")
+	require.Equal(t, "migration", adopted.WinningFamily)
 	require.False(t, adopted.Ambiguous)
+	require.False(t, adopted.TiebreakLowConfidence, "exactly-at-mark is confident")
 
-	belowFloor, _, _, ctx2 := tiebreakFixture(t, `{"id": "migration", "confidence": 0.49}`)
-	scored := ambiguousTie()
-	kept := belowFloor.disambiguateFamilyTie(ctx2, scored, "fix it")
-	require.Same(t, scored, kept, "below-floor keeps the deterministic result")
-	require.True(t, kept.Ambiguous)
+	belowMark, _, recorder, ctx2 := tiebreakFixture(t, `{"id": "migration", "confidence": 0.0}`)
+	adoptedLow := belowMark.disambiguateFamilyTie(ctx2, ambiguousTie(), "fix it")
+	require.Equal(t, "migration", adoptedLow.WinningFamily, "an in-set answer adopts regardless of self-reported confidence")
+	require.False(t, adoptedLow.Ambiguous)
+	require.True(t, adoptedLow.TiebreakLowConfidence, "below-mark adoption carries the provenance marker")
+
+	lowEvents := 0
+	for _, ev := range recorder.events {
+		if ev.Type == telemetry.EventIntentFamilyDisambiguation {
+			lowEvents++
+		}
+	}
+	require.Equal(t, 1, lowEvents)
 }
 
 // TestFamilyTieModelErrorKeepsDeterministic proves a failing model degrades
