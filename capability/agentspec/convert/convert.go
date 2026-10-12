@@ -34,6 +34,7 @@ func ConvertProfileConfig(c *cfgmodel.ModelProfileConfig) *model.ModelProfile {
 	if c.Context.MaxTokens > 0 {
 		profile.ContextSize = c.Context.MaxTokens
 	}
+	profile.Repair.Strategy = strings.ToLower(strings.TrimSpace(c.Repair.Strategy))
 	profile.Normalize()
 	return profile
 }

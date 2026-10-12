@@ -288,15 +288,19 @@ func (n *reactThinkNode) buildRuntimeContext(env *contextdata.Envelope, tools []
 }
 
 // resolvePrompt returns the assembled user prompt for the current iteration.
-// When the registry is populated and the prompt resolves, it uses that.
-// Otherwise it falls back to a minimal inline prompt so the agent stays functional
-// before prompt files are authored.
+// The prompt corpus owns the text (agent.react.default.user); the registry-miss
+// path (no registry, or a composition without the shipped corpus) degrades to
+// the inline minimal prompt.
 func (n *reactThinkNode) resolvePrompt(env *contextdata.Envelope, tools []ports.Tool) string {
 	text := ""
 	reg := n.agent.PromptRegistry
 	if reg != nil {
 		promptID := promptIDFromTask(n.task)
 		rctx := n.buildRuntimeContext(env, tools)
+		if rctx.Variables == nil {
+			rctx.Variables = map[string]string{}
+		}
+		rctx.Variables["tools"] = reactUserToolLines(tools)
 		if resolved, err := reg.Resolve(promptID, rctx); err == nil && resolved != "" {
 			text = resolved
 		}
@@ -311,7 +315,27 @@ func (n *reactThinkNode) resolvePrompt(env *contextdata.Envelope, tools []ports.
 }
 
 // resolveSystemPrompt returns the system prompt for chat-based iterations.
+// The prompt corpus owns the text (agent.react.default); the registry-miss
+// path degrades to the inline minimal prompt.
 func (n *reactThinkNode) resolveSystemPrompt(tools []ports.Tool) string {
+	if reg := n.agent.PromptRegistry; reg != nil {
+		consumerID := "react"
+		if n.agent.Config != nil {
+			consumerID = n.agent.Config.Name
+		}
+		resolved, err := reg.Resolve("agent.react.default", prompt.RuntimeContext{
+			Variables: map[string]string{
+				"tools":    reactSystemToolLines(tools),
+				"guidance": reactSystemGuidance(tools, n.agent),
+			},
+			Paradigm:   "react",
+			ConsumerID: consumerID,
+			Tools:      tools,
+		})
+		if err == nil && strings.TrimSpace(resolved) != "" {
+			return resolved
+		}
+	}
 	return minimalReactSystemPrompt(tools, n.agent)
 }
 
@@ -340,24 +364,50 @@ func (n *reactThinkNode) ensureMessages(env *contextdata.Envelope, tools []ports
 	return messages
 }
 
-// promptIDFromTask reads "prompt_id" from task.Context, falling back to the
-// default react prompt ID.
+// promptIDFromTask reads "prompt_id" from task.Context (the recipe's
+// `goal prompt <ref>` seam — a USER prompt reference), falling back to the
+// shipped user-prompt corpus ID.
 func promptIDFromTask(task *execution.Task) string {
 	if task != nil && task.Context != nil {
 		if id, ok := task.Context["prompt_id"].(string); ok && id != "" {
 			return id
 		}
 	}
-	return "agent.react.default"
+	return "agent.react.default.user"
 }
 
-// minimalReactSystemPrompt is the inline fallback used when the registry has
-// no matching prompt.
-func minimalReactSystemPrompt(tools []ports.Tool, agent *ReActAgent) string {
-	var lines []string
-	var hasLSP, hasAST bool
+// reactSystemToolLines renders the system prompt's tool list.
+func reactSystemToolLines(tools []ports.Tool) string {
+	lines := make([]string, 0, len(tools))
 	for _, tool := range tools {
 		lines = append(lines, fmt.Sprintf("- %s: %s", tool.Name(), tool.Description()))
+	}
+	return strings.Join(lines, "\n")
+}
+
+// reactUserToolLines renders the user prompt's tool list (descriptions only
+// when present).
+func reactUserToolLines(tools []ports.Tool) string {
+	var section strings.Builder
+	for _, tool := range tools {
+		if section.Len() > 0 {
+			section.WriteString("\n")
+		}
+		section.WriteString("- ")
+		section.WriteString(tool.Name())
+		if desc := strings.TrimSpace(tool.Description()); desc != "" {
+			section.WriteString(": ")
+			section.WriteString(desc)
+		}
+	}
+	return section.String()
+}
+
+// reactSystemGuidance renders the conditional code-analysis and agent-spec
+// skill guidance appended to the system prompt.
+func reactSystemGuidance(tools []ports.Tool, agent *ReActAgent) string {
+	var hasLSP, hasAST bool
+	for _, tool := range tools {
 		if strings.HasPrefix(tool.Name(), "lsp_") {
 			hasLSP = true
 		}
@@ -383,29 +433,24 @@ func minimalReactSystemPrompt(tools []ports.Tool, agent *ReActAgent) string {
 			guidance.WriteRune('\n')
 		}
 	}
+	return guidance.String()
+}
+
+// minimalReactSystemPrompt is the inline degradation used when the prompt
+// registry cannot supply the corpus system prompt.
+func minimalReactSystemPrompt(tools []ports.Tool, agent *ReActAgent) string {
 	return fmt.Sprintf(`You are a ReAct agent optimized for small local models.
 Think carefully, but keep reasoning short.
 Available tools:
 %s%s
 IMPORTANT: Only call tools listed above. Never invent or use tool names that are not in this list.
 When information is missing, read/search before editing.
-Return ONLY structured JSON. No prose outside the JSON object.`, strings.Join(lines, "\n"), guidance.String())
+Return ONLY structured JSON. No prose outside the JSON object.`, reactSystemToolLines(tools), reactSystemGuidance(tools, agent))
 }
 
-// minimalReactUserPrompt is the inline fallback prompt body.
+// minimalReactUserPrompt is the inline degradation used when the prompt
+// registry cannot supply the corpus user prompt.
 func minimalReactUserPrompt(task *execution.Task, tools []ports.Tool) string {
-	var toolSection strings.Builder
-	for _, tool := range tools {
-		if toolSection.Len() > 0 {
-			toolSection.WriteString("\n")
-		}
-		toolSection.WriteString("- ")
-		toolSection.WriteString(tool.Name())
-		if desc := strings.TrimSpace(tool.Description()); desc != "" {
-			toolSection.WriteString(": ")
-			toolSection.WriteString(desc)
-		}
-	}
 	instruction := ""
 	if task != nil {
 		instruction = task.Instruction
@@ -418,5 +463,5 @@ Work step-by-step. Prefer the smallest useful action. Do not restate the task.
 Task: %s
 
 Return ONLY JSON with fields:
-{"thought":"short reasoning","action":"tool|complete","tool":"tool name or empty","arguments":{},"complete":true|false,"summary":"final answer when complete"}`, toolSection.String(), instruction)
+{"thought":"short reasoning","action":"tool|complete","tool":"tool name or empty","arguments":{},"complete":true|false,"summary":"final answer when complete"}`, reactUserToolLines(tools), instruction)
 }

@@ -139,8 +139,8 @@ func TestCLIAllText(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v\noutput: %s", err, string(out))
 	}
-	if len(out) != 0 {
-		t.Fatalf("expected empty output (no diagnostics), got: %s", string(out))
+	if !strings.Contains(string(out), "all checks passed") {
+		t.Fatalf("expected explicit pass summary (no diagnostics), got: %s", string(out))
 	}
 }
 

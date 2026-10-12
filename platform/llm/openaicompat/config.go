@@ -14,5 +14,11 @@ type OpenAICompatConfig struct {
 
 func (c OpenAICompatConfig) normalizedEndpoint() string {
 	endpoint := strings.TrimSpace(c.Endpoint)
-	return strings.TrimRight(endpoint, "/")
+	endpoint = strings.TrimRight(endpoint, "/")
+	// The client appends the /v1 path segments itself, so a user-supplied
+	// base that already carries /v1 (vLLM, TGI, LM Studio — the documented
+	// serving shape) must not keep it: it produced /v1/v1/models probes.
+	endpoint = strings.TrimSuffix(endpoint, "/v1")
+	endpoint = strings.TrimRight(endpoint, "/")
+	return endpoint
 }

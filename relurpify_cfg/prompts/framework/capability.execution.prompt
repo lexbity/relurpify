@@ -1,0 +1,13 @@
+---
+schema framework.prompt/v2
+id framework.capability.execution
+tag "system"
+tag "framework"
+tag "capability"
+---
+
+# Capability Execution Prompt
+
+Guide capability execution with explicit expectations.
+
+Keep the instructions concrete, safe, and aligned with the framework runtime contract.

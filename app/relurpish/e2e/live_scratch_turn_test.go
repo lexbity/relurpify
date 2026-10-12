@@ -44,12 +44,16 @@ func TestLiveRelurpishScratchTurn(t *testing.T) {
 		require.NoError(t, relurpishruntime.InitializeWorkspaceFromTemplates(relurpishruntime.ConfigForWorkspace(relurpishruntime.DefaultConfig(), abs), false))
 	}
 
-	// Each acceptance run starts with clean stream memory: the context-stream
-	// store (.relurpify_state/events.db) persists retrieved chunks across
-	// turns, and observations from earlier broken runs (e.g. stale sandbox
-	// denies) otherwise inject into every future turn. The audit chain under
-	// .relurpify_state/audit is separate and untouched.
+	// Each acceptance run starts from a defined memory state: the observation
+	// substrate persists in TWO stores — the context-stream store
+	// (.relurpify_state/events.db) and the knowledge memory/graph store
+	// (.relurpify_state/memory, Badger-backed). Observations from earlier
+	// runs (stale sandbox denies, prior-run file contents) otherwise inject
+	// into every future turn; wiping only events.db let the memory store
+	// resurrect them. The audit chain, logs, and telemetry under
+	// .relurpify_state are separate and intentionally kept.
 	require.NoError(t, os.RemoveAll(filepath.Join(abs, ".relurpify_state", "events.db")))
+	require.NoError(t, os.RemoveAll(filepath.Join(abs, ".relurpify_state", "memory")))
 
 	// Seed the recipe's designed TDD shape: hello.py misspells the greeting,
 	// and test_hello.py is a plain-python failing test (no pytest dependency)

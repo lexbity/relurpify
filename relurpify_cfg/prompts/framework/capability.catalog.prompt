@@ -1,0 +1,13 @@
+---
+schema framework.prompt/v2
+id framework.capability.catalog
+tag "system"
+tag "framework"
+tag "capability"
+---
+
+# Capability Catalog Prompt
+
+Describe available capabilities clearly and without ambiguity.
+
+Prefer concise capability summaries that help routing, discovery, and execution selection.

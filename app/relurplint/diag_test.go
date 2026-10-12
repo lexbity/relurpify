@@ -47,8 +47,8 @@ func TestExitCodeMixed(t *testing.T) {
 func TestRenderTextEmpty(t *testing.T) {
 	var buf bytes.Buffer
 	Render(nil, "text", &buf)
-	if buf.Len() != 0 {
-		t.Fatalf("expected empty output for nil, got %q", buf.String())
+	if !strings.Contains(buf.String(), "all checks passed") {
+		t.Fatalf("expected explicit pass summary, got %q", buf.String())
 	}
 }
 

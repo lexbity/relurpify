@@ -277,7 +277,9 @@ func BuildDoctorReport(ctx context.Context, cfg Config, secrets config.Secrets) 
 	})
 	dockerDetail := formatSandboxDetail(firstNonEmpty(env.Sandbox.Docker.Version, env.Sandbox.Docker.Error))
 	if dockerDegraded {
-		dockerDetail = "degraded: docker installed but unreachable"
+		// Name the real probe failure: "installed but unreachable" was a lie
+		// for a reachable daemon whose runsc runtime is simply not registered.
+		dockerDetail = "degraded: " + firstNonEmpty(env.Sandbox.Docker.Error, "docker installed but unreachable")
 	}
 	deps = append(deps, DependencyStatus{
 		Name:      "docker",
@@ -315,6 +317,10 @@ func uniqueStrings(s []string) []string {
 	return out
 }
 
+// computeSandboxReady reports workspace-config readiness for the sandbox —
+// NOT sandbox-binary verification. Actual sandbox verification lives in the
+// sandbox_backend dependency (blocking when neither runsc nor docker verify);
+// this flag only means "the workspace config that names a sandbox exists".
 func computeSandboxReady(r DoctorReport) bool {
 	if r.ConfigError != "" || r.StarterTemplatesError != "" {
 		return false
@@ -368,26 +374,36 @@ func InitializeWorkspaceFromTemplates(cfg Config, overwrite bool) error {
 	// source checkout on disk. The embedded "workspace/" subtree maps 1:1 onto
 	// <workspace>/relurpify_cfg/.
 	efs := templatesembed.DefaultFS()
-	const templateRoot = "workspace"
-	walkErr := fs.WalkDir(efs, templateRoot, func(p string, d fs.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-		if d.IsDir() {
-			return nil
-		}
-		rel, relErr := filepath.Rel(templateRoot, filepath.FromSlash(p))
-		if relErr != nil {
-			return relErr
-		}
-		data, readErr := fs.ReadFile(efs, p)
-		if readErr != nil {
-			return fmt.Errorf("read embedded template %s: %w", p, readErr)
-		}
-		return copyTemplateContent(data, filepath.Join(configRoot, rel), cfg.Workspace, overwrite)
-	})
-	if walkErr != nil {
-		return fmt.Errorf("materialize workspace templates: %w", walkErr)
+	// destPrefix places a subtree under the config root: the workspace tree
+	// maps onto the root, the prompt corpus keeps its prompts/ directory
+	// (the workspace prompt registry loads <workspace>/relurpify_cfg/prompts).
+	materializeTree := func(templateRoot, destPrefix string) error {
+		return fs.WalkDir(efs, templateRoot, func(p string, d fs.DirEntry, walkErr error) error {
+			if walkErr != nil {
+				return walkErr
+			}
+			if d.IsDir() {
+				return nil
+			}
+			rel, relErr := filepath.Rel(templateRoot, filepath.FromSlash(p))
+			if relErr != nil {
+				return relErr
+			}
+			data, readErr := fs.ReadFile(efs, p)
+			if readErr != nil {
+				return fmt.Errorf("read embedded template %s: %w", p, readErr)
+			}
+			return copyTemplateContent(data, filepath.Join(configRoot, destPrefix, rel), cfg.Workspace, overwrite)
+		})
+	}
+	// The prompt corpus ships inside relurpify_cfg (prompts/) so the
+	// workspace prompt registry resolves the system prompts the agents
+	// depend on; existing files are never overwritten (user edits win).
+	if err := materializeTree("workspace", ""); err != nil {
+		return fmt.Errorf("materialize workspace templates: %w", err)
+	}
+	if err := materializeTree("prompts", "prompts"); err != nil {
+		return fmt.Errorf("materialize prompt templates: %w", err)
 	}
 	stateDir := config.DefaultWorkspaceStateDir(cfg.Workspace)
 	for _, dir := range []string{

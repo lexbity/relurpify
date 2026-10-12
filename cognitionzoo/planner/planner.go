@@ -15,6 +15,7 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	capability "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/cognitionzoo/paradigm"
+	reactpkg "codeburg.org/lexbit/relurpify/cognitionzoo/react"
 	pl "codeburg.org/lexbit/relurpify/cognitionzoo/plan"
 	relurpctx "codeburg.org/lexbit/relurpify/context"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
@@ -590,7 +591,7 @@ func decodeDirectivePlan(raw string, bound int) (pl.Plan, error) {
 			Params map[string]any `json:"params"`
 		} `json:"steps"`
 	}
-	if err := json.Unmarshal([]byte(plannerExtractJSON(raw)), &wire); err != nil {
+	if err := json.Unmarshal([]byte(reactpkg.ExtractJSON(raw)), &wire); err != nil {
 		return pl.Plan{}, fmt.Errorf("plan JSON decode: %w", err)
 	}
 	if len(wire.Steps) == 0 {
@@ -1062,7 +1063,7 @@ func decodeVerdict(raw string) (string, []string, error) {
 		Verdict string   `json:"verdict"`
 		Issues  []string `json:"issues"`
 	}
-	if err := json.Unmarshal([]byte(plannerExtractJSON(raw)), &wire); err != nil {
+	if err := json.Unmarshal([]byte(reactpkg.ExtractJSON(raw)), &wire); err != nil {
 		return "", nil, fmt.Errorf("verdict JSON decode: %w", err)
 	}
 	verdict := strings.ToLower(strings.TrimSpace(wire.Verdict))
@@ -1183,7 +1184,7 @@ func plannerAggregate(env *contextdata.Envelope) map[string]any {
 // PlannerAgent.Execute easy to read and doubles as a seam for unit tests.
 func parsePlan(raw string) (pl.Plan, error) {
 	var plan pl.Plan
-	if err := json.Unmarshal([]byte(plannerExtractJSON(raw)), &plan); err != nil {
+	if err := json.Unmarshal([]byte(reactpkg.ExtractJSON(raw)), &plan); err != nil {
 		return plan, err
 	}
 	if plan.Dependencies == nil {
@@ -1465,15 +1466,6 @@ func plannerUUID() string {
 		return fmt.Sprintf("%d", time.Now().UnixNano())
 	}
 	return hex.EncodeToString(b[:])
-}
-
-func plannerExtractJSON(raw string) string {
-	start := strings.Index(raw, "{")
-	end := strings.LastIndex(raw, "}")
-	if start >= 0 && end >= start {
-		return raw[start : end+1]
-	}
-	return "{}"
 }
 
 func plannerPrimaryPath(task *execution.Task, plan pl.Plan) string {

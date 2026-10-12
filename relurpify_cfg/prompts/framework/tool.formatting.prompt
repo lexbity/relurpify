@@ -1,0 +1,13 @@
+---
+schema framework.prompt/v2
+id framework.tool.formatting
+tag "system"
+tag "framework"
+tag "tool"
+---
+
+# Tool Formatting Prompt
+
+Format tool interactions clearly.
+
+Keep command text, structured fields, and expected outputs explicit so tool use stays predictable.

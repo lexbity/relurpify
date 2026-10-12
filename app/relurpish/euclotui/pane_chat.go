@@ -507,6 +507,13 @@ func (p *ChatPane) work(run *chatRun, metadata map[string]any) {
 	switch {
 	case err == nil:
 		run.setResult(result)
+		// A completed pipeline is not a successful turn: the result carries
+		// the classified outcome, and a non-success outcome is surfaced as a
+		// failed run naming its reason (never a silent "success").
+		if result != nil && !result.Success {
+			outcome = tui.RunFailed
+			err = outcomeFailureError(result)
+		}
 		if summary := summarizeResult(result); summary != "" {
 			tokens = tui.EstimateTokens(summary)
 		}
@@ -1214,6 +1221,26 @@ func summarizeResult(res *execution.Result) string {
 		b.WriteString(res.Error)
 	}
 	return b.String()
+}
+
+// outcomeFailureError builds the terminal run error from a non-success
+// execution result: the classified outcome reason the graph recorded, not a
+// bare "Agent error: <nil>".
+func outcomeFailureError(res *execution.Result) error {
+	fields := execution.ResultFields(res.Data)
+	reason, _ := fields["outcome_reason"].(string)
+	category, _ := fields["outcome_category"].(string)
+	if strings.TrimSpace(reason) == "" {
+		reason = strings.TrimSpace(res.Error)
+	}
+	if strings.TrimSpace(reason) == "" {
+		if category != "" {
+			reason = "outcome: " + category
+		} else {
+			reason = "execution did not succeed"
+		}
+	}
+	return fmt.Errorf("%s", reason)
 }
 
 func extractCompactSummary(result *execution.Result) string {

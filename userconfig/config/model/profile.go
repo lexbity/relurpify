@@ -26,6 +26,13 @@ type ModelProfileConfig struct {
 		Temperature float64 `yaml:"temperature"`
 		TopP        float64 `yaml:"top_p"`
 	} `yaml:"generation"`
+	// Repair selects how malformed model output is salvaged at the decision
+	// boundary: "heuristic-only" (deterministic JSON balancing, the default)
+	// or "llm" (one model round-trip to reformat the raw response before the
+	// step fails). Empty normalizes to "heuristic-only".
+	Repair struct {
+		Strategy string `yaml:"strategy"`
+	} `yaml:"repair"`
 	SourcePath string `yaml:"-"`
 }
 
@@ -180,6 +187,11 @@ func (p ModelProfileConfig) Validate() error {
 	}
 	if isDefaultProfilePath(p.SourcePath) && strings.TrimSpace(p.Pattern) != "*" {
 		return fmt.Errorf("default.llm.yaml must use pattern \"*\"")
+	}
+	switch strings.ToLower(strings.TrimSpace(p.Repair.Strategy)) {
+	case "", "heuristic-only", "llm":
+	default:
+		return fmt.Errorf("repair.strategy invalid (valid: heuristic-only, llm)")
 	}
 	return nil
 }

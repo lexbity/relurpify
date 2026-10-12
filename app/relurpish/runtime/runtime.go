@@ -636,20 +636,7 @@ func buildRuntime(ctx context.Context, cfg Config, secrets config.Secrets) (*Run
 		_ = rt.Close(ctx)
 		return nil, fmt.Errorf("start workspace services: %w", err)
 	}
-	syncWorkspaceReadiness(rt)
 	return rt, nil
-}
-
-func syncWorkspaceReadiness(rt *Runtime) {
-	if rt == nil || rt.Workspace == nil {
-		return
-	}
-	ws := rt.Workspace
-	ws.Readiness.SandboxReady = rt.Tools != nil
-	ws.Readiness.ModelReady = rt.Model != nil
-	if ws.Readiness.Ready() {
-		ws.Readiness.Degraded = false
-	}
 }
 
 func newDegradedRuntime(ctx context.Context, cfg Config, reason error) *Runtime {

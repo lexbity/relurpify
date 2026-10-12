@@ -1,0 +1,13 @@
+---
+schema framework.prompt/v2
+id framework.capability.selection
+tag "system"
+tag "framework"
+tag "capability"
+---
+
+# Capability Selection Prompt
+
+Choose the best capability for the current task.
+
+Prefer direct matches, avoid over-broad routing, and explain the selection when needed.

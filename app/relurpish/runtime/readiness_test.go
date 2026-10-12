@@ -88,13 +88,10 @@ func TestDoctorReport_ModelReadyAllowsToolsWhenSandboxReady(t *testing.T) {
 	require.True(t, report.SandboxReady, "sandbox is independently ready")
 }
 
-func TestSyncWorkspaceReadiness(t *testing.T) {
+func TestDegradedWorkspaceCarriesReason(t *testing.T) {
 	ws := session.DegradedWorkspace("test")
 	ws.Registration = &session.Registration{ID: "test"}
 
-	rt := &Runtime{Workspace: ws, Tools: nil, Model: nil}
-	syncWorkspaceReadiness(rt)
-	require.False(t, ws.Readiness.SandboxReady)
-	require.False(t, ws.Readiness.ModelReady)
-	require.False(t, ws.Readiness.Ready())
+	require.True(t, ws.Readiness.Degraded)
+	require.Equal(t, "test", ws.Readiness.Reason)
 }

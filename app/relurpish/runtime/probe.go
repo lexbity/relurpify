@@ -73,8 +73,11 @@ type EnvironmentReport struct {
 
 // StatusSnapshot enriches the environment report with live runtime details.
 type StatusSnapshot struct {
-	Environment           EnvironmentReport
-	Ready                 bool
+	Environment EnvironmentReport
+	// Ready is doctor's canonical verdict (DoctorReport.Ready) — status and
+	// doctor can never disagree about whether the workspace is operational.
+	Ready       bool
+	Doctor      *DoctorReport
 	PendingHITL           []*authorization.PermissionRequest
 	ServerActive          bool
 	ProtectedPaths        []string
@@ -402,11 +405,15 @@ func (r *Runtime) Status(ctx context.Context) StatusSnapshot {
 		snapshot.ProtectedPaths = config.New(env.Workspace).GovernanceRoots()
 	}
 	if ws := r.AgentWorkspace(); ws != nil {
-		snapshot.Ready = ws.Readiness.Ready()
 		if ws.Environment.KnowledgeHealth != nil {
 			snapshot.KnowledgeDegraded, snapshot.KnowledgeReason = ws.Environment.KnowledgeHealth.Degraded()
 		}
 	}
+	// Doctor is the canonical readiness surface (Q7 parity): status re-runs
+	// the same report the doctor command and the TUI startup gate render.
+	report := BuildDoctorReport(ctx, r.Config, r.secrets)
+	snapshot.Ready = report.Ready()
+	snapshot.Doctor = &report
 	if r.registration != nil {
 		if ds, ok := r.registration.DocumentSnapshot.(*config.DocumentSnapshot); ok && ds != nil {
 			snapshot.ManifestFingerprint = fmt.Sprintf("%x", ds.Fingerprint)
@@ -441,7 +448,18 @@ func (s StatusSnapshot) RenderText(w io.Writer) {
 	if s.RecipesError != "" {
 		fmt.Fprintf(w, "            %s (run 'relurpish doctor --fix' to materialize starter recipes)\n", s.RecipesError)
 	}
-	fmt.Fprintf(w, "ready:      %t\n", s.Ready)
+	fmt.Fprintf(w, "ready:      %t (doctor verdict)\n", s.Ready)
+	if s.Doctor != nil {
+		deps := make([]string, 0, len(s.Doctor.Dependencies))
+		for _, dep := range s.Doctor.Dependencies {
+			if dep.Blocking {
+				deps = append(deps, dep.Name)
+			}
+		}
+		if len(deps) > 0 {
+			fmt.Fprintf(w, "blocking:   %s\n", strings.Join(deps, ", "))
+		}
+	}
 	if s.KnowledgeDegraded {
 		fmt.Fprintf(w, "knowledge:  degraded: %s\n", s.KnowledgeReason)
 	}

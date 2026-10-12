@@ -363,7 +363,32 @@ func buildNodes(ctx context.Context, in buildNodeInput) ([]agentgraph.Node, erro
 		}, nil
 	})
 
-	doneNode := agentgraph.NewTerminalNode("euclo.done")
+	// The terminal node is the graph's returned result (last-node-wins), so it
+	// is the caller-facing outcome boundary: Success is the classified outcome
+	// category (only full success is success), never an unconditional true.
+	// The generic TerminalNode would erase the outcome here.
+	doneNode := newStageNode("euclo.done", agentgraph.NodeTypeTerminal, func(_ context.Context, env *contextdata.Envelope) (*execution.Result, error) {
+		category, ok := euclostate.GetOutcomeCategory(env)
+		if !ok {
+			// The report node always classifies before this node runs; a
+			// missing category means the report leg never executed, which is
+			// not a success.
+			return &execution.Result{
+				NodeID:  "euclo.done",
+				Success: false,
+				Error:   "execution outcome not classified (report leg did not run)",
+			}, nil
+		}
+		reason, _ := contextdata.GetTyped[string](env, "euclo.outcome.reason")
+		return &execution.Result{
+			NodeID:  "euclo.done",
+			Success: category == string(reporting.OutcomeCategorySuccess),
+			Data: execution.NewToolResultPayload(map[string]any{
+				"outcome_category": category,
+				"outcome_reason":   reason,
+			}),
+		}, nil
+	})
 
 	return []agentgraph.Node{
 		intakeNode,

@@ -60,6 +60,9 @@ func Render(diags []Diagnostic, format string, w io.Writer) {
 
 func renderText(diags []Diagnostic, w io.Writer) {
 	if len(diags) == 0 {
+		// A silent pass is indistinguishable from a tool that did nothing:
+		// say what ran and that it is clean.
+		_, _ = fmt.Fprintln(w, "relurplint: all checks passed (0 diagnostics)")
 		return
 	}
 	for _, d := range diags {
