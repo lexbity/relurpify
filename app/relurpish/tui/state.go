@@ -48,6 +48,10 @@ type Session struct {
 	Mode          string
 	ExecutionMode string
 	Strategy      string
+	// PinnedRecipe is the user's session-level recipe choice (/recipe <name>):
+	// every submitted turn carries it as recipe_id metadata, and dispatch runs
+	// exactly that recipe. Empty: normal selection.
+	PinnedRecipe  string
 	TotalTokens   int
 	TotalDuration time.Duration
 	Profile       string

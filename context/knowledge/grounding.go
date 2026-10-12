@@ -1,6 +1,7 @@
 package knowledge
 
 import (
+	"strings"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -85,6 +86,11 @@ type GroundingItem struct {
 	Kind           ChunkKind // capture by default; tool results use ChunkKindTool
 	SourceChunkIDs []ChunkID // streamed context of the producing step (≤16)
 	ForwardedFrom  []ChunkID // prior chunks when the capture forwards state
+	// Artifact identifies the external artifact this observation is a view of
+	// (e.g. {Kind: "file", Ref: "/abs/path"}), as declared by the tool that
+	// produced the result. Nil for observations without an artifact. The
+	// context system uses it to keep one authoritative view per artifact.
+	Artifact *ProvenanceSource
 }
 
 // GivenOriginLookup resolves whether a value is identity-equal to a
@@ -383,7 +389,7 @@ func (g *GroundingService) decide(admitted []admittedItem, report *GroundingRepo
 			Epistemics:        string(admittedItem.epistemics),
 			GroundedBy:        []GroundingRecord{{TaskID: item.TaskID, NodeID: item.NodeID, Epoch: item.Epoch, RecipeID: item.RecipeID}},
 			Freshness:         FreshnessValid,
-			Provenance:        ChunkProvenance{SessionID: item.SessionID, WorkflowID: item.TaskID, CompiledBy: CompilerDeterministic, Timestamp: now},
+			Provenance:        chunkProvenanceWithArtifact(item, now),
 			Body:              ChunkBody{Raw: string(admittedItem.encoded), Fields: groundingFields(item)},
 			CreatedAt:         now,
 			UpdatedAt:         now,
@@ -748,4 +754,14 @@ func suspiciousGroundingValue(value any) (string, bool) {
 func contentHashForText(text string) string {
 	sum := sha256.Sum256([]byte(text))
 	return hex.EncodeToString(sum[:16])
+}
+
+// chunkProvenanceWithArtifact builds the chunk provenance, attaching the
+// grounding item's declared artifact as a provenance source when present.
+func chunkProvenanceWithArtifact(item GroundingItem, now time.Time) ChunkProvenance {
+	provenance := ChunkProvenance{SessionID: item.SessionID, WorkflowID: item.TaskID, CompiledBy: CompilerDeterministic, Timestamp: now}
+	if item.Artifact != nil && strings.TrimSpace(item.Artifact.Ref) != "" {
+		provenance.Sources = append(provenance.Sources, *item.Artifact)
+	}
+	return provenance
 }

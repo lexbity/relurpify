@@ -20,7 +20,10 @@ import (
 // models spend this budget on reasoning before emitting the decision JSON —
 // 512 truncated decisions mid-JSON (finish_reason=length), which the loop
 // then misread as completions.
-const decisionMaxTokens = 2048
+// 4096: thinking models spend the completion budget on reasoning before the
+// JSON decision; 2048 truncated them mid-thought (finish_reason=length) on
+// the first iteration of every nontrivial repair.
+const decisionMaxTokens = 4096
 
 type reactThinkNode struct {
 	id    string
@@ -42,6 +45,7 @@ func (n *reactThinkNode) Type() agentgraph.NodeType { return agentgraph.NodeType
 // react.tool_calls reset must therefore never be extended to touch that slot.
 func (n *reactThinkNode) Execute(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 	env.SetWorkingValueWithClass("react.execution_phase", "planning", contextdata.MemoryClassTask)
+	println("ZZDEBUG think enter")
 	if summary := strings.TrimSpace(envGetString(env, "react.verification_latched_summary")); summary != "" {
 		decision := decisionPayload{
 			Thought:   "verification already succeeded",

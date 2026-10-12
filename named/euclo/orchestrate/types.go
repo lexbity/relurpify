@@ -21,6 +21,12 @@ type RouteRequest struct {
 	FamilyID        string
 	ThoughtRecipeID string
 	CapabilityID    string
+	// PinnedRecipeID is the user's explicit recipe choice for this turn (turn
+	// or session pin). When set and registered, selection is deterministic by
+	// construction: classification and the Tier-2 model never run. When set
+	// but unregistered, dispatch fails naming the ID — a pinned choice may
+	// never silently resolve to something else.
+	PinnedRecipeID string
 	Instruction     string
 	Inputs          map[string]any
 	FallbackID      string

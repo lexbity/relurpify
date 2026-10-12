@@ -3,7 +3,10 @@
 // to import execution directly for compiler trigger or lifecycle.
 package ports
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 // CompilationRequest is the context-owned view of a compilation request.
 type CompilationRequest struct {
@@ -51,6 +54,12 @@ type StreamedChunkView struct {
 	TokenEstimate int
 	TrustClass    string // agentspec trust class label; "" when unset
 	IsSummary     bool   // summary-substituted chunk
+	// ArtifactKey identifies the external artifact this chunk is a view of
+	// (chunk provenance source of kind "artifact"), empty when the chunk is
+	// not an artifact observation. The slice assembly keeps exactly one —
+	// the newest — view per key.
+	ArtifactKey string
+	ObservedAt  time.Time
 }
 
 // CompilationRecord captures metadata about a compilation.

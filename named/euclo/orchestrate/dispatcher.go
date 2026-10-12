@@ -172,6 +172,10 @@ func (d *Dispatcher) Execute(ctx context.Context, env *contextdata.Envelope) (*e
 
 func routeRequestFromEnvelope(env *contextdata.Envelope) RouteRequest {
 	req := RouteRequest{}
+	if pinned := pinnedRecipeIDFromMetadata(env); pinned != "" {
+		req.PinnedRecipeID = pinned
+		req.ThoughtRecipeID = pinned
+	}
 	if s, ok := euclostate.GetFamilySelection(env); ok {
 		req.FamilyID = strings.TrimSpace(s)
 	}

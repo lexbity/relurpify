@@ -426,14 +426,13 @@ func (n *reactActNode) recordObservation(ctx context.Context, env *contextdata.E
 			observation.Data = nil
 		}
 	}
+	// The observation history is never truncated: every observation is
+	// provenance. Artifact-version supersession lives in the shared context
+	// system (chunk provenance), not in the agent.
 	history := getToolObservations(env)
 	if visible {
 		observation.Seq = nextObservationSeq(history)
 		history = append(history, observation)
-		limit := toolSummaryBudgetForPhase(envGetString(env, "react.phase"))
-		if len(history) > limit {
-			history = history[len(history)-limit:]
-		}
 	}
 	env.SetWorkingValueWithClass("react.tool_observations", history, contextdata.MemoryClassTask)
 	if n != nil && n.agent != nil {
@@ -458,6 +457,11 @@ func (n *reactActNode) recordObservation(ctx context.Context, env *contextdata.E
 			TaskID:         env.TaskID,
 			SessionID:      env.SessionID,
 			SourceChunkIDs: cappedObservationChunkIDs(env.StreamedChunkIDs()),
+			// The tool declares what external artifact its result is a view of
+			// (result metadata key "artifact.key"); the context system uses it
+			// to keep one authoritative view per artifact. The agent
+			// hard-codes no tool shapes.
+			Artifact: artifactFromResult(res),
 		})
 	}
 }
@@ -545,4 +549,20 @@ func resultPathOrArg(call model.ToolCall, res *ports.ToolResult) string {
 		return ""
 	}
 	return path
+}
+
+// artifactFromResult reads a tool-declared artifact identity from the result
+// metadata ("artifact.key" — a stable identity such as "file:/abs/path").
+// Nil when the tool declares none: the mechanism is metadata-driven, never
+// inferred from tool names.
+func artifactFromResult(res *ports.ToolResult) *knowledge.ProvenanceSource {
+	if res == nil {
+		return nil
+	}
+	key, _ := res.Metadata["artifact.key"].(string)
+	key = strings.TrimSpace(key)
+	if key == "" {
+		return nil
+	}
+	return &knowledge.ProvenanceSource{Kind: "artifact", Ref: key}
 }

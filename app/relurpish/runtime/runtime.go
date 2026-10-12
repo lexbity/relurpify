@@ -232,6 +232,9 @@ func buildRuntime(ctx context.Context, cfg Config, secrets config.Secrets) (*Run
 			if v1Cfg.Sandbox.Backend != "" && preSandboxBackend == "" {
 				cfg.SandboxBackend = v1Cfg.Sandbox.Backend
 			}
+			if strings.TrimSpace(v1Cfg.Selection.Posture) != "" {
+				cfg.SelectionPosture = strings.ToLower(strings.TrimSpace(v1Cfg.Selection.Posture))
+			}
 			if strings.TrimSpace(v1Cfg.Audit.Enforcement) != "" && strings.EqualFold(strings.TrimSpace(cfg.AuditEnforcement), "strict") {
 				cfg.AuditEnforcement = v1Cfg.Audit.Enforcement
 			}
@@ -865,6 +868,7 @@ func (r *Runtime) applyResolvedAgentState(name string, effectiveContract *config
 		MaxIterations:     8,
 		NativeToolCalling: agentSpecCap.NativeToolCallingEnabled(),
 		AgentSpec:         agentSpecCap,
+		SelectionPosture:  cfg.SelectionPosture,
 		Telemetry:         r.Workspace.Telemetry,
 	}
 	agent, err := instantiateAgent(r.switchAgentDeps(agentCfg), r.hitlBroker(), r.interactionResolver())

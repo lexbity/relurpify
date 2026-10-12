@@ -16,6 +16,7 @@ type WorkspaceConfigV1 struct {
 	Schema    string            `yaml:"schema"`
 	Paths     PathsConfigV1     `yaml:"paths"`
 	Model     ModelConfigV1     `yaml:"model"`
+	Selection SelectionConfigV1 `yaml:"selection,omitempty"`
 	Sandbox   SandboxConfigV1   `yaml:"sandbox"`
 	Logging   LoggingConfigV1   `yaml:"logging"`
 	Audit     AuditConfigV1     `yaml:"audit"`
@@ -31,6 +32,13 @@ type ModelConfigV1 struct {
 	Provider string `yaml:"provider"`
 	Name     string `yaml:"name"`
 	Endpoint string `yaml:"endpoint,omitempty"`
+}
+
+// SelectionConfigV1 selects the route-selection posture. "deterministic"
+// (default) keeps selection reproducible; "model_assisted" lets the tier-2
+// disambiguator break ties.
+type SelectionConfigV1 struct {
+	Posture string `yaml:"posture"`
 }
 
 type SandboxConfigV1 struct {
@@ -144,6 +152,11 @@ func LoadRuntimeWorkspaceConfigV1(path string) (WorkspaceConfigV1, error) {
 	}
 	if strings.TrimSpace(cfg.Schema) != WorkspaceSchemaV1 {
 		return WorkspaceConfigV1{}, fmt.Errorf("unsupported schema %q (expected %q)", cfg.Schema, WorkspaceSchemaV1)
+	}
+	switch strings.ToLower(strings.TrimSpace(cfg.Selection.Posture)) {
+	case "", "deterministic", "model_assisted":
+	default:
+		return WorkspaceConfigV1{}, fmt.Errorf("selection.posture invalid %q (want deterministic or model_assisted)", cfg.Selection.Posture)
 	}
 	return cfg, nil
 }

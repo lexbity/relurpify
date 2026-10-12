@@ -33,6 +33,7 @@ func TestTier2TiePathEndToEnd(t *testing.T) {
 
 	model := testhelper.NewScriptedModel(`{"id": "euclo:cap.symbol_trace", "confidence": 0.9}`)
 	deps := orchestrate.SelectionDeps{
+		SelectionPosture: "model_assisted",
 		Capabilities: reg,
 		Tier2Model:   model,
 	}
@@ -74,7 +75,8 @@ func TestTier2StrongMatchSkipsModelEndToEnd(t *testing.T) {
 	}
 
 	model := testhelper.NewScriptedModel("never returned")
-	deps := orchestrate.SelectionDeps{Capabilities: reg, Tier2Model: model}
+	deps := orchestrate.SelectionDeps{
+		SelectionPosture: "model_assisted",Capabilities: reg, Tier2Model: model}
 
 	env := contextdata.NewEnvelope("task-tier2-strong", "session-tier2-strong")
 	result, err := orchestrate.Dispatch(context.Background(), env, orchestrate.RouteRequest{FamilyID: "query"}, deps)

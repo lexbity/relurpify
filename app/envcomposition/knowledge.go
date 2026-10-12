@@ -1,6 +1,7 @@
 package envcomposition
 
 import (
+	"strings"
 	"context"
 	"fmt"
 	"time"
@@ -223,6 +224,8 @@ func streamedChunkViews(result *compiler.CompilationResult, summaryChunkIDs map[
 			ChunkID:     string(chunk.ID),
 			ContentHash: chunk.ContentHash,
 			Body:        chunk.Body.Raw,
+			ArtifactKey: chunkArtifactKey(chunk),
+			ObservedAt:  chunk.AcquiredAt,
 			// The compiler's own per-chunk accounting (estimate at rank
 			// time) is authoritative and sums to Record.FinalTokens; the
 			// chunk's stored TokenEstimate is advisory metadata.
@@ -232,4 +235,16 @@ func streamedChunkViews(result *compiler.CompilationResult, summaryChunkIDs map[
 		})
 	}
 	return views, nil
+}
+
+
+// chunkArtifactKey extracts the declared artifact identity from a chunk's
+// provenance sources (kind "artifact"), empty when the chunk has none.
+func chunkArtifactKey(chunk *knowledge.KnowledgeChunk) string {
+	for _, source := range chunk.Provenance.Sources {
+		if source.Kind == "artifact" && strings.TrimSpace(source.Ref) != "" {
+			return source.Ref
+		}
+	}
+	return ""
 }

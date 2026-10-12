@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"codeburg.org/lexbit/relurpify/named/euclo"
 	"context"
 	"errors"
 	"fmt"
@@ -73,6 +74,10 @@ type RuntimeAdapter interface {
 	AvailableAgents() []string
 	SwitchAgent(name string) error
 	SessionInfo() SessionInfo
+	// RegisteredRecipes lists the euclo workspace recipes (id, description,
+	// families) for user-facing selection surfaces. Nil result: the runtime
+	// is degraded or the active agent is not euclo.
+	RegisteredRecipes() []RecipeSummary
 	// ProbeBackendHealth probes the model backend now (bounded: 2 s) and
 	// returns its state string, caching the result for SessionInfo. It is
 	// called off the UI thread — boot never probes synchronously.
@@ -220,6 +225,30 @@ func (r *runtimeAdapter) SwitchAgent(name string) error {
 		return fmt.Errorf("runtime unavailable")
 	}
 	return r.currentRuntime().SwitchAgent(name)
+}
+
+// RecipeSummary describes one registered euclo recipe for /recipe listing.
+type RecipeSummary struct {
+	ID          string
+	Description string
+	Families    []string
+}
+
+func (r *runtimeAdapter) RegisteredRecipes() []RecipeSummary {
+	if r == nil || r.currentRuntime() == nil {
+		return nil
+	}
+	executor := r.currentRuntime().ActiveAgent()
+	eucloAgent, ok := executor.(*euclo.Agent)
+	if !ok {
+		return nil
+	}
+	summaries := eucloAgent.RegisteredRecipes()
+	out := make([]RecipeSummary, 0, len(summaries))
+	for _, s := range summaries {
+		out = append(out, RecipeSummary{ID: s.ID, Description: s.Description, Families: s.Families})
+	}
+	return out
 }
 
 func (r *runtimeAdapter) SessionInfo() SessionInfo {

@@ -122,7 +122,7 @@ func registerUniversalCommands(r *CommandRegistry) {
 		{Name: "help", Description: "Show available commands", Usage: "/help [command]", Handler: rootHandleHelp},
 		{Name: "mode", Description: "Set agent mode", Usage: "/mode <mode>", Handler: rootHandleMode},
 		{Name: "agent", Description: "Switch agent type", Usage: "/agent <name>", Handler: rootHandleAgent},
-		{Name: "strategy", Description: "Set execution strategy", Usage: "/strategy <strategy>", Handler: rootHandleStrategy},
+		{Name: "recipe", Description: "List recipes or pin one for this session", Usage: "/recipe [id|clear]", Handler: rootHandleRecipe},
 		{Name: "stop", Description: "Stop current run", Usage: "/stop", Handler: rootHandleStop},
 		{Name: "retry", Description: "Retry last prompt", Usage: "/retry", Handler: rootHandleRetry},
 		{Name: "export", Description: "Export session", Usage: "/export [md|json] [path]", Handler: rootHandleExport},
@@ -686,22 +686,6 @@ func rootHandleAgent(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 	return m, nil
 }
 
-func rootHandleStrategy(m *RootModel, args []string) (*RootModel, tea.Cmd) {
-	if len(args) == 0 {
-		if m.sharedSess != nil && m.sharedSess.Strategy != "" {
-			m.addSystemMessage(fmt.Sprintf("Current strategy: %s", m.sharedSess.Strategy))
-		} else {
-			m.addSystemMessage("Current strategy: (auto-detect)")
-		}
-		return m, nil
-	}
-	if m.sharedSess != nil {
-		m.sharedSess.Strategy = args[0]
-	}
-	m.addSystemMessage(fmt.Sprintf("Set strategy to: %s", args[0]))
-	return m, nil
-}
-
 func rootHandleParallel(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 	if m.chat == nil {
 		return m, nil
@@ -1101,5 +1085,56 @@ func rootHandleDiffView(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 	_ = args
 	m.setActiveTab(TabDiff)
 	m.addSystemMessage("Toggle diff view requested (not yet implemented as palette command)")
+	return m, nil
+}
+
+
+// rootHandleRecipe lists the workspace recipes, pins one for the session, or
+// clears the pin. A pinned recipe rides every submitted turn as recipe_id
+// metadata; dispatch runs exactly that recipe — selection is the user's
+// choice, deterministic by construction.
+func rootHandleRecipe(m *RootModel, args []string) (*RootModel, tea.Cmd) {
+	if len(args) == 0 {
+		if m.runtime == nil {
+			m.addSystemMessage("Runtime unavailable: cannot list recipes")
+			return m, nil
+		}
+		recipes := m.runtime.RegisteredRecipes()
+		if len(recipes) == 0 {
+			m.addSystemMessage("No recipes registered in this workspace.")
+			return m, nil
+		}
+		var b strings.Builder
+		b.WriteString("Registered recipes:")
+		for _, r := range recipes {
+			b.WriteString("\n  " + r.ID)
+			if len(r.Families) > 0 {
+				b.WriteString("  [" + strings.Join(r.Families, ",") + "]")
+			}
+			if r.Description != "" {
+				b.WriteString("  — " + r.Description)
+			}
+		}
+		b.WriteString("\nPin one with /recipe <id>; clear with /recipe clear")
+		if m.sharedSess != nil && m.sharedSess.PinnedRecipe != "" {
+			b.WriteString("\nPinned: " + m.sharedSess.PinnedRecipe)
+		}
+		m.addSystemMessage(b.String())
+		return m, nil
+	}
+	choice := strings.TrimSpace(args[0])
+	if choice == "clear" {
+		if m.sharedSess != nil {
+			m.sharedSess.PinnedRecipe = ""
+		}
+		m.addSystemMessage("Recipe pin cleared; normal selection applies.")
+		return m, nil
+	}
+	if m.sharedSess == nil {
+		m.addSystemMessage("No active session: cannot pin a recipe")
+		return m, nil
+	}
+	m.sharedSess.PinnedRecipe = choice
+	m.addSystemMessage("Pinned recipe for this session: " + choice + " (dispatch runs exactly this recipe; /recipe clear to unpin)")
 	return m, nil
 }

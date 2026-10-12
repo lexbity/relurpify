@@ -909,6 +909,9 @@ func (p *ChatPane) buildMetadata(ctx context.Context) map[string]any {
 		if p.session.Strategy != "" {
 			meta["strategy"] = p.session.Strategy
 		}
+		if p.session.PinnedRecipe != "" {
+			meta["recipe_id"] = p.session.PinnedRecipe
+		}
 	}
 	if p.activeSubTab != "" {
 		if policy, ok := chatSubTabPolicies[p.activeSubTab]; ok {

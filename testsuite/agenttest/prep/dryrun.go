@@ -66,6 +66,10 @@ type DryRunConfig struct {
 	// DisableCompiler detaches the stream trigger for renderer-less paths;
 	// the compiler is wired by default.
 	DisableCompiler bool
+	// SelectionPosture overrides the route-selection posture for this run:
+	// "deterministic" (default) never consults the tier-2 model; a run that
+	// specifically tests model-assisted selection sets "model_assisted".
+	SelectionPosture string
 }
 
 // ChunkRecord is one grounded chunk in the post-run knowledge summary. The
@@ -208,11 +212,12 @@ func Run(ctx context.Context, cfg DryRunConfig) (*DryRunReport, error) {
 	}
 	deps := &paradigm.Deps{
 		Config: &execution.Config{
-			Name:          "prep",
-			Model:         "scripted",
-			MaxIterations: maxIterations,
-			Workspace:     ws,
-			Telemetry:     sink,
+			Name:             "prep",
+			Model:            "scripted",
+			MaxIterations:    maxIterations,
+			Workspace:        ws,
+			SelectionPosture: cfg.SelectionPosture,
+			Telemetry:        sink,
 		},
 		Model:          model,
 		Registry:       capability.Registry,
@@ -234,7 +239,7 @@ func Run(ctx context.Context, cfg DryRunConfig) (*DryRunReport, error) {
 		euclo.WithLifecycleRepository(persistence.NewLifecycleRepository(capability.IndexManager.GraphDB)),
 		euclo.WithInteractionResolver(testhelper.NewPermissiveResolver()),
 	)
-	if err := agent.Initialize(&execution.Config{Workspace: ws}); err != nil {
+	if err := agent.Initialize(&execution.Config{Workspace: ws, SelectionPosture: cfg.SelectionPosture}); err != nil {
 		return nil, fmt.Errorf("prep: initialize: %w", err)
 	}
 

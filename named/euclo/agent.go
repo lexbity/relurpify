@@ -236,6 +236,12 @@ func (a *Agent) BuildGraph(ctx context.Context, task *execution.Task) (*agentgra
 	if tier2Model == nil {
 		tier2Model = a.deps.Model
 	}
+	if a.config.SelectionPosture == "" || strings.EqualFold(strings.TrimSpace(a.config.SelectionPosture), "deterministic") {
+		// Deterministic selection posture (the default): route selection and
+		// family tie-breaks never consult a model. Ties resolve through the
+		// lattice or fall to clarification downstream.
+		tier2Model = nil
+	}
 	deps := orchestrate.RootGraphDeps{
 		Workspace:            workspaceRootPath(a.deps),
 		DispatchCapabilities: a.deps.Registry,
@@ -362,3 +368,34 @@ func (a *Agent) Capabilities() []string {
 }
 
 var _ agentgraph.WorkflowExecutor = (*Agent)(nil)
+
+
+// RecipeSummary is one registered recipe for user-facing listing.
+type RecipeSummary struct {
+	ID          string
+	Description string
+	Families    []string
+	Keywords    []string
+}
+
+// RegisteredRecipes lists the recipes loaded into this agent's registry at
+// initialize, in registry order. It backs user-facing selection surfaces
+// (TUI /recipe listing, headless pinning).
+func (a *Agent) RegisteredRecipes() []RecipeSummary {
+	if a == nil || a.thoughtrecipeRegistry == nil {
+		return nil
+	}
+	out := make([]RecipeSummary, 0)
+	for _, entry := range a.thoughtrecipeRegistry.Entries() {
+		if entry.ThoughtRecipe == nil {
+			continue
+		}
+		out = append(out, RecipeSummary{
+			ID:          entry.ThoughtRecipe.ID,
+			Description: entry.ThoughtRecipe.Description,
+			Families:    append([]string(nil), entry.ThoughtRecipe.Metadata.Families...),
+			Keywords:    append([]string(nil), entry.ThoughtRecipe.Metadata.Keywords...),
+		})
+	}
+	return out
+}

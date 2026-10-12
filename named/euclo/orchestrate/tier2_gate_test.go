@@ -68,7 +68,7 @@ func TestTier2GateStrongMatchSkipsModel(t *testing.T) {
 	selected := candidates[0]
 	m := &tier2TestModel{}
 
-	got, decidedBy, info := applyTier2Gate(context.Background(), nil, RouteRequest{}, report, selected, report.DecidedBy, SelectionDeps{Tier2Model: m})
+	got, decidedBy, info := applyTier2Gate(context.Background(), nil, RouteRequest{}, report, selected, report.DecidedBy, SelectionDeps{Tier2Model: m, SelectionPosture: "model_assisted"})
 	if m.invocationCount() != 0 {
 		t.Fatalf("strong match invoked the model %d times", m.invocationCount())
 	}
@@ -91,7 +91,7 @@ func TestTier2GateTieAdoptsModelChoice(t *testing.T) {
 	selected := candidates[0]
 	m := &tier2TestModel{text: `{"id": "euclo:cap.b", "confidence": 0.95}`}
 
-	got, decidedBy, info := applyTier2Gate(context.Background(), nil, RouteRequest{}, report, selected, report.DecidedBy, SelectionDeps{Tier2Model: m})
+	got, decidedBy, info := applyTier2Gate(context.Background(), nil, RouteRequest{}, report, selected, report.DecidedBy, SelectionDeps{Tier2Model: m, SelectionPosture: "model_assisted"})
 	if m.invocationCount() != 1 {
 		t.Fatalf("tie triggered %d model calls, want 1", m.invocationCount())
 	}
@@ -117,7 +117,7 @@ func TestTier2GateOutOfSetKeepsDeterministicWinner(t *testing.T) {
 	selected := candidates[0]
 	m := &tier2TestModel{text: `{"id": "euclo:cap.somewhere_else", "confidence": 0.99}`}
 
-	got, _, info := applyTier2Gate(context.Background(), nil, RouteRequest{}, report, selected, report.DecidedBy, SelectionDeps{Tier2Model: m})
+	got, _, info := applyTier2Gate(context.Background(), nil, RouteRequest{}, report, selected, report.DecidedBy, SelectionDeps{Tier2Model: m, SelectionPosture: "model_assisted"})
 	if info.Outcome != "rejected" {
 		t.Fatalf("outcome = %q, want rejected", info.Outcome)
 	}
@@ -140,7 +140,7 @@ func TestTier2GateLowConfidenceAdoptsWithMarker(t *testing.T) {
 	selected := candidates[0]
 	m := &tier2TestModel{text: `{"id": "euclo:cap.b", "confidence": 0.3}`}
 
-	got, _, info := applyTier2Gate(context.Background(), nil, RouteRequest{}, report, selected, report.DecidedBy, SelectionDeps{Tier2Model: m})
+	got, _, info := applyTier2Gate(context.Background(), nil, RouteRequest{}, report, selected, report.DecidedBy, SelectionDeps{Tier2Model: m, SelectionPosture: "model_assisted"})
 	if info.Outcome != "low_confidence_adopted" {
 		t.Fatalf("outcome = %q, want low_confidence_adopted", info.Outcome)
 	}
@@ -159,7 +159,7 @@ func TestTier2GateUnparseableKeepsDeterministicWinner(t *testing.T) {
 	selected := candidates[0]
 	m := &tier2TestModel{text: "the answer is obviously capability a"}
 
-	got, _, info := applyTier2Gate(context.Background(), nil, RouteRequest{}, report, selected, report.DecidedBy, SelectionDeps{Tier2Model: m})
+	got, _, info := applyTier2Gate(context.Background(), nil, RouteRequest{}, report, selected, report.DecidedBy, SelectionDeps{Tier2Model: m, SelectionPosture: "model_assisted"})
 	if info.Outcome != "unparseable" {
 		t.Fatalf("outcome = %q, want unparseable", info.Outcome)
 	}
@@ -181,7 +181,7 @@ func TestTier2GateUnavailableEmitsEventAndKeepsWinner(t *testing.T) {
 	sink := &telemetrySink{}
 	ctx := telemetry.WithTelemetry(context.Background(), sink)
 
-	got, _, info := applyTier2Gate(ctx, nil, RouteRequest{}, report, selected, report.DecidedBy, SelectionDeps{Tier2Model: m})
+	got, _, info := applyTier2Gate(ctx, nil, RouteRequest{}, report, selected, report.DecidedBy, SelectionDeps{Tier2Model: m, SelectionPosture: "model_assisted"})
 	if info.Outcome != "unavailable" || !info.Used {
 		t.Fatalf("tier-2 info = %+v, want used/unavailable", info)
 	}
@@ -215,7 +215,7 @@ func TestTier2GateNeverAdoptsOutsideTopK(t *testing.T) {
 	selected := candidates[0]
 	m := &tier2TestModel{text: `{"id": "euclo:cap.c5", "confidence": 0.99}`}
 
-	got, _, info := applyTier2Gate(context.Background(), nil, RouteRequest{}, report, selected, report.DecidedBy, SelectionDeps{Tier2Model: m})
+	got, _, info := applyTier2Gate(context.Background(), nil, RouteRequest{}, report, selected, report.DecidedBy, SelectionDeps{Tier2Model: m, SelectionPosture: "model_assisted"})
 	if info.Outcome != "rejected" {
 		t.Fatalf("6th-ranked answer outcome = %q, want rejected (outside top-5)", info.Outcome)
 	}
@@ -234,7 +234,7 @@ func TestTier2GateNoModelRecordsUnavailableWithoutBlocking(t *testing.T) {
 	report := tier2Report(candidates)
 	selected := candidates[0]
 
-	got, decidedBy, info := applyTier2Gate(context.Background(), nil, RouteRequest{}, report, selected, report.DecidedBy, SelectionDeps{})
+	got, decidedBy, info := applyTier2Gate(context.Background(), nil, RouteRequest{}, report, selected, report.DecidedBy, SelectionDeps{SelectionPosture: "model_assisted"})
 	if info.Outcome != "unavailable" || !info.Used {
 		t.Fatalf("nil model info = %+v, want used/unavailable", info)
 	}
@@ -250,7 +250,7 @@ func TestTier2GateSkipsExplicitAndDefault(t *testing.T) {
 	explicit.Request = RouteRequest{CapabilityID: "euclo:cap.a"}
 	explicit.DecidedBy = decidedByExplicit
 	m := &tier2TestModel{text: `{"id": "x", "confidence": 0.9}`}
-	if got, _, info := applyTier2Gate(context.Background(), nil, RouteRequest{}, explicit, explicit.Candidates[0], explicit.DecidedBy, SelectionDeps{Tier2Model: m}); info.Used || m.invocationCount() != 0 || got.RouteID != "euclo:cap.a" {
+	if got, _, info := applyTier2Gate(context.Background(), nil, RouteRequest{}, explicit, explicit.Candidates[0], explicit.DecidedBy, SelectionDeps{Tier2Model: m, SelectionPosture: "model_assisted"}); info.Used || m.invocationCount() != 0 || got.RouteID != "euclo:cap.a" {
 		t.Fatalf("explicit request consulted tier-2: info=%+v calls=%d", info, m.invocationCount())
 	}
 
@@ -259,5 +259,31 @@ func TestTier2GateSkipsExplicitAndDefault(t *testing.T) {
 	fallback.DecidedBy = decidedByDefaultRecipe
 	if got, _, info := applyTier2Gate(context.Background(), nil, RouteRequest{}, fallback, fallback.Candidates[0], fallback.DecidedBy, SelectionDeps{Tier2Model: m2}); info.Used || m2.invocationCount() != 0 || got.RouteID != "euclo:cap.fallback" {
 		t.Fatalf("default-recipe fallback consulted tier-2: info=%+v calls=%d", info, m2.invocationCount())
+	}
+}
+
+
+// TestTier2GateDeterministicPostureNeverConsultsModel pins the ruled default:
+// the deterministic posture resolves ties through the lattice (or downstream
+// clarification) and the Tier-2 model is never consulted — even on a tie the
+// model tier would otherwise win.
+func TestTier2GateDeterministicPostureNeverConsultsModel(t *testing.T) {
+	candidates := []CandidateRouteInfo{
+		availableRecipe("euclo.thoughtrecipe.review_a", 50, nil),
+		availableRecipe("euclo.thoughtrecipe.review_b", 50, nil),
+	}
+	report := tier2Report(candidates)
+	selected := candidates[0]
+	m := &tier2TestModel{text: `{"id":"euclo.thoughtrecipe.review_b","confidence":0.9}`}
+	before := m.invocationCount()
+	got, _, info := applyTier2Gate(context.Background(), nil, RouteRequest{}, report, selected, report.DecidedBy, SelectionDeps{Tier2Model: m})
+	if m.invocationCount() != before {
+		t.Fatal("deterministic posture consulted the model")
+	}
+	if info.Used || info.Outcome != "posture_deterministic" {
+		t.Fatalf("tier-2 info = %+v, want unused/posture_deterministic", info)
+	}
+	if got.RouteID != selected.RouteID {
+		t.Fatalf("deterministic winner moved: %q -> %q", selected.RouteID, got.RouteID)
 	}
 }

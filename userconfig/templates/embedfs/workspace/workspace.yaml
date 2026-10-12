@@ -11,6 +11,13 @@ model:
 sandbox:
   backend: gvisor
 
+# Route-selection posture: "deterministic" (default) keeps recipe selection
+# reproducible — ties resolve through the deterministic lattice or fall to a
+# clarification frame, and no model is consulted for selection.
+# "model_assisted" lets the tier-2 disambiguator break ties with the model.
+selection:
+  posture: deterministic
+
 logging:
   level: info
   format: json

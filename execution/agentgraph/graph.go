@@ -967,7 +967,7 @@ func (n *ConditionalNode) ID() string { return n.id }
 func (n *ConditionalNode) Type() NodeType { return NodeTypeConditional }
 
 // Execute just evaluates the condition and stores the decision.
-func (n *ConditionalNode) Execute(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
+func (n *ConditionalNode) Execute(_ context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 	to, err := n.Condition(env)
 	if err != nil {
 		return nil, err
@@ -1010,7 +1010,7 @@ func (n *HumanNode) Contract() NodeContract {
 }
 
 // Execute pauses execution until callback completes.
-func (n *HumanNode) Execute(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
+func (n *HumanNode) Execute(_ context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 	if n.Callback != nil {
 		if err := n.Callback(env); err != nil {
 			return nil, err
@@ -1052,7 +1052,7 @@ func (n *TerminalNode) Contract() NodeContract {
 }
 
 // Execute completes immediately.
-func (n *TerminalNode) Execute(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
+func (n *TerminalNode) Execute(_ context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 	return &execution.Result{NodeID: n.id, Success: true}, nil
 }
 

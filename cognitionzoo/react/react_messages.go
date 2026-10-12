@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	capresult "codeburg.org/lexbit/relurpify/capability/result"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
@@ -159,74 +158,31 @@ func summarizeToolResult(state *contextdata.Envelope, call model.ToolCall, res *
 		observation.Summary = fmt.Sprintf("%s returned no result", call.Name)
 		return observation
 	}
-	summary, data := compactToolData(call, res, decision)
+	summary, data := renderToolData(call, res)
 	observation.Summary = summary
 	observation.Data = data
 	return observation
 }
 
-// clipSizeForDecision returns the max characters for tool output in
-// observations, based on the insertion decision. Direct → generous budget,
-// Summarized → moderate, MetadataOnly → minimal.
-func clipSizeForDecision(decision capresult.InsertionDecision) int {
-	switch decision.Action {
-	case agentspec.InsertionActionDirect:
-		return 4000
-	case agentspec.InsertionActionSummarized:
-		return 900
-	case agentspec.InsertionActionMetadataOnly:
-		return 120
-	default:
-		return 320
-	}
-}
-
-func compactToolData(call model.ToolCall, res *ports.ToolResult, decision capresult.InsertionDecision) (string, map[string]any) {
+// renderToolData renders a tool result at full fidelity, generically: the
+// tool's own structured result speaks for itself — the agent hard-codes no
+// tool shapes. Size is bounded only by the envelope's state-size contracts.
+func renderToolData(call model.ToolCall, res *ports.ToolResult) (string, map[string]any) {
 	if res == nil {
 		return fmt.Sprintf("%s returned no result", call.Name), nil
 	}
-	maxClip := clipSizeForDecision(decision)
 	if res.Error != "" {
-		stdout := trimToBudget(fmt.Sprint(res.Data["stdout"]), maxClip)
-		stderr := trimToBudget(fmt.Sprint(res.Data["stderr"]), maxClip)
-		reason := strings.TrimSpace(firstMeaningfulLine(stderr))
-		if reason == "" {
-			reason = strings.TrimSpace(firstMeaningfulLine(stdout))
-		}
-		if reason == "" {
-			reason = trimToBudget(res.Error, maxClip)
-		}
-		return fmt.Sprintf("%s failed: %s", call.Name, reason), map[string]any{
-			"error":  trimToBudget(res.Error, maxClip),
-			"stdout": stdout,
-			"stderr": stderr,
+		return fmt.Sprintf("%s failed: %s", call.Name, res.Error), map[string]any{
+			"error":  res.Error,
+			"data":   res.Data,
+			"stdout": fmt.Sprint(res.Data["stdout"]),
+			"stderr": fmt.Sprint(res.Data["stderr"]),
 		}
 	}
-	switch call.Name {
-	case "file_read":
-		path := fmt.Sprint(call.Args["path"])
-		content := fmt.Sprint(res.Data["content"])
-		snippet := trimToBudget(content, maxClip*3)
-		return fmt.Sprintf("Read %s", path), map[string]any{"path": path, "snippet": snippet}
-	case "file_list":
-		files := trimToBudget(fmt.Sprint(res.Data["files"]), maxClip)
-		return fmt.Sprintf("Listed files: %s", files), map[string]any{"files": files}
-	default:
-		stdout := trimToBudget(fmt.Sprint(res.Data["stdout"]), maxClip)
-		stderr := trimToBudget(fmt.Sprint(res.Data["stderr"]), maxClip)
-		if stdout != "" || stderr != "" {
-			summary := strings.TrimSpace(strings.Join([]string{firstMeaningfulLine(stderr), firstMeaningfulLine(stdout)}, " | "))
-			if summary == "" {
-				summary = trimToBudget(fmt.Sprintf("stdout=%s stderr=%s", stdout, stderr), maxClip)
-			}
-			return fmt.Sprintf("%s: %s", call.Name, summary), map[string]any{"stdout": stdout, "stderr": stderr}
-		}
-		if len(res.Data) > 0 {
-			summary := trimToBudget(fmt.Sprint(res.Data), maxClip)
-			return fmt.Sprintf("%s: %s", call.Name, summary), map[string]any{"summary": summary}
-		}
-		return fmt.Sprintf("%s completed", call.Name), map[string]any{"summary": fmt.Sprintf("%s completed", call.Name)}
+	if len(res.Data) == 0 {
+		return fmt.Sprintf("%s completed", call.Name), nil
 	}
+	return fmt.Sprintf("%s: %s", call.Name, firstMeaningfulLine(fmt.Sprint(res.Data))), res.Data
 }
 
 func firstMeaningfulLine(text string) string {
@@ -270,7 +226,7 @@ func summarizeToolPayload(result *ports.ToolResult) string {
 	if result.Error != "" {
 		return result.Error
 	}
-	return trimToBudget(fmt.Sprint(result.Data), 220)
+	return fmt.Sprint(result.Data)
 }
 
 func toolSummaryBudgetForPhase(phase string) int {

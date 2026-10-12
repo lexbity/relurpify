@@ -120,7 +120,8 @@ func applyStreamedSlice(env *contextdata.Envelope, compilation *contextports.Com
 		CompiledAt: time.Now().UTC(),
 		CacheHit:   compilation.Record.CacheHit,
 	}
-	for _, chunk := range compilation.StreamedChunks {
+	authored, elided := artifactAuthoritativeChunks(compilation.StreamedChunks)
+	for _, chunk := range authored {
 		slice.Chunks = append(slice.Chunks, contextdata.StreamedChunk{
 			ChunkID:       contextdata.ChunkID(chunk.ChunkID),
 			ContentHash:   chunk.ContentHash,
@@ -128,11 +129,14 @@ func applyStreamedSlice(env *contextdata.Envelope, compilation *contextports.Com
 			TokenEstimate: chunk.TokenEstimate,
 			TrustClass:    chunk.TrustClass,
 			IsSummary:     chunk.IsSummary,
+			ArtifactKey:   chunk.ArtifactKey,
+			ObservedAt:    chunk.ObservedAt,
 		})
 	}
 	slice.FinalTokens = compilation.Record.FinalTokens
 	slice.BudgetTokens = compilation.Record.OriginalBudget
 	slice.GapMessages = append([]string(nil), compilation.SkippedStaleChunks...)
+	slice.GapMessages = append(slice.GapMessages, elided...)
 
 	if slice.BudgetTokens > 0 {
 		byteEstimate := 0
@@ -210,4 +214,39 @@ func EmitStaleApplyDropped(ctx context.Context, currentEpoch, resultEpoch uint64
 			"request_id":    requestID,
 		},
 	})
+}
+
+// artifactAuthoritativeChunks enforces the slice's one-authoritative-view-per-
+// artifact rule: when several chunks observe the same declared artifact, only
+// the newest observation survives and the superseded views become gap
+// messages (elided, named — never silently dropped). Chunks without an
+// artifact key pass through untouched.
+func artifactAuthoritativeChunks(chunks []contextports.StreamedChunkView) ([]contextports.StreamedChunkView, []string) {
+	newest := map[string]int{}
+	for i, chunk := range chunks {
+		if chunk.ArtifactKey == "" {
+			continue
+		}
+		if j, ok := newest[chunk.ArtifactKey]; ok {
+			if chunk.ObservedAt.After(chunks[j].ObservedAt) {
+				newest[chunk.ArtifactKey] = i
+			}
+		} else {
+			newest[chunk.ArtifactKey] = i
+		}
+	}
+	out := make([]contextports.StreamedChunkView, 0, len(chunks))
+	elided := make([]string, 0)
+	for i, chunk := range chunks {
+		if chunk.ArtifactKey == "" {
+			out = append(out, chunk)
+			continue
+		}
+		if newest[chunk.ArtifactKey] == i {
+			out = append(out, chunk)
+			continue
+		}
+		elided = append(elided, fmt.Sprintf("superseded view of %s elided — a newer observation of this artifact is in this slice", chunk.ArtifactKey))
+	}
+	return out, elided
 }

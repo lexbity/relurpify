@@ -34,6 +34,11 @@ type SelectionDeps struct {
 	// Nil means Tier-2 is not configured: the gate records no attempt, and if
 	// it would have fired the model is reported as unavailable.
 	Tier2Model model.LanguageModel
+	// SelectionPosture declares whether route selection may consult a model.
+	// "deterministic" (the default) never runs the Tier-2 disambiguator:
+	// ties resolve through the lattice or fall to clarification, keeping
+	// selection reproducible. "model_assisted" opts into the model tier.
+	SelectionPosture string
 	// Recorder persists the Selection Decision Record of every successful
 	// dispatch (D11). Nil means no record is written (declared degraded mode:
 	// provenance loss is surfaced only when persistence was expected).
@@ -44,9 +49,20 @@ type SelectionDeps struct {
 // deterministic lattice selects first; the bounded Tier-2 gate may then
 // disambiguate within that candidate set only (D8/D10).
 func Dispatch(ctx context.Context, env *contextdata.Envelope, req RouteRequest, deps SelectionDeps) (*RouteResult, error) {
+	if strings.TrimSpace(req.PinnedRecipeID) != "" && deps.ThoughtRecipes != nil {
+		if _, registered := deps.ThoughtRecipes.Get(strings.TrimSpace(req.PinnedRecipeID)); !registered {
+			return nil, fmt.Errorf("pinned recipe %q is not registered in this workspace (relurpify_cfg/euclo)", req.PinnedRecipeID)
+		}
+	}
 	report, selected, fallbackTaken, ok := resolveRoute(env, req, deps)
 	if ok {
-		selected, report.DecidedBy, report.Tier2 = applyTier2Gate(ctx, env, req, report, selected, report.DecidedBy, deps)
+		if strings.TrimSpace(req.PinnedRecipeID) != "" {
+			// A pinned turn is deterministic by construction: the user chose
+			// the recipe; neither lattice ties nor the Tier-2 model may move it.
+			report.DecidedBy = "pinned"
+		} else {
+			selected, report.DecidedBy, report.Tier2 = applyTier2Gate(ctx, env, req, report, selected, report.DecidedBy, deps)
+		}
 	}
 	resolution := buildRouteResolution(env, req, report, selected, ok, fallbackTaken)
 	if env != nil {
@@ -278,7 +294,6 @@ func deterministicRouteCandidates(env *contextdata.Envelope, req RouteRequest, d
 		candidates = append(candidates, *clarificationCandidate)
 	}
 	candidates = append(candidates, metadataThoughtRecipeCandidates(deps.ThoughtRecipes, ctx)...)
-	fmt.Printf("DBGPROBE needsClarify=%v family=%q tokens=%v\n", needsClarificationRoute(env), ctx.family, ctx.tokens)
 	candidates = append(candidates, metadataCapabilityCandidates(req, deps.Capabilities, ctx)...)
 	return dedupeAndSortRouteCandidates(candidates)
 }
@@ -1532,4 +1547,24 @@ func primaryRouteID(req RouteRequest) string {
 		return strings.TrimSpace(req.CapabilityID)
 	}
 	return strings.TrimSpace(req.FallbackID)
+}
+
+
+// pinnedRecipeIDFromMetadata reads the user's recipe pin from the turn's task
+// metadata (key "recipe_id"): turn-level pins arrive through SubmitTurn
+// metadata; session-level pins ride every turn the TUI submits.
+func pinnedRecipeIDFromMetadata(env *contextdata.Envelope) string {
+	if env == nil {
+		return ""
+	}
+	raw, ok := contextdata.GetTyped[any](env, "task.metadata")
+	if !ok {
+		return ""
+	}
+	meta, ok := raw.(map[string]any)
+	if !ok {
+		return ""
+	}
+	id, _ := meta["recipe_id"].(string)
+	return strings.TrimSpace(id)
 }

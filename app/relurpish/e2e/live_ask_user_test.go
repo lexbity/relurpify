@@ -125,6 +125,12 @@ func TestLiveAskUserFamilyTableGuardsDanglingHandoff(t *testing.T) {
 	entries, err := os.ReadDir(recipesDir)
 	require.NoError(t, err)
 	for _, e := range entries {
+		// families.yaml stays: it is the shipped handoff TABLE (workspace
+		// data) whose dangling-target assertion this test exercises. The
+		// shipped recipes leave.
+		if e.Name() == "families.yaml" {
+			continue
+		}
 		require.NoError(t, os.Remove(filepath.Join(recipesDir, e.Name())))
 	}
 	require.NoError(t, os.WriteFile(filepath.Join(recipesDir, "ask_modules.erpe"), []byte(askRecipe), 0o644))

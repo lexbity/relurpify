@@ -26,6 +26,7 @@ type WorkspaceDefaultUsage struct {
 type WorkspaceConfig struct {
 	Paths     WorkspacePaths     `yaml:"paths"`
 	Model     model.ModelRef     `yaml:"model"`
+	Selection SelectionConfigV1  `yaml:"selection,omitempty"`
 	Sandbox   WorkspaceSandbox   `yaml:"sandbox"`
 	Logging   WorkspaceLogging   `yaml:"logging"`
 	Audit     WorkspaceAudit     `yaml:"audit"`

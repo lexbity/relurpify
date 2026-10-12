@@ -23,6 +23,12 @@ func applyTier2Gate(ctx context.Context, env *contextdata.Envelope, req RouteReq
 	if !needTier2(report) {
 		return selected, decidedBy, euclotypes.Tier2Info{}
 	}
+	if selectionIsDeterministic(deps.SelectionPosture) {
+		// Deterministic posture: selection never consults a model. Ties and
+		// low confidence resolve through the lattice or fall to the
+		// clarification posture downstream — reproducible by construction.
+		return selected, decidedBy, euclotypes.Tier2Info{Outcome: "posture_deterministic"}
+	}
 	ranked := rankAvailableCandidates(report.Candidates)
 	refs := topCandidateRefs(ranked, tier2TopK)
 	requestedRouteID := string(selected.RouteID)
@@ -137,6 +143,18 @@ func topCandidateRefs(ranked []CandidateRouteInfo, k int) []intake.CandidateRef 
 	if k <= 0 || len(ranked) == 0 {
 		return nil
 	}
+	// The generic default recipe is a last-resort fallback, never a
+	// disambiguation candidate: the tier-2 model once picked it for a debug
+	// task and its goal drops the user's request entirely (the agent ran
+	// blind). Filtering it here keeps the deterministic fallback path intact.
+	filtered := ranked[:0:0]
+	for _, candidate := range ranked {
+		if RouteID(defaultThoughtRecipeID) == candidate.RouteID {
+			continue
+		}
+		filtered = append(filtered, candidate)
+	}
+	ranked = filtered
 	if len(ranked) > k {
 		ranked = ranked[:k]
 	}
@@ -199,4 +217,16 @@ func streamedContextForGate(env *contextdata.Envelope) string {
 		}
 	}
 	return strings.Join(out, ",")
+}
+
+
+// selectionIsDeterministic reports whether the posture forbids model-assisted
+// selection. Empty defaults to deterministic (the ruled default posture).
+func selectionIsDeterministic(posture string) bool {
+	switch strings.ToLower(strings.TrimSpace(posture)) {
+	case "", "deterministic":
+		return true
+	default:
+		return false
+	}
 }

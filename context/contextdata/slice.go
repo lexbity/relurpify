@@ -10,6 +10,12 @@ type StreamedChunk struct {
 	TokenEstimate int
 	TrustClass    string // agentspec trust class label; "" when unset
 	IsSummary     bool   // summary-substituted chunk
+	// ArtifactKey identifies the external artifact this chunk observes
+	// (declared chunk provenance), empty when the chunk is not an artifact
+	// view. The slice keeps exactly one — the newest — view per key: a stale
+	// view of an artifact must never compete with its authoritative one.
+	ArtifactKey string
+	ObservedAt  time.Time
 }
 
 // StreamedSlice is the current backward-pass delivery: one per envelope. It

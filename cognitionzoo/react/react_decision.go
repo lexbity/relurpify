@@ -2,6 +2,7 @@ package react
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"time"
 )
@@ -22,6 +23,12 @@ type decisionPayload struct {
 // text) and normalizes it into the decisionPayload struct.
 func parseDecision(raw string) (decisionPayload, error) {
 	var payload decisionPayload
+	if strings.TrimSpace(raw) == "" {
+		// An empty response is not a decision. Synthesizing Complete here is
+		// how a model that called no tools and said nothing ended a repair
+		// step as a successful no-op (the relurpish-TEST demo failure).
+		return payload, fmt.Errorf("empty model response is not a decision")
+	}
 	snippet := ExtractJSON(raw)
 	if snippet == "{}" {
 		payload.Thought = strings.TrimSpace(raw)

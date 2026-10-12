@@ -99,6 +99,19 @@ func (n *reactObserveNode) Execute(ctx context.Context, env *contextdata.Envelop
 		}
 	}
 	if !completed && iter >= n.agent.maxIterations {
+		if taskNeedsEditing(n.task) && !hasEditObservation(env) {
+			reason := iterationExhaustionReason(n.task, env)
+			env.SetWorkingValueWithClass("react.incomplete_reason", reason, contextdata.MemoryClassTask)
+			return &execution.Result{
+				NodeID:  n.id,
+				Success: false,
+				Error:   reason,
+				Data: execution.NewToolResultPayload(map[string]any{
+					"diagnostic": diagnostic.String(),
+					"complete":   false,
+				}),
+			}, nil
+		}
 		if summary, ok := completionSummaryFromState(n.agent, n.task, env, lastMap); ok {
 			completed = true
 			setSynthesizedConclusion(env, summary, &diagnostic)

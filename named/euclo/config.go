@@ -21,6 +21,10 @@ type EucloConfig struct {
 
 	// CapabilityClassifierModel overrides the model used for tier-2 classification.
 	CapabilityClassifierModel model.LanguageModel
+	// SelectionPosture controls whether route selection may consult a model:
+	// "deterministic" (default) never runs the tier-2 disambiguator;
+	// "model_assisted" opts in. Empty normalizes to deterministic.
+	SelectionPosture string
 
 	// MaxStreamTokens is the token budget passed to context stream requests.
 	MaxStreamTokens int

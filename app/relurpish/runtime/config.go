@@ -52,6 +52,10 @@ type Config struct {
 	AuditLimit                 int
 	AuditEnforcement           string // "strict" (default) | "best_effort"
 	HITLTimeout                time.Duration
+	// SelectionPosture controls whether route selection may consult a model:
+	// "deterministic" (default; reproducible selection) or "model_assisted"
+	// (ties may be disambiguated by the tier-2 model).
+	SelectionPosture string
 	// HITLMode selects the approval posture: "governed" (default) blocks on a
 	// human decision; "permissive" (--hitl-mode permissive) auto-approves
 	// every request, audited per decision and surfaced by the doctor. The
@@ -165,6 +169,9 @@ func (c *Config) Normalize() error {
 	}
 	if c.HITLTimeout <= 0 {
 		c.HITLTimeout = 30 * time.Second
+	}
+	if strings.TrimSpace(c.SelectionPosture) == "" {
+		c.SelectionPosture = "deterministic"
 	}
 	if strings.TrimSpace(c.HITLMode) == "" {
 		c.HITLMode = fauthorization.HITLModeGoverned

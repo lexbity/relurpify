@@ -96,6 +96,13 @@ func (t *ReadFileTool) ParamKeys() []string {
 	return FileReadParamKeys()
 }
 
+// artifactMetadata stamps the tool-declared artifact identity onto a result:
+// the context system uses it to keep one authoritative view per artifact.
+// Key is the resolved absolute path — the tool owns its artifact declaration.
+func artifactMetadata(path string) map[string]any {
+	return map[string]any{"artifact.key": "file:" + filepath.ToSlash(path)}
+}
+
 func (t *ReadFileTool) Execute(ctx context.Context, args map[string]any) (*ports.ToolResult, error) {
 	params, err := ParseFileReadParams(args)
 	if err != nil {
@@ -129,8 +136,10 @@ func (t *ReadFileTool) Execute(ctx context.Context, args map[string]any) (*ports
 		return nil, err
 	}
 	return &ports.ToolResult{
-		Success: true,
+		Success:  true,
+		Metadata: artifactMetadata(path),
 		Data: map[string]any{
+			"path":    filepath.ToSlash(path),
 			"content": string(data),
 			"size":    info.Size(),
 			"mode":    info.Mode().String(),
@@ -235,7 +244,7 @@ func (t *WriteFileTool) Execute(ctx context.Context, args map[string]any) (*port
 	if closeErr := f.Close(); closeErr != nil {
 		return nil, closeErr
 	}
-	return &ports.ToolResult{Success: true, Data: map[string]any{"path": path}}, nil
+	return &ports.ToolResult{Success: true, Metadata: artifactMetadata(path), Data: map[string]any{"path": filepath.ToSlash(path)}}, nil
 }
 func (t *WriteFileTool) IsAvailable(ctx context.Context) bool {
 	return true
