@@ -658,6 +658,21 @@ func (r *CapabilityRegistry) prepareLegacyToolBatchEntryLocked(ctx context.Conte
 			aware.SetAgentSpec(r.agentSpec, r.registeredAgentID)
 		}
 	}
+	// D3 (extended to legacy tools): a legacy tool whose descriptor ID carries
+	// a bare name (suffix after the final ':') contributes that bare name to
+	// the shared name index, exactly as an invocable capability does — so a
+	// recipe declaring the bare form resolves against a legacy-tool-backed
+	// capability. A bare name already mapped to a different capability is a
+	// namespace collision: a registration error naming both holders, never a
+	// silent override.
+	bareName := bareCapabilityName(desc.ID)
+	if bareName != "" {
+		for _, holder := range r.capabilityNameIndex[bareName] {
+			if holder != desc.ID {
+				return descriptor.CapabilityDescriptor{}, nil, fmt.Errorf("bare capability name %q already maps to %q (registering %q)", bareName, holder, desc.ID)
+			}
+		}
+	}
 	wrapped := r.wrapTool(tool)
 	adapter := legacyToolHandler{tool: wrapped}
 	return desc, &capabilityEntry{
@@ -667,6 +682,7 @@ func (r *CapabilityRegistry) prepareLegacyToolBatchEntryLocked(ctx context.Conte
 		legacyTool: wrapped,
 		providerID: desc.Source.ProviderID,
 		sessionID:  desc.Source.SessionID,
+		bareName:   bareName,
 	}, nil
 }
 

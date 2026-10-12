@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/capability/agentspec"
+	"codeburg.org/lexbit/relurpify/capability/descriptor"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	thoughtrecipepkg "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
 )
@@ -108,5 +110,25 @@ func TestMissingRecipeIDOnExplicitMiss(t *testing.T) {
 	}
 	if rerr.MissingRecipeID != "euclo.thoughtrecipe.debug_tdd_repair" {
 		t.Fatalf("MissingRecipeID = %q (reason %q)", rerr.MissingRecipeID, rerr.Reason)
+	}
+}
+
+// TestRouteEligibleCapability pins the D8 rank-5 posture: raw local tools are
+// paradigm-invoked primitives and are NEVER direct deterministic route
+// candidates; governed (relurpic/provider) capabilities are. A bare file
+// mention therefore cannot preempt the built-in default-recipe fallback.
+func TestRouteEligibleCapability(t *testing.T) {
+	local := descriptor.CapabilityDescriptor{ID: "tool:file_list", RuntimeFamily: agentspec.CapabilityRuntimeFamilyLocalTool}
+	relurpic := descriptor.CapabilityDescriptor{ID: "euclo:cap.test_run", RuntimeFamily: agentspec.CapabilityRuntimeFamilyRelurpic}
+	provider := descriptor.CapabilityDescriptor{ID: "euclo:cap.intent.clarify", RuntimeFamily: agentspec.CapabilityRuntimeFamilyProvider}
+
+	if routeEligibleCapability(local) {
+		t.Fatal("a raw local tool must not be a direct route candidate")
+	}
+	if !routeEligibleCapability(relurpic) {
+		t.Fatal("a relurpic capability must be a direct route candidate")
+	}
+	if !routeEligibleCapability(provider) {
+		t.Fatal("a provider capability must be a direct route candidate")
 	}
 }

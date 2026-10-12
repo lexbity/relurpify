@@ -28,6 +28,7 @@ func TestStreamedBodyReachesPromptIsHermeticLoop(t *testing.T) {
 			{Text: `{}`}, // route disambiguation call
 			{Text: `{"thought":"done","action":"complete","complete":true,"summary":"streamed evidence consumed"}`},
 		},
+		Scripted: []*ScriptedCapability{prepProbe()},
 		SeedChunks: []SeedChunk{
 			{Body: sentinelOne},
 			{Body: sentinelTwo},
@@ -159,6 +160,7 @@ func TestTemplatedGoalStreamsFromSeededChunk(t *testing.T) {
 			{Text: `{}`}, // route disambiguation call
 			{Text: `{"thought":"done","action":"complete","complete":true,"summary":"templated goal consumed"}`},
 		},
+		Scripted:   []*ScriptedCapability{prepProbe()},
 		SeedChunks: []SeedChunk{{Body: seedBody}},
 	})
 	if err != nil {

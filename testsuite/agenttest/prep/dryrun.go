@@ -26,6 +26,20 @@ import (
 	"codeburg.org/lexbit/relurpify/testsuite/testhelper"
 	"codeburg.org/lexbit/relurpify/testsuite/testsupport"
 	"codeburg.org/lexbit/relurpify/userconfig/templates/embedfs"
+
+	// go_native tool constructor registrations: the harness composes the
+	// registry from the materialized shipped manifests, exactly as the
+	// production runtime does (app/relurpish/runtime/tool_activation.go).
+	// Without these, strict-mode build skips every go_native manifest and the
+	// loud load (D2) correctly rejects the recipes that declare them.
+	_ "codeburg.org/lexbit/relurpify/platform/tools/native/fs"
+	_ "codeburg.org/lexbit/relurpify/platform/tools/native/git"
+	_ "codeburg.org/lexbit/relurpify/platform/tools/native/langgo"
+	_ "codeburg.org/lexbit/relurpify/platform/tools/native/langjs"
+	_ "codeburg.org/lexbit/relurpify/platform/tools/native/langpython"
+	_ "codeburg.org/lexbit/relurpify/platform/tools/native/langrust"
+	_ "codeburg.org/lexbit/relurpify/platform/tools/native/lsp"
+	_ "codeburg.org/lexbit/relurpify/platform/tools/native/search"
 )
 
 // canonicalMarker in WorkspaceFiles requests the canonical 7 recipes be
@@ -109,9 +123,6 @@ func Run(ctx context.Context, cfg DryRunConfig) (*DryRunReport, error) {
 	defer os.RemoveAll(ws)
 	if err := materializeWorkspace(ws, cfg.WorkspaceFiles); err != nil {
 		return nil, fmt.Errorf("prep: workspace: %w", err)
-	}
-	if err := writeScriptedManifests(ws, cfg.Scripted); err != nil {
-		return nil, fmt.Errorf("prep: capability manifests: %w", err)
 	}
 
 	sink := &recordingSink{}
@@ -272,92 +283,42 @@ func materializeWorkspace(ws string, files map[string]string) error {
 			return err
 		}
 	}
+	// The shipped tool manifests materialize for every workspace: the
+	// canonical recipes declare file tools (file_read/grep/file_write), and
+	// the built-in default execution recipe (registered programmatically for
+	// every run) declares the same file toolset. The registry admits only
+	// manifest-declared tools, so without the manifests the loud load (D2)
+	// correctly rejects both the recipes and the default fallback's scope.
+	if err := copyEmbeddedTree("workspace/tools", filepath.Join(ws, "relurpify_cfg", "tools")); err != nil {
+		return fmt.Errorf("prep: tool manifests: %w", err)
+	}
 	if !canonical {
 		return nil
 	}
-	embed, err := iofs.Sub(embedfs.DefaultFS(), "workspace/euclo")
+	return copyEmbeddedTree("workspace/euclo", filepath.Join(ws, "relurpify_cfg", "euclo"))
+}
+
+// copyEmbeddedTree materializes an embedded template subtree into the
+// workspace, preserving relative paths.
+func copyEmbeddedTree(embedRoot, destRoot string) error {
+	embed, err := iofs.Sub(embedfs.DefaultFS(), embedRoot)
 	if err != nil {
 		return err
 	}
-	entries, err := iofs.ReadDir(embed, ".")
-	if err != nil {
-		return err
-	}
-	dest := filepath.Join(ws, "relurpify_cfg", "euclo")
-	if err := capfs.MkdirAllSecure(dest); err != nil {
-		return err
-	}
-	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".erpe") {
-			continue
-		}
-		content, err := iofs.ReadFile(embed, entry.Name())
+	return iofs.WalkDir(embed, ".", func(path string, d iofs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-		if err := capfs.WriteFileSecure(filepath.Join(dest, entry.Name()), content); err != nil {
+		target := filepath.Join(destRoot, filepath.FromSlash(path))
+		if d.IsDir() {
+			return capfs.MkdirAllSecure(target)
+		}
+		content, err := iofs.ReadFile(embed, path)
+		if err != nil {
 			return err
 		}
-	}
-	return nil
-}
-
-// writeScriptedManifests declares every scripted capability in the workspace tool
-// manifest tree; the registry's admission policy admits only
-// manifest-declared tools, so an undeclared one would be silently dropped at
-// registration (deny-by-default registry invariant — the harness must pass
-// through it, not bypass it).
-func writeScriptedManifests(ws string, scripted []*ScriptedCapability) error {
-	if len(scripted) == 0 {
-		return nil
-	}
-	dir := filepath.Join(ws, "relurpify_cfg", "tools")
-	if err := capfs.MkdirAllSecure(dir); err != nil {
-		return err
-	}
-	var b strings.Builder
-	for _, capability := range scripted {
-		if capability == nil || capability.Name == "" {
-			continue
-		}
-		b.Reset()
-		fmt.Fprintf(&b, `schema: relurpify/tool/v1
-name: %q
-version: "1"
-family: prep
-description: prep dry-run scripted capability
-execution:
-  backend: go_native
-  implementation: %q
-capability:
-  trust_class: builtin_trusted
-  risk_class:
-    - read_only
-  effect_class:
-    - pure
-`, capability.Name, capability.Name)
-		// one manifest per capability: the loader reads single-document YAML files
-		name := sanitizeManifestFile(capability.Name)
-		if err := capfs.WriteFileSecure(filepath.Join(dir, name+".tool.yaml"), []byte(b.String())); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// sanitizeManifestFile maps a capability ID to a safe manifest file name.
-func sanitizeManifestFile(name string) string {
-	replaced := strings.Map(func(r rune) rune {
-		switch {
-		case r >= 'a' && r <= 'z', r >= '0' && r <= '9', r == '_', r == '-', r == '.':
-			return r
-		case r >= 'A' && r <= 'Z':
-			return r + ('a' - 'A')
-		default:
-			return '_'
-		}
-	}, name)
-	return "prep_" + replaced
+		return capfs.WriteFileSecure(target, content)
+	})
 }
 
 func collectRoute(report *DryRunReport, env *contextdata.Envelope) {

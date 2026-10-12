@@ -2,6 +2,7 @@ package orchestrate
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -277,6 +278,7 @@ func deterministicRouteCandidates(env *contextdata.Envelope, req RouteRequest, d
 		candidates = append(candidates, *clarificationCandidate)
 	}
 	candidates = append(candidates, metadataThoughtRecipeCandidates(deps.ThoughtRecipes, ctx)...)
+	fmt.Printf("DBGPROBE needsClarify=%v family=%q tokens=%v\n", needsClarificationRoute(env), ctx.family, ctx.tokens)
 	candidates = append(candidates, metadataCapabilityCandidates(req, deps.Capabilities, ctx)...)
 	return dedupeAndSortRouteCandidates(candidates)
 }
@@ -409,6 +411,9 @@ func metadataCapabilityCandidates(req RouteRequest, caps *registry.CapabilityReg
 		}
 		candidates := make([]CandidateRouteInfo, 0, len(snapshots))
 		for _, snapshot := range snapshots {
+			if !routeEligibleCapability(snapshot.Descriptor) {
+				continue
+			}
 			availability, reason := routeAvailabilityFromSnapshot(snapshot)
 			priority := capabilityPriorityScore(snapshot.Descriptor)
 			candidates = append(candidates, CandidateRouteInfo{
@@ -426,6 +431,9 @@ func metadataCapabilityCandidates(req RouteRequest, caps *registry.CapabilityReg
 	}
 	candidates := make([]CandidateRouteInfo, 0, len(snapshots))
 	for _, snapshot := range snapshots {
+		if !routeEligibleCapability(snapshot.Descriptor) {
+			continue
+		}
 		s := scoreCapabilityCandidate(snapshot.Descriptor, ctx)
 		if s.total <= 0 {
 			continue
@@ -453,6 +461,20 @@ func metadataCapabilityCandidates(req RouteRequest, caps *registry.CapabilityReg
 		})
 	}
 	return candidates
+}
+
+// routeEligibleCapability reports whether a registry entry may be offered as a
+// direct deterministic route candidate. Governed capabilities (the relurpic and
+// provider runtime families) are route targets; raw local tools are
+// paradigm-invoked primitives carrying immediate host effects, not governed
+// routes. Offering them directly would let a bare file mention select
+// `tool:file_list` over a paradigm — the opposite of the D8 rank-5 posture
+// (governed decomposition over immediate host effect) — and would preempt the
+// built-in default-recipe fallback, which wave 2 §D8 defines as "zero
+// candidates scored above zero". Tool names remain fully resolvable and scoped
+// through the recipe/paradigm path (D1/D6).
+func routeEligibleCapability(desc descriptor.CapabilityDescriptor) bool {
+	return desc.RuntimeFamily != agentspec.CapabilityRuntimeFamilyLocalTool
 }
 
 // capabilityDescription renders the one-line candidate description used by the

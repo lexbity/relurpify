@@ -2,7 +2,9 @@ package orchestrate
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"log"
 	"strings"
 
 	registry "codeburg.org/lexbit/relurpify/capability/registry"
@@ -192,14 +194,6 @@ func buildNodes(ctx context.Context, in buildNodeInput) ([]agentgraph.Node, erro
 	if thoughtrecipeReg == nil {
 		thoughtrecipeReg = thoughtrecipepkg.NewThoughtRecipeRegistry()
 	}
-	ensureClarificationThoughtRecipe(thoughtrecipeReg)
-	ensureDefaultThoughtRecipe(thoughtrecipeReg)
-	// FR-15: the clarification family→recipe table is validated against the
-	// recipe registry at agent construction; a dangling target fails boot, not
-	// the first ambiguous utterance.
-	if err := assertClarificationFamilyTable(thoughtrecipeReg); err != nil {
-		return nil, err
-	}
 	var thoughtrecipeCapReg *registry.CapabilityRegistry
 	if in.paradigmDeps != nil {
 		thoughtrecipeCapReg = in.paradigmDeps.Registry
@@ -207,7 +201,31 @@ func buildNodes(ctx context.Context, in buildNodeInput) ([]agentgraph.Node, erro
 	if thoughtrecipeCapReg == nil {
 		thoughtrecipeCapReg = registry.NewRegistry()
 	}
+	// One registry (D1): the built-in recipes' `may invoke` vocabulary is
+	// validated at registration against the registry they will actually be
+	// scoped and invoked through — never a different instance the loader may
+	// have wired. In production the composed registry is the same instance, so
+	// this is a no-op; when construction supplies a fresh registry (a caller
+	// with no wired capability runtime) the validation follows it.
+	thoughtrecipeReg.WithToolVocabulary(thoughtrecipeCapReg)
+	// The clarification capability registers BEFORE the built-in recipes it
+	// backs: both built-ins are compiled plans whose `may invoke` vocabulary
+	// is validated against the composed registry at registration (FR-14), so
+	// registering the capability after the recipe would fail the recipe's
+	// load with its own capability missing. Ordering is load-bearing.
 	if err := registerClarificationCapability(ctx, thoughtrecipeCapReg, thoughtrecipeReg); err != nil {
+		return nil, err
+	}
+	if err := ensureClarificationThoughtRecipe(thoughtrecipeReg); err != nil {
+		return nil, err
+	}
+	if err := ensureDefaultThoughtRecipe(thoughtrecipeReg); err != nil {
+		return nil, err
+	}
+	// FR-15: the clarification family→recipe table is validated against the
+	// recipe registry at agent construction; a dangling target fails boot, not
+	// the first ambiguous utterance.
+	if err := assertClarificationFamilyTable(thoughtrecipeReg); err != nil {
 		return nil, err
 	}
 	// A nil *contextstream.Trigger means "no compiler wired" (compiler-less
@@ -447,14 +465,25 @@ func wireEdges(g *agentgraph.Graph) error {
 // thoughtrecipe executor already falls back to this ID when the envelope
 // carries no route selection; registering it makes that fallback executable.
 // Workspace recipes register first and win over it (first-wins registry).
+//
+// Every declared name is validated against the composed capability registry
+// at registration (FR-14): the vocabulary here must resolve or the route
+// fails the load. The scope is the guaranteed workspace file toolset — the
+// tools every composition that builds the euclo graph registers from the file
+// manifests. Names whose implementations are composition-optional are dead
+// vocabulary (the F2 class) and are not declared: `file_edit` has no shipped
+// manifest, and the indexed search tools (`search_grep`, `search_find_similar`)
+// require the optional native search package. The canonical workspace
+// `default.erpe` (which shadows this fallback in production) declares the same
+// fs vocabulary.
 const defaultThoughtRecipeID = "euclo.thoughtrecipe.default"
 
-func ensureDefaultThoughtRecipe(reg *thoughtrecipepkg.ThoughtRecipeRegistry) {
+func ensureDefaultThoughtRecipe(reg *thoughtrecipepkg.ThoughtRecipeRegistry) error {
 	if reg == nil {
-		return
+		return nil
 	}
 	if _, ok := reg.Get(defaultThoughtRecipeID); ok {
-		return
+		return nil
 	}
 	thoughtrecipe := &surface.ThoughtRecipe{
 		ID:   defaultThoughtRecipeID,
@@ -474,10 +503,9 @@ func ensureDefaultThoughtRecipe(reg *thoughtrecipepkg.ThoughtRecipeRegistry) {
 			Paradigm: "react",
 			// Directly-constructed steps must set an explicit scope: the zero
 			// value is deny-all (fail-closed, A-6). Scope the fallback to the
-			// workspace read/edit toolset; shell tools stay excluded.
+			// workspace read/write toolset; shell tools stay excluded.
 			Scope: thoughtrecipepkg.AllowTools([]string{
-				"file_read", "file_list", "file_search", "search_grep",
-				"search_find_similar", "file_edit", "file_write", "file_create",
+				"file_read", "file_list", "file_search", "file_write", "file_create",
 			}),
 			Prompt: "{{ (index . \"" + euclostate.KeyTaskInput + "\").Instruction }}",
 			Goal:   "Complete the user's coding task in the workspace.",
@@ -485,15 +513,34 @@ func ensureDefaultThoughtRecipe(reg *thoughtrecipepkg.ThoughtRecipeRegistry) {
 		}},
 		Warnings: []thoughtrecipepkg.SemanticWarning{{Message: "built-in default execution recipe; workspace recipes take precedence"}},
 	}
-	_, _ = reg.RegisterCompiledFirstWins(thoughtrecipe, plan, "built-in default execution route")
+	_, err := reg.RegisterCompiledFirstWins(thoughtrecipe, plan, "built-in default execution route")
+	if err != nil {
+		var unresolved *thoughtrecipepkg.ErrUnresolvedToolName
+		if errors.As(err, &unresolved) {
+			// The built-in default is an OPTIONAL last-resort fallback. A
+			// composition that does not provide its declared file vocabulary
+			// (e.g. a minimal test registry) cannot enforce the scope, so the
+			// recipe is not registered — the fallback is unavailable rather
+			// than armed with a broken vocabulary. The shipped composition
+			// provides the file tools (proven by the composition gate and the
+			// prep tier), so production keeps the fallback; authored recipes
+			// still fail the load loudly (D2). Registering nothing here is
+			// honest: resolveRoute then reports no candidate instead of
+			// running a fallback that cannot enforce its own scope.
+			log.Printf("built-in default execution recipe unavailable in this composition: %v", err)
+			return nil
+		}
+		return err
+	}
+	return nil
 }
 
-func ensureClarificationThoughtRecipe(reg *thoughtrecipepkg.ThoughtRecipeRegistry) {
+func ensureClarificationThoughtRecipe(reg *thoughtrecipepkg.ThoughtRecipeRegistry) error {
 	if reg == nil {
-		return
+		return nil
 	}
 	if _, ok := reg.Get(clarificationThoughtRecipeID); ok {
-		return
+		return nil
 	}
 	thoughtrecipe := &surface.ThoughtRecipe{
 		ID:   clarificationThoughtRecipeID,
@@ -518,7 +565,8 @@ func ensureClarificationThoughtRecipe(reg *thoughtrecipepkg.ThoughtRecipeRegistr
 			Config: map[string]any{},
 		}},
 	}
-	_, _ = reg.RegisterCompiledFirstWins(thoughtrecipe, plan, "built-in clarification route")
+	_, err := reg.RegisterCompiledFirstWins(thoughtrecipe, plan, "built-in clarification route")
+	return err
 }
 
 func seedPolicyDefaults(env *contextdata.Envelope) {

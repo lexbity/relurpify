@@ -25,6 +25,7 @@ func TestGroundingDeduplicatesIdenticalContent(t *testing.T) {
 			{Text: `{}`}, // route disambiguation call
 			{Text: `{"thought":"done","action":"complete","complete":true,"summary":"ok"}`},
 		},
+		Scripted: []*ScriptedCapability{prepProbe()},
 		SeedChunks: []SeedChunk{
 			{Body: body},
 			{Body: body},

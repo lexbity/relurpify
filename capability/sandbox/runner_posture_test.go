@@ -80,7 +80,11 @@ func TestRunnerPosture_OutputCeilingTruncatesAndSpills(t *testing.T) {
 	require.True(t, res.Truncated, "ceiling exceeded must report Truncated")
 	require.True(t, res.TornDown, "ceiling exceeded must tear the process down")
 	require.NotEmpty(t, res.StdoutRef, "spill must populate StdoutRef")
-	require.Equal(t, int64(2097152), res.StdoutBytes, "StdoutBytes is the total streamed bytes")
+	// StdoutBytes counts every byte read, but the ceiling teardown kills the
+	// child as soon as the stream crosses the ceiling (TornDown==true), so the
+	// exact total is scheduling-dependent. The invariant is that the stream
+	// crossed the ceiling; the retained prefix below is the exact pin.
+	require.Greater(t, res.StdoutBytes, int64(1<<20), "the stream must have crossed the ceiling")
 
 	spilled, err := os.ReadFile(res.StdoutRef)
 	require.NoError(t, err)

@@ -25,6 +25,7 @@ func TestIntakeDeliversSeededBodyIntoFirstParadigmCall(t *testing.T) {
 			{Text: `{}`}, // route disambiguation call
 			{Text: `{"thought":"done","action":"complete","complete":true,"summary":"intake evidence consumed"}`},
 		},
+		Scripted:   []*ScriptedCapability{prepProbe()},
 		SeedChunks: []SeedChunk{{Body: sentinel}},
 	})
 	if err != nil {

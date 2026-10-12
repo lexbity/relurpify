@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"codeburg.org/lexbit/relurpify/capability/ports"
 	registry "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
@@ -50,22 +51,22 @@ func (c *stepCore) effectiveToolAllowlist() ([]string, error) {
 	seen := make(map[string]struct{}, len(names))
 	for _, toolName := range names {
 		name := strings.TrimSpace(toolName)
-		if name == "" {
-			continue
-		}
-		desc, ok := c.deps.Registry.GetCapability(name)
-		if !ok || desc.ID == "" {
-			return nil, &ErrUnresolvedToolName{
-				Step:    c.id,
-				Tool:    name,
-				Nearest: nearestVocabularyNames(name, c.deps.Registry.CallableCapabilityNames()),
+		// Guarded bodies keep this loop free of `continue`: the only control
+		// branches are the loud unresolved-name error (D2) and the dedup skip.
+		if name != "" {
+			desc, ok := c.deps.Registry.GetCapability(name)
+			if !ok || desc.ID == "" {
+				return nil, &ErrUnresolvedToolName{
+					Step:    c.id,
+					Tool:    name,
+					Nearest: nearestVocabularyNames(name, c.deps.Registry.CallableCapabilityNames()),
+				}
+			}
+			if _, exists := seen[desc.ID]; !exists {
+				seen[desc.ID] = struct{}{}
+				allowed = append(allowed, desc.ID)
 			}
 		}
-		if _, exists := seen[desc.ID]; exists {
-			continue
-		}
-		seen[desc.ID] = struct{}{}
-		allowed = append(allowed, desc.ID)
 	}
 	if len(allowed) == 0 {
 		return []string{"__euclo__.deny_all__"}, nil
@@ -266,15 +267,48 @@ func (c *stepCore) executeCapability(ctx context.Context, env *contextdata.Envel
 }
 
 func (c *stepCore) buildCapabilityArgs(env *contextdata.Envelope) map[string]any {
+	// A capability invocation receives exactly what the step declares: the
+	// capability's own input-schema parameters, with `on`/`with` refs resolved
+	// to their concrete values. The run envelope is never dumped into args —
+	// its internal keys (task metadata, policy-gate results, captures) are not
+	// capability parameters and would fail the handler's schema validation
+	// (and must never become visible to a handler). `capability_id` is the
+	// invocation's metadata, passed separately to InvokeCapability.
+	declared := declaredCapabilityParamNames(c)
 	data := thoughtrecipeTemplateData(env, c.step)
-	args := make(map[string]any, len(data)+len(c.step.Config))
-	for key, value := range data {
+	args := make(map[string]any, len(c.step.Config))
+	for key, value := range c.step.Config {
+		if key == "capability_id" {
+			continue
+		}
+		if declared != nil && !declared[ports.NormalizeToolName(key)] {
+			continue
+		}
+		if ref, ok := value.(string); ok {
+			if resolved, found := lookupTemplateValue(data, ref); found {
+				args[key] = resolved
+				continue
+			}
+		}
 		args[key] = value
 	}
-	for key, value := range c.step.Config {
-		if _, exists := args[key]; !exists {
-			args[key] = value
-		}
-	}
 	return args
+}
+
+// declaredCapabilityParamNames returns the capability's declared input-schema
+// property names (normalized), or nil when the capability has no schema (or no
+// registry). Its non-nil result is the exact allowlist a step may argue.
+func declaredCapabilityParamNames(c *stepCore) map[string]bool {
+	if c == nil || c.deps == nil || c.deps.Registry == nil {
+		return nil
+	}
+	desc, ok := c.deps.Registry.GetCapability(c.step.CapabilityID)
+	if !ok || desc.InputSchema == nil {
+		return nil
+	}
+	declared := make(map[string]bool, len(desc.InputSchema.Properties))
+	for name := range desc.InputSchema.Properties {
+		declared[ports.NormalizeToolName(name)] = true
+	}
+	return declared
 }

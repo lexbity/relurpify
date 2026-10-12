@@ -26,5 +26,9 @@ func processAlive(pid int) bool {
 		// Kernel threads have an empty cmdline; a vanished PID is not ours.
 		return false
 	}
-	return bytes.Contains(raw, []byte("relurpify"))
+	// The runner binary is `relurpify-runner`; matching the bare substring
+	// "relurpify" would also confirm any unrelated process whose path merely
+	// contains the project name (a checkout dir, a build-cache path), which is
+	// exactly the recycled-PID class this narrowing exists to reject.
+	return bytes.Contains(raw, []byte("relurpify-runner"))
 }
