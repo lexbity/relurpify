@@ -236,6 +236,15 @@ func resolveRoute(env *contextdata.Envelope, req RouteRequest, deps SelectionDep
 		if candidate, okFallback := defaultExecutionRecipeCandidate(deps.ThoughtRecipes); okFallback {
 			report.Candidates = append(report.Candidates, candidate)
 			selected, ok, fallbackTaken, decidedBy = candidate, true, true, decidedByDefaultRecipe
+		} else if candidate, okClarify := availableRecipeCandidate(deps.ThoughtRecipes, clarificationThoughtRecipeID,
+			euclotypes.RouteKindIntent, scoreClarification,
+			[]string{"no deterministic route and the default fallback cannot be armed; stopping for clarification"}); okClarify {
+			// Last resort: nothing scored, no default fallback, no explicit
+			// route. The turn stops for a human rather than failing
+			// silently — clarification as terminal backstop, never as the
+			// first response to an ordinary instruction.
+			report.Candidates = append(report.Candidates, candidate)
+			selected, ok, fallbackTaken, decidedBy = candidate, true, true, decidedByClarification
 		}
 	}
 	report.DecidedBy = decidedBy
@@ -375,7 +384,7 @@ func clarificationRouteCandidate(env *contextdata.Envelope, req RouteRequest, th
 		return nil
 	}
 	candidate, ok := availableRecipeCandidate(thoughtrecipes, clarificationThoughtRecipeID,
-		euclotypes.RouteKindIntent, 900,
+		euclotypes.RouteKindIntent, scoreClarification,
 		[]string{"clarification route"})
 	if !ok {
 		return nil
@@ -395,6 +404,13 @@ func metadataThoughtRecipeCandidates(thoughtrecipes *thoughtrecipepkg.ThoughtRec
 	for _, entry := range thoughtrecipes.Entries() {
 		routeID := routeIDForThoughtRecipeEntry(entry)
 		if routeID == "" {
+			continue
+		}
+		// The clarification recipe is not an ordinary lattice candidate:
+		// keyword overlap must never route a turn to it. It routes only
+		// through the ambiguity predicate or the no-fallback last resort
+		// in resolveRoute.
+		if routeID == clarificationThoughtRecipeID {
 			continue
 		}
 		s := scoreThoughtRecipeCandidate(entry, ctx)
@@ -447,6 +463,13 @@ func metadataCapabilityCandidates(req RouteRequest, caps *registry.CapabilityReg
 	candidates := make([]CandidateRouteInfo, 0, len(snapshots))
 	for _, snapshot := range snapshots {
 		if !routeEligibleCapability(snapshot.Descriptor) {
+			continue
+		}
+		// The clarification interaction is not an ordinary lattice
+		// candidate: description-token overlap must never route a turn to
+		// it. It routes only through the ambiguity predicate or the
+		// no-fallback last resort in resolveRoute.
+		if snapshot.Descriptor.ID == clarificationCapabilityID {
 			continue
 		}
 		s := scoreCapabilityCandidate(snapshot.Descriptor, ctx)

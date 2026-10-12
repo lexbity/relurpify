@@ -15,5 +15,5 @@ agent worker uses react
 run worker:
   may invoke ["file_read", "file_list", "grep", "file_write", "test_run"]
   from input.prompt
-  goal "Complete the user's task against the workspace, verifying changes before reporting."
+  goal """Complete the user's task against the workspace, verifying changes before reporting. The user request is: {{ index . "task.instruction" }}"""
   capture result -> state.summary

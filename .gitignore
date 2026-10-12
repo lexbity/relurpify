@@ -21,11 +21,14 @@ relurpify/
 /app/relurpish/runtime/relurpify_cfg/
 
 .claudeignore
+.zcodeignore
 
 /REFERENCE_ONLY
 *.db
 # Build outputs: compiled binaries at the repo root (go build / go test -c).
 /dev-agent-cli
+/coverage
+/relurplint
 
 # Build artifacts from test fixtures
 testsuite/agenttest_fixtures/**/target/

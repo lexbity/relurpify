@@ -44,6 +44,20 @@ func SetExecutionCompleted(env *contextdata.Envelope, ok bool) {
 	contextdata.SetTyped(env, KeyExecutionCompleted, ok)
 }
 
+// GetTurnAwaitingInteraction reports whether the turn ended with an emitted
+// interaction frame still awaiting resolution.
+func GetTurnAwaitingInteraction(env *contextdata.Envelope) bool {
+	v, _ := contextdata.GetTyped[bool](env, KeyTurnAwaitingInteraction)
+	return v
+}
+
+// SetTurnAwaitingInteraction marks (or clears) the turn-level awaiting flag.
+// The clarification request action sets it when the turn ends on a live
+// frame; frame resolution clears it before the interaction resume runs.
+func SetTurnAwaitingInteraction(env *contextdata.Envelope, awaiting bool) {
+	contextdata.SetTyped(env, KeyTurnAwaitingInteraction, awaiting)
+}
+
 // GetExecutionThoughtRecipeID returns the ID of the thought recipe being executed, if any.
 func GetExecutionThoughtRecipeID(env *contextdata.Envelope) string {
 	v, _ := contextdata.GetTyped[string](env, KeyExecutionThoughtRecipe)

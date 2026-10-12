@@ -95,7 +95,7 @@ func newRootCmd() *cobra.Command {
 	root.SetVersionTemplate(fmt.Sprintf("%s %s (commit %s, built %s)\n", root.Name(), version, commit, date))
 	root.PersistentFlags().StringVar(&cfg.Workspace, "workspace", cfg.Workspace, "Workspace directory")
 	root.PersistentFlags().StringVar(&cfg.InferenceEndpoint, "inference-endpoint", cfg.InferenceEndpoint, "Inference backend endpoint URL")
-	root.PersistentFlags().StringVar(&cfg.InferenceModel, "inference-model", cfg.InferenceModel, "Inference backend model name")
+	root.PersistentFlags().StringVar(&cfg.InferenceModel, "inference-model", cfg.InferenceModel, "Inference backend model name (backend default; the workspace model config governs agent turns)")
 	root.PersistentFlags().StringVar(&cfg.InferenceProvider, "inference-provider", cfg.InferenceProvider, "Inference backend provider (ollama, lmstudio, offline)")
 	root.PersistentFlags().Bool("offline", false, "Use offline backend (sugar for --inference-provider offline)")
 	root.PersistentFlags().StringVar(&cfg.SandboxBackend, "sandbox-backend", cfg.SandboxBackend, "Sandbox backend to use (gvisor or docker)")

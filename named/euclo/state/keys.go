@@ -127,6 +127,7 @@ const (
 	KeyInteractionClarificationFrame = euclokeys.KeyInteractionClarificationFrame
 	KeyInteractionResumeNodeID       = euclokeys.KeyInteractionResumeNodeID
 	KeyInteractionPause              = euclokeys.KeyInteractionPause
+	KeyTurnAwaitingInteraction       = euclokeys.KeyTurnAwaitingInteraction
 )
 
 // Ask / HITL prompt keys — written by the clarification flow.

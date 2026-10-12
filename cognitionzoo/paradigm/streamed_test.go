@@ -2,13 +2,11 @@ package paradigm
 
 import (
 	"context"
-	"errors"
 	"strings"
 	"sync"
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/context/contextdata"
-	"codeburg.org/lexbit/relurpify/context/contextstream"
 	"codeburg.org/lexbit/relurpify/telemetry"
 )
 
@@ -76,7 +74,10 @@ func TestStreamedSectionTelemetry(t *testing.T) {
 		t.Fatalf("inject_skipped events = %d, want 1", got)
 	}
 
-	// Inconsistent slice → render_error and a failed node (D-10).
+	// Inconsistent slice → render_error recorded, then degraded to zero
+	// prompt bytes: the slice is an advisory section and an estimate
+	// bookkeeping mismatch must not abort a turn that may already have
+	// done its work (content corruption — a bodyless chunk — still fails).
 	broken := contextdata.NewEnvelope("t", "s")
 	broken.SetStreamedSlice(&contextdata.StreamedSlice{
 		RequestID:   "req-broken",
@@ -87,13 +88,16 @@ func TestStreamedSectionTelemetry(t *testing.T) {
 		},
 	})
 	section, err = StreamedSection(ctx, broken, "react")
-	if !errors.Is(err, contextstream.ErrSliceTokenMismatch) {
-		t.Fatalf("err = %v, want ErrSliceTokenMismatch", err)
+	if err != nil {
+		t.Fatalf("err = %v, want nil (accounting mismatch degrades)", err)
 	}
 	if section != "" {
-		t.Fatal("failed render must not return a partial section")
+		t.Fatal("degraded render must not return a partial section")
 	}
 	if got := sink.count(telemetry.EventContextStreamRenderError); got != 1 {
 		t.Fatalf("render_error events = %d, want 1", got)
+	}
+	if got := sink.count(telemetry.EventContextStreamInjectSkipped); got != 2 {
+		t.Fatalf("inject_skipped events = %d, want 2 (empty_slice + token_accounting_mismatch)", got)
 	}
 }

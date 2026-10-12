@@ -57,10 +57,29 @@ func (c *stepCore) buildTask(ctx context.Context, env *contextdata.Envelope) (*e
 		if c.deps.PromptRegistry == nil {
 			return nil, fmt.Errorf("thoughtrecipe step %q: prompt_id requires a registry", c.step.ID)
 		}
-		var err error
-		instruction, err = c.resolveFromRegistry(ctx, env)
-		if err != nil {
-			return nil, err
+		if c.step.Kind == StepKindAsk {
+			// Ask frames speak to a human: the bound prompt resolves into
+			// the instruction here, once.
+			rctx, err := c.buildRuntimeContext(ctx, env)
+			if err != nil {
+				return nil, err
+			}
+			resolved, err := c.deps.PromptRegistry.Resolve(c.step.PromptID, rctx)
+			if err != nil {
+				return nil, err
+			}
+			instruction = resolved
+		} else {
+			// A prompt-bound run step renders exactly once, at the
+			// paradigm's user-prompt seam: the task carries the registry
+			// reference (Context["prompt_id"]) and the user's request as
+			// the instruction, and react resolves {instruction} from it.
+			// Pre-rendering the prompt here would flow the rendered text
+			// back through that seam as the instruction — a double render
+			// in which the user's request never reaches the model.
+			if request, ok := data["task.instruction"].(string); ok {
+				instruction = request
+			}
 		}
 	}
 

@@ -18,6 +18,3 @@ run upgrader:
   goal "Locate the dependency manifest, apply the requested upgrade, and run the test suite to verify it."
   capture result -> state.upgrade
 
-route:
-  otherwise:
-    do relurpic:test_run on state.upgrade

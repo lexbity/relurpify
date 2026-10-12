@@ -52,17 +52,13 @@ func needsClarificationRoute(env *contextdata.Envelope) bool {
 			}
 		}
 	}
-	if evidence, ok := euclostate.GetIntentEvidence(env); ok && evidence != nil {
-		if evidence.RequiresClarification || len(evidence.MissingFields) > 0 {
-			return true
-		}
-	}
-	if interpretation, ok := euclostate.GetIntentInterpretation(env); ok && interpretation != nil {
-		if len(interpretation.MissingInfo) > 0 {
-			return true
-		}
-	}
-	return false
+	// Ambiguity is the clarification trigger: a classification with real
+	// signals that remains ambiguous (multi-match, low-confidence tie).
+	// Evidence incompleteness — no explicit file, action verb, or scope —
+	// is recipe context, not a reason to stop the turn: plain instructions
+	// like "build a tetris clone" or "fix the failing test" name no file
+	// and must still route.
+	return classificationRequiresClarification(env)
 }
 
 func registerClarificationCapability(ctx context.Context, reg *registry.CapabilityRegistry, recipes *thoughtrecipepkg.ThoughtRecipeRegistry) error {
@@ -147,6 +143,11 @@ func (h *clarificationCapabilityHandler) Invoke(ctx context.Context, st ports.St
 				env.SetWorkingValueWithClass(euclostate.KeyInteractionClarificationFrame, frame, contextdata.MemoryClassTask)
 				if interactionFrame := frame.ToInteractionFrame(); interactionFrame != nil {
 					_ = interaction.EmitFrame(ctx, interactionFrame, env, telemetry.TelemetryFromContext(ctx))
+					// The turn ends on a live frame: the graph finished,
+					// the clarification did not. The outcome is
+					// awaiting_interaction until the answer resolves (and
+					// clears) this flag.
+					euclostate.SetTurnAwaitingInteraction(env, true)
 				}
 			}
 		}
@@ -220,6 +221,11 @@ func (h *clarificationCapabilityHandler) Invoke(ctx context.Context, st ports.St
 				env.SetWorkingValueWithClass(euclostate.KeyInteractionClarificationFrame, frame, contextdata.MemoryClassTask)
 				if interactionFrame := frame.ToInteractionFrame(); interactionFrame != nil {
 					_ = interaction.EmitFrame(ctx, interactionFrame, env, telemetry.TelemetryFromContext(ctx))
+					// The turn ends on a live frame: the graph finished,
+					// the clarification did not. The outcome is
+					// awaiting_interaction until the answer resolves (and
+					// clears) this flag.
+					euclostate.SetTurnAwaitingInteraction(env, true)
 				}
 			}
 		}

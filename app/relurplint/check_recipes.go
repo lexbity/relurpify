@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"codeburg.org/lexbit/relurpify/cognitionzoo/paradigm"
+	"codeburg.org/lexbit/relurpify/named/euclo/families"
 	thoughtrecipe "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
 )
 
@@ -115,6 +117,47 @@ func validateRecipe(workspace, path, src string) []Diagnostic {
 		})
 	}
 
+	diags = append(diags, familyVocabularyDiags(workspace, rel, plan)...)
+
+	return diags
+}
+
+// familyVocabularyDiags warns when a recipe declares a family the selector
+// can never see: natural-language selection scores candidates against the
+// built-in keyword families plus the workspace's families.yaml keys (the
+// sanctioned vocabulary expansion). A family outside both means the recipe
+// is reachable only by explicit pinning — an authoring-time fact, not a
+// runtime surprise.
+func familyVocabularyDiags(workspace, rel string, plan *thoughtrecipe.ExecutionPlan) []Diagnostic {
+	declared := plan.ThoughtRecipe.Metadata.Families
+	if len(declared) == 0 {
+		return nil
+	}
+	known := map[string]bool{}
+	registry := families.NewRegistry()
+	if err := families.RegisterBuiltins(registry); err == nil {
+		for _, family := range registry.All() {
+			known[family.ID] = true
+		}
+	}
+	handoffs, err := thoughtrecipe.LoadHandoffsFile(filepath.Join(workspace, thoughtrecipe.ThoughtRecipeSourceRoot))
+	if err == nil {
+		for id := range handoffs {
+			known[strings.TrimSpace(id)] = true
+		}
+	}
+	var diags []Diagnostic
+	for _, family := range declared {
+		if !known[strings.TrimSpace(family)] {
+			diags = append(diags, Diagnostic{
+				Check:    "recipes",
+				Code:     "recipes.family_vocabulary",
+				Severity: SeverityWarning,
+				Loc:      SourceLoc{File: rel},
+				Message: fmt.Sprintf("family %q is outside the selection vocabulary (built-in families and families.yaml keys); natural-language selection will never pick this recipe — add the family to families.yaml or pin the recipe explicitly", family),
+			})
+		}
+	}
 	return diags
 }
 

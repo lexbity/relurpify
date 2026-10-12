@@ -2,6 +2,7 @@ package reporting
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"codeburg.org/lexbit/relurpify/context/contextdata"
@@ -174,6 +175,23 @@ func (n *TelemetryNode) Execute(ctx context.Context, env *contextdata.Envelope) 
 	}
 
 	outcome := ClassifyOutcome(completed, errorCount, blocked)
+	// Honest reclassification of the two coarse edges ClassifyOutcome
+	// cannot see from its inputs: a turn that ended on a live interaction
+	// frame is neither success nor failure, and an incomplete run without
+	// context cancellation is a failure, not a user cancellation.
+	switch {
+	case outcome.Category == OutcomeCategoryBlocked:
+		// policy-blocked keeps its category and reason
+	case state.GetTurnAwaitingInteraction(env):
+		outcome.Category = OutcomeCategoryAwaitingInteraction
+		outcome.Reason = "turn awaiting interaction frame resolution"
+	case !completed && ctx.Err() == nil:
+		outcome.Category = OutcomeCategoryFailure
+		outcome.Reason = "execution failed"
+		if cause := latestStepFailureMessage(env); cause != "" {
+			outcome.Reason = "execution failed: " + cause
+		}
+	}
 	state.SetOutcomeCategory(env, string(outcome.Category))
 	contextdata.SetTyped(env, "euclo.outcome.reason", outcome.Reason)
 	contextdata.SetTyped(env, "euclo.outcome.completed", outcome.Completed)
@@ -468,4 +486,17 @@ func emitRouteEvent(ctx context.Context, eventType EventType, taskID, sessionID 
 	}
 	telemetry.StampCorrelation(ctx, &ev)
 	sink.Emit(ev)
+}
+
+// latestStepFailureMessage returns the most recent step failure's message —
+// the honest cause for a failed execution, surfaced in the outcome reason
+// instead of a bare "failed".
+func latestStepFailureMessage(env *contextdata.Envelope) string {
+	failures := state.GetStepFailures(env)
+	for i := len(failures) - 1; i >= 0; i-- {
+		if failures[i] != nil && strings.TrimSpace(failures[i].Message) != "" {
+			return strings.TrimSpace(failures[i].Message)
+		}
+	}
+	return ""
 }

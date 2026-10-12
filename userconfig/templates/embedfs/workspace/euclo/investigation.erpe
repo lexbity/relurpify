@@ -17,6 +17,3 @@ run investigator:
   goal "Investigate the reported question: gather evidence, trace causes, and record findings."
   capture result -> state.findings
 
-route:
-  otherwise:
-    do relurpic:ast_query on state.findings

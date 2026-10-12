@@ -50,6 +50,11 @@ type LLMOptions struct {
 // LLMResponse is the result of a model invocation.
 type LLMResponse struct {
 	Text         string
+	// Thinking carries the reasoning-channel output of thinking models
+	// (ollama message.thinking). A turn may spend its whole response there
+	// and stop before emitting content — the reasoning is first-class
+	// material for the consumer, never waste.
+	Thinking     string
 	FinishReason string
 	Usage        TokenUsage
 	ToolCalls    []ToolCall

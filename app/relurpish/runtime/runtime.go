@@ -580,6 +580,16 @@ func buildRuntime(ctx context.Context, cfg Config, secrets config.Secrets) (*Run
 	}
 
 	rt.setAgent(agent)
+	// Initialize eagerly: the thoughtrecipe registry loads here, so
+	// selection surfaces (/recipe listing, pinning) and the first turn see
+	// the same registry, and an invalid recipe file degrades the boot
+	// loudly (D-8) instead of surfacing at dispatch on turn one. Execute
+	// keeps its idempotent per-turn Initialize for agents constructed
+	// outside this path (agent switching re-initializes too).
+	if err := agent.Initialize(&execution.Config{Workspace: cfg.Workspace}); err != nil {
+		_ = rt.Close(ctx)
+		return nil, fmt.Errorf("initialize agent: %w", err)
+	}
 	emitAgentStartupEvent(ctx, env.EventLog, "local", registration.ID, cfg.AgentLabel(), agent)
 	emitContractResolvedEvent(ctx, env.EventLog, "local", registration.ID, cfg.AgentLabel(), docSnapshot)
 	// S9 dual-path bootstrap: when the runner section is enabled, supervise
@@ -878,6 +888,11 @@ func (r *Runtime) applyResolvedAgentState(name string, effectiveContract *config
 	r.Tools.UseAgentSpec(r.Workspace.Registration.ID, agentSpecCap)
 	r.Workspace.Registration.Policy = nil
 	r.setAgent(agent)
+	// Eager initialize: same contract as boot (recipe registry ready for
+	// selection surfaces before the first turn on the new agent).
+	if err := agent.Initialize(&execution.Config{Workspace: r.Config.Workspace}); err != nil {
+		return fmt.Errorf("initialize agent %q: %w", name, err)
+	}
 	r.Workspace.AgentSpec = agentSpecCap
 	r.Workspace.EffectiveContract = effectiveContract
 	r.Workspace.CompiledPolicy = compiledPolicy
@@ -1404,6 +1419,9 @@ func (r *Runtime) ResolveInteractionFrame(ctx context.Context, taskID, frameID, 
 		extra["freetext"] = strings.TrimSpace(freetext)
 	}
 	frame.SetResponse(answer, extra, "relurpish", time.Now().UTC())
+	// The frame is answered: the awaiting-interaction outcome no longer
+	// applies to this envelope (the resume below starts from a clean flag).
+	euclostate.SetTurnAwaitingInteraction(env, false)
 	if err := r.persistInteractionResolution(ctx, env, frame); err != nil {
 		return err
 	}

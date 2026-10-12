@@ -4,6 +4,11 @@ tool_calling:
   intent: native
   max_concurrent_tools: 2
   double_encode_args: false
+# gemma4 is a thinking model: decisions may arrive as prose, fenced JSON, or
+# a thinking-only completion. Malformed output is repaired with a bounded
+# model call (heuristic-only cannot recover an empty or fenced response).
+repair:
+  strategy: llm
 context:
   max_tokens: 8192
   response_reserve_tokens: 512

@@ -18,6 +18,3 @@ run repairer:
   goal """Find the failing test, repair the underlying cause, and re-run the test suite to verify. The user request is: {{ index . "task.instruction" }}"""
   capture result -> state.repair
 
-route:
-  otherwise:
-    do relurpic:test_run on state.repair

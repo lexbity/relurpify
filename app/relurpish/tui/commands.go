@@ -1100,22 +1100,33 @@ func rootHandleRecipe(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 			return m, nil
 		}
 		recipes := m.runtime.RegisteredRecipes()
-		if len(recipes) == 0 {
+		warnings := m.runtime.RecipeLoadWarnings()
+		if len(recipes) == 0 && len(warnings) == 0 {
 			m.addSystemMessage("No recipes registered in this workspace.")
 			return m, nil
 		}
 		var b strings.Builder
-		b.WriteString("Registered recipes:")
-		for _, r := range recipes {
-			b.WriteString("\n  " + r.ID)
-			if len(r.Families) > 0 {
-				b.WriteString("  [" + strings.Join(r.Families, ",") + "]")
+		if len(recipes) > 0 {
+			b.WriteString("Registered recipes:")
+			for _, r := range recipes {
+				b.WriteString("\n  " + r.ID)
+				if len(r.Families) > 0 {
+					b.WriteString("  [" + strings.Join(r.Families, ",") + "]")
+				}
+				if r.Description != "" {
+					b.WriteString("  — " + r.Description)
+				}
 			}
-			if r.Description != "" {
-				b.WriteString("  — " + r.Description)
-			}
+			b.WriteString("\nPin one with /recipe <id>; clear with /recipe clear")
+		} else {
+			b.WriteString("No recipes registered in this workspace.")
 		}
-		b.WriteString("\nPin one with /recipe <id>; clear with /recipe clear")
+		for _, w := range warnings {
+			b.WriteString("\nSkipped: " + w)
+		}
+		if len(warnings) > 0 {
+			b.WriteString("\nRecipes load once at boot: restart relurpish to pick up new or fixed recipe files.")
+		}
 		if m.sharedSess != nil && m.sharedSess.PinnedRecipe != "" {
 			b.WriteString("\nPinned: " + m.sharedSess.PinnedRecipe)
 		}
@@ -1133,6 +1144,34 @@ func rootHandleRecipe(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 	if m.sharedSess == nil {
 		m.addSystemMessage("No active session: cannot pin a recipe")
 		return m, nil
+	}
+	// Validate the pin against the loaded registry: an unknown id would
+	// otherwise fail the whole turn at dispatch. Recipes load once per
+	// boot, so a file authored after startup is not pinnable until restart.
+	if m.runtime != nil {
+		registered := false
+		for _, r := range m.runtime.RegisteredRecipes() {
+			if r.ID == choice {
+				registered = true
+				break
+			}
+		}
+		if !registered {
+			var b strings.Builder
+			b.WriteString("Cannot pin " + choice + ": not registered in this workspace.")
+			b.WriteString("\nRecipes load once at boot — restart relurpish to pick up new recipe files.")
+			if recipes := m.runtime.RegisteredRecipes(); len(recipes) > 0 {
+				b.WriteString("\nRegistered:")
+				for _, r := range recipes {
+					b.WriteString("\n  " + r.ID)
+				}
+			}
+			for _, w := range m.runtime.RecipeLoadWarnings() {
+				b.WriteString("\nSkipped: " + w)
+			}
+			m.addSystemMessage(b.String())
+			return m, nil
+		}
 	}
 	m.sharedSess.PinnedRecipe = choice
 	m.addSystemMessage("Pinned recipe for this session: " + choice + " (dispatch runs exactly this recipe; /recipe clear to unpin)")

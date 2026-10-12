@@ -9,6 +9,10 @@ const (
 	OutcomeCategoryPartial   OutcomeCategory = "partial"
 	OutcomeCategoryBlocked   OutcomeCategory = "blocked"
 	OutcomeCategoryCancelled OutcomeCategory = "cancelled"
+	// OutcomeCategoryAwaitingInteraction: the execution graph finished but
+	// the turn ended on a live interaction frame. Neither success nor
+	// failure — the turn's work continues when the frame is answered.
+	OutcomeCategoryAwaitingInteraction OutcomeCategory = "awaiting_interaction"
 )
 
 // Outcome represents the final outcome of task execution.

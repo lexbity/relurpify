@@ -12,16 +12,9 @@ input prompt: user.request
 
 agent author uses react
 
-route:
-  when missing state.summary:
-    do relurpic:ast_query on input.workspace
-  otherwise:
-    run author:
-      may invoke ["file_read", "grep", "test_run", "file_write"]
-      from state.summary
-      goal "Author tests for the anchored symbol or file, then run them to confirm they pass."
-      capture result -> state.tests
+run author:
+  may invoke ["file_read", "grep", "test_run", "file_write"]
+  from input.prompt
+  goal """Author tests for the requested symbol or file, then run them to confirm they pass. The user request is: {{ index . "task.instruction" }}"""
+  capture result -> state.tests
 
-route:
-  otherwise:
-    do relurpic:test_run on state.tests

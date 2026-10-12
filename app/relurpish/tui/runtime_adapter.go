@@ -78,6 +78,9 @@ type RuntimeAdapter interface {
 	// families) for user-facing selection surfaces. Nil result: the runtime
 	// is degraded or the active agent is not euclo.
 	RegisteredRecipes() []RecipeSummary
+	// RecipeLoadWarnings surfaces the euclo loader's non-fatal diagnostics —
+	// files under relurpify_cfg/euclo that were skipped during the load.
+	RecipeLoadWarnings() []string
 	// ProbeBackendHealth probes the model backend now (bounded: 2 s) and
 	// returns its state string, caching the result for SessionInfo. It is
 	// called off the UI thread — boot never probes synchronously.
@@ -247,6 +250,26 @@ func (r *runtimeAdapter) RegisteredRecipes() []RecipeSummary {
 	out := make([]RecipeSummary, 0, len(summaries))
 	for _, s := range summaries {
 		out = append(out, RecipeSummary{ID: s.ID, Description: s.Description, Families: s.Families})
+	}
+	return out
+}
+
+// RecipeLoadWarnings surfaces the euclo loader's non-fatal diagnostics —
+// files under relurpify_cfg/euclo that were skipped, so /recipe can explain
+// a file on disk with no registry entry.
+func (r *runtimeAdapter) RecipeLoadWarnings() []string {
+	if r == nil || r.currentRuntime() == nil {
+		return nil
+	}
+	executor := r.currentRuntime().ActiveAgent()
+	eucloAgent, ok := executor.(*euclo.Agent)
+	if !ok {
+		return nil
+	}
+	warnings := eucloAgent.RecipeLoadWarnings()
+	out := make([]string, 0, len(warnings))
+	for _, w := range warnings {
+		out = append(out, fmt.Sprintf("%s: %s", w.Path, w.Message))
 	}
 	return out
 }

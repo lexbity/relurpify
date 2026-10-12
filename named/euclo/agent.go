@@ -35,6 +35,11 @@ type Agent struct {
 	deps        *paradigm.Deps
 	config      EucloConfig
 	initialized bool
+	// recipeLoadWarnings carries the loader's non-fatal diagnostics from the
+	// most recent Initialize (skipped directories, duplicate names, ignored
+	// extensions) so selection surfaces can explain why a file on disk has
+	// no registry entry without re-scanning the workspace.
+	recipeLoadWarnings []thoughtrecipe.LoadWarning
 
 	thoughtrecipeRegistry *thoughtrecipe.ThoughtRecipeRegistry
 
@@ -160,6 +165,10 @@ func (a *Agent) Initialize(config *execution.Config) error {
 		a.thoughtrecipeRegistry = loaded.Registry
 	} else {
 		a.thoughtrecipeRegistry = thoughtrecipe.NewThoughtRecipeRegistry()
+	}
+	a.recipeLoadWarnings = nil
+	if loaded != nil {
+		a.recipeLoadWarnings = append([]thoughtrecipe.LoadWarning(nil), loaded.Warnings...)
 	}
 
 	// FR-24: nil StateReground is a declared cold-start mode. Emit exactly one
@@ -376,6 +385,16 @@ type RecipeSummary struct {
 	Description string
 	Families    []string
 	Keywords    []string
+}
+
+// RecipeLoadWarnings returns the loader's non-fatal diagnostics from this
+// agent's most recent Initialize — why a file under relurpify_cfg/euclo has
+// no registry entry (ignored directory or extension, duplicate name).
+func (a *Agent) RecipeLoadWarnings() []thoughtrecipe.LoadWarning {
+	if a == nil {
+		return nil
+	}
+	return a.recipeLoadWarnings
 }
 
 // RegisteredRecipes lists the recipes loaded into this agent's registry at

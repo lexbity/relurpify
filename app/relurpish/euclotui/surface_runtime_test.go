@@ -43,6 +43,8 @@ func (s *stubRuntimeAdapter) SwitchAgent(name string) error { return nil }
 func (s *stubRuntimeAdapter) SessionInfo() tui.SessionInfo { return tui.SessionInfo{} }
 
 func (s *stubRuntimeAdapter) RegisteredRecipes() []tui.RecipeSummary { return nil }
+
+func (s *stubRuntimeAdapter) RecipeLoadWarnings() []string { return nil }
 func (s *stubRuntimeAdapter) ResolveContextFiles(ctx context.Context, files []string) tui.ContextFileResolution {
 	return tui.ContextFileResolution{Allowed: files}
 }

@@ -90,12 +90,18 @@ ask user:
 	deps := &paradigm.Deps{PromptRegistry: promptRegistry}
 	runNode := NewRunNode("review_flow.run", deps, plan.Steps[0])
 	runEnv := contextdata.NewEnvelope("task-review-flow", "")
+	// A prompt-bound run step carries the user's request as the task
+	// instruction; the bound prompt renders once at the react user-prompt
+	// seam (Context["prompt_id"] resolved with {instruction} bound to the
+	// request). Pre-rendering here produced a double render in which the
+	// user's request never reached the model.
+	runEnv.SetWorkingValueWithClass("task.instruction", "review the auth module", contextdata.MemoryClassTask)
 	runTask, err := runNode.buildTask(context.Background(), runEnv)
 	if err != nil {
 		t.Fatalf("buildTask(run): %v", err)
 	}
-	if runTask.Instruction != "Explore the codebase thoroughly." {
-		t.Fatalf("run instruction = %q, want resolved prompt text", runTask.Instruction)
+	if runTask.Instruction != "review the auth module" {
+		t.Fatalf("run instruction = %q, want the user request (single render at the user-prompt seam)", runTask.Instruction)
 	}
 	if got := runTask.Context["prompt_id"]; got != "named.euclo.code.explore" {
 		t.Fatalf("run prompt_id = %#v, want named.euclo.code.explore", got)

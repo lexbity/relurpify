@@ -32,7 +32,13 @@ func TestDryRunEndToEndTelemetryOrder(t *testing.T) {
 		telemetry.EventType("euclo.route.completed"),
 		telemetry.EventType("euclo.execution.complete"),
 	})
-	if got, _ := euclostate.GetOutcomeCategory(env); strings.TrimSpace(got) != "success" {
-		t.Fatal("expected success outcome")
+	// This composition arms neither workspace recipes nor the default
+	// fallback (no file tools), so the zero-signal instruction stops at the
+	// clarification last resort. The honest turn outcome is
+	// awaiting_interaction — the graph finished, the clarification did not.
+	if got, _ := euclostate.GetOutcomeCategory(env); strings.TrimSpace(got) != "awaiting_interaction" {
+		resolution, _ := euclostate.GetRouteResolution(env)
+		selection, _ := euclostate.GetRouteSelection(env)
+		t.Fatalf("expected awaiting_interaction outcome, got %q (resolution=%+v selection=%+v)", got, resolution, selection)
 	}
 }

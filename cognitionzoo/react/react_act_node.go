@@ -181,20 +181,24 @@ func (n *reactActNode) Execute(ctx context.Context, env *contextdata.Envelope) (
 	}
 	decision := val.(decisionPayload)
 	toolName := strings.TrimSpace(decision.Tool)
-	if decision.Complete || toolName == "" || strings.EqualFold(toolName, "none") {
+	// A completion claim naming a tool is contradictory — small models mark
+	// complete:true in the same breath as the write that does the work. The
+	// action wins: execute it and let the next decision complete the loop.
+	// Completion is honored only when there is genuinely nothing to execute.
+	if decision.Complete && (toolName == "" || strings.EqualFold(toolName, "none")) {
 		env.SetWorkingValueWithClass("react.last_tool_result", map[string]any{}, contextdata.MemoryClassTask)
 		result := &execution.Result{NodeID: n.id, Success: true}
 		env.SetWorkingValueWithClass("react.last_result", result, contextdata.MemoryClassTask)
 		return result, nil
 	}
+	if toolName == "" || strings.EqualFold(toolName, "none") {
+		env.SetWorkingValueWithClass("react.last_tool_result", map[string]any{}, contextdata.MemoryClassTask)
+		result := &execution.Result{NodeID: n.id, Success: true}
+		env.SetWorkingValueWithClass("react.last_result", result, contextdata.MemoryClassTask)
+		return result, nil
+	}
+	decision.Complete = false
 	if !n.capabilityAllowed(toolName, activeTools) || !n.agent.Tools.HasCapability(toolName) {
-		lower := strings.ToLower(toolName)
-		if lower == "" || strings.Contains(lower, "none") {
-			env.SetWorkingValueWithClass("react.last_tool_result", map[string]any{}, contextdata.MemoryClassTask)
-			result := &execution.Result{NodeID: n.id, Success: true}
-			env.SetWorkingValueWithClass("react.last_result", result, contextdata.MemoryClassTask)
-			return result, nil
-		}
 		// Feed error back to the LLM so it can retry with a valid tool name.
 		errMsg := fmt.Sprintf("tool %q does not exist. Only use tools from the available list.", toolName)
 		env.SetWorkingValueWithClass("react.last_tool_result", map[string]any{"error": errMsg}, contextdata.MemoryClassTask)
@@ -214,7 +218,10 @@ func (n *reactActNode) Execute(ctx context.Context, env *contextdata.Envelope) (
 	}
 	res, err := n.agent.Tools.InvokeCapability(ctx, env.State(), toolName, decision.Arguments)
 	if err != nil {
-		return nil, err
+		// Convert hard tool errors (schema validation, permission denial,
+		// path-escape) into soft ToolResult failures so the LLM can observe
+		// and recover — the same contract as the native tool-call path.
+		res = &ports.ToolResult{Success: false, Error: err.Error()}
 	}
 	call := model.ToolCall{
 		ID:   NewUUID(),

@@ -64,6 +64,7 @@ type ollamaToolCall struct {
 type ollamaMessage struct {
 	Role      string           `json:"role"`
 	Content   string           `json:"content"`
+	Thinking  string           `json:"thinking"`
 	ToolCalls []ollamaToolCall `json:"tool_calls"`
 }
 
@@ -510,6 +511,9 @@ func (c *Client) decodeLLMResponse(body io.Reader, promptTokens int) (*LLMRespon
 		Text:         cmp.Or(raw.Text, raw.Response),
 		FinishReason: raw.DoneReason,
 		Usage:        normalizeUsage(raw, promptTokens, cmp.Or(raw.Text, raw.Response)),
+	}
+	if raw.Message != nil {
+		resp.Thinking = raw.Message.Thinking
 	}
 	if resp.Text == "" && raw.Message != nil {
 		resp.Text = raw.Message.Content

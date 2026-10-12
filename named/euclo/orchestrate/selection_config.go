@@ -49,6 +49,12 @@ const (
 	// tier2ConfidenceFloor is the model confidence below which its answer is
 	// rejected and the deterministic winner stands.
 	tier2ConfidenceFloor = 0.5
+
+	// scoreClarification is the clarification route's candidate score: above
+	// every evidence-derived score so a genuinely ambiguous turn always
+	// stops for a human, but reached only through needsClarificationRoute
+	// (real signal ambiguity) or the no-fallback last resort in resolveRoute.
+	scoreClarification = 900
 )
 
 // decidedBy reason vocabulary recorded on RouteResult, DryRunReport, the
@@ -56,6 +62,7 @@ const (
 const (
 	decidedByExplicit        = "explicit"
 	decidedByDefaultRecipe   = "default_recipe"
+	decidedByClarification   = "clarification"
 	decidedByScore           = "lattice:score"
 	decidedByFamilyAffinity  = "lattice:family_affinity"
 	decidedByUserOverBuiltin = "lattice:user_over_builtin"

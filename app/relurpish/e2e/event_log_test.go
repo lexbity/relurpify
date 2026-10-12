@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/model"
+
 	relurpishruntime "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
 	"codeburg.org/lexbit/relurpify/execution"
 	tsevent "codeburg.org/lexbit/relurpify/telemetry/event"
@@ -22,15 +24,27 @@ func TestBootTurnEventLogReceivesCausalRecord(t *testing.T) {
 	workspace := t.TempDir()
 	testhelper.WriteCleanWorkspace(t, workspace, testhelper.WorkspaceOpts{
 		Provider: "offline",
+		SeedFiles: map[string]string{
+			"notes.txt": "causal record content\n",
+		},
 	})
 	testhelper.InitGitRepo(t, workspace)
 
 	eventsPath := filepath.Join(workspace, ".relurpify_state", "events.db")
 
+	scenario := &scenarioState{}
+	offline := &offlineScenarioModel{}
 	cfg := relurpishruntime.ConfigForWorkspace(relurpishruntime.DefaultConfig(), workspace)
 	cfg.InferenceProvider = "offline"
 	cfg.InferenceModel = "offline-synthetic"
 	cfg.InferenceNativeToolCalling = true
+	cfg.ModelFactoryWrapper = func(base model.ModelFactory) model.ModelFactory {
+		return func(tel model.EventSink, debug bool) model.LanguageModel {
+			offline.inner = base(tel, debug)
+			offline.scenario = func() string { return scenario.get() }
+			return offline
+		}
+	}
 
 	rt, err := relurpishruntime.New(context.Background(), cfg, config.Secrets{})
 	if err != nil {
@@ -39,9 +53,14 @@ func TestBootTurnEventLogReceivesCausalRecord(t *testing.T) {
 	cancelHITL := autoApproveHITL(t, rt)
 	defer cancelHITL()
 
+	// A real governed tool invocation is the causal record's source: the
+	// offline model reads a seeded file through the capability pipeline, so
+	// the framework log receives the policy decisions that mediation produced.
+	scenario.set("tool:file_read:notes.txt")
+
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	_, err = rt.SubmitTurn(ctx, "review", execution.TaskTypeAnalysis, nil, nil)
+	_, err = rt.SubmitTurn(ctx, "read notes.txt", execution.TaskTypeAnalysis, nil, nil)
 	if err != nil {
 		t.Fatalf("submit turn: %v", err)
 	}

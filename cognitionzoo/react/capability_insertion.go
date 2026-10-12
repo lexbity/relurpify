@@ -49,24 +49,30 @@ func visibleBlockSummary(envelope *capresult.CapabilityResultEnvelope) (string, 
 		if i >= len(envelope.BlockInsertions) {
 			break
 		}
-		switch envelope.BlockInsertions[i].Decision.Action {
-		case agentspec.InsertionActionDirect, agentspec.InsertionActionSummarized:
-		default:
-			continue
+		// Direct insertions carry the block verbatim — the trust-based
+		// decision already ruled the model may see it, and clipping here is
+		// how a directory listing shrank to its first three paths while the
+		// model flew blind ("I still need the file listing output").
+		// Summarized insertions keep a working budget: enough entries for
+		// the loop to act on, capped so one noisy tool cannot eat the
+		// context window.
+		budget := 220
+		if envelope.BlockInsertions[i].Decision.Action == agentspec.InsertionActionDirect {
+			budget = 0
 		}
 		switch typed := block.(type) {
 		case capresult.TextContentBlock:
-			text := trimToBudget(strings.TrimSpace(typed.Text), 220)
+			text := trimToBudget(strings.TrimSpace(typed.Text), budget)
 			if text != "" {
 				parts = append(parts, text)
 			}
 		case capresult.StructuredContentBlock:
-			text := trimToBudget(fmt.Sprint(typed.Data), 220)
+			text := trimToBudget(fmt.Sprint(typed.Data), budget)
 			if text != "" && text != "<nil>" {
 				parts = append(parts, text)
 			}
 		case capresult.ErrorContentBlock:
-			text := trimToBudget(strings.TrimSpace(typed.Message), 220)
+			text := trimToBudget(strings.TrimSpace(typed.Message), budget)
 			if text != "" {
 				parts = append(parts, text)
 			}
@@ -75,7 +81,7 @@ func visibleBlockSummary(envelope *capresult.CapabilityResultEnvelope) (string, 
 	if len(parts) == 0 {
 		return "", false
 	}
-	return strings.Join(parts, " "), true
+	return strings.Join(parts, "\n"), true
 }
 
 func metadataOnlyInsertionText(toolName string, envelope *capresult.CapabilityResultEnvelope) string {

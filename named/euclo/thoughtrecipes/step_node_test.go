@@ -260,6 +260,10 @@ func TestThoughtRecipeStepNodeBuildRuntimeContextIncludesStepContext(t *testing.
 func TestThoughtRecipeStepNodeUsesRegistryPromptID(t *testing.T) {
 	registry := prompttest.New().With("euclo.intent.clarify.question.v1", "resolved prompt text")
 	env := contextdata.NewEnvelope("task-1", "session-1")
+	// The prompt-bound step carries the user's request as the instruction;
+	// the bound prompt renders once at the paradigm's user-prompt seam
+	// (react resolves Context["prompt_id"] with {instruction} bound to it).
+	env.SetWorkingValueWithClass("task.instruction", "the user request", contextdata.MemoryClassTask)
 	step := ExecutionStep{
 		ID:       "clarify.step",
 		Kind:     StepKindRun,
@@ -273,8 +277,8 @@ func TestThoughtRecipeStepNodeUsesRegistryPromptID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("buildTask: %v", err)
 	}
-	if task.Instruction != "resolved prompt text" {
-		t.Fatalf("expected registry-backed prompt content, got %q", task.Instruction)
+	if task.Instruction != "the user request" {
+		t.Fatalf("expected the user request as instruction (single render at the user-prompt seam), got %q", task.Instruction)
 	}
 	if got := task.Context["prompt_id"]; got != "euclo.intent.clarify.question.v1" {
 		t.Fatalf("expected prompt_id in task context, got %#v", got)

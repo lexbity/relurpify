@@ -11,6 +11,7 @@ import (
 	"codeburg.org/lexbit/relurpify/model"
 	"codeburg.org/lexbit/relurpify/named/euclo/euclotypes"
 	"codeburg.org/lexbit/relurpify/named/euclo/families"
+	"codeburg.org/lexbit/relurpify/named/euclo/intake"
 	intentcontext "codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
 	"codeburg.org/lexbit/relurpify/named/euclo/reporting"
 	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
@@ -294,5 +295,32 @@ func hasIntentGrounding(env *contextdata.Envelope) bool {
 
 func classificationRequiresClarification(env *contextdata.Envelope) bool {
 	cls, ok := euclostate.GetIntentClassification(env)
-	return ok && cls != nil && cls.Ambiguous
+	if !ok || cls == nil {
+		return false
+	}
+	// A classification resting only on the default baseline matched nothing:
+	// there is no ambiguity to resolve, and the lattice's default-recipe
+	// fallback (D8) owns the turn — general tasks still run through a
+	// paradigm. Clarification is for genuine ambiguity: a classification
+	// with real signals that picked a family yet remains ambiguous
+	// (multi-match, low-confidence tie).
+	if classificationIsDefaultBaselineOnly(cls) {
+		return false
+	}
+	return cls.Ambiguous
+}
+
+// classificationIsDefaultBaselineOnly reports whether every signal behind
+// the classification is the injected default baseline (no keyword, hint, or
+// user signal matched).
+func classificationIsDefaultBaselineOnly(cls *intake.IntentClassification) bool {
+	if cls == nil || len(cls.Signals) == 0 {
+		return true
+	}
+	for _, signal := range cls.Signals {
+		if signal.Kind != intake.SignalKindDefault {
+			return false
+		}
+	}
+	return true
 }

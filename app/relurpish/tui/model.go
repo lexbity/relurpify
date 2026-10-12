@@ -670,6 +670,22 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 		}
+		// A pending decision notification (HITL approval, interaction
+		// frame) owns its decision keys before the input sees them:
+		// attention priority without a modal freeze. Keys the bar does
+		// not consume keep flowing to the rest of the UI. Enter and esc
+		// yield to a non-empty draft so composing and submitting a
+		// message is never stolen by a frame default, and modal
+		// overlays keep their existing precedence.
+		if m.notifBar != nil && m.notifBar.Active() && m.overlays.Len() == 0 && m.decisionNotifTakesKey(msg) {
+			nb, cmd := m.notifBar.Update(msg)
+			m.notifBar = nb
+			if cmd != nil {
+				m.syncCommandPalette()
+				m.syncOverlayStack()
+				return m, cmd
+			}
+		}
 		ownsInput := m.activeInput != nil
 		if m.activeInput != nil {
 			if cmd, handled := m.activeInput.HandleKey(msg); handled {
@@ -701,13 +717,8 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-		// Notification bar captures keys when active.
-		if m.notifBar.Active() {
-			nb, cmd := m.notifBar.Update(msg)
-			m.notifBar = nb
-			m.syncOverlayStack()
-			return m, cmd
-		}
+		// Notification bar decision keys were already given priority
+		// above; unmatched keys reach here with the bar still active.
 		if handled, cmd := m.routeFocusKey(msg); handled {
 			return m, cmd
 		}
@@ -1473,6 +1484,9 @@ func (m *RootModel) applyDoctorReport(report DoctorReport) {
 		}
 		m.setActiveTab(TabChat)
 		m.addSystemMessage("Doctor checks passed; startup checks are healthy")
+		if postures := doctorPostureSummary(report); postures != "" {
+			m.addSystemMessage(postures)
+		}
 		return
 	}
 	m.startupLocked = true
@@ -1720,4 +1734,57 @@ func (m RootModel) latestChanges() []FileChange {
 		}
 	}
 	return nil
+}
+
+// decisionNotifTakesKey reports whether the active decision notification
+// should see this key before the input does. Enter and esc yield to a
+// non-empty input draft: a frame's default slot is chosen with its slot
+// number or an empty-draft enter, never by consuming a composed submit.
+func (m RootModel) decisionNotifTakesKey(msg tea.KeyMsg) bool {
+	switch msg.String() {
+	case "enter", "esc":
+		return m.inputBar == nil || strings.TrimSpace(m.inputBar.Value()) == ""
+	default:
+		return true
+	}
+}
+
+// doctorPostureSummary condenses the doctor's posture rows into one boot
+// message: who answers approvals and who disambiguates intent. Deterministic
+// selection means clarification frames are always human-answered — an
+// operator reading the chat should not have to discover that from a timeout.
+func doctorPostureSummary(report DoctorReport) string {
+	var hitl, posture string
+	for _, dep := range report.Dependencies {
+		switch dep.Name {
+		case "hitl_mode":
+			hitl = firstPostureClause(dep.Details)
+		case "selection_posture":
+			posture = firstPostureClause(dep.Details)
+		}
+	}
+	if hitl == "" && posture == "" {
+		return ""
+	}
+	summary := "Postures —"
+	if hitl != "" {
+		summary += " approvals: " + hitl + ";"
+	}
+	if posture != "" {
+		summary += " intent selection: " + posture
+	}
+	return strings.TrimRight(summary, "; ")
+}
+
+// firstPostureClause takes the detail text's lead clause (before the first
+// colon or parenthesis) as the compact posture label.
+func firstPostureClause(details string) string {
+	detail := strings.TrimSpace(details)
+	if detail == "" {
+		return ""
+	}
+	if idx := strings.IndexAny(detail, ":("); idx >= 0 {
+		detail = strings.TrimSpace(detail[:idx])
+	}
+	return detail
 }

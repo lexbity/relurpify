@@ -509,10 +509,17 @@ func (p *ChatPane) work(run *chatRun, metadata map[string]any) {
 		run.setResult(result)
 		// A completed pipeline is not a successful turn: the result carries
 		// the classified outcome, and a non-success outcome is surfaced as a
-		// failed run naming its reason (never a silent "success").
+		// failed run naming its reason (never a silent "success") — except
+		// awaiting_interaction: the graph finished, the clarification frame
+		// in the notification bar awaits the answer. That is a pause, not
+		// an error.
 		if result != nil && !result.Success {
-			outcome = tui.RunFailed
-			err = outcomeFailureError(result)
+			if categoryOf(result) == "awaiting_interaction" {
+				p.addSystemMessage("Waiting for your answer — choose a slot in the banner above (number, or enter on an empty input).")
+			} else {
+				outcome = tui.RunFailed
+				err = outcomeFailureError(result)
+			}
 		}
 		if summary := summarizeResult(result); summary != "" {
 			tokens = tui.EstimateTokens(summary)
@@ -1495,4 +1502,12 @@ func (p *ChatPane) takeFinishedRun(id string) (*chatRun, bool) {
 		}
 	}
 	return nil, false
+}
+
+// categoryOf reads the classified outcome category from a turn result's
+// payload fields.
+func categoryOf(res *execution.Result) string {
+	fields := execution.ResultFields(res.Data)
+	category, _ := fields["outcome_category"].(string)
+	return strings.TrimSpace(category)
 }

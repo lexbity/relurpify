@@ -85,9 +85,16 @@ func appendAssistantMessage(state *contextdata.Envelope, resp *model.LLMResponse
 	if len(messages) == 0 {
 		return
 	}
+	// A thinking-only turn has empty content: keep the reasoning in the
+	// transcript (prefixed) so the continuation iteration sees what the
+	// model concluded, instead of an empty assistant turn.
+	content := resp.Text
+	if strings.TrimSpace(content) == "" && strings.TrimSpace(resp.Thinking) != "" {
+		content = "[reasoning] " + strings.TrimSpace(resp.Thinking)
+	}
 	messages = append(messages, model.Message{
 		Role:      "assistant",
-		Content:   resp.Text,
+		Content:   content,
 		ToolCalls: append([]model.ToolCall{}, resp.ToolCalls...),
 	})
 	saveReactMessages(state, messages)

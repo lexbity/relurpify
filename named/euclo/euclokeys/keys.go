@@ -130,6 +130,10 @@ const (
 	KeyInteractionClarificationFrame = "euclo.interaction.clarification_frame"
 	KeyInteractionResumeNodeID       = "euclo.interaction.resume_node_id"
 	KeyInteractionPause              = "euclo.interaction.pause"
+	// KeyTurnAwaitingInteraction marks a turn that ended while an emitted
+	// interaction frame awaited resolution: the execution graph finished,
+	// the turn's work did not — the outcome is neither success nor failure.
+	KeyTurnAwaitingInteraction = "euclo.turn.awaiting_interaction"
 )
 
 // Ask / HITL prompt keys.

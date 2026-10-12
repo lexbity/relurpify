@@ -2,6 +2,7 @@ package paradigm
 
 import (
 	"context"
+	"errors"
 
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/context/contextstream"
@@ -22,6 +23,18 @@ func StreamedSection(ctx context.Context, env *contextdata.Envelope, paradigmNam
 	section, stats, err := contextstream.RenderStreamedSection(env)
 	if err != nil {
 		contextstream.EmitRenderError(ctx, err)
+		// The streamed slice is an advisory prompt section. Content
+		// corruption (a chunk without a body) must fail the node — wrong
+		// bytes in a prompt are never acceptable. An accounting mismatch,
+		// though, is estimate bookkeeping drifting from the compiler's
+		// counter: aborting a turn that may already have done its work over
+		// an estimate delta fails the user's task to defend a rounding
+		// rule. Degrade to zero prompt bytes (D-3) and let the mismatch
+		// telemetry carry it.
+		if errors.Is(err, contextstream.ErrSliceTokenMismatch) {
+			contextstream.EmitInjectSkipped(ctx, "token_accounting_mismatch", paradigmName)
+			return "", nil
+		}
 		return "", err
 	}
 	if section == "" {

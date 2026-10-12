@@ -16,14 +16,13 @@ import (
 	"codeburg.org/lexbit/relurpify/model"
 )
 
-// decisionMaxTokens is the completion budget for one react decision. Thinking
-// models spend this budget on reasoning before emitting the decision JSON —
-// 512 truncated decisions mid-JSON (finish_reason=length), which the loop
-// then misread as completions.
-// 4096: thinking models spend the completion budget on reasoning before the
-// JSON decision; 2048 truncated them mid-thought (finish_reason=length) on
-// the first iteration of every nontrivial repair.
-const decisionMaxTokens = 4096
+// The react decision sends no completion budget (num_predict). A hard cap
+// here is how a thinking model died mid-decision — finish_reason "length"
+// with the whole budget spent in the thinking channel and zero content
+// produced (live demo turn, 2026-10-12). Every earlier cap value (512,
+// 2048, 4096) truncated decisions mid-thought or mid-JSON the same way.
+// Output length is the model's to finish; input size is the context
+// compiler's budget to hold.
 
 type reactThinkNode struct {
 	id    string
@@ -45,7 +44,6 @@ func (n *reactThinkNode) Type() agentgraph.NodeType { return agentgraph.NodeType
 // react.tool_calls reset must therefore never be extended to touch that slot.
 func (n *reactThinkNode) Execute(ctx context.Context, env *contextdata.Envelope) (*execution.Result, error) {
 	env.SetWorkingValueWithClass("react.execution_phase", "planning", contextdata.MemoryClassTask)
-	println("ZZDEBUG think enter")
 	if summary := strings.TrimSpace(envGetString(env, "react.verification_latched_summary")); summary != "" {
 		decision := decisionPayload{
 			Thought:   "verification already succeeded",
@@ -79,7 +77,6 @@ func (n *reactThinkNode) Execute(ctx context.Context, env *contextdata.Envelope)
 		resp, err = n.agent.Model.ChatWithTools(ctx, messages, ports.LLMToolSpecsFromTools(tools), &model.LLMOptions{
 			Model:          n.agent.Config.Model,
 			Temperature:    0.1,
-			MaxTokens:      decisionMaxTokens,
 			StreamCallback: streamCB,
 		})
 		if err == nil {
@@ -93,7 +90,6 @@ func (n *reactThinkNode) Execute(ctx context.Context, env *contextdata.Envelope)
 		resp, err = n.agent.Model.Generate(ctx, prompt, &model.LLMOptions{
 			Model:          n.agent.Config.Model,
 			Temperature:    0.1,
-			MaxTokens:      decisionMaxTokens,
 			StreamCallback: streamCB,
 		})
 	}
@@ -151,10 +147,6 @@ func (n *reactThinkNode) normalizeDecision(ctx context.Context, env *contextdata
 			}, toolCalls, nil
 		}
 	}
-	parsed, err := parseDecision(resp.Text)
-	if err == nil && (parsed.Tool != "" || parsed.Complete) {
-		return parsed, nil, nil
-	}
 	// An unparseable decision is never a completion. Synthesizing
 	// Complete:true here is how a length-truncated decision (thinking models
 	// consume the completion budget before the JSON) ended a repair step as
@@ -164,9 +156,41 @@ func (n *reactThinkNode) normalizeDecision(ctx context.Context, env *contextdata
 	if pm, ok := n.agent.Model.(model.ProfiledModel); ok {
 		repairStrategy = pm.ToolRepairStrategy()
 	}
+	parsed, err := parseDecision(resp.Text)
+	if err == nil && (parsed.Tool != "" || parsed.Complete) {
+		return parsed, nil, nil
+	}
+	// Thinking-model support: a turn may spend its entire response in the
+	// reasoning channel and stop before emitting the decision JSON in
+	// content. The reasoning is first-class material — parse the decision
+	// out of it, or repair from it (it carries the model's full intent);
+	// never discard it as an empty response.
+	thinking := strings.TrimSpace(resp.Thinking)
+	if thinking != "" && strings.TrimSpace(resp.Text) == "" {
+		if parsed, err := parseDecision(thinking); err == nil && (parsed.Tool != "" || parsed.Complete) {
+			parsed.Thought = trimToBudget(thinking, 220)
+			return parsed, nil, nil
+		}
+		if repairStrategy == "llm" {
+			if repaired, repairErr := n.repairDecision(ctx, env, tools, thinking, useToolCalling); repairErr == nil && ExtractJSON(repaired) != "{}" {
+				if parsed, err := parseDecision(repaired); err == nil && (parsed.Tool != "" || parsed.Complete) {
+					if parsed.Tool != "" {
+						return parsed, []model.ToolCall{{Name: parsed.Tool, Args: parsed.Arguments}}, nil
+					}
+					return parsed, nil, nil
+				}
+			}
+		}
+		return decisionPayload{}, nil, fmt.Errorf("react decision unparseable (finish_reason=%q, strategy=%q): thinking-only response: %.120s", resp.FinishReason, repairStrategy, thinking)
+	}
 	if repairStrategy == "llm" {
 		repaired, repairErr := n.repairDecision(ctx, env, tools, resp.Text, useToolCalling)
-		if repairErr == nil {
+		if repairErr == nil && ExtractJSON(repaired) != "{}" {
+			// The repair must produce actual JSON. parseDecision's
+			// no-JSON sentinel would otherwise bless arbitrary repair
+			// prose — "<execute_tool>" tags, apologies — as a
+			// completed decision, ending the step "successfully"
+			// with no work done.
 			if parsed, err := parseDecision(repaired); err == nil {
 				if parsed.Tool != "" {
 					return parsed, []model.ToolCall{{Name: parsed.Tool, Args: parsed.Arguments}}, nil
@@ -181,11 +205,14 @@ func (n *reactThinkNode) normalizeDecision(ctx context.Context, env *contextdata
 func (n *reactThinkNode) repairDecision(ctx context.Context, env *contextdata.Envelope, tools []ports.Tool, raw string, useToolCalling bool) (string, error) {
 	schema := `Return ONLY valid JSON:
 {"thought":"short reasoning","action":"tool|complete","tool":"tool name or empty","arguments":{},"complete":true|false,"summary":"final answer when complete"}`
-	prompt := fmt.Sprintf("%s\nAllowed tools: %s\nOriginal response:\n%s", schema, strings.Join(toolNames(tools), ", "), raw)
+	// The repair call carries the task: for a thinking-model response that
+	// arrived empty (budget consumed by the thinking channel) the original
+	// response alone gives the repair nothing to repair from.
+	taskContext := strings.TrimSpace(envGetString(env, "task.instruction"))
+	prompt := fmt.Sprintf("%s\nAllowed tools: %s\nTask: %s\nOriginal response:\n%s", schema, strings.Join(toolNames(tools), ", "), taskContext, raw)
 	resp, err := n.agent.Model.Generate(ctx, prompt, &model.LLMOptions{
 		Model:       n.agent.Config.Model,
 		Temperature: 0,
-		MaxTokens:   256,
 	})
 	if err != nil {
 		return "", err
@@ -362,11 +389,20 @@ func (n *reactThinkNode) ensureMessages(env *contextdata.Envelope, tools []ports
 		} else {
 			messages = append([]model.Message{{Role: "system", Content: systemPrompt}}, messages...)
 		}
-		messages = append(messages, model.Message{Role: "user", Content: userPrompt})
+		// Continuation iterations append a minimal prompt only.
+		// Re-appending the full user prompt after each tool result reads to
+		// the model as the human re-sending the same request — small models
+		// then conclude there is no new task and stall in exploration loops
+		// instead of consuming the observations directly above.
+		messages = append(messages, model.Message{Role: "user", Content: reactContinuationPrompt})
 	}
 	saveReactMessages(env, messages)
 	return messages
 }
+
+// reactContinuationPrompt is the per-iteration continuation instruction for
+// transcript-based (tool-calling) react iterations after the first.
+const reactContinuationPrompt = "Continue the task using the observations above. Return the next JSON decision."
 
 // promptIDFromTask reads "prompt_id" from task.Context (the recipe's
 // `goal prompt <ref>` seam — a USER prompt reference), falling back to the

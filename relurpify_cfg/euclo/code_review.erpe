@@ -17,6 +17,3 @@ run reviewer:
   goal "Review the pending changes and produce findings with severity and suggested actions."
   capture result -> state.findings
 
-route:
-  otherwise:
-    do relurpic:code_review on state.findings

@@ -2,7 +2,6 @@ package thoughtrecipe
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/context/contextdata"
@@ -11,17 +10,6 @@ import (
 	"codeburg.org/lexbit/relurpify/execution/prompt"
 	"codeburg.org/lexbit/relurpify/named/euclo/intentcontext"
 )
-
-func (c *stepCore) resolveFromRegistry(ctx context.Context, env *contextdata.Envelope) (string, error) {
-	if c.deps.PromptRegistry == nil {
-		return "", fmt.Errorf("no prompt registry available")
-	}
-	rctx, err := c.buildRuntimeContext(ctx, env)
-	if err != nil {
-		return "", err
-	}
-	return c.deps.PromptRegistry.Resolve(c.step.PromptID, rctx)
-}
 
 func (c *stepCore) buildRuntimeContext(ctx context.Context, env *contextdata.Envelope) (prompt.RuntimeContext, error) {
 	data := thoughtrecipeTemplateData(env, c.step)

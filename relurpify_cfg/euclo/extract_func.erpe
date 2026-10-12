@@ -12,16 +12,9 @@ input prompt: user.request
 
 agent refactorer uses react
 
-route:
-  when missing state.summary:
-    do relurpic:ast_query on input.workspace
-  otherwise:
-    run refactorer:
-      may invoke ["file_read", "grep", "test_run", "file_write"]
-      from state.summary
-      goal "Extract the anchored code into its own function and verify the build and tests still pass."
-      capture result -> state.refactor
+run refactorer:
+  may invoke ["file_read", "grep", "test_run", "file_write"]
+  from input.prompt
+  goal """Extract the requested code into its own function and verify the build and tests still pass. The user request is: {{ index . "task.instruction" }}"""
+  capture result -> state.refactor
 
-route:
-  otherwise:
-    do relurpic:test_run on state.refactor

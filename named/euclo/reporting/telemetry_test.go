@@ -99,8 +99,51 @@ func TestTelemetryNodeIncompleteExecution(t *testing.T) {
 		t.Fatalf("Execute failed: %v", err)
 	}
 
+	// An incomplete run without context cancellation is a failure, not a
+	// user cancellation.
+	if result["outcome_category"] != "failure" {
+		t.Errorf("Expected outcome_category failure, got %v", result["outcome_category"])
+	}
+}
+
+func TestTelemetryNodeCancelledContext(t *testing.T) {
+	node := NewTelemetryNode("telemetry1")
+
+	env := contextdata.NewEnvelope("task-123", "session-456")
+	state.SetExecutionCompleted(env, false)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	result, err := node.Execute(ctx, env)
+	if err != nil {
+		t.Fatalf("Execute failed: %v", err)
+	}
+
 	if result["outcome_category"] != "cancelled" {
 		t.Errorf("Expected outcome_category cancelled, got %v", result["outcome_category"])
+	}
+}
+
+func TestTelemetryNodeAwaitingInteraction(t *testing.T) {
+	node := NewTelemetryNode("telemetry1")
+
+	env := contextdata.NewEnvelope("task-123", "session-456")
+	state.SetExecutionCompleted(env, true)
+	state.SetTurnAwaitingInteraction(env, true)
+
+	result, err := node.Execute(context.Background(), env)
+	if err != nil {
+		t.Fatalf("Execute failed: %v", err)
+	}
+
+	if result["outcome_category"] != "awaiting_interaction" {
+		t.Errorf("Expected outcome_category awaiting_interaction, got %v", result["outcome_category"])
+	}
+
+	category, _ := state.GetOutcomeCategory(env)
+	if category != "awaiting_interaction" {
+		t.Errorf("Expected envelope outcome.category awaiting_interaction, got %v", category)
 	}
 }
 

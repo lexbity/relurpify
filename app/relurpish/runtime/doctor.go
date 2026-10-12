@@ -243,6 +243,12 @@ func BuildDoctorReport(ctx context.Context, cfg Config, secrets config.Secrets) 
 	// human-approval ask — surfaced here so the posture is impossible to
 	// miss. The sandbox and capability enforcement are unaffected.
 	deps = append(deps, probeHITLMode(cfg))
+	// Selection posture: deterministic (shipped default) never consults a
+	// model for intent disambiguation — a multi-match intent always
+	// resolves through a clarification frame answered by a human.
+	// Surfaced beside hitl_mode so the two postures that decide "who
+	// answers ambiguity" are visible in one place.
+	deps = append(deps, probeSelectionPosture(cfg))
 	deps = append(deps, DependencyStatus{
 		Name:      "starter-templates",
 		Required:  true,
@@ -831,6 +837,33 @@ func probeRunner(stateDir string) DependencyStatus {
 			Details: fmt.Sprintf("degraded: %s (last heartbeat %s)",
 				reason, status.HeartbeatAt.Format(time.RFC3339)),
 		}
+	}
+}
+
+// probeSelectionPosture reports the route-selection posture. Deterministic
+// (workspace `selection.posture`, the shipped default) keeps selection
+// reproducible: ambiguous intents are always resolved by a human-answered
+// clarification frame, never by a model. model_assisted lets the tier-2
+// model break ties within the candidate set.
+func probeSelectionPosture(cfg Config) DependencyStatus {
+	posture := strings.TrimSpace(cfg.SelectionPosture)
+	if posture == "" {
+		posture = "deterministic"
+	}
+	if posture == "model_assisted" {
+		return DependencyStatus{
+			Name:      "selection_posture",
+			Required:  false,
+			Available: true,
+			Degraded:  true,
+			Details:   "model_assisted: ambiguous intents may be disambiguated by the tier-2 model",
+		}
+	}
+	return DependencyStatus{
+		Name:      "selection_posture",
+		Required:  false,
+		Available: true,
+		Details:   "deterministic: ambiguous intents always ask a human via a clarification frame (workspace selection.posture: model_assisted to opt into model disambiguation)",
 	}
 }
 
