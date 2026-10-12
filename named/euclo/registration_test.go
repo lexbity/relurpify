@@ -29,7 +29,7 @@ func TestLoadThoughtRecipes(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(workspace, "relurpify_cfg", "euclo", "probe.erpe"), []byte(testRecipeSource), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	thoughtrecipes, err := reg.LoadThoughtRecipes(workspace, nil)
+	thoughtrecipes, err := reg.LoadThoughtRecipes(workspace, nil, nil)
 	if err != nil {
 		t.Errorf("LoadThoughtRecipes returned error: %v", err)
 	}
@@ -50,7 +50,7 @@ func TestLoadThoughtRecipes(t *testing.T) {
 func TestLoadThoughtRecipesMissingDirErrors(t *testing.T) {
 	reg := services.NewRegistration()
 
-	_, err := reg.LoadThoughtRecipes(t.TempDir(), nil)
+	_, err := reg.LoadThoughtRecipes(t.TempDir(), nil, nil)
 	if err == nil {
 		t.Fatal("expected error for workspace without relurpify_cfg/euclo")
 	}

@@ -113,7 +113,11 @@ func TestClarificationCapability_HandoffSelectsNormalThoughtRecipe(t *testing.T)
 		t.Fatalf("write state: %v", err)
 	}
 
-	handler := &clarificationCapabilityHandler{recipes: testRecipeRegistryWith("euclo.thoughtrecipe.code_review")}
+	recipes := testRecipeRegistryWith("euclo.thoughtrecipe.code_review")
+	// The family → handoff mapping is workspace data (families.yaml); this
+	// test installs the mapping a workspace file would carry.
+	recipes.SetHandoffs(map[string]string{"review": "euclo.thoughtrecipe.code_review"})
+	handler := &clarificationCapabilityHandler{recipes: recipes}
 	result, err := handler.Invoke(context.Background(), env.State(), map[string]any{
 		clarificationActionKey: clarificationActionHandoff,
 		"family_id":            "review",

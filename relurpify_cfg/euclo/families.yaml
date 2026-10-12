@@ -1,0 +1,15 @@
+schema: relurpify/euclo/families/v1
+
+# Workspace handoff table: maps a classified intent family to the thoughtrecipe
+# its clarification handoff targets. This is user-editable workspace data —
+# the shipped mappings below match the starter recipes, and `doctor --fix`
+# never overwrites an edit. A family without a mapping degrades to a named
+# handoff failure at runtime; a mapping whose recipe is absent fails the boot.
+handoffs:
+  review: euclo.thoughtrecipe.code_review
+  investigation: euclo.thoughtrecipe.investigation
+  debug: euclo.thoughtrecipe.debug_tdd_repair
+  migration: euclo.thoughtrecipe.dep_upgrade
+  implementation: euclo.thoughtrecipe.test_synthesis
+  refactor: euclo.thoughtrecipe.extract_func
+  architecture: euclo.thoughtrecipe.investigation

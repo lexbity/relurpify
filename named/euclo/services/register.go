@@ -40,9 +40,10 @@ func (r *Registration) RegisterPromptProviders(reg prompt.Registry) error {
 }
 
 // LoadThoughtRecipes loads all thoughtrecipes from the given workspace using the
-// provided capability registry for semantic validation.
-func (r *Registration) LoadThoughtRecipes(workspace string, caps thoughtrecipe.ToolVocabularyLookup) (*thoughtrecipe.LoadResult, error) {
-	return r.thoughtrecipeLoader.LoadAll(workspace, caps)
+// provided capability registry for semantic validation and the workspace
+// prompt registry for `import prompt` resolution.
+func (r *Registration) LoadThoughtRecipes(workspace string, caps thoughtrecipe.ToolVocabularyLookup, prompts thoughtrecipe.PromptRegistryLookup) (*thoughtrecipe.LoadResult, error) {
+	return r.thoughtrecipeLoader.LoadAll(workspace, caps, prompts)
 }
 
 func CapabilityLookup(reg *registry.CapabilityRegistry) thoughtrecipe.ToolVocabularyLookup {
@@ -99,7 +100,7 @@ type PromptRegistrar interface {
 // parameter is the composed registry's vocabulary adapter — the single
 // declared-vocabulary catalog (FR-5).
 type ThoughtRecipeLoader interface {
-	LoadAll(workspace string, caps thoughtrecipe.ToolVocabularyLookup) (*thoughtrecipe.LoadResult, error)
+	LoadAll(workspace string, caps thoughtrecipe.ToolVocabularyLookup, prompts thoughtrecipe.PromptRegistryLookup) (*thoughtrecipe.LoadResult, error)
 }
 
 type capabilityLookupAdapter struct {

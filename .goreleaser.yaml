@@ -51,7 +51,7 @@ builds:
     mod_timestamp: "{{ .CommitTimestamp }}"
 
   - id: dev-agent
-    main: ./app/dev-agent-cli
+    main: ./tooling/dev-agent-cli
     binary: dev-agent
     goos:
       - linux

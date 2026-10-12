@@ -37,7 +37,7 @@ func TestNewRegistrationAppliesOverrides(t *testing.T) {
 		t.Fatal("expected custom prompt registrar to be called")
 	}
 
-	loaded, err := reg.LoadThoughtRecipes(t.TempDir(), nil)
+	loaded, err := reg.LoadThoughtRecipes(t.TempDir(), nil, nil)
 	if err != nil {
 		t.Fatalf("LoadThoughtRecipes returned error: %v", err)
 	}
@@ -93,7 +93,7 @@ func TestDefaultThoughtRecipeLoaderLoadsRegistry(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(workspace, "relurpify_cfg", "euclo", "probe.erpe"), []byte(testRecipeSource), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	result, err := loader.LoadAll(workspace, nil)
+	result, err := loader.LoadAll(workspace, nil, nil)
 	if err != nil {
 		t.Fatalf("LoadAll returned error: %v", err)
 	}
@@ -112,7 +112,7 @@ func TestDefaultThoughtRecipeLoaderLoadsRegistry(t *testing.T) {
 // ErrNoRecipeDir instead of tolerating an absent recipe directory (D-8).
 func TestDefaultThoughtRecipeLoaderMissingDirPropagates(t *testing.T) {
 	var loader defaultThoughtRecipeLoader
-	_, err := loader.LoadAll(t.TempDir(), nil)
+	_, err := loader.LoadAll(t.TempDir(), nil, nil)
 	if !errors.Is(err, thoughtrecipepkg.ErrNoRecipeDir) {
 		t.Fatalf("error %v is not ErrNoRecipeDir", err)
 	}
@@ -157,7 +157,7 @@ type stubThoughtRecipeLoader struct {
 	result *thoughtrecipepkg.LoadResult
 }
 
-func (s *stubThoughtRecipeLoader) LoadAll(string, thoughtrecipepkg.ToolVocabularyLookup) (*thoughtrecipepkg.LoadResult, error) {
+func (s *stubThoughtRecipeLoader) LoadAll(string, thoughtrecipepkg.ToolVocabularyLookup, thoughtrecipepkg.PromptRegistryLookup) (*thoughtrecipepkg.LoadResult, error) {
 	s.called = true
 	if s.result == nil {
 		s.result = &thoughtrecipepkg.LoadResult{Registry: thoughtrecipepkg.NewThoughtRecipeRegistry()}

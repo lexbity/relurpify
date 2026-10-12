@@ -147,7 +147,9 @@ func (a *Agent) Initialize(config *execution.Config) error {
 	if workspace == "" {
 		return fmt.Errorf("euclo: recipe workspace unresolved: config.Workspace empty and no IndexManager workspace")
 	}
-	loaded, err := registrar.LoadThoughtRecipes(workspace, services.CapabilityLookup(a.deps.Registry))
+	// The paradigm deps carry the workspace prompt registry; the loader needs
+	// it so authored `import prompt` / `goal prompt <ref>` recipes boot.
+	loaded, err := registrar.LoadThoughtRecipes(workspace, services.CapabilityLookup(a.deps.Registry), a.deps.PromptRegistry)
 	if err != nil {
 		if errors.Is(err, thoughtrecipe.ErrNoRecipeDir) {
 			return fmt.Errorf("euclo: initialize: %w", err)

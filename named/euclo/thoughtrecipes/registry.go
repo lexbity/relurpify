@@ -23,6 +23,45 @@ type ThoughtRecipeRegistry struct {
 	thoughtrecipes map[string]*ThoughtRecipeEntry
 	order          []string
 	vocabulary     ToolVocabularyLookup
+	handoffs       map[string]string
+}
+
+// SetHandoffs installs the workspace handoff table (families.yaml). Nil or
+// empty clears the table: handoff resolution then degrades to its named
+// runtime miss instead of consulting compiled-in data.
+func (r *ThoughtRecipeRegistry) SetHandoffs(handoffs map[string]string) {
+	if r == nil {
+		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.handoffs = handoffs
+}
+
+// HandoffForFamily resolves a classified family to its handoff recipe ID via
+// the workspace handoff table. Empty means no mapping exists.
+func (r *ThoughtRecipeRegistry) HandoffForFamily(family string) string {
+	if r == nil {
+		return ""
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.handoffs[strings.ToLower(strings.TrimSpace(family))]
+}
+
+// Handoffs returns a copy of the workspace handoff table (boot assertions
+// iterate it; callers must not mutate the registry's map).
+func (r *ThoughtRecipeRegistry) Handoffs() map[string]string {
+	if r == nil {
+		return nil
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	out := make(map[string]string, len(r.handoffs))
+	for family, target := range r.handoffs {
+		out[family] = target
+	}
+	return out
 }
 
 // WithToolVocabulary wires the declared-vocabulary catalog used by the

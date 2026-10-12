@@ -225,7 +225,7 @@ func buildNodes(ctx context.Context, in buildNodeInput) ([]agentgraph.Node, erro
 	// FR-15: the clarification family→recipe table is validated against the
 	// recipe registry at agent construction; a dangling target fails boot, not
 	// the first ambiguous utterance.
-	if err := assertClarificationFamilyTable(thoughtrecipeReg); err != nil {
+	if err := assertClarificationHandoffs(thoughtrecipeReg); err != nil {
 		return nil, err
 	}
 	// A nil *contextstream.Trigger means "no compiler wired" (compiler-less

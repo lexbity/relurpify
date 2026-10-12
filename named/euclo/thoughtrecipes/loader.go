@@ -138,6 +138,14 @@ func (l *Loader) LoadWorkspace(workspaceRoot string) (*LoadResult, error) {
 		}
 	}
 
+	// The workspace handoff table (families.yaml) is workspace data read
+	// alongside the recipes; the clarification handoff resolves through it.
+	handoffs, err := LoadHandoffsFile(root)
+	if err != nil {
+		return nil, err
+	}
+	result.Registry.SetHandoffs(handoffs)
+
 	return result, nil
 }
 

@@ -268,21 +268,22 @@ func BenchmarkSelectByLattice(b *testing.B) {
 	}
 }
 
-// TestAssertClarificationFamilyTable covers FR-15: a live family whose shipped
-// handoff target is missing fails boot; a dormant mapping and a bare registry
-// do not.
-func TestAssertClarificationFamilyTable(t *testing.T) {
+// TestAssertClarificationHandoffs covers the workspace handoff table
+// (families.yaml loaded into the registry): a mapped family whose target is
+// missing fails boot; an unmapped family, a dormant mapping, and a bare
+// registry do not.
+func TestAssertClarificationHandoffs(t *testing.T) {
 	t.Run("bare registry is not a recipe system", func(t *testing.T) {
 		reg := thoughtrecipepkg.NewThoughtRecipeRegistry()
 		if err := reg.Register(&surface.ThoughtRecipe{ID: defaultThoughtRecipeID, Name: "default"}); err != nil {
 			t.Fatalf("register default: %v", err)
 		}
-		if err := assertClarificationFamilyTable(reg); err != nil {
+		if err := assertClarificationHandoffs(reg); err != nil {
 			t.Fatalf("bare registry must not fail boot: %v", err)
 		}
 	})
 
-	t.Run("live family with registered target passes", func(t *testing.T) {
+	t.Run("mapped family with registered target passes", func(t *testing.T) {
 		reg := thoughtrecipepkg.NewThoughtRecipeRegistry()
 		if err := reg.Register(&surface.ThoughtRecipe{
 			ID:       "euclo.thoughtrecipe.code_review",
@@ -291,14 +292,15 @@ func TestAssertClarificationFamilyTable(t *testing.T) {
 		}); err != nil {
 			t.Fatalf("register code_review: %v", err)
 		}
-		if err := assertClarificationFamilyTable(reg); err != nil {
+		reg.SetHandoffs(map[string]string{"review": "euclo.thoughtrecipe.code_review"})
+		if err := assertClarificationHandoffs(reg); err != nil {
 			t.Fatalf("consistent table must pass: %v", err)
 		}
 	})
 
-	t.Run("live family with dangling target fails boot", func(t *testing.T) {
+	t.Run("mapped family with dangling target fails boot", func(t *testing.T) {
 		reg := thoughtrecipepkg.NewThoughtRecipeRegistry()
-		// A recipe declares the debug family, but the shipped debug recipe is
+		// The workspace table maps the debug family, but the mapped recipe is
 		// absent: the handoff target dangles and boot must fail.
 		if err := reg.Register(&surface.ThoughtRecipe{
 			ID:       "custom.thoughtrecipe.fix",
@@ -307,8 +309,26 @@ func TestAssertClarificationFamilyTable(t *testing.T) {
 		}); err != nil {
 			t.Fatalf("register custom fix: %v", err)
 		}
-		if err := assertClarificationFamilyTable(reg); err == nil {
+		reg.SetHandoffs(map[string]string{"debug": "euclo.thoughtrecipe.debug_tdd_repair"})
+		if err := assertClarificationHandoffs(reg); err == nil {
 			t.Fatal("expected boot failure for a dangling family handoff target")
+		}
+	})
+
+	t.Run("declared family without a table mapping is not a boot defect", func(t *testing.T) {
+		// The workspace author decides the table: a custom family absent from
+		// families.yaml is a runtime handoff miss with an actionable reason,
+		// never a boot refusal.
+		reg := thoughtrecipepkg.NewThoughtRecipeRegistry()
+		if err := reg.Register(&surface.ThoughtRecipe{
+			ID:       "custom.thoughtrecipe.fix",
+			Name:     "fix",
+			Metadata: surface.ThoughtRecipeMetadata{Families: []string{"debug"}},
+		}); err != nil {
+			t.Fatalf("register custom fix: %v", err)
+		}
+		if err := assertClarificationHandoffs(reg); err != nil {
+			t.Fatalf("unmapped family must not fail boot: %v", err)
 		}
 	})
 }

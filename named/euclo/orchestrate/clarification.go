@@ -335,7 +335,7 @@ func clarificationThoughtRecipeForState(args map[string]any, recipes *thoughtrec
 		return ""
 	}
 	if familyID := strings.TrimSpace(stringArg(args, "family_id")); familyID != "" {
-		if thoughtrecipeID := clarificationThoughtRecipeForFamily(familyID); thoughtrecipeID != "" {
+		if thoughtrecipeID := recipes.HandoffForFamily(familyID); thoughtrecipeID != "" {
 			if recipeRegistered(recipes, thoughtrecipeID) {
 				return thoughtrecipeID
 			}
@@ -356,9 +356,9 @@ func (h *clarificationCapabilityHandler) handoffFailureReason(args map[string]an
 		return fmt.Sprintf("no thoughtrecipe registered for handoff target %q (run 'relurpish doctor' to materialize starter recipes)", thoughtrecipeID)
 	}
 	if familyID := strings.TrimSpace(stringArg(args, "family_id")); familyID != "" {
-		expected := clarificationThoughtRecipeForFamily(familyID)
+		expected := h.recipes.HandoffForFamily(familyID)
 		if expected == "" {
-			return fmt.Sprintf("no thoughtrecipe mapped for family %q", familyID)
+			return fmt.Sprintf("no thoughtrecipe mapped for family %q (add one to relurpify_cfg/euclo/families.yaml)", familyID)
 		}
 		return fmt.Sprintf("no thoughtrecipe registered for family %q (expected %s; run 'relurpish doctor' to materialize starter recipes)", familyID, expected)
 	}
@@ -513,30 +513,18 @@ func stringArg(args map[string]any, key string) string {
 	}
 }
 
-// clarificationFamilyRecipeTable maps each classified family to the shipped
-// thoughtrecipe its clarification handoff targets (D9/FR-15). It is the single
-// source for the handoff resolution and the boot-time table assertion; the
-// table is shipped data reviewed like code.
-var clarificationFamilyRecipeTable = map[string]string{ //nolint:gochecknoglobals // immutable shipped handoff table
-	"review":         "euclo.thoughtrecipe.code_review",
-	"investigation":  "euclo.thoughtrecipe.investigation",
-	"debug":          "euclo.thoughtrecipe.debug_tdd_repair",
-	"migration":      "euclo.thoughtrecipe.dep_upgrade",
-	"implementation": "euclo.thoughtrecipe.test_synthesis",
-	"refactor":       "euclo.thoughtrecipe.extract_func",
-	"architecture":   "euclo.thoughtrecipe.investigation",
-}
+// The family to handoff mapping is workspace data (relurpify_cfg/euclo/
+// families.yaml), loaded into the registry by the workspace loader. There is
+// no compiled-in table: a workspace's recipes and its handoff targets are the
+// workspace author's decision, and a family without a mapping degrades to the
+// named handoff failure at runtime instead of a boot refusal.
 
-func clarificationThoughtRecipeForFamily(family string) string {
-	return clarificationFamilyRecipeTable[strings.ToLower(strings.TrimSpace(family))]
-}
-
-// assertClarificationFamilyTable fails boot when a recipe present in the
-// registry declares a family whose shipped handoff target is not registered
-// (the dangling-ID class dies at boot, never mid-flight; FR-15). A registry
-// whose recipes declare no families exercises no handoff mapping, so its
-// dormant table entries are not asserted.
-func assertClarificationFamilyTable(thoughtrecipes *thoughtrecipepkg.ThoughtRecipeRegistry) error {
+// assertClarificationHandoffs fails boot when the workspace handoff table
+// maps a family to a recipe that is not registered (the dangling-ID class
+// dies at boot, never mid-flight). Families without mappings are not
+// asserted: an unmapped family is a runtime handoff miss with an actionable
+// reason, not a boot defect.
+func assertClarificationHandoffs(thoughtrecipes *thoughtrecipepkg.ThoughtRecipeRegistry) error {
 	if thoughtrecipes == nil {
 		return nil
 	}
@@ -549,8 +537,9 @@ func assertClarificationFamilyTable(thoughtrecipes *thoughtrecipepkg.ThoughtReci
 			familiesInUse[strings.ToLower(strings.TrimSpace(family))] = struct{}{}
 		}
 	}
-	familyIDs := make([]string, 0, len(clarificationFamilyRecipeTable))
-	for family := range clarificationFamilyRecipeTable {
+	handoffs := thoughtrecipes.Handoffs()
+	familyIDs := make([]string, 0, len(handoffs))
+	for family := range handoffs {
 		if _, inUse := familiesInUse[family]; inUse {
 			familyIDs = append(familyIDs, family)
 		}
@@ -560,11 +549,11 @@ func assertClarificationFamilyTable(thoughtrecipes *thoughtrecipepkg.ThoughtReci
 	}
 	sort.Strings(familyIDs)
 	for _, family := range familyIDs {
-		target := clarificationFamilyRecipeTable[family]
+		target := handoffs[family]
 		if recipeRegistered(thoughtrecipes, target) || isBuiltinRecipeID(target) {
 			continue
 		}
-		return fmt.Errorf("boot: clarification family %q maps to thoughtrecipe %q which is not registered", family, target)
+		return fmt.Errorf("boot: clarification family %q maps to thoughtrecipe %q which is not registered (edit relurpify_cfg/euclo/families.yaml)", family, target)
 	}
 	return nil
 }
