@@ -53,6 +53,11 @@ The terminal UI is **relurpish**.
   recorded and replayable.
 - **Thinking-model friendly** — native or fallback tool calling, bounded
   decision repair for malformed output, and per-model profiles.
+- **OpenTelemetry telemetry** — every run exports OTel traces (lifecycle
+  spans), log records, and metrics. By default everything stays local and
+  offline: OTLP-JSON segments under `.relurpify_state/telemetry/otlp/` with
+  7-day retention, readable with `jq`; set `telemetry.endpoint` in
+  `workspace.yaml` to forward to any OTLP/HTTP collector.
 - **Characterizable** — YAML-driven agent tests with outcome/security/benchmark
   assertions, LLM tape replay, conformance suites, and a 70% per-package
   coverage floor.
