@@ -4,60 +4,99 @@
   <img src="./logo.png" alt="Relurpify logo" width="240" />
 </div>
 
-<div align="center">
-  To the day it rewrites itself
-</div>
+<div align="center">To the day it rewrites itself</div>
 
-## What Is Relurpify?
+> **Audience**: developers evaluating or installing Relurpify.
+> **Purpose**: what Relurpify is, what it ships, and how to get it running.
+> **Prerequisites**: none; setup details live in [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md).
 
-Relurpify is a fullstack Agent framework 
-- generic execution Agent library 
-- LLM oriented memory/context/graph/sandbox management framework 
-- archaeology memory system 
-- extensive testsuite
-- (Euclo) coding agent 
-- TUI interfaces 
+[TODO: badges — CI, latest release, license]
 
-## Currently Available
+[TODO: screenshot — relurpish TUI, chat tab with a completed task and the diff tab open]
 
-### Relurpish Agent TUI
+## What is Relurpify?
 
-- Default Agent TUI 
-- Euclo coding agent access 
+Relurpify is a local-first agent framework written in Go.
+It runs LLM-driven coding agents against a real workspace, and it makes every
+rung of that ladder explicit and governed:
 
-## Requirements
+- Context is compiled, not stuffed: what the model sees is a deterministic
+  artifact with a digest, a token budget, and provenance.
+- Every action is mediated: model-driven work reaches your machine only through
+  capabilities that pass a policy engine, a human-approval gate, and a
+  sandboxed execution chain.
+- Memory is structured: results and observations persist as provenance-tracked
+  knowledge chunks, so stale knowledge is skipped rather than repeated.
+- Behavior is characterizable: deterministic routing, LLM record/replay tapes,
+  golden files, and conformance suites treat agent behavior as something you
+  can pin and regression-test.
 
-- Go `1.25+`
-- Docker or another supported container runtime
-- gVisor `runsc`
-- Ollama (default inference provider)
+The built-in coding agent is **Euclo**.
+The terminal UI is **relurpish**.
 
-## Docs
+## Features
 
-Developer documentation lives in the repository's `devdocs` folder;
-`developer-documentation.md` is the canonical internal reference. Contribution
-gates, coverage requirements, and the release process are described in
-[CONTRIBUTING.md](CONTRIBUTING.md).
+- **Governed execution** — every model action is a capability with declared
+  trust and effect classes; writes and risky steps pause for your approval
+  (HITL) in the default `governed` mode.
+- **Sandboxed commands** — agent commands run in a container through gVisor
+  (`runsc`) or the Docker backend, with the workspace mounted and network
+  isolated by default.
+- **Deterministic routing** — a keyword classifier scores your instruction into
+  intent families, and a thoughtrecipe or capability is picked
+  deterministically; the same input takes the same route.
+- **Thoughtrecipes** — declarative `.erpe` workflows (trigger, tool scope,
+  steps, captures) that you can author and pin; see
+  [docs/RECIPE_DSL.md](docs/RECIPE_DSL.md).
+- **Compiled context** — retrieval, trust filtering, and token budgeting run
+  deterministically over a knowledge-chunk memory graph; every compilation is
+  recorded and replayable.
+- **Thinking-model friendly** — native or fallback tool calling, bounded
+  decision repair for malformed output, and per-model profiles.
+- **Characterizable** — YAML-driven agent tests with outcome/security/benchmark
+  assertions, LLM tape replay, conformance suites, and a 70% per-package
+  coverage floor.
+- **Enforced architecture** — machine-checked layering and hygiene gates; the
+  charter forbids shims, compatibility layers, aliases, and stubs.
 
-The `go build` examples in this README were verified in this workspace. The
-runtime examples are documented invocation shapes, not all re-run here.
+## Prerequisites
 
-> **Running without Ollama (CI/plumbing only):**
-> ```bash
-> go build ./app/relurpish
-> ./relurpish doctor --offline --fix
-> ```
-> The built-in `offline` backend is a deterministic scripted model that
-> exercises the agent plumbing (tool dispatch, streaming, compilation)
-> without requiring Ollama, Docker, or network access. It is intended
-> for testing and CI — not for end-user demo or production use.
+| Requirement | Version / notes |
+|---|---|
+| Go | 1.25+ (builds offline-friendly) |
+| Container runtime | Docker, plus gVisor `runsc` for the default `gvisor` sandbox backend (the `docker` backend needs Docker alone) |
+| Model backend | Ollama (default), LM Studio, any OpenAI-compatible endpoint, or the built-in `offline` scripted model |
+| OS | Linux or macOS (amd64 / arm64) |
 
-In sandboxed environments you may also want repo-local Go caches:
+## Quick start
 
 ```bash
-export GOMODCACHE=$PWD/.gomodcache
-export GOCACHE=$PWD/.gocache
+# 1. Start a model backend and pull the default model
+ollama serve
+ollama pull gemma4:e4b
+
+# 2. Build the TUI from the repository root
+go build ./app/relurpish
+
+# 3. Check your project directory; the first run materializes
+#    the starter configuration into relurpify_cfg/
+cd ~/code/your-project
+/path/to/relurpish doctor
+
+# 4. Start the coding agent
+/path/to/relurpish chat
 ```
+
+No Ollama or Docker handy? The `offline` backend exercises the full plumbing
+with a deterministic scripted model:
+
+```bash
+go build -o relurpish ./app/relurpish
+./relurpish doctor --offline --fix
+./relurpish chat --offline
+```
+
+The offline backend is for testing and CI, not for real work.
 
 ## Install
 
@@ -67,37 +106,43 @@ export GOCACHE=$PWD/.gocache
 go build ./app/relurpish
 ```
 
+All project binaries:
+
+| Binary | Build | Purpose |
+|---|---|---|
+| `relurpish` | `go build ./app/relurpish` | Terminal UI, `doctor`, `status` |
+| `relurpify-runner` | `go build ./ayenitd/cmd/relurpify-runner` | Background job runner (spawned by the app) |
+| `relurplint` | `go build ./app/relurplint` | Workspace linter: config, tools, recipes, prompts, agents |
+| `dev-agent` | `go build ./tooling/dev-agent-cli` | Agent test-suite runner |
+| `generate-config` | `go build ./userconfig/templates/cmd/generate-config` | Materializes the default config tree |
+
 ### Release binaries
 
 Pre-built artifacts are attached to every
-[GitHub release](https://github.com/lexbit/relurpify/releases): per-platform
+[GitHub release](https://github.com/lexbity/relurpify/releases): per-platform
 archives, `checksums.txt`, SBOMs (`*.sbom.json`), `.deb`/`.rpm` packages, and
-an AUR package. Releases are created as drafts; the maintainer reviews and
-publishes them.
-
-`relurpish`, `dev-agent`, `relurplint`, and `generate-config` are built for
-Linux and macOS (amd64 + arm64). The internal tooling binaries `archcheck`,
-`domaincheck`, and `driftcheck` additionally build for Windows (zip archives).
+an AUR package.
+Releases are created as drafts; the maintainer reviews and publishes them.
 Every binary is statically linked (CGO disabled).
 
 #### Linux (deb)
 
 ```bash
-wget https://github.com/lexbit/relurpify/releases/download/v0.1.0/relurpify_0.1.0_amd64.deb
+wget https://github.com/lexbity/relurpify/releases/download/v0.1.0/relurpify_0.1.0_amd64.deb
 sudo dpkg -i relurpify_0.1.0_amd64.deb
 ```
 
 #### Linux (rpm)
 
 ```bash
-wget https://github.com/lexbit/relurpify/releases/download/v0.1.0/relurpify-0.1.0-1.x86_64.rpm
+wget https://github.com/lexbity/relurpify/releases/download/v0.1.0/relurpify-0.1.0-1.x86_64.rpm
 sudo rpm -i relurpify-0.1.0-1.x86_64.rpm
 ```
 
 #### Linux / macOS (archive)
 
 ```bash
-wget https://github.com/lexbit/relurpify/releases/download/v0.1.0/relurpify_0.1.0_linux_amd64.tar.gz
+wget https://github.com/lexbity/relurpify/releases/download/v0.1.0/relurpify_0.1.0_linux_amd64.tar.gz
 tar -xzf relurpify_0.1.0_linux_amd64.tar.gz
 ```
 
@@ -115,86 +160,59 @@ yay -S relurpify-bin
 
 #### Version
 
-Release binaries report their build metadata (`--version` on `relurpish` and
-`dev-agent`):
-
 ```bash
 relurpish --version
 # relurpish 0.1.0 (commit 594da458..., built 2026-10-08T...)
 ```
 
-Source builds report `dev` / `none` / `unknown`.
+Release binaries report build metadata; source builds report `dev` / `none` / `unknown`.
 
-### Optional: build all project binaries
+## Usage examples
 
-```bash
-go build ./...
-```
-
-## First-run (Ollama)
-
-Before starting a chat session, ensure Ollama is running and has a model pulled:
+Start a chat session in your project:
 
 ```bash
-# Start the Ollama daemon (in a separate terminal)
-ollama serve
-
-# Pull a model that the default catalog references
-ollama pull gemma4:e4b
+relurpish chat --workspace .
 ```
 
-Then run doctor to verify the workspace is ready:
+Check workspace readiness without the TUI:
 
 ```bash
-go build ./app/relurpish
-./relurpish doctor
+relurpish doctor
+relurpish status --format json
 ```
 
-## Run Euclo in Relurpish
-
-Start the terminal app with:
+Lint the workspace configuration:
 
 ```bash
-go run ./app/relurpish chat
+relurplint --check all --workspace .
 ```
 
-This launches `relurpish` and starts the default Euclo coding workflow in the current workspace.
-
-For a typical first-use flow:
+Run the agent test suites:
 
 ```bash
-go build ./app/relurpish
-go run ./app/relurpish doctor
-go run ./app/relurpish chat
+go run ./tooling/dev-agent-cli agenttest run
 ```
 
-## Testing
+## Documentation
 
-The main local checks are:
+| Doc | What it covers |
+|---|---|
+| [Docs index and glossary](docs/README.md) | Start here |
+| [Architecture](docs/ARCHITECTURE.md) | System shape, enforced layering, a turn end to end |
+| [Getting started](docs/GETTING_STARTED.md) | Setup, configuration, environment variables, troubleshooting |
+| [Relurpish guide](docs/RELURPISH.md) | Daily use of the TUI: commands, approvals, postures |
+| [Recipe DSL](docs/RECIPE_DSL.md) | Authoring thoughtrecipes (`.erpe`) |
+| [Prompt DSL](docs/PROMPT_DSL.md) | Prompt file format and the prompt registry |
+| [Configuration](docs/CONFIGURATION.md) | The `relurpify_cfg/` tree reference |
+| [Contributing](docs/CONTRIBUTING.md) | DCO, gates, coverage floor, release process |
+| [Testing](docs/TESTING.md) | Unit, integration, and agent test layers; tapes |
+| [Changelog](CHANGELOG.md) | Release history |
+| [Code of conduct](docs/CODE_OF_CONDUCT.md) | Community rules |
 
-```bash
-make test-unit
-make test-dev-agent
-make test-tape-fidelity
-```
+## Status
 
-See `developer-documentation.md` in the repository's `devdocs` folder for the
-full matrix and agent-test workflow.
-
-## Additional Tools
-
-Relurpify also includes developer tooling for internal workflows and testing:
-
-```bash
-# List discovered agents
-go run ./app/dev-agent-cli agents list
-
-# Run agent tests
-go run ./app/dev-agent-cli agenttest run
-
-# Scaffold a skill
-go run ./app/dev-agent-cli skill init my-skill --description "My focused workflow" --with-tests
-
-# Validate a skill
-go run ./app/dev-agent-cli skill validate my-skill
-```
+Relurpify is under active development by a solo maintainer and is not yet
+version 1.0.
+Expect rapid change; see the [changelog](CHANGELOG.md) and
+[contributing guide](docs/CONTRIBUTING.md) if you want to ride along.
