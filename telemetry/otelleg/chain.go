@@ -13,6 +13,7 @@ import (
 
 	"codeburg.org/lexbit/relurpify/telemetry"
 	"go.opentelemetry.io/otel/attribute"
+	otellog "go.opentelemetry.io/otel/log"
 	sdklog "go.opentelemetry.io/otel/sdk/log"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
@@ -50,6 +51,7 @@ type Chain struct {
 	loggerProvider *sdklog.LoggerProvider
 	meterProvider  *sdkmetric.MeterProvider
 	segment        *segmentWriter
+	logger         otellog.Logger
 
 	closed   atomic.Bool
 	received atomic.Uint64
@@ -149,14 +151,17 @@ func New(ctx context.Context, s Settings, opts ...Option) (*Chain, error) {
 	chain.tracerProvider = newTracerProvider(res, resolved.SamplingRatio, spanProcessors)
 	chain.loggerProvider = newLoggerProvider(res, logProcessors)
 	chain.meterProvider = newMeterProvider(res, metricReaders)
+	chain.logger = chain.loggerProvider.Logger(instrumentationScopeName)
 	return chain, nil
 }
 
 // Emit implements telemetry.Telemetry. It never panics, never blocks on I/O, and
-// tolerates a nil or closed chain (counting the drop). Event routing into spans
-// and log records lands in slices 2-4; this method is the permanent boundary
-// those slices attach to.
-func (c *Chain) Emit(_ telemetry.Event) {
+// tolerates a nil or closed chain (counting the drop).
+//
+// Routing: lifecycle events open and close spans (the assembler of slice 3) and
+// are deliberately kept off the log signal; every other event becomes an OTel
+// log record (slice 2).
+func (c *Chain) Emit(ev telemetry.Event) {
 	if c == nil {
 		return
 	}
@@ -171,6 +176,13 @@ func (c *Chain) Emit(_ telemetry.Event) {
 		}
 	}()
 	c.received.Add(1)
+	if isLifecycleType(ev.Type) {
+		// Slice 3 installs the span assembler here. Routing lifecycle events
+		// away from the log signal now keeps them from being mis-typed as point
+		// events once the assembler lands.
+		return
+	}
+	emitLog(c.logger, ev)
 }
 
 // Close flushes and shuts down every provider, then closes the segment writer.

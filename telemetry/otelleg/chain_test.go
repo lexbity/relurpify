@@ -25,7 +25,7 @@ func TestChainFileLegWritesParsableOTLPJSON(t *testing.T) {
 	dir := t.TempDir()
 	chain := newFileOnlyChain(t, dir)
 	emitSpan(t, chain)
-	emitLog(t, chain)
+	emitProviderLog(t, chain)
 	emitMetric(t, chain)
 	if err := chain.Close(context.Background()); err != nil {
 		t.Fatalf("close: %v", err)
@@ -109,7 +109,7 @@ func TestChainOTLPHTTPRoundTrip(t *testing.T) {
 		t.Fatalf("new chain: %v", err)
 	}
 	emitSpan(t, chain)
-	emitLog(t, chain)
+	emitProviderLog(t, chain)
 	emitMetric(t, chain)
 	if err := chain.Close(ctx); err != nil {
 		t.Fatalf("close: %v", err)
@@ -209,6 +209,73 @@ func TestEmitNeverPanics(t *testing.T) {
 	}
 }
 
+// TestEmitSurvivesHostileMetadata proves the emit boundary tolerates metadata
+// that would break a naive stringifier: a self-referential map, a map with a
+// non-string key, nested containers, and a value with a panicking String method.
+func TestEmitSurvivesHostileMetadata(t *testing.T) {
+	chain := newFileOnlyChain(t, t.TempDir())
+	recursive := map[string]any{}
+	recursive["self"] = recursive
+	chain.Emit(telemetry.Event{Type: telemetry.EventStateChange, Metadata: recursive})
+	chain.Emit(telemetry.Event{Type: telemetry.EventStateChange, Metadata: map[string]any{
+		"nested": map[int]any{1: recursive, 2: []any{recursive}},
+		"panic":  panickingStringer{},
+		"nil":    nil,
+	}})
+	if err := chain.Close(context.Background()); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+	if got := chain.SelfMetrics().Received; got != 2 {
+		t.Fatalf("Received = %d, want 2", got)
+	}
+}
+
+func TestEmitDropCounting(t *testing.T) {
+	chain := newFileOnlyChain(t, t.TempDir())
+	chain.Emit(telemetry.Event{Type: telemetry.EventStateChange})
+	if got := chain.SelfMetrics().Received; got != 1 {
+		t.Fatalf("Received = %d, want 1", got)
+	}
+	if err := chain.Close(context.Background()); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+	chain.Emit(telemetry.Event{Type: telemetry.EventStateChange})
+	if got := chain.SelfMetrics().Dropped; got != 1 {
+		t.Fatalf("Dropped = %d, want 1 after emit on a closed chain", got)
+	}
+}
+
+// TestChainRoutesPointEventsToLogs proves a point event becomes an OTLP-JSON log
+// record while a lifecycle event is kept off the log signal (it belongs to the
+// span assembler).
+func TestChainRoutesPointEventsToLogs(t *testing.T) {
+	dir := t.TempDir()
+	chain := newFileOnlyChain(t, dir)
+	chain.Emit(telemetry.Event{
+		Type:      telemetry.EventSchedulerJobCompleted,
+		Timestamp: time.Now(),
+		Message:   testLogMessage,
+	})
+	chain.Emit(telemetry.Event{Type: telemetry.EventGraphStart, Timestamp: time.Now()})
+	if err := chain.Close(context.Background()); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+
+	eventNames := logRecordEventNames(t, dir)
+	if !eventNames["scheduler.job_completed"] {
+		t.Fatalf("point event missing from log records: %v", eventNames)
+	}
+	if eventNames["graph_start"] {
+		t.Fatal("lifecycle event was emitted as a log record")
+	}
+}
+
+// panickingStringer panics when formatted, proving fmt-based rendering is
+// contained.
+type panickingStringer struct{}
+
+func (panickingStringer) String() string { panic("boom") }
+
 func TestCloseIsIdempotent(t *testing.T) {
 	chain := newFileOnlyChain(t, t.TempDir())
 	if err := chain.Close(context.Background()); err != nil {
@@ -234,7 +301,7 @@ func emitSpan(t *testing.T, c *Chain) {
 	span.End()
 }
 
-func emitLog(t *testing.T, c *Chain) {
+func emitProviderLog(t *testing.T, c *Chain) {
 	t.Helper()
 	var rec log.Record
 	rec.SetTimestamp(time.Now())
@@ -274,4 +341,41 @@ func segmentJSONObjects(t *testing.T, dir string) []map[string]json.RawMessage {
 		}
 	}
 	return out
+}
+
+// logRecordEventNames collects the eventName of every log record in the segment
+// store, proving the OTLP-JSON shape the downstream parsers walk.
+func logRecordEventNames(t *testing.T, dir string) map[string]bool {
+	t.Helper()
+	names := map[string]bool{}
+	for _, line := range segmentJSONObjects(t, dir) {
+		raw, ok := line["resourceLogs"]
+		if !ok {
+			continue
+		}
+		var resourceLogs []map[string]json.RawMessage
+		if err := json.Unmarshal(raw, &resourceLogs); err != nil {
+			t.Fatalf("unmarshal resourceLogs: %v", err)
+		}
+		for _, resourceLog := range resourceLogs {
+			var scopeLogs []map[string]json.RawMessage
+			if err := json.Unmarshal(resourceLog["scopeLogs"], &scopeLogs); err != nil {
+				t.Fatalf("unmarshal scopeLogs: %v", err)
+			}
+			for _, scopeLog := range scopeLogs {
+				var records []map[string]json.RawMessage
+				if err := json.Unmarshal(scopeLog["logRecords"], &records); err != nil {
+					t.Fatalf("unmarshal logRecords: %v", err)
+				}
+				for _, record := range records {
+					var name string
+					if err := json.Unmarshal(record["eventName"], &name); err != nil {
+						continue
+					}
+					names[name] = true
+				}
+			}
+		}
+	}
+	return names
 }

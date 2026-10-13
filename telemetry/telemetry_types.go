@@ -39,6 +39,10 @@ const (
 	EventBootstrapComplete     EventType = "bootstrap_complete"
 )
 
+// EventToolEdited is emitted when a write-class capability invocation succeeds.
+// It lives here so the event taxonomy has one home (spec §8.5).
+const EventToolEdited EventType = "tool.edited"
+
 // Domain event types bridged in Phase 6 (silent domain bridging). These carry
 // the same dot-qualified spelling as the decision-forensics events so the JSONL
 // namespace is consistent: compiler.*, scheduler.*, chunk.*, sandbox.*.

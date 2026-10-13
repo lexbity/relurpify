@@ -5,9 +5,6 @@ import (
 	"sync/atomic"
 )
 
-// EventToolEdited is emitted when a write-class capability invocation succeeds.
-const EventToolEdited EventType = "tool.edited"
-
 type subscriber struct {
 	ch      chan Event
 	dropped atomic.Uint64
