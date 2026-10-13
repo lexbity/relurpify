@@ -39,6 +39,7 @@ type SelfSnapshot struct {
 	Received    uint64
 	Dropped     uint64
 	FileDropped uint64
+	OpenSpans   int64
 }
 
 // Chain is the OTel export leg. It implements telemetry.Telemetry and io.Closer.
@@ -52,6 +53,7 @@ type Chain struct {
 	meterProvider  *sdkmetric.MeterProvider
 	segment        *segmentWriter
 	logger         otellog.Logger
+	assembler      *spanAssembler
 
 	closed   atomic.Bool
 	received atomic.Uint64
@@ -152,6 +154,14 @@ func New(ctx context.Context, s Settings, opts ...Option) (*Chain, error) {
 	chain.loggerProvider = newLoggerProvider(res, logProcessors)
 	chain.meterProvider = newMeterProvider(res, metricReaders)
 	chain.logger = chain.loggerProvider.Logger(instrumentationScopeName)
+	chain.assembler = newSpanAssembler( //nolint:contextcheck // the assembler's background sweep owns no caller context
+		chain.tracerProvider.Tracer(instrumentationScopeName),
+		chain.logger,
+		resolved.OrphanTimeout,
+		maxOpenSpans,
+		cfg.clock,
+		func() { chain.dropped.Add(1) },
+	)
 	return chain, nil
 }
 
@@ -177,9 +187,7 @@ func (c *Chain) Emit(ev telemetry.Event) {
 	}()
 	c.received.Add(1)
 	if isLifecycleType(ev.Type) {
-		// Slice 3 installs the span assembler here. Routing lifecycle events
-		// away from the log signal now keeps them from being mis-typed as point
-		// events once the assembler lands.
+		c.assembler.Emit(ev)
 		return
 	}
 	emitLog(c.logger, ev)
@@ -195,6 +203,8 @@ func (c *Chain) Close(ctx context.Context) error {
 	if !c.closed.CompareAndSwap(false, true) {
 		return nil
 	}
+	// Final assembler sweep (and drain) before the providers flush (D9).
+	c.assembler.shutdown() //nolint:contextcheck // the assembler owns its own background context
 	ctx, cancel := context.WithTimeout(ctx, closeTotalTimeout)
 	defer cancel()
 
@@ -240,6 +250,9 @@ func (c *Chain) SelfMetrics() SelfSnapshot {
 	snap := SelfSnapshot{Received: c.received.Load(), Dropped: c.dropped.Load()}
 	if c.segment != nil {
 		snap.FileDropped = c.segment.DroppedTotal()
+	}
+	if c.assembler != nil {
+		snap.OpenSpans = c.assembler.openSpans.Load()
 	}
 	return snap
 }

@@ -28,7 +28,7 @@ type severityRule struct {
 // severityRules are the D12 suffix rules, in evaluation order.
 var severityRules = []severityRule{ //nolint:gochecknoglobals // immutable severity-rule table
 	// Error: explicit failure.
-	{substr: "error", severity: log.SeverityError1},
+	{substr: statusError, severity: log.SeverityError1},
 	{substr: "failed", severity: log.SeverityError1},
 	{substr: "failure", severity: log.SeverityError1},
 	// Error: hard refusals and resource ceilings.

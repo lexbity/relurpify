@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/telemetry"
+	"go.opentelemetry.io/otel/attribute"
 	otellog "go.opentelemetry.io/otel/log"
 	"go.opentelemetry.io/otel/trace"
 )
@@ -49,6 +50,31 @@ func eventTimestamp(ev telemetry.Event) time.Time {
 		return time.Now()
 	}
 	return ev.Timestamp
+}
+
+// emitSelfLog writes a telemetry self-record (assembler orphan/overflow/panic
+// notices). Self-records are not part of the event taxonomy, so their name and
+// severity are explicit rather than resolved through SeverityOf.
+func emitSelfLog(logger otellog.Logger, name string, severity otellog.Severity, body string, attrs ...attribute.KeyValue) {
+	if logger == nil {
+		return
+	}
+	var rec otellog.Record
+	rec.SetTimestamp(time.Now())
+	rec.SetEventName(name)
+	rec.SetSeverity(severity)
+	rec.SetSeverityText(severity.String())
+	if body != "" {
+		rec.SetBody(otellog.StringValue(body))
+	}
+	if len(attrs) > 0 {
+		kvs := make([]otellog.KeyValue, 0, len(attrs))
+		for _, a := range attrs {
+			kvs = append(kvs, otellog.KeyValueFromAttribute(a))
+		}
+		rec.AddAttributes(kvs...)
+	}
+	logger.Emit(context.Background(), rec)
 }
 
 // syntheticSpanContext rebuilds an OTel span context from the correlation ids

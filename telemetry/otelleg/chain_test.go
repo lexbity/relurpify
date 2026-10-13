@@ -246,8 +246,8 @@ func TestEmitDropCounting(t *testing.T) {
 }
 
 // TestChainRoutesPointEventsToLogs proves a point event becomes an OTLP-JSON log
-// record while a lifecycle event is kept off the log signal (it belongs to the
-// span assembler).
+// record while an assemblable lifecycle event is kept off the log signal (it
+// becomes a span in the assembler).
 func TestChainRoutesPointEventsToLogs(t *testing.T) {
 	dir := t.TempDir()
 	chain := newFileOnlyChain(t, dir)
@@ -256,7 +256,13 @@ func TestChainRoutesPointEventsToLogs(t *testing.T) {
 		Timestamp: time.Now(),
 		Message:   testLogMessage,
 	})
-	chain.Emit(telemetry.Event{Type: telemetry.EventGraphStart, Timestamp: time.Now()})
+	chain.Emit(telemetry.Event{
+		Type:      telemetry.EventGraphStart,
+		TraceID:   testTraceID,
+		SpanID:    testSpanID,
+		RunID:     "r1",
+		Timestamp: time.Now(),
+	})
 	if err := chain.Close(context.Background()); err != nil {
 		t.Fatalf("close: %v", err)
 	}
@@ -266,7 +272,7 @@ func TestChainRoutesPointEventsToLogs(t *testing.T) {
 		t.Fatalf("point event missing from log records: %v", eventNames)
 	}
 	if eventNames["graph_start"] {
-		t.Fatal("lifecycle event was emitted as a log record")
+		t.Fatal("assemblable lifecycle event was emitted as a log record")
 	}
 }
 

@@ -22,46 +22,46 @@ type spanFamily struct {
 // //nolint records that it is intentional package state, not accidental.
 var spanFamilies = []spanFamily{ //nolint:gochecknoglobals // immutable lifecycle-family table
 	{
-		name:         "graph",
+		name:         familyGraph,
 		startTypes:   []telemetry.EventType{telemetry.EventGraphStart},
 		endTypes:     []telemetry.EventType{telemetry.EventGraphFinish},
-		identityKeys: []string{"run_id"},
+		identityKeys: []string{keyRunID},
 	},
 	{
-		name:         "node",
+		name:         familyNode,
 		startTypes:   []telemetry.EventType{telemetry.EventNodeStart},
 		endTypes:     []telemetry.EventType{telemetry.EventNodeFinish, telemetry.EventNodeError},
-		identityKeys: []string{"node_id", "span_id"},
+		identityKeys: []string{keyNodeID, keySpanID},
 	},
 	{
-		name:         "agent",
+		name:         familyAgent,
 		startTypes:   []telemetry.EventType{telemetry.EventAgentStart},
 		endTypes:     []telemetry.EventType{telemetry.EventAgentFinish},
-		identityKeys: []string{"run_id", "agent_id"},
+		identityKeys: []string{keyRunID, keyAgentID},
 	},
 	{
-		name:         "delegation",
+		name:         familyDelegation,
 		startTypes:   []telemetry.EventType{telemetry.EventDelegationStart},
 		endTypes:     []telemetry.EventType{telemetry.EventDelegationFinish, telemetry.EventDelegationCancel},
-		identityKeys: []string{"delegation_id", "task_id"},
+		identityKeys: []string{keyDelegationID, keyTaskID},
 	},
 	{
-		name:         "llm",
+		name:         familyLLM,
 		startTypes:   []telemetry.EventType{telemetry.EventLLMPrompt},
 		endTypes:     []telemetry.EventType{telemetry.EventLLMResponse},
-		identityKeys: []string{"span_id", "request_id"},
+		identityKeys: []string{keySpanID, keyRequestID},
 	},
 	{
-		name:         "tool",
+		name:         familyTool,
 		startTypes:   []telemetry.EventType{telemetry.EventToolCall},
 		endTypes:     []telemetry.EventType{telemetry.EventToolResult},
-		identityKeys: []string{"span_id", "call_id"},
+		identityKeys: []string{keySpanID, keyCallID},
 	},
 	{
-		name:         "capability",
+		name:         familyCapability,
 		startTypes:   []telemetry.EventType{telemetry.EventCapabilityCall},
 		endTypes:     []telemetry.EventType{telemetry.EventCapabilityResult},
-		identityKeys: []string{"span_id", "call_id"},
+		identityKeys: []string{keySpanID, keyCallID},
 	},
 }
 
