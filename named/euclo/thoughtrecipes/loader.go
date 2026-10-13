@@ -118,6 +118,11 @@ func (l *Loader) LoadWorkspace(workspaceRoot string) (*LoadResult, error) {
 
 		ext := filepath.Ext(name)
 		if !IsAcceptedThoughtRecipeExtension(ext) {
+			// families.yaml is the workspace handoff table read alongside
+			// the recipes — its presence here is expected, not a mistake.
+			if name == FamiliesFileName {
+				continue
+			}
 			result.Warnings = append(result.Warnings, LoadWarning{
 				Path:    fullPath,
 				Message: fmt.Sprintf("ignored unsupported thoughtrecipe extension %q", ext),

@@ -208,6 +208,13 @@ func (n *reactActNode) Execute(ctx context.Context, env *contextdata.Envelope) (
 	}
 	if !n.agent.Tools.CapabilityAvailable(ctx, env.State(), toolName) {
 		errMsg := fmt.Sprintf("tool %q is unavailable right now.", toolName)
+		// Record the rejection as an observation: an unavailable tool the
+		// model never hears about is indistinguishable from a write that
+		// succeeded — the loop then completes on a hallucinated fix.
+		errResult := &ports.ToolResult{Success: false, Error: errMsg}
+		rejectedCall := model.ToolCall{ID: NewUUID(), Name: toolName, Args: decision.Arguments}
+		rejectionEnvelope := n.capabilityEnvelope(ctx, env, nil, rejectedCall, errResult)
+		n.recordObservation(ctx, env, rejectedCall, errResult, rejectionEnvelope)
 		env.SetWorkingValueWithClass("react.last_tool_result", map[string]any{"error": errMsg}, contextdata.MemoryClassTask)
 		result := &execution.Result{NodeID: n.id, Success: false, Error: errMsg}
 		env.SetWorkingValueWithClass("react.last_result", result, contextdata.MemoryClassTask)

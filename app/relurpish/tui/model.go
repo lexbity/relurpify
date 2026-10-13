@@ -436,6 +436,16 @@ func (m *RootModel) activateSurface(agentName string) {
 	m.activeTab = m.tabs.ActiveTab().ID
 	m.setActiveTab(m.activeTab)
 	propagateSurfaceTheme(m, state.surface)
+	// Surfaces are built lazily — after the boot's initial WindowSizeMsg a
+	// late-activated pane has seen no size at all and would render at
+	// width 0 (the dead "terminal too narrow" feed). Re-push the current
+	// terminal dimensions to the freshly activated surface.
+	if m.width > 0 && m.height > 0 {
+		updated, _ := m.handleResize(tea.WindowSizeMsg{Width: m.width, Height: m.height})
+		if rm, ok := updated.(RootModel); ok {
+			*m = rm
+		}
+	}
 }
 
 func (m *RootModel) surfaceStateFor(agentName string) *surfaceState {

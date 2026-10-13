@@ -46,6 +46,7 @@ devdocs/
 # Build artifacts: test binaries must not be committed
 *.test
 /driftcheck
+tui-stderr.log
 
 # GoReleaser output
 /dist/
