@@ -6,12 +6,14 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math"
 	"os"
 	"runtime/debug"
 	"sync/atomic"
 	"time"
 
 	"codeburg.org/lexbit/relurpify/telemetry"
+	"codeburg.org/lexbit/relurpify/telemetry/observing"
 	"go.opentelemetry.io/otel/attribute"
 	otellog "go.opentelemetry.io/otel/log"
 	sdklog "go.opentelemetry.io/otel/sdk/log"
@@ -48,12 +50,15 @@ type Chain struct {
 	settings Settings
 	enabled  bool
 
-	tracerProvider *sdktrace.TracerProvider
-	loggerProvider *sdklog.LoggerProvider
-	meterProvider  *sdkmetric.MeterProvider
-	segment        *segmentWriter
-	logger         otellog.Logger
-	assembler      *spanAssembler
+	tracerProvider    *sdktrace.TracerProvider
+	loggerProvider    *sdklog.LoggerProvider
+	meterProvider     *sdkmetric.MeterProvider
+	selfMeterProvider *sdkmetric.MeterProvider
+	segment           *segmentWriter
+	logger            otellog.Logger
+	assembler         *spanAssembler
+	meter             *meterBridge
+	usage             *usageRecorder
 
 	closed   atomic.Bool
 	received atomic.Uint64
@@ -64,7 +69,11 @@ type Chain struct {
 type Option func(*options)
 
 type options struct {
-	clock func() time.Time
+	clock          func() time.Time
+	toolMetrics    *telemetry.ToolCallMetrics
+	usageDelegate  observing.UsageObserver
+	usageModel     string
+	droppedSources []droppedSource
 }
 
 // WithClock injects the time source used for segment rotation and pruning. It
@@ -73,6 +82,35 @@ func WithClock(clock func() time.Time) Option {
 	return func(o *options) {
 		if clock != nil {
 			o.clock = clock
+		}
+	}
+}
+
+// WithToolCallMetrics injects the process tool-call metrics instance the meter
+// bridge polls. Without it, the relurpify.tool.* gauges are not registered.
+func WithToolCallMetrics(metrics *telemetry.ToolCallMetrics) Option {
+	return func(o *options) {
+		if metrics != nil {
+			o.toolMetrics = metrics
+		}
+	}
+}
+
+// WithUsageObserver injects the UsageObserver the UsageRecorder decorates.
+// model, when non-empty, is exported as gen_ai.request.model.
+func WithUsageObserver(delegate observing.UsageObserver, model string) Option {
+	return func(o *options) {
+		o.usageDelegate = delegate
+		o.usageModel = model
+	}
+}
+
+// WithDroppedSource registers an extra relurpify.telemetry.dropped series. The
+// broadcast sink is the intended user (its DroppedTotal); wiring supplies it.
+func WithDroppedSource(kind string, source func() int64) Option {
+	return func(o *options) {
+		if source != nil {
+			o.droppedSources = append(o.droppedSources, droppedSource{kind: kind, value: source})
 		}
 	}
 }
@@ -89,37 +127,45 @@ func New(ctx context.Context, s Settings, opts ...Option) (*Chain, error) {
 	for _, opt := range opts {
 		opt(&cfg)
 	}
+	chain := &Chain{settings: resolved, enabled: resolved.Enabled}
+	chain.usage = &usageRecorder{delegate: cfg.usageDelegate, model: cfg.usageModel}
 	if !resolved.Enabled {
-		return &Chain{settings: resolved}, nil
+		return chain, nil
 	}
-
-	chain := &Chain{settings: resolved, enabled: true}
 	res := newResource()
+	lag := &exportLag{}
 
 	var spanProcessors []sdktrace.SpanProcessor
 	var logProcessors []sdklog.Processor
 	var metricReaders []sdkmetric.Reader
+	var selfMetricReaders []sdkmetric.Reader
 
 	if resolved.FileEnabled {
 		chain.segment = newSegmentWriter(resolved.FileDir, segmentPrefix, resolved.FileRetention, resolved.FileMaxSizeMB, cfg.clock)
 		traceExp, err := newFileTraceExporter(ctx, chain.segment)
 		if err != nil {
-			chain.closeOnError()
+			chain.closeOnError(ctx)
 			return nil, fmt.Errorf("telemetry file trace exporter: %w", err)
 		}
 		metricExp, err := newFileMetricExporter(ctx, chain.segment)
 		if err != nil {
-			chain.closeOnError()
+			chain.closeOnError(ctx)
 			return nil, fmt.Errorf("telemetry file metric exporter: %w", err)
+		}
+		selfMetricExp, err := newFileMetricExporter(ctx, chain.segment)
+		if err != nil {
+			chain.closeOnError(ctx)
+			return nil, fmt.Errorf("telemetry file self-metric exporter: %w", err)
 		}
 		logExp, err := newFileLogExporter(ctx, chain.segment)
 		if err != nil {
-			chain.closeOnError()
+			chain.closeOnError(ctx)
 			return nil, fmt.Errorf("telemetry file log exporter: %w", err)
 		}
-		spanProcessors = append(spanProcessors, newBatchSpanProcessor(traceExp))
+		spanProcessors = append(spanProcessors, newBatchSpanProcessor(&lagSpanExporter{inner: traceExp, lag: lag, signal: signalTraces}))
 		metricReaders = append(metricReaders, newPeriodicReader(metricExp, resolved.MetricsInterval))
-		logProcessors = append(logProcessors, newBatchLogProcessor(logExp))
+		selfMetricReaders = append(selfMetricReaders, newPeriodicReader(selfMetricExp, resolved.MetricsInterval))
+		logProcessors = append(logProcessors, newBatchLogProcessor(&lagLogExporter{inner: logExp, lag: lag, signal: signalLogs}))
 	}
 
 	if resolved.Endpoint != "" {
@@ -132,27 +178,28 @@ func New(ctx context.Context, s Settings, opts ...Option) (*Chain, error) {
 		}
 		traceExp, err := newNetworkTraceExporter(ctx, netCfg)
 		if err != nil {
-			chain.closeOnError()
+			chain.closeOnError(ctx)
 			return nil, fmt.Errorf("telemetry OTLP trace exporter: %w", err)
 		}
 		metricExp, err := newNetworkMetricExporter(ctx, netCfg)
 		if err != nil {
-			chain.closeOnError()
+			chain.closeOnError(ctx)
 			return nil, fmt.Errorf("telemetry OTLP metric exporter: %w", err)
 		}
 		logExp, err := newNetworkLogExporter(ctx, netCfg)
 		if err != nil {
-			chain.closeOnError()
+			chain.closeOnError(ctx)
 			return nil, fmt.Errorf("telemetry OTLP log exporter: %w", err)
 		}
-		spanProcessors = append(spanProcessors, newBatchSpanProcessor(traceExp))
+		spanProcessors = append(spanProcessors, newBatchSpanProcessor(&lagSpanExporter{inner: traceExp, lag: lag, signal: signalTraces}))
 		metricReaders = append(metricReaders, newPeriodicReader(metricExp, resolved.MetricsInterval))
-		logProcessors = append(logProcessors, newBatchLogProcessor(logExp))
+		logProcessors = append(logProcessors, newBatchLogProcessor(&lagLogExporter{inner: logExp, lag: lag, signal: signalLogs}))
 	}
 
 	chain.tracerProvider = newTracerProvider(res, resolved.SamplingRatio, spanProcessors)
 	chain.loggerProvider = newLoggerProvider(res, logProcessors)
 	chain.meterProvider = newMeterProvider(res, metricReaders)
+	chain.selfMeterProvider = newMeterProvider(res, selfMetricReaders)
 	chain.logger = chain.loggerProvider.Logger(instrumentationScopeName)
 	chain.assembler = newSpanAssembler( //nolint:contextcheck // the assembler's background sweep owns no caller context
 		chain.tracerProvider.Tracer(instrumentationScopeName),
@@ -162,6 +209,21 @@ func New(ctx context.Context, s Settings, opts ...Option) (*Chain, error) {
 		cfg.clock,
 		func() { chain.dropped.Add(1) },
 	)
+
+	bridge, err := newMeterBridge(bridgeConfig{
+		meter:          chain.meterProvider.Meter(instrumentationScopeName),
+		selfMeter:      chain.selfMeterProvider.Meter(instrumentationScopeName),
+		usage:          chain.usage,
+		toolMetrics:    cfg.toolMetrics,
+		droppedSources: chain.droppedSources(cfg.droppedSources),
+		openSpans:      func() int64 { return chain.assembler.openSpans.Load() },
+		lag:            lag,
+	})
+	if err != nil {
+		chain.closeOnError(ctx)
+		return nil, fmt.Errorf("telemetry meter bridge: %w", err)
+	}
+	chain.meter = bridge
 	return chain, nil
 }
 
@@ -205,6 +267,8 @@ func (c *Chain) Close(ctx context.Context) error {
 	}
 	// Final assembler sweep (and drain) before the providers flush (D9).
 	c.assembler.shutdown() //nolint:contextcheck // the assembler owns its own background context
+	// Unregister observable callbacks before shutting the providers down.
+	c.meter.shutdown()
 	ctx, cancel := context.WithTimeout(ctx, closeTotalTimeout)
 	defer cancel()
 
@@ -225,6 +289,9 @@ func (c *Chain) Close(ctx context.Context) error {
 	if c.meterProvider != nil {
 		flush("metric flush", c.meterProvider.ForceFlush)
 	}
+	if c.selfMeterProvider != nil {
+		flush("self metric flush", c.selfMeterProvider.ForceFlush)
+	}
 	if c.tracerProvider != nil {
 		flush("trace shutdown", c.tracerProvider.Shutdown)
 	}
@@ -234,12 +301,25 @@ func (c *Chain) Close(ctx context.Context) error {
 	if c.meterProvider != nil {
 		flush("metric shutdown", c.meterProvider.Shutdown)
 	}
+	if c.selfMeterProvider != nil {
+		flush("self metric shutdown", c.selfMeterProvider.Shutdown)
+	}
 	if c.segment != nil {
 		if err := c.segment.Close(); err != nil {
 			errs = append(errs, fmt.Errorf("segment close: %w", err))
 		}
 	}
 	return errors.Join(errs...)
+}
+
+// UsageRecorder returns the decorator the composition root installs on the
+// usage observer. It forwards every record to the configured delegate and
+// records the token/call instruments (spec §6.6).
+func (c *Chain) UsageRecorder() observing.UsageObserver {
+	if c == nil {
+		return nil
+	}
+	return c.usage
 }
 
 // SelfMetrics returns the chain's own counters.
@@ -257,8 +337,37 @@ func (c *Chain) SelfMetrics() SelfSnapshot {
 	return snap
 }
 
+// droppedSources is the built-in relurpify.telemetry.dropped series set.
+func (c *Chain) droppedSources(extra []droppedSource) []droppedSource {
+	sources := []droppedSource{
+		{kind: "chain", value: func() int64 { return saturatingInt64(c.dropped.Load()) }},
+		{kind: "file", value: func() int64 {
+			if c.segment == nil {
+				return 0
+			}
+			return saturatingInt64(c.segment.DroppedTotal())
+		}},
+	}
+	return append(sources, extra...)
+}
+
 // closeOnError releases a partially constructed chain.
-func (c *Chain) closeOnError() {
+func (c *Chain) closeOnError(ctx context.Context) {
+	if c.assembler != nil {
+		c.assembler.stop()
+	}
+	if c.tracerProvider != nil {
+		_ = c.tracerProvider.Shutdown(ctx)
+	}
+	if c.loggerProvider != nil {
+		_ = c.loggerProvider.Shutdown(ctx)
+	}
+	if c.meterProvider != nil {
+		_ = c.meterProvider.Shutdown(ctx)
+	}
+	if c.selfMeterProvider != nil {
+		_ = c.selfMeterProvider.Shutdown(ctx)
+	}
 	if c.segment != nil {
 		_ = c.segment.Close()
 		c.segment = nil
@@ -341,6 +450,15 @@ func newInstanceID() string {
 	b[6] = (b[6] & 0x0f) | 0x40
 	b[8] = (b[8] & 0x3f) | 0x80
 	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
+}
+
+// saturatingInt64 converts an unsigned counter to int64, clamping instead of
+// wrapping (a counter near MaxInt64 would otherwise report a negative gauge).
+func saturatingInt64(v uint64) int64 {
+	if v > math.MaxInt64 {
+		return math.MaxInt64
+	}
+	return int64(v)
 }
 
 var _ telemetry.Telemetry = (*Chain)(nil)

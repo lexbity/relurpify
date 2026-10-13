@@ -36,55 +36,58 @@ func TestChainFileLegWritesParsableOTLPJSON(t *testing.T) {
 		for key := range line {
 			seen[key] = true
 		}
-		switch {
-		case line["resourceLogs"] != nil:
-			checkNestedName(t, line, "resourceLogs", "scopeLogs", "logRecords", "eventName", "test.event")
-		case line["resourceSpans"] != nil:
-			checkNestedName(t, line, "resourceSpans", "scopeSpans", "spans", "name", "test-span")
-		case line["resourceMetrics"] != nil:
-			checkNestedName(t, line, "resourceMetrics", "scopeMetrics", "metrics", "name", "test.counter")
-		}
 	}
 	for _, want := range []string{"resourceSpans", "resourceLogs", "resourceMetrics"} {
 		if !seen[want] {
 			t.Fatalf("file leg missing %q line; saw %v", want, seen)
 		}
 	}
+	if names := nestedNames(t, dir, "resourceSpans", "scopeSpans", "spans", "name"); !names["test-span"] {
+		t.Fatalf("span missing: %v", names)
+	}
+	if names := nestedNames(t, dir, "resourceLogs", "scopeLogs", "logRecords", "eventName"); !names["test.event"] {
+		t.Fatalf("log record missing: %v", names)
+	}
+	if names := nestedNames(t, dir, "resourceMetrics", "scopeMetrics", "metrics", "name"); !names["test.counter"] {
+		t.Fatalf("metric missing: %v", names)
+	}
 }
 
-// checkNestedName asserts line[top][middle][list][field] == want, proving the
-// OTLP-JSON shape the downstream selection report parses.
-func checkNestedName(t *testing.T, line map[string]json.RawMessage, top, middle, list, field, want string) {
+// nestedNames collects line[top][middle][list][field] across every segment line,
+// proving the OTLP-JSON shape the downstream selection report parses.
+func nestedNames(t *testing.T, dir, top, middle, list, field string) map[string]bool {
 	t.Helper()
-	// Generic walk: top -> [ { middle: [ { list: [ {field: value} ] } ] } ].
-	var topList []map[string]json.RawMessage
-	if err := json.Unmarshal(line[top], &topList); err != nil {
-		t.Fatalf("unmarshal %s: %v", top, err)
+	names := map[string]bool{}
+	for _, line := range segmentJSONObjects(t, dir) {
+		raw, ok := line[top]
+		if !ok {
+			continue
+		}
+		var topList []map[string]json.RawMessage
+		if err := json.Unmarshal(raw, &topList); err != nil {
+			t.Fatalf("unmarshal %s: %v", top, err)
+		}
+		for _, item := range topList {
+			var middleList []map[string]json.RawMessage
+			if err := json.Unmarshal(item[middle], &middleList); err != nil {
+				t.Fatalf("unmarshal %s.%s: %v", top, middle, err)
+			}
+			for _, entry := range middleList {
+				var items []map[string]json.RawMessage
+				if err := json.Unmarshal(entry[list], &items); err != nil {
+					t.Fatalf("unmarshal %s.%s.%s: %v", top, middle, list, err)
+				}
+				for _, item := range items {
+					var name string
+					if err := json.Unmarshal(item[field], &name); err != nil {
+						continue
+					}
+					names[name] = true
+				}
+			}
+		}
 	}
-	if len(topList) == 0 {
-		t.Fatalf("%s is empty", top)
-	}
-	var middleList []map[string]json.RawMessage
-	if err := json.Unmarshal(topList[0][middle], &middleList); err != nil {
-		t.Fatalf("unmarshal %s.%s: %v", top, middle, err)
-	}
-	if len(middleList) == 0 {
-		t.Fatalf("%s.%s is empty", top, middle)
-	}
-	var items []map[string]json.RawMessage
-	if err := json.Unmarshal(middleList[0][list], &items); err != nil {
-		t.Fatalf("unmarshal %s.%s.%s: %v", top, middle, list, err)
-	}
-	if len(items) == 0 {
-		t.Fatalf("%s.%s.%s is empty", top, middle, list)
-	}
-	var got string
-	if err := json.Unmarshal(items[0][field], &got); err != nil {
-		t.Fatalf("unmarshal %s field: %v", field, err)
-	}
-	if got != want {
-		t.Fatalf("%s.%s.%s[0].%s = %q, want %q", top, middle, list, field, got, want)
-	}
+	return names
 }
 
 func TestChainOTLPHTTPRoundTrip(t *testing.T) {
@@ -353,35 +356,5 @@ func segmentJSONObjects(t *testing.T, dir string) []map[string]json.RawMessage {
 // store, proving the OTLP-JSON shape the downstream parsers walk.
 func logRecordEventNames(t *testing.T, dir string) map[string]bool {
 	t.Helper()
-	names := map[string]bool{}
-	for _, line := range segmentJSONObjects(t, dir) {
-		raw, ok := line["resourceLogs"]
-		if !ok {
-			continue
-		}
-		var resourceLogs []map[string]json.RawMessage
-		if err := json.Unmarshal(raw, &resourceLogs); err != nil {
-			t.Fatalf("unmarshal resourceLogs: %v", err)
-		}
-		for _, resourceLog := range resourceLogs {
-			var scopeLogs []map[string]json.RawMessage
-			if err := json.Unmarshal(resourceLog["scopeLogs"], &scopeLogs); err != nil {
-				t.Fatalf("unmarshal scopeLogs: %v", err)
-			}
-			for _, scopeLog := range scopeLogs {
-				var records []map[string]json.RawMessage
-				if err := json.Unmarshal(scopeLog["logRecords"], &records); err != nil {
-					t.Fatalf("unmarshal logRecords: %v", err)
-				}
-				for _, record := range records {
-					var name string
-					if err := json.Unmarshal(record["eventName"], &name); err != nil {
-						continue
-					}
-					names[name] = true
-				}
-			}
-		}
-	}
-	return names
+	return nestedNames(t, dir, "resourceLogs", "scopeLogs", "logRecords", "eventName")
 }

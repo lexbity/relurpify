@@ -126,17 +126,30 @@ func (a *spanAssembler) Emit(ev telemetry.Event) {
 // still-open spans (they were never completed; ending them at the current time
 // keeps the registry bounded and lets the flush export them).
 func (a *spanAssembler) shutdown() {
-	if a == nil {
+	if !a.beginStop() {
 		return
 	}
-	if !a.closed.CompareAndSwap(false, true) {
-		return
-	}
-	close(a.done)
-	a.wg.Wait()
 	now := a.clock()
 	a.sweepOrphans(now)
 	a.drain(now)
+}
+
+// stop stops the sweep goroutine without sweeping or emitting self-records. It
+// is the error-path teardown, where no spans have been assembled.
+func (a *spanAssembler) stop() {
+	a.beginStop()
+}
+
+func (a *spanAssembler) beginStop() bool {
+	if a == nil {
+		return false
+	}
+	if !a.closed.CompareAndSwap(false, true) {
+		return false
+	}
+	close(a.done)
+	a.wg.Wait()
+	return true
 }
 
 func (a *spanAssembler) handleStart(ev telemetry.Event, family spanFamily, key string) {
