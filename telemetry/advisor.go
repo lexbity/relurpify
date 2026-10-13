@@ -46,11 +46,11 @@ func AdvisorFromContext(ctx context.Context) *ContextBudgetAdvisor {
 
 // RecordTokenUsage implements observing.UsageObserver.
 func (a *ContextBudgetAdvisor) RecordTokenUsage(usage observing.TokenUsage) {
-	a.RecordCall(TokenUsage(usage))
+	a.RecordCall(usage)
 }
 
 // RecordCall updates internal accounting from an LLM response.
-func (a *ContextBudgetAdvisor) RecordCall(usage TokenUsage) {
+func (a *ContextBudgetAdvisor) RecordCall(usage observing.TokenUsage) {
 	if a == nil {
 		return
 	}

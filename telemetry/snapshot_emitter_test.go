@@ -3,6 +3,8 @@ package telemetry
 import (
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/telemetry/observing"
+
 	"github.com/stretchr/testify/require"
 )
 
@@ -18,9 +20,9 @@ func TestSnapshotEmitter_EmitsEveryInterval(t *testing.T) {
 	advisor := &ContextBudgetAdvisor{ModelContextSize: 4096}
 	sink := &snapshotTelemetryStub{}
 
-	advisor.RecordCall(TokenUsage{PromptTokens: 100})
-	advisor.RecordCall(TokenUsage{PromptTokens: 100})
-	advisor.RecordCall(TokenUsage{PromptTokens: 100})
+	advisor.RecordCall(observing.TokenUsage{PromptTokens: 100})
+	advisor.RecordCall(observing.TokenUsage{PromptTokens: 100})
+	advisor.RecordCall(observing.TokenUsage{PromptTokens: 100})
 
 	emitter := NewSnapshotEmitter(advisor, sink, 1)
 	emitter.Observe()

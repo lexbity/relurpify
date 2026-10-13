@@ -340,29 +340,6 @@ func TestSuiteValidateRejectsUnsupportedRecordingStrategy(t *testing.T) {
 	}
 }
 
-func TestSuiteValidateRejectsInvalidBootstrapTimeoutOverride(t *testing.T) {
-	suite := &Suite{
-		APIVersion: relurpify_v1alpha1,
-		Kind:       agenttestsuite,
-		Metadata:   SuiteMeta{Name: coding},
-		Spec: SuiteSpec{
-			AgentName: coding,
-			Manifest:  relurpify_cfg_agent_yaml,
-			Cases: []CaseSpec{{
-				Name:   smoke,
-				Prompt: summarize,
-				Overrides: CaseOverrideSpec{
-					BootstrapTimeout: "nope",
-				},
-			}},
-		},
-	}
-
-	if err := suite.Validate(); err == nil {
-		t.Fatal("expected invalid bootstrap_timeout override to fail validation")
-	}
-}
-
 // Test removed; EucloExpectSpec no longer exists and was migrated to Benchmark.Euclo.
 
 func TestSuiteValidateRejectsInvalidSetupFileMode(t *testing.T) {

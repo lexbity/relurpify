@@ -376,7 +376,6 @@ func BootstrapAgentRuntime(ctx context.Context, workspace string, opts AgentBoot
 		KnowledgeStore:    nil, // Will be populated in Open
 		Retriever:         nil, // Will be populated in Open
 		Compiler:          nil, // Will be populated in Open
-		EventLog:          nil,
 		Scheduler:         nil,
 		ServiceManager:    nil,
 	}

@@ -123,14 +123,17 @@ func (s TelemetryDecisionSink) emit(ctx context.Context, et EventType, message s
 	if s.Telemetry == nil {
 		return
 	}
+	if actor != "" {
+		if metadata == nil {
+			metadata = map[string]any{}
+		}
+		metadata["actor"] = actor
+	}
 	ev := Event{
 		Type:      et,
 		Message:   message,
 		Timestamp: time.Now().UTC(),
 		Metadata:  metadata,
-	}
-	if actor != "" {
-		ev.Actor = actor
 	}
 	StampCorrelation(ctx, &ev)
 	s.Telemetry.Emit(ev)

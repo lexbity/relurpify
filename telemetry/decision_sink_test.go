@@ -2,9 +2,10 @@ package telemetry
 
 import (
 	"context"
-	"github.com/stretchr/testify/require"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 type decisionEventSink struct {
@@ -66,7 +67,7 @@ func TestTelemetryDecisionSink_PolicyConflictShadowed(t *testing.T) {
 	require.Equal(t, "global:deny", ev.Metadata["winner_rule"])
 	require.Equal(t, "tool:allow", ev.Metadata["shadowed_rule"])
 	require.Equal(t, "allow", ev.Metadata["shadowed_effect"])
-	require.Equal(t, "agent:euclo", ev.Actor)
+	require.Equal(t, "agent:euclo", ev.Metadata["actor"])
 }
 
 // TestTelemetryDecisionSink_HITLLifecycle verifies hitl.requested and

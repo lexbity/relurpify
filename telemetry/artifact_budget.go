@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"sort"
 	"sync"
+
+	"codeburg.org/lexbit/relurpify/telemetry/observing"
 )
 
 // ArtifactTokenUsage captures the token accounting snapshot for artifact budgeting.
@@ -32,7 +34,7 @@ type Allocation struct {
 	UsedTokens int
 	Reserved   bool
 	Priority   int
-	Items      []BudgetItem
+	Items      []observing.BudgetItem
 }
 
 // BudgetListener receives events emitted by the budget. Agents can hook
@@ -134,7 +136,7 @@ func NewArtifactBudgetWithPolicy(maxTokens int, policy *AllocationPolicy) *Artif
 
 // Allocate reserves tokens inside a category, optionally associating a concrete
 // item so the budget can compress or evict it later if needed.
-func (cb *ArtifactBudget) Allocate(category string, tokens int, item BudgetItem) error {
+func (cb *ArtifactBudget) Allocate(category string, tokens int, item observing.BudgetItem) error {
 	if tokens < 0 {
 		return fmt.Errorf("cannot allocate negative tokens")
 	}
@@ -305,7 +307,7 @@ func (cb *ArtifactBudget) compressLocked(category string, target int) bool {
 		return alloc.Items[i].GetPriority() > alloc.Items[j].GetPriority()
 	})
 	saved := 0
-	replacements := make([]BudgetItem, 0, len(alloc.Items))
+	replacements := make([]observing.BudgetItem, 0, len(alloc.Items))
 	for _, item := range alloc.Items {
 		if !item.CanCompress() {
 			replacements = append(replacements, item)
@@ -370,7 +372,7 @@ func (cb *ArtifactBudget) recomputeAllocations() {
 			Category:  category,
 			MaxTokens: maxTokens,
 			Priority:  priority,
-			Items:     make([]BudgetItem, 0),
+			Items:     make([]observing.BudgetItem, 0),
 		}
 		priority--
 	}

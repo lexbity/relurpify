@@ -212,12 +212,3 @@ func (c WorkspaceConfig) TelemetryDir() string {
 	}
 	return filepath.Join(stateDir, "telemetry")
 }
-
-// EventsFile returns the absolute runtime events database path for the workspace.
-func (c WorkspaceConfig) EventsFile() string {
-	stateDir := c.StateDir()
-	if stateDir == "" {
-		return ""
-	}
-	return filepath.Join(stateDir, "events.db")
-}

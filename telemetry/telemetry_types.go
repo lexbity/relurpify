@@ -218,29 +218,9 @@ type Event struct {
 	Timestamp time.Time      `json:"timestamp"`
 	Metadata  map[string]any `json:"metadata,omitempty"`
 	Seq       uint64         `json:"seq,omitempty"`
-	Partition string         `json:"partition,omitempty"`
-	Payload   []byte         `json:"payload,omitempty"`
-	Actor     string         `json:"actor,omitempty"`
-	// ActorKind classifies the actor (e.g. "agent", "system"). The
-	// observability.Event Actor struct was flattened into Actor (the ID)
-	// plus this field when the two Event structs unified (S4).
-	ActorKind string `json:"actor_kind,omitempty"`
 }
 
 // Telemetry captures execution traces emitted by the graph runtime.
 type Telemetry interface {
 	Emit(event Event)
-}
-
-// BudgetTelemetry extends telemetry with budget-management signals.
-type BudgetTelemetry interface {
-	OnArtifactPruning(taskID string, itemsRemoved int, tokensFreed int)
-	OnBudgetExceeded(taskID string, attempted int, available int)
-}
-
-// CheckpointTelemetry extends telemetry with checkpoint lifecycle events.
-type CheckpointTelemetry interface {
-	OnCheckpointCreated(taskID string, checkpointID string, nodeID string)
-	OnCheckpointRestored(taskID string, checkpointID string)
-	OnGraphResume(taskID string, checkpointID string, nodeID string)
 }

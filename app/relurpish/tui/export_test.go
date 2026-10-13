@@ -10,8 +10,8 @@ import (
 	"codeburg.org/lexbit/relurpify/telemetry"
 )
 
-// exportTelemetryPath is the telemetry path rendered into the export.
-const exportTelemetryPath = "telemetry.jsonl"
+// exportTelemetryDir is the telemetry segment directory rendered into the export.
+const exportTelemetryDir = "telemetry/otlp"
 
 func TestWriteMarkdownExportTelemetrySections(t *testing.T) {
 	tests := []struct {
@@ -22,14 +22,14 @@ func TestWriteMarkdownExportTelemetrySections(t *testing.T) {
 	}{
 		{
 			name:      "error takes precedence",
-			telemetry: TelemetryExport{Path: exportTelemetryPath, Error: "probe failed"},
+			telemetry: TelemetryExport{Path: exportTelemetryDir, Error: "probe failed"},
 			want:      []string{"- Error: probe failed"},
 			absent:    []string{"- Events:"},
 		},
 		{
 			name: "events render counts and truncation",
 			telemetry: TelemetryExport{
-				Path: exportTelemetryPath,
+				Path: exportTelemetryDir,
 				Events: []telemetry.Event{
 					{Type: telemetry.EventType("first")},
 					{Type: telemetry.EventType("second")},
@@ -40,7 +40,7 @@ func TestWriteMarkdownExportTelemetrySections(t *testing.T) {
 		},
 		{
 			name:      "no events",
-			telemetry: TelemetryExport{Path: exportTelemetryPath},
+			telemetry: TelemetryExport{Path: exportTelemetryDir},
 			want:      []string{"- Events: 0"},
 			absent:    []string{"- Note: telemetry truncated"},
 		},

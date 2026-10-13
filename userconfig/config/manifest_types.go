@@ -77,11 +77,6 @@ func (p Paths) TelemetryDir() string {
 	return filepath.Join(p.StateRoot(), "telemetry")
 }
 
-// EventsFile returns the runtime events database path.
-func (p Paths) EventsFile() string {
-	return filepath.Join(p.StateRoot(), "events.db")
-}
-
 // NodesFile returns the runtime nodes database path.
 func (p Paths) NodesFile() string {
 	return filepath.Join(p.StateRoot(), "nodes.db")

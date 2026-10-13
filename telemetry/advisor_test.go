@@ -5,14 +5,16 @@ import (
 	"sync"
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/telemetry/observing"
+
 	"github.com/stretchr/testify/require"
 )
 
 func TestContextBudgetAdvisorRecordThenQuery(t *testing.T) {
 	advisor := &ContextBudgetAdvisor{ModelContextSize: 8000, ReservedOutputTokens: 1024}
-	advisor.RecordCall(TokenUsage{PromptTokens: 1024, CompletionTokens: 128, TotalTokens: 1152})
-	advisor.RecordCall(TokenUsage{PromptTokens: 1000, Estimated: true})
-	advisor.RecordCall(TokenUsage{PromptTokens: 1200})
+	advisor.RecordCall(observing.TokenUsage{PromptTokens: 1024, CompletionTokens: 128, TotalTokens: 1152})
+	advisor.RecordCall(observing.TokenUsage{PromptTokens: 1000, Estimated: true})
+	advisor.RecordCall(observing.TokenUsage{PromptTokens: 1200})
 	require.True(t, advisor.ShouldReset())
 	advisor.Reset()
 	require.Equal(t, 2048-512, advisor.AvailableCompilationBudget())
@@ -26,7 +28,7 @@ func TestContextBudgetAdvisor_ConcurrentRecordCall(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			advisor.RecordCall(TokenUsage{PromptTokens: 10, CompletionTokens: 5})
+			advisor.RecordCall(observing.TokenUsage{PromptTokens: 10, CompletionTokens: 5})
 		}()
 	}
 	wg.Wait()

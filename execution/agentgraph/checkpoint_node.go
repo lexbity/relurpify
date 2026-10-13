@@ -239,9 +239,6 @@ func (n *CheckpointNode) Execute(ctx context.Context, env *contextdata.Envelope)
 			resultData["checkpoint_mirror_failed"] = err.Error()
 		}
 	}
-	if tel, ok := telemetry.TelemetryFromContext(ctx).(telemetry.CheckpointTelemetry); ok {
-		tel.OnCheckpointCreated(env.TaskIDSnapshot(), ref.ArtifactID, n.id)
-	}
 	if n.telemetry != nil {
 		ev := telemetry.Event{
 			Type:      telemetry.EventStateChange,

@@ -497,17 +497,8 @@ func TestNewRunCaseLayoutUsesStructuredRunSubdirectories(t *testing.T) {
 	if got := layout.WorkspaceDir; got != filepath.Join(runRoot, "tmp", caseKey, "workspace") {
 		t.Fatalf("WorkspaceDir = %q", got)
 	}
-	if got := layout.LogPath; got != filepath.Join(runRoot, "logs", caseKey+".log") {
-		t.Fatalf("LogPath = %q", got)
-	}
-	if got := layout.TelemetryPath; got != filepath.Join(runRoot, "telemetry", caseKey+".jsonl") {
-		t.Fatalf("TelemetryPath = %q", got)
-	}
 	if got := layout.TapePath; got != filepath.Join(runRoot, artifacts, caseKey, "tape.jsonl") {
 		t.Fatalf("TapePath = %q", got)
-	}
-	if got := layout.InteractionTapePath; got != filepath.Join(runRoot, artifacts, caseKey, "interaction.tape.jsonl") {
-		t.Fatalf("InteractionTapePath = %q", got)
 	}
 }
 

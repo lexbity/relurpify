@@ -1,8 +1,9 @@
 package session
 
 import (
-	"codeburg.org/lexbit/relurpify/execution/services"
 	"time"
+
+	"codeburg.org/lexbit/relurpify/execution/services"
 
 	registry "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
@@ -20,7 +21,6 @@ import (
 	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/jobs"
 	"codeburg.org/lexbit/relurpify/model"
-	"codeburg.org/lexbit/relurpify/telemetry/event"
 )
 
 // agentEnv is the internal runtime data shared within a workspace session.
@@ -88,7 +88,6 @@ type agentEnv struct {
 	PromptRegistry prompt.Registry
 
 	// Event infrastructure
-	EventLog        event.Log
 	KnowledgeEvents *knowledge.EventBus
 	// KnowledgeDrain is the invalidation subscriber's bounded drain the epoch
 	// barrier calls. Nil when the knowledge runtime is absent.

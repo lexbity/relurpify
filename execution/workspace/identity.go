@@ -48,16 +48,6 @@ func (id Identity) TelemetryDir() string {
 	return filepath.Join(id.StateDir(), "telemetry")
 }
 
-// TelemetryPath returns a path to a named telemetry file under the state telemetry directory.
-func (id Identity) TelemetryPath(name string) string {
-	return filepath.Join(id.TelemetryDir(), name)
-}
-
-// EventsFile returns the default events database path under the state directory.
-func (id Identity) EventsFile() string {
-	return filepath.Join(id.StateDir(), "events.db")
-}
-
 // MemoryDir returns the default memory/working store directory under the state directory.
 func (id Identity) MemoryDir() string {
 	return filepath.Join(id.StateDir(), "memory")

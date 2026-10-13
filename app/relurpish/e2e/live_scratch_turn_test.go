@@ -15,7 +15,6 @@ package e2e
 
 import (
 	"context"
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -26,6 +25,7 @@ import (
 
 	relurpishruntime "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
 	execution "codeburg.org/lexbit/relurpify/execution"
+	"codeburg.org/lexbit/relurpify/telemetry/otelleg"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
@@ -160,7 +160,7 @@ func TestLiveRelurpishScratchTurn(t *testing.T) {
 	// verification-leg failure is a named finding (wave-2 honesty taxonomy),
 	// not a papered-over pass.
 	require.NoError(t, rt.Close(context.Background()))
-	verdict := logVerificationLegOutcome(t, filepath.Join(abs, ".relurpify_state", "telemetry", "telemetry.jsonl"))
+	verdict := logVerificationLegOutcome(t, filepath.Join(abs, ".relurpify_state", "telemetry", "otlp"))
 	t.Logf("verification leg (relurpic:test_run) outcome: %s", verdict)
 
 	t.Logf("scratch workspace artifacts: %s/.relurpify_state/{logs,telemetry,audit}, test_runs under relurpify_cfg", abs)
@@ -174,36 +174,29 @@ func firstNonEmptyEnv(key, fallback string) string {
 }
 
 // logVerificationLegOutcome reports the last capability step's outcome from
-// the run's telemetry: success, or the failure with its message named.
-func logVerificationLegOutcome(t *testing.T, telemetryPath string) string {
+// the run's OTLP-JSON telemetry segments: success, or the failure with its
+// message named.
+func logVerificationLegOutcome(t *testing.T, segmentDir string) string {
 	t.Helper()
-	data, readErr := os.ReadFile(telemetryPath)
-	if readErr != nil {
-		return "telemetry unavailable: " + readErr.Error()
+	records, err := otelleg.ReadSegmentDirLogRecords(segmentDir)
+	if err != nil {
+		return "telemetry unavailable: " + err.Error()
 	}
 	verdict := "not observed"
 	lastFailure := ""
-	for _, line := range strings.Split(string(data), "\n") {
-		var event struct {
-			Type     string         `json:"type"`
-			Metadata map[string]any `json:"metadata"`
-		}
-		if err := json.Unmarshal([]byte(line), &event); err != nil {
-			continue
-		}
-		stepID, _ := event.Metadata["step_id"].(string)
+	for _, rec := range records {
+		stepID := rec.Attr("step_id")
 		if !strings.HasPrefix(stepID, "capability.") {
 			continue
 		}
-		switch event.Type {
+		switch rec.Name {
 		case "euclo.step.completed":
-			if success, _ := event.Metadata["success"].(bool); success {
+			if success, _ := rec.Attributes["success"].(bool); success {
 				verdict = "passed"
 			}
 		case "step.operational_failure":
-			message, _ := event.Metadata["message"].(string)
-			kind, _ := event.Metadata["kind"].(string)
-			if message == "" && kind != "" {
+			message := rec.Attr("message")
+			if kind := rec.Attr("kind"); message == "" && kind != "" {
 				message = "kind=" + kind
 			}
 			if message != "" {

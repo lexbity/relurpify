@@ -4,6 +4,8 @@ import (
 	"context"
 	"sync"
 	"time"
+
+	"codeburg.org/lexbit/relurpify/telemetry/observing"
 )
 
 type snapshotTelemetry interface {
@@ -38,7 +40,7 @@ func WithSnapshotEmitter(ctx context.Context, emitter *SnapshotEmitter) context.
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	return WithSnapshotObserver(ctx, emitter)
+	return observing.WithSnapshotObserver(ctx, emitter)
 }
 
 // SnapshotEmitterFromContext extracts the emitter from the telemetry.SnapshotObserver key.
@@ -46,7 +48,7 @@ func SnapshotEmitterFromContext(ctx context.Context) *SnapshotEmitter {
 	if ctx == nil {
 		return nil
 	}
-	obs := SnapshotObserverFromContext(ctx)
+	obs := observing.SnapshotObserverFromContext(ctx)
 	emitter, _ := obs.(*SnapshotEmitter)
 	return emitter
 }

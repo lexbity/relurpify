@@ -70,24 +70,6 @@ func TestIdentity_TelemetryDir(t *testing.T) {
 	}
 }
 
-func TestIdentity_TelemetryPath(t *testing.T) {
-	id := Identity{Root: "/workspace"}
-	want := "/workspace/.relurpify_state/telemetry/events.jsonl"
-	got := id.TelemetryPath("events.jsonl")
-	if got != want {
-		t.Errorf("TelemetryPath() = %q, want %q", got, want)
-	}
-}
-
-func TestIdentity_EventsFile(t *testing.T) {
-	id := Identity{Root: "/workspace"}
-	want := "/workspace/.relurpify_state/events.db"
-	got := id.EventsFile()
-	if got != want {
-		t.Errorf("EventsFile() = %q, want %q", got, want)
-	}
-}
-
 func TestIdentity_MemoryDir(t *testing.T) {
 	id := Identity{Root: "/workspace"}
 	want := "/workspace/.relurpify_state/memory"
