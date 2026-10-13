@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/telemetry"
+	oteltest "codeburg.org/lexbit/relurpify/telemetry/otelleg/otlptest"
 )
 
 // exportTelemetryDir is the telemetry segment directory rendered into the export.
@@ -166,5 +167,55 @@ func TestWriteMarkdownExportOmitsAbsentSections(t *testing.T) {
 		if strings.Contains(out, absent) {
 			t.Errorf("export unexpectedly contains %q:\n%s", absent, out)
 		}
+	}
+}
+
+// TestLoadTelemetryEventsFromSegments proves the export's segment reader end
+// to end: events written through a real OTel chain round-trip back to the
+// display event shape with the correlation attributes hoisted to first-class
+// fields (AC-11: the TUI's telemetry surface reads the new file leg while the
+// bus feed is untouched).
+func TestLoadTelemetryEventsFromSegments(t *testing.T) {
+	dir := t.TempDir()
+	oteltest.WriteSegments(t, dir, []telemetry.Event{
+		{
+			Type:      telemetry.EventType("tool_call"),
+			Message:   "shell ls",
+			SessionID: "sess-1",
+			RunID:     "run-1",
+			AgentID:   "euclo",
+			Metadata:  map[string]any{"tool": "shell"},
+		},
+		{Type: telemetry.EventType("scheduler.tick")},
+	})
+
+	events, truncated, err := loadTelemetryEvents(dir, 10)
+	if err != nil {
+		t.Fatalf("loadTelemetryEvents: %v", err)
+	}
+	if truncated {
+		t.Fatal("two events must not truncate at limit 10")
+	}
+	if len(events) != 2 {
+		t.Fatalf("events = %d, want 2", len(events))
+	}
+	first := events[0]
+	if first.Type != "tool_call" || first.Message != "shell ls" {
+		t.Fatalf("first event = %+v", first)
+	}
+	if first.SessionID != "sess-1" || first.RunID != "run-1" || first.AgentID != "euclo" {
+		t.Fatalf("correlation fields not hoisted: %+v", first)
+	}
+	if got, _ := first.Metadata["tool"].(string); got != "shell" {
+		t.Fatalf("tool metadata = %q, want shell", got)
+	}
+
+	// A tight limit keeps only the tail and reports truncation.
+	events, truncated, err = loadTelemetryEvents(dir, 1)
+	if err != nil {
+		t.Fatalf("loadTelemetryEvents: %v", err)
+	}
+	if !truncated || len(events) != 1 {
+		t.Fatalf("limit-1 read: events=%d truncated=%v, want 1/true", len(events), truncated)
 	}
 }

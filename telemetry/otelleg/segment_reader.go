@@ -198,3 +198,103 @@ func base64IDToHex(encoded string) string {
 	}
 	return hex.EncodeToString(raw)
 }
+
+// SpanRecord is one OTel span decoded from an OTLP-JSON segment file.
+type SpanRecord struct {
+	// Name is the span name (e.g. "tool shell", "node planner").
+	Name string
+	// TraceID and SpanID are hex-encoded OTel identifiers.
+	TraceID string
+	SpanID  string
+	// Attributes holds the span attributes with native value types.
+	Attributes map[string]any
+}
+
+// ReadSegmentSpans decodes the spans of one segment file with the same
+// leniency as ReadSegmentLogRecords: non-span or unparseable lines contribute
+// nothing.
+func ReadSegmentSpans(path string) ([]SpanRecord, error) {
+	f, err := os.Open(filepath.Clean(path))
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = f.Close() }()
+	scanner := bufio.NewScanner(f)
+	scanner.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
+	var spans []SpanRecord
+	for scanner.Scan() {
+		line := scanner.Bytes()
+		if len(line) == 0 {
+			continue
+		}
+		spans = appendSpanBatch(spans, line)
+	}
+	return spans, scanner.Err()
+}
+
+// ReadSegmentDirSpans decodes the spans of every *.jsonl segment in dir,
+// ordered by file name.
+func ReadSegmentDirSpans(dir string) ([]SpanRecord, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+	names := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".jsonl") {
+			names = append(names, entry.Name())
+		}
+	}
+	sort.Strings(names)
+	var spans []SpanRecord
+	for _, name := range names {
+		fileSpans, err := ReadSegmentSpans(filepath.Join(dir, name))
+		if err != nil {
+			continue
+		}
+		spans = append(spans, fileSpans...)
+	}
+	return spans, nil
+}
+
+// appendSpanBatch decodes one OTLP-JSON line's span batch. A line carrying no
+// span batch (logs, metrics, garbage) contributes nothing.
+func appendSpanBatch(spans []SpanRecord, line []byte) []SpanRecord {
+	var batch struct {
+		ResourceSpans []struct {
+			ScopeSpans []struct {
+				Spans []struct {
+					Name          string `json:"name"`
+					TraceIDBase64 string `json:"traceId"`
+					SpanIDBase64  string `json:"spanId"`
+					Attributes    []struct {
+						Key   string         `json:"key"`
+						Value map[string]any `json:"value"`
+					} `json:"attributes"`
+				} `json:"spans"`
+			} `json:"scopeSpans"`
+		} `json:"resourceSpans"`
+	}
+	if err := json.Unmarshal(line, &batch); err != nil {
+		return spans
+	}
+	for _, resource := range batch.ResourceSpans {
+		for _, scope := range resource.ScopeSpans {
+			for _, raw := range scope.Spans {
+				rec := SpanRecord{
+					Name:       raw.Name,
+					TraceID:    base64IDToHex(raw.TraceIDBase64),
+					SpanID:     base64IDToHex(raw.SpanIDBase64),
+					Attributes: make(map[string]any, len(raw.Attributes)),
+				}
+				for _, attr := range raw.Attributes {
+					if value, ok := decodeAttrValue(attr.Value); ok {
+						rec.Attributes[attr.Key] = value
+					}
+				}
+				spans = append(spans, rec)
+			}
+		}
+	}
+	return spans
+}

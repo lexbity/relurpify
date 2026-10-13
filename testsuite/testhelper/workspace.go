@@ -59,7 +59,7 @@ audit:
   retention_days: 7
 
 telemetry:
-  enabled: false
+  enabled: true
 `, provider)
 	if err := fs.WriteFileSecure(wsPath, []byte(wsContent)); err != nil {
 		t.Fatalf("write workspace config: %v", err)

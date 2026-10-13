@@ -38,10 +38,11 @@ const (
 // SelfSnapshot is the chain's own health, for tests and the degraded log. It
 // grows with the metric bridge (slice 4).
 type SelfSnapshot struct {
-	Received    uint64
-	Dropped     uint64
-	FileDropped uint64
-	OpenSpans   int64
+	Received      uint64
+	Dropped       uint64
+	FileDropped   uint64
+	ExportDropped uint64
+	OpenSpans     int64
 }
 
 // Chain is the OTel export leg. It implements telemetry.Telemetry and io.Closer.
@@ -60,9 +61,10 @@ type Chain struct {
 	meter             *meterBridge
 	usage             *usageRecorder
 
-	closed   atomic.Bool
-	received atomic.Uint64
-	dropped  atomic.Uint64
+	closed         atomic.Bool
+	received       atomic.Uint64
+	dropped        atomic.Uint64
+	exportFailures exportFailureCounter
 }
 
 // Option configures a Chain at construction.
@@ -191,9 +193,14 @@ func New(ctx context.Context, s Settings, opts ...Option) (*Chain, error) {
 			chain.closeOnError(ctx)
 			return nil, fmt.Errorf("telemetry OTLP log exporter: %w", err)
 		}
-		spanProcessors = append(spanProcessors, newBatchSpanProcessor(&lagSpanExporter{inner: traceExp, lag: lag, signal: signalTraces}))
-		metricReaders = append(metricReaders, newPeriodicReader(metricExp, resolved.MetricsInterval))
-		logProcessors = append(logProcessors, newBatchLogProcessor(&lagLogExporter{inner: logExp, lag: lag, signal: signalLogs}))
+		// D8: export failures count and warn once; the leg stays best-effort.
+		failure := &chain.exportFailures
+		countedTrace := &countedSpanExporter{inner: traceExp, failure: failure}
+		countedMetric := &countedMetricExporter{inner: metricExp, failure: failure}
+		countedLog := &countedLogExporter{inner: logExp, failure: failure}
+		spanProcessors = append(spanProcessors, newBatchSpanProcessor(&lagSpanExporter{inner: countedTrace, lag: lag, signal: signalTraces}))
+		metricReaders = append(metricReaders, newPeriodicReader(countedMetric, resolved.MetricsInterval))
+		logProcessors = append(logProcessors, newBatchLogProcessor(&lagLogExporter{inner: countedLog, lag: lag, signal: signalLogs}))
 	}
 
 	chain.tracerProvider = newTracerProvider(res, resolved.SamplingRatio, spanProcessors)
@@ -269,7 +276,11 @@ func (c *Chain) Close(ctx context.Context) error {
 	c.assembler.shutdown() //nolint:contextcheck // the assembler owns its own background context
 	// Unregister observable callbacks before shutting the providers down.
 	c.meter.shutdown()
-	ctx, cancel := context.WithTimeout(ctx, closeTotalTimeout)
+	// The close budget is internal (D9/NFR-5): a cancelled caller context
+	// must not abort the shutdown mid-flush — providers shut down with a dead
+	// context leak their batch goroutines. WithoutCancel keeps the caller's
+	// values while the deadline below bounds the work.
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), closeTotalTimeout)
 	defer cancel()
 
 	var errs []error
@@ -337,7 +348,11 @@ func (c *Chain) SelfMetrics() SelfSnapshot {
 	if c == nil {
 		return SelfSnapshot{}
 	}
-	snap := SelfSnapshot{Received: c.received.Load(), Dropped: c.dropped.Load()}
+	snap := SelfSnapshot{
+		Received:      c.received.Load(),
+		Dropped:       c.dropped.Load(),
+		ExportDropped: c.exportFailures.dropped.Load(),
+	}
 	if c.segment != nil {
 		snap.FileDropped = c.segment.DroppedTotal()
 	}

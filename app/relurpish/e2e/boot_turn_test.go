@@ -1,11 +1,12 @@
 package e2e
 
 import (
-	"codeburg.org/lexbit/relurpify/governance/sandbox"
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -14,7 +15,9 @@ import (
 	"codeburg.org/lexbit/relurpify/execution"
 	"codeburg.org/lexbit/relurpify/execution/compiler"
 	governanceports "codeburg.org/lexbit/relurpify/governance/ports"
+	"codeburg.org/lexbit/relurpify/governance/sandbox"
 	"codeburg.org/lexbit/relurpify/model"
+	"codeburg.org/lexbit/relurpify/telemetry/otelleg"
 	"codeburg.org/lexbit/relurpify/testsuite/testhelper"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
@@ -246,9 +249,73 @@ func TestBootTurnToolCall(t *testing.T) {
 		t.Fatal("expected CompilationRecord.RequestID to be set")
 	}
 
+	// AC-3: the turn's telemetry must reach the durable OTLP-JSON leg — at
+	// least one tool span, at least ten named log records, and a segment file
+	// that parses line-by-line as OTLP-JSON.
+	segmentDir := rt.TelemetryDir()
+	if segmentDir == "" {
+		t.Fatal("runtime exposes no telemetry segment directory")
+	}
 	if err := rt.Close(context.Background()); err != nil {
 		t.Fatalf("close runtime: %v", err)
 	}
+
+	spans, err := otelleg.ReadSegmentDirSpans(segmentDir)
+	if err != nil {
+		t.Fatalf("read telemetry segments: %v", err)
+	}
+	toolSpans := 0
+	for _, span := range spans {
+		if strings.HasPrefix(span.Name, "tool ") {
+			toolSpans++
+		}
+	}
+	if toolSpans == 0 {
+		t.Fatalf("no tool span in %d spans recorded for the scripted turn", len(spans))
+	}
+	records, err := otelleg.ReadSegmentDirLogRecords(segmentDir)
+	if err != nil {
+		t.Fatalf("read telemetry segments: %v", err)
+	}
+	named := 0
+	for _, rec := range records {
+		if rec.Name != "" {
+			named++
+		}
+	}
+	if named < 10 {
+		t.Fatalf("only %d named log records recorded, want >= 10 (AC-3)", named)
+	}
+	raw, err := os.ReadFile(firstSegment(t, segmentDir))
+	if err != nil {
+		t.Fatalf("read segment: %v", err)
+	}
+	for i, line := range strings.Split(strings.TrimSpace(string(raw)), "\n") {
+		if line == "" {
+			continue
+		}
+		var batch map[string]json.RawMessage
+		if err := json.Unmarshal([]byte(line), &batch); err != nil {
+			t.Fatalf("segment line %d does not parse as OTLP-JSON: %v", i+1, err)
+		}
+	}
+}
+
+// firstSegment returns the segment file under dir, requiring exactly the
+// dated-naming convention of the workspace leg.
+func firstSegment(t *testing.T, dir string) string {
+	t.Helper()
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("read segment dir: %v", err)
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".jsonl") {
+			return filepath.Join(dir, entry.Name())
+		}
+	}
+	t.Fatalf("no segment file under %s", dir)
+	return ""
 }
 
 func findRepoRoot() string {

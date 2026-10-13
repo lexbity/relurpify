@@ -29,7 +29,7 @@ audit:
   enforcement: strict
 
 telemetry:
-  enabled: false
+  enabled: true
 
 runner:
   enabled: true
