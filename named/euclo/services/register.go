@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"codeburg.org/lexbit/relurpify/capability/descriptor"
 	registry "codeburg.org/lexbit/relurpify/capability/registry"
 	"codeburg.org/lexbit/relurpify/execution/prompt"
@@ -126,4 +127,20 @@ func (a capabilityLookupAdapter) CallableCapabilityNames() []string {
 		return nil
 	}
 	return a.reg.CallableCapabilityNames()
+}
+
+// ModelCallableToolNames implements thoughtrecipe.ModelCallableToolClassifier:
+// the model-facing view of the registry, used to distinguish declared recipe
+// vocabulary the model can actually invoke from governed capabilities it
+// cannot see.
+func (a capabilityLookupAdapter) ModelCallableToolNames() []string {
+	if a.reg == nil {
+		return nil
+	}
+	tools := a.reg.ModelCallableTools(context.Background())
+	names := make([]string, 0, len(tools))
+	for _, tool := range tools {
+		names = append(names, tool.Name())
+	}
+	return names
 }

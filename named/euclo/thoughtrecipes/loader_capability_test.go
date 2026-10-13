@@ -140,3 +140,91 @@ func (s staticCapabilityLookup) CallableCapabilityNames() []string {
 	sort.Strings(names)
 	return names
 }
+
+// classifiedCapabilityLookup is a staticCapabilityLookup that also implements
+// ModelCallableToolClassifier — the registry's model-facing view.
+type classifiedCapabilityLookup struct {
+	staticCapabilityLookup
+	modelCallable []string
+}
+
+func (c classifiedCapabilityLookup) ModelCallableToolNames() []string {
+	return c.modelCallable
+}
+
+// TestFindNonCallableDeclaredTools: names that resolve in the registry but are
+// absent from the model-callable view are reported; unresolved names are left
+// to the load failure; lookups without the classifier report nothing.
+func TestFindNonCallableDeclaredTools(t *testing.T) {
+	lookup := classifiedCapabilityLookup{
+		staticCapabilityLookup: staticCapabilityLookup{
+			"file_read":          descriptor.CapabilityDescriptor{ID: "file_read"},
+			"test_run":           descriptor.CapabilityDescriptor{ID: "euclo:cap.test_run"},
+			"euclo:cap.test_run": descriptor.CapabilityDescriptor{ID: "euclo:cap.test_run"},
+		},
+		modelCallable: []string{"file_read"},
+	}
+	got := FindNonCallableDeclaredTools([]string{"file_read", "test_run", "never_registered", ""}, lookup)
+	if len(got) != 1 || got[0] != "test_run" {
+		t.Fatalf("FindNonCallableDeclaredTools = %v, want [test_run]", got)
+	}
+	if plain := FindNonCallableDeclaredTools([]string{"test_run"}, staticCapabilityLookup{"test_run": descriptor.CapabilityDescriptor{ID: "euclo:cap.test_run"}}); plain != nil {
+		t.Fatalf("lookup without classifier must report nothing, got %v", plain)
+	}
+}
+
+// TestLoaderWarnsVocabularyNotCallable pins the P1 contract with the exact
+// situation the live test drive exposed: debug_tdd_repair declares bare
+// `test_run` in `may invoke`; the name resolves (the governed capability
+// euclo:cap.test_run) so the recipe loads, but the model's tool list never
+// contains it. The load must carry a vocabulary_not_model_callable warning
+// naming recipe, step, and tool — never silently run disarmed.
+func TestLoaderWarnsVocabularyNotCallable(t *testing.T) {
+	dir := t.TempDir()
+	writeRecipe(t, dir, "repair.erpe", `thoughtrecipe euclo.thoughtrecipe.repair
+"Repair recipe whose declared vocabulary includes a governed capability."
+
+trigger as capability:
+  may read workspace
+  may invoke ["file_read", "test_run"]
+  family ["debug"]
+
+input workspace: "**/*"
+input prompt: user.request
+
+agent repairer uses react
+
+run repairer:
+  may invoke ["file_read", "test_run"]
+  from input.workspace
+  goal "Repair the reported failure and verify."
+  capture result -> state.repair
+`)
+	caps := classifiedCapabilityLookup{
+		staticCapabilityLookup: staticCapabilityLookup{
+			"file_read":          descriptor.CapabilityDescriptor{ID: "file_read"},
+			"test_run":           descriptor.CapabilityDescriptor{ID: "euclo:cap.test_run"},
+			"euclo:cap.test_run": descriptor.CapabilityDescriptor{ID: "euclo:cap.test_run"},
+		},
+		modelCallable: []string{"file_read"},
+	}
+	loader := NewLoader().WithCapabilityRegistry(caps)
+	result, err := loader.LoadWorkspace(dir)
+	if err != nil {
+		t.Fatalf("load must succeed (the name is legal vocabulary): %v", err)
+	}
+	var found []LoadWarning
+	for _, warning := range result.Warnings {
+		if warning.Kind == LoadWarningKindVocabularyNotCallable {
+			found = append(found, warning)
+		}
+	}
+	if len(found) != 1 {
+		t.Fatalf("vocabulary warnings = %d (%v), want 1 (the compiled plan merges trigger and run vocabulary into one react scope)", len(found), result.Warnings)
+	}
+	for _, warning := range found {
+		if !strings.Contains(warning.Message, "test_run") || !strings.Contains(warning.Message, "repair") {
+			t.Fatalf("warning must name tool and recipe: %q", warning.Message)
+		}
+	}
+}

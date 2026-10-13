@@ -179,6 +179,11 @@ const (
 	// EventStepFallbackActivated marks an authored fallback agent taking over a
 	// failed step.
 	EventStepFallbackActivated EventType = "step.fallback_activated"
+	// EventRecipeVocabularyNotCallable warns that a recipe's declared
+	// `may invoke` vocabulary resolves only to a governed capability, not a
+	// model-callable tool: the model's tool list never contains it, so react
+	// steps cannot invoke it (the recipe runs that expectation disarmed).
+	EventRecipeVocabularyNotCallable EventType = "recipe.vocabulary_not_model_callable"
 	// EventGroundingPortsUnwired is the single info-level boot event emitted
 	// when no StateReground source is composed (declared cold-start mode).
 	EventGroundingPortsUnwired EventType = "grounding.ports_unwired"

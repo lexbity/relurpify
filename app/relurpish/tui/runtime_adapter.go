@@ -298,6 +298,11 @@ func (r *runtimeAdapter) SessionInfo() SessionInfo {
 	if ws == nil {
 		return info
 	}
+	// The workspace contract governs agent turns (the CLI-level model is only
+	// a backend default); display the model that actually serves them.
+	if ws.EffectiveContract != nil && ws.EffectiveContract.AgentSpec != nil && ws.EffectiveContract.AgentSpec.Model.Name != "" {
+		info.Model = ws.EffectiveContract.AgentSpec.Model.Name
+	}
 
 	if ws.ProfileResolution.Profile != nil {
 		info.Profile = strings.TrimSpace(ws.ProfileResolution.Profile.Pattern)

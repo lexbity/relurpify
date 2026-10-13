@@ -126,3 +126,48 @@ func min3(a, b, c int) int {
 	}
 	return a
 }
+
+// ModelCallableToolClassifier optionally refines a ToolVocabularyLookup with
+// the registry's model-facing view. A declared `may invoke` name can resolve
+// in the registry (legal for `do` steps and scope enforcement) yet not be
+// exposed as a model-callable tool — the model never sees it in its tool list
+// and cannot invoke it. Production lookups implement this; constructed symbol
+// tables in tests may not, and the classification is then skipped.
+type ModelCallableToolClassifier interface {
+	ModelCallableToolNames() []string
+}
+
+// FindNonCallableDeclaredTools returns the declared names that resolve in the
+// registry but are not exposed as model-callable tools. Unresolved names are
+// not reported here — ResolveDeclaredToolNames fails the load for those. A
+// lookup without the classifier reports nothing.
+func FindNonCallableDeclaredTools(names []string, lookup ToolVocabularyLookup) []string {
+	classifier, ok := lookup.(ModelCallableToolClassifier)
+	if !ok || lookup == nil {
+		return nil
+	}
+	callable := make(map[string]struct{})
+	for _, name := range classifier.ModelCallableToolNames() {
+		callable[strings.TrimSpace(name)] = struct{}{}
+	}
+	seen := make(map[string]struct{}, len(names))
+	var out []string
+	for _, raw := range names {
+		name := strings.TrimSpace(raw)
+		if name == "" || name == "__euclo__.deny_all__" {
+			continue
+		}
+		if _, dup := seen[name]; dup {
+			continue
+		}
+		seen[name] = struct{}{}
+		if _, resolved := lookup.GetCapability(name); !resolved {
+			continue
+		}
+		if _, callableName := callable[name]; callableName {
+			continue
+		}
+		out = append(out, name)
+	}
+	return out
+}

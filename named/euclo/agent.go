@@ -170,6 +170,7 @@ func (a *Agent) Initialize(config *execution.Config) error {
 	if loaded != nil {
 		a.recipeLoadWarnings = append([]thoughtrecipe.LoadWarning(nil), loaded.Warnings...)
 	}
+	a.emitRecipeVocabularyWarnings(a.recipeLoadWarnings)
 
 	// FR-24: nil StateReground is a declared cold-start mode. Emit exactly one
 	// info-level boot event so grounding composition is observable, never a
@@ -180,6 +181,27 @@ func (a *Agent) Initialize(config *execution.Config) error {
 
 	a.initialized = true
 	return nil
+}
+
+// emitRecipeVocabularyWarnings surfaces declared recipe vocabulary the model
+// cannot invoke (resolves to a governed capability, not a model-callable tool)
+// as boot telemetry (P1): the disarmed expectation must be observable, not
+// silently dropped at load.
+func (a *Agent) emitRecipeVocabularyWarnings(warnings []thoughtrecipe.LoadWarning) {
+	if a == nil || a.deps == nil || a.deps.Telemetry == nil {
+		return
+	}
+	for _, warning := range warnings {
+		if warning.Kind != thoughtrecipe.LoadWarningKindVocabularyNotCallable {
+			continue
+		}
+		a.deps.Telemetry.Emit(telemetry.Event{
+			Type:      telemetry.EventRecipeVocabularyNotCallable,
+			Message:   warning.Message,
+			Timestamp: time.Now().UTC(),
+			Metadata:  map[string]any{"path": warning.Path},
+		})
+	}
 }
 
 // emitGroundingPortsUnwired emits the single boot event that declares the
@@ -377,7 +399,6 @@ func (a *Agent) Capabilities() []string {
 }
 
 var _ agentgraph.WorkflowExecutor = (*Agent)(nil)
-
 
 // RecipeSummary is one registered recipe for user-facing listing.
 type RecipeSummary struct {

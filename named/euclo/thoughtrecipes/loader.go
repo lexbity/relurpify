@@ -27,10 +27,28 @@ type Loader struct {
 	CapabilityRegistry ToolVocabularyLookup
 }
 
+// LoadWarningKind classifies a non-fatal loader diagnostic so surfaces (the
+// TUI recipe list, boot telemetry) can react to kinds, not parse messages.
+type LoadWarningKind string
+
+const (
+	// LoadWarningKindDirectory: a directory was ignored by the top-level scan.
+	LoadWarningKindDirectory LoadWarningKind = "ignored_directory"
+	// LoadWarningKindExtension: a file with an unsupported extension.
+	LoadWarningKindExtension LoadWarningKind = "ignored_extension"
+	// LoadWarningKindDuplicate: a duplicate recipe name, first wins.
+	LoadWarningKindDuplicate LoadWarningKind = "duplicate_ignored"
+	// LoadWarningKindVocabularyNotCallable: a declared `may invoke` name
+	// resolves only to a governed capability — legal vocabulary, but not a
+	// model-callable tool, so the model cannot invoke it.
+	LoadWarningKindVocabularyNotCallable LoadWarningKind = "vocabulary_not_model_callable"
+)
+
 // LoadWarning captures a non-fatal loader diagnostic.
 type LoadWarning struct {
 	Path    string
 	Message string
+	Kind    LoadWarningKind
 }
 
 // SourceFile describes a candidate Euclo thoughtrecipe source discovered in the
@@ -112,6 +130,7 @@ func (l *Loader) LoadWorkspace(workspaceRoot string) (*LoadResult, error) {
 			result.Warnings = append(result.Warnings, LoadWarning{
 				Path:    fullPath,
 				Message: "ignored directory during top-level-only thoughtrecipe scan",
+				Kind:    LoadWarningKindDirectory,
 			})
 			continue
 		}
@@ -126,6 +145,7 @@ func (l *Loader) LoadWorkspace(workspaceRoot string) (*LoadResult, error) {
 			result.Warnings = append(result.Warnings, LoadWarning{
 				Path:    fullPath,
 				Message: fmt.Sprintf("ignored unsupported thoughtrecipe extension %q", ext),
+				Kind:    LoadWarningKindExtension,
 			})
 			continue
 		}
@@ -199,9 +219,48 @@ func (l *Loader) loadThoughtRecipeSource(result *LoadResult, source SourceFile) 
 		result.Warnings = append(result.Warnings, LoadWarning{
 			Path:    source.Path,
 			Message: fmt.Sprintf("duplicate thoughtrecipe name %q ignored; first registration wins", plan.ThoughtRecipe.Name),
+			Kind:    LoadWarningKindDuplicate,
 		})
 	}
+	result.Warnings = append(result.Warnings, l.vocabularyVisibilityWarnings(plan, source.Path)...)
 	return nil
+}
+
+// vocabularyVisibilityWarnings reports declared `may invoke` names that resolve
+// in the registry only as governed capabilities: legal vocabulary, but the
+// model's tool list never contains them, so react steps cannot invoke them.
+// The recipe still loads (the name is enforceable scope), and boot telemetry
+// surfaces the warning so the disarmed expectation is observable (P1).
+func (l *Loader) vocabularyVisibilityWarnings(plan *ExecutionPlan, sourcePath string) []LoadWarning {
+	if l.CapabilityRegistry == nil || plan == nil {
+		return nil
+	}
+	recipeName := ""
+	if plan.ThoughtRecipe != nil {
+		recipeName = plan.ThoughtRecipe.Name
+	}
+	var warnings []LoadWarning
+	var walk func(steps []ExecutionStep)
+	walk = func(steps []ExecutionStep) {
+		for _, step := range steps {
+			for _, tool := range FindNonCallableDeclaredTools(step.Scope.AllowedToolNames(), l.CapabilityRegistry) {
+				warnings = append(warnings, LoadWarning{
+					Path: sourcePath,
+					Message: fmt.Sprintf(
+						"recipe %q step %q: may invoke %q resolves to a governed capability, not a model-callable tool; the model tool list does not contain it, so react steps cannot invoke it (invoke via a do step or expose a callable tool)",
+						recipeName, step.ID, tool),
+					Kind: LoadWarningKindVocabularyNotCallable,
+				})
+			}
+		}
+	}
+	walk(plan.Steps)
+	for _, group := range plan.Routes {
+		for _, branch := range group.Branches {
+			walk(branch.Steps)
+		}
+	}
+	return warnings
 }
 
 // validateCapabilityStepScopes is the belt-to-the-lowering's-suspenders load
