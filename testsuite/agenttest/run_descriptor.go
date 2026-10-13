@@ -614,9 +614,9 @@ type ArtifactPaths struct {
 func (d *PreparedRunDescriptor) ArtifactPaths() ArtifactPaths {
 	return ArtifactPaths{
 		SetupLog:           filepath.Join(d.SetupLogsDir, "agenttest.log"),
-		SetupTelemetry:     filepath.Join(d.SetupTelemetryDir, "agenttest.jsonl"),
+		SetupTelemetry:     filepath.Join(d.SetupTelemetryDir, "agenttest-otlp.jsonl"),
 		ExecutionLog:       filepath.Join(d.ExecutionLogsDir, "agenttest.log"),
-		ExecutionTelemetry: filepath.Join(d.ExecutionTelemetryDir, "agenttest.jsonl"),
+		ExecutionTelemetry: filepath.Join(d.ExecutionTelemetryDir, "agenttest-otlp.jsonl"),
 		Report:             filepath.Join(d.ExecutionDir, "report.json"),
 		Verification:       filepath.Join(d.VerificationDir, "verification.json"),
 	}

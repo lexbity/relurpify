@@ -66,9 +66,9 @@ spec:
 	}
 	for _, path := range []string{
 		filepath.Join(prepared.Descriptor.SetupLogsDir, "agenttest.log"),
-		filepath.Join(prepared.Descriptor.SetupTelemetryDir, "agenttest.jsonl"),
+		filepath.Join(prepared.Descriptor.SetupTelemetryDir, "agenttest-otlp.jsonl"),
 		filepath.Join(prepared.Descriptor.ExecutionLogsDir, "agenttest.log"),
-		filepath.Join(prepared.Descriptor.ExecutionTelemetryDir, "agenttest.jsonl"),
+		filepath.Join(prepared.Descriptor.ExecutionTelemetryDir, "agenttest-otlp.jsonl"),
 		preparedRunReportPath(prepared.Descriptor),
 	} {
 		if err := fs.MkdirAllSecure(filepath.Dir(path)); err != nil {

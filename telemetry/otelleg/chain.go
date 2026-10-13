@@ -141,7 +141,7 @@ func New(ctx context.Context, s Settings, opts ...Option) (*Chain, error) {
 	var selfMetricReaders []sdkmetric.Reader
 
 	if resolved.FileEnabled {
-		chain.segment = newSegmentWriter(resolved.FileDir, segmentPrefix, resolved.FileRetention, resolved.FileMaxSizeMB, cfg.clock)
+		chain.segment = newSegmentWriter(resolved.FileDir, segmentPrefix, resolved.FileNameOverride, resolved.FileRetention, resolved.FileMaxSizeMB, cfg.clock)
 		traceExp, err := newFileTraceExporter(ctx, chain.segment)
 		if err != nil {
 			chain.closeOnError(ctx)

@@ -4,14 +4,6 @@ import (
 	// Native go_native tool constructor registrations: the production runtime
 	// wires these in app/relurpish/runtime (tool_activation.go); the test
 	// executor composes the same registry and needs the same vocabulary.
-	_ "codeburg.org/lexbit/relurpify/platform/tools/native/fs"
-	_ "codeburg.org/lexbit/relurpify/platform/tools/native/git"
-	_ "codeburg.org/lexbit/relurpify/platform/tools/native/langgo"
-	_ "codeburg.org/lexbit/relurpify/platform/tools/native/langjs"
-	_ "codeburg.org/lexbit/relurpify/platform/tools/native/langpython"
-	_ "codeburg.org/lexbit/relurpify/platform/tools/native/langrust"
-	_ "codeburg.org/lexbit/relurpify/platform/tools/native/lsp"
-	_ "codeburg.org/lexbit/relurpify/platform/tools/native/search"
 	"context"
 	"errors"
 	"fmt"
@@ -23,6 +15,15 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	_ "codeburg.org/lexbit/relurpify/platform/tools/native/fs"
+	_ "codeburg.org/lexbit/relurpify/platform/tools/native/git"
+	_ "codeburg.org/lexbit/relurpify/platform/tools/native/langgo"
+	_ "codeburg.org/lexbit/relurpify/platform/tools/native/langjs"
+	_ "codeburg.org/lexbit/relurpify/platform/tools/native/langpython"
+	_ "codeburg.org/lexbit/relurpify/platform/tools/native/langrust"
+	_ "codeburg.org/lexbit/relurpify/platform/tools/native/lsp"
+	_ "codeburg.org/lexbit/relurpify/platform/tools/native/search"
 
 	"codeburg.org/lexbit/relurpify/app/envcomposition"
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
@@ -44,6 +45,8 @@ import (
 	euclopolicy "codeburg.org/lexbit/relurpify/named/euclo/policy"
 	"codeburg.org/lexbit/relurpify/platform/llm"
 	"codeburg.org/lexbit/relurpify/telemetry"
+	"codeburg.org/lexbit/relurpify/telemetry/otelleg"
+	oteltest "codeburg.org/lexbit/relurpify/telemetry/otelleg/otlptest"
 	"codeburg.org/lexbit/relurpify/telemetry/perfstats"
 	"codeburg.org/lexbit/relurpify/testsuite/testhelper"
 	"codeburg.org/lexbit/relurpify/testsuite/testsupport"
@@ -64,10 +67,10 @@ type PreparedRunExecutor struct {
 
 	// recorder captures every telemetry event in memory for the duration of the
 	// run so the case report and the OSB evaluators are derived from real
-	// telemetry (FR-8). telemetryFile is the durable JSONL mirror; it is nil
-	// when the descriptor has no telemetry directory.
-	recorder      *recordingTelemetrySink
-	telemetryFile *telemetry.JSONFileTelemetry
+	// telemetry (FR-8). telemetryChain is the durable OTLP-JSON file leg; it is
+	// nil when the descriptor has no telemetry directory.
+	recorder       *recordingTelemetrySink
+	telemetryChain *otelleg.Chain
 	// knowledgeBridge forwards knowledge.EventBus chunk signals into the
 	// recorder for the duration of the run (FR-14).
 	knowledgeBridge *knowledge.EventBusTelemetryBridge
@@ -332,21 +335,18 @@ func (e *PreparedRunExecutor) buildModel(ctx context.Context, desc *PreparedRunD
 
 func (e *PreparedRunExecutor) buildTelemetry(desc *PreparedRunDescriptor) telemetry.Telemetry {
 	e.recorder = newRecordingTelemetrySink()
-	sinks := []telemetry.Telemetry{e.recorder}
-	if file := e.openTelemetryFile(desc); file != nil {
-		e.telemetryFile = file
-		sinks = append(sinks, file)
+	chain := e.openTelemetryChain(desc)
+	if chain != nil {
+		e.telemetryChain = chain
+		return telemetry.MultiplexTelemetry{Sinks: []telemetry.Telemetry{e.recorder, chain}}
 	}
-	if len(sinks) == 1 {
-		return e.recorder
-	}
-	return telemetry.MultiplexTelemetry{Sinks: sinks}
+	return e.recorder
 }
 
-// openTelemetryFile opens the durable JSONL mirror for the run. It is
+// openTelemetryChain opens the durable OTLP-JSON file leg for the run. It is
 // best-effort: without a telemetry directory the recording sink is still the
 // source of truth, and an open failure must never abort the run (NFR-3).
-func (e *PreparedRunExecutor) openTelemetryFile(desc *PreparedRunDescriptor) *telemetry.JSONFileTelemetry {
+func (e *PreparedRunExecutor) openTelemetryChain(desc *PreparedRunDescriptor) *otelleg.Chain {
 	if desc == nil {
 		return nil
 	}
@@ -357,11 +357,16 @@ func (e *PreparedRunExecutor) openTelemetryFile(desc *PreparedRunDescriptor) *te
 	if err := fs.MkdirAllSecure(dir); err != nil {
 		return nil
 	}
-	file, err := telemetry.NewJSONFileTelemetry(filepath.Join(dir, "agenttest.jsonl"))
+	chain, err := otelleg.New(context.Background(), otelleg.Settings{
+		Enabled:          true,
+		FileEnabled:      true,
+		FileDir:          dir,
+		FileNameOverride: oteltest.SegmentName,
+	})
 	if err != nil {
 		return nil
 	}
-	return file
+	return chain
 }
 
 func (e *PreparedRunExecutor) assembleDeps(desc *PreparedRunDescriptor, tel telemetry.Telemetry) *paradigm.Deps {
@@ -553,9 +558,9 @@ func (e *PreparedRunExecutor) cleanup() {
 		e.knowledgeBridge.Close()
 		e.knowledgeBridge = nil
 	}
-	if e.telemetryFile != nil {
-		_ = e.telemetryFile.Close()
-		e.telemetryFile = nil
+	if e.telemetryChain != nil {
+		_ = e.telemetryChain.Close(context.Background())
+		e.telemetryChain = nil
 	}
 	if e.model != nil && e.model.Backend != nil {
 		_ = e.model.Backend.Close()

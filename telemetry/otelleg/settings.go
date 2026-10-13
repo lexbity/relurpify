@@ -47,7 +47,14 @@ type Settings struct {
 	FileDir       string
 	FileRetention time.Duration
 	FileMaxSizeMB int
-	OrphanTimeout time.Duration
+	// FileNameOverride replaces the dated segment naming
+	// (relurpify-YYYY-MM-DD.jsonl) with a fixed base name
+	// (<FileNameOverride>.jsonl, size overflow suffixed). It is for wirings
+	// whose artifact paths must be stable across a short-lived run — the
+	// agenttest harness's verification contract stats an exact path. Empty
+	// keeps the dated convention.
+	FileNameOverride string
+	OrphanTimeout    time.Duration
 }
 
 // resolve returns a copy with every numeric and duration default applied, then
@@ -57,6 +64,7 @@ func (s Settings) resolve() (Settings, error) {
 	out.Endpoint = strings.TrimSpace(out.Endpoint)
 	out.CAFile = strings.TrimSpace(out.CAFile)
 	out.FileDir = strings.TrimSpace(out.FileDir)
+	out.FileNameOverride = strings.TrimSpace(out.FileNameOverride)
 	out.Headers = copyHeaders(out.Headers)
 
 	if out.Timeout <= 0 {

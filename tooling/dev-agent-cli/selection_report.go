@@ -1,17 +1,26 @@
 package main
 
 import (
-	"bufio"
-	"encoding/json"
 	"fmt"
 	"io"
 	"io/fs"
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 
-	telemetry "codeburg.org/lexbit/relurpify/telemetry"
+	"codeburg.org/lexbit/relurpify/telemetry/otelleg"
+)
+
+// The route-selection record contract: the eventName and the attribute keys
+// the dispatchers stamp on every euclo.route.selected record.
+const (
+	eventRouteSelected = "euclo.route.selected"
+	attrRouteID        = "route_id"
+	attrDecidedBy      = "decided_by"
+	attrFallbackTaken  = "fallback_taken"
+	attrTier2Used      = "tier2_used"
+	attrTier2Outcome   = "tier2_outcome"
+	attrDegradation    = "degradation"
 )
 
 // selectionSummary aggregates the euclo.route.selected telemetry events of one
@@ -30,8 +39,8 @@ type selectionSummary struct {
 	DegradationCount    int
 }
 
-// buildSelectionSummary reads every agenttest.jsonl telemetry file under the
-// run directory and aggregates the selection decision events. A run directory
+// buildSelectionSummary reads every OTLP-JSON telemetry segment under the run
+// directory and aggregates the selection decision events. A run directory
 // without telemetry produces an empty summary, not an error.
 func buildSelectionSummary(runDir string) (*selectionSummary, error) {
 	summary := &selectionSummary{
@@ -51,16 +60,17 @@ func buildSelectionSummary(runDir string) (*selectionSummary, error) {
 	return summary, nil
 }
 
-// collectTelemetryFiles walks the run directory for agenttest.jsonl files
-// (execution telemetry lives at <caseRunRoot>/execution/telemetry/agenttest.jsonl
-// and <outDir>/telemetry/<caseKey>.jsonl across the two run layouts).
+// collectTelemetryFiles walks the run directory for OTLP-JSON segments
+// (*otlp*.jsonl): the agenttest harness writes <dir>/agenttest-otlp.jsonl and
+// the workspace leg writes <state>/telemetry/otlp/relurpify-YYYY-MM-DD.jsonl.
 func collectTelemetryFiles(runDir string) []string {
 	var files []string
 	_ = filepath.WalkDir(runDir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
-			return nil
+			return nil //nolint:nilerr // one unreadable path must not abort the run report
 		}
-		if !d.IsDir() && filepath.Base(path) == "agenttest.jsonl" {
+		name := filepath.Base(path)
+		if !d.IsDir() && strings.HasSuffix(name, ".jsonl") && strings.Contains(name, "otlp") {
 			files = append(files, path)
 		}
 		return nil
@@ -69,51 +79,39 @@ func collectTelemetryFiles(runDir string) []string {
 	return files
 }
 
-// scanSelectionTelemetryFile aggregates the euclo.route.selected events of one
-// JSONL telemetry file.
+// scanSelectionTelemetryFile aggregates the euclo.route.selected records of
+// one OTLP-JSON segment file (D11): unparseable content is skipped by the
+// reader — a torn line must never abort the whole run report.
 func scanSelectionTelemetryFile(path string, summary *selectionSummary) error {
-	f, err := os.Open(path)
+	records, err := otelleg.ReadSegmentLogRecords(path)
 	if err != nil {
 		return err
 	}
-	defer func() { _ = f.Close() }()
-	scanner := bufio.NewScanner(f)
-	scanner.Buffer(make([]byte, 1024*1024), 4*1024*1024)
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" {
-			continue
-		}
-		var event telemetry.Event
-		if err := json.Unmarshal([]byte(line), &event); err != nil {
-			continue // a truncated/unparseable line must not abort the whole run report
-		}
-		if event.Type != "euclo.route.selected" {
+	for _, rec := range records {
+		if rec.Name != eventRouteSelected {
 			continue
 		}
 		summary.Total++
-		routeID, _ := event.Metadata["route_id"].(string)
-		if routeID != "" {
+		if routeID := rec.Attr(attrRouteID); routeID != "" {
 			summary.RouteHistogram[routeID]++
 		}
-		decidedBy, _ := event.Metadata["decided_by"].(string)
-		if decidedBy != "" {
+		if decidedBy := rec.Attr(attrDecidedBy); decidedBy != "" {
 			summary.DecidedByHistogram[decidedBy]++
 		}
-		if taken, _ := event.Metadata["fallback_taken"].(bool); taken {
+		if taken, _ := rec.Attributes[attrFallbackTaken].(bool); taken {
 			summary.FallbackCount++
 		}
-		if used, _ := event.Metadata["tier2_used"].(bool); used {
+		if used, _ := rec.Attributes[attrTier2Used].(bool); used {
 			summary.Tier2UsedCount++
 		}
-		if outcome, _ := event.Metadata["tier2_outcome"].(string); tier2Rejection(outcome) {
+		if tier2Rejection(rec.Attr(attrTier2Outcome)) {
 			summary.Tier2RejectionCount++
 		}
-		if degradation, _ := event.Metadata["degradation"].(string); degradation != "" {
+		if degradation := rec.Attr(attrDegradation); degradation != "" {
 			summary.DegradationCount++
 		}
 	}
-	return scanner.Err()
+	return nil
 }
 
 // tier2Rejection reports whether a bounded Tier-2 outcome left the

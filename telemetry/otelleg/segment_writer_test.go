@@ -12,7 +12,7 @@ import (
 func TestSegmentWriterDailyRollover(t *testing.T) {
 	dir := t.TempDir()
 	now := time.Date(2026, 10, 13, 23, 59, 0, 0, time.UTC)
-	w := newSegmentWriter(dir, segmentPrefix, 168*time.Hour, 256, func() time.Time { return now })
+	w := newSegmentWriter(dir, segmentPrefix, "", 168*time.Hour, 256, func() time.Time { return now })
 	defer func() { _ = w.Close() }()
 
 	writeLine(t, w, `{"a":1}`+"\n")
@@ -32,7 +32,7 @@ func TestSegmentWriterDailyRollover(t *testing.T) {
 
 func TestSegmentWriterSizeOverflow(t *testing.T) {
 	dir := t.TempDir()
-	w := newSegmentWriter(dir, segmentPrefix, 168*time.Hour, 1, nil)
+	w := newSegmentWriter(dir, segmentPrefix, "", 168*time.Hour, 1, nil)
 	defer func() { _ = w.Close() }()
 
 	// A payload larger than the 1 MiB bound forces an overflow segment.
@@ -66,7 +66,7 @@ func TestSegmentWriterPrune(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	w := newSegmentWriter(dir, segmentPrefix, 168*time.Hour, 256, nil)
+	w := newSegmentWriter(dir, segmentPrefix, "", 168*time.Hour, 256, nil)
 	defer func() { _ = w.Close() }()
 
 	if _, err := os.Stat(old); !os.IsNotExist(err) {
@@ -95,7 +95,7 @@ func TestSegmentWriterPruneSurvivesDirectoryEntry(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	w := newSegmentWriter(dir, segmentPrefix, 168*time.Hour, 256, nil)
+	w := newSegmentWriter(dir, segmentPrefix, "", 168*time.Hour, 256, nil)
 	defer func() { _ = w.Close() }()
 
 	if _, err := os.Stat(old); !os.IsNotExist(err) {
@@ -105,7 +105,7 @@ func TestSegmentWriterPruneSurvivesDirectoryEntry(t *testing.T) {
 
 func TestSegmentWriterConcurrentWritesKeepLinesWhole(t *testing.T) {
 	dir := t.TempDir()
-	w := newSegmentWriter(dir, segmentPrefix, 168*time.Hour, 256, nil)
+	w := newSegmentWriter(dir, segmentPrefix, "", 168*time.Hour, 256, nil)
 	defer func() { _ = w.Close() }()
 
 	const writers = 10
@@ -182,4 +182,56 @@ func readLines(t *testing.T, path string) []string {
 func jsonValid(b []byte) bool {
 	var v any
 	return json.Unmarshal(b, &v) == nil
+}
+
+func TestSegmentWriterFixedName(t *testing.T) {
+	dir := t.TempDir()
+	now := time.Date(2026, 10, 13, 23, 59, 0, 0, time.UTC)
+	clock := now
+	w := newSegmentWriter(dir, segmentPrefix, "agenttest-otlp", 168*time.Hour, 1, func() time.Time { return clock })
+	defer func() { _ = w.Close() }()
+
+	writeLine(t, w, `{"a":1}`+"\n")
+	clock = clock.Add(2 * time.Minute) // crosses local midnight: fixed names never roll on the clock
+	writeLine(t, w, `{"a":2}`+"\n")
+
+	base := filepath.Join(dir, "agenttest-otlp.jsonl")
+	if _, err := os.Stat(base); err != nil {
+		t.Fatalf("fixed-name segment missing: %v", err)
+	}
+	if lines := readLines(t, base); len(lines) != 2 {
+		t.Fatalf("fixed-name segment has %d lines, want 2 (midnight must not roll a fixed name)", len(lines))
+	}
+}
+
+func TestSegmentWriterFixedNamePrunesOverflowOnly(t *testing.T) {
+	dir := t.TempDir()
+	oldOverflow := filepath.Join(dir, "agenttest-otlpT010101.jsonl")
+	live := filepath.Join(dir, "agenttest-otlp.jsonl")
+	foreign := filepath.Join(dir, "relurpify-2026-01-01.jsonl")
+	for path, age := range map[string]time.Duration{
+		oldOverflow: 1000 * 24 * time.Hour,
+		live:        1000 * 24 * time.Hour,
+		foreign:     1000 * 24 * time.Hour,
+	} {
+		if err := os.WriteFile(path, []byte("{}\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		past := time.Now().Add(-age)
+		if err := os.Chtimes(path, past, past); err != nil {
+			t.Fatal(err)
+		}
+	}
+	w := newSegmentWriter(dir, segmentPrefix, "agenttest-otlp", 168*time.Hour, 256, nil)
+	defer func() { _ = w.Close() }()
+
+	if _, err := os.Stat(oldOverflow); !os.IsNotExist(err) {
+		t.Fatalf("stale overflow segment not pruned: %v", err)
+	}
+	if _, err := os.Stat(live); err != nil {
+		t.Fatalf("live fixed-name segment must never be pruned: %v", err)
+	}
+	if _, err := os.Stat(foreign); err != nil {
+		t.Fatalf("segments of other wirings must not be pruned: %v", err)
+	}
 }

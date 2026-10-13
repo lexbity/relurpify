@@ -7,10 +7,12 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"codeburg.org/lexbit/relurpify/capability/fs"
+	oteltest "codeburg.org/lexbit/relurpify/telemetry/otelleg/otlptest"
 )
 
 func TestLoadExecutorCaseReportFailsWhenMissing(t *testing.T) {
@@ -189,9 +191,27 @@ func TestExecuteWritesCanonicalReportAndTelemetryArtifacts(t *testing.T) {
 		t.Fatalf("report name = %q, want %q", report.Name, desc.CaseName)
 	}
 
-	telemetryPath := filepath.Join(desc.ExecutionTelemetryDir, "agenttest.jsonl")
-	if _, err := os.Stat(telemetryPath); err != nil {
-		t.Fatalf("execution telemetry not written at %s: %v", telemetryPath, err)
+	segment := filepath.Join(desc.ExecutionTelemetryDir, oteltest.SegmentName+".jsonl")
+	if _, err := os.Stat(segment); err != nil {
+		t.Fatalf("execution telemetry segment not written at %s: %v", segment, err)
+	}
+	// The segment must carry the run's real log records, not merely exist:
+	// every line must parse as OTLP-JSON (one batch per line).
+	raw, err := os.ReadFile(segment)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(strings.TrimSpace(string(raw))) == 0 {
+		t.Fatal("execution telemetry segment is empty; the file leg recorded nothing")
+	}
+	for i, line := range strings.Split(strings.TrimSpace(string(raw)), "\n") {
+		if line == "" {
+			continue
+		}
+		var probe map[string]json.RawMessage
+		if err := json.Unmarshal([]byte(line), &probe); err != nil {
+			t.Fatalf("segment line %d does not parse as OTLP-JSON: %v", i+1, err)
+		}
 	}
 
 	if err := fs.MkdirAllSecure(desc.ExecutionArtifactsDir); err != nil {

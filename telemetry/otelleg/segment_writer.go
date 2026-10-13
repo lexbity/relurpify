@@ -29,6 +29,7 @@ const (
 type segmentWriter struct {
 	dir       string
 	prefix    string
+	baseName  string
 	retention time.Duration
 	maxBytes  int64
 	now       func() time.Time
@@ -44,10 +45,15 @@ type segmentWriter struct {
 
 // newSegmentWriter opens (or creates) the segment store. Directory creation and
 // the initial segment open are best-effort: an unwritable directory disables the
-// leg with a single warning rather than failing the chain.
-func newSegmentWriter(dir, prefix string, retention time.Duration, maxSizeMB int, now func() time.Time) *segmentWriter {
+// leg with a single warning rather than failing the chain. A non-empty
+// baseName switches the writer to fixed-name segments (<baseName>.jsonl, no
+// daily roll); empty uses the dated relurpify-YYYY-MM-DD convention.
+func newSegmentWriter(dir, prefix, baseName string, retention time.Duration, maxSizeMB int, now func() time.Time) *segmentWriter {
 	if strings.TrimSpace(prefix) == "" {
 		prefix = segmentPrefix
+	}
+	if baseName != "" {
+		baseName = strings.TrimSuffix(baseName, ".jsonl")
 	}
 	if now == nil {
 		now = time.Now
@@ -55,6 +61,7 @@ func newSegmentWriter(dir, prefix string, retention time.Duration, maxSizeMB int
 	w := &segmentWriter{
 		dir:       dir,
 		prefix:    prefix,
+		baseName:  baseName,
 		retention: retention,
 		maxBytes:  int64(maxSizeMB) * 1024 * 1024,
 		now:       now,
@@ -116,6 +123,10 @@ func (w *segmentWriter) roll(now time.Time, incoming int) {
 	if w.disabled {
 		return
 	}
+	if w.baseName != "" {
+		w.rollFixed(incoming)
+		return
+	}
 	if now.IsZero() {
 		now = w.now()
 	}
@@ -137,28 +148,65 @@ func (w *segmentWriter) roll(now time.Time, incoming int) {
 		// overflow segment is distinct and sortable.
 		name = w.uniqueName(fmt.Sprintf("%s-%sT%s", w.prefix, day, now.Format("1504")))
 	}
-	path := filepath.Join(filepath.Clean(w.dir), name)
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, segmentFilePerm) //nolint:gosec // path is under the operator-configured telemetry directory
-	if err != nil {
-		w.disable("open segment: " + err.Error())
+	if !w.openSegment(name) {
 		return
 	}
-	info, err := f.Stat()
-	if err != nil {
-		_ = f.Close()
-		w.disable("stat segment: " + err.Error())
-		return
-	}
-	w.file = f
 	w.day = day
-	w.size = info.Size()
 	if rotate {
 		w.prune()
 	}
 }
 
+// rollFixed opens the fixed-name segment, rotating only when the size bound
+// would be exceeded (overflow segments get a distinct sortable suffix). It must
+// be called with w.mu held.
+func (w *segmentWriter) rollFixed(incoming int) {
+	if w.file != nil && (w.maxBytes <= 0 || w.size+int64(incoming) <= w.maxBytes) {
+		return
+	}
+	rotate := w.file != nil
+	if w.file != nil {
+		if err := w.file.Close(); err != nil {
+			log.Printf("telemetry: closing segment failed: %v", err)
+		}
+		w.file = nil
+	}
+	name := w.baseName + ".jsonl"
+	if rotate {
+		// Size overflow: suffix with the local wall clock so the overflow
+		// segment is distinct and sortable.
+		name = w.uniqueName(fmt.Sprintf("%sT%s", w.baseName, w.now().Format("150405")))
+	}
+	if !w.openSegment(name) {
+		return
+	}
+	if rotate {
+		w.prune()
+	}
+}
+
+// openSegment opens dir/name for append and records it as the current segment.
+// It must be called with w.mu held; a failure disables the writer.
+func (w *segmentWriter) openSegment(name string) bool {
+	path := filepath.Join(filepath.Clean(w.dir), name)
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, segmentFilePerm) //nolint:gosec // path is under the operator-configured telemetry directory
+	if err != nil {
+		w.disable("open segment: " + err.Error())
+		return false
+	}
+	info, err := f.Stat()
+	if err != nil {
+		_ = f.Close()
+		w.disable("stat segment: " + err.Error())
+		return false
+	}
+	w.file = f
+	w.size = info.Size()
+	return true
+}
+
 // uniqueName returns base+".jsonl" if free, otherwise base-N.jsonl for the first
-// free N. It is used only for same-day size overflow.
+// free N. It is used only for size overflow.
 func (w *segmentWriter) uniqueName(base string) string {
 	name := base + ".jsonl"
 	for i := 2; ; i++ {
@@ -182,8 +230,25 @@ func (w *segmentWriter) prune() {
 		log.Printf("telemetry: segment prune list failed: %v", err)
 		return
 	}
+	// Fixed-name mode prunes only the size-overflow siblings; the live base
+	// segment is never a prune candidate.
+	liveName := ""
+	stem := w.prefix + "-"
+	if w.baseName != "" {
+		liveName = w.baseName + ".jsonl"
+		stem = w.baseName
+	}
+	isSegment := func(name string) bool {
+		if !strings.HasSuffix(name, ".jsonl") {
+			return false
+		}
+		if !strings.HasPrefix(name, stem) {
+			return false
+		}
+		return w.baseName == "" || name != liveName
+	}
 	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasPrefix(entry.Name(), w.prefix+"-") || !strings.HasSuffix(entry.Name(), ".jsonl") {
+		if entry.IsDir() || !isSegment(entry.Name()) {
 			continue
 		}
 		info, err := entry.Info()
