@@ -35,16 +35,14 @@ func TestNewRootCmdPersistentPreRunNormalizesConfig(t *testing.T) {
 
 	workspace := t.TempDir()
 	cfg = runtimesvc.Config{
-		Workspace:     workspace,
-		AgentsDir:     "agents",
-		MemoryPath:    "memory",
-		LogPath:       "logs/relurpish.log",
-		TelemetryPath: "telemetry/telemetry.jsonl",
-		EventsPath:    "events.db",
-		ConfigPath:    "manifest.yaml",
-		AgentName:     "",
-		AuditLimit:    0,
-		HITLTimeout:   0,
+		Workspace:   workspace,
+		AgentsDir:   "agents",
+		MemoryPath:  "memory",
+		LogPath:     "logs/relurpish.log",
+		ConfigPath:  "manifest.yaml",
+		AgentName:   "",
+		AuditLimit:  0,
+		HITLTimeout: 0,
 	}
 
 	root := newRootCmd()
@@ -59,8 +57,6 @@ func TestNewRootCmdPersistentPreRunNormalizesConfig(t *testing.T) {
 	require.True(t, filepath.IsAbs(cfg.AgentsDir))
 	require.True(t, filepath.IsAbs(cfg.MemoryPath))
 	require.True(t, filepath.IsAbs(cfg.LogPath))
-	require.True(t, filepath.IsAbs(cfg.TelemetryPath))
-	require.True(t, filepath.IsAbs(cfg.EventsPath))
 	require.True(t, filepath.IsAbs(cfg.ConfigPath))
 }
 

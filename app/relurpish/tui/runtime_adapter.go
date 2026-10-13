@@ -1139,8 +1139,8 @@ func (r *runtimeAdapter) SessionArtifacts() SessionArtifacts {
 		return SessionArtifacts{}
 	}
 	return SessionArtifacts{
-		TelemetryPath: r.currentRuntime().Config.TelemetryPath,
-		LogPath:       r.currentRuntime().Config.LogPath,
+		TelemetryDir: r.currentRuntime().TelemetryDir(),
+		LogPath:      r.currentRuntime().Config.LogPath,
 	}
 }
 

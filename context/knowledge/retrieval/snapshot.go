@@ -24,6 +24,11 @@ type CorpusSnapshot struct {
 	Chunks []knowledge.KnowledgeChunk
 	// Generation monotonically increases per rebuild; 0 means none.
 	Generation uint64
+	// StoreRevision is the corpus mutation counter the snapshot was decoded
+	// from. A snapshot whose StoreRevision lags the store is stale even within
+	// its TTL: retrieval rebuilds rather than serve a corpus missing a
+	// just-written chunk (read-your-writes).
+	StoreRevision uint64
 	// BuiltAt is the snapshot's build time (TTL/serve-stale accounting).
 	BuiltAt time.Time
 
@@ -43,15 +48,20 @@ func (s *CorpusSnapshot) Lookup(id knowledge.ChunkID) (knowledge.KnowledgeChunk,
 
 // buildCorpusSnapshot decodes the corpus in a single store pass.
 func buildCorpusSnapshot(store *knowledge.ChunkStore, generation uint64, builtAt time.Time) (*CorpusSnapshot, error) {
+	// Read the revision before decoding: a write that lands during the decode
+	// must leave the snapshot's revision behind the store's so the next get
+	// rebuilds instead of serving a partial corpus.
+	revision := store.Revision()
 	chunks, err := store.FindAll()
 	if err != nil {
 		return nil, err
 	}
 	snap := &CorpusSnapshot{
-		Generation: generation,
-		Chunks:     chunks,
-		byID:       make(map[knowledge.ChunkID]int32, len(chunks)),
-		BuiltAt:    builtAt,
+		Generation:    generation,
+		StoreRevision: revision,
+		Chunks:        chunks,
+		byID:          make(map[knowledge.ChunkID]int32, len(chunks)),
+		BuiltAt:       builtAt,
 	}
 	for i, chunk := range chunks {
 		snap.byID[chunk.ID] = int32(i)
@@ -104,7 +114,7 @@ func (ss *snapshotState) get(store *knowledge.ChunkStore) (*CorpusSnapshot, getO
 	snap := ss.current
 	ss.mu.RUnlock()
 
-	if snap != nil && ss.now().Sub(snap.BuiltAt) < snapshotTTL {
+	if snap != nil && ss.now().Sub(snap.BuiltAt) < snapshotTTL && snap.StoreRevision == store.Revision() {
 		return snap, outcomeFresh, nil
 	}
 

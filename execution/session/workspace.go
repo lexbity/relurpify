@@ -9,7 +9,6 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"time"
 
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	aconvert "codeburg.org/lexbit/relurpify/capability/agentspec/convert"
@@ -28,7 +27,7 @@ import (
 	"codeburg.org/lexbit/relurpify/jobs"
 	"codeburg.org/lexbit/relurpify/model"
 	"codeburg.org/lexbit/relurpify/telemetry"
-	"codeburg.org/lexbit/relurpify/telemetry/event"
+	"codeburg.org/lexbit/relurpify/telemetry/otelleg"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 	cfgsecurity "codeburg.org/lexbit/relurpify/userconfig/config/security"
 	"codeburg.org/lexbit/relurpify/userconfig/modelselect"
@@ -70,8 +69,12 @@ type Workspace struct {
 	ProfileResolution modelselect.ProfileResolution
 
 	// Internals held for Close()/Restart()
-	logFile  io.Closer
-	eventLog io.Closer
+	logFile io.Closer
+
+	// TelemetryChain is the OTel export leg this workspace owns. The emit
+	// surface (Telemetry) may be re-pointed at a runtime mux, so the chain is
+	// closed here explicitly.
+	TelemetryChain *otelleg.Chain
 
 	// Derived fields for callers that need them
 	AgentSpec            *agentspec.AgentRuntimeSpec
@@ -133,12 +136,6 @@ func (w *Workspace) Close(ctx context.Context) error {
 		}
 	}
 
-	if w.eventLog != nil {
-		if err := w.eventLog.Close(); err != nil {
-			errs = append(errs, fmt.Errorf("close event log: %w", err))
-		}
-	}
-
 	// Close IndexManager if present (allocated in BootstrapAgentRuntime).
 	if w.Environment.IndexManager != nil {
 		if err := w.Environment.IndexManager.Close(ctx); err != nil {
@@ -152,13 +149,14 @@ func (w *Workspace) Close(ctx context.Context) error {
 		}
 	}
 
-	// Close the telemetry chain last: it owns the JSONL file sink, which must be
-	// flushed/closed rather than left to the OS. Sinks without an error-returning
-	// Close (logger, event-log mirror, broadcast) are skipped by design.
-	if w.Telemetry != nil {
-		if err := closeTelemetry(w.Telemetry); err != nil {
+	// Close the OTel export leg last: it flushes the providers and the segment
+	// store (D9 ordering). It is closed explicitly because the emit surface may
+	// have been re-pointed at a runtime mux that does not own it.
+	if w.TelemetryChain != nil {
+		if err := closeTelemetry(ctx, w.TelemetryChain); err != nil {
 			errs = append(errs, fmt.Errorf("close telemetry: %w", err))
 		}
+		w.TelemetryChain = nil
 	}
 
 	return errors.Join(errs...)
@@ -495,24 +493,22 @@ func OpenWorkspace(ctx context.Context, cfg WorkspaceConfig) (_ *Workspace, err 
 
 	defaultStateDir := workspace.StateDir(cfg.Workspace)
 	defaultLogPath := filepath.Join(defaultStateDir, "logs", "workspace.log")
-	defaultTelemetryPath := filepath.Join(defaultStateDir, "telemetry", "workspace.jsonl")
-	defaultEventsPath := filepath.Join(defaultStateDir, "events.db")
 	defaultMemoryPath := filepath.Join(defaultStateDir, "memory")
 	if cfg.LogPath == "" || filepath.Clean(cfg.LogPath) == filepath.Clean(defaultLogPath) {
 		cfg.LogPath = filepath.Join(cfg.StateDir, "logs", "workspace.log")
 	}
-	if cfg.TelemetryPath == "" || filepath.Clean(cfg.TelemetryPath) == filepath.Clean(defaultTelemetryPath) {
-		cfg.TelemetryPath = filepath.Join(cfg.StateDir, "telemetry", "workspace.jsonl")
-	}
-	if cfg.EventsPath == "" || filepath.Clean(cfg.EventsPath) == filepath.Clean(defaultEventsPath) {
-		cfg.EventsPath = filepath.Join(cfg.StateDir, "events.db")
-	}
 	if cfg.MemoryPath == "" || filepath.Clean(cfg.MemoryPath) == filepath.Clean(defaultMemoryPath) {
 		cfg.MemoryPath = filepath.Join(cfg.StateDir, "memory")
 	}
-
+	// The local OTLP-JSON leg writes under the workspace state directory. The
+	// composition root may already have supplied the directory; derive it when
+	// it did not (embedded scope and direct callers).
+	if cfg.TelemetrySettings.FileEnabled && cfg.TelemetrySettings.FileDir == "" {
+		cfg.TelemetrySettings.FileDir = filepath.Join(cfg.StateDir, "telemetry", "otlp")
+	}
+	// Scope gates the telemetry leg: an embedded workspace emits nothing.
 	if !cfg.Scope.TelemetrySinks {
-		cfg.TelemetryPath = ""
+		cfg.TelemetrySettings.Enabled = false
 	}
 
 	// Phase A: Configuration Validation
@@ -535,29 +531,15 @@ func OpenWorkspace(ctx context.Context, cfg WorkspaceConfig) (_ *Workspace, err 
 		backend = cfg.ModelProduct.Backend
 	}
 
-	// Phase C: Log and Telemetry Setup (logger always on; JSON sink gated by
-	// cfg.Scope.TelemetrySinks, enforced via empty cfg.TelemetryPath above)
-	logFile, logger, tel, err := setupTelemetry(cfg)
+	// Phase C: Log and Telemetry Setup. The logger is always on; the OTel
+	// export leg is built from the resolved telemetry settings and is the sole
+	// event output besides the broadcast bus.
+	logFile, logger, tel, err := setupTelemetry(ctx, cfg)
 	if err != nil {
 		return nil, err
 	}
 	cleanup.Add(func(_ context.Context) error { return logFile.Close() })
-	cleanup.Add(func(_ context.Context) error { return closeTelemetry(tel) })
-
-	// Phase C.5: Event Log Setup (gated by Scope.Services). Fail-closed
-	// per NFR-4: an unavailable Badger store downgrades the runtime to
-	// JSONL-only telemetry with a warning — boot never fails on telemetry.
-	var eventLog event.Log
-	if cfg.Scope.Services && cfg.EventLogFactory != nil && cfg.EventsPath != "" {
-		eventLog, err = cfg.EventLogFactory(cfg.EventsPath)
-		if err != nil {
-			logger.Printf("warning: framework event log unavailable at %s: %v (continuing with JSONL-only telemetry)", cfg.EventsPath, err)
-			eventLog = nil
-		}
-	}
-	if eventLog != nil {
-		cleanup.Add(func(_ context.Context) error { return eventLog.Close() })
-	}
+	cleanup.Add(func(ctx context.Context) error { return closeTelemetry(ctx, tel) })
 
 	// Phase D: KnowledgeStore initialization deferred until after BootstrapAgentRuntime
 	// where the graphdb.Engine is available from IndexManager.
@@ -584,18 +566,10 @@ func OpenWorkspace(ctx context.Context, cfg WorkspaceConfig) (_ *Workspace, err 
 	}
 	runner := cfg.SecurityRuntime.Runner
 
-	// Phase E.5: telemetry chain — the workspace mux gains the causal event
-	// log leg when the Badger store is available, so every downstream
-	// emitter (model, decision forensics, registry, prompt registry)
-	// mirrors into the framework event log through one writer
-	// (EventTelemetry), never a second one.
+	// Phase E.5: the OTel export leg is the telemetry chain — every downstream
+	// emitter (model, decision forensics, registry, prompt registry) reaches it
+	// through one writer.
 	telemetryChain := tel
-	if eventLog != nil {
-		telemetryChain = telemetry.MultiplexTelemetry{Sinks: []telemetry.Telemetry{
-			tel,
-			telemetry.NewEventTelemetry(eventLog, "local", registration.ID, cfg.AgentName),
-		}}
-	}
 
 	// Resolve model from the registered agent spec if not overridden in config.
 	inferenceModel := cfg.InferenceModel
@@ -676,10 +650,6 @@ func OpenWorkspace(ctx context.Context, cfg WorkspaceConfig) (_ *Workspace, err 
 	// (gated by Scope.Services and Scope.Knowledge)
 	env := boot.Environment
 	env.PermissionManager = registration.Permissions
-	// The causal event log opened in Phase C.5 is shared with the agent
-	// environment so runtime consumers (decision forensics, session
-	// runners) and the workspace close the same instance.
-	env.EventLog = eventLog
 
 	// Phase H.5: Artifact Store — per-session durable storage for tool output.
 	artifactStore, err := artifactstore.NewDiskStore(cfg.Workspace, 0)
@@ -749,13 +719,13 @@ func OpenWorkspace(ctx context.Context, cfg WorkspaceConfig) (_ *Workspace, err 
 		Backend:              backend,
 		ProfileResolution:    profileResolution,
 		logFile:              logFile,
-		eventLog:             eventLog,
 		AgentSpec:            boot.AgentSpec,
 		EffectiveContract:    boot.Contract,
 		CompiledPolicy:       boot.CompiledPolicy,
 		PolicyEngine:         boot.PolicyEngine,
 		CapabilityAdmissions: boot.CapabilityAdmissions,
 		Telemetry:            telemetryChain,
+		TelemetryChain:       tel,
 		Logger:               logger,
 		ServiceManager:       sm,
 	}
@@ -796,25 +766,16 @@ func resolveRuntimeModelSettings(inferenceModel string, debugLLM bool, registrat
 	return inferenceModel, debugLLM
 }
 
-// setupTelemetry opens the (rotating) log file, creates a logger, and
-// assembles the telemetry sink chain (logger + optional JSON file). Returns
-// the log writer (an io.Closer the caller must close), the logger, and the
-// assembled telemetry.
-func setupTelemetry(cfg WorkspaceConfig) (io.Closer, *log.Logger, telemetry.Telemetry, error) {
+// setupTelemetry opens the (rotating) log file, creates a logger, and builds the
+// OTel export leg from the resolved telemetry settings. Returns the log writer
+// (an io.Closer the caller must close), the logger, and the chain.
+func setupTelemetry(ctx context.Context, cfg WorkspaceConfig) (io.Closer, *log.Logger, *otelleg.Chain, error) {
 	logPath := cfg.LogPath
 	if logPath == "" {
 		if cfg.StateDir != "" {
 			logPath = filepath.Join(cfg.StateDir, "logs", "workspace.log")
 		} else {
 			logPath = filepath.Join(cfg.Workspace, workspace.StateDirName, "logs", "workspace.log")
-		}
-	}
-	telemetryPath := cfg.TelemetryPath
-	if telemetryPath == "" {
-		if cfg.StateDir != "" {
-			telemetryPath = filepath.Join(cfg.StateDir, "telemetry", "workspace.jsonl")
-		} else {
-			telemetryPath = filepath.Join(cfg.Workspace, workspace.StateDirName, "telemetry", "workspace.jsonl")
 		}
 	}
 	if err := os.MkdirAll(filepath.Dir(logPath), 0o700); err != nil { // public: workspace log directory
@@ -826,39 +787,30 @@ func setupTelemetry(cfg WorkspaceConfig) (io.Closer, *log.Logger, telemetry.Tele
 	}
 	logger := log.New(logFile, "workspace ", log.LstdFlags|log.Lmicroseconds)
 
-	var sinks []telemetry.Telemetry
-	sinks = append(sinks, telemetry.LoggerTelemetry{Logger: logger})
-
-	if telemetryPath != "" {
-		if err := os.MkdirAll(filepath.Dir(telemetryPath), 0o700); err == nil { // public: workspace telemetry directory
-			// NFR-10: enforce the JSONL retention window on open so a session's
-			// telemetry file never grows past one retention window of traffic.
-			retention := cfg.TelemetryRetention
-			if retention <= 0 {
-				retention = telemetry.DefaultTelemetryRetention
-			}
-			if err := telemetry.PruneJSONL(telemetryPath, retention, time.Now()); err != nil {
-				logger.Printf("warning: telemetry retention prune failed: %v", err)
-			}
-			if fileSink, err := telemetry.NewJSONFileTelemetry(telemetryPath); err == nil {
-				sinks = append(sinks, fileSink)
-			} else {
-				logger.Printf("warning: failed to init json telemetry: %v", err)
-			}
-		}
+	// An injected chain (composition root) is adopted as-is; it was already
+	// built fail-closed at the injection site.
+	if cfg.TelemetryChain != nil {
+		return logFile, logger, cfg.TelemetryChain, nil
 	}
-
-	return logFile, logger, telemetry.MultiplexTelemetry{Sinks: sinks}, nil
+	chain, err := otelleg.New(ctx, cfg.TelemetrySettings)
+	if err != nil {
+		_ = logFile.Close()
+		return nil, nil, nil, fmt.Errorf("telemetry: %w", err)
+	}
+	return logFile, logger, chain, nil
 }
 
-// closeTelemetry releases the resources owned by a telemetry chain.
-// MultiplexTelemetry implements io.Closer and closes only sinks that own an OS
-// resource (the JSONL file sink and nested multiplexes); other sink shapes
-// (logger, event mirror, broadcast) are left to their own owners. A nil or
+// closeTelemetry releases the resources owned by the telemetry chain. The OTel
+// chain closes with the caller's context (its own flush/shutdown deadlines are
+// internal); an io.Closer sink (legacy shapes) closes without one. A nil or
 // non-closeable telemetry is a no-op.
-func closeTelemetry(t telemetry.Telemetry) error {
-	if closer, ok := t.(io.Closer); ok {
+func closeTelemetry(ctx context.Context, t telemetry.Telemetry) error {
+	switch closer := t.(type) {
+	case interface{ Close(context.Context) error }:
+		return closer.Close(ctx)
+	case io.Closer:
 		return closer.Close()
+	default:
+		return nil
 	}
-	return nil
 }

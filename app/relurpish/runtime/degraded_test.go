@@ -51,6 +51,7 @@ func TestNew_ReturnsDegradedOnInvalidConfig(t *testing.T) {
 	rt, err := New(context.Background(), cfg, config.Secrets{})
 	require.NoError(t, err)
 	require.NotNil(t, rt)
+	t.Cleanup(func() { _ = rt.Close(context.Background()) })
 
 	ws := rt.AgentWorkspace()
 	require.NotNil(t, ws, "AgentWorkspace() must return non-nil even when degraded")
@@ -66,6 +67,7 @@ func TestNew_AgentWorkspaceNeverNil(t *testing.T) {
 	rt, err := New(context.Background(), cfg, config.Secrets{})
 	require.NoError(t, err)
 	require.NotNil(t, rt)
+	t.Cleanup(func() { _ = rt.Close(context.Background()) })
 
 	ws := rt.AgentWorkspace()
 	require.NotNil(t, ws)
@@ -80,6 +82,7 @@ func TestNewDegradedRuntime_HasDenyAllTools(t *testing.T) {
 	rt, err := New(context.Background(), cfg, config.Secrets{})
 	require.NoError(t, err)
 	require.NotNil(t, rt)
+	t.Cleanup(func() { _ = rt.Close(context.Background()) })
 
 	require.NotNil(t, rt.Tools, "registry must have a scope for tools (deny-all)")
 }

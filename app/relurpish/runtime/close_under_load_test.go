@@ -19,6 +19,7 @@ import (
 	"codeburg.org/lexbit/relurpify/execution/agentgraph"
 	"codeburg.org/lexbit/relurpify/execution/session"
 	"codeburg.org/lexbit/relurpify/telemetry"
+	"codeburg.org/lexbit/relurpify/telemetry/otelleg"
 )
 
 // sleepingExecutor is a workflow executor whose turn is in flight until its
@@ -47,45 +48,72 @@ func (s *sleepingExecutor) Execute(ctx context.Context, _ *execution.Task, _ *co
 }
 
 // TestRuntimeCloseUnderLoadDrainsThenTearsDown runs a real in-flight turn and
-// calls Close() mid-turn (AC-8): the coordinator drains/cancels the run before
-// the JSONL telemetry sink and the Badger store are torn down, the telemetry
-// file absorbs the shutdown events without a write error, and the store opens
-// cleanly afterwards — no LOCK contention left behind.
+// calls Close() mid-turn while 20 goroutines emit through the telemetry mux
+// (NFR-5): the coordinator drains/cancels the run before the OTel chain and the
+// Badger store are torn down, emits racing close are dropped without a panic,
+// Close stays within budget, and the store opens cleanly afterwards — no LOCK
+// contention left behind.
 func TestRuntimeCloseUnderLoadDrainsThenTearsDown(t *testing.T) {
 	ctx := context.Background()
-	workspace := t.TempDir()
+	workspaceDir := t.TempDir()
 
 	// Real Badger store rooted in the workspace state dir so the engine lock's
 	// release is observable after Close.
-	stateDir := filepath.Join(workspace, ".relurpify_state")
+	stateDir := filepath.Join(workspaceDir, ".relurpify_state")
 	require.NoError(t, os.MkdirAll(stateDir, 0o700))
 	engine, err := graphdb.Open(ctx, graphdb.DefaultOptions(stateDir))
 	require.NoError(t, err)
 	indexStore := ast.NewGraphIndexStore(engine)
-	indexManager := ast.NewIndexManager(indexStore, ast.IndexConfig{WorkspacePath: workspace})
+	indexManager := ast.NewIndexManager(indexStore, ast.IndexConfig{WorkspacePath: workspaceDir})
 	indexManager.GraphDB = engine
 
-	// Real JSONL telemetry sink: the shutdown accounting must land on disk
-	// without a write error even though Close interrupts a live turn.
-	telemetryPath := filepath.Join(workspace, "telemetry.jsonl")
-	sink, err := telemetry.NewJSONFileTelemetry(telemetryPath)
+	// Real OTel chain: the shutdown accounting must land on the durable
+	// OTLP-JSON leg without a write error even though Close interrupts a live
+	// turn and racing emitters.
+	segmentDir := filepath.Join(stateDir, "telemetry", "otlp")
+	chain, err := otelleg.New(ctx, otelleg.Settings{Enabled: true, FileEnabled: true, FileDir: segmentDir})
 	require.NoError(t, err)
+	execSink := telemetry.NewBroadcastSink()
+	mux := telemetry.MultiplexTelemetry{Sinks: []telemetry.Telemetry{chain, execSink}}
 
 	ws := &session.Workspace{
-		Telemetry: sink,
-		Logger:    log.New(io.Discard, "", 0),
+		Telemetry:      mux,
+		TelemetryChain: chain,
+		Logger:         log.New(io.Discard, "", 0),
 	}
 	ws.Environment.IndexManager = indexManager
 
-	coord := newRunCoordinator(ws.Telemetry)
+	coord := newRunCoordinator(mux)
 	coord.SetDurations(100*time.Millisecond, time.Second)
 	rt := &Runtime{
-		Config:      Config{Workspace: workspace},
+		Config:      Config{Workspace: workspaceDir},
 		Workspace:   ws,
 		coordinator: coord,
+		execSink:    execSink,
 	}
 	sleeping := newSleepingExecutor()
 	rt.setAgent(sleeping)
+
+	var emitters sync.WaitGroup
+	stop := make(chan struct{})
+	for i := 0; i < 20; i++ {
+		emitters.Add(1)
+		go func() {
+			defer emitters.Done()
+			for {
+				select {
+				case <-stop:
+					return
+				default:
+					mux.Emit(telemetry.Event{
+						Type:      telemetry.EventStateChange,
+						Timestamp: time.Now(),
+						Metadata:  map[string]any{"n": 1},
+					})
+				}
+			}
+		}()
+	}
 
 	runResult := make(chan error, 1)
 	go func() {
@@ -93,15 +121,22 @@ func TestRuntimeCloseUnderLoadDrainsThenTearsDown(t *testing.T) {
 		runResult <- err
 	}()
 
-	// Wait until the turn is genuinely in flight, then close mid-turn.
+	// Wait until the turn is genuinely in flight, then close mid-turn under load.
 	<-sleeping.started
+	start := time.Now()
 	require.NoError(t, rt.Close(ctx))
+	elapsed := time.Since(start)
+	close(stop)
+	emitters.Wait()
+
+	require.LessOrEqual(t, elapsed, 35*time.Second, "Close must respect the NFR-5 budget")
 	require.NoError(t, <-runResult, "the in-flight turn must finish cleanly after Close")
 
-	// The JSONL sink recorded the quiesce accounting and closed without error.
-	raw, err := os.ReadFile(telemetryPath)
+	// The OTLP-JSON leg recorded the quiesce accounting.
+	segment := otlpSegmentFile(t, segmentDir)
+	raw, err := os.ReadFile(segment)
 	require.NoError(t, err)
-	require.Contains(t, string(raw), telemetry.EventShutdownDrain,
+	require.Contains(t, string(raw), string(telemetry.EventShutdownDrain),
 		"shutdown accounting must reach the durable telemetry trail")
 
 	// The Badger lock is released: the same store directory opens fresh.

@@ -41,6 +41,12 @@ var blockedMetadataKeys = map[string]struct{}{ //nolint:gochecknoglobals // immu
 // correlation attributes first, then metadata in sorted key order, stopping at
 // maxAttributes. Fixed attributes win the cap.
 func projectAttributes(ev telemetry.Event) []attribute.KeyValue {
+	return projectEventAttributes(ev, nil)
+}
+
+// projectEventAttributes is projectAttributes with a metadata exclusion set
+// (used by spans to skip keys they handle explicitly).
+func projectEventAttributes(ev telemetry.Event, excluded map[string]struct{}) []attribute.KeyValue {
 	attrs := make([]attribute.KeyValue, 0, maxAttributes)
 	appendString := func(key, value string) {
 		if value == "" || len(attrs) >= maxAttributes {
@@ -77,6 +83,11 @@ func projectAttributes(ev telemetry.Event) []attribute.KeyValue {
 		}
 		if _, blocked := blockedMetadataKeys[key]; blocked {
 			continue
+		}
+		if excluded != nil {
+			if _, skip := excluded[key]; skip {
+				continue
+			}
 		}
 		value, ok := projectMetadataValue(ev.Metadata[key])
 		if !ok {

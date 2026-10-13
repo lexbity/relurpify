@@ -616,7 +616,7 @@ func rootHandleExport(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 	}
 	if m.runtime != nil {
 		artifacts := m.runtime.SessionArtifacts()
-		opts.TelemetryPath = artifacts.TelemetryPath
+		opts.TelemetryDir = artifacts.TelemetryDir
 		opts.LogPath = artifacts.LogPath
 	}
 	var msgs []Message
@@ -1087,7 +1087,6 @@ func rootHandleDiffView(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 	m.addSystemMessage("Toggle diff view requested (not yet implemented as palette command)")
 	return m, nil
 }
-
 
 // rootHandleRecipe lists the workspace recipes, pins one for the session, or
 // clears the pin. A pinned recipe rides every submitted turn as recipe_id

@@ -16,7 +16,6 @@ import (
 	"codeburg.org/lexbit/relurpify/governance/policy"
 	"codeburg.org/lexbit/relurpify/model"
 	"codeburg.org/lexbit/relurpify/telemetry"
-	"codeburg.org/lexbit/relurpify/telemetry/event"
 	"codeburg.org/lexbit/relurpify/telemetry/otelleg"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 	cfgsecurity "codeburg.org/lexbit/relurpify/userconfig/config/security"
@@ -115,18 +114,13 @@ type WorkspaceConfig struct {
 	AuditLimit                 int
 	HITLTimeout                time.Duration
 	LogPath                    string
-	TelemetryPath              string
-	// TelemetryRetention bounds JSONL growth across sessions (NFR-10). Zero is
-	// treated as telemetry.DefaultTelemetryRetention (7 days).
-	TelemetryRetention  time.Duration
-	EventsPath          string
-	MemoryPath          string
-	SkipASTIndex        bool
-	MaxIterations       int
-	AllowedCapabilities []agentspec.CapabilitySelector
-	DebugLLM            bool
-	DebugAgent          bool
-	Strict              bool
+	MemoryPath                 string
+	SkipASTIndex               bool
+	MaxIterations              int
+	AllowedCapabilities        []agentspec.CapabilitySelector
+	DebugLLM                   bool
+	DebugAgent                 bool
+	Strict                     bool
 	// Agent specification for policy engine and capability registration
 	AgentSpec *agentspec.AgentRuntimeSpec
 	// Permission manager for authorization
@@ -135,13 +129,18 @@ type WorkspaceConfig struct {
 	Registration *Registration
 	// Agent ID for permission tracking
 	AgentID string
-	// Telemetry for instrumentation
-	Telemetry telemetry.Telemetry
 	// TelemetrySettings is the resolved OTel export-leg configuration the
-	// workspace builds its chain from. The zero value disables the leg.
-	// OpenWorkspace validates it fail-closed (D9/FR-16) so a bad endpoint or CA
-	// path aborts boot rather than degrading silently.
+	// workspace builds its chain from when TelemetryChain is not injected.
+	// The zero value disables the leg. OpenWorkspace validates it fail-closed
+	// (D9/FR-16) so a bad endpoint or CA path aborts boot rather than
+	// degrading silently.
 	TelemetrySettings otelleg.Settings
+	// TelemetryChain is a pre-built OTel export leg the workspace adopts
+	// instead of building its own from TelemetrySettings. The composition
+	// root injects it when the chain must exist before the workspace opens
+	// (the sandbox runner is constructed with it). The workspace owns closing
+	// it either way.
+	TelemetryChain *otelleg.Chain
 	// LoadedConfig contains the resolved config tree produced by config.
 	LoadedConfig *config.AppConfig
 	// DocumentSnapshot contains the loaded document used for contract resolution.
@@ -176,10 +175,6 @@ type WorkspaceConfig struct {
 	// backfill keeps platform free of a context edge. Required whenever
 	// ModelProduct.ModelFactory is set.
 	NewEventSink func(telemetry.Telemetry) model.EventSink
-	// EventLogFactory creates an event.Log implementation for the workspace.
-	// If nil, no event log is created. This allows apps to inject app-specific
-	// event log implementations (e.g., app/nexus/db) without framework dependencies.
-	EventLogFactory func(path string) (event.Log, error)
 	// Scope declares which optional feature layers are assembled.
 	// A zero value defaults to ScopeFull.
 	Scope WorkspaceScope

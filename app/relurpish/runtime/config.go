@@ -28,8 +28,6 @@ type Config struct {
 	SharedRoot                 string
 	MemoryPath                 string
 	LogPath                    string
-	TelemetryPath              string
-	EventsPath                 string
 	ConfigPath                 string
 	InferenceProvider          string
 	InferenceEndpoint          string
@@ -61,10 +59,10 @@ type Config struct {
 	// every request, audited per decision and surfaced by the doctor. The
 	// sandbox and capability enforcement are unaffected — only the
 	// human-approval boundary opens.
-	HITLMode                   string
-	Editor                     string
-	SubprocessToolFactory      func(ports.ToolManifest) any
-	ModelFactoryWrapper        func(model.ModelFactory) model.ModelFactory
+	HITLMode              string
+	Editor                string
+	SubprocessToolFactory func(ports.ToolManifest) any
+	ModelFactoryWrapper   func(model.ModelFactory) model.ModelFactory
 }
 
 // DefaultConfig infers sensible defaults based on the current working
@@ -79,8 +77,6 @@ func DefaultConfig() Config {
 		AgentsDir:        "relurpify_cfg/agents",
 		MemoryPath:       ".relurpify_state/memory",
 		LogPath:          ".relurpify_state/logs/relurpish.log",
-		TelemetryPath:    ".relurpify_state/telemetry/telemetry.jsonl",
-		EventsPath:       ".relurpify_state/events.db",
 		ConfigPath:       "relurpify_cfg/workspace.yaml",
 		AgentName:        AgentLabelEuclo,
 		ServerAddr:       ":8080",
@@ -130,18 +126,6 @@ func (c *Config) Normalize() error {
 	}
 	if !filepath.IsAbs(c.LogPath) {
 		c.LogPath = filepath.Join(c.Workspace, c.LogPath)
-	}
-	if c.TelemetryPath == "" {
-		c.TelemetryPath = filepath.Join(config.DefaultWorkspaceStateTelemetryDir(c.Workspace), "telemetry.jsonl")
-	}
-	if !filepath.IsAbs(c.TelemetryPath) {
-		c.TelemetryPath = filepath.Join(c.Workspace, c.TelemetryPath)
-	}
-	if c.EventsPath == "" {
-		c.EventsPath = config.DefaultWorkspaceStateEventsFile(c.Workspace)
-	}
-	if !filepath.IsAbs(c.EventsPath) {
-		c.EventsPath = filepath.Join(c.Workspace, c.EventsPath)
 	}
 	if c.ConfigPath == "" {
 		c.ConfigPath = config.DefaultWorkspaceConfigPath(c.Workspace)

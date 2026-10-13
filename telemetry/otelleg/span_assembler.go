@@ -433,44 +433,36 @@ func joinSpanName(prefix, suffix string) string {
 	return prefix + " " + suffix
 }
 
-// spanAttributes is the start-time attribute set: fixed correlation, the
-// event's own span id, and the family's key attributes (spec §6.1).
+// spanAttributes is the start-time attribute set: the projected event
+// attributes (fixed correlation + metadata, spec §6.4), the event's own span
+// id, and the family's key attributes (spec §6.1).
 func spanAttributes(ev telemetry.Event, family spanFamily) []attribute.KeyValue {
-	attrs := make([]attribute.KeyValue, 0, maxAttributes)
-	appendString := func(key, value string) {
-		if value == "" || len(attrs) >= maxAttributes {
-			return
-		}
-		attrs = append(attrs, attribute.String(key, value))
-	}
-	appendString("session.id", ev.SessionID)
-	appendString("run.id", ev.RunID)
-	appendString("agent.id", ev.AgentID)
-	appendString("node.id", ev.NodeID)
-	appendString("task.id", ev.TaskID)
-	if ev.Seq != 0 && len(attrs) < maxAttributes {
-		attrs = append(attrs, attribute.KeyValue{Key: attribute.Key("relurpify.seq"), Value: uintAttrValue(ev.Seq)})
-	}
-	if id := eventSpanID(ev); id != "" {
-		appendString("relurpify.span.event_id", id)
-	}
+	attrs := projectEventAttributes(ev, map[string]struct{}{metaSpanAttrs: {}})
+	attrs = appendSpanString(attrs, "relurpify.span.event_id", eventSpanID(ev))
 
 	switch family.name {
 	case familyTool:
 		attrs = appendSpanAttrs(attrs, ev.Metadata[metaSpanAttrs])
 	case familyCapability:
 		attrs = appendSpanAttrs(attrs, ev.Metadata[metaSpanAttrs])
-		appendString("capability.id", metadataString(ev, metaCapabilityID))
-		appendString("capability.name", metadataString(ev, metaCapability))
-		appendString("capability.kind", metadataString(ev, metaKind))
-		appendString("capability.runtime_family", metadataString(ev, metaRuntimeFamily))
+		attrs = appendSpanString(attrs, "capability.id", metadataString(ev, metaCapabilityID))
+		attrs = appendSpanString(attrs, "capability.name", metadataString(ev, metaCapability))
+		attrs = appendSpanString(attrs, "capability.kind", metadataString(ev, metaKind))
+		attrs = appendSpanString(attrs, "capability.runtime_family", metadataString(ev, metaRuntimeFamily))
 	case familyLLM:
-		appendString("gen_ai.request.model", metadataString(ev, metaModel))
-		appendString("gen_ai.system", metadataString(ev, metaSystem))
-		appendString("finish_reason", metadataString(ev, metaFinishReason))
-		appendString("tool_calling_mode", metadataString(ev, metaToolCallingMode))
+		attrs = appendSpanString(attrs, "gen_ai.request.model", metadataString(ev, metaModel))
+		attrs = appendSpanString(attrs, "gen_ai.system", metadataString(ev, metaSystem))
+		attrs = appendSpanString(attrs, "finish_reason", metadataString(ev, metaFinishReason))
+		attrs = appendSpanString(attrs, "tool_calling_mode", metadataString(ev, metaToolCallingMode))
 	}
 	return attrs
+}
+
+func appendSpanString(attrs []attribute.KeyValue, key, value string) []attribute.KeyValue {
+	if value == "" || len(attrs) >= maxAttributes {
+		return attrs
+	}
+	return append(attrs, attribute.String(key, value))
 }
 
 // finishSpanAttributes is the end-time attribute set: tool/capability result

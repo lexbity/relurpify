@@ -322,6 +322,16 @@ func (c *Chain) UsageRecorder() observing.UsageObserver {
 	return c.usage
 }
 
+// SegmentDir returns the directory the local OTLP-JSON segments are written to,
+// or "" when the file leg is disabled. Readers (the TUI export, tooling) walk
+// the segments from here.
+func (c *Chain) SegmentDir() string {
+	if c == nil {
+		return ""
+	}
+	return c.settings.FileDir
+}
+
 // SelfMetrics returns the chain's own counters.
 func (c *Chain) SelfMetrics() SelfSnapshot {
 	if c == nil {

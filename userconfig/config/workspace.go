@@ -93,11 +93,6 @@ func DefaultWorkspaceStateMemoryDir(workspace string) string {
 	return filepath.Join(DefaultWorkspaceStateDir(workspace), "memory")
 }
 
-// DefaultWorkspaceStateEventsFile returns the default events database path.
-func DefaultWorkspaceStateEventsFile(workspace string) string {
-	return filepath.Join(DefaultWorkspaceStateDir(workspace), "events.db")
-}
-
 // DefaultWorkspaceStateTapeFile returns the default tape corpus path.
 func DefaultWorkspaceStateTapeFile(workspace string) string {
 	return filepath.Join(DefaultWorkspaceStateDir(workspace), "tapes", "tape.jsonl")

@@ -3,10 +3,14 @@ package tui
 import (
 	"bufio"
 	"context"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -25,7 +29,7 @@ type ExportOptions struct {
 	Format        string
 	Path          string
 	WorkspaceRoot string
-	TelemetryPath string
+	TelemetryDir  string
 	LogPath       string
 	Limit         int
 }
@@ -93,9 +97,9 @@ func WriteSessionExport(messages []Message, session *Session, ctx *AgentContext,
 		return "", err
 	}
 
-	telemetry := TelemetryExport{Path: opts.TelemetryPath}
-	if opts.TelemetryPath != "" {
-		events, truncated, err := loadTelemetryEvents(opts.TelemetryPath, opts.Limit)
+	telemetry := TelemetryExport{Path: opts.TelemetryDir}
+	if opts.TelemetryDir != "" {
+		events, truncated, err := loadTelemetryEvents(opts.TelemetryDir, opts.Limit)
 		if err != nil {
 			telemetry.Error = err.Error()
 		} else {
@@ -214,37 +218,168 @@ func writeMarkdownExport(path string, payload SessionExport) error {
 	return os.WriteFile(path, []byte(b.String()), fs.PublicFileMode) // public: markdown export
 }
 
+// loadTelemetryEvents reads the OTLP-JSON log records from the telemetry
+// segment directory (or a single segment file) and maps them back to the
+// display event shape. Unparseable lines are skipped, matching the old
+// NDJSON reader's leniency.
 func loadTelemetryEvents(path string, limit int) ([]telemetry.Event, bool, error) {
 	if limit <= 0 {
 		limit = 200
 	}
-	f, err := os.Open(filepath.Clean(path))
+	segments, err := otlpSegmentFiles(path)
 	if err != nil {
 		return nil, false, err
+	}
+	var events []telemetry.Event
+	total := 0
+	for _, segment := range segments {
+		segmentEvents, err := readOTLPLogSegment(segment)
+		if err != nil {
+			continue
+		}
+		for _, event := range segmentEvents {
+			total++
+			events = append(events, event)
+			if len(events) > limit {
+				events = events[1:]
+			}
+		}
+	}
+	return events, total > limit, nil
+}
+
+// otlpSegmentFiles returns the segment files under path. A single file is
+// returned as-is; a directory yields its *.jsonl segments sorted by name.
+func otlpSegmentFiles(path string) ([]string, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
+	if !info.IsDir() {
+		return []string{path}, nil
+	}
+	entries, err := os.ReadDir(path)
+	if err != nil {
+		return nil, err
+	}
+	var files []string
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".jsonl") {
+			continue
+		}
+		files = append(files, filepath.Join(path, entry.Name()))
+	}
+	sort.Strings(files)
+	return files, nil
+}
+
+// otlpLogRecord is the subset of the OTLP-JSON log record the file leg emits
+// (protojson: 64-bit integers are strings, bytes are base64).
+type otlpLogRecord struct {
+	TimeUnixNano string `json:"timeUnixNano"`
+	EventName    string `json:"eventName"`
+	Body         struct {
+		StringValue string `json:"stringValue"`
+	} `json:"body"`
+	TraceID    string `json:"traceId"`
+	SpanID     string `json:"spanId"`
+	Attributes []struct {
+		Key   string         `json:"key"`
+		Value map[string]any `json:"value"`
+	} `json:"attributes"`
+}
+
+func readOTLPLogSegment(path string) ([]telemetry.Event, error) {
+	f, err := os.Open(filepath.Clean(path))
+	if err != nil {
+		return nil, err
 	}
 	defer func() { _ = f.Close() }()
 
 	scanner := bufio.NewScanner(f)
-	buf := make([]byte, 0, 64*1024)
-	scanner.Buffer(buf, 1024*1024)
+	scanner.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
 	var events []telemetry.Event
-	total := 0
 	for scanner.Scan() {
-		total++
-		var event telemetry.Event
-		if err := json.Unmarshal(scanner.Bytes(), &event); err != nil {
+		var batch struct {
+			ResourceLogs []struct {
+				ScopeLogs []struct {
+					LogRecords []otlpLogRecord `json:"logRecords"`
+				} `json:"scopeLogs"`
+			} `json:"resourceLogs"`
+		}
+		if err := json.Unmarshal(scanner.Bytes(), &batch); err != nil {
 			continue
 		}
-		events = append(events, event)
-		if len(events) > limit {
-			events = events[1:]
+		for _, resource := range batch.ResourceLogs {
+			for _, scope := range resource.ScopeLogs {
+				for _, record := range scope.LogRecords {
+					events = append(events, record.toEvent())
+				}
+			}
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		return nil, false, err
+		return nil, err
 	}
-	truncated := total > limit
-	return events, truncated, nil
+	return events, nil
+}
+
+func (r otlpLogRecord) toEvent() telemetry.Event {
+	event := telemetry.Event{Type: telemetry.EventType(r.EventName), Message: r.Body.StringValue}
+	if r.TimeUnixNano != "" {
+		if ns, err := strconv.ParseInt(r.TimeUnixNano, 10, 64); err == nil {
+			event.Timestamp = time.Unix(0, ns).UTC()
+		}
+	}
+	event.TraceID = base64Hex(r.TraceID)
+	event.SpanID = base64Hex(r.SpanID)
+	if len(r.Attributes) > 0 {
+		event.Metadata = make(map[string]any, len(r.Attributes))
+	}
+	for _, attr := range r.Attributes {
+		for kind, raw := range attr.Value {
+			switch kind {
+			case "stringValue":
+				event.Metadata[attr.Key] = raw
+			case "intValue":
+				if s, ok := raw.(string); ok {
+					if n, err := strconv.ParseInt(s, 10, 64); err == nil {
+						event.Metadata[attr.Key] = n
+					}
+				}
+			case "doubleValue", "boolValue":
+				event.Metadata[attr.Key] = raw
+			}
+		}
+	}
+	// Hoist the fixed correlation attributes back to first-class fields.
+	event.SessionID = attrString(event.Metadata, "session.id")
+	event.RunID = attrString(event.Metadata, "run.id")
+	event.AgentID = attrString(event.Metadata, "agent.id")
+	event.NodeID = attrString(event.Metadata, "node.id")
+	event.TaskID = attrString(event.Metadata, "task.id")
+	return event
+}
+
+func attrString(metadata map[string]any, key string) string {
+	if metadata == nil {
+		return ""
+	}
+	if value, ok := metadata[key].(string); ok {
+		return value
+	}
+	return ""
+}
+
+func base64Hex(encoded string) string {
+	if encoded == "" {
+		return ""
+	}
+	raw, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		return ""
+	}
+	return hex.EncodeToString(raw)
 }
 
 func sanitizeTelemetryExport(in TelemetryExport) TelemetryExport {

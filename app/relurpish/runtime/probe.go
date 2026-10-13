@@ -76,8 +76,8 @@ type StatusSnapshot struct {
 	Environment EnvironmentReport
 	// Ready is doctor's canonical verdict (DoctorReport.Ready) — status and
 	// doctor can never disagree about whether the workspace is operational.
-	Ready       bool
-	Doctor      *DoctorReport
+	Ready                 bool
+	Doctor                *DoctorReport
 	PendingHITL           []*authorization.PermissionRequest
 	ServerActive          bool
 	ProtectedPaths        []string

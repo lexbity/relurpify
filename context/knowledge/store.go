@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"codeburg.org/lexbit/relurpify/context/knowledge/graphdb"
@@ -26,6 +27,27 @@ type edgeEnvelope struct {
 // ChunkStore persists artifacts and relationships in graphdb.
 type ChunkStore struct {
 	Graph *graphdb.Engine
+
+	// revision increments on every successful corpus mutation. Retrieval reads
+	// it to decide whether a cached corpus snapshot is stale, so a chunk
+	// written before a read is always visible to that read without waiting on
+	// the asynchronous bus invalidation (read-your-writes).
+	revision atomic.Uint64
+}
+
+// Revision returns the corpus mutation counter. It is monotonic; consumers
+// compare two reads to detect a change.
+func (s *ChunkStore) Revision() uint64 {
+	if s == nil {
+		return 0
+	}
+	return s.revision.Load()
+}
+
+func (s *ChunkStore) bumpRevision() {
+	if s != nil {
+		s.revision.Add(1)
+	}
 }
 
 // mergeOutcome describes what the D3 merge rule decided for an incoming chunk.
@@ -100,7 +122,11 @@ func (s *ChunkStore) GroundBatch(ctx context.Context, prepared []preparedChunk) 
 	if err != nil {
 		return err
 	}
-	return s.Graph.ApplyBatch(ctx, batch)
+	if err := s.Graph.ApplyBatch(ctx, batch); err != nil {
+		return err
+	}
+	s.bumpRevision()
+	return nil
 }
 
 // GroundBatchValidated is the grounding write under OCC (D4.1): each attempt
@@ -113,7 +139,7 @@ func (s *ChunkStore) GroundBatchValidated(ctx context.Context, build func(reload
 	if s == nil || s.Graph == nil {
 		return errors.New("knowledge: chunk store graph is required")
 	}
-	return s.Graph.ApplyBatchChecked(ctx,
+	err := s.Graph.ApplyBatchChecked(ctx,
 		func() (graphdb.GraphBatch, error) {
 			prepared, err := build(s.loadChunk)
 			if err != nil {
@@ -136,6 +162,11 @@ func (s *ChunkStore) GroundBatchValidated(ctx context.Context, build func(reload
 				return decodeChunkNode(node)
 			})
 		})
+	if err != nil {
+		return err
+	}
+	s.bumpRevision()
+	return nil
 }
 
 // groundBatchFrom converts prepared chunks into one graph batch.
@@ -250,6 +281,7 @@ func (s *ChunkStore) Save(ctx context.Context, chunk KnowledgeChunk) (*Knowledge
 	}); err != nil {
 		return nil, err
 	}
+	s.bumpRevision()
 	return &chunk, nil
 }
 
@@ -312,7 +344,11 @@ func (s *ChunkStore) Delete(ctx context.Context, id ChunkID) error {
 	if s == nil || s.Graph == nil || id == "" {
 		return nil
 	}
-	return s.Graph.DeleteNode(ctx, string(id))
+	if err := s.Graph.DeleteNode(ctx, string(id)); err != nil {
+		return err
+	}
+	s.bumpRevision()
+	return nil
 }
 
 func (s *ChunkStore) SaveEdge(ctx context.Context, edge ChunkEdge) (*ChunkEdge, error) {

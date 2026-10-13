@@ -2,32 +2,41 @@ package session
 
 import (
 	"context"
-	"path/filepath"
 	"testing"
 
-	telemetry "codeburg.org/lexbit/relurpify/telemetry"
+	"codeburg.org/lexbit/relurpify/telemetry"
+	"codeburg.org/lexbit/relurpify/telemetry/otelleg"
 )
 
-// TestWorkspaceCloseClosesTelemetryFileSink proves Workspace.Close releases the
-// JSONL file sink owned by the telemetry chain rather than leaking the handle.
-func TestWorkspaceCloseClosesTelemetryFileSink(t *testing.T) {
-	sink, err := telemetry.NewJSONFileTelemetry(filepath.Join(t.TempDir(), "telemetry.jsonl"))
+// TestWorkspaceCloseClosesTelemetryChain proves Workspace.Close releases the OTel
+// export leg it owns (flushing the providers and the segment store) and is safe
+// to repeat.
+func TestWorkspaceCloseClosesTelemetryChain(t *testing.T) {
+	chain, err := otelleg.New(context.Background(), otelleg.Settings{
+		Enabled:     true,
+		FileEnabled: true,
+		FileDir:     t.TempDir(),
+	})
 	if err != nil {
-		t.Fatalf("NewJSONFileTelemetry: %v", err)
+		t.Fatalf("otelleg.New: %v", err)
 	}
 
 	ws := DegradedWorkspace("close wiring test")
-	ws.Telemetry = telemetry.MultiplexTelemetry{
-		Sinks: []telemetry.Telemetry{telemetry.LoggerTelemetry{}, sink},
-	}
+	ws.Telemetry = chain
+	ws.TelemetryChain = chain
 
 	if err := ws.Close(context.Background()); err != nil {
 		t.Fatalf("Workspace.Close: %v", err)
 	}
 
-	// A closed sink drops rather than writes; DroppedTotal proves the wiring.
-	sink.Emit(telemetry.Event{Type: telemetry.EventGraphStart})
-	if got := sink.DroppedTotal(); got != 1 {
-		t.Fatalf("DroppedTotal after Close = %d, want 1 (file sink not closed)", got)
+	// The chain is closed: a subsequent Emit is counted as a drop.
+	chain.Emit(telemetry.Event{Type: telemetry.EventStateChange})
+	if got := chain.SelfMetrics().Dropped; got == 0 {
+		t.Fatal("Dropped = 0 after Close; the chain was not closed")
+	}
+
+	// A second Close is idempotent.
+	if err := ws.Close(context.Background()); err != nil {
+		t.Fatalf("second Workspace.Close: %v", err)
 	}
 }

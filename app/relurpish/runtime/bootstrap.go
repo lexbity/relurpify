@@ -146,8 +146,6 @@ func ConfigForWorkspace(current Config, workspace string) Config {
 	cfg.AgentsDir = paths.AgentsDir()
 	cfg.MemoryPath = config.DefaultWorkspaceStateMemoryDir(workspace)
 	cfg.LogPath = filepath.Join(config.DefaultWorkspaceStateLogsDir(workspace), "relurpish.log")
-	cfg.TelemetryPath = filepath.Join(config.DefaultWorkspaceStateTelemetryDir(workspace), "telemetry.jsonl")
-	cfg.EventsPath = config.DefaultWorkspaceStateEventsFile(workspace)
 	cfg.ConfigPath = config.DefaultWorkspaceConfigPath(workspace)
 	currentTapePath := config.DefaultWorkspaceStateTapeFile(current.Workspace)
 	if cfg.InferenceTapePath == "" || cfg.InferenceTapePath == currentTapePath {

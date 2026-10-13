@@ -51,8 +51,6 @@ func TestConfigForWorkspaceRebindsPaths(t *testing.T) {
 		AgentsDir:         runtimeTestWorkspaceOld + "/relurpify_cfg/agents",
 		MemoryPath:        runtimeTestWorkspaceOld + "/.relurpify_state/memory",
 		LogPath:           runtimeTestWorkspaceOld + "/.relurpify_state/logs/relurpish.log",
-		TelemetryPath:     runtimeTestWorkspaceOld + "/.relurpify_state/telemetry/telemetry.jsonl",
-		EventsPath:        runtimeTestWorkspaceOld + "/.relurpify_state/events.db",
 		ConfigPath:        runtimeTestWorkspaceOld + "/relurpify_cfg/config.yaml",
 		InferenceTapePath: runtimeTestTapePath,
 	}

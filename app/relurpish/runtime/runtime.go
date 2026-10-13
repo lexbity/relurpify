@@ -3,11 +3,9 @@ package runtime
 import (
 	"context"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
-	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -45,7 +43,6 @@ import (
 	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
 	"codeburg.org/lexbit/relurpify/platform/llm"
 	"codeburg.org/lexbit/relurpify/telemetry"
-	"codeburg.org/lexbit/relurpify/telemetry/event"
 	"codeburg.org/lexbit/relurpify/telemetry/otelleg"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 	"codeburg.org/lexbit/relurpify/userconfig/modelselect"
@@ -121,6 +118,16 @@ type Runtime struct {
 // AgentWorkspace returns the execution workspace for this Runtime.
 func (r *Runtime) AgentWorkspace() *session.Workspace {
 	return r.Workspace
+}
+
+// TelemetryDir returns the directory the workspace's OTLP-JSON segments are
+// written to, or "" when the file leg is disabled. The TUI export and tooling
+// read the segments from here.
+func (r *Runtime) TelemetryDir() string {
+	if r == nil || r.Workspace == nil || r.Workspace.TelemetryChain == nil {
+		return ""
+	}
+	return r.Workspace.TelemetryChain.SegmentDir()
 }
 
 // ProviderSecrets returns env-only provider credentials for backend construction.
@@ -339,6 +346,19 @@ func buildRuntime(ctx context.Context, cfg Config, secrets config.Secrets) (*Run
 	var capabilityProduct *session.CapabilityProduct
 	var knowledgeProduct *session.KnowledgeProduct
 	var modelProduct *envcomposition.ModelRuntime
+	// The OTel export leg is built before the security compose so the sandbox
+	// runner is constructed with the real chain (§8.8): posture events
+	// (ceiling exceed, protected-path escape, image pin status) are baked into
+	// the runner at build time and cannot be attached later. The workspace
+	// adopts this same chain at open, so there is exactly one.
+	telemetrySettings, err := resolveTelemetrySettings(loadedConfig.Workspace, cfg.Workspace)
+	if err != nil {
+		return nil, fmt.Errorf("resolve telemetry settings: %w", err)
+	}
+	telemetryChain, err := otelleg.New(ctx, telemetrySettings)
+	if err != nil {
+		return nil, fmt.Errorf("build telemetry chain: %w", err)
+	}
 	securityProduct, err := envcomposition.BuildSecurityRuntime(ctx, envcomposition.SecurityRuntimeInput{
 		Context:           ctx,
 		Workspace:         cfg.Workspace,
@@ -351,10 +371,7 @@ func buildRuntime(ctx context.Context, cfg Config, secrets config.Secrets) (*Run
 		Security:          contract.Security,
 		PermissionManager: registration.Permissions,
 		ExistingRunner:    cfg.SecurityRunner,
-		// Sandbox posture events (ceiling exceed, protected-path escape, image
-		// pin status) ride the workspace log sink until the full telemetry
-		// chain is assembled at workspace open (SBH-1 D-12/13/14).
-		Events: telemetry.LoggerTelemetry{Logger: log.Default()},
+		Events:            telemetryChain,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("compose security runtime: %w", err)
@@ -429,10 +446,6 @@ func buildRuntime(ctx context.Context, cfg Config, secrets config.Secrets) (*Run
 		Audit:       registration.Audit,
 		HITL:        registration.HITL,
 	}
-	telemetrySettings, err := resolveTelemetrySettings(loadedConfig.Workspace, cfg.Workspace)
-	if err != nil {
-		return nil, fmt.Errorf("resolve telemetry settings: %w", err)
-	}
 	ws, err := session.OpenWorkspace(ctx, session.WorkspaceConfig{
 		Workspace:                  cfg.Workspace,
 		InferenceProvider:          cfg.InferenceProvider,
@@ -443,8 +456,6 @@ func buildRuntime(ctx context.Context, cfg Config, secrets config.Secrets) (*Run
 		AgentsDir:                  cfg.AgentsDir,
 		AgentName:                  cfg.AgentName,
 		LogPath:                    cfg.LogPath,
-		TelemetryPath:              cfg.TelemetryPath,
-		EventsPath:                 cfg.EventsPath,
 		MemoryPath:                 cfg.MemoryPath,
 		MaxIterations:              8,
 		HITLTimeout:                cfg.HITLTimeout,
@@ -472,7 +483,7 @@ func buildRuntime(ctx context.Context, cfg Config, secrets config.Secrets) (*Run
 			return envcomposition.NewEventSinkAdapter(chain, envcomposition.IdentityTriple{})
 		},
 		TelemetrySettings: telemetrySettings,
-		EventLogFactory:   openRuntimeEventLogFactory,
+		TelemetryChain:    telemetryChain,
 		Scope:             session.ScopeFull,
 	})
 	if err != nil {
@@ -481,7 +492,6 @@ func buildRuntime(ctx context.Context, cfg Config, secrets config.Secrets) (*Run
 
 	sess := session.NewSessionFromWorkspace(ws, cfg.Workspace)
 	env := ws.Environment
-	logger := ws.Logger
 	baseTelemetry := ws.Telemetry
 	if registration != nil && registration.Permissions != nil {
 		bashCfg := &fauthorization.BashConfig{Default: permissions.DecisionAsk}
@@ -502,14 +512,10 @@ func buildRuntime(ctx context.Context, cfg Config, secrets config.Secrets) (*Run
 		})
 	}
 
-	// The causal event log mirror lives in the workspace telemetry chain
-	// (opened via the composition root's EventLogFactory, FR-4). Surface a
-	// warning when it is not available so operators see the JSONL-only
-	// downgrade (NFR-4), and stamp the contract-fingerprint reload event.
-	if env.EventLog == nil && cfg.EventsPath != "" {
-		logger.Printf("warning: framework event log not available from workspace (JSONL-only telemetry)")
-	} else if env.EventLog != nil && docSnapshot != nil && docSnapshot.SourcePath != "" {
-		emitDocumentReloadedEvent(ctx, env.EventLog, registration.ID, cfg.AgentLabel(), docSnapshot)
+	// D10: the contract-fingerprint reload is a bus event
+	// (context_policy_reloaded), not a direct framework-log write.
+	if docSnapshot != nil && docSnapshot.SourcePath != "" {
+		emitDocumentReloadedEvent(ctx, baseTelemetry, registration.ID, cfg.AgentLabel(), docSnapshot)
 	}
 
 	execSink := telemetry.NewBroadcastSink()
@@ -596,8 +602,8 @@ func buildRuntime(ctx context.Context, cfg Config, secrets config.Secrets) (*Run
 		_ = rt.Close(ctx)
 		return nil, fmt.Errorf("initialize agent: %w", err)
 	}
-	emitAgentStartupEvent(ctx, env.EventLog, "local", registration.ID, cfg.AgentLabel(), agent)
-	emitContractResolvedEvent(ctx, env.EventLog, "local", registration.ID, cfg.AgentLabel(), docSnapshot)
+	emitAgentStartupEvent(ctx, baseTelemetry, registration.ID, cfg.AgentLabel(), agent)
+	emitContractResolvedEvent(ctx, baseTelemetry, registration.ID, cfg.AgentLabel(), docSnapshot)
 	// S9 dual-path bootstrap: when the runner section is enabled, supervise
 	// the runner (attach/spawn/degrade). A healthy runner receives the
 	// bootstrap SUBMISSION via the spool and the in-process service is not
@@ -706,33 +712,35 @@ func newDegradedRuntime(ctx context.Context, cfg Config, reason error) *Runtime 
 		coordinator: newRunCoordinator(nil),
 	}
 
-	// Emit boot.degraded as a structured telemetry event (FR-16 / AC-10). A
-	// degraded boot has no runtime telemetry chain, so a dedicated sink records
-	// the structured event — always to stderr, best-effort to the workspace
-	// JSONL — and the plain log line preserves a fast human-readable trace.
-	ws.Telemetry = degradedTelemetrySink(cfg)
+	// Emit boot.degraded as a structured telemetry event (FR-16 / AC-7). A
+	// degraded boot has no runtime telemetry chain, so a minimal file-only OTel
+	// leg records the structured event durably; the plain log line preserves a
+	// fast human-readable trace.
+	chain := degradedTelemetrySink(ctx, cfg)
+	if chain != nil {
+		ws.Telemetry = chain
+		ws.TelemetryChain = chain
+	}
 	emitBootDegraded(ctx, ws, reason)
 	log.Printf("runtime degraded: reason=%q degraded=true", reason.Error())
 	return rt
 }
 
-// degradedTelemetrySink assembles the telemetry sink for a degraded boot: a
-// logger-backed sink (always) plus a best-effort JSONL file under the workspace
-// state telemetry path so boot.degraded is durably queryable (AC-10). JSONL
-// failure is non-fatal; a degraded boot never extends further on telemetry.
-func degradedTelemetrySink(cfg Config) telemetry.Telemetry {
-	sinks := []telemetry.Telemetry{telemetry.LoggerTelemetry{Logger: log.Default()}}
-	stateDir := workspace.StateDir(cfg.Workspace)
-	path := filepath.Join(stateDir, "telemetry", "workspace.jsonl")
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err == nil { // public: degraded telemetry dir
-		if fileSink, err := telemetry.NewJSONFileTelemetry(path); err == nil {
-			sinks = append(sinks, fileSink)
-		}
+// degradedTelemetrySink builds the OTel export leg for a degraded boot: a
+// file-only chain so boot.degraded is durably queryable (AC-7). Failure is
+// non-fatal; a degraded boot never extends further on telemetry.
+func degradedTelemetrySink(ctx context.Context, cfg Config) *otelleg.Chain {
+	settings := otelleg.Settings{
+		Enabled:     true,
+		FileEnabled: true,
+		FileDir:     filepath.Join(workspace.StateDir(cfg.Workspace), "telemetry", "otlp"),
 	}
-	if len(sinks) == 1 {
-		return sinks[0]
+	chain, err := otelleg.New(ctx, settings)
+	if err != nil {
+		log.Printf("telemetry: degraded file leg unavailable: %v", err)
+		return nil
 	}
-	return telemetry.MultiplexTelemetry{Sinks: sinks}
+	return chain
 }
 
 // emitBootDegraded emits the boot.degraded telemetry event on the degraded
@@ -1018,54 +1026,66 @@ func (r *Runtime) switchAgentDeps(agentCfg *execution.Config) *paradigm.Deps {
 	return deps
 }
 
-func emitAgentStartupEvent(ctx context.Context, eventLog event.Log, partition, agentID, label string, agent agentgraph.WorkflowExecutor) {
-	if eventLog == nil {
+// Metadata keys shared by the D10 boot events; the kind values distinguish
+// the two context_policy_reloaded variants.
+const (
+	metaKind        = "kind"
+	metaFingerprint = "fingerprint"
+	metaAgentID     = "agent_id"
+	metaAgentLabel  = "agent_label"
+
+	kindContractResolved  = "contract_resolved"
+	kindDocumentReloaded  = "document_reloaded"
+	phaseBoot             = "boot"
+	agentStartupMessage   = "agent startup"
+	contractResolvedMsg   = "contract resolved"
+	documentReloadedMsg   = "document reloaded"
+	contractSourceBuiltin = "builtin+split"
+)
+
+// emitAgentStartupEvent records the boot-phase agent startup as an agent-family
+// bus event (D10). The agent span covers the session: the assembler drains it
+// at workspace close.
+func emitAgentStartupEvent(ctx context.Context, sink telemetry.Telemetry, agentID, label string, agent agentgraph.WorkflowExecutor) {
+	if sink == nil {
 		return
 	}
-	if strings.TrimSpace(partition) == "" {
-		partition = "local"
-	}
-	payload := map[string]any{
-		"agent_id":      agentID,
-		"agent_label":   label,
-		"executor_type": fmt.Sprintf("%T", agent),
-	}
-	data, err := json.Marshal(payload)
-	if err != nil {
-		return
-	}
-	_, _ = eventLog.Append(ctx, partition, []event.FrameworkEvent{{
+	ev := telemetry.Event{
+		Type:      telemetry.EventAgentStart,
+		AgentID:   agentID,
+		Message:   agentStartupMessage,
 		Timestamp: time.Now().UTC(),
-		Type:      event.EventAgentRunStarted,
-		Payload:   data,
-		Actor:     event.Actor{Kind: "agent", ID: agentID, Label: label},
-		Partition: partition,
-	}})
+		Metadata: map[string]any{
+			"phase":         phaseBoot,
+			metaAgentID:     agentID,
+			metaAgentLabel:  label,
+			"executor_type": fmt.Sprintf("%T", agent),
+		},
+	}
+	telemetry.StampCorrelation(ctx, &ev)
+	sink.Emit(ev)
 }
 
-func emitContractResolvedEvent(ctx context.Context, eventLog event.Log, partition, agentID, label string, snapshot *config.DocumentSnapshot) {
-	if eventLog == nil || snapshot == nil {
+// emitContractResolvedEvent records the resolved contract as a
+// context_policy_reloaded bus event (D10), preserving the old payload fields.
+func emitContractResolvedEvent(ctx context.Context, sink telemetry.Telemetry, agentID, label string, snapshot *config.DocumentSnapshot) {
+	if sink == nil || snapshot == nil {
 		return
 	}
-	if strings.TrimSpace(partition) == "" {
-		partition = "local"
-	}
-	payload := map[string]any{
-		"contract_source": "builtin+split",
-		"fingerprint":     fmt.Sprintf("%x", snapshot.Fingerprint),
-		"agent_id":        agentID,
-	}
-	data, err := json.Marshal(payload)
-	if err != nil {
-		return
-	}
-	_, _ = eventLog.Append(ctx, partition, []event.FrameworkEvent{{
+	ev := telemetry.Event{
+		Type:      telemetry.EventContextPolicyReloaded,
+		Message:   contractResolvedMsg,
 		Timestamp: time.Now().UTC(),
-		Type:      event.EventContractResolved,
-		Payload:   data,
-		Actor:     event.Actor{Kind: "agent", ID: agentID, Label: label},
-		Partition: partition,
-	}})
+		Metadata: map[string]any{
+			metaKind:          kindContractResolved,
+			"contract_source": contractSourceBuiltin,
+			metaFingerprint:   fmt.Sprintf("%x", snapshot.Fingerprint),
+			metaAgentID:       agentID,
+			metaAgentLabel:    label,
+		},
+	}
+	telemetry.StampCorrelation(ctx, &ev)
+	sink.Emit(ev)
 }
 
 func (r *Runtime) resolveEffectiveContractForAgent(name string) (*config.EffectiveAgentContract, *session.CompiledPolicy, error) {
@@ -1656,24 +1676,27 @@ func (r *Runtime) PendingHITL() []*fauthorization.PermissionRequest {
 	return r.registration.HITL.PendingRequests()
 }
 
-func emitDocumentReloadedEvent(ctx context.Context, eventLog event.Log, agentID, label string, snapshot *config.DocumentSnapshot) {
-	if eventLog == nil || snapshot == nil {
+// emitDocumentReloadedEvent records a document/contract reload as a
+// context_policy_reloaded bus event (D10), preserving the old payload fields.
+func emitDocumentReloadedEvent(ctx context.Context, sink telemetry.Telemetry, agentID, label string, snapshot *config.DocumentSnapshot) {
+	if sink == nil || snapshot == nil {
 		return
 	}
-	payload := map[string]any{
-		"document_path": snapshot.SourcePath,
-		"fingerprint":   hex.EncodeToString(snapshot.Fingerprint[:]),
-		"warnings":      append([]string(nil), snapshot.Warnings...),
+	ev := telemetry.Event{
+		Type:      telemetry.EventContextPolicyReloaded,
+		Message:   documentReloadedMsg,
+		Timestamp: time.Now().UTC(),
+		Metadata: map[string]any{
+			metaKind:        kindDocumentReloaded,
+			"document_path": snapshot.SourcePath,
+			metaFingerprint: hex.EncodeToString(snapshot.Fingerprint[:]),
+			"warnings":      append([]string(nil), snapshot.Warnings...),
+			metaAgentID:     agentID,
+			metaAgentLabel:  label,
+		},
 	}
-	if data, err := json.Marshal(payload); err == nil {
-		_, _ = eventLog.Append(ctx, "local", []event.FrameworkEvent{{
-			Timestamp: time.Now().UTC(),
-			Type:      event.EventManifestReloaded,
-			Payload:   data,
-			Actor:     event.Actor{Kind: "agent", ID: agentID, Label: label},
-			Partition: "local",
-		}})
-	}
+	telemetry.StampCorrelation(ctx, &ev)
+	sink.Emit(ev)
 }
 
 // SubscribeHITL streams HITL lifecycle events (requested/resolved/expired).

@@ -78,8 +78,8 @@ type SessionInfo struct {
 
 // SessionArtifacts provides file paths for logs/telemetry.
 type SessionArtifacts struct {
-	TelemetryPath string
-	LogPath       string
+	TelemetryDir string
+	LogPath      string
 }
 
 // ContractSummary exposes the resolved runtime contract for inspection.
