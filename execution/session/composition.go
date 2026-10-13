@@ -17,6 +17,7 @@ import (
 	"codeburg.org/lexbit/relurpify/model"
 	"codeburg.org/lexbit/relurpify/telemetry"
 	"codeburg.org/lexbit/relurpify/telemetry/event"
+	"codeburg.org/lexbit/relurpify/telemetry/otelleg"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 	cfgsecurity "codeburg.org/lexbit/relurpify/userconfig/config/security"
 	"codeburg.org/lexbit/relurpify/userconfig/modelselect"
@@ -136,6 +137,11 @@ type WorkspaceConfig struct {
 	AgentID string
 	// Telemetry for instrumentation
 	Telemetry telemetry.Telemetry
+	// TelemetrySettings is the resolved OTel export-leg configuration the
+	// workspace builds its chain from. The zero value disables the leg.
+	// OpenWorkspace validates it fail-closed (D9/FR-16) so a bad endpoint or CA
+	// path aborts boot rather than degrading silently.
+	TelemetrySettings otelleg.Settings
 	// LoadedConfig contains the resolved config tree produced by config.
 	LoadedConfig *config.AppConfig
 	// DocumentSnapshot contains the loaded document used for contract resolution.

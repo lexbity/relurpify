@@ -46,6 +46,7 @@ import (
 	"codeburg.org/lexbit/relurpify/platform/llm"
 	"codeburg.org/lexbit/relurpify/telemetry"
 	"codeburg.org/lexbit/relurpify/telemetry/event"
+	"codeburg.org/lexbit/relurpify/telemetry/otelleg"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 	"codeburg.org/lexbit/relurpify/userconfig/modelselect"
 )
@@ -428,6 +429,10 @@ func buildRuntime(ctx context.Context, cfg Config, secrets config.Secrets) (*Run
 		Audit:       registration.Audit,
 		HITL:        registration.HITL,
 	}
+	telemetrySettings, err := resolveTelemetrySettings(loadedConfig.Workspace, cfg.Workspace)
+	if err != nil {
+		return nil, fmt.Errorf("resolve telemetry settings: %w", err)
+	}
 	ws, err := session.OpenWorkspace(ctx, session.WorkspaceConfig{
 		Workspace:                  cfg.Workspace,
 		InferenceProvider:          cfg.InferenceProvider,
@@ -466,8 +471,9 @@ func buildRuntime(ctx context.Context, cfg Config, secrets config.Secrets) (*Run
 			// graph context envelope.
 			return envcomposition.NewEventSinkAdapter(chain, envcomposition.IdentityTriple{})
 		},
-		EventLogFactory: openRuntimeEventLogFactory,
-		Scope:           session.ScopeFull,
+		TelemetrySettings: telemetrySettings,
+		EventLogFactory:   openRuntimeEventLogFactory,
+		Scope:             session.ScopeFull,
 	})
 	if err != nil {
 		return nil, err
@@ -650,6 +656,36 @@ func buildRuntime(ctx context.Context, cfg Config, secrets config.Secrets) (*Run
 		return nil, fmt.Errorf("start workspace services: %w", err)
 	}
 	return rt, nil
+}
+
+// resolveTelemetrySettings converts the userconfig telemetry section into the
+// OTel export-leg settings the workspace consumes. It is fail-closed: an
+// invalid endpoint, CA path, sampling ratio, or interval aborts boot
+// (D9/FR-16). The local OTLP-JSON directory is derived from the workspace state
+// directory (<state>/telemetry/otlp).
+func resolveTelemetrySettings(ws config.WorkspaceConfig, workspaceRoot string) (otelleg.Settings, error) {
+	resolved, err := ws.Telemetry.Resolved()
+	if err != nil {
+		return otelleg.Settings{}, err
+	}
+	settings := otelleg.Settings{
+		Enabled:         resolved.Enabled,
+		Endpoint:        resolved.Endpoint,
+		Headers:         resolved.Headers,
+		Timeout:         resolved.Timeout,
+		TLSInsecure:     resolved.TLSInsecure,
+		CAFile:          resolved.CAFile,
+		SamplingRatio:   resolved.SamplingRatio,
+		MetricsInterval: resolved.MetricsInterval,
+		FileEnabled:     resolved.FileEnabled,
+		FileRetention:   resolved.FileRetention,
+		FileMaxSizeMB:   resolved.FileMaxSizeMB,
+		OrphanTimeout:   resolved.OrphanTimeout,
+	}
+	if settings.FileEnabled {
+		settings.FileDir = filepath.Join(config.DefaultWorkspaceStateTelemetryDir(workspaceRoot), "otlp")
+	}
+	return settings, nil
 }
 
 func newDegradedRuntime(ctx context.Context, cfg Config, reason error) *Runtime {

@@ -55,8 +55,11 @@ type AuditConfigV1 struct {
 	Enforcement   string `yaml:"enforcement"`
 }
 
+// TelemetryConfigV1 is the v1 runtime workspace telemetry section. It shares
+// its schema with the v0 workspace section through TelemetrySettings, so the
+// two boot spellings cannot drift apart.
 type TelemetryConfigV1 struct {
-	Enabled bool `yaml:"enabled"`
+	TelemetrySettings `yaml:",inline"`
 }
 
 // RunnerConfigV1 is the service-runner section (S9). Zero-value fields take

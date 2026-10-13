@@ -519,6 +519,12 @@ func OpenWorkspace(ctx context.Context, cfg WorkspaceConfig) (_ *Workspace, err 
 	if err := validateConfig(cfg); err != nil {
 		return nil, fmt.Errorf("invalid workspace config: %w", err)
 	}
+	// Telemetry config is fail-closed (D9/FR-16): a bad endpoint, missing CA
+	// file, out-of-range sampling ratio, or a file leg without a directory
+	// aborts workspace open instead of degrading silently.
+	if err := cfg.TelemetrySettings.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid telemetry config: %w", err)
+	}
 
 	// Phase B: LLM Backend (gated by Scope.LLMBackend)
 	var backend model.ModelBackend

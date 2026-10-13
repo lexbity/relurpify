@@ -62,9 +62,10 @@ type WorkspaceAudit struct {
 	Enforcement   *string `yaml:"enforcement"`
 }
 
-// WorkspaceTelemetry configures state telemetry behavior.
+// WorkspaceTelemetry configures state telemetry behavior. It shares its schema
+// with the v1 runtime workspace section through TelemetrySettings.
 type WorkspaceTelemetry struct {
-	Enabled *bool `yaml:"enabled"`
+	TelemetrySettings `yaml:",inline"`
 }
 
 // DefaultWorkspaceConfigPath returns the canonical workspace.yaml location.
@@ -169,7 +170,7 @@ func (c *WorkspaceConfig) applyDefaults(strict bool) error {
 	applyStringDefault("logging.level", &c.Logging.Level, "info")
 	applyStringDefault("logging.format", &c.Logging.Format, "json")
 	applyIntDefault("audit.retention_days", &c.Audit.RetentionDays, 7)
-	applyBoolDefault("telemetry.enabled", &c.Telemetry.Enabled, false)
+	applyBoolDefault("telemetry.enabled", &c.Telemetry.Enabled, true)
 
 	if strict && len(c.DefaultsUsed) > 0 {
 		keys := make([]string, 0, len(c.DefaultsUsed))
