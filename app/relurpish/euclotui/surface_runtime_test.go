@@ -40,7 +40,7 @@ func (s *stubRuntimeAdapter) ExecuteInstructionStream(ctx context.Context, instr
 
 func (s *stubRuntimeAdapter) AvailableAgents() []string     { return []string{"euclo"} }
 func (s *stubRuntimeAdapter) SwitchAgent(name string) error { return nil }
-func (s *stubRuntimeAdapter) SessionInfo() tui.SessionInfo { return tui.SessionInfo{} }
+func (s *stubRuntimeAdapter) SessionInfo() tui.SessionInfo  { return tui.SessionInfo{} }
 
 func (s *stubRuntimeAdapter) RegisteredRecipes() []tui.RecipeSummary { return nil }
 

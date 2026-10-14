@@ -61,9 +61,6 @@ packages:
   codeburg.org/lexbit/relurpify/capability/sandbox/safeexec:
     floor: 0
     reason: no unit tests yet; floor ratchets up from 0 as tests land
-  codeburg.org/lexbit/relurpify/capability/schemacoerce:
-    floor: 0
-    reason: no unit tests yet; floor ratchets up from 0 as tests land
   codeburg.org/lexbit/relurpify/capability/toolcapabilities:
     floor: 44
     reason: partial unit coverage; floor recorded from current coverage, raise as tests land

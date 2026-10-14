@@ -171,6 +171,9 @@ func (p *Pipeline) stage3Scan(ctx context.Context, typed *TypedIngestion) []Scan
 	var reports []ScannerReport
 
 	for _, boundary := range typed.ChunkBoundaries {
+		if !boundaryInContent(typed.Content, boundary) {
+			continue
+		}
 		chunk := TypedChunk{
 			Content:     typed.Content[boundary.Start:boundary.End],
 			Boundary:    boundary,
@@ -208,6 +211,9 @@ func (p *Pipeline) stage4Enrich(ctx context.Context, typed *TypedIngestion) []Ca
 	// Simple enrichment - in real implementation would parse imports, calls, etc.
 	for i := range typed.ChunkBoundaries {
 		boundary := typed.ChunkBoundaries[i]
+		if !boundaryInContent(typed.Content, boundary) {
+			continue
+		}
 		content := typed.Content[boundary.Start:boundary.End]
 		edge := CandidateEdges{
 			ChunkID: knowledge.CanonicalChunkID(knowledge.ChunkKindFile, content),
@@ -300,6 +306,9 @@ func (p *Pipeline) stage6Commit(ctx context.Context, typed *TypedIngestion, edge
 
 	// Commit chunks
 	for i, boundary := range typed.ChunkBoundaries {
+		if !boundaryInContent(typed.Content, boundary) {
+			continue
+		}
 		chunkContent := string(typed.Content[boundary.Start:boundary.End])
 		chunk := knowledge.KnowledgeChunk{
 			ID:                knowledge.CanonicalChunkID(knowledge.ChunkKindFile, []byte(chunkContent)),
@@ -406,7 +415,7 @@ func detectMIMEType(path string, content []byte) string {
 	// Simple content detection
 	if len(content) > 0 {
 		// Check for common binary signatures
-		if content[0] == 0x7f && len(content) > 1 && content[1] == 'E' && content[2] == 'L' && content[3] == 'F' {
+		if content[0] == 0x7f && len(content) > 3 && content[1] == 'E' && content[2] == 'L' && content[3] == 'F' {
 			return "application/x-elf"
 		}
 		if content[0] == 0x89 && len(content) > 3 && string(content[1:4]) == "PNG" {
@@ -415,6 +424,16 @@ func detectMIMEType(path string, content []byte) string {
 	}
 
 	return "application/octet-stream"
+}
+
+// boundaryInContent reports whether a chunk boundary denotes a slice range
+// that is valid for the parsed content. Chunk boundaries are line-based, so
+// content that is empty or made up of newlines only yields line counts above
+// the byte length; such boundaries are skipped instead of panicking. For
+// every other content shape every boundary lies within range, so this never
+// changes chunking results for previously working inputs (R-6).
+func boundaryInContent(content []byte, boundary ChunkBoundary) bool {
+	return boundary.Start >= 0 && boundary.Start <= boundary.End && boundary.End <= len(content)
 }
 
 func isBinaryContent(content []byte) bool {

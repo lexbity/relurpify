@@ -3,14 +3,20 @@ package chainer
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 )
 
 func TestFilterStateUsesHandoffPolicy(t *testing.T) {
+	assert.Empty(t, FilterState(nil, []string{"k"}), "nil envelope filters to nothing")
+
 	env := contextdata.NewEnvelope("task-1", "session-1")
 	env.SetWorkingValueWithClass("keep", "value-keep", contextdata.MemoryClassTask)
 	env.SetWorkingValueWithClass("keep.local", "value-prefix", contextdata.MemoryClassTask)
 	env.SetWorkingValueWithClass("drop", "value-drop", contextdata.MemoryClassTask)
+
+	assert.Empty(t, FilterState(env, []string{"absent"}), "keys absent from the envelope filter to nothing")
 
 	filtered := FilterState(env, []string{"keep"})
 	if len(filtered) != 1 {

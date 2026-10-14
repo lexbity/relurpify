@@ -92,6 +92,12 @@ func MatchGlob(pattern, path string) bool {
 	}
 	// Simple glob: split on * and match segments
 	parts := splitGlob(pattern)
+	if len(parts) == 0 {
+		// A pattern made only of stars beyond the "*" and "**" special cases
+		// carries no literal segments; fail closed instead of indexing an
+		// empty segment list.
+		return false
+	}
 	if len(parts) == 1 {
 		return path == parts[0]
 	}

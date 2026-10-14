@@ -28,14 +28,9 @@ func emitLog(logger otellog.Logger, ev telemetry.Event) {
 	rec.SetSeverity(severity)
 	rec.SetSeverityText(severity.String())
 	if ev.Message != "" {
-		rec.SetBody(otellog.StringValue(ev.Message))
+		rec.SetBody(attribute.StringValue(ev.Message))
 	}
-	attrs := projectAttributes(ev)
-	kvs := make([]otellog.KeyValue, 0, len(attrs))
-	for _, a := range attrs {
-		kvs = append(kvs, otellog.KeyValueFromAttribute(a))
-	}
-	rec.AddAttributes(kvs...)
+	rec.AddAttributes(projectAttributes(ev)...)
 	// The OTel log API carries trace context on the context, not the record: the
 	// SDK logger copies the span context into the record. The Telemetry
 	// interface carries no context (it predates and is independent of OTel), so
@@ -65,14 +60,10 @@ func emitSelfLog(logger otellog.Logger, name string, severity otellog.Severity, 
 	rec.SetSeverity(severity)
 	rec.SetSeverityText(severity.String())
 	if body != "" {
-		rec.SetBody(otellog.StringValue(body))
+		rec.SetBody(attribute.StringValue(body))
 	}
 	if len(attrs) > 0 {
-		kvs := make([]otellog.KeyValue, 0, len(attrs))
-		for _, a := range attrs {
-			kvs = append(kvs, otellog.KeyValueFromAttribute(a))
-		}
-		rec.AddAttributes(kvs...)
+		rec.AddAttributes(attrs...)
 	}
 	logger.Emit(context.Background(), rec)
 }

@@ -79,10 +79,12 @@ func (a *PipelineAgent) Execute(ctx context.Context, task *execution.Task, env *
 		ModelName:         a.modelName(),
 		Tools:             a.availableTools(ctx),
 		EnableToolCalling: a.toolCallingEnabled(),
-		AgentSpec:         a.Config.AgentSpec,
 		Telemetry:         a.telemetry(),
 		CapabilityInvoker: a.Tools,
 	}}
+	if a.Config != nil {
+		runner.Options.AgentSpec = a.Config.AgentSpec
+	}
 	results, err := runner.Execute(ctx, executionTask, env, stages)
 	if err != nil {
 		return nil, err

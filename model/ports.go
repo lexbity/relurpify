@@ -31,12 +31,12 @@ type LanguageModel interface {
 
 // LLMOptions configures a single model invocation.
 type LLMOptions struct {
-	Model          string
-	Temperature    float64
-	MaxTokens      int
-	Stop           []string
-	TopP           float64
-	Stream         bool
+	Model       string
+	Temperature float64
+	MaxTokens   int
+	Stop        []string
+	TopP        float64
+	Stream      bool
 	// ContextWindow is the served context window in tokens (ollama num_ctx).
 	// Zero means the transport default — for the ollama transport the
 	// backend derives it per call as min(profile budget, server-discovered
@@ -49,7 +49,7 @@ type LLMOptions struct {
 
 // LLMResponse is the result of a model invocation.
 type LLMResponse struct {
-	Text         string
+	Text string
 	// Thinking carries the reasoning-channel output of thinking models
 	// (ollama message.thinking). A turn may spend its whole response there
 	// and stop before emitting content — the reasoning is first-class

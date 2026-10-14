@@ -42,7 +42,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.25.x"
+          go-version: "1.27.x"
       - uses: actions/cache@v4
         with:
           path: |
@@ -50,6 +50,8 @@ jobs:
             ~/.cache/go-build
           key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
           restore-keys: ${{ runner.os }}-
+      - name: Download modules (network allowed; the gates below run with GOPROXY=off)
+        run: go mod download
       - run: make lint-arch
       - run: make lint-all
       - run: make check-gates-honest
@@ -61,7 +63,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.25.x"
+          go-version: "1.27.x"
       - uses: actions/cache@v4
         with:
           path: |
@@ -70,7 +72,7 @@ jobs:
           key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
           restore-keys: ${{ runner.os }}-
       - name: Lint ratchet (new issues only)
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v7
         with:
           version: v2.12.2
           args: --new-from-rev=origin/main --timeout 5m
@@ -89,7 +91,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.25.x"
+          go-version: "1.27.x"
       - uses: actions/cache@v4
         with:
           path: |
@@ -97,6 +99,8 @@ jobs:
             ~/.cache/go-build
           key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
           restore-keys: ${{ runner.os }}-
+      - name: Download modules (network allowed; the gates below run with GOPROXY=off)
+        run: go mod download
       - run: make test-unit
       - run: make test-conformance
 
@@ -107,7 +111,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.25.x"
+          go-version: "1.27.x"
       - uses: actions/cache@v4
         with:
           path: |
@@ -115,6 +119,8 @@ jobs:
             ~/.cache/go-build
           key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
           restore-keys: ${{ runner.os }}-
+      - name: Download modules (network allowed; the gates below run with GOPROXY=off)
+        run: go mod download
       - run: go build ./...
       - run: go vet ./...
       # govulncheck is not preinstalled on GitHub runners; install it first
@@ -136,7 +142,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.25.x"
+          go-version: "1.27.x"
       - uses: actions/cache@v4
         with:
           path: |
@@ -144,6 +150,8 @@ jobs:
             ~/.cache/go-build
           key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
           restore-keys: ${{ runner.os }}-
+      - name: Download modules (network allowed; the gates below run with GOPROXY=off)
+        run: go mod download
       - run: make test-coverage
 
   release:
@@ -159,7 +167,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.25.x"
+          go-version: "1.27.x"
       # The SBOM pipe shells out to syft (internal/pipe/sbom/sbom.go: cmd).
       # Without it the release fails at the "software bill of materials" step.
       - name: Install syft

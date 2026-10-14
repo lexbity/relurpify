@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/telemetry"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/log"
 	logspb "go.opentelemetry.io/proto/otlp/logs/v1"
 	metricspb "go.opentelemetry.io/proto/otlp/metrics/v1"
@@ -316,7 +317,7 @@ func emitProviderLog(t *testing.T, c *Chain) {
 	rec.SetTimestamp(time.Now())
 	rec.SetEventName("test.event")
 	rec.SetSeverity(log.SeverityInfo1)
-	rec.SetBody(log.StringValue("hello"))
+	rec.SetBody(attribute.StringValue("hello"))
 	c.loggerProvider.Logger("test").Emit(context.Background(), rec)
 }
 

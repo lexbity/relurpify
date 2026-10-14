@@ -27,21 +27,27 @@ func (s *SignatureScanner) Name() string {
 	return "signature"
 }
 
+// defaultSignaturePatterns are the signature families matched when a
+// SignatureScanner has no custom patterns. They are precompiled once at
+// package initialization, so a zero-value scanner is ready for concurrent
+// use and Scan never mutates the receiver.
+var defaultSignaturePatterns = []*regexp.Regexp{
+	// DB injection patterns
+	regexp.MustCompile(`(?i)(SELECT\s+.*FROM|INSERT\s+INTO|UPDATE\s+.*SET|DELETE\s+FROM)`),
+	// Command injection
+	regexp.MustCompile(`(?i)(;\s*rm\s+-rf|\|\s*bash|\|\s*sh\s+-c)`),
+	// XSS patterns
+	regexp.MustCompile(`(?i)(<script|javascript:|on\w+\s*=)`),
+	// Path traversal
+	regexp.MustCompile(`\.\.(/|\\)`),
+	// Common backdoors
+	regexp.MustCompile(`(?i)(eval\s*\(|exec\s*\(|system\s*\()`),
+}
+
 func (s *SignatureScanner) Scan(ctx context.Context, chunk TypedChunk) ScanResult {
-	if len(s.Patterns) == 0 {
-		// Initialize default patterns
-		s.Patterns = []*regexp.Regexp{
-			// DB injection patterns
-			regexp.MustCompile(`(?i)(SELECT\s+.*FROM|INSERT\s+INTO|UPDATE\s+.*SET|DELETE\s+FROM)`),
-			// Command injection
-			regexp.MustCompile(`(?i)(;\s*rm\s+-rf|\|\s*bash|\|\s*sh\s+-c)`),
-			// XSS patterns
-			regexp.MustCompile(`(?i)(<script|javascript:|on\w+\s*=)`),
-			// Path traversal
-			regexp.MustCompile(`\.\.(/|\\)`),
-			// Common backdoors
-			regexp.MustCompile(`(?i)(eval\s*\(|exec\s*\(|system\s*\()`),
-		}
+	patterns := s.Patterns
+	if len(patterns) == 0 {
+		patterns = defaultSignaturePatterns
 	}
 
 	content := string(chunk.Content)
@@ -50,7 +56,7 @@ func (s *SignatureScanner) Scan(ctx context.Context, chunk TypedChunk) ScanResul
 		Flags:          []string{},
 	}
 
-	for _, pattern := range s.Patterns {
+	for _, pattern := range patterns {
 		if pattern.MatchString(content) {
 			result.SuspicionScore = max(result.SuspicionScore, 0.8)
 			patternStr := pattern.String()

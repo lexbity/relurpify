@@ -14,43 +14,60 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	"codeburg.org/lexbit/relurpify/ayenitd"
 )
 
 func main() {
-	workspace := flag.String("workspace", "", "workspace root the runner operates on")
-	stateDir := flag.String("state-dir", "", "runtime state dir (spool, status.json, logs, jobs store)")
-	queues := flag.String("queues", "knowledge", "comma-separated claim order")
-	workers := flag.Int("workers", 2, "executor worker count")
-	refreshInterval := flag.Duration("refresh-interval", 0, "scheduled knowledge.refresh submission cadence (0 = off)")
-	flag.Parse()
+	// run returns the exit code instead of calling os.Exit itself so the
+	// deferred dependency cleanup (deps.Close, telemetry) always executes —
+	// os.Exit would skip it and leave the jobs store lock file unflushed.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	os.Exit(run(ctx, os.Args[1:], os.Stderr))
+}
 
-	if *workspace == "" || *stateDir == "" {
-		fmt.Fprintln(os.Stderr, "relurpify-runner: --workspace and --state-dir are required")
-		os.Exit(2)
+// run parses args, wires the runner, and drains until ctx is cancelled.
+// The returned int is the process exit code (0 clean, 1 runtime failure,
+// 2 usage).
+func run(ctx context.Context, args []string, stderr io.Writer) (exitCode int) {
+	flags := flag.NewFlagSet("relurpify-runner", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	workspace := flags.String("workspace", "", "workspace root the runner operates on")
+	stateDir := flags.String("state-dir", "", "runtime state dir (spool, status.json, logs, jobs store)")
+	queues := flags.String("queues", "knowledge", "comma-separated claim order")
+	workers := flags.Int("workers", 2, "executor worker count")
+	refreshInterval := flags.Duration("refresh-interval", 0, "scheduled knowledge.refresh submission cadence (0 = off)")
+	if err := flags.Parse(args); err != nil {
+		return 2
 	}
 
-	ctx := context.Background()
+	if *workspace == "" || *stateDir == "" {
+		fmt.Fprintln(stderr, "relurpify-runner: --workspace and --state-dir are required")
+		return 2
+	}
 
 	telemetryLog := filepath.Join(*stateDir, "logs", "runner.jsonl")
 	if err := os.MkdirAll(filepath.Dir(telemetryLog), 0o700); err != nil {
-		fmt.Fprintf(os.Stderr, "relurpify-runner: create log dir: %v\n", err)
-		os.Exit(1)
+		fmt.Fprintf(stderr, "relurpify-runner: create log dir: %v\n", err)
+		return 1
 	}
 	tel, err := newFileTelemetry(telemetryLog)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "relurpify-runner: telemetry: %v\n", err)
-		os.Exit(1)
+		fmt.Fprintf(stderr, "relurpify-runner: telemetry: %v\n", err)
+		return 1
 	}
 
 	deps, err := ayenitd.BuildKnowledgeRunnerDeps(ctx, *workspace, *stateDir)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "relurpify-runner: %v\n", err)
-		os.Exit(1)
+		fmt.Fprintf(stderr, "relurpify-runner: %v\n", err)
+		return 1
 	}
 	defer deps.Close()
 
@@ -67,7 +84,8 @@ func main() {
 	}
 
 	if err := ayenitd.Run(ctx, cfg); err != nil {
-		fmt.Fprintf(os.Stderr, "relurpify-runner: %v\n", err)
-		os.Exit(1)
+		fmt.Fprintf(stderr, "relurpify-runner: %v\n", err)
+		return 1
 	}
+	return 0
 }

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/telemetry"
+	"go.opentelemetry.io/otel/attribute"
 	otellog "go.opentelemetry.io/otel/log"
 	sdklog "go.opentelemetry.io/otel/sdk/log"
 )
@@ -46,10 +47,10 @@ func newRecordingLogger(t *testing.T) (otellog.Logger, *recordingLogExporter) {
 	return provider.Logger(instrumentationScopeName), exporter
 }
 
-func recordAttrMap(rec sdklog.Record) map[string]otellog.Value {
-	m := map[string]otellog.Value{}
-	rec.WalkAttributes(func(kv otellog.KeyValue) bool {
-		m[kv.Key] = kv.Value
+func recordAttrMap(rec sdklog.Record) map[string]attribute.Value {
+	m := map[string]attribute.Value{}
+	rec.WalkAttributes(func(kv attribute.KeyValue) bool {
+		m[string(kv.Key)] = kv.Value
 		return true
 	})
 	return m

@@ -73,6 +73,16 @@ func TestRedactArgs_OriginalUnmodified(t *testing.T) {
 	require.Equal(t, "[REDACTED]", redacted["api_key"])
 }
 
+func TestRedactArgs_EmptyArgsReturnSameMap(t *testing.T) {
+	args := map[string]any{}
+	redacted := RedactArgs(args, nil)
+	redacted["k"] = "v"
+	assert.Equal(t, "v", args["k"], "empty args must return the original map, not a copy")
+
+	var nilArgs map[string]any
+	assert.Nil(t, RedactArgs(nilArgs, nil))
+}
+
 func TestRedactStringsAdapter(t *testing.T) {
 	got := RedactStrings([]string{"curl", "ghp_abc", "sk-proj-1", "/tmp/x"})
 	assert.Equal(t, []string{"curl", "[REDACTED]", "[REDACTED]", "/tmp/x"}, got)
