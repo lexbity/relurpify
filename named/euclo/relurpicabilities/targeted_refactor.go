@@ -1,11 +1,12 @@
 package relurpicabilities
 
 import (
-	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"codeburg.org/lexbit/relurpify/context/contextdata"
 
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/descriptor"

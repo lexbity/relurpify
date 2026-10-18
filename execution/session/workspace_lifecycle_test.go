@@ -3,6 +3,7 @@ package session
 import (
 	"context"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -10,7 +11,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"codeburg.org/lexbit/relurpify/context/persistence/artifactstore"
 	"codeburg.org/lexbit/relurpify/execution/services"
+	"codeburg.org/lexbit/relurpify/model"
+	"codeburg.org/lexbit/relurpify/telemetry"
 	"codeburg.org/lexbit/relurpify/telemetry/otelleg"
 )
 
@@ -80,16 +84,17 @@ func TestWorkspaceGetServiceAndListServices(t *testing.T) {
 	require.NoError(t, ws.Close(context.Background()))
 }
 
-func TestWorkspaceRestartPropagatesServiceManagerStartErrors(t *testing.T) {
+func TestWorkspaceRestartServiceErrorContract(t *testing.T) {
+	// StartAll logs individual start failures but never halts startup, so
+	// Restart succeeds even when a service fails to start.
 	sm := services.NewServiceManager()
 	sm.Register("broken", &lifecycleService{startErr: errors.New("start failed")})
 	ws := &Workspace{ServiceManager: sm}
 
 	err := ws.Restart(context.Background())
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "start failed")
+	require.NoError(t, err)
 
-	// stopServices surfaces stop errors too.
+	// stopServices, in contrast, surfaces stop errors to the caller.
 	sm2 := services.NewServiceManager()
 	sm2.Register("broken", &lifecycleService{stopErr: errors.New("stop failed")})
 	ws2 := &Workspace{ServiceManager: sm2}
@@ -126,6 +131,10 @@ type failingBackend struct {
 }
 
 func (b *failingBackend) Close() error { b.closes++; return b.closeErr }
+func (b *failingBackend) Model() model.LanguageModel {
+	return nil // never invoked; the test only exercises Close aggregation
+}
+func (b *failingBackend) SetDebugLogging(bool) {}
 
 type failingArtifactStore struct {
 	closeErr error
@@ -133,13 +142,27 @@ type failingArtifactStore struct {
 }
 
 func (s *failingArtifactStore) Close() error { s.closes++; return s.closeErr }
+func (s *failingArtifactStore) Put(context.Context, string, map[string]string, io.Reader) (artifactstore.Ref, error) {
+	return "", nil
+}
+func (s *failingArtifactStore) Open(context.Context, artifactstore.Ref) (io.ReadCloser, artifactstore.ArtifactMeta, error) {
+	return nil, artifactstore.ArtifactMeta{}, nil
+}
+func (s *failingArtifactStore) GC(context.Context, string) error { return nil }
 
 type failingCloser struct {
 	closeErr error
 	closes   int
 }
 
-func (c *failingCloser) Close() error { c.closes++; return c.closeErr }
+func (c *failingCloser) Close() error            { c.closes++; return c.closeErr }
+func (c *failingCloser) Emit(telemetry.Event)    {}
+func (c contextCloserFunc) Emit(telemetry.Event) {}
+func (c emitOnlyTelemetry) Emit(telemetry.Event) {}
+
+// emitOnlyTelemetry satisfies telemetry.Telemetry without being closeable:
+// closeTelemetry must treat it as a no-op.
+type emitOnlyTelemetry struct{}
 
 func TestCloseTelemetryHandlesAllCloserShapes(t *testing.T) {
 	ctx := context.Background()
@@ -158,7 +181,7 @@ func TestCloseTelemetryHandlesAllCloserShapes(t *testing.T) {
 	assert.Equal(t, 1, plain.closes)
 
 	// Anything else is a no-op.
-	require.NoError(t, closeTelemetry(ctx, struct{}{}))
+	require.NoError(t, closeTelemetry(ctx, emitOnlyTelemetry{}))
 	require.NoError(t, closeTelemetry(ctx, nil))
 }
 

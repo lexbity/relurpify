@@ -3,6 +3,7 @@ package session
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	execctx "codeburg.org/lexbit/relurpify/execution/context"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
@@ -18,7 +19,10 @@ func AssembleContract(doc *config.Document) (*config.EffectiveAgentContract, err
 		return nil, fmt.Errorf("document required")
 	}
 
-	agentID := doc.Metadata.Name
+	agentID := strings.TrimSpace(doc.Metadata.Name)
+	if agentID == "" {
+		return nil, fmt.Errorf("document metadata.name required")
+	}
 
 	// Decode permissions section
 	perms, err := decodePermissionsSection(doc)

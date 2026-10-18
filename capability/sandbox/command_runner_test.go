@@ -1,7 +1,6 @@
 package sandbox
 
 import (
-	"codeburg.org/lexbit/relurpify/governance/sandbox"
 	"context"
 	"os"
 	"path/filepath"
@@ -9,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"codeburg.org/lexbit/relurpify/governance/sandbox"
 
 	"github.com/stretchr/testify/require"
 )

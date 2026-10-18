@@ -154,7 +154,7 @@ func familyVocabularyDiags(workspace, rel string, plan *thoughtrecipe.ExecutionP
 				Code:     "recipes.family_vocabulary",
 				Severity: SeverityWarning,
 				Loc:      SourceLoc{File: rel},
-				Message: fmt.Sprintf("family %q is outside the selection vocabulary (built-in families and families.yaml keys); natural-language selection will never pick this recipe — add the family to families.yaml or pin the recipe explicitly", family),
+				Message:  fmt.Sprintf("family %q is outside the selection vocabulary (built-in families and families.yaml keys); natural-language selection will never pick this recipe — add the family to families.yaml or pin the recipe explicitly", family),
 			})
 		}
 	}

@@ -39,10 +39,10 @@ func TestDryRunCanonicalRecipeTable(t *testing.T) {
 		{name: "dep_upgrade", instruction: "fix upgrade dep.md", wantRoute: "euclo.thoughtrecipe.dep_upgrade", wantModel: true},
 		{name: "extract_func", instruction: "refactor extract.md", wantRoute: "euclo.thoughtrecipe.extract_func"},
 		{name: "test_synthesis", instruction: "create main_test.go", wantRoute: "euclo.thoughtrecipe.test_synthesis"},
-			// wantModel=false: under the deterministic selection posture the
-			// run makes no model call — the only model call at HEAD was the
-			// tier-2 tie-break consult, removed by the posture ruling.
-			
+		// wantModel=false: under the deterministic selection posture the
+		// run makes no model call — the only model call at HEAD was the
+		// tier-2 tie-break consult, removed by the posture ruling.
+
 		{name: "investigation", instruction: "investigate notes.md", wantRoute: "euclo.thoughtrecipe.investigation", wantModel: true},
 		// No family-classifiable token: no recipe scores family affinity, so
 		// route resolution falls back to the built-in default execution recipe.

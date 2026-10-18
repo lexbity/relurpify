@@ -89,7 +89,8 @@ being needed, so a hole cannot quietly grow a comment.
 
 ### Lint ratchet
 
-golangci-lint (v2.12.2) runs as a ratchet: CI lints only new code
+golangci-lint (v2.15.0 — must be ≥ v2.15.0 to typecheck Go 1.27) runs as a
+ratchet: CI lints only new code
 (`--new-from-rev=origin/main`), and a second pass enforces the "graduated"
 linter set over the whole tree (`.golangci-graduated.txt`).
 Do not add new violations; fixing old ones is welcome.

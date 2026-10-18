@@ -1,9 +1,10 @@
 package sandbox
 
 import (
-	"codeburg.org/lexbit/relurpify/governance/sandbox"
 	"context"
 	"sync"
+
+	"codeburg.org/lexbit/relurpify/governance/sandbox"
 )
 
 // DockerSandboxBackend implements SandboxRuntime using Docker's native security

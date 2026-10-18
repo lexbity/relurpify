@@ -1,11 +1,12 @@
 package e2e
 
 import (
-	"codeburg.org/lexbit/relurpify/governance/sandbox"
 	"context"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"codeburg.org/lexbit/relurpify/governance/sandbox"
 
 	relurpishruntime "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
 	governanceports "codeburg.org/lexbit/relurpify/governance/ports"

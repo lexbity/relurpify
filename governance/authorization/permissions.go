@@ -6,7 +6,6 @@
 package authorization
 
 import (
-	"codeburg.org/lexbit/relurpify/governance/sandbox"
 	"context"
 	"errors"
 	"fmt"
@@ -15,6 +14,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"codeburg.org/lexbit/relurpify/governance/sandbox"
 
 	"codeburg.org/lexbit/relurpify/governance/bounded"
 	"codeburg.org/lexbit/relurpify/governance/permissions"

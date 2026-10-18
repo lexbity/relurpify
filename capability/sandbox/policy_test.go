@@ -1,9 +1,10 @@
 package sandbox
 
 import (
-	"codeburg.org/lexbit/relurpify/governance/sandbox"
 	"strings"
 	"testing"
+
+	"codeburg.org/lexbit/relurpify/governance/sandbox"
 )
 
 // TestValidatePolicyEnforcesEgressDenylist proves the denylist is enforced by

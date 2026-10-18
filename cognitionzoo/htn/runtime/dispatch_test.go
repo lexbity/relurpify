@@ -287,7 +287,7 @@ func TestDispatchTaskThroughCapability(t *testing.T) {
 	decision, ok := raw.(map[string]any)
 	require.True(t, ok)
 	assert.Equal(t, "capability", decision["mode"])
-	assert.Equal(t, "react", decision["resolved_target"])
+	assert.Equal(t, "agent:react", decision["resolved_target"])
 	assert.Equal(t, "agent:react", decision["requested_target"])
 	assert.Equal(t, "explicit_coordination_target", decision["reason"])
 	require.NotNil(t, decision["timestamp"])
@@ -467,7 +467,7 @@ func TestPlanPreflight(t *testing.T) {
 		require.Len(t, report.Issues, 1)
 		assert.Equal(t, "capability_missing", report.Issues[0].Code)
 		assert.True(t, report.Issues[0].Blocking)
-		assert.Equal(t, "custom.only", report.Issues[0].NodeID)
+		assert.Equal(t, "only", report.Issues[0].NodeID)
 	})
 	t.Run("optional targets non-blocking", func(t *testing.T) {
 		reg := newHTNRegistry(t, &htnFakeCapability{id: "unittest.tool", name: "unittest.tool"})

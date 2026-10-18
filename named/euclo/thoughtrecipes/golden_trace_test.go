@@ -3,13 +3,14 @@ package thoughtrecipe
 import (
 	"context"
 
-	"codeburg.org/lexbit/relurpify/capability/fs"
 	"encoding/json"
 	"os"
 	"sort"
 	"strings"
 	"sync"
 	"testing"
+
+	"codeburg.org/lexbit/relurpify/capability/fs"
 
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/descriptor"

@@ -262,7 +262,6 @@ func TestTier2GateSkipsExplicitAndDefault(t *testing.T) {
 	}
 }
 
-
 // TestTier2GateDeterministicPostureNeverConsultsModel pins the ruled default:
 // the deterministic posture resolves ties through the lattice (or downstream
 // clarification) and the Tier-2 model is never consulted — even on a tie the

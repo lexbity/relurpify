@@ -1,13 +1,14 @@
 package e2e
 
 import (
-	"codeburg.org/lexbit/relurpify/governance/sandbox"
 	"context"
 	"fmt"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"codeburg.org/lexbit/relurpify/governance/sandbox"
 
 	relurpishruntime "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
 	"codeburg.org/lexbit/relurpify/context/knowledge/retrieval"

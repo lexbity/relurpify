@@ -1,13 +1,14 @@
 package e2e
 
 import (
-	"codeburg.org/lexbit/relurpify/governance/sandbox"
 	"context"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"codeburg.org/lexbit/relurpify/governance/sandbox"
 
 	tea "github.com/charmbracelet/bubbletea"
 

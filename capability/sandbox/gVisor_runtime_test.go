@@ -1,13 +1,14 @@
 package sandbox
 
 import (
-	"codeburg.org/lexbit/relurpify/governance/sandbox"
 	"context"
 	"os/exec"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"codeburg.org/lexbit/relurpify/governance/sandbox"
 )
 
 // ----------------------------------------------------------------------------

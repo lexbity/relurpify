@@ -2,7 +2,7 @@ package summarization
 
 import (
 	"context"
-	"fmt"
+	"errors"
 
 	"codeburg.org/lexbit/relurpify/context/knowledge"
 )
@@ -22,13 +22,13 @@ func chunkWithBody(id, contentType, body string) knowledge.KnowledgeChunk {
 
 // fakeSummarizer is a scripted Summarizer used to drive the router.
 type fakeSummarizer struct {
-	kind    SummarizerKind
-	can     bool
-	result  *SummarizationResult
-	err     error
-	gotReq  SummarizationRequest
-	calls   int
-	canGot  [][]knowledge.KnowledgeChunk
+	kind   SummarizerKind
+	can    bool
+	result *SummarizationResult
+	err    error
+	gotReq SummarizationRequest
+	calls  int
+	canGot [][]knowledge.KnowledgeChunk
 }
 
 func (f *fakeSummarizer) Kind() SummarizerKind { return f.kind }
@@ -50,4 +50,8 @@ func (f *fakeSummarizer) Summarize(_ context.Context, req SummarizationRequest) 
 	return &SummarizationResult{Summary: "fake summary", UsedModel: false}, nil
 }
 
-func fakeErr() error { return fmt.Errorf("scripted failure") }
+// errFake is a stable sentinel: errors.Is must find it through the
+// production wrap in Route/RouteWithKind.
+var errFake = errors.New("scripted failure")
+
+func fakeErr() error { return errFake }

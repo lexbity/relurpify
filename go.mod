@@ -2,6 +2,8 @@ module codeburg.org/lexbit/relurpify
 
 go 1.26.0
 
+toolchain go1.27.2
+
 require (
 	github.com/charmbracelet/bubbles v0.21.0
 	github.com/charmbracelet/bubbletea v1.3.10

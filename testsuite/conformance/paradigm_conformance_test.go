@@ -825,7 +825,7 @@ func runBlackboardSourceEpisodeRearm(t *testing.T) {
 	t.Helper()
 	order := []string{}
 	reg := registry.NewRegistry()
-	for _, capabilityHandler := range []interface{}{
+	for _, capabilityHandler := range []any{
 		&stateCapability{id: "euclo:cap.conformance_probe", order: &order},
 		&stateCapability{id: "euclo:cap.conformance_flip", order: &order, writes: map[string]string{"state.gate": "ready"}},
 		&stateCapability{id: "euclo:cap.conformance_break", order: &order, writes: map[string]string{"state.gate": "missing"}},

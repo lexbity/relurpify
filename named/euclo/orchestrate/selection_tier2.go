@@ -219,7 +219,6 @@ func streamedContextForGate(env *contextdata.Envelope) string {
 	return strings.Join(out, ",")
 }
 
-
 // selectionIsDeterministic reports whether the posture forbids model-assisted
 // selection. Empty defaults to deterministic (the ruled default posture).
 func selectionIsDeterministic(posture string) bool {

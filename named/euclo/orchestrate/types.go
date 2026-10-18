@@ -27,12 +27,12 @@ type RouteRequest struct {
 	// but unregistered, dispatch fails naming the ID — a pinned choice may
 	// never silently resolve to something else.
 	PinnedRecipeID string
-	Instruction     string
-	Inputs          map[string]any
-	FallbackID      string
-	DryRun          bool
-	SkillFilter     string
-	TelemetryOff    bool
+	Instruction    string
+	Inputs         map[string]any
+	FallbackID     string
+	DryRun         bool
+	SkillFilter    string
+	TelemetryOff   bool
 }
 
 // RouteResult is the runtime outcome of a route dispatch.

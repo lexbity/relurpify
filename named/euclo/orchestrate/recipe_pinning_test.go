@@ -8,8 +8,8 @@ import (
 	"codeburg.org/lexbit/relurpify/cognitionzoo/paradigm"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	euclopolicy "codeburg.org/lexbit/relurpify/named/euclo/policy"
-	thoughtrecipepkg "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
 	"codeburg.org/lexbit/relurpify/named/euclo/surface"
+	thoughtrecipepkg "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
 )
 
 func pinTestRegistry(t *testing.T) *thoughtrecipepkg.ThoughtRecipeRegistry {
@@ -23,8 +23,8 @@ func pinTestRegistry(t *testing.T) *thoughtrecipepkg.ThoughtRecipeRegistry {
 		t.Fatalf("register pinned: %v", err)
 	}
 	if err := reg.Register(&surface.ThoughtRecipe{
-		ID:          defaultThoughtRecipeID,
-		Name:        "default",
+		ID:   defaultThoughtRecipeID,
+		Name: "default",
 	}); err != nil {
 		t.Fatalf("register default: %v", err)
 	}

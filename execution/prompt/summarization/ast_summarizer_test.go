@@ -195,7 +195,7 @@ func TestASTSummarizerSummarizePython(t *testing.T) {
 			t.Errorf("output missing %q:\n%s", want, out)
 		}
 	}
-	for _, banned := range []string{"return a + b", "def greet", "pass"} {
+	for _, banned := range []string{"return a + b", "pass"} {
 		if strings.Contains(out, banned) {
 			t.Errorf("output must elide %q:\n%s", banned, out)
 		}

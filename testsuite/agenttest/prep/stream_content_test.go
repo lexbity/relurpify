@@ -29,10 +29,10 @@ func TestStreamedBodyReachesPromptIsHermeticLoop(t *testing.T) {
 		sentinelTwo = "wombat-fibonacci BETA composite fixture evidence"
 	)
 	report, err := Run(context.Background(), DryRunConfig{
-			SelectionPosture: "model_assisted",
-		Name:           "stream-body-loop",
-		WorkspaceFiles: map[string]string{"relurpify_cfg/euclo/stream_step.erpe": readFixture(t, "stream_step.erpe")},
-		Instruction:    "investigate wombat-fibonacci.md",
+		SelectionPosture: "model_assisted",
+		Name:             "stream-body-loop",
+		WorkspaceFiles:   map[string]string{"relurpify_cfg/euclo/stream_step.erpe": readFixture(t, "stream_step.erpe")},
+		Instruction:      "investigate wombat-fibonacci.md",
 		Turns: []testhelper.ModelTurn{
 			{Text: `{}`}, // route disambiguation call
 			{Text: `{"thought":"done","action":"complete","complete":true,"summary":"streamed evidence consumed"}`},
@@ -105,10 +105,10 @@ func TestCaptureGroundsAndStreamsBack(t *testing.T) {
 	defer goleak.VerifyNone(t)
 	probe := &ScriptedCapability{Name: "prep_probe", Response: map[string]any{"finding": "platypus-quartz 42"}}
 	report, err := Run(context.Background(), DryRunConfig{
-			SelectionPosture: "model_assisted",
-		Name:           "capture-ground-stream",
-		WorkspaceFiles: map[string]string{"relurpify_cfg/euclo/capture_ground.erpe": readFixture(t, "capture_ground.erpe")},
-		Instruction:    "investigate platypus-quartz.md",
+		SelectionPosture: "model_assisted",
+		Name:             "capture-ground-stream",
+		WorkspaceFiles:   map[string]string{"relurpify_cfg/euclo/capture_ground.erpe": readFixture(t, "capture_ground.erpe")},
+		Instruction:      "investigate platypus-quartz.md",
 		Turns: []testhelper.ModelTurn{
 			{Text: `{}`}, // route disambiguation call
 			{Text: `{"thought":"call the probe","action":"tool","tool":"prep_probe","arguments":{"target":"platypus-quartz.md"}}`},
@@ -164,10 +164,10 @@ func TestTemplatedGoalStreamsFromSeededChunk(t *testing.T) {
 	defer goleak.VerifyNone(t)
 	const seedBody = "heron rookery notes for templated-heron-goal"
 	report, err := Run(context.Background(), DryRunConfig{
-			SelectionPosture: "model_assisted",
-		Name:           "template-goal",
-		WorkspaceFiles: map[string]string{"relurpify_cfg/euclo/template_goal.erpe": readFixture(t, "template_goal.erpe")},
-		Instruction:    "explain templated-heron-goal.md",
+		SelectionPosture: "model_assisted",
+		Name:             "template-goal",
+		WorkspaceFiles:   map[string]string{"relurpify_cfg/euclo/template_goal.erpe": readFixture(t, "template_goal.erpe")},
+		Instruction:      "explain templated-heron-goal.md",
 		Turns: []testhelper.ModelTurn{
 			{Text: `{}`}, // route disambiguation call
 			{Text: `{"thought":"done","action":"complete","complete":true,"summary":"templated goal consumed"}`},

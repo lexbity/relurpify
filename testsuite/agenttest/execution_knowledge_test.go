@@ -11,7 +11,7 @@ import (
 	"codeburg.org/lexbit/relurpify/capability/descriptor"
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
-	"codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
+	thoughtrecipe "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
 )
 
 func TestExecutorBuildsKnowledgeRuntime(t *testing.T) {

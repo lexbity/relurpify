@@ -1,10 +1,11 @@
 package sandbox
 
 import (
-	"codeburg.org/lexbit/relurpify/governance/sandbox"
 	"context"
 	"errors"
 	"fmt"
+
+	"codeburg.org/lexbit/relurpify/governance/sandbox"
 )
 
 // NewVerifiedCommandRunner verifies the runtime, applies the policy, and returns a

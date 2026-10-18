@@ -1,9 +1,10 @@
 package agentspec
 
 import (
-	"codeburg.org/lexbit/relurpify/governance/authorization"
 	"strings"
 	"testing"
+
+	"codeburg.org/lexbit/relurpify/governance/authorization"
 )
 
 func TestAgentBashPermissionsValidate(t *testing.T) {

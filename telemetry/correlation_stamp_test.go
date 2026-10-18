@@ -2,8 +2,9 @@ package telemetry
 
 import (
 	"context"
-	"github.com/stretchr/testify/require"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 // recordingSink is a test sink that captures emitted events.

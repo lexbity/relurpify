@@ -190,9 +190,9 @@ func boolToInt(b bool) int {
 // older compilation ID still updates attribution.
 func TestEpochMetadataNeverRegresses(t *testing.T) {
 	cases := []struct {
-		name      string
-		first     uint64
-		second    uint64
+		name       string
+		first      uint64
+		second     uint64
 		wantEpoch  uint64
 		wantRecord string // CompilationID after the second apply
 	}{

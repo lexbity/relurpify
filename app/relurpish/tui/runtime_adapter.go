@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"codeburg.org/lexbit/relurpify/named/euclo"
 	"context"
 	"errors"
 	"fmt"
@@ -11,6 +10,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"codeburg.org/lexbit/relurpify/named/euclo"
 
 	runtimesvc "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
 	"codeburg.org/lexbit/relurpify/capability/agentspec"

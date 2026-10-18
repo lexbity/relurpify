@@ -532,17 +532,17 @@ func writePromotionLineage(destDir string, suite *agenttest.Suite, cr agenttest.
 
 // PromotionLineageRecord records what was promoted and from where.
 type PromotionLineageRecord struct {
-	SuiteName         string    `json:"suite_name"`
-	SuitePath         string    `json:"suite_path"`
-	Classification    string    `json:"classification"`
-	CaseName          string    `json:"case_name"`
-	Model             string    `json:"model"`
-	Provider          string    `json:"provider,omitempty"`
-	Layer             string    `json:"layer"`
-	PromotedArtifacts []string  `json:"promoted_artifacts"`
-	SourceRunDir      string    `json:"source_run_dir"`
-	SourceArtifacts   string    `json:"source_artifacts"`
-	DestinationTape   string    `json:"destination_tape,omitempty"`
+	SuiteName         string   `json:"suite_name"`
+	SuitePath         string   `json:"suite_path"`
+	Classification    string   `json:"classification"`
+	CaseName          string   `json:"case_name"`
+	Model             string   `json:"model"`
+	Provider          string   `json:"provider,omitempty"`
+	Layer             string   `json:"layer"`
+	PromotedArtifacts []string `json:"promoted_artifacts"`
+	SourceRunDir      string   `json:"source_run_dir"`
+	SourceArtifacts   string   `json:"source_artifacts"`
+	DestinationTape   string   `json:"destination_tape,omitempty"`
 	// Status records the lineage's honesty state: "" (healthy — the
 	// destination tape exists and replays) or "stale-awaiting-rerecord" (the
 	// tape was removed on a fingerprint mismatch; coverage is explicitly

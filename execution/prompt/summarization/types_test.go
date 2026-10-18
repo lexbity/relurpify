@@ -73,9 +73,9 @@ func TestCountTokensApproximatesBytesOverFour(t *testing.T) {
 		want int
 	}{
 		{"", 0},
-		{"abc", 0},          // 3 bytes floor to zero
-		{"abcd", 1},         // 4 bytes
-		{"abcdefgh", 2},     // 8 bytes
+		{"abc", 0},      // 3 bytes floor to zero
+		{"abcd", 1},     // 4 bytes
+		{"abcdefgh", 2}, // 8 bytes
 		{strings.Repeat("x", 400), 100},
 	}
 	for _, tc := range cases {

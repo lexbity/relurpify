@@ -1,9 +1,10 @@
 package authorization
 
 import (
-	"codeburg.org/lexbit/relurpify/governance/sandbox"
 	"context"
 	"fmt"
+
+	"codeburg.org/lexbit/relurpify/governance/sandbox"
 
 	"codeburg.org/lexbit/relurpify/governance/netpolicy"
 	"codeburg.org/lexbit/relurpify/governance/permissions"

@@ -2,8 +2,8 @@ package agentgraph
 
 import (
 	"context"
-	"strings"
 	"errors"
+	"strings"
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/context/contextdata"

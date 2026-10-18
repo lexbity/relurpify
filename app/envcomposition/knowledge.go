@@ -1,9 +1,9 @@
 package envcomposition
 
 import (
-	"strings"
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"codeburg.org/lexbit/relurpify/context/contextstream"
@@ -236,7 +236,6 @@ func streamedChunkViews(result *compiler.CompilationResult, summaryChunkIDs map[
 	}
 	return views, nil
 }
-
 
 // chunkArtifactKey extracts the declared artifact identity from a chunk's
 // provenance sources (kind "artifact"), empty when the chunk has none.

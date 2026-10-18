@@ -156,16 +156,16 @@ func (n *StreamTriggerNode) requestID(env *contextdata.Envelope) string {
 func (n *StreamTriggerNode) buildRequest(env *contextdata.Envelope) contextstream.Request {
 	meta := env.AssemblyMetadataSnapshot()
 	return contextstream.Request{
-		ID:          n.requestID(env),
-		Query:       n.Query,
-		MaxTokens:   n.MaxTokens,
-		EventLogSeq: meta.EventLogSeq,
-		EpochID:     meta.EpochID,
-		RunID:       meta.RunID,
+		ID:                    n.requestID(env),
+		Query:                 n.Query,
+		MaxTokens:             n.MaxTokens,
+		EventLogSeq:           meta.EventLogSeq,
+		EpochID:               meta.EpochID,
+		RunID:                 meta.RunID,
 		BudgetShortfallPolicy: n.BudgetShortfallPolicy,
-		Mode:        n.mode(),
-		RequestedAt: time.Now().UTC(),
-		Metadata:    cloneAnyMap(n.Metadata),
+		Mode:                  n.mode(),
+		RequestedAt:           time.Now().UTC(),
+		Metadata:              cloneAnyMap(n.Metadata),
 	}
 }
 

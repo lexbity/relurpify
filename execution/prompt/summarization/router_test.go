@@ -83,9 +83,9 @@ func TestRouteSelectsFirstCapableSummarizer(t *testing.T) {
 
 func TestRouteBuildsDefaultSummarizersWhenNoneProvided(t *testing.T) {
 	cases := []struct {
-		name            string
-		chunk           knowledge.KnowledgeChunk
-		wantDerivation  string
+		name           string
+		chunk          knowledge.KnowledgeChunk
+		wantDerivation string
 	}{
 		{"code routes to ast", chunkWithBody("c1", "go", "package p"), "ast_summarizer:"},
 		{"markdown routes to heading", chunkWithBody("c1", "markdown", "# Title\nText."), "heading_summarizer:"},

@@ -1572,7 +1572,6 @@ func primaryRouteID(req RouteRequest) string {
 	return strings.TrimSpace(req.FallbackID)
 }
 
-
 // pinnedRecipeIDFromMetadata reads the user's recipe pin from the turn's task
 // metadata (key "recipe_id"): turn-level pins arrive through SubmitTurn
 // metadata; session-level pins ride every turn the TUI submits.

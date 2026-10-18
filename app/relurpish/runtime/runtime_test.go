@@ -1,7 +1,6 @@
 package runtime
 
 import (
-	"codeburg.org/lexbit/relurpify/governance/sandbox"
 	"context"
 	"encoding/json"
 	"errors"
@@ -10,6 +9,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"codeburg.org/lexbit/relurpify/governance/sandbox"
 
 	"codeburg.org/lexbit/relurpify/capability/fs"
 	"codeburg.org/lexbit/relurpify/capability/ports"

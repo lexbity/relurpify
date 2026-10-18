@@ -142,9 +142,9 @@ func TestHeadingSummarizerIsHeading(t *testing.T) {
 		{"# Heading", true},
 		{"====", true},
 		{"-----", true},
-		{"==", false},   // too short for underline style
-		{"---", false},  // exactly 3 chars: not an underline
-		{"-", false},    // list marker, not a heading
+		{"==", false},  // too short for underline style
+		{"---", false}, // exactly 3 chars: not an underline
+		{"-", false},   // list marker, not a heading
 		{"text", false},
 		{"", false},
 	}

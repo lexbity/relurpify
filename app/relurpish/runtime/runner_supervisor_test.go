@@ -7,10 +7,11 @@ import (
 	"os/exec"
 	"sync"
 
-	"codeburg.org/lexbit/relurpify/telemetry"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"codeburg.org/lexbit/relurpify/telemetry"
 
 	"github.com/stretchr/testify/require"
 )

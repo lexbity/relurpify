@@ -1,13 +1,14 @@
 package intake
 
 import (
-	"codeburg.org/lexbit/relurpify/capability/ports"
-	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
+
+	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/context/contextdata"
 
 	"codeburg.org/lexbit/relurpify/model"
 )

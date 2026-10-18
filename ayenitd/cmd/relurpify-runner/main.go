@@ -26,11 +26,13 @@ import (
 
 func main() {
 	// run returns the exit code instead of calling os.Exit itself so the
-	// deferred dependency cleanup (deps.Close, telemetry) always executes —
-	// os.Exit would skip it and leave the jobs store lock file unflushed.
+	// deferred dependency cleanup (deps.Close, telemetry) always executes;
+	// signal delivery is stopped explicitly so os.Exit does not skip it and
+	// leave the jobs store lock file unflushed.
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-	os.Exit(run(ctx, os.Args[1:], os.Stderr))
+	code := run(ctx, os.Args[1:], os.Stderr)
+	stop()
+	os.Exit(code)
 }
 
 // run parses args, wires the runner, and drains until ctx is cancelled.
@@ -49,24 +51,24 @@ func run(ctx context.Context, args []string, stderr io.Writer) (exitCode int) {
 	}
 
 	if *workspace == "" || *stateDir == "" {
-		fmt.Fprintln(stderr, "relurpify-runner: --workspace and --state-dir are required")
+		_, _ = fmt.Fprintln(stderr, "relurpify-runner: --workspace and --state-dir are required")
 		return 2
 	}
 
 	telemetryLog := filepath.Join(*stateDir, "logs", "runner.jsonl")
 	if err := os.MkdirAll(filepath.Dir(telemetryLog), 0o700); err != nil {
-		fmt.Fprintf(stderr, "relurpify-runner: create log dir: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "relurpify-runner: create log dir: %v\n", err)
 		return 1
 	}
 	tel, err := newFileTelemetry(telemetryLog)
 	if err != nil {
-		fmt.Fprintf(stderr, "relurpify-runner: telemetry: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "relurpify-runner: telemetry: %v\n", err)
 		return 1
 	}
 
 	deps, err := ayenitd.BuildKnowledgeRunnerDeps(ctx, *workspace, *stateDir)
 	if err != nil {
-		fmt.Fprintf(stderr, "relurpify-runner: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "relurpify-runner: %v\n", err)
 		return 1
 	}
 	defer deps.Close()
@@ -84,7 +86,7 @@ func run(ctx context.Context, args []string, stderr io.Writer) (exitCode int) {
 	}
 
 	if err := ayenitd.Run(ctx, cfg); err != nil {
-		fmt.Fprintf(stderr, "relurpify-runner: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "relurpify-runner: %v\n", err)
 		return 1
 	}
 	return 0

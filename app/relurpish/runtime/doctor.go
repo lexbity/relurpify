@@ -1,11 +1,9 @@
 package runtime
 
 import (
-	"codeburg.org/lexbit/relurpify/userconfig/config/model"
 	"context"
 	"errors"
 	"fmt"
-	"golang.org/x/sync/errgroup"
 	"io/fs"
 	"math"
 	"os"
@@ -13,6 +11,9 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"codeburg.org/lexbit/relurpify/userconfig/config/model"
+	"golang.org/x/sync/errgroup"
 
 	capabilityfs "codeburg.org/lexbit/relurpify/capability/fs"
 	platformfs "codeburg.org/lexbit/relurpify/capability/fs"

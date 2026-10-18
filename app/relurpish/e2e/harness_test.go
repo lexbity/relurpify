@@ -1,12 +1,13 @@
 package e2e
 
 import (
-	govsandbox "codeburg.org/lexbit/relurpify/governance/sandbox"
 	"context"
 	"os/exec"
 	"strings"
 	"sync"
 	"testing"
+
+	govsandbox "codeburg.org/lexbit/relurpify/governance/sandbox"
 
 	"codeburg.org/lexbit/relurpify/app/relurpish/runtime"
 	"codeburg.org/lexbit/relurpify/capability/ports"

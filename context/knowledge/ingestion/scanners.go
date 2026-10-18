@@ -31,6 +31,8 @@ func (s *SignatureScanner) Name() string {
 // SignatureScanner has no custom patterns. They are precompiled once at
 // package initialization, so a zero-value scanner is ready for concurrent
 // use and Scan never mutates the receiver.
+//
+//nolint:gochecknoglobals // static precompiled pattern table; immutable by design, see lint-backlog ledger Slice 8
 var defaultSignaturePatterns = []*regexp.Regexp{
 	// DB injection patterns
 	regexp.MustCompile(`(?i)(SELECT\s+.*FROM|INSERT\s+INTO|UPDATE\s+.*SET|DELETE\s+FROM)`),

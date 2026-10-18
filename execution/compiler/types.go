@@ -39,10 +39,10 @@ const (
 
 // CompilationRequest represents a request to compile context.
 type CompilationRequest struct {
-	Query                 retrieval.RetrievalQuery
-	ManifestID            string
-	PolicyBundleID        string
-	EventLogSeq           uint64
+	Query          retrieval.RetrievalQuery
+	ManifestID     string
+	PolicyBundleID string
+	EventLogSeq    uint64
 	// EpochID is the memory-generation the compile reflects (owner ruling
 	// R-1). It is part of cache identity: an entry can only be served for
 	// the epoch it was compiled in, and a new epoch always misses. Epoch 0

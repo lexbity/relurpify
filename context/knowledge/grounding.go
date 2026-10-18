@@ -1,7 +1,6 @@
 package knowledge
 
 import (
-	"strings"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -9,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strings"
 	"time"
 
 	"codeburg.org/lexbit/relurpify/capability/agentspec"

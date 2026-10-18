@@ -8,6 +8,7 @@ import (
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/model"
 	"codeburg.org/lexbit/relurpify/platform/llm"
+
 	// Blank imports register the managed backend kinds with the llm factory;
 	// the composition root is where the set of available providers is fixed.
 	_ "codeburg.org/lexbit/relurpify/platform/llm/lmstudio"

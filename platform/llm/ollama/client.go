@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"cmp"
-	"codeburg.org/lexbit/relurpify/telemetry"
 	"context"
 	"encoding/json"
 	"errors"
@@ -16,6 +15,8 @@ import (
 	"path"
 	"strings"
 	"time"
+
+	"codeburg.org/lexbit/relurpify/telemetry"
 
 	"codeburg.org/lexbit/relurpify/model"
 	llm "codeburg.org/lexbit/relurpify/platform/llm"

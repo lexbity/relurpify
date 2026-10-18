@@ -1,10 +1,11 @@
 package authorization
 
 import (
-	"codeburg.org/lexbit/relurpify/governance/sandbox"
 	"context"
 	"errors"
 	"testing"
+
+	"codeburg.org/lexbit/relurpify/governance/sandbox"
 
 	governanceports "codeburg.org/lexbit/relurpify/governance/ports"
 )

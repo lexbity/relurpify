@@ -1,11 +1,12 @@
 package e2e
 
 import (
-	"codeburg.org/lexbit/relurpify/governance/sandbox"
 	"context"
 	"strings"
 	"testing"
 	"time"
+
+	"codeburg.org/lexbit/relurpify/governance/sandbox"
 
 	"codeburg.org/lexbit/relurpify/app/relurpish/euclotui"
 	relurpishruntime "codeburg.org/lexbit/relurpify/app/relurpish/runtime"

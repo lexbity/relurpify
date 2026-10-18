@@ -1,11 +1,12 @@
 package config
 
 import (
-	"codeburg.org/lexbit/relurpify/testsuite/testhelper"
-	"codeburg.org/lexbit/relurpify/userconfig/securefile"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"codeburg.org/lexbit/relurpify/testsuite/testhelper"
+	"codeburg.org/lexbit/relurpify/userconfig/securefile"
 )
 
 func TestValidateWorkspaceTreeCleanRepo(t *testing.T) {

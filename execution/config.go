@@ -24,7 +24,7 @@ type Config struct {
 	SandboxBackend    string                      `json:"sandbox_backend,omitempty"`
 	// SelectionPosture: "deterministic" (default) never consults a model for
 	// route selection or family tie-breaks; "model_assisted" opts in.
-	SelectionPosture   string                      `json:"selection_posture,omitempty"`
-	Extensions         map[string]any              `json:"extensions,omitempty"`
-	Metadata          map[string]any              `json:"metadata,omitempty"`
+	SelectionPosture string         `json:"selection_posture,omitempty"`
+	Extensions       map[string]any `json:"extensions,omitempty"`
+	Metadata         map[string]any `json:"metadata,omitempty"`
 }
