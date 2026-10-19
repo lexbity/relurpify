@@ -14,5 +14,5 @@ agent investigator uses react
 run investigator:
   may invoke ["file_read", "file_search"]
   from input.workspace
-  goal "Investigate the reported question: gather evidence, trace causes, and record findings."
+  goal """Investigate the reported question: gather evidence, trace causes, and record findings. The user request is: {{ index . "task.instruction" }}"""
   capture result -> state.findings

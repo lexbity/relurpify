@@ -68,7 +68,7 @@ On an empty workspace, doctor **materializes the starter configuration** into
 - `workspace.yaml` — provider, model, sandbox, logging, postures
 - `model/provider/` and `model/profiles/` — endpoints and per-model behavior
 - `security/` — sandbox, shell blacklist, tool policies, ingestion rules
-- `tools/` — 98 tool manifests
+- `tools/` — 99 tool manifests
 - `prompts/` — the prompt corpus
 - `euclo/` — shipped thoughtrecipes plus `families.yaml`
 

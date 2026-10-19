@@ -162,7 +162,7 @@ func TestCheckCanonicalRecipes_MaterializedWorkspace(t *testing.T) {
 	if err := os.MkdirAll(dst, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"default", "code_review", "investigation", "debug_tdd_repair", "dep_upgrade", "test_synthesis", "extract_func"} {
+	for _, name := range []string{"default", "code_review", "investigation", "debug_tdd_repair", "dep_upgrade", "test_synthesis", "extract_func", "plan", "security_review", "explain"} {
 		src := filepath.Join("..", "..", "..", "userconfig", "templates", "embedfs", "workspace", "euclo", name+".erpe")
 		data, err := os.ReadFile(src)
 		if err != nil {

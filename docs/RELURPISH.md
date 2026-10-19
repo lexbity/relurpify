@@ -174,7 +174,7 @@ Everything the runtime produces lives under `<workspace>/.relurpify_state/`:
 
 | Path | Contents |
 |---|---|
-| `telemetry/telemetry.jsonl` | The full event trail: route selections, policy decisions, tool calls, outcomes |
+| `telemetry/otlp/*.jsonl` | The full event trail as OpenTelemetry (OTLP-JSON): route selections, policy decisions, tool calls, outcomes |
 | `logs/` | Main log, `runner.log`, runner JSONL |
 | `audit/` | The audit chain: approvals and auto-approvals |
 | `jobs/` | Runner spool, `status.json` heartbeat, job logs |
@@ -186,12 +186,19 @@ Everything the runtime produces lives under `<workspace>/.relurpify_state/`:
 Two useful greps during or after a session:
 
 ```bash
-grep 'euclo.route.selected' .relurpify_state/telemetry/telemetry.jsonl | tail -3
-grep 'euclo.execution.complete' .relurpify_state/telemetry/telemetry.jsonl | tail -1
+jq -r '.. | .logRecords[]? | select(.eventName=="euclo.route.selected")' \
+    .relurpify_state/telemetry/otlp/*.jsonl | tail -3
+jq -r '.. | .logRecords[]? | select(.eventName=="euclo.execution.complete")' \
+    .relurpify_state/telemetry/otlp/*.jsonl | tail -1
 ```
 
 `euclo.route.selected` carries `decided_by` (why this route ran);
 `euclo.execution.complete` carries the real LLM call count and token usage.
+
+Telemetry records the runtime's *decisions* (which route, which tool, the
+outcome). Raw model and tool payloads are deliberately kept out of telemetry;
+when you need the raw wire view, enable LLM debug and read `logs/`
+(contributors: see `devdocs/observability.md`).
 
 ## Tips
 

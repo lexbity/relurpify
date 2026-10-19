@@ -135,7 +135,8 @@ regression signal.
    `import prompt <id> as <alias>` plus `goal prompt <alias>`
    (mind the double-render caveat above).
 4. Run a turn and confirm `prompt.resolved` (not `prompt.resolve_failed`) in
-   `.relurpify_state/telemetry/telemetry.jsonl`.
+   `.relurpify_state/telemetry/otlp/*.jsonl` (OTLP-JSON log records; see
+   [RELURPISH](RELURPISH.md#inspecting-state)).
 
 ## Changing the shipped defaults
 

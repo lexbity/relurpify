@@ -55,6 +55,22 @@ func TestLoopCloseReadonlyTaskNotMarkedUnverified(t *testing.T) {
 	}
 }
 
+// A plan-typed task is read-only even though its instruction reads
+// edit-capable: HTN's plan subtasks default to the react executor and carry
+// instructions like "Plan the implementation for: …", so the type — not the
+// instruction text — must decide. Without the exemption this would be
+// wrongly marked unverified.
+func TestLoopClosePlanTaskNotMarkedUnverified(t *testing.T) {
+	agent, env, task := seedUnverifiedScenario(t, "plan", "Plan the implementation for: add caching")
+
+	runReactLoop(t, agent, task, env)
+
+	unverified, _ := contextdata.GetTyped[bool](env, "euclo.outcome.unverified")
+	if unverified {
+		t.Fatal("a plan-typed task must not be marked unverified")
+	}
+}
+
 // An executed write satisfies the evidence bar: the same task with an edit
 // observation on record closes verified.
 func TestLoopCloseEditObservationSatisfiesEvidence(t *testing.T) {

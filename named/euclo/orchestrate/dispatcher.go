@@ -173,6 +173,13 @@ func (d *Dispatcher) Execute(ctx context.Context, env *contextdata.Envelope) (*e
 
 func routeRequestFromEnvelope(env *contextdata.Envelope) RouteRequest {
 	req := RouteRequest{}
+	// Carry the route's original request text so selection scores against the
+	// utterance, not only the structured intake evidence. routeSearchTokens
+	// already folds req.Instruction (and its split tokens) into the candidate
+	// token set, which is what makes a recipe's declared keyword, handoff, and
+	// description vocabulary match the user's words. instructionFromEnvelope is
+	// the same accessor the Tier-2 gate reads, so both surfaces see one source.
+	req.Instruction = instructionFromEnvelope(env)
 	if pinned := pinnedRecipeIDFromMetadata(env); pinned != "" {
 		req.PinnedRecipeID = pinned
 		req.ThoughtRecipeID = pinned

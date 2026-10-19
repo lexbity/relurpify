@@ -1293,19 +1293,58 @@ func capabilitySnapshotByID(caps *registry.CapabilityRegistry, id string) (regis
 	return registry.CapabilitySnapshot{}, false
 }
 
+// selectionStopTokens are English function words dropped from the selection
+// match vocabulary. The route request text is part of the selection token set
+// (routeSearchTokens folds in req.Instruction), so without this filter a recipe
+// description — prose full of "the"/"a"/"in" — would match any instruction
+// containing those words and manufacture a candidate. Filtering both sides of
+// every intersection means a function word can contribute to no component.
+// Content words (file, test, fix, run, …) are deliberately absent.
+var selectionStopTokens = map[string]struct{}{ //nolint:gochecknoglobals // immutable stopword table
+	"a": {}, "about": {}, "above": {}, "after": {}, "again": {}, "all": {}, "also": {},
+	"am": {}, "an": {}, "and": {}, "any": {}, "are": {}, "as": {}, "at": {}, "be": {},
+	"because": {}, "been": {}, "being": {}, "below": {}, "between": {}, "both": {},
+	"but": {}, "by": {}, "can": {}, "could": {}, "did": {}, "do": {}, "does": {},
+	"doing": {}, "done": {}, "during": {}, "each": {}, "few": {}, "for": {}, "from": {},
+	"further": {}, "had": {}, "has": {}, "have": {}, "having": {}, "he": {}, "her": {},
+	"here": {}, "hers": {}, "him": {}, "his": {}, "how": {}, "i": {}, "if": {},
+	"in": {}, "into": {}, "is": {}, "it": {}, "its": {}, "just": {}, "me": {},
+	"more": {}, "most": {}, "my": {}, "no": {}, "nor": {}, "not": {}, "of": {},
+	"on": {}, "once": {}, "only": {}, "or": {}, "other": {}, "our": {}, "ours": {},
+	"out": {}, "over": {}, "own": {}, "same": {}, "she": {}, "should": {}, "so": {},
+	"some": {}, "such": {}, "than": {}, "that": {}, "the": {}, "their": {}, "theirs": {},
+	"them": {}, "then": {}, "there": {}, "these": {}, "they": {}, "this": {},
+	"those": {}, "to": {}, "too": {}, "under": {}, "until": {}, "up": {}, "us": {},
+	"very": {}, "was": {}, "we": {}, "were": {}, "what": {}, "when": {}, "where": {},
+	"which": {}, "while": {}, "who": {}, "whom": {}, "why": {}, "will": {}, "with": {},
+	"would": {}, "you": {}, "your": {}, "yours": {},
+}
+
+// isSelectionStopToken reports whether a normalized token is a dropped function
+// word.
+func isSelectionStopToken(token string) bool {
+	if token == "" {
+		return false
+	}
+	_, stop := selectionStopTokens[token]
+	return stop
+}
+
 // tokenNormalizedSet expands the utterance tokens into the normalized match
 // vocabulary used by every scorer: the trimmed lowercased token plus its
-// split sub-tokens.
+// split sub-tokens, minus function words (selectionStopTokens).
 func tokenNormalizedSet(tokens []string) map[string]struct{} {
 	normalized := make(map[string]struct{}, len(tokens)*2)
-	for _, token := range tokens {
-		if trimmed := strings.TrimSpace(strings.ToLower(token)); trimmed != "" {
-			normalized[trimmed] = struct{}{}
+	add := func(token string) {
+		if token == "" || isSelectionStopToken(token) {
+			return
 		}
+		normalized[token] = struct{}{}
+	}
+	for _, token := range tokens {
+		add(strings.TrimSpace(strings.ToLower(token)))
 		for _, split := range splitRouteTokens(token) {
-			if split != "" {
-				normalized[split] = struct{}{}
-			}
+			add(split)
 		}
 	}
 	return normalized

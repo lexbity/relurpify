@@ -60,6 +60,9 @@ var canonicalTestRecipeIDs = []string{
 	"euclo.thoughtrecipe.dep_upgrade",
 	"euclo.thoughtrecipe.test_synthesis",
 	"euclo.thoughtrecipe.extract_func",
+	"euclo.thoughtrecipe.plan",
+	"euclo.thoughtrecipe.security_review",
+	"euclo.thoughtrecipe.explain",
 }
 
 // TestLoadWorkspaceMissingRecipeDirErrors pins the empty-vs-missing

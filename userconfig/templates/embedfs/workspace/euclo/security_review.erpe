@@ -1,0 +1,19 @@
+thoughtrecipe euclo.thoughtrecipe.security_review
+"Review-family recipe for security: read the relevant code, then run a read-only react review pass that reports security findings with severity and remediation. Family defaults: read-only; no writes."
+
+trigger as capability:
+  may read workspace
+  may invoke ["file_read", "file_list", "file_search"]
+  family ["review"]
+  keyword ["security", "vulnerability", "injection", "auth", "secret", "sanitize"]
+
+input workspace: "**/*"
+input prompt: user.request
+
+agent auditor uses react
+
+run auditor:
+  may invoke ["file_read", "file_list", "file_search"]
+  from input.prompt
+  goal """Review the workspace for security weaknesses: injection, authentication or authorization bypass, secrets committed to code, unsafe deserialization, and unsafe shell or network use. Report each finding with its severity, the file and line, and a concrete remediation. The user request is: {{ index . "task.instruction" }}"""
+  capture result -> state.findings

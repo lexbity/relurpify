@@ -1,0 +1,19 @@
+thoughtrecipe euclo.thoughtrecipe.explain
+"Investigation-family recipe for explanation: read the named code, then explain in plain language what it does and what would break if it changed. Family defaults: read-only; no writes."
+
+trigger as capability:
+  may read workspace
+  may invoke ["file_read", "file_list", "file_search"]
+  family ["investigation"]
+  keyword ["explain", "describe", "document"]
+
+input workspace: "**/*"
+input prompt: user.request
+
+agent explainer uses react
+
+run explainer:
+  may invoke ["file_read", "file_list", "file_search"]
+  from input.prompt
+  goal """Read the code the user names, then explain in plain language what behavior it covers and what a bug in it would break. The user request is: {{ index . "task.instruction" }}"""
+  capture result -> state.explanation

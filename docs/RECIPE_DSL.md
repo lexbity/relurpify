@@ -282,10 +282,16 @@ do relurpic:test_run on state.repair
   `on <expr>` supplies input, `with <expr>` additional arguments.
   Namespace is `relurpic`; bare names resolve (`test_run` ->
   `euclo:cap.test_run`).
+  A `relurpic` capability is dispatch-only: it never appears in the model's
+  tool list.
 
 Known limitation: there is no load-time check that a `do` target satisfies the
 capability's input schema, and no DSL form produces a literal map argument, so
 capabilities requiring literal inputs are not yet authorable.
+`test_run` is one of these — it needs a literal command — so a recipe cannot
+yet express it through `do`. For verification, use the model-callable
+test-runner manifest tools instead (see
+[Tool vocabulary](#tool-vocabulary)); the shipped recipes do.
 
 ## Paradigm directives
 
@@ -322,6 +328,27 @@ Resolution order for a declared name: exact capability ID, then the registry
 name index (manifest names, bare invocable-capability names, curated aliases
 such as `grep` -> `file_search`), else a load error.
 
+### Verification vocabulary
+
+The shipped `test/` manifests are model-callable runners:
+`python_pytest`, `python_unittest`, `go_test`, `node_npm_test`,
+`rust_cargo_test`. They take typed, constrained inputs (a working directory and
+an optional path or name filter) and run a fixed command — the model chooses
+neither the command nor the binary.
+
+To verify an edit, declare the runner that matches the project in the step's
+`may invoke` and tell the agent to run it before reporting complete:
+
+```erpe
+run repairer:
+  may invoke ["file_read", "file_write", "python_pytest"]
+  goal """Repair the defect, then run python_pytest to prove the suite passes
+  before reporting complete. The user request is: {{ index . "task.instruction" }}"""
+```
+
+Unlike the dispatch-only `test_run` capability, these runners appear in the
+model's tool list, so a react step can actually invoke them.
+
 ## Execution semantics
 
 - The loader lowers a recipe into an execution graph: linear sections in
@@ -341,8 +368,9 @@ such as `grep` -> `file_search`), else a load error.
 2. Lint: `relurplint --check recipes --workspace .`
 3. Restart relurpish; boot resolves vocabulary and prompt imports against the
    live registries, and failures name the artifact.
-4. Confirm selection with telemetry:
-   `grep 'euclo.route.selected' .relurpify_state/telemetry/telemetry.jsonl`.
+4. Confirm selection with telemetry (OTLP-JSON log records under
+   `.relurpify_state/telemetry/otlp/`):
+   `jq -r '.. | .logRecords[]? | select(.eventName=="euclo.route.selected")' .relurpify_state/telemetry/otlp/*.jsonl`.
 5. If a family should hand off cleanly, map it in `families.yaml`.
 
 For a turn you control entirely, pin the recipe with `/recipe <id>`; see

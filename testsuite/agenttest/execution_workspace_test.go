@@ -148,6 +148,9 @@ func TestExecutorBootsWithWorkspaceRecipesFromNonRepoCWD(t *testing.T) {
 		"euclo.thoughtrecipe.dep_upgrade",
 		"euclo.thoughtrecipe.test_synthesis",
 		"euclo.thoughtrecipe.extract_func",
+		"euclo.thoughtrecipe.plan",
+		"euclo.thoughtrecipe.security_review",
+		"euclo.thoughtrecipe.explain",
 	} {
 		if !loaded[id] {
 			t.Errorf("canonical recipe %q missing from booted registry", id)

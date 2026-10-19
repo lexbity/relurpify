@@ -1,0 +1,21 @@
+thoughtrecipe euclo.thoughtrecipe.plan
+"Planning-family recipe: generate an implementation plan for the request, check it against the workspace, then summarize it. Family defaults: read-only; planning never writes."
+
+trigger as capability:
+  may read workspace
+  may invoke ["file_read", "file_list", "file_search"]
+  family ["planning"]
+  keyword ["plan", "design", "approach", "outline", "roadmap", "steps"]
+
+input workspace: "**/*"
+input prompt: user.request
+
+agent planner uses planner
+
+run planner:
+  may invoke ["file_read", "file_list", "file_search"]
+  from input.prompt
+  plan """Produce a concrete, ordered implementation plan for the user's request, grounded in the files and symbols that already exist in the workspace. The user request is: {{ index . "task.instruction" }}"""
+  verify "Check that every step names a real file or symbol and that the plan covers the whole request."
+  summarize "Produce the final ordered plan, leading with the first step the user should take."
+  capture result -> state.plan

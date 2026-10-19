@@ -24,7 +24,7 @@ func TestLoadToolManifestsLoadsWorkspaceCorpus(t *testing.T) {
 	require.Contains(t, seen, "file_read")
 	require.Contains(t, seen, "go_test")
 	require.Contains(t, seen, "search_grep")
-	require.Contains(t, seen, "shell_tool_discover")
+	require.Contains(t, seen, "bash")
 }
 
 func TestLoadToolManifestRejectsUnknownSchemaBody(t *testing.T) {

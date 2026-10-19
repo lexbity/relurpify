@@ -43,7 +43,7 @@ relurpify_cfg/
 │   ├── provider/                   # one manifest per inference provider (4 ship)
 │   └── profiles/                   # per-model behavior profiles (3 ship)
 ├── security/                       # sandbox, shell blacklist, tool policies, ingestion (4 files)
-├── tools/                          # 98 tool manifests
+├── tools/                          # 99 tool manifests
 ├── prompts/                        # the prompt corpus; see PROMPT_DSL
 └── euclo/                          # thoughtrecipes + families.yaml; see RECIPE_DSL
 ```
@@ -140,8 +140,9 @@ risk, and effect classes.
 | `file/` | 6 | `file_read`, `file_write`, `file_list` |
 | `git/` | 5 | `cli_git` (blame, branch, commit, diff, history) |
 | `lsp/` | 7 | `lsp_get_diagnostics`, `lsp_get_definition` |
-| `search/` | 4 | `search_grep`, `search_semantic`, `query_ast` |
-| `shell/` | 76 | build, text, network, system, archive, fileops tools plus `bash` |
+| `search/` | 3 | `search_grep`, `search_semantic`, `search_find_similar` |
+| `shell/` | 73 | build, text, network, system, archive, fileops tools plus `bash` |
+| `test/` | 5 | `python_pytest`, `python_unittest`, `go_test`, `node_npm_test`, `rust_cargo_test` |
 
 Tool names in recipes and policies resolve through the registry, never by
 literal string match; see [RECIPE_DSL](RECIPE_DSL.md#tool-vocabulary) for the

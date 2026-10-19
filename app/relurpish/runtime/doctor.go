@@ -1,14 +1,11 @@
 package runtime
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
 	"math"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -28,6 +25,7 @@ import (
 	eucloservices "codeburg.org/lexbit/relurpify/named/euclo/services"
 	thoughtrecipes "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
 	"codeburg.org/lexbit/relurpify/platform/llm"
+	"codeburg.org/lexbit/relurpify/platform/llm/ollama"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 	cfgsecurity "codeburg.org/lexbit/relurpify/userconfig/config/security"
 	"codeburg.org/lexbit/relurpify/userconfig/modelselect"
@@ -344,21 +342,13 @@ func probeModelToolTemplate(ctx context.Context, def *model.ResolvedProvider, se
 	}
 	endpoint := strings.TrimSpace(def.Endpoint)
 	if endpoint == "" {
-		endpoint = "http://localhost:11434"
-	}
-	body, err := json.Marshal(map[string]any{"model": selectedModel})
-	if err != nil {
-		return nil
+		endpoint = ollama.DefaultEndpoint
 	}
 	probeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	req, err := http.NewRequestWithContext(probeCtx, http.MethodPost, strings.TrimRight(endpoint, "/")+"/api/show", bytes.NewReader(body))
-	if err != nil {
-		return nil
-	}
-	req.Header.Set("Content-Type", "application/json")
-	client := &http.Client{Timeout: 5 * time.Second}
-	resp, err := client.Do(req)
+	// Reuse the provider's own /api/show client rather than a parallel HTTP
+	// implementation: one endpoint normalization, one response shape.
+	template, err := ollama.NewClient(endpoint, selectedModel, "").ModelTemplate(probeCtx, selectedModel)
 	if err != nil {
 		return &DependencyStatus{
 			Name:      "model_tool_template",
@@ -369,17 +359,7 @@ func probeModelToolTemplate(ctx context.Context, def *model.ResolvedProvider, se
 			Details:   fmt.Sprintf("template probe failed for %s: %v", selectedModel, err),
 		}
 	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode >= 300 {
-		return nil // unknown model or non-ollama response shape: not a tool-support verdict
-	}
-	var shown struct {
-		Template string `json:"template"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&shown); err != nil {
-		return nil
-	}
-	lowered := strings.ToLower(shown.Template)
+	lowered := strings.ToLower(template)
 	if strings.Contains(lowered, "tools") || strings.Contains(lowered, "tool_call") {
 		return nil // tool-capable template; nothing to warn about
 	}
@@ -754,9 +734,10 @@ func applyProviderProbe(ctx context.Context, ph *ProviderHealth, def *model.Reso
 	}
 }
 
-// canonicalRecipeIDs is the seven-recipe canonical set (§5.7) plus the
-// built-in clarification target: every family handoff must resolve to one of
-// these, and doctor reports any that a workspace lacks.
+// canonicalRecipeIDs is the shipped starter-recipe set: the family handoff
+// targets plus the read-only specialized recipes (plan/security_review/explain,
+// which are pinned rather than family-selected). Every family handoff must
+// resolve to one of these, and doctor reports any that a workspace lacks.
 var canonicalRecipeIDs = []string{
 	"euclo.thoughtrecipe.default",
 	"euclo.thoughtrecipe.code_review",
@@ -765,6 +746,9 @@ var canonicalRecipeIDs = []string{
 	"euclo.thoughtrecipe.dep_upgrade",
 	"euclo.thoughtrecipe.test_synthesis",
 	"euclo.thoughtrecipe.extract_func",
+	"euclo.thoughtrecipe.plan",
+	"euclo.thoughtrecipe.security_review",
+	"euclo.thoughtrecipe.explain",
 }
 
 type recipesCheckResult struct {

@@ -14,5 +14,5 @@ agent reviewer uses react
 run reviewer:
   may invoke ["file_read", "file_search"]
   from input.workspace
-  goal "Review the pending changes and produce findings with severity and suggested actions."
+  goal """Review the pending changes and produce findings with severity and suggested actions. The user request is: {{ index . "task.instruction" }}"""
   capture result -> state.findings

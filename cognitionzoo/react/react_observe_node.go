@@ -511,13 +511,19 @@ func iterationExhaustionReason(task *execution.Task, env *contextdata.Envelope) 
 // envelope, not the react task: the react task's instruction is the recipe
 // goal, which reads edit-capable even for read-only requests, and its type
 // is the step paradigm.
+//
+// Read-only task types are exempt even though the react task's instruction
+// reads edit-capable: "plan" belongs to the exempt set because HTN's plan
+// subtasks default to the react executor (cognitionzoo/htn/runtime
+// method_resolution.go), so a planning turn reaches this loop with a
+// plan-shaped instruction and legitimately produces no edit.
 func editTaskClosedWithoutEvidence(task *execution.Task, env *contextdata.Envelope) bool {
 	if hasEditObservation(env) {
 		return false
 	}
 	if taskType, ok := contextdata.GetTyped[string](env, "task.type"); ok {
 		switch strings.ToLower(strings.TrimSpace(taskType)) {
-		case "review", "explain", "analysis", "planning":
+		case "review", "explain", "analysis", "plan", "planning":
 			return false // read-only intents have nothing to verify
 		case "execute", "code-generation":
 			return true

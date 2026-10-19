@@ -44,6 +44,12 @@ func TestDryRunCanonicalRecipeTable(t *testing.T) {
 		// tier-2 tie-break consult, removed by the posture ruling.
 
 		{name: "investigation", instruction: "investigate notes.md", wantRoute: "euclo.thoughtrecipe.investigation", wantModel: true},
+		// The planning family keyword routes to the planner-paradigm recipe.
+		{name: "plan", instruction: "plan the caching approach", wantRoute: "euclo.thoughtrecipe.plan", wantModel: true},
+		// The request text is scored, so a recipe keyword that names the
+		// request's vocabulary ("security"/"auth") outranks its review-family
+		// sibling code_review.
+		{name: "security_review", instruction: "review the auth module for security vulnerabilities", wantRoute: "euclo.thoughtrecipe.security_review", wantModel: true},
 		// No family-classifiable token: no recipe scores family affinity, so
 		// route resolution falls back to the built-in default execution recipe.
 		{name: "default_fallback", instruction: "explain summary.md", wantRoute: "euclo.thoughtrecipe.default", wantModel: true},

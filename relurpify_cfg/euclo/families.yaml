@@ -9,6 +9,8 @@ handoffs:
   review: euclo.thoughtrecipe.code_review
   investigation: euclo.thoughtrecipe.investigation
   debug: euclo.thoughtrecipe.debug_tdd_repair
+  repair: euclo.thoughtrecipe.debug_tdd_repair
+  planning: euclo.thoughtrecipe.plan
   migration: euclo.thoughtrecipe.dep_upgrade
   implementation: euclo.thoughtrecipe.test_synthesis
   refactor: euclo.thoughtrecipe.extract_func
