@@ -1,10 +1,10 @@
 thoughtrecipe euclo.thoughtrecipe.test_synthesis
-"Review-family recipe for test synthesis: anchor the symbol or file via ast_query, author tests in a react pass, then run them. Family defaults: writes confined to test authoring; the synthesized tests must pass."
+"Implementation-family recipe for test synthesis: author tests in a react edit pass, then run them through the workspace's test runner tools to confirm they pass. Family defaults: writes confined to test authoring; the synthesized tests must run green before completion."
 
 trigger as capability:
   may read workspace
   may write workspace
-  may invoke ["file_read", "grep", "ast_query"]
+  may invoke ["file_read", "file_search"]
   family ["implementation"]
 
 input workspace: "**/*"
@@ -13,8 +13,7 @@ input prompt: user.request
 agent author uses react
 
 run author:
-  may invoke ["file_read", "grep", "test_run", "file_write"]
+  may invoke ["file_read", "file_search", "file_write", "python_pytest", "python_unittest", "go_test", "node_npm_test", "rust_cargo_test"]
   from input.prompt
-  goal """Author tests for the requested symbol or file, then run them to confirm they pass. The user request is: {{ index . "task.instruction" }}"""
+  goal """Author tests for the requested symbol or file, then run them with the matching test runner tool to confirm they pass. The user request is: {{ index . "task.instruction" }}"""
   capture result -> state.tests
-

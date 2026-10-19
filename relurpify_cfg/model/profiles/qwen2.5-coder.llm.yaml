@@ -6,7 +6,7 @@ tool_calling:
   double_encode_args: true
 context:
   max_tokens: 8192
-  response_reserve_tokens: 512
+  response_reserve_tokens: 2048
 generation:
   temperature: 0.1
   top_p: 0.95

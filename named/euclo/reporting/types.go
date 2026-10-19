@@ -13,6 +13,11 @@ const (
 	// the turn ended on a live interaction frame. Neither success nor
 	// failure — the turn's work continues when the frame is answered.
 	OutcomeCategoryAwaitingInteraction OutcomeCategory = "awaiting_interaction"
+	// OutcomeCategoryUnverified reports a route that ran to completion
+	// without failure while the work is not evidenced: an edit-shaped task
+	// closed without an executed write or test observation, so the model's
+	// assertion of success was the only support. Degraded, not trusted.
+	OutcomeCategoryUnverified OutcomeCategory = "unverified"
 )
 
 // Outcome represents the final outcome of task execution.

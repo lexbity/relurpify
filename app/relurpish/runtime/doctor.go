@@ -1,11 +1,14 @@
 package runtime
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
 	"math"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,10 +18,9 @@ import (
 	"codeburg.org/lexbit/relurpify/userconfig/config/model"
 	"golang.org/x/sync/errgroup"
 
-	capabilityfs "codeburg.org/lexbit/relurpify/capability/fs"
 	platformfs "codeburg.org/lexbit/relurpify/capability/fs"
-	capabilityports "codeburg.org/lexbit/relurpify/capability/ports"
 	capabilityregistry "codeburg.org/lexbit/relurpify/capability/registry"
+	"codeburg.org/lexbit/relurpify/capability/toolcapabilities"
 	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
 	"codeburg.org/lexbit/relurpify/governance/policy"
 	"codeburg.org/lexbit/relurpify/named/euclo/euclocontract"
@@ -208,6 +210,7 @@ func BuildDoctorReport(ctx context.Context, cfg Config, secrets config.Secrets) 
 	report.Inference = env.Inference
 	// Build provider catalog health list.
 	bundle, diags, err := config.LoadDiagnostic(config.LoadOptions{WorkspaceRoot: cfg.Workspace})
+	var selectedProviderDef *model.ResolvedProvider
 	switch {
 	case err == nil && bundle.Config != nil:
 		reg, _ := buildProviderRegistry(bundle.Config.Model.Providers)
@@ -225,6 +228,18 @@ func BuildDoctorReport(ctx context.Context, cfg Config, secrets config.Secrets) 
 			report.ModelProfilesError = profileDiag.Message
 		default:
 			report.ModelProfilesError = "no workspace model profile matched the selected model"
+		}
+		// Native intent on a served template without tool support makes the
+		// model's tool decisions surface as text instead of structured tool
+		// calls; the template probe below names that combination (P2).
+		if resolution.SourcePath != "" && resolution.Profile != nil &&
+			strings.EqualFold(strings.TrimSpace(resolution.Profile.ToolCalling.Intent), "native") {
+			for _, def := range bundle.Config.Model.Providers {
+				if strings.EqualFold(def.Name, cfg.InferenceProvider) {
+					selectedProviderDef = def
+					break
+				}
+			}
 		}
 	case err != nil:
 		report.ModelProfilesError = err.Error()
@@ -302,11 +317,82 @@ func BuildDoctorReport(ctx context.Context, cfg Config, secrets config.Secrets) 
 	if bundle.Config != nil {
 		deps = append(deps, probeRuntimeImage(bundle.Config.Security.Sandbox))
 	}
+	if selectedProviderDef != nil {
+		if dep := probeModelToolTemplate(ctx, selectedProviderDef, report.Inference.SelectedModel); dep != nil {
+			deps = append(deps, *dep)
+		}
+	}
 	report.Dependencies = deps
 
 	report.SandboxReady = computeSandboxReady(report)
 	report.ModelReady = computeModelReady(report)
 	return report
+}
+
+// probeModelToolTemplate warns when the served model's prompt template has no
+// tool support while the resolved profile requests native tool calling: the
+// model's tool decisions then surface as text (often with a leaked raw
+// <tool_call|> marker) instead of structured tool calls. Non-blocking —
+// prompt_based profiles and template-less backends are legitimate.
+func probeModelToolTemplate(ctx context.Context, def *model.ResolvedProvider, selectedModel string) *DependencyStatus {
+	if !strings.EqualFold(def.Kind, "ollama") && !strings.EqualFold(def.Name, "ollama") {
+		return nil
+	}
+	selectedModel = strings.TrimSpace(selectedModel)
+	if selectedModel == "" || strings.EqualFold(selectedModel, "offline-synthetic") {
+		return nil
+	}
+	endpoint := strings.TrimSpace(def.Endpoint)
+	if endpoint == "" {
+		endpoint = "http://localhost:11434"
+	}
+	body, err := json.Marshal(map[string]any{"model": selectedModel})
+	if err != nil {
+		return nil
+	}
+	probeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(probeCtx, http.MethodPost, strings.TrimRight(endpoint, "/")+"/api/show", bytes.NewReader(body))
+	if err != nil {
+		return nil
+	}
+	req.Header.Set("Content-Type", "application/json")
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return &DependencyStatus{
+			Name:      "model_tool_template",
+			Required:  false,
+			Available: false,
+			Degraded:  true,
+			Blocking:  false,
+			Details:   fmt.Sprintf("template probe failed for %s: %v", selectedModel, err),
+		}
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode >= 300 {
+		return nil // unknown model or non-ollama response shape: not a tool-support verdict
+	}
+	var shown struct {
+		Template string `json:"template"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&shown); err != nil {
+		return nil
+	}
+	lowered := strings.ToLower(shown.Template)
+	if strings.Contains(lowered, "tools") || strings.Contains(lowered, "tool_call") {
+		return nil // tool-capable template; nothing to warn about
+	}
+	return &DependencyStatus{
+		Name:      "model_tool_template",
+		Required:  false,
+		Available: false,
+		Degraded:  true,
+		Blocking:  false,
+		Details: fmt.Sprintf(
+			"served template for %s has no tool support (no .Tools block); profile intent is native, so tool decisions may arrive as text instead of structured tool calls. Use a model artifact with a tool-capable template, or set tool_calling.intent: prompt_based in the model profile",
+			selectedModel),
+	}
 }
 
 func uniqueStrings(s []string) []string {
@@ -695,18 +781,21 @@ type recipesCheckResult struct {
 func checkCanonicalRecipes(workspace string) recipesCheckResult {
 	result := recipesCheckResult{}
 	// Diagnostics have no live runtime registry; seed a static capability
-	// view the way the runtime composes one: the real file tools plus the
-	// shipped relurpic capability set (registered invocably, so bare
-	// declared names like "test_run" resolve exactly as they would at run
-	// time — the wave-5 declared-vocabulary contract).
+	// view the way the runtime composes one: the full go_native catalog plus
+	// the shipped relurpic capability set (registered invocably, so bare
+	// declared capability names resolve exactly as they would at run time —
+	// the wave-5 declared-vocabulary contract).
 	caps := capabilityregistry.NewRegistry()
-	for _, tool := range []capabilityports.Tool{
-		&capabilityfs.ReadFileTool{BasePath: workspace},
-		&capabilityfs.ListFilesTool{BasePath: workspace},
-		&capabilityfs.SearchInFilesTool{BasePath: workspace},
-		&capabilityfs.WriteFileTool{BasePath: workspace},
-		&capabilityfs.EditFileTool{BasePath: workspace},
-	} {
+	// Seed the full go_native catalog the way the composition root registers
+	// it: shipped recipes may declare any shipped manifest tool, and
+	// vocabulary resolution must see them all.
+	catalog, catErr := toolcapabilities.CatalogForWorkspace(workspace)
+	if catErr != nil {
+		result.errText = fmt.Sprintf("seed capability view: %v", catErr)
+		result.missing = append(result.missing, canonicalRecipeIDs...)
+		return result
+	}
+	for _, tool := range catalog {
 		if err := caps.Register(context.Background(), tool); err != nil {
 			result.errText = fmt.Sprintf("seed capability view: %v", err)
 			result.missing = append(result.missing, canonicalRecipeIDs...)

@@ -99,7 +99,7 @@ func (n *reactObserveNode) Execute(ctx context.Context, env *contextdata.Envelop
 		}
 	}
 	if !completed && iter >= n.agent.maxIterations {
-		if taskNeedsEditing(n.task) && !hasEditObservation(env) {
+		if editTaskClosedWithoutEvidence(n.task, env) {
 			reason := iterationExhaustionReason(n.task, env)
 			env.SetWorkingValueWithClass("react.incomplete_reason", reason, contextdata.MemoryClassTask)
 			return &execution.Result{
@@ -120,6 +120,19 @@ func (n *reactObserveNode) Execute(ctx context.Context, env *contextdata.Envelop
 			env.SetWorkingValueWithClass("react.incomplete_reason", iterationExhaustionReason(n.task, env), contextdata.MemoryClassTask)
 		}
 	}
+	// Loop-close honesty: an edit-shaped task that closed without an
+	// executed edit observation is unverified no matter who claimed
+	// completion — the model asserting success is not evidence. The
+	// outcome classifier downgrades a would-be success to unverified on
+	// this flag; read-only tasks have nothing to verify and are exempt.
+	if completed && editTaskClosedWithoutEvidence(n.task, env) {
+		reason := strings.TrimSpace(envGetString(env, "react.incomplete_reason"))
+		if reason == "" {
+			reason = "task edits code but the run executed no file write or edit observation"
+		}
+		env.SetWorkingValueWithClass("euclo.outcome.unverified", true, contextdata.MemoryClassTask)
+		env.SetWorkingValueWithClass("euclo.outcome.unverified_reason", reason, contextdata.MemoryClassTask)
+	}
 	env.SetWorkingValueWithClass("react.done", completed, contextdata.MemoryClassTask)
 
 	if n.agent.Memory != nil && env != nil && strings.TrimSpace(env.TaskIDSnapshot()) != "" {
@@ -134,9 +147,12 @@ func (n *reactObserveNode) Execute(ctx context.Context, env *contextdata.Envelop
 
 	if completed {
 		summary := diagnostic.String()
+		unverified, _ := contextdata.GetTyped[bool](env, "euclo.outcome.unverified")
 		if synthetic := strings.TrimSpace(envGetString(env, "react.synthetic_summary")); synthetic != "" {
 			summary = synthetic
-			env.SetWorkingValueWithClass("react.incomplete_reason", "", contextdata.MemoryClassTask)
+			if !unverified {
+				env.SetWorkingValueWithClass("react.incomplete_reason", "", contextdata.MemoryClassTask)
+			}
 		}
 		env.SetWorkingValueWithClass("react.final_output", map[string]any{
 			"summary": summary,
@@ -487,6 +503,30 @@ func iterationExhaustionReason(task *execution.Task, env *contextdata.Envelope) 
 		return "iteration budget exhausted before making any file changes"
 	}
 	return "iteration budget exhausted before task completion"
+}
+
+// editTaskClosedWithoutEvidence reports whether the turn's task was
+// edit-shaped and the run closed without an executed edit observation. The
+// decision reads the route's ORIGINAL instruction and task type from the
+// envelope, not the react task: the react task's instruction is the recipe
+// goal, which reads edit-capable even for read-only requests, and its type
+// is the step paradigm.
+func editTaskClosedWithoutEvidence(task *execution.Task, env *contextdata.Envelope) bool {
+	if hasEditObservation(env) {
+		return false
+	}
+	if taskType, ok := contextdata.GetTyped[string](env, "task.type"); ok {
+		switch strings.ToLower(strings.TrimSpace(taskType)) {
+		case "review", "explain", "analysis", "planning":
+			return false // read-only intents have nothing to verify
+		case "execute", "code-generation":
+			return true
+		}
+	}
+	if userInstruction := strings.TrimSpace(envGetString(env, "task.instruction")); userInstruction != "" {
+		return taskNeedsEditing(&execution.Task{Instruction: userInstruction})
+	}
+	return taskNeedsEditing(task)
 }
 
 func hasEditObservation(env *contextdata.Envelope) bool {

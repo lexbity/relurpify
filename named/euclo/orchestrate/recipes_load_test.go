@@ -5,9 +5,8 @@ import (
 	"errors"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/capability/fs"
-	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/capability/registry"
+	"codeburg.org/lexbit/relurpify/capability/toolcapabilities"
 	"codeburg.org/lexbit/relurpify/named/euclo/relurpicabilities"
 	"codeburg.org/lexbit/relurpify/named/euclo/services"
 	thoughtrecipepkg "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
@@ -19,18 +18,15 @@ import (
 // takes.
 func TestCanonicalRecipesLoadClean(t *testing.T) {
 	caps := registry.NewRegistry()
-	// Declared vocabulary: the real file tools (capability/fs is the
-	// implementation the platform native registration wraps) plus the shipped
+	// Declared vocabulary: the full go_native catalog plus the shipped
 	// relurpic capability set, registered the way the runtime does (FR-5).
-	// Registry coherence with the manifests is the composition gate's contract
-	// (app/envcomposition); this corpus gate exercises the loader.
-	for _, tool := range []ports.Tool{
-		&fs.ReadFileTool{BasePath: "../../../"},
-		&fs.SearchInFilesTool{BasePath: "../../../"},
-		&fs.WriteFileTool{BasePath: "../../../"},
-		&fs.EditFileTool{BasePath: "../../../"},
-		&fs.ListFilesTool{BasePath: "../../../"},
-	} {
+	// Registry coherence with the manifests is the composition gate's
+	// contract (app/envcomposition); this corpus gate exercises the loader.
+	catalog, err := toolcapabilities.CatalogForWorkspace("../../../")
+	if err != nil {
+		t.Fatalf("compose native catalog: %v", err)
+	}
+	for _, tool := range catalog {
 		if err := caps.Register(context.Background(), tool); err != nil {
 			t.Fatalf("register %s: %v", tool.Name(), err)
 		}

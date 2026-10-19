@@ -31,15 +31,29 @@ func TestBackendReset(t *testing.T) {
 		require.NoError(t, backend.Reset(context.Background(), ""))
 	})
 
+	// Strategies past the no-op short-circuit resolve ollama/systemctl via
+	// exec.LookPath directly, outside the stubbed execCommandContext seam, so
+	// they only run where those binaries are installed.
+	requireOnPath := func(t *testing.T, binary string) {
+		t.Helper()
+		if _, err := exec.LookPath(binary); err != nil {
+			t.Skipf("%s not found on PATH; skipping strategy that resolves it", binary)
+		}
+	}
+
 	t.Run("unknown strategy returns nil", func(t *testing.T) {
+		requireOnPath(t, "ollama")
 		require.NoError(t, backend.Reset(context.Background(), "unknown"))
 	})
 
 	t.Run("model strategy with no model name returns nil", func(t *testing.T) {
+		requireOnPath(t, "ollama")
 		require.NoError(t, backend.Reset(context.Background(), "model"))
 	})
 
 	t.Run("server strategy returns nil", func(t *testing.T) {
+		requireOnPath(t, "ollama")
+		requireOnPath(t, "systemctl")
 		require.NoError(t, backend.Reset(context.Background(), "server"))
 	})
 }

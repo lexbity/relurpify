@@ -1,0 +1,39 @@
+schema: relurpify/tool/v1
+name: python_unittest
+version: "1"
+family: test
+intent:
+  - test
+  - python
+description: Runs python3 -m unittest and returns structured Python test results.
+parameters:
+  - name: working_directory
+    type: string
+    description: Directory to run unittest in, relative to workspace root.
+    required: false
+    default: "."
+  - name: start_directory
+    type: string
+    description: Directory containing the test discovery start point.
+    required: false
+  - name: pattern
+    type: string
+    description: Test file discovery pattern (default test*.py).
+    required: false
+  - name: extra_args
+    type: array
+    description: Extra unittest arguments.
+    required: false
+execution:
+  backend: go_native
+  implementation: python_unittest
+  sandbox:
+    allowed_root: ${workspace}
+    timeout_seconds: 300
+  supports_workdir: true
+capability:
+  trust_class: builtin_trusted
+  risk_class:
+    - execute
+  effect_class:
+    - process_spawn

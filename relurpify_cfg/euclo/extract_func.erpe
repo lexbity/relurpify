@@ -1,10 +1,10 @@
 thoughtrecipe euclo.thoughtrecipe.extract_func
-"Repair-family recipe for function extraction: anchor the code with ast_query, perform the extraction in a react edit pass, then verify. Family defaults: edits confined to the extraction; verification is mandatory."
+"Refactor-family recipe for function extraction: perform the extraction in a react edit pass, then verify through the workspace's test runner tools. Family defaults: edits confined to the extraction; verification runs through the runner tools before completion."
 
 trigger as capability:
   may read workspace
   may write workspace
-  may invoke ["file_read", "grep", "ast_query"]
+  may invoke ["file_read", "file_search"]
   family ["refactor"]
 
 input workspace: "**/*"
@@ -13,8 +13,7 @@ input prompt: user.request
 agent refactorer uses react
 
 run refactorer:
-  may invoke ["file_read", "grep", "test_run", "file_write"]
+  may invoke ["file_read", "file_search", "file_write", "python_pytest", "python_unittest", "go_test", "node_npm_test", "rust_cargo_test"]
   from input.prompt
-  goal """Extract the requested code into its own function and verify the build and tests still pass. The user request is: {{ index . "task.instruction" }}"""
+  goal """Extract the requested code into its own function, then verify the build and tests still pass with the matching test runner tool. The user request is: {{ index . "task.instruction" }}"""
   capture result -> state.refactor
-

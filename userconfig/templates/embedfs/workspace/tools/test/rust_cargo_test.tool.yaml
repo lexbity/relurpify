@@ -1,0 +1,35 @@
+schema: relurpify/tool/v1
+name: rust_cargo_test
+version: "1"
+family: test
+intent:
+  - test
+  - rust
+description: Runs cargo test and returns structured Rust test results.
+parameters:
+  - name: working_directory
+    type: string
+    description: Directory to run cargo test in, relative to workspace root.
+    required: false
+    default: "."
+  - name: test_name
+    type: string
+    description: Optional test name filter.
+    required: false
+  - name: extra_args
+    type: array
+    description: Extra cargo arguments.
+    required: false
+execution:
+  backend: go_native
+  implementation: rust_cargo_test
+  sandbox:
+    allowed_root: ${workspace}
+    timeout_seconds: 300
+  supports_workdir: true
+capability:
+  trust_class: builtin_trusted
+  risk_class:
+    - execute
+  effect_class:
+    - process_spawn

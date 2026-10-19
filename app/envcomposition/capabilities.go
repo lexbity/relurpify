@@ -16,6 +16,10 @@ import (
 	"codeburg.org/lexbit/relurpify/context/knowledge/search"
 	platformsearch "codeburg.org/lexbit/relurpify/platform/search"
 	"codeburg.org/lexbit/relurpify/platform/tools/composite"
+	// The composition root owns native tool registration: every runtime
+	// composed through this package must see the full go_native catalog,
+	// not just the implementations the embedding binary happened to import.
+	_ "codeburg.org/lexbit/relurpify/platform/tools/native"
 	"codeburg.org/lexbit/relurpify/platform/tools/subprocess"
 	"codeburg.org/lexbit/relurpify/telemetry"
 	"codeburg.org/lexbit/relurpify/userconfig/config"

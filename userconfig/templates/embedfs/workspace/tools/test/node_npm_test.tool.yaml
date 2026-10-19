@@ -1,0 +1,31 @@
+schema: relurpify/tool/v1
+name: node_npm_test
+version: "1"
+family: test
+intent:
+  - test
+  - node
+description: Runs npm test and returns structured Node.js test results.
+parameters:
+  - name: working_directory
+    type: string
+    description: Directory to run npm test in, relative to workspace root.
+    required: false
+    default: "."
+  - name: extra_args
+    type: array
+    description: Extra npm arguments.
+    required: false
+execution:
+  backend: go_native
+  implementation: node_npm_test
+  sandbox:
+    allowed_root: ${workspace}
+    timeout_seconds: 300
+  supports_workdir: true
+capability:
+  trust_class: builtin_trusted
+  risk_class:
+    - execute
+  effect_class:
+    - process_spawn

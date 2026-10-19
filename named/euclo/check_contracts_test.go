@@ -6,9 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"codeburg.org/lexbit/relurpify/capability/fs"
-	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/capability/registry"
+	"codeburg.org/lexbit/relurpify/capability/toolcapabilities"
 	"codeburg.org/lexbit/relurpify/cognitionzoo/paradigm"
 	"codeburg.org/lexbit/relurpify/named/euclo/relurpicabilities"
 	"codeburg.org/lexbit/relurpify/named/euclo/services"
@@ -29,18 +28,18 @@ func TestShippedRecipesLoadUnderContracts(t *testing.T) {
 	root := filepath.Join("..", "..")
 
 	caps := registry.NewRegistry()
-	// Declared vocabulary: the real file tools (capability/fs is the
-	// implementation the platform native registration wraps) plus the shipped
-	// relurpic capability set, registered the way the runtime does (FR-5).
-	// Registry coherence with the manifests is the composition gate's contract
-	// (app/envcomposition); this corpus gate exercises the loader.
-	for _, tool := range []ports.Tool{
-		&fs.ReadFileTool{BasePath: root},
-		&fs.SearchInFilesTool{BasePath: root},
-		&fs.WriteFileTool{BasePath: root},
-		&fs.EditFileTool{BasePath: root},
-		&fs.ListFilesTool{BasePath: root},
-	} {
+	// Declared vocabulary: the full go_native catalog (capability/fs is the
+	// implementation the platform native registration wraps; shipped recipes
+	// may declare any shipped manifest tool, e.g. the test runner family)
+	// plus the shipped relurpic capability set, registered the way the
+	// runtime does (FR-5). Registry coherence with the manifests is the
+	// composition gate's contract (app/envcomposition); this corpus gate
+	// exercises the loader.
+	catalog, err := toolcapabilities.CatalogForWorkspace(root)
+	if err != nil {
+		t.Fatalf("compose native catalog: %v", err)
+	}
+	for _, tool := range catalog {
 		if err := caps.Register(context.Background(), tool); err != nil {
 			t.Fatalf("register %s: %v", tool.Name(), err)
 		}

@@ -1,10 +1,10 @@
 thoughtrecipe euclo.thoughtrecipe.debug_tdd_repair
-"Debug/repair-family recipe: discover the failing test, repair via a react edit pass, then re-run the tests to verify. Family defaults: writes allowed inside the repair run; verification is mandatory before completion."
+"Debug/repair-family recipe: discover the failing test, repair via a react edit pass, then re-run the tests through the workspace's test runner tools to verify. Family defaults: writes allowed inside the repair run; verification runs through the runner tools before completion."
 
 trigger as capability:
   may read workspace
   may write workspace
-  may invoke ["file_read", "file_list", "grep", "test_run"]
+  may invoke ["file_read", "file_list", "file_search"]
   family ["debug"]
 
 input workspace: "**/*"
@@ -13,8 +13,7 @@ input prompt: user.request
 agent repairer uses react
 
 run repairer:
-  may invoke ["file_read", "file_list", "grep", "test_run", "file_write"]
+  may invoke ["file_read", "file_list", "file_search", "python_pytest", "python_unittest", "go_test", "node_npm_test", "rust_cargo_test", "file_write"]
   from input.workspace
-  goal """Find the failing test, repair the underlying cause, and re-run the test suite to verify. The user request is: {{ index . "task.instruction" }}"""
+  goal """Find the failing test, repair the underlying cause, and re-run the tests with the matching test runner tool to verify. The user request is: {{ index . "task.instruction" }}"""
   capture result -> state.repair
-

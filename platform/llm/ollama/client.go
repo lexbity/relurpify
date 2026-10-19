@@ -114,6 +114,41 @@ func (c *Client) Generate(ctx context.Context, prompt string, options *LLMOption
 	return c.doRequest(ctx, "/api/generate", payload)
 }
 
+// ModelTemplate returns the prompt template Ollama serves for the named
+// model. Diagnostics use it to detect a served template without tool support
+// (no {{ .Tools }} block) while the profile requests native tool calling.
+func (c *Client) ModelTemplate(ctx context.Context, model string) (string, error) {
+	body, err := json.Marshal(map[string]any{"model": model})
+	if err != nil {
+		return "", err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.ollamaAPIEndpoint()+"/api/show", bytes.NewReader(body))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := c.getHTTPClient().Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode >= 300 {
+		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		detail := strings.TrimSpace(string(msg))
+		if detail != "" {
+			return "", fmt.Errorf("ollama error: %s: %s", resp.Status, detail)
+		}
+		return "", fmt.Errorf("ollama error: %s", resp.Status)
+	}
+	var shown struct {
+		Template string `json:"template"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&shown); err != nil {
+		return "", err
+	}
+	return shown.Template, nil
+}
+
 // GenerateStream returns a simple streaming channel.
 func (c *Client) GenerateStream(ctx context.Context, prompt string, options *LLMOptions) (<-chan string, error) {
 	payload := map[string]any{
@@ -377,6 +412,20 @@ func (c *Client) doRequestStream(ctx context.Context, apiPath string, payload ma
 	}
 	var fullText strings.Builder
 	var finalChunk ollamaResponse
+	streamLines := make([]string, 0, 64)
+	toolCalls := make([]ollamaToolCall, 0, 4)
+	seenToolCallIDs := make(map[string]struct{})
+	collectToolCalls := func(calls []ollamaToolCall) {
+		for _, call := range calls {
+			if call.ID != "" {
+				if _, dup := seenToolCallIDs[call.ID]; dup {
+					continue
+				}
+				seenToolCallIDs[call.ID] = struct{}{}
+			}
+			toolCalls = append(toolCalls, call)
+		}
+	}
 	scanner := bufio.NewScanner(resp.Body)
 	scanBuf := make([]byte, 0, 64*1024)
 	scanner.Buffer(scanBuf, 512*1024)
@@ -389,10 +438,13 @@ func (c *Client) doRequestStream(ctx context.Context, apiPath string, payload ma
 		if err := json.Unmarshal(line, &chunk); err != nil {
 			continue
 		}
+		streamLines = append(streamLines, string(line))
 		token := ""
 		if chunk.Message != nil {
 			token = chunk.Message.Content
+			collectToolCalls(chunk.Message.ToolCalls)
 		}
+		collectToolCalls(chunk.ToolCalls)
 		if token != "" {
 			fullText.WriteString(token)
 			if callback != nil {
@@ -404,15 +456,17 @@ func (c *Client) doRequestStream(ctx context.Context, apiPath string, payload ma
 	if err := scanner.Err(); err != nil {
 		return nil, err
 	}
+	// Tool calls arrive mid-stream (the terminal chunk is a usage summary);
+	// they are collected from every chunk above, not read off finalChunk.
+	if len(streamLines) > 0 {
+		c.logResponse(apiPath, []byte(strings.Join(streamLines, "\n")))
+	}
 	result := &LLMResponse{
 		Text:         fullText.String(),
 		FinishReason: finalChunk.DoneReason,
 		Usage:        normalizeUsage(finalChunk, promptTokens, fullText.String()),
 	}
-	if finalChunk.Message != nil {
-		result.ToolCalls = append(result.ToolCalls, c.parseToolCalls(finalChunk.Message.ToolCalls)...)
-	}
-	result.ToolCalls = append(result.ToolCalls, c.parseToolCalls(finalChunk.ToolCalls)...)
+	result.ToolCalls = append(result.ToolCalls, c.parseToolCalls(toolCalls)...)
 	return result, nil
 }
 
@@ -656,14 +710,16 @@ func (c *Client) logPayload(path string, payload []byte) {
 	if !c.Debug {
 		return
 	}
-	c.logf("request %s payload: %s", path, truncate(string(payload), 2048))
+	// Full payloads: native tool-calling turns are undiagnosable from a
+	// truncated tools array, and these lines only emit under Debug.
+	c.logf("request %s payload: %s", path, string(payload))
 }
 
 func (c *Client) logResponse(path string, resp []byte) {
 	if !c.Debug {
 		return
 	}
-	c.logf("response %s payload: %s", path, truncate(string(resp), 2048))
+	c.logf("response %s payload: %s", path, string(resp))
 }
 
 func (c *Client) logf(format string, args ...any) {
@@ -671,11 +727,4 @@ func (c *Client) logf(format string, args ...any) {
 		return
 	}
 	log.Printf("[ollama] "+format, args...)
-}
-
-func truncate(s string, max int) string {
-	if len(s) <= max {
-		return s
-	}
-	return s[:max] + "...(truncated)"
 }

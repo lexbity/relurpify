@@ -1,9 +1,9 @@
 thoughtrecipe euclo.thoughtrecipe.code_review
-"Review-family recipe: gather the diff, run a react review pass, then report through the review-synthesis capability. Family defaults: read-only until the report; HITL not required for reads."
+"Review-family recipe: gather the diff and surrounding context, then run a react review pass that produces findings with severity and suggested actions. Family defaults: read-only; no writes."
 
 trigger as capability:
   may read workspace
-  may invoke ["file_read", "grep"]
+  may invoke ["file_read", "file_search"]
   family ["review"]
 
 input workspace: "**/*"
@@ -12,8 +12,7 @@ input prompt: user.request
 agent reviewer uses react
 
 run reviewer:
-  may invoke ["file_read", "grep", "diff_summary"]
+  may invoke ["file_read", "file_search"]
   from input.workspace
   goal "Review the pending changes and produce findings with severity and suggested actions."
   capture result -> state.findings
-

@@ -192,15 +192,28 @@ func (n *TelemetryNode) Execute(ctx context.Context, env *contextdata.Envelope) 
 			outcome.Reason = "execution failed: " + cause
 		}
 	}
+	// Honest downgrade (P2): a route can complete with zero errors while the
+	// react loop closed without an executed edit or test observation — the
+	// model's assertion of success was the only support. Success without
+	// evidence is unverified, never success.
+	if unverified, ok := contextdata.GetTyped[bool](env, "euclo.outcome.unverified"); ok && unverified && outcome.Category == OutcomeCategorySuccess {
+		outcome.Category = OutcomeCategoryUnverified
+		outcome.Reason = "completed without verification"
+		if reason, ok := contextdata.GetTyped[string](env, "euclo.outcome.unverified_reason"); ok && strings.TrimSpace(reason) != "" {
+			outcome.Reason = reason
+		}
+	}
 	state.SetOutcomeCategory(env, string(outcome.Category))
 	contextdata.SetTyped(env, "euclo.outcome.reason", outcome.Reason)
 	contextdata.SetTyped(env, "euclo.outcome.completed", outcome.Completed)
+	unverified, _ := contextdata.GetTyped[bool](env, "euclo.outcome.unverified")
 	state.SetOutcomeTelemetry(env, map[string]any{
 		"category":    string(outcome.Category),
 		"reason":      outcome.Reason,
 		"completed":   outcome.Completed,
 		"error_count": outcome.ErrorCount,
 		"blocked":     blocked,
+		"unverified":  unverified,
 	})
 
 	if mutation, ok := contextdata.GetTyped[*graphdb.MutationResult](env, "euclo.projection.mutation_result"); ok && mutation != nil {

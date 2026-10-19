@@ -1,0 +1,35 @@
+schema: relurpify/tool/v1
+name: python_pytest
+version: "1"
+family: test
+intent:
+  - test
+  - python
+description: Runs python3 -m pytest and returns structured Python test results (pass/fail counts, first failure).
+parameters:
+  - name: working_directory
+    type: string
+    description: Directory to run pytest in, relative to workspace root.
+    required: false
+    default: "."
+  - name: test_path
+    type: string
+    description: Optional test file or directory to run instead of the whole suite.
+    required: false
+  - name: extra_args
+    type: array
+    description: Extra pytest arguments.
+    required: false
+execution:
+  backend: go_native
+  implementation: python_pytest
+  sandbox:
+    allowed_root: ${workspace}
+    timeout_seconds: 300
+  supports_workdir: true
+capability:
+  trust_class: builtin_trusted
+  risk_class:
+    - execute
+  effect_class:
+    - process_spawn
