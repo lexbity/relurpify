@@ -2,6 +2,8 @@ package thoughtrecipe
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -191,6 +193,36 @@ func BenchmarkErpeCompileNested50_Full(b *testing.B) {
 		_, err := LowerDocument(doc)
 		if err != nil {
 			b.Fatal(err)
+		}
+	}
+}
+
+// BenchmarkErpeLoadWorkspace measures the end-to-end cost of loading a
+// workspace with both synthetic .erpe sources. The temp directory and source
+// files are created once outside the timer; the timed loop calls
+// loader.LoadWorkspace repeatedly, which re-reads both files from disk,
+// parses, typechecks, semantically resolves, lowers, and registers each recipe.
+func BenchmarkErpeLoadWorkspace(b *testing.B) {
+	root := b.TempDir()
+	sourceRoot := filepath.Join(root, ThoughtRecipeSourceRoot)
+	if err := os.MkdirAll(sourceRoot, 0o700); err != nil {
+		b.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(sourceRoot, "flat5.euclo"), []byte(buildFlat5Source()), 0o600); err != nil {
+		b.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(sourceRoot, "nested50.euclo"), []byte(buildNested50Source()), 0o600); err != nil {
+		b.Fatal(err)
+	}
+	loader := NewLoader()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		result, err := loader.LoadWorkspace(root)
+		if err != nil {
+			b.Fatal(err)
+		}
+		if result == nil {
+			b.Fatal("LoadWorkspace returned nil result")
 		}
 	}
 }
