@@ -23,8 +23,8 @@ func buildFlat5Source() string {
 }
 
 // buildNested50Source returns a synthetic .erpe source with 50 leaf execution
-// items nested inside two layers of directive blocks (depth 3: run -> outer ->
-// middle -> leaves). All leaves are DirectiveClause.
+// items nested inside a pipeline stage (depth 3: pipeline -> stage -> run ->
+// leaves). All leaves are GoalClause.
 func buildNested50Source() string {
 	var b strings.Builder
 	b.WriteString("thoughtrecipe bench_nested50\n")
@@ -32,13 +32,167 @@ func buildNested50Source() string {
 	b.WriteString("trigger as capability:\n")
 	b.WriteString("  may read workspace\n\n")
 	b.WriteString("agent default uses react\n\n")
-	b.WriteString("run default:\n")
-	b.WriteString("  outer:\n")
-	b.WriteString("    middle:\n")
+	b.WriteString("pipeline:\n")
+	b.WriteString("  stage nested:\n")
+	b.WriteString("    run default:\n")
 	for i := 1; i <= 50; i++ {
 		fmt.Fprintf(&b, "      goal \"Step %02d.\"\n", i)
 	}
 	return b.String()
+}
+
+// BenchmarkErpeCompileFlat5_Parse measures lexer + parser cost for the flat-5
+// source. The source string is built once outside the timer; the timed loop
+// calls ParseSource repeatedly.
+func BenchmarkErpeCompileFlat5_Parse(b *testing.B) {
+	src := buildFlat5Source()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := ParseSource("flat5.euclo", src)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+// BenchmarkErpeCompileFlat5_Typecheck measures type-validation cost for the
+// flat-5 source. The document is parsed once outside the timer; the timed loop
+// calls NewTypeSystem(doc).Validate() on the same AST.
+func BenchmarkErpeCompileFlat5_Typecheck(b *testing.B) {
+	src := buildFlat5Source()
+	doc, err := ParseSource("flat5.euclo", src)
+	if err != nil {
+		b.Fatal(err)
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if err := NewTypeSystem(doc).Validate(); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+// BenchmarkErpeCompileFlat5_Semantic measures name-resolution + contract-check
+// cost for the flat-5 source. The document is parsed and typechecked once
+// outside the timer; the timed loop calls NewSymbolTable(doc).Resolve() on the
+// same AST.
+func BenchmarkErpeCompileFlat5_Semantic(b *testing.B) {
+	src := buildFlat5Source()
+	doc, err := ParseSource("flat5.euclo", src)
+	if err != nil {
+		b.Fatal(err)
+	}
+	if err := NewTypeSystem(doc).Validate(); err != nil {
+		b.Fatal(err)
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if err := NewSymbolTable(doc).Resolve(); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+// BenchmarkErpeCompileFlat5_Full measures lowering + plan-assembly cost for
+// the flat-5 source. The document is parsed, typechecked, and semantically
+// resolved once outside the timer; the timed loop calls LowerDocument(doc)
+// (the nil-lookup convenience wrapper) on the same AST.
+func BenchmarkErpeCompileFlat5_Full(b *testing.B) {
+	src := buildFlat5Source()
+	doc, err := ParseSource("flat5.euclo", src)
+	if err != nil {
+		b.Fatal(err)
+	}
+	if err := NewTypeSystem(doc).Validate(); err != nil {
+		b.Fatal(err)
+	}
+	if err := NewSymbolTable(doc).Resolve(); err != nil {
+		b.Fatal(err)
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := LowerDocument(doc)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+// BenchmarkErpeCompileNested50_Parse measures lexer + parser cost for the
+// nested-50 source. The source string is built once outside the timer; the
+// timed loop calls ParseSource repeatedly.
+func BenchmarkErpeCompileNested50_Parse(b *testing.B) {
+	src := buildNested50Source()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := ParseSource("nested50.euclo", src)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+// BenchmarkErpeCompileNested50_Typecheck measures type-validation cost for the
+// nested-50 source. The document is parsed once outside the timer; the timed
+// loop calls NewTypeSystem(doc).Validate() on the same AST.
+func BenchmarkErpeCompileNested50_Typecheck(b *testing.B) {
+	src := buildNested50Source()
+	doc, err := ParseSource("nested50.euclo", src)
+	if err != nil {
+		b.Fatal(err)
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if err := NewTypeSystem(doc).Validate(); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+// BenchmarkErpeCompileNested50_Semantic measures name-resolution + contract-check
+// cost for the nested-50 source. The document is parsed and typechecked once
+// outside the timer; the timed loop calls NewSymbolTable(doc).Resolve() on the
+// same AST.
+func BenchmarkErpeCompileNested50_Semantic(b *testing.B) {
+	src := buildNested50Source()
+	doc, err := ParseSource("nested50.euclo", src)
+	if err != nil {
+		b.Fatal(err)
+	}
+	if err := NewTypeSystem(doc).Validate(); err != nil {
+		b.Fatal(err)
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if err := NewSymbolTable(doc).Resolve(); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+// BenchmarkErpeCompileNested50_Full measures lowering + plan-assembly cost for
+// the nested-50 source. The document is parsed, typechecked, and semantically
+// resolved once outside the timer; the timed loop calls LowerDocument(doc)
+// (the nil-lookup convenience wrapper) on the same AST.
+func BenchmarkErpeCompileNested50_Full(b *testing.B) {
+	src := buildNested50Source()
+	doc, err := ParseSource("nested50.euclo", src)
+	if err != nil {
+		b.Fatal(err)
+	}
+	if err := NewTypeSystem(doc).Validate(); err != nil {
+		b.Fatal(err)
+	}
+	if err := NewSymbolTable(doc).Resolve(); err != nil {
+		b.Fatal(err)
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := LowerDocument(doc)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
 }
 
 // TestBuildSourcesParse verifies that both synthetic benchmark sources parse
@@ -92,28 +246,25 @@ func TestBuildSourcesParse(t *testing.T) {
 		if _, ok := doc.Declarations[1].(*AgentDecl); !ok {
 			t.Fatalf("declaration 1 is %T, want *AgentDecl", doc.Declarations[1])
 		}
-		runDecl, ok := doc.Declarations[2].(*RunDecl)
+		pipelineDecl, ok := doc.Declarations[2].(*PipelineDecl)
 		if !ok {
-			t.Fatalf("declaration 2 is %T, want *RunDecl", doc.Declarations[2])
+			t.Fatalf("declaration 2 is %T, want *PipelineDecl", doc.Declarations[2])
 		}
-		if len(runDecl.Items) != 1 {
-			t.Fatalf("run items = %d, want 1", len(runDecl.Items))
+		if len(pipelineDecl.Stages) != 1 {
+			t.Fatalf("pipeline stages = %d, want 1", len(pipelineDecl.Stages))
 		}
-		outer, ok := runDecl.Items[0].(*DirectiveBlock)
+		stage := pipelineDecl.Stages[0]
+		if len(stage.Body) != 1 {
+			t.Fatalf("stage body = %d, want 1", len(stage.Body))
+		}
+		runDecl, ok := stage.Body[0].(*RunDecl)
 		if !ok {
-			t.Fatalf("run item 0 is %T, want *DirectiveBlock", runDecl.Items[0])
+			t.Fatalf("stage body 0 is %T, want *RunDecl", stage.Body[0])
 		}
-		if len(outer.Body) != 1 {
-			t.Fatalf("outer body = %d, want 1", len(outer.Body))
+		if len(runDecl.Items) != 50 {
+			t.Fatalf("run items = %d, want 50", len(runDecl.Items))
 		}
-		middle, ok := outer.Body[0].(*DirectiveBlock)
-		if !ok {
-			t.Fatalf("outer body 0 is %T, want *DirectiveBlock", outer.Body[0])
-		}
-		if len(middle.Body) != 50 {
-			t.Fatalf("middle body = %d, want 50", len(middle.Body))
-		}
-		for i, item := range middle.Body {
+		for i, item := range runDecl.Items {
 			if _, ok := item.(*GoalClause); !ok {
 				t.Fatalf("leaf %d is %T, want *GoalClause", i, item)
 			}
