@@ -12,11 +12,6 @@ import (
 	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
 )
 
-// SkipAvailabilityProbe disables the shell-based availability check. Prepared
-// live runs can enable this to avoid bootstrap-time command authorization
-// probes before the workspace is fully open.
-var SkipAvailabilityProbe bool //nolint:gochecknoglobals // probe toggle enabled by prepared live runs
-
 // GitCommandTool executes predefined git commands.
 type GitCommandTool struct {
 	RepoPath string
@@ -184,19 +179,14 @@ func (t *GitCommandTool) runGit(ctx context.Context, args []string) (*ports.Tool
 	}, nil
 }
 
-func (t *GitCommandTool) IsAvailable(ctx context.Context) bool {
-	if SkipAvailabilityProbe {
-		return true
-	}
-	if t.Runner == nil {
-		return false
-	}
-	res, err := t.Runner.Run(ctx, ports.CommandRequest{
-		Workdir: t.RepoPath,
-		Args:    []string{"git", "rev-parse", "--is-inside-work-tree"},
-		Timeout: 5 * time.Second,
-	})
-	return err == nil && res != nil && res.ExitCode == 0
+// IsAvailable reports whether the tool has a command runner. It is deliberately
+// a cheap check, not a repository probe: availability is consulted at boot
+// (descriptor construction) and at recipe load, where a command would escalate
+// to HITL with no approver and block startup. A git command outside a repository
+// fails at Execute with the git error, which the agent can observe and recover
+// from.
+func (t *GitCommandTool) IsAvailable(context.Context) bool {
+	return t.Runner != nil
 }
 
 func (t *GitCommandTool) Permissions() ports.ToolPermissions {

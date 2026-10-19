@@ -47,13 +47,6 @@ func (r *queueRunner) args() [][]string {
 	return out
 }
 
-func disableProbe(t *testing.T) {
-	t.Helper()
-	prev := SkipAvailabilityProbe
-	SkipAvailabilityProbe = true
-	t.Cleanup(func() { SkipAvailabilityProbe = prev })
-}
-
 func TestGitCommandTool_Metadata(t *testing.T) {
 	tests := []struct {
 		command     string
@@ -71,12 +64,11 @@ func TestGitCommandTool_Metadata(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.command, func(t *testing.T) {
-			disableProbe(t)
 			tool := &GitCommandTool{Command: tc.command}
 			assert.Equal(t, tc.wantName, tool.Name())
 			assert.Equal(t, tc.wantDescr, tool.Description())
 			assert.Equal(t, "git", tool.Category())
-			assert.True(t, tool.IsAvailable(context.Background()), "probe disabled must report available")
+			assert.False(t, tool.IsAvailable(context.Background()), "a tool without a runner is unavailable")
 
 			names := make([]string, 0, len(tool.Parameters()))
 			for _, param := range tool.Parameters() {
@@ -89,35 +81,29 @@ func TestGitCommandTool_Metadata(t *testing.T) {
 	}
 }
 
-func TestGitCommandTool_IsAvailableProbesRepository(t *testing.T) {
-	tests := []struct {
-		name   string
-		runner ports.CommandRunner
-		want   bool
-	}{
-		{name: "nil runner is unavailable", runner: nil, want: false},
-		{name: "runner error is unavailable", runner: &queueRunner{err: errors.New("boom")}, want: false},
-		{name: "non-zero exit is unavailable", runner: &queueRunner{results: []*ports.CommandResult{{ExitCode: 128}}}, want: false},
-		{name: "zero exit is available", runner: &queueRunner{results: []*ports.CommandResult{{ExitCode: 0}}}, want: true},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			tool := &GitCommandTool{Command: "diff", Runner: tc.runner}
-			assert.Equal(t, tc.want, tool.IsAvailable(context.Background()))
-		})
-	}
+// Availability is a cheap runner check, never a repository probe: the probe ran
+// `git rev-parse` through the HITL-gated runner and blocked boot (and recipe
+// load) with no approver. A missing runner is unavailable; a present runner is
+// available, and a bad repository surfaces at Execute.
+func TestGitCommandTool_IsAvailableRequiresRunner(t *testing.T) {
+	assert.False(t, (&GitCommandTool{Command: "diff"}).IsAvailable(context.Background()),
+		"a tool without a runner is unavailable")
+	assert.True(t, (&GitCommandTool{Command: "diff", Runner: &queueRunner{}}).IsAvailable(context.Background()),
+		"a tool with a runner is available without probing")
 }
 
-func TestGitCommandTool_ExecuteFailsWhenRepositoryUnavailable(t *testing.T) {
-	tool := &GitCommandTool{Command: "diff", Runner: &queueRunner{err: errors.New("probe failed")}}
+// A repository git cannot operate in surfaces at Execute as the git error:
+// availability no longer probes, so the failure is observed where the command
+// runs, where the agent can read it and recover.
+func TestGitCommandTool_ExecuteSurfacesGitFailure(t *testing.T) {
+	tool := &GitCommandTool{Command: "diff", Runner: &queueRunner{err: errors.New("not a git repository")}}
 	res, err := tool.Execute(context.Background(), map[string]any{})
 	require.Error(t, err)
 	assert.Nil(t, res)
-	assert.Contains(t, err.Error(), "git repository not detected")
+	assert.Contains(t, err.Error(), "git diff failed")
 }
 
 func TestGitCommandTool_ExecuteDiffReturnsOutput(t *testing.T) {
-	disableProbe(t)
 	runner := &queueRunner{results: []*ports.CommandResult{
 		{Stdout: "diff --git a/a.txt b/a.txt", Stderr: "", ExitCode: 0, StdoutRef: "ref-out", StderrRef: "ref-err"},
 	}}
@@ -164,7 +150,6 @@ func TestGitCommandTool_ExecuteHistoryBuildsLogCommand(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			disableProbe(t)
 			runner := &queueRunner{results: []*ports.CommandResult{okResult("abc123 initial")}}
 			tool := &GitCommandTool{Command: "history", Runner: runner}
 
@@ -178,7 +163,6 @@ func TestGitCommandTool_ExecuteHistoryBuildsLogCommand(t *testing.T) {
 }
 
 func TestGitCommandTool_ExecuteBranchCreatesBranch(t *testing.T) {
-	disableProbe(t)
 	runner := &queueRunner{results: []*ports.CommandResult{okResult("")}}
 	tool := &GitCommandTool{Command: "branch", Runner: runner}
 
@@ -213,7 +197,6 @@ func TestGitCommandTool_ExecuteCommitStagesAndCommits(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			disableProbe(t)
 			runner := &queueRunner{results: []*ports.CommandResult{okResult(""), okResult("main 1234")}}
 			tool := &GitCommandTool{Command: "commit", Runner: runner}
 
@@ -228,7 +211,6 @@ func TestGitCommandTool_ExecuteCommitStagesAndCommits(t *testing.T) {
 }
 
 func TestGitCommandTool_ExecuteCommitRejectsNonArrayFiles(t *testing.T) {
-	disableProbe(t)
 	tool := &GitCommandTool{Command: "commit", Runner: &queueRunner{}}
 
 	res, err := tool.Execute(context.Background(), map[string]any{"message": "m", "files": "a.txt"})
@@ -238,7 +220,6 @@ func TestGitCommandTool_ExecuteCommitRejectsNonArrayFiles(t *testing.T) {
 }
 
 func TestGitCommandTool_ExecuteCommitProceedsAfterNonZeroStagingExit(t *testing.T) {
-	disableProbe(t)
 	// Documents current behavior: a non-zero `git add` exit is reported as a
 	// result envelope, not a Go error, so Execute still attempts the commit.
 	runner := &queueRunner{results: []*ports.CommandResult{
@@ -257,7 +238,6 @@ func TestGitCommandTool_ExecuteCommitProceedsAfterNonZeroStagingExit(t *testing.
 }
 
 func TestGitCommandTool_ExecuteBlameBuildsRangeCommand(t *testing.T) {
-	disableProbe(t)
 	runner := &queueRunner{results: []*ports.CommandResult{okResult("abc (Test 2026-01-01 1) one")}}
 	tool := &GitCommandTool{Command: "blame", Runner: runner}
 
@@ -269,7 +249,6 @@ func TestGitCommandTool_ExecuteBlameBuildsRangeCommand(t *testing.T) {
 }
 
 func TestGitCommandTool_ExecuteUnsupportedCommand(t *testing.T) {
-	disableProbe(t)
 	tool := &GitCommandTool{Command: "push", Runner: &queueRunner{}}
 
 	res, err := tool.Execute(context.Background(), map[string]any{})
@@ -297,7 +276,6 @@ func TestGitCommandTool_ExecuteReportsFailureEnvelope(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			disableProbe(t)
 			runner := &queueRunner{results: []*ports.CommandResult{tc.result}}
 			tool := &GitCommandTool{Command: "diff", Runner: runner}
 
@@ -313,7 +291,6 @@ func TestGitCommandTool_ExecuteReportsFailureEnvelope(t *testing.T) {
 }
 
 func TestGitCommandTool_ExecuteRunnerErrorIsWrapped(t *testing.T) {
-	disableProbe(t)
 	tool := &GitCommandTool{Command: "diff", Runner: &queueRunner{err: errors.New("sandbox denied")}}
 
 	res, err := tool.Execute(context.Background(), map[string]any{})
@@ -324,13 +301,12 @@ func TestGitCommandTool_ExecuteRunnerErrorIsWrapped(t *testing.T) {
 }
 
 func TestGitCommandTool_ExecuteWithoutRunnerFails(t *testing.T) {
-	disableProbe(t)
 	tool := &GitCommandTool{Command: "diff"}
 
 	res, err := tool.Execute(context.Background(), map[string]any{})
 	require.Error(t, err)
 	assert.Nil(t, res)
-	assert.Contains(t, err.Error(), "command runner missing")
+	assert.Contains(t, err.Error(), "git repository not detected")
 }
 
 func TestGitCommandTool_SetCommandRunnerWiresRunner(t *testing.T) {

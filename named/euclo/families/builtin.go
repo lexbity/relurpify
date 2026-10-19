@@ -91,7 +91,7 @@ func RegisterBuiltins(registry *KeywordFamilyRegistry) error {
 		{
 			ID:                  FamilyInvestigation,
 			DisplayName:         "Investigation",
-			Keywords:            []string{"investigate", "explore", "understand", "trace", "analyze"},
+			Keywords:            []string{"investigate", "explore", "understand", "trace", "analyze", "explain", "describe"},
 			IntentKeywords:      []string{"investigate", "explore", "understand", "trace"},
 			DefaultHITLPolicy:   HITLPolicyNever,
 			DefaultVerification: VerificationNotRequired,

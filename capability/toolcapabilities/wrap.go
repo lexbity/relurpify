@@ -100,6 +100,17 @@ func (w *withCapability) SetToolName(name string) {
 	}
 }
 
+// SetCommandRunner forwards the sandbox command runner to the decorated tool.
+// The composition root injects the runner through the tool Build returns (the
+// wrapper), before registration; without this forwarding a runner-backed
+// go_native tool (the shipped test runners) stays unavailable, so a recipe's
+// `may invoke` resolves but the model's tool list never contains it.
+func (w *withCapability) SetCommandRunner(runner ports.CommandRunner) {
+	if aware, ok := w.Tool.(interface{ SetCommandRunner(ports.CommandRunner) }); ok {
+		aware.SetCommandRunner(runner)
+	}
+}
+
 // Ensure the wrapped tool is available when wrapped.
 func (w *withCapability) IsAvailable(ctx context.Context) bool {
 	return w.Tool.IsAvailable(ctx)

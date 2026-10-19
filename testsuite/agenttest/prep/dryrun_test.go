@@ -50,9 +50,13 @@ func TestDryRunCanonicalRecipeTable(t *testing.T) {
 		// request's vocabulary ("security"/"auth") outranks its review-family
 		// sibling code_review.
 		{name: "security_review", instruction: "review the auth module for security vulnerabilities", wantRoute: "euclo.thoughtrecipe.security_review", wantModel: true},
-		// No family-classifiable token: no recipe scores family affinity, so
-		// route resolution falls back to the built-in default execution recipe.
-		{name: "default_fallback", instruction: "explain summary.md", wantRoute: "euclo.thoughtrecipe.default", wantModel: true},
+		// "explain" classifies into the investigation family (a family
+		// keyword), so the investigation-family explain recipe wins.
+		{name: "explain", instruction: "explain what stringkit.py does", wantRoute: "euclo.thoughtrecipe.explain", wantModel: true},
+		// No family-classifiable token: tier-1 injects the implementation
+		// baseline, and the default recipe (an implementation-family member)
+		// wins the deterministic tie-break.
+		{name: "default_fallback", instruction: "summarize the frobnicator in frobnicator.go", wantRoute: "euclo.thoughtrecipe.default", wantModel: true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

@@ -139,8 +139,13 @@ func TestConstructors_ExecuteFailsOutsideRepository(t *testing.T) {
 	}
 	plainDir := t.TempDir()
 	diff := toolWithRunner(t, "git_diff", plainDir)
-	require.False(t, diff.IsAvailable(context.Background()), "non-repo dir must not be available")
+	// Availability is a cheap runner check (never a repository probe, which
+	// would run a HITL-gated command at boot). The repository failure is
+	// observed at Execute, where git reports it as a failed command.
+	require.True(t, diff.IsAvailable(context.Background()), "a runner-backed git tool reports available")
 
-	_, err := diff.Execute(context.Background(), map[string]any{})
-	require.Error(t, err, "execute outside a git repository must fail")
+	res, err := diff.Execute(context.Background(), map[string]any{})
+	require.NoError(t, err)
+	require.NotNil(t, res)
+	require.False(t, res.Success, "execute outside a git repository must fail")
 }
