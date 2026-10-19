@@ -9,7 +9,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"codeburg.org/lexbit/relurpify/context/knowledge"
-	"codeburg.org/lexbit/relurpify/context/knowledge/graphdb"
 	"codeburg.org/lexbit/relurpify/context/knowledge/retrieval"
 	telemetry "codeburg.org/lexbit/relurpify/telemetry"
 )
@@ -188,20 +187,5 @@ func BenchmarkCompileHot(b *testing.B) {
 }
 
 func newBenchStore(b *testing.B) *knowledge.ChunkStore {
-	b.Helper()
-	engine, err := graphdb.Open(context.Background(), graphdb.DefaultOptions(b.TempDir()))
-	if err != nil {
-		b.Fatal(err)
-	}
-	b.Cleanup(func() { _ = engine.Close(context.Background()) })
-	store := &knowledge.ChunkStore{Graph: engine}
-	content := strings.Repeat("x", 200)
-	if _, err := store.Save(context.Background(), knowledge.KnowledgeChunk{
-		ID:         "chunk:bench",
-		TrustClass: "builtin.trusted",
-		Body:       knowledge.ChunkBody{Raw: content, Fields: map[string]any{"content": content}},
-	}); err != nil {
-		b.Fatal(err)
-	}
-	return store
+	return newBenchStoreWithCorpus(b, 1, 200)
 }
