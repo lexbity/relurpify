@@ -12,7 +12,7 @@ import (
 	thoughtrecipepkg "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
 )
 
-func pinTestRegistry(t *testing.T) *thoughtrecipepkg.ThoughtRecipeRegistry {
+func pinTestRegistry(t *testing.T) *thoughtrecipepkg.Registry {
 	t.Helper()
 	reg := thoughtrecipepkg.NewThoughtRecipeRegistry()
 	if err := reg.Register(&surface.ThoughtRecipe{
@@ -31,7 +31,7 @@ func pinTestRegistry(t *testing.T) *thoughtrecipepkg.ThoughtRecipeRegistry {
 	return reg
 }
 
-func pinTestDeps(reg *thoughtrecipepkg.ThoughtRecipeRegistry, posture string, m *tier2TestModel) SelectionDeps {
+func pinTestDeps(reg *thoughtrecipepkg.Registry, posture string, m *tier2TestModel) SelectionDeps {
 	return SelectionDeps{
 		ThoughtRecipes:   reg,
 		Tier2Model:       m,

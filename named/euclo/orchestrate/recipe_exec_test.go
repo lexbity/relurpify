@@ -37,7 +37,7 @@ func ctxWithTrigger(ctx context.Context) context.Context {
 	return contextstream.WithTrigger(ctx, contextstream.NewTrigger(noopCompiler{}))
 }
 
-func mustRegisterCompiledThoughtRecipe(t *testing.T, registry *thoughtrecipepkg.ThoughtRecipeRegistry, thoughtrecipe *surface.ThoughtRecipe) {
+func mustRegisterCompiledThoughtRecipe(t *testing.T, registry *thoughtrecipepkg.Registry, thoughtrecipe *surface.ThoughtRecipe) {
 	t.Helper()
 	if thoughtrecipe == nil {
 		t.Fatal("thoughtrecipe is nil")
@@ -406,7 +406,7 @@ func (h *recordingCapabilityHandler) Invoke(ctx context.Context, env ports.State
 	}, nil
 }
 
-func compileThoughtRecipeFromSource(t *testing.T, source string, toolReg *regpkg.CapabilityRegistry, capReg thoughtrecipepkg.ToolVocabularyLookup) (*thoughtrecipepkg.ThoughtRecipeRegistry, *thoughtrecipepkg.ExecutionPlan) {
+func compileThoughtRecipeFromSource(t *testing.T, source string, toolReg *regpkg.CapabilityRegistry, capReg thoughtrecipepkg.ToolVocabularyLookup) (*thoughtrecipepkg.Registry, *thoughtrecipepkg.ExecutionPlan) {
 	t.Helper()
 	doc, err := thoughtrecipepkg.ParseSource("scope_demo.euclo", source)
 	if err != nil {

@@ -75,11 +75,11 @@ func stepPolicyAction(step ExecutionStep) policyActionKind {
 		return policyAbort
 	}
 	switch strings.ToLower(strings.TrimSpace(step.OnError.Action)) {
-	case "continue", "skip":
+	case string(policyContinue), "skip":
 		return policyContinue
 	case "fallback":
 		return policyFallback
-	case "ask":
+	case KeyAsk:
 		return policyAsk
 	default:
 		return policyAbort
@@ -140,8 +140,8 @@ func (c *stepCore) classifyAndRecord(ctx context.Context, env *contextdata.Envel
 	c.emitOperationalFailure(ctx, env, kind, action, actionTaken, askOutcome, err.Error())
 
 	data := map[string]any{
-		"failure_kind":    string(kind),
-		"on_error_action": string(action),
+		"failure_kind":   string(kind),
+		KeyOnErrorAction: string(action),
 	}
 	if askOutcome != "" {
 		data["ask_outcome"] = askOutcome
@@ -207,12 +207,12 @@ func (c *stepCore) resolveAskPolicy(ctx context.Context, env *contextdata.Envelo
 	case resolveErr != nil,
 		resolution.Status == interaction.ResolutionDenied,
 		resolution.Status == interaction.ResolutionExpired,
-		resolution.Answer != "continue" && resolution.Answer != "retry":
-		return policyAbort, "abort"
-	case resolution.Answer == "continue":
-		return policyContinue, "continue"
+		resolution.Answer != string(policyContinue) && resolution.Answer != string(policyRetry):
+		return policyAbort, string(policyAbort)
+	case resolution.Answer == string(policyContinue):
+		return policyContinue, string(policyContinue)
 	default:
-		return policyRetry, "retry"
+		return policyRetry, string(policyRetry)
 	}
 }
 
@@ -240,7 +240,7 @@ func (c *stepCore) emitOperationalFailure(ctx context.Context, env *contextdata.
 		return
 	}
 	metadata := map[string]any{
-		"step_id":      c.step.ID,
+		KeyStepID:      c.step.ID,
 		"paradigm":     c.step.Paradigm,
 		"kind":         string(kind),
 		"on_error":     string(action),
@@ -294,7 +294,7 @@ func (c *stepCore) markFallbackActivated(ctx context.Context, env *contextdata.E
 		Message:   "authored fallback activated",
 		Timestamp: time.Now().UTC(),
 		Metadata: map[string]any{
-			"step_id":      c.step.ID,
+			KeyStepID:      c.step.ID,
 			"fallback_for": c.step.FallbackFor,
 			"paradigm":     c.step.Paradigm,
 		},

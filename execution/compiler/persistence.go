@@ -21,16 +21,16 @@ type Repository interface {
 	InvalidateCacheEntries(ctx context.Context, chunkIDs []string) error
 
 	// Compiler artifact operations
-	StoreCompilerArtifact(ctx context.Context, artifact CompilerArtifact) error
-	GetCompilerArtifact(ctx context.Context, artifactID string) (*CompilerArtifact, error)
-	ListCompilerArtifacts(ctx context.Context, requestID string) ([]CompilerArtifact, error)
+	StoreCompilerArtifact(ctx context.Context, artifact Artifact) error
+	GetCompilerArtifact(ctx context.Context, artifactID string) (*Artifact, error)
+	ListCompilerArtifacts(ctx context.Context, requestID string) ([]Artifact, error)
 
 	// Close
 	Close() error
 }
 
-// CompilerArtifact represents a compiler-produced artifact (e.g., candidate records, replay metadata).
-type CompilerArtifact struct {
+// Artifact represents a compiler-produced artifact (e.g., candidate records, replay metadata).
+type Artifact struct {
 	ArtifactID   string
 	RequestID    string
 	ArtifactKind string

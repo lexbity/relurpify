@@ -832,7 +832,7 @@ func compilationDigest(record *CompilationRecord) string {
 }
 
 // trySummarySubstitution attempts to substitute chunks with their summaries to meet budget.
-func (c *Compiler) trySummarySubstitution(ctx context.Context, chunks []retrieval.RankedChunk, maxTokens int) ([]retrieval.RankedChunk, []SummarySubstitution) {
+func (c *Compiler) trySummarySubstitution(ctx context.Context, chunks []retrieval.RankedChunk, _ int) ([]retrieval.RankedChunk, []SummarySubstitution) {
 	substitutions := make([]SummarySubstitution, 0)
 	if c.policy == nil || c.chunkStore == nil {
 		return chunks, substitutions
@@ -864,7 +864,7 @@ func (c *Compiler) trySummarySubstitution(ctx context.Context, chunks []retrieva
 		if c.chunkStore != nil && chunk.CoverageHash != "" {
 			if chunksByHash, err := c.chunkStore.FindByCoverageHash(chunk.CoverageHash); err == nil {
 				for i := range chunksByHash {
-					if chunksByHash[i].CoverageHash == chunk.CoverageHash && chunksByHash[i].SourceOrigin == "summary_derivation" {
+					if chunksByHash[i].CoverageHash == chunk.CoverageHash && chunksByHash[i].SourceOrigin == summaryDerivationSourceOrigin {
 						summaryChunk = &chunksByHash[i]
 						break
 					}
@@ -963,7 +963,7 @@ func (c *Compiler) generateAndPersistSummary(ctx context.Context, chunks []knowl
 	summaryChunk := knowledge.KnowledgeChunk{
 		ID:                   knowledge.ChunkID(c.newID()),
 		CoverageHash:         result.CoverageHash,
-		SourceOrigin:         "summary_derivation",
+		SourceOrigin:         summaryDerivationSourceOrigin,
 		DerivedFrom:          sourceIDs,
 		DerivationGeneration: maxGen + 1,
 		Body: knowledge.ChunkBody{
@@ -978,7 +978,7 @@ func (c *Compiler) generateAndPersistSummary(ctx context.Context, chunks []knowl
 		Content:      []byte(result.Summary),
 		Kind:         knowledge.ChunkKindDerivation,
 		ContentType:  "summary",
-		SourceOrigin: "summary_derivation",
+		SourceOrigin: summaryDerivationSourceOrigin,
 		DerivedFrom:  sourceIDs,
 	})
 	if err != nil {

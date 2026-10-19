@@ -26,7 +26,7 @@ type SelectionDeps struct {
 	Capabilities *registry.CapabilityRegistry
 	// ThoughtRecipes is the recipe registry whose entries form the recipe side
 	// of the candidate pool.
-	ThoughtRecipes *thoughtrecipepkg.ThoughtRecipeRegistry
+	ThoughtRecipes *thoughtrecipepkg.Registry
 	// Families is the keyword-family registry whose vocabulary feeds the
 	// family-affinity and intent-keyword score components (D9).
 	Families *families.KeywordFamilyRegistry
@@ -256,7 +256,7 @@ func resolveRoute(env *contextdata.Envelope, req RouteRequest, deps SelectionDep
 // a thoughtrecipe route — explicit, clarification, metadata, and default
 // fallback — must pass through it: an unregistered recipe is never offered,
 // so selection can no longer succeed on a route that execution cannot run.
-func availableRecipeCandidate(reg *thoughtrecipepkg.ThoughtRecipeRegistry, id string, kind string, score int, reasons []string) (CandidateRouteInfo, bool) {
+func availableRecipeCandidate(reg *thoughtrecipepkg.Registry, id string, kind string, score int, reasons []string) (CandidateRouteInfo, bool) {
 	if reg == nil {
 		return CandidateRouteInfo{}, false
 	}
@@ -278,7 +278,7 @@ func availableRecipeCandidate(reg *thoughtrecipepkg.ThoughtRecipeRegistry, id st
 
 // defaultExecutionRecipeCandidate offers the built-in default execution
 // thoughtrecipe when it is registered and no workspace recipe matched.
-func defaultExecutionRecipeCandidate(reg *thoughtrecipepkg.ThoughtRecipeRegistry) (CandidateRouteInfo, bool) {
+func defaultExecutionRecipeCandidate(reg *thoughtrecipepkg.Registry) (CandidateRouteInfo, bool) {
 	id := defaultThoughtRecipeID
 	candidate, ok := availableRecipeCandidate(reg, id,
 		euclotypes.RouteKindForThoughtRecipeID(id), 0,
@@ -372,7 +372,7 @@ func markExplicit(candidate CandidateRouteInfo) *CandidateRouteInfo {
 	return &candidate
 }
 
-func clarificationRouteCandidate(env *contextdata.Envelope, req RouteRequest, thoughtrecipes *thoughtrecipepkg.ThoughtRecipeRegistry) *CandidateRouteInfo {
+func clarificationRouteCandidate(env *contextdata.Envelope, req RouteRequest, thoughtrecipes *thoughtrecipepkg.Registry) *CandidateRouteInfo {
 	needsClarify := needsClarificationRoute(env)
 	hasDirectGrounding := strings.TrimSpace(req.Instruction) != "" || strings.TrimSpace(req.FamilyID) != "" || strings.TrimSpace(req.SkillFilter) != ""
 	if !needsClarify && !hasDirectGrounding && strings.TrimSpace(req.ThoughtRecipeID) != clarificationThoughtRecipeID {
@@ -392,7 +392,7 @@ func clarificationRouteCandidate(env *contextdata.Envelope, req RouteRequest, th
 	return &candidate
 }
 
-func metadataThoughtRecipeCandidates(thoughtrecipes *thoughtrecipepkg.ThoughtRecipeRegistry, ctx selectionContext) []CandidateRouteInfo {
+func metadataThoughtRecipeCandidates(thoughtrecipes *thoughtrecipepkg.Registry, ctx selectionContext) []CandidateRouteInfo {
 	if thoughtrecipes == nil {
 		return nil
 	}
@@ -1074,7 +1074,7 @@ func candidateRouteID(candidate CandidateRouteInfo) string {
 	return strings.TrimSpace(string(candidate.RouteID))
 }
 
-func routeIDForThoughtRecipeEntry(entry thoughtrecipepkg.ThoughtRecipeEntry) string {
+func routeIDForThoughtRecipeEntry(entry thoughtrecipepkg.Entry) string {
 	if entry.ThoughtRecipe == nil {
 		return strings.TrimSpace(entry.Name)
 	}
@@ -1171,7 +1171,7 @@ type candidateScore struct {
 	matchedKeywords []string
 }
 
-func scoreThoughtRecipeCandidate(entry thoughtrecipepkg.ThoughtRecipeEntry, ctx selectionContext) candidateScore {
+func scoreThoughtRecipeCandidate(entry thoughtrecipepkg.Entry, ctx selectionContext) candidateScore {
 	score := candidateScore{components: make(map[string]int), reasons: make([]string, 0, 6)}
 	if entry.ThoughtRecipe == nil {
 		return score

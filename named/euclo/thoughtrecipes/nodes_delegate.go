@@ -78,11 +78,11 @@ func (n *DelegateNode) Execute(ctx context.Context, env *contextdata.Envelope) (
 			// D12: the surface answered "retry" on the error-decision frame.
 			// Re-run the delegated sub-agent exactly once; a second failure
 			// aborts without re-asking.
-			if retryResult, retryErr := agent.Execute(ctx, task, childEnv); retryErr == nil {
+			retryResult, retryErr := agent.Execute(ctx, task, childEnv)
+			if retryErr == nil {
 				return n.completeDelegateStep(ctx, env, childEnv, retryResult)
-			} else {
-				failureResult = n.recordExhaustedRetry(ctx, env, retryErr)
 			}
+			failureResult = n.recordExhaustedRetry(ctx, env, retryErr)
 		}
 		if _, capErr := n.completeDelegateStep(ctx, env, childEnv, result); capErr != nil {
 			stepResult = result

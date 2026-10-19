@@ -56,13 +56,13 @@ func emitStepCompleted(ctx context.Context, env *contextdata.Envelope, step Exec
 
 func (c *stepCore) stepMetadata() map[string]any {
 	metadata := map[string]any{
-		"execution_step_id":   c.step.ID,
-		"execution_step_type": c.step.Kind.String(),
-		"execution_paradigm":  c.step.Paradigm,
-		"execution_goal":      c.step.Goal,
-		"execution_question":  c.step.Question,
-		"execution_mutation":  c.step.Mutation,
-		"execution_hitl":      c.step.HITL,
+		KeyExecutionStepID:   c.step.ID,
+		KeyExecutionStepType: c.step.Kind.String(),
+		"execution_paradigm": c.step.Paradigm,
+		"execution_goal":     c.step.Goal,
+		"execution_question": c.step.Question,
+		"execution_mutation": c.step.Mutation,
+		"execution_hitl":     c.step.HITL,
 	}
 	if len(c.step.Sources) > 0 {
 		metadata["execution_sources"] = append([]string(nil), c.step.Sources...)

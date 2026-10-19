@@ -32,7 +32,7 @@
 //  1. reporting events (live stream — recipe.selected, step.started,
 //     step.completed, branch.resolved, parallel.fanout, verify.*)
 //  2. interaction frames (durable user-facing clarifications / HITL)
-//  3. RecipeProjection (reconstructed from the ThoughtRecipeRegistry on
+//  3. RecipeProjection (reconstructed from the Registry on
 //     session resume, never serialized in full — see DEC-6).
 //
 // See devdocs/plans/relurpish-rework-spec.md for the full engineering spec.

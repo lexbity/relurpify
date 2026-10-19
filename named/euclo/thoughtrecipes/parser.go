@@ -21,7 +21,7 @@ func NewParser(filename string, tokens []Token) *Parser {
 }
 
 // ParseSource tokenizes and parses a Euclo source file.
-func ParseSource(filename, src string) (*ThoughtRecipeDocument, error) {
+func ParseSource(filename, src string) (*Document, error) {
 	tokens, err := NewLexer(filename, src).LexAll()
 	if err != nil {
 		return nil, err
@@ -30,13 +30,13 @@ func ParseSource(filename, src string) (*ThoughtRecipeDocument, error) {
 }
 
 // ParseDocument parses a full Euclo thoughtrecipe document.
-func (p *Parser) ParseDocument() (*ThoughtRecipeDocument, error) {
+func (p *Parser) ParseDocument() (*Document, error) {
 	header, err := p.parseHeader()
 	if err != nil {
 		return nil, err
 	}
 
-	doc := &ThoughtRecipeDocument{
+	doc := &Document{
 		SourcePath: p.filename,
 		Name:       header.Name.Value,
 		Header:     header,
@@ -56,17 +56,17 @@ func (p *Parser) ParseDocument() (*ThoughtRecipeDocument, error) {
 	return doc, nil
 }
 
-func (p *Parser) parseHeader() (ThoughtRecipeHeader, error) {
+func (p *Parser) parseHeader() (Header, error) {
 	thoughtrecipeTok, err := p.expectKeyword("thoughtrecipe")
 	if err != nil {
-		return ThoughtRecipeHeader{}, err
+		return Header{}, err
 	}
 	nameTok, nameValue, err := p.parseDottedDefinitionName("thoughtrecipe name")
 	if err != nil {
-		return ThoughtRecipeHeader{}, err
+		return Header{}, err
 	}
 
-	header := ThoughtRecipeHeader{
+	header := Header{
 		positioned: positioned{Span: spanFromTokens(thoughtrecipeTok, nameTok)},
 		Name:       Identifier{positioned: positioned{Span: spanFromTokens(thoughtrecipeTok, nameTok)}, Value: nameValue},
 	}
@@ -88,23 +88,23 @@ func (p *Parser) parseTopLevelDeclaration() (Declaration, error) {
 	switch p.peek().Lexeme {
 	case "import":
 		return p.parseImportDecl()
-	case "trigger":
+	case KeyTrigger:
 		return p.parseTriggerDecl()
-	case "input":
+	case KeyInput:
 		return p.parseInputDecl()
-	case "type":
+	case ValType:
 		return p.parseTypeDecl()
-	case "agent":
+	case KeyAgent:
 		return p.parseAgentDecl()
-	case "run":
+	case KeyRun:
 		return p.parseRunDecl()
-	case "route":
+	case KeyRoute:
 		return p.parseRouteDecl()
-	case "delegate":
+	case KeyDelegate:
 		return p.parseDelegateDecl()
-	case "ask":
+	case KeyAsk:
 		return p.parseAskDecl()
-	case "pipeline":
+	case KeyPipeline:
 		return p.parsePipelineDecl()
 	default:
 		return nil, p.unexpectedToken(p.peek(), "unknown top-level declaration")
@@ -113,7 +113,7 @@ func (p *Parser) parseTopLevelDeclaration() (Declaration, error) {
 
 func (p *Parser) parseImportDecl() (*ImportDecl, error) {
 	start := p.next()
-	kindTok, err := p.expectKeyword("prompt")
+	kindTok, err := p.expectKeyword(KeyImportKindPrompt)
 	if err != nil {
 		if _, recipeErr := p.expectKeyword("recipe"); recipeErr != nil {
 			return nil, p.unexpectedToken(p.peek(), "expected prompt or recipe import kind")
@@ -168,8 +168,8 @@ func (p *Parser) parseTriggerDecl() (*TriggerDecl, error) {
 
 	for !p.atEOF() && p.peek().Kind != TokenDedent {
 		switch p.peek().Lexeme {
-		case "may":
-			mayTok, err := p.expectKeyword("may")
+		case KeyMay:
+			mayTok, err := p.expectKeyword(KeyMay)
 			if err != nil {
 				return nil, err
 			}
@@ -391,7 +391,7 @@ func (p *Parser) parseRouteDecl() (*RouteDecl, error) {
 func (p *Parser) parseRouteBranch() (RouteBranch, error) {
 	start := p.peek()
 	branch := RouteBranch{}
-	if p.peekLexeme("when") {
+	if p.peekLexeme(KeyWhen) {
 		p.next()
 		pred, err := p.parsePredicateExpr()
 		if err != nil {
@@ -435,7 +435,7 @@ func (p *Parser) parseRouteBranch() (RouteBranch, error) {
 
 func (p *Parser) parseAskDecl() (*AskDecl, error) {
 	start := p.next()
-	if _, err := p.expectKeyword("user"); err != nil {
+	if _, err := p.expectKeyword(KeyUser); err != nil {
 		return nil, err
 	}
 	if _, err := p.expectPunctuation(":"); err != nil {
@@ -541,7 +541,7 @@ func (p *Parser) parseExecutionBlockItems() ([]ExecutionItem, Token, error) {
 }
 
 func (p *Parser) parseRunExecutionItem() (ExecutionItem, error) {
-	if p.peekLexeme("may") {
+	if p.peekLexeme(KeyMay) {
 		mayTok := p.peek()
 		p.next()
 		if !p.peekLexeme("invoke") {
@@ -554,27 +554,27 @@ func (p *Parser) parseRunExecutionItem() (ExecutionItem, error) {
 
 func (p *Parser) parseExecutionItem() (ExecutionItem, error) {
 	switch p.peek().Lexeme {
-	case "run":
+	case KeyRun:
 		return p.parseRunDecl()
-	case "delegate":
+	case KeyDelegate:
 		return p.parseDelegateDecl()
-	case "route":
+	case KeyRoute:
 		return p.parseRouteDecl()
-	case "ask":
+	case KeyAsk:
 		return p.parseAskDecl()
-	case "pipeline":
+	case KeyPipeline:
 		return p.parsePipelineDecl()
-	case "from":
+	case KeyFrom:
 		return p.parseFromClause()
-	case "goal":
+	case KeyGoal:
 		return p.parseGoalClause()
 	case "stream":
 		return p.parseStreamClause()
 	case "do":
 		return p.parseCapabilityInvocation()
-	case "capture":
+	case KeyCapture:
 		return p.parseCaptureBlock()
-	case "step", "task", "method", "link", "source", "detect", "clarify", "revise", "retry", "plan", "verify", "summarize", "review", "decompose", "solve", "until":
+	case "step", KeyTask, "method", KeyLink, "source", "detect", "clarify", KeyRevise, "retry", "plan", "verify", "summarize", "review", "decompose", "solve", "until":
 		return p.parseDirectiveItem()
 	default:
 		if p.peek().Kind == TokenKeyword || p.peek().Kind == TokenIdentifier {
@@ -648,7 +648,7 @@ func (p *Parser) parseStreamClause() (*StreamClause, error) {
 func (p *Parser) parseGoalClause() (*GoalClause, error) {
 	start := p.next()
 	switch p.peek().Lexeme {
-	case "prompt":
+	case KeyImportKindPrompt:
 		ref, err := p.parsePromptRef()
 		if err != nil {
 			return nil, err
@@ -759,7 +759,7 @@ func (p *Parser) parseCaptureBinding() (CaptureBinding, error) {
 		if err != nil {
 			return CaptureBinding{}, err
 		}
-		if epistemicTok.Lexeme != "claimed" && epistemicTok.Lexeme != "given" {
+		if epistemicTok.Lexeme != KeyClaimed && epistemicTok.Lexeme != KeyGiven {
 			return CaptureBinding{}, p.unexpectedToken(epistemicTok, "expected epistemic annotation (claimed|given)")
 		}
 		binding.Epistemics = &EpistemicExpr{
@@ -792,14 +792,14 @@ func (p *Parser) parseDirectiveItem() (ExecutionItem, error) {
 	var args []ValueExpr
 	var pred *PredicateExpr
 
-	if nameTok.Lexeme == "may" {
+	if nameTok.Lexeme == KeyMay {
 		if p.peekLexeme("invoke") {
 			return nil, p.unexpectedToken(p.peek(), "may invoke is only allowed in trigger and run blocks")
 		}
 		return nil, p.unexpectedToken(nameTok, "may policy lines are only allowed in trigger blocks")
 	}
 
-	if nameTok.Lexeme == "when" {
+	if nameTok.Lexeme == KeyWhen {
 		pexpr, err := p.parsePredicateExpr()
 		if err != nil {
 			return nil, err
@@ -820,7 +820,7 @@ func (p *Parser) parseDirectiveItem() (ExecutionItem, error) {
 		}, nil
 	}
 
-	if p.peekLexeme("when") {
+	if p.peekLexeme(KeyWhen) {
 		rawTokens = append(rawTokens, p.next())
 		pexpr, err := p.parsePredicateExpr()
 		if err != nil {
@@ -875,10 +875,10 @@ func (p *Parser) parseDirectiveItem() (ExecutionItem, error) {
 
 func (p *Parser) parseAskItem() (AskItem, error) {
 	switch p.peek().Lexeme {
-	case "question":
+	case KeyQuestion:
 		start := p.next()
 		switch p.peek().Lexeme {
-		case "prompt":
+		case KeyImportKindPrompt:
 			ref, err := p.parsePromptRef()
 			if err != nil {
 				return nil, err
@@ -893,7 +893,7 @@ func (p *Parser) parseAskItem() (AskItem, error) {
 		}
 	case "choices":
 		start := p.next()
-		if p.peekLexeme("from") {
+		if p.peekLexeme(KeyFrom) {
 			p.next()
 			source, err := p.parseValueExpr()
 			if err != nil {
@@ -924,7 +924,7 @@ func (p *Parser) parseAskItem() (AskItem, error) {
 			return &ChoicesListClause{positioned: positioned{Span: spanFromTokens(start, endTok)}, Raw: list.Raw, Items: list.Entries}, nil
 		}
 		return nil, p.unexpectedToken(p.peek(), "expected choices source or list")
-	case "capture":
+	case KeyCapture:
 		capture, err := p.parseCaptureBlock()
 		if err != nil {
 			return nil, err
@@ -937,7 +937,7 @@ func (p *Parser) parseAskItem() (AskItem, error) {
 
 func (p *Parser) parsePromptRef() (*PromptRef, error) {
 	start := p.peek()
-	if _, err := p.expectKeyword("prompt"); err != nil {
+	if _, err := p.expectKeyword(KeyImportKindPrompt); err != nil {
 		return nil, err
 	}
 	nameTok, err := p.expectName("prompt binding")
@@ -954,7 +954,7 @@ func (p *Parser) parsePredicateExpr() (PredicateExpr, error) {
 	start := p.peek()
 	rawTokens := []Token{}
 	switch p.peek().Lexeme {
-	case "missing":
+	case KeyMissing:
 		p.next()
 		subject, err := p.parsePathExpr()
 		if err != nil {
@@ -964,10 +964,10 @@ func (p *Parser) parsePredicateExpr() (PredicateExpr, error) {
 		return PredicateExpr{
 			positioned: positioned{Span: spanFromTokens(start, endToken(subject))},
 			Raw:        collectRaw(rawTokens),
-			Kind:       "missing",
+			Kind:       KeyMissing,
 			Subject:    subject,
 		}, nil
-	case "present":
+	case KeyPresent:
 		p.next()
 		subject, err := p.parsePathExpr()
 		if err != nil {
@@ -977,7 +977,7 @@ func (p *Parser) parsePredicateExpr() (PredicateExpr, error) {
 		return PredicateExpr{
 			positioned: positioned{Span: spanFromTokens(start, endToken(subject))},
 			Raw:        collectRaw(rawTokens),
-			Kind:       "present",
+			Kind:       KeyPresent,
 			Subject:    subject,
 		}, nil
 	default:
@@ -1004,13 +1004,13 @@ func (p *Parser) parsePredicateExpr() (PredicateExpr, error) {
 			if err != nil {
 				return PredicateExpr{}, err
 			}
-			pred.Kind = "confidence_below"
+			pred.Kind = KeyConfidenceBelow
 			pred.Value = &NumberLiteral{positioned: positioned{Span: spanFromToken(num)}, Raw: num.Lexeme, Value: num.Lexeme}
 			pred.Span = spanFromTokens(start, num)
 			rawTokens = append(rawTokens, num)
 			pred.Raw = collectRaw(rawTokens)
 			return pred, nil
-		case "is", "contains":
+		case "is", KeyContains:
 			val, err := p.parseValueExpr()
 			if err != nil {
 				return PredicateExpr{}, err

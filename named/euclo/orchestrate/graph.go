@@ -34,7 +34,7 @@ import (
 type RootGraphDeps struct {
 	Workspace            string
 	DispatchCapabilities *registry.CapabilityRegistry
-	ThoughtRecipes       *thoughtrecipepkg.ThoughtRecipeRegistry
+	ThoughtRecipes       *thoughtrecipepkg.Registry
 	Families             *families.KeywordFamilyRegistry
 	Paradigm             *paradigm.Deps
 	StreamTrigger        *contextstream.Trigger
@@ -172,7 +172,7 @@ func (e *errMissingDeps) Error() string {
 
 type buildNodeInput struct {
 	capReg               *registry.CapabilityRegistry
-	thoughtReg           *thoughtrecipepkg.ThoughtRecipeRegistry
+	thoughtReg           *thoughtrecipepkg.Registry
 	paradigmDeps         *paradigm.Deps
 	famReg               *families.KeywordFamilyRegistry
 	maxTokens            int
@@ -503,7 +503,7 @@ func wireEdges(g *agentgraph.Graph) error {
 // fs vocabulary.
 const defaultThoughtRecipeID = "euclo.thoughtrecipe.default"
 
-func ensureDefaultThoughtRecipe(reg *thoughtrecipepkg.ThoughtRecipeRegistry) error {
+func ensureDefaultThoughtRecipe(reg *thoughtrecipepkg.Registry) error {
 	if reg == nil {
 		return nil
 	}
@@ -560,7 +560,7 @@ func ensureDefaultThoughtRecipe(reg *thoughtrecipepkg.ThoughtRecipeRegistry) err
 	return nil
 }
 
-func ensureClarificationThoughtRecipe(reg *thoughtrecipepkg.ThoughtRecipeRegistry) error {
+func ensureClarificationThoughtRecipe(reg *thoughtrecipepkg.Registry) error {
 	if reg == nil {
 		return nil
 	}

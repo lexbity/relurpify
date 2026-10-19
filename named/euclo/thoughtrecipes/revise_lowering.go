@@ -16,7 +16,7 @@ import (
 func lowerReviseDirective(items []ExecutionItem, agents map[string]AgentBinding, index *int, inheritedToolScopes []ToolScopeFrame) ([]ExecutionStep, *Predicate, error) {
 	for _, item := range items {
 		block, ok := item.(*DirectiveBlock)
-		if !ok || strings.TrimSpace(block.Name.Value) != "revise" {
+		if !ok || strings.TrimSpace(block.Name.Value) != KeyRevise {
 			continue
 		}
 		if block.Predicate == nil {

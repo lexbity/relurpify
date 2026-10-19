@@ -80,13 +80,13 @@ func marshalCanonicalJSON(t *testing.T, v any) []byte {
 	return data
 }
 
-func loadGoldenRecipes(t *testing.T) map[string]*ThoughtRecipeDocument {
+func loadGoldenRecipes(t *testing.T) map[string]*Document {
 	t.Helper()
 	entries, err := os.ReadDir("testdata/recipes")
 	if err != nil {
 		t.Fatalf("read testdata/recipes: %v", err)
 	}
-	recipes := make(map[string]*ThoughtRecipeDocument)
+	recipes := make(map[string]*Document)
 	for _, entry := range entries {
 		if entry.IsDir() {
 			continue

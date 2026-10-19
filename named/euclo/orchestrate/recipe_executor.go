@@ -26,7 +26,7 @@ import (
 type ThoughtRecipeExecutorNode struct {
 	id                string
 	deps              *paradigm.Deps
-	registry          *thoughtrecipepkg.ThoughtRecipeRegistry
+	registry          *thoughtrecipepkg.Registry
 	ingestionPipeline *frameworkingestion.Pipeline
 	workspace         string
 	stateReground     grounding.StateRegroundSource
@@ -43,7 +43,7 @@ func NewThoughtRecipeExecutorNode(id string) *ThoughtRecipeExecutorNode {
 }
 
 // WithThoughtRecipeRegistry sets the thoughtrecipe registry used to resolve thoughtrecipes.
-func (n *ThoughtRecipeExecutorNode) WithThoughtRecipeRegistry(reg *thoughtrecipepkg.ThoughtRecipeRegistry) *ThoughtRecipeExecutorNode {
+func (n *ThoughtRecipeExecutorNode) WithThoughtRecipeRegistry(reg *thoughtrecipepkg.Registry) *ThoughtRecipeExecutorNode {
 	if n != nil && reg != nil {
 		n.registry = reg
 	}
@@ -253,14 +253,14 @@ func nextClarificationThoughtRecipeID(env *contextdata.Envelope, currentThoughtR
 	return ""
 }
 
-// NewRecipeRegistryLookup adapts a ThoughtRecipeRegistry to the RecipeRegistryLookup
+// NewRecipeRegistryLookup adapts a Registry to the RecipeRegistryLookup
 // interface that the TUI uses for recipe rehydration on session resume.
-func NewRecipeRegistryLookup(reg *thoughtrecipepkg.ThoughtRecipeRegistry) surface.RecipeRegistryLookup {
+func NewRecipeRegistryLookup(reg *thoughtrecipepkg.Registry) surface.RecipeRegistryLookup {
 	return &recipeRegistryLookup{reg: reg}
 }
 
 type recipeRegistryLookup struct {
-	reg *thoughtrecipepkg.ThoughtRecipeRegistry
+	reg *thoughtrecipepkg.Registry
 }
 
 func (l *recipeRegistryLookup) LookupRecipe(recipeID string) (*surface.RecipeProjection, bool) {

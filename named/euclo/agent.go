@@ -41,7 +41,7 @@ type Agent struct {
 	// no registry entry without re-scanning the workspace.
 	recipeLoadWarnings []thoughtrecipe.LoadWarning
 
-	thoughtrecipeRegistry *thoughtrecipe.ThoughtRecipeRegistry
+	thoughtrecipeRegistry *thoughtrecipe.Registry
 
 	// resume state: populated by Execute before calling BuildGraph
 	resumeClassification *intake.IntentClassification

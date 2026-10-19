@@ -23,7 +23,7 @@ func (b CaptureBinding) EpistemicsValue() string {
 	if b.Epistemics != nil {
 		return b.Epistemics.Value
 	}
-	return "claimed"
+	return KeyClaimed
 }
 
 // typeAnnotationName extracts the DSL type name from a capture annotation.
@@ -118,7 +118,7 @@ func ApplyCaptureValue(env *contextdata.Envelope, destination string, value any,
 		return fmt.Errorf("capture destination %q must be a namespace reference", dest)
 	}
 	switch strings.TrimSpace(parts[0]) {
-	case "state", "scratch", "user", "output":
+	case KeyState, KeyScratch, "user", KeyOutput:
 	default:
 		return fmt.Errorf("capture destination %q must use state, scratch, user, or output", dest)
 	}
@@ -187,7 +187,7 @@ func validateCaptureDestinationPath(dest PathExpr) (PathExpr, bool) {
 		return PathExpr{}, false
 	}
 	switch strings.TrimSpace(dest.Parts[0].Value) {
-	case "state", "scratch", "user", "output":
+	case KeyState, KeyScratch, "user", KeyOutput:
 		return dest, true
 	default:
 		return PathExpr{}, false

@@ -34,7 +34,7 @@
 //
 // RecipeResumeData persists only the recipe ID, per-step statuses, and macro
 // phase (never the full recipe structure — see DEC-6). On session resume,
-// the recipe is rehydrated from the ThoughtRecipeRegistry via
+// the recipe is rehydrated from the Registry via
 // RecipeRegistryLookup.
 //
 // See devdocs/plans/relurpish-rework-spec.md for the full engineering spec.

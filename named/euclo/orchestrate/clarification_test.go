@@ -200,7 +200,7 @@ func mustEnvelopeString(t *testing.T, env *contextdata.Envelope, key string) str
 
 // testRecipeRegistryWith builds a registry holding recipe IDs declared as
 // bare IDs (mirrors what production registration stores).
-func testRecipeRegistryWith(ids ...string) *thoughtrecipepkg.ThoughtRecipeRegistry {
+func testRecipeRegistryWith(ids ...string) *thoughtrecipepkg.Registry {
 	reg := thoughtrecipepkg.NewThoughtRecipeRegistry()
 	for _, id := range ids {
 		_, _ = reg.RegisterCompiledFirstWins(&surface.ThoughtRecipe{ID: id, Name: id}, nil, "test")

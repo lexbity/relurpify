@@ -13,15 +13,15 @@ var AcceptedThoughtRecipeExtensions = []string{".erpe", ".euclo", ".thoughtrecip
 // for the Euclo thoughtrecipe DSL.
 var AllowedTopLevelDeclarations = []string{ //nolint:gochecknoglobals // immutable contract vocabulary
 	"thoughtrecipe",
-	"trigger",
-	"input",
-	"type",
-	"agent",
-	"run",
-	"route",
-	"delegate",
-	"ask",
-	"pipeline",
+	KeyTrigger,
+	KeyInput,
+	ValType,
+	KeyAgent,
+	KeyRun,
+	KeyRoute,
+	KeyDelegate,
+	KeyAsk,
+	KeyPipeline,
 }
 
 // SupportedNamespaces freezes the state namespaces that the DSL may target.

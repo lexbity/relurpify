@@ -116,7 +116,7 @@ func htnOptions(step ExecutionStep) ([]htnagent.Option, error) {
 		return nil, err
 	}
 	if !hasMethod {
-		if len(StepItems(directives, "task")) > 0 {
+		if len(StepItems(directives, KeyTask)) > 0 {
 			return nil, fmt.Errorf("htn task requires a method block")
 		}
 		return nil, nil
@@ -125,14 +125,14 @@ func htnOptions(step ExecutionStep) ([]htnagent.Option, error) {
 	if methodName == "" {
 		return nil, fmt.Errorf("htn method requires a name")
 	}
-	tasks := StepItems(methodDirective.Body, "task")
+	tasks := StepItems(methodDirective.Body, KeyTask)
 	if len(tasks) == 0 {
 		return nil, fmt.Errorf("htn method %q requires at least one task", methodName)
 	}
 	// The contract admits nested directive blocks under `method`; the runner
 	// honours exactly the `task` clause (belt to the load-time shape check).
 	for _, body := range methodDirective.Body {
-		if strings.TrimSpace(body.Name) != "" && body.Name != "task" {
+		if strings.TrimSpace(body.Name) != "" && body.Name != KeyTask {
 			return nil, fmt.Errorf("htn method %q contains unsupported nested clause %q", methodName, body.Name)
 		}
 	}
@@ -167,7 +167,7 @@ func reflectionOptions(step ExecutionStep, deps *paradigm.Deps) ([]reflectionage
 	if err != nil {
 		return nil, err
 	}
-	reviseDirective, hasRevise, err := AtMostOne(directives, "revise")
+	reviseDirective, hasRevise, err := AtMostOne(directives, KeyRevise)
 	if err != nil {
 		return nil, err
 	}
@@ -339,7 +339,7 @@ func blackboardAuthoredSource(source TypedDirective, index int) (blackboardagent
 	writeIndex := -1
 	writeCount := 0
 	for i, item := range source.Body {
-		if item.Name == "write" {
+		if item.Name == KeyWrite {
 			writeIndex = i
 			writeCount++
 		}
@@ -360,7 +360,7 @@ func blackboardAuthoredSource(source TypedDirective, index int) (blackboardagent
 
 	for _, item := range source.Body {
 		switch item.Name {
-		case "write":
+		case KeyWrite:
 			// Exactly-once was validated above; this case only advances the
 			// trailing-clause sentinel so later when/read/do clauses are
 			// rejected as out of order.
@@ -369,7 +369,7 @@ func blackboardAuthoredSource(source TypedDirective, index int) (blackboardagent
 			}
 			writeIndex = -2
 			continue
-		case "when":
+		case KeyWhen:
 			if writeIndex == -2 {
 				return authored, fmt.Errorf("blackboard source %q: when clause must precede write", name)
 			}

@@ -10,24 +10,25 @@ import (
 	"codeburg.org/lexbit/relurpify/context/knowledge/graphdb"
 )
 
-// CompilerRepositoryImpl implements the Repository interface using graphdb.
-type CompilerRepositoryImpl struct {
+// RepositoryImpl implements the Repository interface using graphdb.
+type RepositoryImpl struct {
 	db *graphdb.Engine
 }
 
 // NewCompilerRepository creates a new compiler repository backed by graphdb.
-func NewCompilerRepository(db *graphdb.Engine) *CompilerRepositoryImpl {
-	return &CompilerRepositoryImpl{db: db}
+func NewCompilerRepository(db *graphdb.Engine) *RepositoryImpl {
+	return &RepositoryImpl{db: db}
 }
 
 // Close closes the repository and the underlying graphdb engine.
-func (r *CompilerRepositoryImpl) Close() error {
+func (r *RepositoryImpl) Close() error {
 	return r.db.Close(context.Background())
 }
 
 // Compilation record operations
 
-func (r *CompilerRepositoryImpl) StoreCompilationRecord(ctx context.Context, record CompilationRecord) error {
+// StoreCompilationRecord persists a compilation record as a graph node.
+func (r *RepositoryImpl) StoreCompilationRecord(ctx context.Context, record CompilationRecord) error {
 	props, err := json.Marshal(record)
 	if err != nil {
 		return err
@@ -46,7 +47,8 @@ func (r *CompilerRepositoryImpl) StoreCompilationRecord(ctx context.Context, rec
 // GetCompilationRecord; callers map it onto their not-found semantics.
 var ErrCompilationRecordNotFound = errors.New("compilation record not found")
 
-func (r *CompilerRepositoryImpl) GetCompilationRecord(ctx context.Context, requestID string) (*CompilationRecord, error) {
+// GetCompilationRecord loads a compilation record by request ID.
+func (r *RepositoryImpl) GetCompilationRecord(_ context.Context, requestID string) (*CompilationRecord, error) {
 	node, ok := r.db.GetNode(requestID)
 	if !ok {
 		return nil, fmt.Errorf("%w: %s", ErrCompilationRecordNotFound, requestID)
@@ -58,7 +60,8 @@ func (r *CompilerRepositoryImpl) GetCompilationRecord(ctx context.Context, reque
 	return &record, nil
 }
 
-func (r *CompilerRepositoryImpl) ListCompilationRecords(ctx context.Context, eventLogSeq uint64) ([]CompilationRecord, error) {
+// ListCompilationRecords returns all persisted compilation records.
+func (r *RepositoryImpl) ListCompilationRecords(_ context.Context, _ uint64) ([]CompilationRecord, error) {
 	nodes := r.db.ListNodes(graphdb.NodeKindCompilerCompilation)
 	records := make([]CompilationRecord, 0, len(nodes))
 	for _, node := range nodes {
@@ -73,7 +76,8 @@ func (r *CompilerRepositoryImpl) ListCompilationRecords(ctx context.Context, eve
 
 // Cache entry operations
 
-func (r *CompilerRepositoryImpl) StoreCacheEntry(ctx context.Context, entry CacheEntry) error {
+// StoreCacheEntry persists a cache entry as a graph node.
+func (r *RepositoryImpl) StoreCacheEntry(ctx context.Context, entry CacheEntry) error {
 	keyStr := entry.Key.String()
 	props, err := json.Marshal(entry)
 	if err != nil {
@@ -89,7 +93,8 @@ func (r *CompilerRepositoryImpl) StoreCacheEntry(ctx context.Context, entry Cach
 	return r.db.UpsertNode(ctx, node)
 }
 
-func (r *CompilerRepositoryImpl) GetCacheEntry(ctx context.Context, key CacheKey) (*CacheEntry, error) {
+// GetCacheEntry loads a cache entry by key.
+func (r *RepositoryImpl) GetCacheEntry(_ context.Context, key CacheKey) (*CacheEntry, error) {
 	keyStr := key.String()
 	node, ok := r.db.GetNode(keyStr)
 	if !ok {
@@ -102,7 +107,8 @@ func (r *CompilerRepositoryImpl) GetCacheEntry(ctx context.Context, key CacheKey
 	return &entry, nil
 }
 
-func (r *CompilerRepositoryImpl) InvalidateCacheEntries(ctx context.Context, chunkIDs []string) error {
+// InvalidateCacheEntries deletes cache entries that depend on any of the given chunk IDs.
+func (r *RepositoryImpl) InvalidateCacheEntries(ctx context.Context, chunkIDs []string) error {
 	nodes := r.db.ListNodes(graphdb.NodeKindCompilerCache)
 	for _, node := range nodes {
 		var entry CacheEntry
@@ -124,7 +130,8 @@ func (r *CompilerRepositoryImpl) InvalidateCacheEntries(ctx context.Context, chu
 
 // Compiler artifact operations
 
-func (r *CompilerRepositoryImpl) StoreCompilerArtifact(ctx context.Context, artifact CompilerArtifact) error {
+// StoreCompilerArtifact persists a compiler artifact as a graph node.
+func (r *RepositoryImpl) StoreCompilerArtifact(ctx context.Context, artifact Artifact) error {
 	props, err := json.Marshal(artifact)
 	if err != nil {
 		return err
@@ -139,23 +146,25 @@ func (r *CompilerRepositoryImpl) StoreCompilerArtifact(ctx context.Context, arti
 	return r.db.UpsertNode(ctx, node)
 }
 
-func (r *CompilerRepositoryImpl) GetCompilerArtifact(ctx context.Context, artifactID string) (*CompilerArtifact, error) {
+// GetCompilerArtifact loads a compiler artifact by artifact ID.
+func (r *RepositoryImpl) GetCompilerArtifact(_ context.Context, artifactID string) (*Artifact, error) {
 	node, ok := r.db.GetNode(artifactID)
 	if !ok {
 		return nil, fmt.Errorf("compiler artifact not found: %s", artifactID)
 	}
-	var artifact CompilerArtifact
+	var artifact Artifact
 	if err := json.Unmarshal(node.Props, &artifact); err != nil {
 		return nil, err
 	}
 	return &artifact, nil
 }
 
-func (r *CompilerRepositoryImpl) ListCompilerArtifacts(ctx context.Context, requestID string) ([]CompilerArtifact, error) {
+// ListCompilerArtifacts returns compiler artifacts, optionally filtered by request ID.
+func (r *RepositoryImpl) ListCompilerArtifacts(_ context.Context, requestID string) ([]Artifact, error) {
 	nodes := r.db.ListNodes(graphdb.NodeKindCompilerArtifact)
-	artifacts := make([]CompilerArtifact, 0)
+	artifacts := make([]Artifact, 0)
 	for _, node := range nodes {
-		var artifact CompilerArtifact
+		var artifact Artifact
 		if err := json.Unmarshal(node.Props, &artifact); err != nil {
 			continue
 		}

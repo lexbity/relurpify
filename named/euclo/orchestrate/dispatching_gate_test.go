@@ -10,7 +10,7 @@ import (
 	thoughtrecipepkg "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
 )
 
-func newGateTestRegistry(ids ...string) *thoughtrecipepkg.ThoughtRecipeRegistry {
+func newGateTestRegistry(ids ...string) *thoughtrecipepkg.Registry {
 	reg := thoughtrecipepkg.NewThoughtRecipeRegistry()
 	for _, id := range ids {
 		_, _ = reg.RegisterCompiledFirstWins(testThoughtRecipe(id), nil, "test")

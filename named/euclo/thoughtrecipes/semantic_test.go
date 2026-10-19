@@ -683,7 +683,7 @@ run reviewer:
 	}
 }
 
-func mustParseDoc(t *testing.T, src string) *ThoughtRecipeDocument {
+func mustParseDoc(t *testing.T, src string) *Document {
 	t.Helper()
 	doc, err := ParseSource("demo.euclo", src)
 	if err != nil {

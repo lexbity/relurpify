@@ -17,7 +17,19 @@ const sessionCapKeyPrefix = "_session_cap:"
 // envelope's working memory. Session capabilities take precedence over the
 // global registry during invocation within the same envelope. Returns an error
 // if the envelope, id, or handler is nil/empty.
+//
+// Deprecated: use RegisterSessionCapabilityWithContext so callers can forward
+// an inherited context.
 func RegisterSessionCapability(env ports.State, id string, handler handler.InvocableCapabilityHandler) error {
+	return RegisterSessionCapabilityWithContext(context.Background(), env, id, handler)
+}
+
+// RegisterSessionCapabilityWithContext stores a session-scoped capability handler
+// in the envelope's working memory, deriving the handler descriptor from ctx.
+// Session capabilities take precedence over the global registry during invocation
+// within the same envelope. Returns an error if the envelope, id, or handler is
+// nil/empty.
+func RegisterSessionCapabilityWithContext(ctx context.Context, env ports.State, id string, handler handler.InvocableCapabilityHandler) error {
 	if env == nil {
 		return fmt.Errorf("envelope required for session capability registration")
 	}
@@ -27,7 +39,7 @@ func RegisterSessionCapability(env ports.State, id string, handler handler.Invoc
 	if handler == nil {
 		return fmt.Errorf("capability handler required")
 	}
-	desc := handler.Descriptor(context.Background(), env)
+	desc := handler.Descriptor(ctx, env)
 	if err := validateSessionCapabilityAvailability(id, desc); err != nil {
 		return err
 	}

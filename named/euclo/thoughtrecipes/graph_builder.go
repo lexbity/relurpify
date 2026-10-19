@@ -153,12 +153,12 @@ func buildRouteSection(graph *agentgraph.Graph, deps *paradigm.Deps, stash *grap
 	joinID := scopedGroupNodeID(group.Group.ID, "join")
 
 	if err := graph.AddNode(newThoughtRecipeStageNode(routeID, agentgraph.NodeTypeConditional, "route", map[string]any{
-		"group_id": group.Group.ID,
+		KeyGroupID: group.Group.ID,
 	})); err != nil {
 		return graphSection{}, err
 	}
 	if err := graph.AddNode(newThoughtRecipeStageNode(joinID, agentgraph.NodeTypeSystem, "join", map[string]any{
-		"group_id": group.Group.ID,
+		KeyGroupID: group.Group.ID,
 	})); err != nil {
 		return graphSection{}, err
 	}
@@ -176,7 +176,7 @@ func buildRouteSection(graph *agentgraph.Graph, deps *paradigm.Deps, stash *grap
 	if !hasElse {
 		noMatchID = scopedGroupNodeID(group.Group.ID, "no-match")
 		if err := graph.AddNode(newThoughtRecipeStageNode(noMatchID, agentgraph.NodeTypeSystem, "no_match", map[string]any{
-			"group_id": group.Group.ID,
+			KeyGroupID: group.Group.ID,
 		})); err != nil {
 			return graphSection{}, err
 		}
@@ -201,7 +201,7 @@ func buildRouteSection(graph *agentgraph.Graph, deps *paradigm.Deps, stash *grap
 		}
 		branchID := scopedGroupNodeID(group.Group.ID, fmt.Sprintf("branch.%d", i))
 		condNode := newThoughtRecipeStageNode(branchID, agentgraph.NodeTypeConditional, "route_condition", map[string]any{
-			"group_id":  group.Group.ID,
+			KeyGroupID:  group.Group.ID,
 			"branch_id": branchID,
 		})
 		if branch.Predicate != nil {
@@ -281,8 +281,8 @@ func addExecutionStep(graph *agentgraph.Graph, deps *paradigm.Deps, stash *graph
 		streamNode.Mode = contextstream.Mode(step.Stream.Mode)
 		streamNode.BudgetShortfallPolicy = "emit_partial"
 		streamNode.Metadata = map[string]any{
-			"execution_step_id":   step.ID,
-			"execution_step_type": step.Kind.String(),
+			KeyExecutionStepID:   step.ID,
+			KeyExecutionStepType: step.Kind.String(),
 		}
 		if cfg := cloneClarificationStepConfig(step.ClarificationConfig); cfg != nil {
 			streamNode.Metadata["execution_clarification_type"] = step.Kind.String()
@@ -302,7 +302,7 @@ func addExecutionStep(graph *agentgraph.Graph, deps *paradigm.Deps, stash *graph
 	if step.CapabilityID == "" && (step.Mutation == "required" || (step.HITL != "" && step.HITL != "never")) {
 		nodeID := step.ID + ".gate"
 		if err := graph.AddNode(newThoughtRecipeStageNode(nodeID, agentgraph.NodeTypeSystem, "gate", map[string]any{
-			"step_id":            step.ID,
+			KeyStepID:            step.ID,
 			"step_type":          step.Kind.String(),
 			"mutation":           step.Mutation,
 			"hitl":               step.HITL,
@@ -388,16 +388,16 @@ func addPipelineStep(graph *agentgraph.Graph, deps *paradigm.Deps, stash *graphB
 	entry := step.ID + ".pipeline"
 	joinID := step.ID + ".join"
 	if err := graph.AddNode(newThoughtRecipeStageNode(entry, agentgraph.NodeTypeSystem, "pipeline", map[string]any{
-		"step_id":     step.ID,
-		"pipeline_id": step.ID,
+		KeyStepID:     step.ID,
+		KeyPipelineID: step.ID,
 		"stage_count": len(step.PipelineStages),
 		"stage_names": summarizePipelineStageSpecs(step.PipelineStages),
 	})); err != nil {
 		return stepArtifacts{}, err
 	}
 	if err := graph.AddNode(newThoughtRecipeStageNode(joinID, agentgraph.NodeTypeSystem, "join", map[string]any{
-		"step_id":     step.ID,
-		"pipeline_id": step.ID,
+		KeyStepID:     step.ID,
+		KeyPipelineID: step.ID,
 	})); err != nil {
 		return stepArtifacts{}, err
 	}
@@ -411,8 +411,8 @@ func addPipelineStep(graph *agentgraph.Graph, deps *paradigm.Deps, stash *graphB
 			stageID += "." + sanitizeComponent(stageName)
 		}
 		if err := graph.AddNode(newThoughtRecipeStageNode(stageID, agentgraph.NodeTypeSystem, "pipeline_stage", map[string]any{
-			"step_id":     step.ID,
-			"pipeline_id": step.ID,
+			KeyStepID:     step.ID,
+			KeyPipelineID: step.ID,
 			"stage_name":  stageName,
 			"stage_index": i,
 		})); err != nil {

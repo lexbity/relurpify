@@ -13,12 +13,12 @@ type TypeCheckResult struct {
 
 // TypeSystem validates thoughtrecipe-local structural types and typed captures.
 type TypeSystem struct {
-	Document *ThoughtRecipeDocument
+	Document *Document
 	types    map[string]*TypeDecl
 }
 
 // NewTypeSystem creates a new type system for a document.
-func NewTypeSystem(doc *ThoughtRecipeDocument) *TypeSystem {
+func NewTypeSystem(doc *Document) *TypeSystem {
 	ts := &TypeSystem{
 		Document: doc,
 		types:    make(map[string]*TypeDecl),
@@ -268,7 +268,7 @@ func (ts *TypeSystem) validateReferencePath(path PathExpr) error {
 		return nil
 	}
 	switch strings.TrimSpace(path.Parts[0].Value) {
-	case "input", "state", "scratch", "user", "output":
+	case "input", KeyState, KeyScratch, KeyUser, KeyOutput:
 		return nil
 	default:
 		return fmt.Errorf("%s:%d:%d: unknown namespace %q", path.Span.Start.File, path.Span.Start.Line, path.Span.Start.Column, path.Parts[0].Value)

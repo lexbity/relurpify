@@ -67,11 +67,11 @@ func (n *RunNode) Execute(ctx context.Context, env *contextdata.Envelope) (retRe
 			// D12: the surface answered "retry" on the error-decision frame.
 			// Re-execute this step's agent exactly once; a second failure
 			// aborts without re-asking.
-			if retryResult, retryErr := agent.Execute(ctx, task, env); retryErr == nil {
+			retryResult, retryErr := agent.Execute(ctx, task, env)
+			if retryErr == nil {
 				return n.completeRunStep(ctx, env, retryResult)
-			} else {
-				failureResult = n.recordExhaustedRetry(ctx, env, retryErr)
 			}
+			failureResult = n.recordExhaustedRetry(ctx, env, retryErr)
 		}
 		n.markFallbackActivated(ctx, env, failureResult)
 		return failureResult, nil

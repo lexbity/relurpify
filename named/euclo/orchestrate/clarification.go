@@ -61,7 +61,7 @@ func needsClarificationRoute(env *contextdata.Envelope) bool {
 	return classificationRequiresClarification(env)
 }
 
-func registerClarificationCapability(ctx context.Context, reg *registry.CapabilityRegistry, recipes *thoughtrecipepkg.ThoughtRecipeRegistry) error {
+func registerClarificationCapability(ctx context.Context, reg *registry.CapabilityRegistry, recipes *thoughtrecipepkg.Registry) error {
 	if reg == nil {
 		return nil
 	}
@@ -77,7 +77,7 @@ func registerClarificationCapability(ctx context.Context, reg *registry.Capabili
 // single gatekeeper — a handoff to an unregistered recipe degrades to an
 // interaction frame, never to a dispatch that will fail mid-flight).
 type clarificationCapabilityHandler struct {
-	recipes *thoughtrecipepkg.ThoughtRecipeRegistry
+	recipes *thoughtrecipepkg.Registry
 }
 
 func (h *clarificationCapabilityHandler) Descriptor(context.Context, ports.State) descriptor.CapabilityDescriptor {
@@ -333,7 +333,7 @@ func buildTraversalFromAnchors(anchors []retrieval.AnchorRef) *retrieval.Travers
 	}
 }
 
-func clarificationThoughtRecipeForState(args map[string]any, recipes *thoughtrecipepkg.ThoughtRecipeRegistry) string {
+func clarificationThoughtRecipeForState(args map[string]any, recipes *thoughtrecipepkg.Registry) string {
 	if thoughtrecipeID := strings.TrimSpace(stringArg(args, "thoughtrecipe_id")); thoughtrecipeID != "" {
 		if recipeRegistered(recipes, thoughtrecipeID) {
 			return thoughtrecipeID
@@ -375,7 +375,7 @@ func (h *clarificationCapabilityHandler) handoffFailureReason(args map[string]an
 // registry. A nil registry (tests, degraded construction) cannot confirm any
 // target; built-in recipe IDs registered by graph construction are the
 // exception the built-in map knows about.
-func recipeRegistered(recipes *thoughtrecipepkg.ThoughtRecipeRegistry, id string) bool {
+func recipeRegistered(recipes *thoughtrecipepkg.Registry, id string) bool {
 	if recipes == nil {
 		return isBuiltinRecipeID(id)
 	}
@@ -530,7 +530,7 @@ func stringArg(args map[string]any, key string) string {
 // dies at boot, never mid-flight). Families without mappings are not
 // asserted: an unmapped family is a runtime handoff miss with an actionable
 // reason, not a boot defect.
-func assertClarificationHandoffs(thoughtrecipes *thoughtrecipepkg.ThoughtRecipeRegistry) error {
+func assertClarificationHandoffs(thoughtrecipes *thoughtrecipepkg.Registry) error {
 	if thoughtrecipes == nil {
 		return nil
 	}

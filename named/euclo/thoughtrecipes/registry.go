@@ -9,18 +9,18 @@ import (
 	"codeburg.org/lexbit/relurpify/named/euclo/surface"
 )
 
-// ThoughtRecipeEntry stores a thoughtrecipe and its compiled DSL plan.
-type ThoughtRecipeEntry struct {
+// Entry stores a thoughtrecipe and its compiled DSL plan.
+type Entry struct {
 	Name          string
 	ThoughtRecipe *surface.ThoughtRecipe
 	Plan          *ExecutionPlan
 	Source        string
 }
 
-// ThoughtRecipeRegistry manages ThoughtRecipe definitions and compiled Euclo plans.
-type ThoughtRecipeRegistry struct {
+// Registry manages ThoughtRecipe definitions and compiled Euclo plans.
+type Registry struct {
 	mu             sync.RWMutex
-	thoughtrecipes map[string]*ThoughtRecipeEntry
+	thoughtrecipes map[string]*Entry
 	order          []string
 	vocabulary     ToolVocabularyLookup
 	handoffs       map[string]string
@@ -29,7 +29,7 @@ type ThoughtRecipeRegistry struct {
 // SetHandoffs installs the workspace handoff table (families.yaml). Nil or
 // empty clears the table: handoff resolution then degrades to its named
 // runtime miss instead of consulting compiled-in data.
-func (r *ThoughtRecipeRegistry) SetHandoffs(handoffs map[string]string) {
+func (r *Registry) SetHandoffs(handoffs map[string]string) {
 	if r == nil {
 		return
 	}
@@ -40,7 +40,7 @@ func (r *ThoughtRecipeRegistry) SetHandoffs(handoffs map[string]string) {
 
 // HandoffForFamily resolves a classified family to its handoff recipe ID via
 // the workspace handoff table. Empty means no mapping exists.
-func (r *ThoughtRecipeRegistry) HandoffForFamily(family string) string {
+func (r *Registry) HandoffForFamily(family string) string {
 	if r == nil {
 		return ""
 	}
@@ -51,7 +51,7 @@ func (r *ThoughtRecipeRegistry) HandoffForFamily(family string) string {
 
 // Handoffs returns a copy of the workspace handoff table (boot assertions
 // iterate it; callers must not mutate the registry's map).
-func (r *ThoughtRecipeRegistry) Handoffs() map[string]string {
+func (r *Registry) Handoffs() map[string]string {
 	if r == nil {
 		return nil
 	}
@@ -67,7 +67,7 @@ func (r *ThoughtRecipeRegistry) Handoffs() map[string]string {
 // WithToolVocabulary wires the declared-vocabulary catalog used by the
 // programmatic FR-14 arm: compiled plans registered through this registry
 // must resolve their full `may invoke` vocabulary against it.
-func (r *ThoughtRecipeRegistry) WithToolVocabulary(vocabulary ToolVocabularyLookup) *ThoughtRecipeRegistry {
+func (r *Registry) WithToolVocabulary(vocabulary ToolVocabularyLookup) *Registry {
 	if r != nil {
 		r.vocabulary = vocabulary
 	}
@@ -76,7 +76,7 @@ func (r *ThoughtRecipeRegistry) WithToolVocabulary(vocabulary ToolVocabularyLook
 
 // validatePlanToolVocabulary resolves every step's declared tool names
 // (steps, route branches, pipeline stages) against the wired vocabulary.
-func (r *ThoughtRecipeRegistry) validatePlanToolVocabulary(plan *ExecutionPlan) error {
+func (r *Registry) validatePlanToolVocabulary(plan *ExecutionPlan) error {
 	if r == nil || r.vocabulary == nil || plan == nil {
 		return nil
 	}
@@ -84,8 +84,7 @@ func (r *ThoughtRecipeRegistry) validatePlanToolVocabulary(plan *ExecutionPlan) 
 	if plan.ThoughtRecipe != nil {
 		recipeName = plan.ThoughtRecipe.Name
 	}
-	var walk func(steps []ExecutionStep) error
-	walk = func(steps []ExecutionStep) error {
+	walk := func(steps []ExecutionStep) error {
 		for _, step := range steps {
 			if err := ResolveDeclaredToolNames(recipeName, step.ID, step.Scope.AllowedToolNames(), r.vocabulary); err != nil {
 				return err
@@ -114,35 +113,35 @@ func (r *ThoughtRecipeRegistry) validatePlanToolVocabulary(plan *ExecutionPlan) 
 }
 
 // NewThoughtRecipeRegistry creates a new thoughtrecipe registry.
-func NewThoughtRecipeRegistry() *ThoughtRecipeRegistry {
-	return &ThoughtRecipeRegistry{
-		thoughtrecipes: make(map[string]*ThoughtRecipeEntry),
+func NewThoughtRecipeRegistry() *Registry {
+	return &Registry{
+		thoughtrecipes: make(map[string]*Entry),
 	}
 }
 
 // Register registers a thoughtrecipe in the registry.
-func (r *ThoughtRecipeRegistry) Register(thoughtrecipe *surface.ThoughtRecipe) error {
+func (r *Registry) Register(thoughtrecipe *surface.ThoughtRecipe) error {
 	_, err := r.registerThoughtRecipe(thoughtrecipe, nil, "", false)
 	return err
 }
 
 // RegisterFirstWins registers a thoughtrecipe if the name is not already present.
-func (r *ThoughtRecipeRegistry) RegisterFirstWins(thoughtrecipe *surface.ThoughtRecipe) (bool, error) {
+func (r *Registry) RegisterFirstWins(thoughtrecipe *surface.ThoughtRecipe) (bool, error) {
 	return r.registerThoughtRecipe(thoughtrecipe, nil, "", true)
 }
 
 // RegisterCompiled registers a compiled thoughtrecipe and its source thoughtrecipe.
-func (r *ThoughtRecipeRegistry) RegisterCompiled(thoughtrecipe *surface.ThoughtRecipe, plan *ExecutionPlan, source string) error {
+func (r *Registry) RegisterCompiled(thoughtrecipe *surface.ThoughtRecipe, plan *ExecutionPlan, source string) error {
 	_, err := r.registerThoughtRecipe(thoughtrecipe, plan, source, false)
 	return err
 }
 
 // RegisterCompiledFirstWins registers a compiled thoughtrecipe only if the name is new.
-func (r *ThoughtRecipeRegistry) RegisterCompiledFirstWins(thoughtrecipe *surface.ThoughtRecipe, plan *ExecutionPlan, source string) (bool, error) {
+func (r *Registry) RegisterCompiledFirstWins(thoughtrecipe *surface.ThoughtRecipe, plan *ExecutionPlan, source string) (bool, error) {
 	return r.registerThoughtRecipe(thoughtrecipe, plan, source, true)
 }
 
-func (r *ThoughtRecipeRegistry) registerThoughtRecipe(thoughtrecipe *surface.ThoughtRecipe, plan *ExecutionPlan, source string, firstWins bool) (bool, error) {
+func (r *Registry) registerThoughtRecipe(thoughtrecipe *surface.ThoughtRecipe, plan *ExecutionPlan, source string, firstWins bool) (bool, error) {
 	if thoughtrecipe == nil {
 		return false, fmt.Errorf("thoughtrecipe is nil")
 	}
@@ -176,7 +175,7 @@ func (r *ThoughtRecipeRegistry) registerThoughtRecipe(thoughtrecipe *surface.Tho
 	if _, exists := r.thoughtrecipes[key]; !exists {
 		r.order = append(r.order, key)
 	}
-	r.thoughtrecipes[key] = &ThoughtRecipeEntry{
+	r.thoughtrecipes[key] = &Entry{
 		Name:          key,
 		ThoughtRecipe: thoughtrecipe,
 		Plan:          plan,
@@ -186,7 +185,7 @@ func (r *ThoughtRecipeRegistry) registerThoughtRecipe(thoughtrecipe *surface.Tho
 }
 
 // Get retrieves a thoughtrecipe by ID.
-func (r *ThoughtRecipeRegistry) Get(id string) (*surface.ThoughtRecipe, bool) {
+func (r *Registry) Get(id string) (*surface.ThoughtRecipe, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -198,7 +197,7 @@ func (r *ThoughtRecipeRegistry) Get(id string) (*surface.ThoughtRecipe, bool) {
 }
 
 // GetPlan retrieves a compiled plan by thoughtrecipe name.
-func (r *ThoughtRecipeRegistry) GetPlan(name string) (*ExecutionPlan, bool) {
+func (r *Registry) GetPlan(name string) (*ExecutionPlan, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -210,7 +209,7 @@ func (r *ThoughtRecipeRegistry) GetPlan(name string) (*ExecutionPlan, bool) {
 }
 
 // List returns all registered thoughtrecipe IDs.
-func (r *ThoughtRecipeRegistry) List() []string {
+func (r *Registry) List() []string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -229,7 +228,7 @@ func (r *ThoughtRecipeRegistry) List() []string {
 }
 
 // Remove removes a thoughtrecipe from the registry.
-func (r *ThoughtRecipeRegistry) Remove(id string) {
+func (r *Registry) Remove(id string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -243,7 +242,7 @@ func (r *ThoughtRecipeRegistry) Remove(id string) {
 }
 
 // Count returns the number of registered thoughtrecipes.
-func (r *ThoughtRecipeRegistry) Count() int {
+func (r *Registry) Count() int {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -251,11 +250,11 @@ func (r *ThoughtRecipeRegistry) Count() int {
 }
 
 // Entries returns the registered thoughtrecipe entries in insertion order.
-func (r *ThoughtRecipeRegistry) Entries() []ThoughtRecipeEntry {
+func (r *Registry) Entries() []Entry {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	out := make([]ThoughtRecipeEntry, 0, len(r.order))
+	out := make([]Entry, 0, len(r.order))
 	for _, key := range r.order {
 		entry, ok := r.thoughtrecipes[key]
 		if !ok || entry == nil {
@@ -267,22 +266,22 @@ func (r *ThoughtRecipeRegistry) Entries() []ThoughtRecipeEntry {
 }
 
 // FindByTag returns entries whose trigger metadata includes the provided tag.
-func (r *ThoughtRecipeRegistry) FindByTag(tag string) []ThoughtRecipeEntry {
+func (r *Registry) FindByTag(tag string) []Entry {
 	return r.findByTags([]string{tag})
 }
 
 // FindByFamily returns entries whose trigger family metadata includes the provided family.
-func (r *ThoughtRecipeRegistry) FindByFamily(family string) []ThoughtRecipeEntry {
+func (r *Registry) FindByFamily(family string) []Entry {
 	return r.findByTags([]string{family})
 }
 
 // FindByKeyword returns entries whose trigger keyword metadata includes the provided keyword.
-func (r *ThoughtRecipeRegistry) FindByKeyword(keyword string) []ThoughtRecipeEntry {
+func (r *Registry) FindByKeyword(keyword string) []Entry {
 	return r.findByTags([]string{keyword})
 }
 
 // FindByHandoffTarget returns entries whose declared handoff targets include the provided target.
-func (r *ThoughtRecipeRegistry) FindByHandoffTarget(target string) []ThoughtRecipeEntry {
+func (r *Registry) FindByHandoffTarget(target string) []Entry {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -291,7 +290,7 @@ func (r *ThoughtRecipeRegistry) FindByHandoffTarget(target string) []ThoughtReci
 		return nil
 	}
 
-	out := make([]ThoughtRecipeEntry, 0)
+	out := make([]Entry, 0)
 	for _, key := range r.order {
 		entry, ok := r.thoughtrecipes[key]
 		if !ok || entry == nil || entry.ThoughtRecipe == nil {
@@ -305,15 +304,15 @@ func (r *ThoughtRecipeRegistry) FindByHandoffTarget(target string) []ThoughtReci
 }
 
 // FindMatchingTags returns entries matching any of the provided tags.
-func (r *ThoughtRecipeRegistry) FindMatchingTags(tags ...string) []ThoughtRecipeEntry {
+func (r *Registry) FindMatchingTags(tags ...string) []Entry {
 	return r.findByTags(tags)
 }
 
 // ResolveBestMatch returns the highest-scoring thoughtrecipe match for the
 // provided explicit identifier and normalized search tokens.
-func (r *ThoughtRecipeRegistry) ResolveBestMatch(explicitID string, tokens ...string) (ThoughtRecipeEntry, bool, []string) {
+func (r *Registry) ResolveBestMatch(explicitID string, tokens ...string) (Entry, bool, []string) {
 	if r == nil {
-		return ThoughtRecipeEntry{}, false, nil
+		return Entry{}, false, nil
 	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -326,11 +325,11 @@ func (r *ThoughtRecipeRegistry) ResolveBestMatch(explicitID string, tokens ...st
 
 	normalizedTokens := normalizeSearchTokens(tokens...)
 	if len(normalizedTokens) == 0 {
-		return ThoughtRecipeEntry{}, false, nil
+		return Entry{}, false, nil
 	}
 
 	var (
-		bestEntry   ThoughtRecipeEntry
+		bestEntry   Entry
 		bestScore   int
 		bestReasons []string
 		tied        bool
@@ -356,12 +355,12 @@ func (r *ThoughtRecipeRegistry) ResolveBestMatch(explicitID string, tokens ...st
 		}
 	}
 	if bestScore == 0 || tied {
-		return ThoughtRecipeEntry{}, false, nil
+		return Entry{}, false, nil
 	}
 	return bestEntry, true, bestReasons
 }
 
-func (r *ThoughtRecipeRegistry) findByTags(tags []string) []ThoughtRecipeEntry {
+func (r *Registry) findByTags(tags []string) []Entry {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -375,7 +374,7 @@ func (r *ThoughtRecipeRegistry) findByTags(tags []string) []ThoughtRecipeEntry {
 		return nil
 	}
 
-	out := make([]ThoughtRecipeEntry, 0)
+	out := make([]Entry, 0)
 	for _, key := range r.order {
 		entry, ok := r.thoughtrecipes[key]
 		if !ok || entry == nil || entry.ThoughtRecipe == nil {
@@ -497,7 +496,7 @@ func registryKeyForThoughtRecipe(thoughtrecipe *surface.ThoughtRecipe) string {
 	return strings.TrimSpace(thoughtrecipe.ID)
 }
 
-func (r *ThoughtRecipeRegistry) lookupEntryLocked(key string) (*ThoughtRecipeEntry, bool) {
+func (r *Registry) lookupEntryLocked(key string) (*Entry, bool) {
 	if entry, ok := r.thoughtrecipes[key]; ok {
 		return entry, true
 	}

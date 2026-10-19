@@ -2,6 +2,7 @@ package thoughtrecipe
 
 import (
 	"context"
+	"errors"
 	"sort"
 	"testing"
 	"time"
@@ -354,7 +355,7 @@ func TestThoughtRecipeStepNodeScopesRuntimeToolsFromEffectiveToolNames(t *testin
 		t.Fatalf("unscoped runtime tools = %#v, want %#v", got, want)
 	}
 	scoped, errScopedNext := nextNode.scopedRegistry()
-	if errScopedNext != nil {
+	if !errors.Is(errScopedNext, ErrNoCapabilityScope) {
 		t.Fatalf("scopedRegistry: %v", errScopedNext)
 	}
 	if scoped != nil {

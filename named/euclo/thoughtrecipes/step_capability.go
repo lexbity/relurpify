@@ -2,6 +2,7 @@ package thoughtrecipe
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -13,20 +14,26 @@ import (
 	"codeburg.org/lexbit/relurpify/named/euclo/state"
 )
 
+// ErrNoCapabilityScope reports that no allowlist-scoped registry view is
+// available for a step: either the step has no capability registry, or its
+// resolved tool allowlist is empty. Callers treat it as "fall back to the
+// unscoped registry view" rather than a hard failure.
+var ErrNoCapabilityScope = errors.New("thoughtrecipe: no capability scope available for step tool scoping")
+
 // scopedRegistry returns the step's allowlist-scoped registry view. The step
 // tool list is a pure function of (compiled step scope) ∩ (registry
 // resolvable) (D6); an unresolvable declared name is a typed error — the
 // silent drop is deleted (D2).
 func (c *stepCore) scopedRegistry() (*registry.CapabilityRegistry, error) {
 	if c == nil || c.deps == nil || c.deps.Registry == nil {
-		return nil, nil
+		return nil, ErrNoCapabilityScope
 	}
 	allowed, err := c.effectiveToolAllowlist()
 	if err != nil {
 		return nil, err
 	}
 	if len(allowed) == 0 {
-		return nil, nil
+		return nil, ErrNoCapabilityScope
 	}
 	return c.deps.Registry.WithAllowlist(allowed), nil
 }
@@ -41,7 +48,7 @@ func (c *stepCore) effectiveToolAllowlist() ([]string, error) {
 		return nil, nil
 	}
 	if c.step.Scope.IsDenyAll() {
-		return []string{"__euclo__.deny_all__"}, nil
+		return []string{KeyDenyAll}, nil
 	}
 	names := c.step.Scope.AllowedToolNames()
 	if len(names) == 0 {
@@ -69,7 +76,7 @@ func (c *stepCore) effectiveToolAllowlist() ([]string, error) {
 		}
 	}
 	if len(allowed) == 0 {
-		return []string{"__euclo__.deny_all__"}, nil
+		return []string{KeyDenyAll}, nil
 	}
 	return allowed, nil
 }
@@ -91,7 +98,7 @@ func (c *stepCore) executeCapability(ctx context.Context, env *contextdata.Envel
 		return nil, fmt.Errorf("thoughtrecipe step %q: capability_id requires a registry", c.id)
 	}
 	scoped, err := c.scopedRegistry()
-	if err != nil {
+	if err != nil && !errors.Is(err, ErrNoCapabilityScope) {
 		return nil, err
 	}
 	if scoped != nil {
@@ -179,13 +186,13 @@ func (c *stepCore) executeCapability(ctx context.Context, env *contextdata.Envel
 					// The human's retry was honored once; a second failure
 					// aborts without re-asking.
 					success = false
-					actionTaken = "abort"
+					actionTaken = string(policyAbort)
 					data["error"] = retryErr.Error()
 					askOutcome = "retry_exhausted"
 				}
 			default: // abort
 				success = false
-				actionTaken = "abort"
+				actionTaken = string(policyAbort)
 			}
 		case "fallback", "fail", "":
 			success = false

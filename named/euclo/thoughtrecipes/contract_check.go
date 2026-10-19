@@ -19,7 +19,7 @@ import (
 // reports every violation, and it reads directive structures from the AST
 // (names, forms, predicates, spans), which is the shape the P2 typed-directive
 // change preserves.
-func ValidateAgainstContracts(doc *ThoughtRecipeDocument, reg *paradigm.ContractRegistry) []error {
+func ValidateAgainstContracts(doc *Document, reg *paradigm.ContractRegistry) []error {
 	if doc == nil {
 		return nil
 	}
@@ -210,7 +210,7 @@ type contractNestedUse struct {
 	span     SourceSpan
 }
 
-func gatherAgentContractUses(doc *ThoughtRecipeDocument) map[string]*contractAgentUse {
+func gatherAgentContractUses(doc *Document) map[string]*contractAgentUse {
 	agents := make(map[string]*contractAgentUse)
 	for _, decl := range doc.Declarations {
 		agent, ok := decl.(*AgentDecl)
@@ -370,7 +370,7 @@ func validateDirectiveUse(use contractDirectiveUse, contract *paradigm.Contract)
 		return []error{&paradigm.ErrDirectiveShape{
 			Paradigm:  contract.Paradigm,
 			Directive: use.name,
-			Problem:   fmt.Sprintf("block form is not declared; expected the line form"),
+			Problem:   "block form is not declared; expected the line form",
 			At:        loc,
 		}}
 	}
@@ -567,7 +567,7 @@ func validateOrder(paradigmName string, directives []TypedDirective, rule *parad
 // It is the load-time half; the plan-level half runs per compiled run/delegate
 // step in ValidatePlanContracts and additionally covers route and pipeline
 // bodies.
-func validateDocumentBlockRules(doc *ThoughtRecipeDocument, reg *paradigm.ContractRegistry, agents map[string]*contractAgentUse) []error {
+func validateDocumentBlockRules(doc *Document, reg *paradigm.ContractRegistry, agents map[string]*contractAgentUse) []error {
 	if doc == nil {
 		return nil
 	}
@@ -575,8 +575,7 @@ func validateDocumentBlockRules(doc *ThoughtRecipeDocument, reg *paradigm.Contra
 		reg = paradigm.Registry
 	}
 	var errs []error
-	var check func(items []ExecutionItem, agentName string) []TypedDirective
-	check = func(items []ExecutionItem, agentName string) []TypedDirective {
+	check := func(items []ExecutionItem, agentName string) []TypedDirective {
 		var typed []TypedDirective
 		for _, item := range items {
 			switch item.(type) {

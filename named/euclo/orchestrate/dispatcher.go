@@ -23,7 +23,7 @@ import (
 type Dispatcher struct {
 	id                    string
 	capabilityRegistry    *registry.CapabilityRegistry
-	thoughtrecipeRegistry *thoughtrecipepkg.ThoughtRecipeRegistry
+	thoughtrecipeRegistry *thoughtrecipepkg.Registry
 	familyRegistry        *families.KeywordFamilyRegistry
 	tier2Model            model.LanguageModel
 	recorder              *SelectionRecorder
@@ -45,7 +45,7 @@ func (d *Dispatcher) WithCapabilityRegistry(reg *registry.CapabilityRegistry) *D
 
 // WithThoughtRecipeRegistry wires the thoughtrecipe registry used for route
 // selection.
-func (d *Dispatcher) WithThoughtRecipeRegistry(reg *thoughtrecipepkg.ThoughtRecipeRegistry) *Dispatcher {
+func (d *Dispatcher) WithThoughtRecipeRegistry(reg *thoughtrecipepkg.Registry) *Dispatcher {
 	if d != nil && reg != nil {
 		d.thoughtrecipeRegistry = reg
 	}

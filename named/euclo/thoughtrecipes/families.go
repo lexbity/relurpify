@@ -53,6 +53,7 @@ func parseFamiliesFile(body []byte) (map[string]string, error) {
 // runtime failure ("no thoughtrecipe mapped for family") instead of coupling
 // every workspace to a shipped file it may have deliberately removed.
 func LoadHandoffsFile(root string) (map[string]string, error) {
+	// #nosec G304 -- root is a workspace path supplied by the operator; FamiliesFileName is a compile-time constant, so the path is not attacker-controlled.
 	body, err := os.ReadFile(filepath.Join(root, FamiliesFileName))
 	if err != nil {
 		if os.IsNotExist(err) {

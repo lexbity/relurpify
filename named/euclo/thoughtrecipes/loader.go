@@ -18,7 +18,7 @@ var ErrNoRecipeDir = errors.New("no recipes")
 // Loader scans Euclo DSL thoughtrecipe sources from the workspace.
 type Loader struct {
 	PromptRegistry PromptRegistryLookup
-	RecipeRegistry ThoughtRecipeRegistryLookup
+	RecipeRegistry RegistryLookup
 	// CapabilityRegistry is the single declared-vocabulary catalog (D1/FR-5):
 	// `do relurpic` references, coordination metadata, and the D2
 	// `may invoke` load check all resolve through it. Production wiring
@@ -32,15 +32,15 @@ type Loader struct {
 type LoadWarningKind string
 
 const (
-	// LoadWarningKindDirectory: a directory was ignored by the top-level scan.
+	// LoadWarningKindDirectory marks a directory ignored by the top-level scan.
 	LoadWarningKindDirectory LoadWarningKind = "ignored_directory"
-	// LoadWarningKindExtension: a file with an unsupported extension.
+	// LoadWarningKindExtension marks a file with an unsupported extension.
 	LoadWarningKindExtension LoadWarningKind = "ignored_extension"
-	// LoadWarningKindDuplicate: a duplicate recipe name, first wins.
+	// LoadWarningKindDuplicate marks a duplicate recipe name; first wins.
 	LoadWarningKindDuplicate LoadWarningKind = "duplicate_ignored"
-	// LoadWarningKindVocabularyNotCallable: a declared `may invoke` name
-	// resolves only to a governed capability — legal vocabulary, but not a
-	// model-callable tool, so the model cannot invoke it.
+	// LoadWarningKindVocabularyNotCallable marks a declared `may invoke` name
+	// that resolves only to a governed capability — legal vocabulary, but not
+	// a model-callable tool, so the model cannot invoke it.
 	LoadWarningKindVocabularyNotCallable LoadWarningKind = "vocabulary_not_model_callable"
 )
 
@@ -65,7 +65,7 @@ type LoadResult struct {
 	SourceRoot string
 	Sources    []SourceFile
 	Warnings   []LoadWarning
-	Registry   *ThoughtRecipeRegistry
+	Registry   *Registry
 }
 
 // NewLoader creates a new thoughtrecipe loader.
@@ -80,7 +80,7 @@ func (l *Loader) WithPromptRegistry(reg PromptRegistryLookup) *Loader {
 }
 
 // WithRecipeRegistry wires thoughtrecipe lookup into the loader.
-func (l *Loader) WithRecipeRegistry(reg ThoughtRecipeRegistryLookup) *Loader {
+func (l *Loader) WithRecipeRegistry(reg RegistryLookup) *Loader {
 	l.RecipeRegistry = reg
 	return l
 }
@@ -240,8 +240,7 @@ func (l *Loader) vocabularyVisibilityWarnings(plan *ExecutionPlan, sourcePath st
 		recipeName = plan.ThoughtRecipe.Name
 	}
 	var warnings []LoadWarning
-	var walk func(steps []ExecutionStep)
-	walk = func(steps []ExecutionStep) {
+	walk := func(steps []ExecutionStep) {
 		for _, step := range steps {
 			for _, tool := range FindNonCallableDeclaredTools(step.Scope.AllowedToolNames(), l.CapabilityRegistry) {
 				warnings = append(warnings, LoadWarning{
@@ -271,8 +270,7 @@ func validateCapabilityStepScopes(plan *ExecutionPlan, sourcePath string) error 
 	if plan == nil {
 		return nil
 	}
-	var walk func(steps []ExecutionStep) error
-	walk = func(steps []ExecutionStep) error {
+	walk := func(steps []ExecutionStep) error {
 		for _, step := range steps {
 			if step.Kind == StepKindCapability && !step.Scope.IsResolved() {
 				return fmt.Errorf("%s: capability_step_missing_scope: capability step %q has no resolved scope", sourcePath, step.ID)

@@ -3,10 +3,10 @@ package thoughtrecipe
 import "testing"
 
 func TestThoughtRecipeDocumentPreservesDeclarationOrderAndSpans(t *testing.T) {
-	doc := &ThoughtRecipeDocument{
+	doc := &Document{
 		SourcePath: "relurpify_cfg/euclo/code_review.euclo",
 		Name:       "code_review",
-		Header: ThoughtRecipeHeader{
+		Header: Header{
 			positioned:  positioned{Span: NewSpan("relurpify_cfg/euclo/code_review.euclo", 1, 1, 2, 1)},
 			Name:        Identifier{positioned: positioned{Span: NewSpan("relurpify_cfg/euclo/code_review.euclo", 1, 8, 1, 19)}, Value: "code_review"},
 			Description: &StringLiteral{positioned: positioned{Span: NewSpan("relurpify_cfg/euclo/code_review.euclo", 2, 1, 2, 16)}, Raw: `"Review."`, Value: "Review."},
@@ -68,7 +68,7 @@ func TestThoughtRecipeDocumentPreservesDeclarationOrderAndSpans(t *testing.T) {
 }
 
 func TestAstPreservesRawLiteralsAndNestedBlocks(t *testing.T) {
-	doc := &ThoughtRecipeDocument{
+	doc := &Document{
 		SourcePath: "relurpify_cfg/euclo/code_review.euclo",
 		Name:       "code_review",
 		Declarations: []Declaration{
@@ -150,7 +150,7 @@ func TestAstPreservesRawLiteralsAndNestedBlocks(t *testing.T) {
 }
 
 func TestAstPreservesPromptReferences(t *testing.T) {
-	doc := &ThoughtRecipeDocument{
+	doc := &Document{
 		SourcePath: "relurpify_cfg/euclo/code_review.euclo",
 		Name:       "code_review",
 		Declarations: []Declaration{

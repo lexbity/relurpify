@@ -188,14 +188,3 @@ func joinChunkIDs(ids []knowledge.ChunkID) string {
 	}
 	return strings.Join(parts, ", ")
 }
-
-func contentBytes(content any) ([]byte, bool) {
-	switch v := content.(type) {
-	case string:
-		return []byte(v), true
-	case []byte:
-		return v, true
-	default:
-		return nil, false
-	}
-}

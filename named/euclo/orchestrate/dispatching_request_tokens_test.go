@@ -64,7 +64,7 @@ func TestSelectionTokensDropFunctionWords(t *testing.T) {
 // zero: the request text is in the token set, so without the stopword filter
 // this candidate would be manufactured from "the"/"in".
 func TestScoreThoughtRecipeCandidateIgnoresFunctionWordOverlap(t *testing.T) {
-	entry := thoughtrecipepkg.ThoughtRecipeEntry{ThoughtRecipe: &surface.ThoughtRecipe{
+	entry := thoughtrecipepkg.Entry{ThoughtRecipe: &surface.ThoughtRecipe{
 		ID:          "custom.thoughtrecipe.stream",
 		Name:        "stream",
 		Description: "the stream of the a in it",

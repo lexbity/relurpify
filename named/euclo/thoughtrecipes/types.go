@@ -27,15 +27,15 @@ const (
 func (k StepKind) String() string {
 	switch k {
 	case StepKindRun:
-		return "run"
+		return KeyRun
 	case StepKindDelegate:
-		return "delegate"
+		return KeyDelegate
 	case StepKindAsk:
-		return "ask"
+		return KeyAsk
 	case StepKindCapability:
 		return "capability"
 	case StepKindPipelineStage:
-		return "pipeline"
+		return KeyPipeline
 	default:
 		return "invalid"
 	}
@@ -45,10 +45,12 @@ func (k StepKind) valid() bool {
 	return k >= StepKindRun && k <= StepKindPipelineStage
 }
 
+// MarshalJSON encodes k as its stable string name.
 func (k StepKind) MarshalJSON() ([]byte, error) {
 	return json.Marshal(k.String())
 }
 
+// UnmarshalJSON decodes a StepKind from its string name.
 func (k *StepKind) UnmarshalJSON(data []byte) error {
 	var s string
 	if err := json.Unmarshal(data, &s); err != nil {
@@ -60,15 +62,15 @@ func (k *StepKind) UnmarshalJSON(data []byte) error {
 
 func stepKindFromString(s string) StepKind {
 	switch s {
-	case "run":
+	case KeyRun:
 		return StepKindRun
-	case "delegate":
+	case KeyDelegate:
 		return StepKindDelegate
-	case "ask":
+	case KeyAsk:
 		return StepKindAsk
 	case "capability":
 		return StepKindCapability
-	case "pipeline":
+	case KeyPipeline:
 		return StepKindPipelineStage
 	default:
 		return StepKindInvalid
@@ -182,6 +184,8 @@ func (s ResolvedToolScope) Permits(toolName string) bool {
 	return false
 }
 
+// MarshalJSON encodes s as its allowed-tool list, using the deny-all and
+// allow-all sentinels.
 func (s ResolvedToolScope) MarshalJSON() ([]byte, error) {
 	switch {
 	case s.denyAll:
@@ -195,6 +199,7 @@ func (s ResolvedToolScope) MarshalJSON() ([]byte, error) {
 	}
 }
 
+// UnmarshalJSON decodes a ResolvedToolScope from its allowed-tool list.
 func (s *ResolvedToolScope) UnmarshalJSON(data []byte) error {
 	var names []string
 	if err := json.Unmarshal(data, &names); err != nil {
@@ -364,13 +369,13 @@ func (o PredicateOp) String() string {
 	case PredOpIs:
 		return "is"
 	case PredOpContains:
-		return "contains"
+		return KeyContains
 	case PredOpMissing:
-		return "missing"
+		return KeyMissing
 	case PredOpPresent:
-		return "present"
+		return KeyPresent
 	case PredOpConfidenceLT:
-		return "confidence_below"
+		return KeyConfidenceBelow
 	default:
 		return "invalid"
 	}
@@ -380,10 +385,12 @@ func (o PredicateOp) valid() bool {
 	return o >= PredOpIs && o <= PredOpConfidenceLT
 }
 
+// MarshalJSON encodes o as its stable string name.
 func (o PredicateOp) MarshalJSON() ([]byte, error) {
 	return json.Marshal(o.String())
 }
 
+// UnmarshalJSON decodes a PredicateOp from its string name.
 func (o *PredicateOp) UnmarshalJSON(data []byte) error {
 	var s string
 	if err := json.Unmarshal(data, &s); err != nil {
@@ -397,13 +404,13 @@ func predicateOpFromString(s string) PredicateOp {
 	switch s {
 	case "is":
 		return PredOpIs
-	case "contains":
+	case KeyContains:
 		return PredOpContains
-	case "missing":
+	case KeyMissing:
 		return PredOpMissing
-	case "present":
+	case KeyPresent:
 		return PredOpPresent
-	case "confidence_below":
+	case KeyConfidenceBelow:
 		return PredOpConfidenceLT
 	default:
 		return PredOpInvalid

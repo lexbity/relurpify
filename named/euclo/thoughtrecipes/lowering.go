@@ -16,13 +16,13 @@ type capabilityScopeLookup = ToolVocabularyLookup
 
 // LowerDocument lowers a document without a capability registry: standalone
 // capability steps scope to exactly the named capability.
-func LowerDocument(doc *ThoughtRecipeDocument) (*ExecutionPlan, error) {
+func LowerDocument(doc *Document) (*ExecutionPlan, error) {
 	return LowerDocumentWithRegistry(doc, nil)
 }
 
 // LowerDocumentWithRegistry lowers a document with a capability lookup so
 // manifest-declared coordination targets union into capability step scopes.
-func LowerDocumentWithRegistry(doc *ThoughtRecipeDocument, lookup ToolVocabularyLookup) (*ExecutionPlan, error) {
+func LowerDocumentWithRegistry(doc *Document, lookup ToolVocabularyLookup) (*ExecutionPlan, error) {
 	if doc == nil {
 		return nil, fmt.Errorf("thoughtrecipe document is nil")
 	}
@@ -84,7 +84,7 @@ func LowerDocumentWithRegistry(doc *ThoughtRecipeDocument, lookup ToolVocabulary
 	return plan, nil
 }
 
-func firstTriggerDecl(doc *ThoughtRecipeDocument) *TriggerDecl {
+func firstTriggerDecl(doc *Document) *TriggerDecl {
 	if doc == nil {
 		return nil
 	}
@@ -211,13 +211,13 @@ func lowerTypedBlockItem(item ExecutionItem) TypedDirective {
 		return lowerTypedDirective(item)
 	case *FromClause:
 		return TypedDirective{
-			Name:     "from",
+			Name:     KeyFrom,
 			TextArgs: []string{strings.TrimSpace(valueExprRaw(node.Source))},
 			Span:     node.GetSpan(),
 		}
 	case *GoalClause:
 		return TypedDirective{
-			Name:     "goal",
+			Name:     KeyGoal,
 			TextArgs: []string{strings.TrimSpace(node.Text.Value)},
 			Span:     node.GetSpan(),
 		}
@@ -243,19 +243,19 @@ func lowerTypedBlockItem(item ExecutionItem) TypedDirective {
 			args = append(args, captureBindingRaw(binding))
 		}
 		return TypedDirective{
-			Name:     "capture",
+			Name:     KeyCapture,
 			TextArgs: args,
 			Span:     node.GetSpan(),
 		}
 	case *RunDecl:
 		return TypedDirective{
-			Name:     "run",
+			Name:     KeyRun,
 			TextArgs: []string{strings.TrimSpace(node.Agent.Value)},
 			Span:     node.GetSpan(),
 		}
 	case *DelegateDecl:
 		return TypedDirective{
-			Name:     "delegate",
+			Name:     KeyDelegate,
 			TextArgs: []string{strings.TrimSpace(node.Agent.Value)},
 			Span:     node.GetSpan(),
 		}
@@ -301,7 +301,7 @@ func lowerAskDecl(decl *AskDecl, runIndex *int) (ExecutionStep, error) {
 	step := ExecutionStep{
 		ID:              stepID,
 		Kind:            StepKindAsk,
-		Paradigm:        "euclo",
+		Paradigm:        KeyEuclo,
 		Question:        question,
 		Choices:         choices,
 		ChoiceSource:    choiceSource,
@@ -357,7 +357,7 @@ func lowerAskItems(items []AskItem) (question string, choices []string, choiceSo
 	}
 	if len(captures) > 0 || strings.TrimSpace(question) != "" || len(choices) > 0 || strings.TrimSpace(choiceSource) != "" || strings.TrimSpace(promptID) != "" {
 		config = map[string]any{
-			"question": question,
+			KeyQuestion: question,
 		}
 	}
 	if strings.TrimSpace(promptID) != "" {
@@ -431,10 +431,10 @@ func lowerPipelineDecl(decl *PipelineDecl, agents map[string]AgentBinding, runIn
 	step := ExecutionStep{
 		ID:             pipelineID,
 		Kind:           StepKindPipelineStage,
-		Paradigm:       "euclo",
+		Paradigm:       KeyEuclo,
 		PipelineStages: append([]PipelineStageSpec(nil), stages...),
 		Config: map[string]any{
-			"pipeline_id": pipelineID,
+			KeyPipelineID: pipelineID,
 			"stage_count": len(stages),
 			"step_count":  totalSteps,
 			"stages":      summarizePipelineStageSpecs(stages),

@@ -4,7 +4,7 @@
 // - CompilationRequest, CompilationResult, CompilationRecord are compiler-owned
 // - CacheKey, CacheEntry are compiler-owned
 // - SummarySubstitution is compiler-owned
-// - CompilerArtifact represents compiler-produced artifacts (candidates, replay metadata)
+// - Artifact represents compiler-produced artifacts (candidates, replay metadata)
 // - Compiler state and context-streaming behavior belong to this package
 //
 // The compiler depends on framework/persistence for its persistence adapter interface.
@@ -33,8 +33,15 @@ const (
 )
 
 const (
-	BudgetShortfallPolicyFail        = "fail"
+	// BudgetShortfallPolicyFail aborts the compilation when the token budget
+	// cannot be met.
+	BudgetShortfallPolicyFail = "fail"
+	// BudgetShortfallPolicyEmitPartial emits a partial compilation when the
+	// token budget cannot be met.
 	BudgetShortfallPolicyEmitPartial = "emit_partial"
+	// summaryDerivationSourceOrigin marks chunks whose content was produced by
+	// summarization rather than retrieved.
+	summaryDerivationSourceOrigin = "summary_derivation"
 )
 
 // CompilationRequest represents a request to compile context.

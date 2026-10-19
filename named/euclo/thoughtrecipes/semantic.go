@@ -25,15 +25,15 @@ type PromptRegistryLookup interface {
 	Get(id string) (*prompt.PromptConfig, bool)
 }
 
-// ThoughtRecipeRegistryLookup is the minimal thoughtrecipe registry contract
+// RegistryLookup is the minimal thoughtrecipe registry contract
 // required by semantic validation.
-type ThoughtRecipeRegistryLookup interface {
+type RegistryLookup interface {
 	Get(id string) (*surface.ThoughtRecipe, bool)
 }
 
 // SymbolTable stores the resolved names for a Euclo document.
 type SymbolTable struct {
-	Document    *ThoughtRecipeDocument
+	Document    *Document
 	agents      map[string]*AgentDecl
 	inputs      map[string]*InputDecl
 	types       map[string]*TypeDecl
@@ -43,7 +43,7 @@ type SymbolTable struct {
 	invocations []*CapabilityInvocation
 	capability  ToolVocabularyLookup
 	prompts     PromptRegistryLookup
-	recipes     ThoughtRecipeRegistryLookup
+	recipes     RegistryLookup
 	paradigms   *paradigm.ContractRegistry
 	Warnings    []SemanticWarning
 }
@@ -52,7 +52,7 @@ type SymbolTable struct {
 // validation defaults to the process-wide paradigm registry (populated by the
 // cognitionzoo paradigm packages' init()s); callers that need a scoped
 // registry use WithParadigmRegistry.
-func NewSymbolTable(doc *ThoughtRecipeDocument) *SymbolTable {
+func NewSymbolTable(doc *Document) *SymbolTable {
 	return &SymbolTable{
 		Document:  doc,
 		agents:    make(map[string]*AgentDecl),
@@ -80,7 +80,7 @@ func (s *SymbolTable) WithPromptRegistry(reg PromptRegistryLookup) *SymbolTable 
 }
 
 // WithRecipeRegistry wires thoughtrecipe lookup into the symbol table.
-func (s *SymbolTable) WithRecipeRegistry(reg ThoughtRecipeRegistryLookup) *SymbolTable {
+func (s *SymbolTable) WithRecipeRegistry(reg RegistryLookup) *SymbolTable {
 	s.recipes = reg
 	return s
 }
@@ -459,7 +459,7 @@ func (s *SymbolTable) resolveRouteDecl(decl *RouteDecl, stepLabel string) error 
 		return nil
 	}
 	if stepLabel == "" {
-		stepLabel = "route"
+		stepLabel = KeyRoute
 	}
 	for _, branch := range decl.Branches {
 		if !branch.IsElse {
@@ -549,7 +549,7 @@ func (s *SymbolTable) resolvePromptRef(ref *PromptRef, span SourceSpan, context 
 	return nil
 }
 
-func (s *SymbolTable) resolvePipelineDecl(decl *PipelineDecl, stepLabel string) error {
+func (s *SymbolTable) resolvePipelineDecl(decl *PipelineDecl, _ string) error {
 	if decl == nil {
 		return nil
 	}
@@ -587,10 +587,10 @@ func (s *SymbolTable) resolveCaptureBlock(block *CaptureBlock) error {
 			}
 		}
 		if binding.Epistemics != nil {
-			if binding.Epistemics.Value != "claimed" && binding.Epistemics.Value != "given" {
+			if binding.Epistemics.Value != KeyClaimed && binding.Epistemics.Value != KeyGiven {
 				return fmt.Errorf("%s:%d:%d: unknown epistemic annotation %q (expected claimed|given)", binding.GetSpan().Start.File, binding.GetSpan().Start.Line, binding.GetSpan().Start.Column, binding.Epistemics.Value)
 			}
-			if binding.Epistemics.Value == "given" && !s.captureSourceCanCarryUserOrigin(binding.Source) {
+			if binding.Epistemics.Value == KeyGiven && !s.captureSourceCanCarryUserOrigin(binding.Source) {
 				return fmt.Errorf("%s:%d:%d: 'as given' requires a user-origin source (user.* or an input declared from user.request)", binding.GetSpan().Start.File, binding.GetSpan().Start.Line, binding.GetSpan().Start.Column)
 			}
 		}
@@ -610,9 +610,9 @@ func (s *SymbolTable) captureSourceCanCarryUserOrigin(source ValueExpr) bool {
 		return false
 	}
 	switch path.Parts[0].Value {
-	case "user":
+	case KeyUser:
 		return len(path.Parts) >= 2
-	case "input":
+	case KeyInput:
 		if len(path.Parts) < 2 {
 			return false
 		}
@@ -631,7 +631,7 @@ func inputDeclHasUserOrigin(decl *InputDecl) bool {
 	if !ok || len(source.Parts) == 0 {
 		return false
 	}
-	return source.Parts[0].Value == "user" && len(source.Parts) >= 2
+	return source.Parts[0].Value == KeyUser && len(source.Parts) >= 2
 }
 
 func (s *SymbolTable) resolveCapabilityInvocation(inv *CapabilityInvocation) error {
@@ -670,7 +670,7 @@ func (s *SymbolTable) resolvePredicateExpr(pred PredicateExpr) error {
 	if pred.Kind == "" && pred.Raw == "" {
 		return nil
 	}
-	if pred.Kind == "missing" || pred.Kind == "present" {
+	if pred.Kind == KeyMissing || pred.Kind == KeyPresent {
 		return s.validateReference(pred.Subject)
 	}
 	if err := s.validateReference(pred.Subject); err != nil {
@@ -768,14 +768,14 @@ func (s *SymbolTable) validateNamespace(expr PathExpr) error {
 	}
 	namespace := strings.TrimSpace(expr.Parts[0].Value)
 	switch namespace {
-	case "input":
+	case KeyInput:
 		if len(expr.Parts) < 2 {
 			return fmt.Errorf("%s:%d:%d: input reference requires a name", expr.Span.Start.File, expr.Span.Start.Line, expr.Span.Start.Column)
 		}
 		if _, ok := s.inputs[expr.Parts[1].Value]; !ok {
 			return fmt.Errorf("%s:%d:%d: unknown input %q", expr.Span.Start.File, expr.Span.Start.Line, expr.Span.Start.Column, expr.Parts[1].Value)
 		}
-	case "state", "scratch", "user", "output":
+	case KeyState, KeyScratch, KeyUser, KeyOutput:
 		if len(expr.Parts) < 2 {
 			return fmt.Errorf("%s:%d:%d: %s reference requires a field name", expr.Span.Start.File, expr.Span.Start.Line, expr.Span.Start.Column, namespace)
 		}
@@ -837,7 +837,7 @@ func (s *SymbolTable) lookupCapability(inv *CapabilityInvocation) (descriptor.Ca
 	return descriptor.CapabilityDescriptor{}, false
 }
 
-func hasAskUserDecl(doc *ThoughtRecipeDocument) bool {
+func hasAskUserDecl(doc *Document) bool {
 	if doc == nil {
 		return false
 	}

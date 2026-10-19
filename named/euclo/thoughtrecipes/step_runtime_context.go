@@ -2,6 +2,7 @@ package thoughtrecipe
 
 import (
 	"context"
+	"errors"
 	"strings"
 
 	"codeburg.org/lexbit/relurpify/context/contextdata"
@@ -14,7 +15,7 @@ import (
 func (c *stepCore) buildRuntimeContext(ctx context.Context, env *contextdata.Envelope) (prompt.RuntimeContext, error) {
 	data := thoughtrecipeTemplateData(env, c.step)
 	scopedRegistry, err := c.scopedRegistry()
-	if err != nil {
+	if err != nil && !errors.Is(err, ErrNoCapabilityScope) {
 		return prompt.RuntimeContext{}, err
 	}
 	runtime := prompt.NewRuntimeContext(env, c.step.Paradigm, "euclo").
@@ -50,8 +51,8 @@ func (c *stepCore) buildRuntimeContext(ctx context.Context, env *contextdata.Env
 
 func (c *stepCore) stepRuntimeState(data map[string]any) map[string]any {
 	state := map[string]any{
-		"execution_step_id":   c.step.ID,
-		"execution_step_type": c.step.Kind.String(),
+		KeyExecutionStepID:    c.step.ID,
+		KeyExecutionStepType:  c.step.Kind.String(),
 		"execution_paradigm":  c.step.Paradigm,
 		"execution_goal":      c.step.Goal,
 		"execution_question":  c.step.Question,

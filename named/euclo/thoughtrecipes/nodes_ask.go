@@ -63,12 +63,12 @@ func (n *AskNode) Execute(ctx context.Context, env *contextdata.Envelope) (*exec
 			Success: true,
 			Data: execution.NewToolResultPayload(map[string]any{
 				"paused":   true,
-				"frame_id": frame.ID,
+				KeyFrameID: frame.ID,
 				"question": n.step.Question,
 			}),
 			Metadata: map[string]any{
 				"euclo.interaction.pause": true,
-				"frame_id":                frame.ID,
+				KeyFrameID:                frame.ID,
 			},
 		}
 		return stepResult, nil
@@ -81,7 +81,7 @@ func (n *AskNode) Execute(ctx context.Context, env *contextdata.Envelope) (*exec
 		Data: execution.NewToolResultPayload(map[string]any{
 			"answer":        answer,
 			"selected_slot": answer,
-			"frame_id":      frame.ID,
+			KeyFrameID:      frame.ID,
 		}),
 	}
 	if frame.Response != nil && len(frame.Response.ExtraData) > 0 {

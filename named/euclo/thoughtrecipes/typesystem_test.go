@@ -95,7 +95,7 @@ agent reviewer uses react
 }
 
 func TestTypeSystemCompatibility(t *testing.T) {
-	ts := NewTypeSystem(&ThoughtRecipeDocument{})
+	ts := NewTypeSystem(&Document{})
 
 	cases := []struct {
 		name string
@@ -138,7 +138,7 @@ func TestTypeSystemCompatibility(t *testing.T) {
 }
 
 func TestTypeSystemHandlesDeepNestingIteratively(t *testing.T) {
-	ts := NewTypeSystem(&ThoughtRecipeDocument{})
+	ts := NewTypeSystem(&Document{})
 
 	deepType := nestedListType(2000)
 	if err := ts.validateTypeExpr(deepType, false); err != nil {

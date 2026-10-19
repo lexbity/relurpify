@@ -52,7 +52,7 @@ type compilationCache struct {
 	invalidationHits atomic.Uint64
 }
 
-func newCompilationCache(clock func() time.Time) compilationCache {
+func newCompilationCache(_ func() time.Time) compilationCache {
 	return compilationCache{
 		entries:     bounded.NewCache[CacheKey, *cacheEntry](compilationCacheCap, compilationCacheTTL, nil),
 		invalidated: bounded.NewCache[knowledge.ChunkID, struct{}](invalidatedChunksCap, 0, nil),

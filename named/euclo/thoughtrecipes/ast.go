@@ -47,7 +47,9 @@ type Declaration interface {
 type ImportKind string
 
 const (
+	// ImportKindPrompt imports a prompt binding into the local recipe scope.
 	ImportKindPrompt ImportKind = "prompt"
+	// ImportKindRecipe imports a recipe binding into the local recipe scope.
 	ImportKindRecipe ImportKind = "recipe"
 )
 
@@ -81,16 +83,16 @@ type AskItem interface {
 	askItemNode()
 }
 
-// ThoughtRecipeDocument is the source-level Euclo thoughtrecipe AST.
-type ThoughtRecipeDocument struct {
+// Document is the source-level Euclo thoughtrecipe AST.
+type Document struct {
 	SourcePath   string
 	Name         string
-	Header       ThoughtRecipeHeader
+	Header       Header
 	Declarations []Declaration
 }
 
-// ThoughtRecipeHeader captures the thoughtrecipe declaration line and optional description.
-type ThoughtRecipeHeader struct {
+// Header captures the thoughtrecipe declaration line and optional description.
+type Header struct {
 	positioned
 	Name        Identifier
 	Description *StringLiteral

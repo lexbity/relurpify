@@ -130,7 +130,7 @@ func newCapabilityRegistry(t *testing.T, ids ...string) *registry.CapabilityRegi
 	return reg
 }
 
-func newThoughtRecipeRegistry(t *testing.T, thoughtrecipe *surface.ThoughtRecipe) *thoughtrecipepkg.ThoughtRecipeRegistry {
+func newThoughtRecipeRegistry(t *testing.T, thoughtrecipe *surface.ThoughtRecipe) *thoughtrecipepkg.Registry {
 	t.Helper()
 	reg := thoughtrecipepkg.NewThoughtRecipeRegistry()
 	if thoughtrecipe == nil {

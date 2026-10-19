@@ -13,12 +13,18 @@ import (
 type ClarificationStepType string
 
 const (
-	ClarificationStepTypeClarify  ClarificationStepType = "intent_clarify"
-	ClarificationStepTypeExtract  ClarificationStepType = "intent_extract"
-	ClarificationStepTypeGround   ClarificationStepType = "intent_ground"
-	ClarificationStepTypeProject  ClarificationStepType = "intent_project"
+	// ClarificationStepTypeClarify identifies the intent_clarify step.
+	ClarificationStepTypeClarify ClarificationStepType = "intent_clarify"
+	// ClarificationStepTypeExtract identifies the intent_extract step.
+	ClarificationStepTypeExtract ClarificationStepType = "intent_extract"
+	// ClarificationStepTypeGround identifies the intent_ground step.
+	ClarificationStepTypeGround ClarificationStepType = "intent_ground"
+	// ClarificationStepTypeProject identifies the intent_project step.
+	ClarificationStepTypeProject ClarificationStepType = "intent_project"
+	// ClarificationStepTypeRetrieve identifies the intent_retrieve step.
 	ClarificationStepTypeRetrieve ClarificationStepType = "intent_retrieve"
-	ClarificationStepTypeHandoff  ClarificationStepType = "intent_handoff"
+	// ClarificationStepTypeHandoff identifies the intent_handoff step.
+	ClarificationStepTypeHandoff ClarificationStepType = "intent_handoff"
 )
 
 // ClarificationStepConfig is the typed clarification contract carried in step config.

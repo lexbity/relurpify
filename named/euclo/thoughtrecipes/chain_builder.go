@@ -22,7 +22,7 @@ import (
 func buildChainerChain(directives []TypedDirective) (*chaineragent.Chain, error) {
 	var linkBlocks []TypedDirective
 	for _, directive := range directives {
-		if directive.Name == "link" {
+		if directive.Name == KeyLink {
 			linkBlocks = append(linkBlocks, directive)
 		}
 	}
@@ -37,15 +37,15 @@ func buildChainerChain(directives []TypedDirective) (*chaineragent.Chain, error)
 		}
 		for _, item := range block.Body {
 			switch item.Name {
-			case "from":
+			case KeyFrom:
 				link.InputKeys = append(link.InputKeys, nonEmptyTextArgs(item.TextArgs)...)
-			case "prompt":
+			case KeyImportKindPrompt:
 				prompt := unquoteString(strings.Join(nonEmptyTextArgs(item.TextArgs), " "))
 				if strings.TrimSpace(prompt) == "" {
 					return nil, fmt.Errorf("chainer link %q requires a non-empty prompt", link.Name)
 				}
 				link.SystemPrompt = prompt
-			case "capture":
+			case KeyCapture:
 				destination := captureDestination(item.TextArgs)
 				if destination == "" {
 					return nil, fmt.Errorf("chainer link %q requires a capture destination", link.Name)
@@ -70,7 +70,7 @@ func linkBlockName(block TypedDirective) string {
 			return name
 		}
 	}
-	return "link"
+	return KeyLink
 }
 
 func nonEmptyTextArgs(args []string) []string {

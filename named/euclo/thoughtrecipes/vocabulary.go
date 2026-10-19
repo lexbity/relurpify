@@ -49,7 +49,7 @@ func ResolveDeclaredToolNames(recipe, step string, names []string, lookup ToolVo
 	seen := make(map[string]struct{}, len(names))
 	for _, raw := range names {
 		name := strings.TrimSpace(raw)
-		if name == "" || name == "__euclo__.deny_all__" {
+		if name == "" || name == KeyDenyAll {
 			continue
 		}
 		if _, ok := seen[name]; ok {
@@ -154,7 +154,7 @@ func FindNonCallableDeclaredTools(names []string, lookup ToolVocabularyLookup) [
 	var out []string
 	for _, raw := range names {
 		name := strings.TrimSpace(raw)
-		if name == "" || name == "__euclo__.deny_all__" {
+		if name == "" || name == KeyDenyAll {
 			continue
 		}
 		if _, dup := seen[name]; dup {

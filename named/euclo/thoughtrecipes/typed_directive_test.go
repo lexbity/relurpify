@@ -181,7 +181,7 @@ func TestLowerTypedDirectivesCoverContractRegistry(t *testing.T) {
 }
 
 // findRunDecl returns the first top-level run declaration in the document.
-func findRunDecl(t *testing.T, doc *ThoughtRecipeDocument) *RunDecl {
+func findRunDecl(t *testing.T, doc *Document) *RunDecl {
 	t.Helper()
 	for _, decl := range doc.Declarations {
 		if run, ok := decl.(*RunDecl); ok {

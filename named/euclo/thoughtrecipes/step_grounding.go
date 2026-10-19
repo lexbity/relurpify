@@ -112,7 +112,7 @@ func captureSourceHasUserOrigin(env *contextdata.Envelope, binding CaptureBindin
 			return true
 		}
 	}
-	if len(path.Parts) > 0 && path.Parts[0].Value == "user" {
+	if len(path.Parts) > 0 && path.Parts[0].Value == KeyUser {
 		return true
 	}
 	return false
@@ -173,12 +173,12 @@ func recipeIDFromEnvelope(env *contextdata.Envelope) string {
 	return ""
 }
 
-func cappedChunkIDs(ids []contextdata.ChunkID, cap int) []knowledge.ChunkID {
-	if cap <= 0 {
+func cappedChunkIDs(ids []contextdata.ChunkID, limit int) []knowledge.ChunkID {
+	if limit <= 0 {
 		return nil
 	}
-	out := make([]knowledge.ChunkID, 0, cap)
-	seen := make(map[knowledge.ChunkID]struct{}, cap)
+	out := make([]knowledge.ChunkID, 0, limit)
+	seen := make(map[knowledge.ChunkID]struct{}, limit)
 	for _, id := range ids {
 		if id == "" {
 			continue
@@ -189,7 +189,7 @@ func cappedChunkIDs(ids []contextdata.ChunkID, cap int) []knowledge.ChunkID {
 		}
 		seen[chunkID] = struct{}{}
 		out = append(out, chunkID)
-		if len(out) >= cap {
+		if len(out) >= limit {
 			break
 		}
 	}

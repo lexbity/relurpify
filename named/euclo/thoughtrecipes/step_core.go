@@ -3,6 +3,7 @@ package thoughtrecipe
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"text/template"
@@ -116,10 +117,10 @@ func (c *stepCore) buildTask(ctx context.Context, env *contextdata.Envelope) (*e
 	return task, nil
 }
 
-func (c *stepCore) buildAgent(task *execution.Task) (agentgraph.WorkflowExecutor, error) {
+func (c *stepCore) buildAgent(_ *execution.Task) (agentgraph.WorkflowExecutor, error) {
 	deps := c.deps
 	scopedRegistry, err := c.scopedRegistry()
-	if err != nil {
+	if err != nil && !errors.Is(err, ErrNoCapabilityScope) {
 		return nil, err
 	}
 	if scopedRegistry != nil {
@@ -129,10 +130,10 @@ func (c *stepCore) buildAgent(task *execution.Task) (agentgraph.WorkflowExecutor
 	switch strings.ToLower(strings.TrimSpace(c.step.Paradigm)) {
 	case "react":
 		opts := c.streamOptions()
-		if cap, err := untilIterationCap(c.step.Directives); err != nil {
+		if iterationCap, err := untilIterationCap(c.step.Directives); err != nil {
 			return nil, err
-		} else if cap > 0 {
-			opts = append(opts, reactagent.WithMaxIterations(cap))
+		} else if iterationCap > 0 {
+			opts = append(opts, reactagent.WithMaxIterations(iterationCap))
 		}
 		return reactagent.New(deps, opts...), nil
 	case "planner":

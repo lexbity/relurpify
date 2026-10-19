@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func firstCaptureBlockFromDoc(t *testing.T, doc *ThoughtRecipeDocument) *CaptureBlock {
+func firstCaptureBlockFromDoc(t *testing.T, doc *Document) *CaptureBlock {
 	t.Helper()
 	for _, decl := range doc.Declarations {
 		run, ok := decl.(*RunDecl)

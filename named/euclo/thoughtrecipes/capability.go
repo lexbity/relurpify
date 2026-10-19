@@ -98,18 +98,18 @@ func TriggerPolicyFromDecl(decl *TriggerDecl) (TriggerPolicyRequirements, error)
 		effect := strings.ToLower(strings.TrimSpace(line.Effect.Value))
 		resource := strings.ToLower(strings.TrimSpace(valueExprRaw(line.Resource)))
 		switch effect {
-		case "read":
+		case KeyRead:
 			if resource != "workspace" {
 				return TriggerPolicyRequirements{}, fmt.Errorf("%s:%d:%d: may read requires workspace", line.GetSpan().Start.File, line.GetSpan().Start.Line, line.GetSpan().Start.Column)
 			}
 			req.ReadWorkspace = true
-		case "write":
+		case KeyWrite:
 			if resource != "workspace" {
 				return TriggerPolicyRequirements{}, fmt.Errorf("%s:%d:%d: may write requires workspace", line.GetSpan().Start.File, line.GetSpan().Start.Line, line.GetSpan().Start.Column)
 			}
 			req.WriteWorkspace = true
-		case "ask":
-			if resource != "user" {
+		case KeyAsk:
+			if resource != KeyUser {
 				return TriggerPolicyRequirements{}, fmt.Errorf("%s:%d:%d: may ask requires user", line.GetSpan().Start.File, line.GetSpan().Start.Line, line.GetSpan().Start.Column)
 			}
 			req.AskUser = true
@@ -251,7 +251,7 @@ func capabilityRequiresWrite(desc descriptor.CapabilityDescriptor) bool {
 	for _, tag := range desc.Tags {
 		tag = strings.ToLower(strings.TrimSpace(tag))
 		switch tag {
-		case "write", "mutating", "destructive", "refactor", "shell", "process":
+		case KeyWrite, "mutating", "destructive", "refactor", "shell", "process":
 			return true
 		}
 	}
@@ -271,7 +271,7 @@ func lowerInvocationReference(expr ValueExpr, clause string) (string, error) {
 	}
 	namespace := strings.ToLower(strings.TrimSpace(path.Parts[0].Value))
 	switch namespace {
-	case "input", "state", "scratch", "user", "output":
+	case KeyInput, KeyState, KeyScratch, KeyUser, KeyOutput:
 		return valueExprRaw(expr), nil
 	default:
 		return "", fmt.Errorf("%s:%d:%d: %s operand must use input, state, scratch, user, or output", expr.GetSpan().Start.File, expr.GetSpan().Start.Line, expr.GetSpan().Start.Column, clause)
