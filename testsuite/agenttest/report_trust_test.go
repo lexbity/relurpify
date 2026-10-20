@@ -101,6 +101,9 @@ func TestUnparsableReportFailsVerification(t *testing.T) {
 // that cannot be written fails the case — the executor returns the error
 // instead of green-passing with no evidence on disk.
 func TestWriteFailureFailsCase(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("skipping: root bypasses file permissions")
+	}
 	dir := t.TempDir()
 	blocker := filepath.Join(dir, "report.json")
 	require.NoError(t, os.WriteFile(blocker, []byte("x"), 0o600))

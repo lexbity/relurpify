@@ -22,6 +22,9 @@ func TestLoadFailsOnMalformedWorkspaceYAML(t *testing.T) {
 }
 
 func TestLoadFailsOnUnreadableWorkspaceYAML(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("skipping: root bypasses file permissions")
+	}
 	workspace := t.TempDir()
 	copyDir(t, filepath.Join("..", "..", "relurpify_cfg"), filepath.Join(workspace, "relurpify_cfg"))
 	require.NoError(t, os.Chmod(filepath.Join(workspace, "relurpify_cfg", "workspace.yaml"), 0000)) //nolint:gosec // test fixture intentionally made unreadable
