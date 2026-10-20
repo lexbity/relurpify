@@ -278,14 +278,19 @@ func BuildDoctorReport(ctx context.Context, cfg Config, secrets config.Secrets) 
 		Details:   firstNonEmpty(report.ModelProfilesError, report.Inference.SelectedProfile, "workspace profile available"),
 	})
 	// Sandbox checks
+	runscPresent := env.Sandbox.Runsc.Path != ""
+	dockerPresent := env.Sandbox.Docker.Path != ""
 	runscOK := env.Sandbox.Runsc.Error == ""
 	dockerOK := env.Sandbox.Docker.Error == ""
-	dockerDegraded := env.Sandbox.Docker.Path != "" && !dockerOK
+	dockerDegraded := dockerPresent && !dockerOK
+	sandboxPresent := runscPresent || dockerPresent
+	sandboxVerified := runscOK || dockerOK
 	deps = append(deps, DependencyStatus{
 		Name:      "sandbox_backend",
 		Required:  true,
-		Available: runscOK || dockerOK,
-		Blocking:  report.ConfigError == "" && (!runscOK && !dockerOK),
+		Available: sandboxVerified,
+		Degraded:  sandboxPresent && !sandboxVerified,
+		Blocking:  report.ConfigError == "" && !sandboxPresent,
 		Details:   formatSandboxDetail(firstNonEmpty(env.Sandbox.Runsc.Version, env.Sandbox.Docker.Version, env.Sandbox.Runsc.Error, env.Sandbox.Docker.Error)),
 	})
 	deps = append(deps, DependencyStatus{

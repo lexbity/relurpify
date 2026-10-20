@@ -270,11 +270,13 @@ func TestStatusCommandRendersJSONSnapshot(t *testing.T) {
 	require.NotEmpty(t, out, "status --format json must render output")
 
 	// The runtime may interleave log lines; the JSON document must be present
-	// and parse as an object.
+	// and parse as an object. Use a Decoder so trailing non-JSON output
+	// (e.g. cobra's "Error: workspace not ready" on stderr) is ignored.
 	idx := strings.Index(out, "{")
 	require.GreaterOrEqual(t, idx, 0, "expected JSON output, got: %s", out)
 	var snapshot map[string]any
-	require.NoError(t, json.Unmarshal([]byte(strings.TrimRight(out[idx:], "\n")), &snapshot),
+	dec := json.NewDecoder(strings.NewReader(out[idx:]))
+	require.NoError(t, dec.Decode(&snapshot),
 		"rendered status JSON must parse, got: %s", out)
 }
 
