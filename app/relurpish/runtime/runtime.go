@@ -783,6 +783,16 @@ func (r *Runtime) Close(ctx context.Context) error {
 		r.coordinator.DrainAndStop()
 	}
 
+	// 1b. Flush the telemetry chain so the shutdown accounting emitted by
+	// DrainAndStop reaches the durable segment writer before the chain is
+	// torn down. Under heavy emit load the BatchProcessor queue may be
+	// saturated; ForceFlush in Close only drains the current batch.
+	if r.Workspace != nil && r.Workspace.TelemetryChain != nil {
+		if err := r.Workspace.TelemetryChain.Flush(ctx); err != nil {
+			errs = append(errs, fmt.Errorf("flush telemetry: %w", err))
+		}
+	}
+
 	// 2. The knowledge bridge stops forwarding before the broadcast sink
 	// closes, so no chunk commit races subscriber teardown.
 	if r.knowledgeBridge != nil {

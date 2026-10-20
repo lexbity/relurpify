@@ -262,6 +262,40 @@ func (c *Chain) Emit(ev telemetry.Event) {
 	emitLog(c.logger, ev)
 }
 
+// Flush forces all pending events through the providers to the durable
+// segment writer. It is safe to call multiple times and is idempotent.
+// Use Flush before Close when shutdown accounting must reach the durable
+// trail even under heavy emit load (NFR-5).
+func (c *Chain) Flush(ctx context.Context) error {
+	if c == nil || !c.enabled || c.closed.Load() {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), closeFlushTimeout)
+	defer cancel()
+	var errs []error
+	if c.tracerProvider != nil {
+		if err := c.tracerProvider.ForceFlush(ctx); err != nil {
+			errs = append(errs, fmt.Errorf("trace flush: %w", err))
+		}
+	}
+	if c.loggerProvider != nil {
+		if err := c.loggerProvider.ForceFlush(ctx); err != nil {
+			errs = append(errs, fmt.Errorf("log flush: %w", err))
+		}
+	}
+	if c.meterProvider != nil {
+		if err := c.meterProvider.ForceFlush(ctx); err != nil {
+			errs = append(errs, fmt.Errorf("metric flush: %w", err))
+		}
+	}
+	if c.selfMeterProvider != nil {
+		if err := c.selfMeterProvider.ForceFlush(ctx); err != nil {
+			errs = append(errs, fmt.Errorf("self metric flush: %w", err))
+		}
+	}
+	return errors.Join(errs...)
+}
+
 // Close flushes and shuts down every provider, then closes the segment writer.
 // It is idempotent. The close sequence is bounded (D9/NFR-5) and errors are
 // joined rather than fatal. ctx must be non-nil, as Go convention requires.

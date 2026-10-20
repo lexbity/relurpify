@@ -14,15 +14,15 @@
 
 ## Why Relurpify?
 
-You should own your tools.
+Own the tools that you creatively build with.
 
-Not rent them from a platform, not trust a black box, not hand your
+Not trust a black box, not rent them from a platform, not hand your
 workspace to something you cannot inspect, cannot stop, and cannot
 understand. 
 
 Originally built as an Generative AI experiment - I wanted to build a 
 platform so that others on their own workstation
- build smart, deterministic, automated tools that are **theirs** —
+ build smart, deterministic, automated tools that is **theirs** ;
 safe, governed, and fully under their control.
 
 No strings attached - it's Apache 2 licensed. 
@@ -99,7 +99,7 @@ Relurpify is a local-first agent framework written in Go. It ships a full stack:
 - **relurplint** — the workspace linter. Config, tools, recipes, prompts,
   and agents — all machine-checked.
   
-- **dev-agent** — the agent test-suite runner. YAML-driven agent tests with
+- **dev-agent** — a CLI only Euclo agent test-suite runner. YAML-driven agent tests with
   outcome/security/benchmark assertions, tape replay, and conformance
   suites.
 
