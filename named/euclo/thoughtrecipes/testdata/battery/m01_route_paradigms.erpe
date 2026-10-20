@@ -1,0 +1,60 @@
+thoughtrecipe battery.mixed.route_paradigms
+"React triage, routed by typed severity, into planner and chainer branches."
+
+trigger as capability:
+  may read workspace
+  may write workspace
+  may invoke ["file_read", "grep"]
+  family ["review"]
+
+input workspace: "**/*"
+input prompt: user.request
+
+type Finding:
+  title: Text
+  severity: low | medium | high
+
+agent triager uses react
+agent planner uses planner
+agent summarizer uses chainer
+agent fixer uses react
+
+run triager:
+  may invoke ["file_read", "grep"]
+  from input.workspace
+  stream "symbols relevant to the request" max 256 mode blocking
+  goal "Triage the request and rate its severity."
+  capture:
+    finding: Finding -> state.finding
+    severity: low | medium | high -> state.severity
+
+route:
+  when state.severity is high:
+    delegate to planner:
+      from state.finding
+      plan "Identify the smallest useful set of actions."
+      step "Inspect the finding":
+        do relurpic:code_review
+      verify "Check that the plan addresses the finding."
+      summarize "Produce a concise implementation plan."
+      capture:
+        plan: Text -> state.plan
+
+  when state.severity is medium:
+    run fixer:
+      may invoke ["file_read", "file_write"]
+      from state.finding
+      goal "Apply the smallest correct fix."
+      capture:
+        fix: Text -> state.fix
+
+  otherwise:
+    capture:
+      state.finding -> state.plan
+
+run summarizer:
+  from state.plan
+  link summarize:
+    from state.plan
+    prompt "Summarize the outcome for the user."
+    capture summary: Markdown -> output.result

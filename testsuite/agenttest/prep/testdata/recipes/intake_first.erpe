@@ -1,0 +1,18 @@
+thoughtrecipe prep_intake_first
+"Dry-run fixture: no stream clause anywhere — the run's only streamed context is the one the INTAKE compile delivers (D5), so the first paradigm call renders the intake slice."
+
+trigger as capability:
+  may read workspace
+  keyword ["wombat-intake-row"]
+  family ["prep-fixtures"]
+
+input workspace: "**/*"
+input prompt: user.request
+
+agent worker uses react
+
+run worker:
+  may invoke ["prep_probe"]
+  from input.prompt
+  goal "Summarize the seeded context about wombat-intake-row."
+  capture result -> state.summary

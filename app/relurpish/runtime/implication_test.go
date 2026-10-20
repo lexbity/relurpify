@@ -19,6 +19,7 @@ import (
 // TestDoctorReadyImpliesRuntimeNewOk verifies that on a good workspace W,
 // doctor.Ready == true implies runtime.New succeeds (AC-9, Q7).
 func TestDoctorReadyImpliesRuntimeNewOk(t *testing.T) {
+	skipWithoutSandboxBackend(t)
 	workspace := t.TempDir()
 	testhelper.WriteCleanWorkspace(t, workspace, testhelper.WorkspaceOpts{
 		Provider: "offline",

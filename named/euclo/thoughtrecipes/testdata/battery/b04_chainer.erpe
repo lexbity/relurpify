@@ -1,0 +1,25 @@
+thoughtrecipe battery.chainer
+"Chainer: ordered prompt links with typed output."
+
+trigger as capability:
+  may read workspace
+  family ["review"]
+
+input workspace: "**/*"
+
+type Summary:
+  title: Text
+  body: Markdown
+
+agent summarizer uses chainer
+
+run summarizer:
+  from input.workspace
+  link summarize:
+    from input.workspace
+    prompt "Summarize the workspace clearly."
+    capture summary: Markdown -> state.summary
+  link polish:
+    from state.summary
+    prompt "Make the summary concise and actionable."
+    capture final: Summary -> output.result

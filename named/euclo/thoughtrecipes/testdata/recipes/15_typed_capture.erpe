@@ -1,0 +1,14 @@
+thoughtrecipe typed_capture
+"Typed capture block with annotated and union-typed bindings (capture-lowering anchor)."
+
+trigger as capability:
+  may read workspace
+
+agent reviewer uses react
+
+run reviewer:
+  from input.prompt
+  goal "Review the codebase and classify severity."
+  capture:
+    findings : ReviewFindings -> state.findings
+    severity : low | medium | high -> state.severity

@@ -1,0 +1,24 @@
+thoughtrecipe battery.reflection
+"Reflection: review then revise via delegation."
+
+trigger as capability:
+  may read workspace
+  may invoke ["file_read"]
+  family ["review"]
+
+input workspace: "**/*"
+
+agent reviewer uses reflection
+agent planner uses planner
+
+run reviewer:
+  may invoke ["file_read"]
+  from input.workspace
+  review "Check correctness, safety, and usefulness."
+  revise when state.review contains issues:
+    delegate to planner:
+      from state.review
+      goal "Plan the revision."
+      capture:
+        plan: Text -> state.revision_plan
+  capture result -> state.review

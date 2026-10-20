@@ -1,0 +1,35 @@
+thoughtrecipe battery.route_ambiguous
+"Routes on ambiguity and confidence."
+
+trigger as capability:
+  may read workspace
+  family ["review"]
+
+input workspace: "**/*"
+
+agent explorer uses react
+
+run explorer:
+  from input.workspace
+  goal "Classify the request."
+  capture:
+    intent: Text -> state.intent
+    confidence: Percent -> state.confidence
+
+route:
+  when state.intent is ambiguous:
+    ask user:
+      question "What did you mean?"
+      choices ["review", "refactor"]
+      capture answer -> state.intent
+
+  when state.confidence confidence below 40:
+    delegate to explorer:
+      from input.workspace
+      goal "Re-run the classification."
+      capture:
+        intent: Text -> state.intent
+
+  otherwise:
+    capture:
+      state.intent -> output.result

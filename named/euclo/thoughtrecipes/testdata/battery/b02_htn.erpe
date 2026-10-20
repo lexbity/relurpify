@@ -1,0 +1,21 @@
+thoughtrecipe battery.htn
+"HTN decomposition."
+
+trigger as capability:
+  may read workspace
+  may invoke ["file_read"]
+  family ["review"]
+
+input workspace: "**/*"
+input prompt: user.request
+
+agent decomposer uses htn
+
+run decomposer:
+  may invoke ["file_read"]
+  from input.workspace
+  method "decompose":
+    task "Check the layering":
+      do relurpic:code_review
+    task "Prepare the summary"
+  capture result -> state.tasks

@@ -1,0 +1,17 @@
+thoughtrecipe pipeline_demo
+"Pipeline with named stages."
+
+trigger as capability:
+  may read workspace
+
+agent explorer uses react
+agent reviewer uses planner
+
+pipeline:
+  stage explore:
+    run explorer:
+      goal "Explore the workspace."
+  stage summarize:
+    run reviewer:
+      from state.findings
+      goal "Summarize the findings."

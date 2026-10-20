@@ -1,0 +1,23 @@
+thoughtrecipe battery.typed_enum
+"Typed captures with inline enum unions."
+
+trigger as capability:
+  may read workspace
+  may write workspace
+  family ["debug"]
+
+input workspace: "**/*"
+
+type Risk:
+  title: Text
+  severity: low | medium | high
+  evidence: list<Text>
+
+agent inspector uses react
+
+run inspector:
+  from input.workspace
+  goal "Inspect and report the risk."
+  capture:
+    risk: Risk -> state.risk
+    severity: low | medium | high -> state.severity

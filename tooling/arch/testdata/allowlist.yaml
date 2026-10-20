@@ -1,0 +1,9 @@
+version: 1
+cycle_violations:
+  - "cycle: test cycle"
+bucket_violations: []
+consumer_violations:
+  - "consumer: test consumer violation"
+glob_violations:
+  - "glob: test glob pattern"
+internal_consumer_violations: []

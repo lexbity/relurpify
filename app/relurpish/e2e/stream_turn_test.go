@@ -47,6 +47,7 @@ run summarizer:
 // contextstream.injected with chunks>0 on the runtime's event stream — and
 // (c) grow the grounded-chunk count through the capturing steps.
 func TestBootTurnStreamsContextAndGroundsCaptures(t *testing.T) {
+	skipWithoutRunsc(t)
 	workspace := t.TempDir()
 	testhelper.WriteCleanWorkspace(t, workspace, testhelper.WorkspaceOpts{
 		Provider: "offline",

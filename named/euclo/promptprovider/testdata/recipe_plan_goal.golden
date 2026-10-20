@@ -1,0 +1,20 @@
+Clarification Plan View:
+Task ID: task-goal-golden
+Session ID: session-goal-golden
+Clarification State Version: 11
+Active ThoughtRecipe ID: thoughtrecipe.intent.clarify
+Last Checkpoint ID: checkpoint-goal
+Last Checkpoint Seq: 42
+Task Goal: Analyze the intake path
+Evidence Action Type: analyze
+Evidence Target: named/euclo/intake
+Evidence Scope: workspace
+Evidence Risk Level: medium
+Evidence Reason Codes: action:analyze
+Interpretation Action Type: analyze
+Interpretation Target: named/euclo/intake
+Interpretation Scope: workspace
+Interpretation Risk Level: medium
+Interpretation Rationale: deterministic interpretation from request evidence
+Interpretation Confidence Note: deterministic
+Interpretation Reason Codes: action:analyze

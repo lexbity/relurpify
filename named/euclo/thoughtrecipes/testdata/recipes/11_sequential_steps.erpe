@@ -1,0 +1,21 @@
+thoughtrecipe sequential_steps
+"Multiple sequential run steps."
+
+trigger as capability:
+  may read workspace
+
+agent explorer uses react
+agent reviewer uses planner
+agent writer uses react
+
+run explorer:
+  from input.workspace
+  goal "Explore the workspace."
+
+run reviewer:
+  from state.findings
+  goal "Review the findings."
+
+run writer:
+  from state.review
+  goal "Write the report."

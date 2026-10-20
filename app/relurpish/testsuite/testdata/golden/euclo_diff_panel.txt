@@ -1,0 +1,1 @@
+╭──────────────────────────╮ │ Diff Surface │ │ view by-file │ │ execution staged │ │ tests ✓ │ │ checkpoint unavailable │ │ No diff hunks available. │ ╰──────────────────────────╯

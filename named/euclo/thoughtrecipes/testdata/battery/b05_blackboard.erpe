@@ -1,0 +1,20 @@
+thoughtrecipe battery.blackboard
+"Blackboard: shared-workspace knowledge sources."
+
+trigger as capability:
+  may read workspace
+  may invoke ["file_read"]
+  family ["architecture"]
+
+input workspace: "**/*"
+
+agent board uses blackboard
+
+run board:
+  may invoke ["file_read"]
+  source architecture:
+    when input.workspace contains go
+    read input.workspace
+    write state.architecture_review
+    do relurpic:code_review
+  capture result -> state.findings

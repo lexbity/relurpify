@@ -1,0 +1,21 @@
+{
+  "start_node": "run.9.5.default.0.execute",
+  "nodes": [
+    {
+      "id": "euclo.execution.done",
+      "type": "terminal"
+    },
+    {
+      "id": "run.9.5.default.0.execute",
+      "type": "tool"
+    }
+  ],
+  "edges": [
+    {
+      "from": "run.9.5.default.0.execute",
+      "to": "euclo.execution.done",
+      "has_condition": true,
+      "parallel": false
+    }
+  ]
+}

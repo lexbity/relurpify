@@ -1,0 +1,353 @@
+{
+  "ThoughtRecipe": {
+    "RouteKind": "capability",
+    "ID": "pipeline_demo",
+    "Name": "pipeline_demo",
+    "Description": "Pipeline with named stages.",
+    "Metadata": {
+      "Name": "pipeline_demo",
+      "Version": "",
+      "Author": "",
+      "Tags": null,
+      "Families": null,
+      "Keywords": null,
+      "HandoffTargets": null,
+      "Category": "",
+      "CreatedAt": "",
+      "UpdatedAt": ""
+    }
+  },
+  "Agents": {
+    "explorer": {
+      "Name": "explorer",
+      "Paradigm": "react",
+      "Span": {
+        "Start": {
+          "File": "testdata/recipes/05_pipeline.erpe",
+          "Line": 7,
+          "Column": 1
+        },
+        "End": {
+          "File": "testdata/recipes/05_pipeline.erpe",
+          "Line": 7,
+          "Column": 25
+        }
+      }
+    },
+    "reviewer": {
+      "Name": "reviewer",
+      "Paradigm": "planner",
+      "Span": {
+        "Start": {
+          "File": "testdata/recipes/05_pipeline.erpe",
+          "Line": 8,
+          "Column": 1
+        },
+        "End": {
+          "File": "testdata/recipes/05_pipeline.erpe",
+          "Line": 8,
+          "Column": 27
+        }
+      }
+    }
+  },
+  "ToolScopes": null,
+  "Steps": [
+    {
+      "ID": "pipeline.10.1",
+      "Kind": "pipeline",
+      "Paradigm": "euclo",
+      "Scope": null,
+      "Question": "",
+      "Choices": null,
+      "ChoiceSource": "",
+      "PipelineStages": [
+        {
+          "Name": "explore",
+          "Span": {
+            "Start": {
+              "File": "testdata/recipes/05_pipeline.erpe",
+              "Line": 11,
+              "Column": 3
+            },
+            "End": {
+              "File": "testdata/recipes/05_pipeline.erpe",
+              "Line": 14,
+              "Column": 1
+            }
+          },
+          "Steps": [
+            {
+              "ID": "run.12.9.explorer.0",
+              "Kind": "run",
+              "Paradigm": "react",
+              "Scope": null,
+              "Question": "",
+              "Choices": null,
+              "ChoiceSource": "",
+              "PipelineStages": null,
+              "Goal": "Explore the workspace.",
+              "Sources": null,
+              "Directives": null,
+              "CaptureBindings": null,
+              "CapabilityID": "",
+              "Prompt": "Explore the workspace.",
+              "PromptID": "",
+              "Mutation": "",
+              "HITL": "",
+              "Stream": null,
+              "Fallback": null,
+              "Inherit": null,
+              "Capture": null,
+              "Dependencies": null,
+              "ClarificationConfig": null,
+              "OnError": null,
+              "Config": {
+                "goals": [
+                  "Explore the workspace."
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "Name": "summarize",
+          "Span": {
+            "Start": {
+              "File": "testdata/recipes/05_pipeline.erpe",
+              "Line": 14,
+              "Column": 3
+            },
+            "End": {
+              "File": "testdata/recipes/05_pipeline.erpe",
+              "Line": 18,
+              "Column": 1
+            }
+          },
+          "Steps": [
+            {
+              "ID": "run.15.9.reviewer.1",
+              "Kind": "run",
+              "Paradigm": "planner",
+              "Scope": null,
+              "Question": "",
+              "Choices": null,
+              "ChoiceSource": "",
+              "PipelineStages": null,
+              "Goal": "Summarize the findings.",
+              "Sources": [
+                "state.findings"
+              ],
+              "Directives": null,
+              "CaptureBindings": null,
+              "CapabilityID": "",
+              "Prompt": "Summarize the findings.",
+              "PromptID": "",
+              "Mutation": "",
+              "HITL": "",
+              "Stream": null,
+              "Fallback": null,
+              "Inherit": null,
+              "Capture": null,
+              "Dependencies": null,
+              "ClarificationConfig": null,
+              "OnError": null,
+              "Config": {
+                "from_sources": [
+                  "state.findings"
+                ],
+                "goals": [
+                  "Summarize the findings."
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "Goal": "",
+      "Sources": null,
+      "Directives": null,
+      "CaptureBindings": null,
+      "CapabilityID": "",
+      "Prompt": "",
+      "PromptID": "",
+      "Mutation": "",
+      "HITL": "",
+      "Stream": null,
+      "Fallback": null,
+      "Inherit": null,
+      "Capture": null,
+      "Dependencies": null,
+      "ClarificationConfig": null,
+      "OnError": null,
+      "Config": {
+        "pipeline_id": "pipeline.10.1",
+        "stage_count": 2,
+        "stages": [
+          "explore",
+          "summarize"
+        ],
+        "step_count": 2
+      }
+    }
+  ],
+  "Routes": null,
+  "Pipelines": [
+    {
+      "Group": {
+        "Span": {
+          "Start": {
+            "File": "testdata/recipes/05_pipeline.erpe",
+            "Line": 10,
+            "Column": 1
+          },
+          "End": {
+            "File": "testdata/recipes/05_pipeline.erpe",
+            "Line": 18,
+            "Column": 1
+          }
+        },
+        "ID": "pipeline.10.1"
+      },
+      "Stages": [
+        {
+          "Stage": {
+            "Span": {
+              "Start": {
+                "File": "testdata/recipes/05_pipeline.erpe",
+                "Line": 11,
+                "Column": 3
+              },
+              "End": {
+                "File": "testdata/recipes/05_pipeline.erpe",
+                "Line": 14,
+                "Column": 1
+              }
+            },
+            "Name": {
+              "Span": {
+                "Start": {
+                  "File": "testdata/recipes/05_pipeline.erpe",
+                  "Line": 11,
+                  "Column": 3
+                },
+                "End": {
+                  "File": "testdata/recipes/05_pipeline.erpe",
+                  "Line": 14,
+                  "Column": 1
+                }
+              },
+              "Value": "explore"
+            },
+            "Body": null
+          },
+          "Steps": [
+            {
+              "ID": "run.12.9.explorer.0",
+              "Kind": "run",
+              "Paradigm": "react",
+              "Scope": null,
+              "Question": "",
+              "Choices": null,
+              "ChoiceSource": "",
+              "PipelineStages": null,
+              "Goal": "Explore the workspace.",
+              "Sources": null,
+              "Directives": null,
+              "CaptureBindings": null,
+              "CapabilityID": "",
+              "Prompt": "Explore the workspace.",
+              "PromptID": "",
+              "Mutation": "",
+              "HITL": "",
+              "Stream": null,
+              "Fallback": null,
+              "Inherit": null,
+              "Capture": null,
+              "Dependencies": null,
+              "ClarificationConfig": null,
+              "OnError": null,
+              "Config": {
+                "goals": [
+                  "Explore the workspace."
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "Stage": {
+            "Span": {
+              "Start": {
+                "File": "testdata/recipes/05_pipeline.erpe",
+                "Line": 14,
+                "Column": 3
+              },
+              "End": {
+                "File": "testdata/recipes/05_pipeline.erpe",
+                "Line": 18,
+                "Column": 1
+              }
+            },
+            "Name": {
+              "Span": {
+                "Start": {
+                  "File": "testdata/recipes/05_pipeline.erpe",
+                  "Line": 14,
+                  "Column": 3
+                },
+                "End": {
+                  "File": "testdata/recipes/05_pipeline.erpe",
+                  "Line": 18,
+                  "Column": 1
+                }
+              },
+              "Value": "summarize"
+            },
+            "Body": null
+          },
+          "Steps": [
+            {
+              "ID": "run.15.9.reviewer.1",
+              "Kind": "run",
+              "Paradigm": "planner",
+              "Scope": null,
+              "Question": "",
+              "Choices": null,
+              "ChoiceSource": "",
+              "PipelineStages": null,
+              "Goal": "Summarize the findings.",
+              "Sources": [
+                "state.findings"
+              ],
+              "Directives": null,
+              "CaptureBindings": null,
+              "CapabilityID": "",
+              "Prompt": "Summarize the findings.",
+              "PromptID": "",
+              "Mutation": "",
+              "HITL": "",
+              "Stream": null,
+              "Fallback": null,
+              "Inherit": null,
+              "Capture": null,
+              "Dependencies": null,
+              "ClarificationConfig": null,
+              "OnError": null,
+              "Config": {
+                "from_sources": [
+                  "state.findings"
+                ],
+                "goals": [
+                  "Summarize the findings."
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "Warnings": null,
+  "RouteKind": "capability"
+}

@@ -1,0 +1,42 @@
+thoughtrecipe battery.mixed.blackboard_route
+"Blackboard sources feed a routed handoff with an ambiguity escape."
+
+trigger as capability:
+  may read workspace
+  may ask user
+  may invoke ["file_read"]
+  keyword ["architecture", "layers"]
+  handoff ["onboarding"]
+  family ["architecture"]
+
+input workspace: "**/*"
+
+agent board uses blackboard
+agent explorer uses react
+
+run board:
+  may invoke ["file_read"]
+  source architecture:
+    when input.workspace contains go
+    read input.workspace
+    write state.architecture_review
+    do relurpic:code_review
+  capture result -> state.findings
+
+route:
+  when state.findings is ambiguous:
+    ask user:
+      question "Which architectural concern should be documented?"
+      choices ["layering", "dependencies", "interfaces"]
+      capture answer -> user.selected_concern
+
+  when present state.findings:
+    delegate to explorer:
+      from state.findings
+      goal "Document the chosen architectural concern."
+      capture:
+        note: Text -> output.result
+
+  otherwise:
+    capture:
+      input.workspace -> state.findings

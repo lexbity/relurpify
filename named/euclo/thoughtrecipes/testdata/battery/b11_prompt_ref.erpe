@@ -1,0 +1,17 @@
+thoughtrecipe battery.prompt_ref
+"Goal bound to a shipped prompt-DSL file."
+
+trigger as capability:
+  may read workspace
+  family ["review"]
+
+input workspace: "**/*"
+
+import prompt named.euclo.code.analyze as analyze
+
+agent analyzer uses react
+
+run analyzer:
+  from input.workspace
+  goal prompt analyze
+  capture result -> state.analysis

@@ -80,6 +80,7 @@ func readRunnerStatusFile(t *testing.T, stateDir string) (runnerStatusFile, bool
 }
 
 func TestBootAgainstSpawnedRunner(t *testing.T) {
+	skipWithoutRunsc(t)
 	workspace := t.TempDir()
 	testhelper.WriteCleanWorkspace(t, workspace, testhelper.WorkspaceOpts{
 		Provider: "offline",

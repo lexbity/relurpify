@@ -1,0 +1,22 @@
+thoughtrecipe battery.planner
+"Planner: plan, execute, verify, summarize."
+
+trigger as capability:
+  may read workspace
+  may invoke ["file_read"]
+  family ["planning"]
+
+input workspace: "**/*"
+input prompt: user.request
+
+agent planner uses planner
+
+run planner:
+  may invoke ["file_read"]
+  from input.workspace
+  plan "Identify the smallest useful set of actions."
+  step "Inspect the workspace":
+    do relurpic:code_review
+  verify "Check that the plan addresses the request."
+  summarize "Produce a concise implementation plan."
+  capture result -> state.plan

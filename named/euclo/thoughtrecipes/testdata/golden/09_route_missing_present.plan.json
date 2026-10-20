@@ -1,0 +1,190 @@
+{
+  "ThoughtRecipe": {
+    "RouteKind": "capability",
+    "ID": "route_missing_present",
+    "Name": "route_missing_present",
+    "Description": "Route with missing and present predicates.",
+    "Metadata": {
+      "Name": "route_missing_present",
+      "Version": "",
+      "Author": "",
+      "Tags": null,
+      "Families": null,
+      "Keywords": null,
+      "HandoffTargets": null,
+      "Category": "",
+      "CreatedAt": "",
+      "UpdatedAt": ""
+    }
+  },
+  "Agents": {
+    "reviewer": {
+      "Name": "reviewer",
+      "Paradigm": "react",
+      "Span": {
+        "Start": {
+          "File": "testdata/recipes/09_route_missing_present.erpe",
+          "Line": 7,
+          "Column": 1
+        },
+        "End": {
+          "File": "testdata/recipes/09_route_missing_present.erpe",
+          "Line": 7,
+          "Column": 25
+        }
+      }
+    }
+  },
+  "ToolScopes": null,
+  "Steps": null,
+  "Routes": [
+    {
+      "Group": {
+        "Span": {
+          "Start": {
+            "File": "testdata/recipes/09_route_missing_present.erpe",
+            "Line": 9,
+            "Column": 1
+          },
+          "End": {
+            "File": "testdata/recipes/09_route_missing_present.erpe",
+            "Line": 20,
+            "Column": 1
+          }
+        },
+        "ID": "route.9.1"
+      },
+      "Branches": [
+        {
+          "Predicate": {
+            "Subject": "state.workspace",
+            "Op": "missing",
+            "Value": {},
+            "Label": "missing"
+          },
+          "Steps": [
+            {
+              "ID": "run.11.9.reviewer.0",
+              "Kind": "run",
+              "Paradigm": "react",
+              "Scope": null,
+              "Question": "",
+              "Choices": null,
+              "ChoiceSource": "",
+              "PipelineStages": null,
+              "Goal": "Request workspace input.",
+              "Sources": null,
+              "Directives": null,
+              "CaptureBindings": null,
+              "CapabilityID": "",
+              "Prompt": "Request workspace input.",
+              "PromptID": "",
+              "Mutation": "",
+              "HITL": "",
+              "Stream": null,
+              "Fallback": null,
+              "Inherit": null,
+              "Capture": null,
+              "Dependencies": null,
+              "ClarificationConfig": null,
+              "OnError": null,
+              "Config": {
+                "goals": [
+                  "Request workspace input."
+                ]
+              }
+            }
+          ],
+          "IsElse": false
+        },
+        {
+          "Predicate": {
+            "Subject": "state.intent",
+            "Op": "present",
+            "Value": {},
+            "Label": "present"
+          },
+          "Steps": [
+            {
+              "ID": "run.14.9.reviewer.1",
+              "Kind": "run",
+              "Paradigm": "react",
+              "Scope": null,
+              "Question": "",
+              "Choices": null,
+              "ChoiceSource": "",
+              "PipelineStages": null,
+              "Goal": "Process the intent.",
+              "Sources": [
+                "state.intent"
+              ],
+              "Directives": null,
+              "CaptureBindings": null,
+              "CapabilityID": "",
+              "Prompt": "Process the intent.",
+              "PromptID": "",
+              "Mutation": "",
+              "HITL": "",
+              "Stream": null,
+              "Fallback": null,
+              "Inherit": null,
+              "Capture": null,
+              "Dependencies": null,
+              "ClarificationConfig": null,
+              "OnError": null,
+              "Config": {
+                "from_sources": [
+                  "state.intent"
+                ],
+                "goals": [
+                  "Process the intent."
+                ]
+              }
+            }
+          ],
+          "IsElse": false
+        },
+        {
+          "Predicate": null,
+          "Steps": [
+            {
+              "ID": "run.18.9.reviewer.2",
+              "Kind": "run",
+              "Paradigm": "react",
+              "Scope": null,
+              "Question": "",
+              "Choices": null,
+              "ChoiceSource": "",
+              "PipelineStages": null,
+              "Goal": "Fallback action.",
+              "Sources": null,
+              "Directives": null,
+              "CaptureBindings": null,
+              "CapabilityID": "",
+              "Prompt": "Fallback action.",
+              "PromptID": "",
+              "Mutation": "",
+              "HITL": "",
+              "Stream": null,
+              "Fallback": null,
+              "Inherit": null,
+              "Capture": null,
+              "Dependencies": null,
+              "ClarificationConfig": null,
+              "OnError": null,
+              "Config": {
+                "goals": [
+                  "Fallback action."
+                ]
+              }
+            }
+          ],
+          "IsElse": true
+        }
+      ]
+    }
+  ],
+  "Pipelines": null,
+  "Warnings": null,
+  "RouteKind": "capability"
+}

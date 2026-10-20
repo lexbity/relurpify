@@ -1,0 +1,27 @@
+Clarification Runtime:
+Task ID: task-golden
+Session ID: session-golden
+Clarification State Version: 9
+Current Turn ID: turn-9
+Active ThoughtRecipe ID: thoughtrecipe.intent.clarify
+Last Checkpoint ID: checkpoint-9
+Last Checkpoint Seq: 99
+Current Question: Which module should be updated?
+Evidence Action Type: review
+Evidence Target: named/euclo/promptprovider
+Evidence Scope: single_file
+Evidence Risk Level: low
+Evidence Expected Verb: review
+Evidence Reason Codes: action:review
+Interpretation Action Type: review
+Interpretation Target: named/euclo/promptprovider
+Interpretation Scope: single_file
+Interpretation Risk Level: low
+Interpretation Rationale: deterministic interpretation from request evidence
+Interpretation Confidence Note: deterministic
+Interpretation Reason Codes: action:review
+Grounded Anchors: Envelope (chunk-9)
+Confirmed Entities: Envelope [type]
+Confirmed Scopes: named/euclo/promptprovider
+Pending Projection: projection-9 upsert_node root=root-9 key=idem-9 subjects=entity-9 objects=entity-10
+Applied Mutations: mutation-9 root=root-9 key=idem-9 result=applied by=test

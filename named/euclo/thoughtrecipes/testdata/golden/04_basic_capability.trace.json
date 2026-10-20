@@ -1,0 +1,43 @@
+{
+  "graph_valid": true,
+  "start_node": "run.9.5.default.0.execute",
+  "node_count": 2,
+  "edge_count": 1,
+  "exec_path": [
+    "run.9.5.default.0.execute",
+    "euclo.execution.done"
+  ],
+  "exec_success": true,
+  "envelope_keys": [
+    "euclo.execution.capability_id",
+    "euclo.execution.step.run.9.5.default.0.capability_id",
+    "euclo.execution.step.run.9.5.default.0.goal",
+    "euclo.execution.step.run.9.5.default.0.hitl",
+    "euclo.execution.step.run.9.5.default.0.id",
+    "euclo.execution.step.run.9.5.default.0.mutation",
+    "euclo.execution.step.run.9.5.default.0.paradigm",
+    "euclo.execution.step.run.9.5.default.0.prompt_id",
+    "euclo.execution.step.run.9.5.default.0.question",
+    "euclo.execution.step.run.9.5.default.0.result",
+    "euclo.execution.step.run.9.5.default.0.success",
+    "euclo.execution.step.run.9.5.default.0.type",
+    "euclo.execution.step_index",
+    "euclo.execution.step_total",
+    "run.9.5.default.0.execute.capability_id",
+    "run.9.5.default.0.execute.metadata",
+    "run.9.5.default.0.execute.output"
+  ],
+  "result_keys": [
+    "euclo.execution.step.run.9.5.default.0.capability_id",
+    "euclo.execution.step.run.9.5.default.0.goal",
+    "euclo.execution.step.run.9.5.default.0.hitl",
+    "euclo.execution.step.run.9.5.default.0.id",
+    "euclo.execution.step.run.9.5.default.0.mutation",
+    "euclo.execution.step.run.9.5.default.0.paradigm",
+    "euclo.execution.step.run.9.5.default.0.prompt_id",
+    "euclo.execution.step.run.9.5.default.0.question",
+    "euclo.execution.step.run.9.5.default.0.result",
+    "euclo.execution.step.run.9.5.default.0.success",
+    "euclo.execution.step.run.9.5.default.0.type"
+  ]
+}

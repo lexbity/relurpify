@@ -145,7 +145,7 @@ For agent-behavior bugs, attach the relevant
 `.relurpify_state/telemetry/telemetry.jsonl` lines (they contain no source
 text; redaction scrubs sensitive values).
 
-[TODO: issue-tracker link — GitHub issues on github.com/lexbity/relurpify or Codeberg; confirm the canonical tracker]
+[GitHub issues](https://github.com/lexbity/relurpify/issues)
 
 ## Release process
 

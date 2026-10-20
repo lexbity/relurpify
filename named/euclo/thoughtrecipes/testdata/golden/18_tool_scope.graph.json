@@ -1,0 +1,77 @@
+{
+  "start_node": "run.10.5.reviewer.0.execute",
+  "nodes": [
+    {
+      "id": "euclo.execution.done",
+      "type": "terminal"
+    },
+    {
+      "id": "euclo.execution.group.route.16.1.branch.0",
+      "type": "conditional"
+    },
+    {
+      "id": "euclo.execution.group.route.16.1.join",
+      "type": "system"
+    },
+    {
+      "id": "euclo.execution.group.route.16.1.route",
+      "type": "conditional"
+    },
+    {
+      "id": "run.10.5.reviewer.0.execute",
+      "type": "tool"
+    },
+    {
+      "id": "run.18.9.reviewer.1.execute",
+      "type": "tool"
+    },
+    {
+      "id": "run.22.9.reviewer.2.execute",
+      "type": "tool"
+    }
+  ],
+  "edges": [
+    {
+      "from": "euclo.execution.group.route.16.1.branch.0",
+      "to": "run.18.9.reviewer.1.execute",
+      "has_condition": true,
+      "parallel": false
+    },
+    {
+      "from": "euclo.execution.group.route.16.1.branch.0",
+      "to": "run.22.9.reviewer.2.execute",
+      "has_condition": true,
+      "parallel": false
+    },
+    {
+      "from": "euclo.execution.group.route.16.1.join",
+      "to": "euclo.execution.done",
+      "has_condition": true,
+      "parallel": false
+    },
+    {
+      "from": "euclo.execution.group.route.16.1.route",
+      "to": "euclo.execution.group.route.16.1.branch.0",
+      "has_condition": false,
+      "parallel": false
+    },
+    {
+      "from": "run.10.5.reviewer.0.execute",
+      "to": "euclo.execution.group.route.16.1.route",
+      "has_condition": true,
+      "parallel": false
+    },
+    {
+      "from": "run.18.9.reviewer.1.execute",
+      "to": "euclo.execution.group.route.16.1.join",
+      "has_condition": true,
+      "parallel": false
+    },
+    {
+      "from": "run.22.9.reviewer.2.execute",
+      "to": "euclo.execution.group.route.16.1.join",
+      "has_condition": true,
+      "parallel": false
+    }
+  ]
+}

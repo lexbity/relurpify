@@ -1,0 +1,57 @@
+agent_id: doc-euclo
+spec_present: false
+agent_spec:
+  implementation: coding
+  version: "2"
+  prompt: summarize this workspace
+  model:
+    provider: lmstudio
+    name: gemma4:e4b
+    temperature: 0
+    max_tokens: 2048
+  bash_permissions:
+    allow_patterns: null
+    deny_patterns: null
+    default: ""
+  logging:
+    llm: true
+    agent: true
+permissions:
+  filesystem:
+    - action: fs:read
+      path: ${workspace}/**
+    - action: fs:write
+      path: ${workspace}/docs/**
+  executables:
+    - binary: git
+      args:
+        - status
+  network:
+    - direction: egress
+      protocol: https
+      host: docs.example.com
+      port: 443
+  capabilities:
+    - capability: cap_net_bind_service
+  ipc:
+    - kind: socket
+      target: /tmp/relurpify-doc.sock
+  hitl_required:
+    - filesystem
+resources:
+  limits:
+    cpu: "4"
+    memory: 2Gi
+    disk_io: sustained
+    network: none
+security:
+  run_as_user: 1001
+  read_only_root: true
+  no_new_privileges: true
+sources:
+  ManifestName: doc-euclo
+  ManifestVersion: "2026.06.13"
+  Workspace: "/workspace/contracts/document"
+  GlobalDefaults: false
+  OverlayCount: 0
+  RuntimeOverrides: 0

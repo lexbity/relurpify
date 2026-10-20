@@ -1,0 +1,58 @@
+agent_id: resolver-euclo
+spec_present: false
+agent_spec:
+  implementation: coding
+  version: "1"
+  prompt: write code
+  model:
+    provider: ollama
+    name: gemma4:e4b
+    temperature: 0.2
+    max_tokens: 4096
+  bash_permissions:
+    allow_patterns: null
+    deny_patterns: null
+    default: ""
+  logging:
+    llm: true
+    agent: false
+permissions:
+  filesystem:
+    - action: fs:read
+      path: ${workspace}/**
+    - action: fs:write
+      path: ${workspace}/src/**
+  executables:
+    - binary: go
+      args:
+        - test
+        - ./...
+  network:
+    - direction: egress
+      protocol: https
+      host: api.example.com
+      port: 443
+  capabilities:
+    - capability: cap_net_bind_service
+  ipc:
+    - kind: socket
+      target: /tmp/relurpify.sock
+  hitl_required:
+    - filesystem
+resources:
+  limits:
+    cpu: "1"
+    memory: 512Mi
+    disk_io: burst
+    network: none
+security:
+  run_as_user: 1000
+  read_only_root: true
+  no_new_privileges: true
+sources:
+  ManifestName: resolver-euclo
+  ManifestVersion: "2026.06.13"
+  Workspace: /workspace/contracts/manifest
+  GlobalDefaults: false
+  OverlayCount: 0
+  RuntimeOverrides: 0

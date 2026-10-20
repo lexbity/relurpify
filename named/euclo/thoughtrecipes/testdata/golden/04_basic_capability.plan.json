@@ -1,0 +1,75 @@
+{
+  "ThoughtRecipe": {
+    "RouteKind": "capability",
+    "ID": "basic_capability",
+    "Name": "basic_capability",
+    "Description": "Basic capability invocation.",
+    "Metadata": {
+      "Name": "basic_capability",
+      "Version": "",
+      "Author": "",
+      "Tags": null,
+      "Families": null,
+      "Keywords": null,
+      "HandoffTargets": null,
+      "Category": "",
+      "CreatedAt": "",
+      "UpdatedAt": ""
+    }
+  },
+  "Agents": {
+    "default": {
+      "Name": "default",
+      "Paradigm": "react",
+      "Span": {
+        "Start": {
+          "File": "testdata/recipes/04_basic_capability.erpe",
+          "Line": 7,
+          "Column": 1
+        },
+        "End": {
+          "File": "testdata/recipes/04_basic_capability.erpe",
+          "Line": 7,
+          "Column": 24
+        }
+      }
+    }
+  },
+  "ToolScopes": null,
+  "Steps": [
+    {
+      "ID": "run.9.5.default.0",
+      "Kind": "run",
+      "Paradigm": "react",
+      "Scope": null,
+      "Question": "",
+      "Choices": null,
+      "ChoiceSource": "",
+      "PipelineStages": null,
+      "Goal": "",
+      "Sources": null,
+      "Directives": null,
+      "CaptureBindings": null,
+      "CapabilityID": "euclo:cap.code_review",
+      "Prompt": "",
+      "PromptID": "",
+      "Mutation": "",
+      "HITL": "",
+      "Stream": null,
+      "Fallback": null,
+      "Inherit": null,
+      "Capture": null,
+      "Dependencies": null,
+      "ClarificationConfig": null,
+      "OnError": null,
+      "Config": {
+        "capability_id": "euclo:cap.code_review",
+        "target": "input.workspace"
+      }
+    }
+  ],
+  "Routes": null,
+  "Pipelines": null,
+  "Warnings": null,
+  "RouteKind": "capability"
+}

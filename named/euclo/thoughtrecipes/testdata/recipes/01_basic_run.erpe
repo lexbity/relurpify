@@ -1,0 +1,12 @@
+thoughtrecipe basic_run
+"Basic run step."
+
+trigger as capability:
+  may read workspace
+
+agent reviewer uses react
+
+run reviewer:
+  from input.prompt
+  goal "Review the codebase."
+  capture result -> state.summary

@@ -1,0 +1,199 @@
+{
+  "ThoughtRecipe": {
+    "RouteKind": "capability",
+    "ID": "route_is",
+    "Name": "route_is",
+    "Description": "Route with is predicate.",
+    "Metadata": {
+      "Name": "route_is",
+      "Version": "",
+      "Author": "",
+      "Tags": null,
+      "Families": null,
+      "Keywords": null,
+      "HandoffTargets": null,
+      "Category": "",
+      "CreatedAt": "",
+      "UpdatedAt": ""
+    }
+  },
+  "Agents": {
+    "reviewer": {
+      "Name": "reviewer",
+      "Paradigm": "react",
+      "Span": {
+        "Start": {
+          "File": "testdata/recipes/06_route_is.erpe",
+          "Line": 7,
+          "Column": 1
+        },
+        "End": {
+          "File": "testdata/recipes/06_route_is.erpe",
+          "Line": 7,
+          "Column": 25
+        }
+      }
+    }
+  },
+  "ToolScopes": null,
+  "Steps": null,
+  "Routes": [
+    {
+      "Group": {
+        "Span": {
+          "Start": {
+            "File": "testdata/recipes/06_route_is.erpe",
+            "Line": 9,
+            "Column": 1
+          },
+          "End": {
+            "File": "testdata/recipes/06_route_is.erpe",
+            "Line": 21,
+            "Column": 1
+          }
+        },
+        "ID": "route.9.1"
+      },
+      "Branches": [
+        {
+          "Predicate": {
+            "Subject": "state.intent",
+            "Op": "is",
+            "Value": {
+              "string_val": "review"
+            },
+            "Label": "state is"
+          },
+          "Steps": [
+            {
+              "ID": "run.11.9.reviewer.0",
+              "Kind": "run",
+              "Paradigm": "react",
+              "Scope": null,
+              "Question": "",
+              "Choices": null,
+              "ChoiceSource": "",
+              "PipelineStages": null,
+              "Goal": "Review the prompt.",
+              "Sources": [
+                "input.prompt"
+              ],
+              "Directives": null,
+              "CaptureBindings": null,
+              "CapabilityID": "",
+              "Prompt": "Review the prompt.",
+              "PromptID": "",
+              "Mutation": "",
+              "HITL": "",
+              "Stream": null,
+              "Fallback": null,
+              "Inherit": null,
+              "Capture": null,
+              "Dependencies": null,
+              "ClarificationConfig": null,
+              "OnError": null,
+              "Config": {
+                "from_sources": [
+                  "input.prompt"
+                ],
+                "goals": [
+                  "Review the prompt."
+                ]
+              }
+            }
+          ],
+          "IsElse": false
+        },
+        {
+          "Predicate": {
+            "Subject": "state.intent",
+            "Op": "is",
+            "Value": {
+              "string_val": "refactor"
+            },
+            "Label": "state is"
+          },
+          "Steps": [
+            {
+              "ID": "run.15.9.reviewer.1",
+              "Kind": "run",
+              "Paradigm": "react",
+              "Scope": null,
+              "Question": "",
+              "Choices": null,
+              "ChoiceSource": "",
+              "PipelineStages": null,
+              "Goal": "Refactor the code.",
+              "Sources": [
+                "input.prompt"
+              ],
+              "Directives": null,
+              "CaptureBindings": null,
+              "CapabilityID": "",
+              "Prompt": "Refactor the code.",
+              "PromptID": "",
+              "Mutation": "",
+              "HITL": "",
+              "Stream": null,
+              "Fallback": null,
+              "Inherit": null,
+              "Capture": null,
+              "Dependencies": null,
+              "ClarificationConfig": null,
+              "OnError": null,
+              "Config": {
+                "from_sources": [
+                  "input.prompt"
+                ],
+                "goals": [
+                  "Refactor the code."
+                ]
+              }
+            }
+          ],
+          "IsElse": false
+        },
+        {
+          "Predicate": null,
+          "Steps": [
+            {
+              "ID": "run.19.9.reviewer.2",
+              "Kind": "run",
+              "Paradigm": "react",
+              "Scope": null,
+              "Question": "",
+              "Choices": null,
+              "ChoiceSource": "",
+              "PipelineStages": null,
+              "Goal": "Handle default case.",
+              "Sources": null,
+              "Directives": null,
+              "CaptureBindings": null,
+              "CapabilityID": "",
+              "Prompt": "Handle default case.",
+              "PromptID": "",
+              "Mutation": "",
+              "HITL": "",
+              "Stream": null,
+              "Fallback": null,
+              "Inherit": null,
+              "Capture": null,
+              "Dependencies": null,
+              "ClarificationConfig": null,
+              "OnError": null,
+              "Config": {
+                "goals": [
+                  "Handle default case."
+                ]
+              }
+            }
+          ],
+          "IsElse": true
+        }
+      ]
+    }
+  ],
+  "Pipelines": null,
+  "Warnings": null,
+  "RouteKind": "capability"
+}

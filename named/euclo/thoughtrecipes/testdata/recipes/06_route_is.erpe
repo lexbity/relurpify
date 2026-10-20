@@ -1,0 +1,20 @@
+thoughtrecipe route_is
+"Route with is predicate."
+
+trigger as capability:
+  may read workspace
+
+agent reviewer uses react
+
+route:
+  when state.intent is review:
+    run reviewer:
+      from input.prompt
+      goal "Review the prompt."
+  when state.intent is refactor:
+    run reviewer:
+      from input.prompt
+      goal "Refactor the code."
+  otherwise:
+    run reviewer:
+      goal "Handle default case."

@@ -1,0 +1,185 @@
+{
+  "ThoughtRecipe": {
+    "RouteKind": "capability",
+    "ID": "sequential_steps",
+    "Name": "sequential_steps",
+    "Description": "Multiple sequential run steps.",
+    "Metadata": {
+      "Name": "sequential_steps",
+      "Version": "",
+      "Author": "",
+      "Tags": null,
+      "Families": null,
+      "Keywords": null,
+      "HandoffTargets": null,
+      "Category": "",
+      "CreatedAt": "",
+      "UpdatedAt": ""
+    }
+  },
+  "Agents": {
+    "explorer": {
+      "Name": "explorer",
+      "Paradigm": "react",
+      "Span": {
+        "Start": {
+          "File": "testdata/recipes/11_sequential_steps.erpe",
+          "Line": 7,
+          "Column": 1
+        },
+        "End": {
+          "File": "testdata/recipes/11_sequential_steps.erpe",
+          "Line": 7,
+          "Column": 25
+        }
+      }
+    },
+    "reviewer": {
+      "Name": "reviewer",
+      "Paradigm": "planner",
+      "Span": {
+        "Start": {
+          "File": "testdata/recipes/11_sequential_steps.erpe",
+          "Line": 8,
+          "Column": 1
+        },
+        "End": {
+          "File": "testdata/recipes/11_sequential_steps.erpe",
+          "Line": 8,
+          "Column": 27
+        }
+      }
+    },
+    "writer": {
+      "Name": "writer",
+      "Paradigm": "react",
+      "Span": {
+        "Start": {
+          "File": "testdata/recipes/11_sequential_steps.erpe",
+          "Line": 9,
+          "Column": 1
+        },
+        "End": {
+          "File": "testdata/recipes/11_sequential_steps.erpe",
+          "Line": 9,
+          "Column": 23
+        }
+      }
+    }
+  },
+  "ToolScopes": null,
+  "Steps": [
+    {
+      "ID": "run.11.5.explorer.0",
+      "Kind": "run",
+      "Paradigm": "react",
+      "Scope": null,
+      "Question": "",
+      "Choices": null,
+      "ChoiceSource": "",
+      "PipelineStages": null,
+      "Goal": "Explore the workspace.",
+      "Sources": [
+        "input.workspace"
+      ],
+      "Directives": null,
+      "CaptureBindings": null,
+      "CapabilityID": "",
+      "Prompt": "Explore the workspace.",
+      "PromptID": "",
+      "Mutation": "",
+      "HITL": "",
+      "Stream": null,
+      "Fallback": null,
+      "Inherit": null,
+      "Capture": null,
+      "Dependencies": null,
+      "ClarificationConfig": null,
+      "OnError": null,
+      "Config": {
+        "from_sources": [
+          "input.workspace"
+        ],
+        "goals": [
+          "Explore the workspace."
+        ]
+      }
+    },
+    {
+      "ID": "run.15.5.reviewer.1",
+      "Kind": "run",
+      "Paradigm": "planner",
+      "Scope": null,
+      "Question": "",
+      "Choices": null,
+      "ChoiceSource": "",
+      "PipelineStages": null,
+      "Goal": "Review the findings.",
+      "Sources": [
+        "state.findings"
+      ],
+      "Directives": null,
+      "CaptureBindings": null,
+      "CapabilityID": "",
+      "Prompt": "Review the findings.",
+      "PromptID": "",
+      "Mutation": "",
+      "HITL": "",
+      "Stream": null,
+      "Fallback": null,
+      "Inherit": null,
+      "Capture": null,
+      "Dependencies": null,
+      "ClarificationConfig": null,
+      "OnError": null,
+      "Config": {
+        "from_sources": [
+          "state.findings"
+        ],
+        "goals": [
+          "Review the findings."
+        ]
+      }
+    },
+    {
+      "ID": "run.19.5.writer.2",
+      "Kind": "run",
+      "Paradigm": "react",
+      "Scope": null,
+      "Question": "",
+      "Choices": null,
+      "ChoiceSource": "",
+      "PipelineStages": null,
+      "Goal": "Write the report.",
+      "Sources": [
+        "state.review"
+      ],
+      "Directives": null,
+      "CaptureBindings": null,
+      "CapabilityID": "",
+      "Prompt": "Write the report.",
+      "PromptID": "",
+      "Mutation": "",
+      "HITL": "",
+      "Stream": null,
+      "Fallback": null,
+      "Inherit": null,
+      "Capture": null,
+      "Dependencies": null,
+      "ClarificationConfig": null,
+      "OnError": null,
+      "Config": {
+        "from_sources": [
+          "state.review"
+        ],
+        "goals": [
+          "Write the report."
+        ]
+      }
+    }
+  ],
+  "Routes": null,
+  "Pipelines": null,
+  "Warnings": null,
+  "RouteKind": "capability"
+}

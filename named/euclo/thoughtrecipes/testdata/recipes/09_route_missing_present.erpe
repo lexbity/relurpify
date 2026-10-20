@@ -1,0 +1,19 @@
+thoughtrecipe route_missing_present
+"Route with missing and present predicates."
+
+trigger as capability:
+  may read workspace
+
+agent reviewer uses react
+
+route:
+  when missing state.workspace:
+    run reviewer:
+      goal "Request workspace input."
+  when present state.intent:
+    run reviewer:
+      from state.intent
+      goal "Process the intent."
+  otherwise:
+    run reviewer:
+      goal "Fallback action."

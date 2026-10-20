@@ -1,0 +1,34 @@
+thoughtrecipe battery.mixed.reflection_rewoo
+"Reflection reviews a ReWOO synthesis and revises by delegation."
+
+trigger as capability:
+  may read workspace
+  may invoke ["file_read"]
+  family ["architecture"]
+
+input workspace: "**/*"
+
+agent reviewer uses reflection
+agent executor uses rewoo
+
+run executor:
+  may invoke ["file_read"]
+  from input.workspace
+  plan "Identify the architectural checks needed."
+  step "Check the layering":
+    do relurpic:code_review
+  synthesize "Combine the checks into an architecture summary."
+  capture result -> state.summary
+
+run reviewer:
+  from state.summary
+  review "Check correctness, safety, and usefulness."
+  revise when state.review contains issues:
+    delegate to executor:
+      from state.review
+      plan "Identify the revision checks needed."
+      step "Re-check the layering":
+        do relurpic:code_review
+      synthesize "Revise the architecture summary."
+      capture result -> state.revised
+  capture result -> output.result

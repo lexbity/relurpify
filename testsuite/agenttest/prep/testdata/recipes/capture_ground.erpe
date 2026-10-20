@@ -1,0 +1,26 @@
+thoughtrecipe prep_capture_ground
+"Dry-run fixture: step 1 calls a stub capability and captures its result, step 2 streams the captured finding — the read-your-writes loop."
+
+trigger as capability:
+  may read workspace
+  keyword ["platypus-quartz"]
+  family ["prep-fixtures"]
+
+input workspace: "**/*"
+input prompt: user.request
+
+agent collector uses react
+agent summarizer uses react
+
+run collector:
+  may invoke ["prep_probe"]
+  from input.prompt
+  goal "Call prep_probe and report its result verbatim."
+  capture result -> state.findings
+
+run summarizer:
+  may invoke ["prep_probe"]
+  from state.findings
+  stream "platypus-quartz observations" max 256 mode blocking
+  goal "Summarize the captured findings."
+  capture result -> state.summary

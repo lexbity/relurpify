@@ -1,0 +1,53 @@
+apiVersion: relurpify.io/v1
+kind: AgentManifest
+metadata:
+  name: resolver-euclo
+  version: 2026.06.13
+  description: document-resolver corpus fixture
+spec:
+  permissions:
+    filesystem:
+      - action: fs:read
+        path: ${workspace}/**
+      - action: fs:write
+        path: ${workspace}/src/**
+    executables:
+      - binary: go
+        args:
+          - test
+          - ./...
+    network:
+      - direction: egress
+        protocol: https
+        host: api.example.com
+        port: 443
+    capabilities:
+      - capability: cap_net_bind_service
+    ipc:
+      - kind: socket
+        target: /tmp/relurpify.sock
+    hitl_required:
+      - filesystem
+  agent:
+    implementation: coding
+    mode: primary
+    version: "1"
+    prompt: write code
+    model:
+      provider: ollama
+      name: gemma4:e4b
+      temperature: 0.2
+      max_tokens: 4096
+    logging:
+      llm: true
+      agent: false
+  resources:
+    limits:
+      cpu: "1"
+      memory: 512Mi
+      disk_io: burst
+      network: none
+  security:
+    run_as_user: 1000
+    read_only_root: true
+    no_new_privileges: true

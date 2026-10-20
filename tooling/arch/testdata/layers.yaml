@@ -1,0 +1,19 @@
+version: 1
+layers:
+  - ordinal: 0
+    name: contracts
+    globs:
+      - "contracts/**"
+  - ordinal: 1
+    name: platform
+    globs:
+      - "platform/**"
+  - ordinal: 2
+    name: capability
+    globs:
+      - "capability/**"
+  - ordinal: 99
+    name: other
+    globs:
+      - "*"
+exceptions: []

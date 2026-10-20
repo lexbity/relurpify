@@ -1,0 +1,18 @@
+thoughtrecipe battery.associations
+"Trigger associations: family, keyword, handoff."
+
+trigger as capability:
+  family ["debug"]
+  keyword ["fix", "diagnose", "trace"]
+  handoff ["onboarding", "escalation"]
+  may read workspace
+
+input workspace: "**/*"
+
+agent fixer uses react
+
+run fixer:
+  from input.workspace
+  until 3
+  goal "Identify the defect."
+  capture result -> state.findings

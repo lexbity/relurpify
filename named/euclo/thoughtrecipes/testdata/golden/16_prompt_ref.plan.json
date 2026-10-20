@@ -1,0 +1,175 @@
+{
+  "ThoughtRecipe": {
+    "RouteKind": "capability",
+    "ID": "prompt_ref",
+    "Name": "prompt_ref",
+    "Description": "Goal driven by an imported prompt binding (PromptID / .prompt registry anchor).",
+    "Metadata": {
+      "Name": "prompt_ref",
+      "Version": "",
+      "Author": "",
+      "Tags": null,
+      "Families": null,
+      "Keywords": null,
+      "HandoffTargets": null,
+      "Category": "",
+      "CreatedAt": "",
+      "UpdatedAt": ""
+    }
+  },
+  "Agents": {
+    "reviewer": {
+      "Name": "reviewer",
+      "Paradigm": "react",
+      "Span": {
+        "Start": {
+          "File": "testdata/recipes/16_prompt_ref.erpe",
+          "Line": 9,
+          "Column": 1
+        },
+        "End": {
+          "File": "testdata/recipes/16_prompt_ref.erpe",
+          "Line": 9,
+          "Column": 25
+        }
+      }
+    }
+  },
+  "ToolScopes": null,
+  "Steps": [
+    {
+      "ID": "run.11.5.reviewer.0",
+      "Kind": "run",
+      "Paradigm": "react",
+      "Scope": null,
+      "Question": "",
+      "Choices": null,
+      "ChoiceSource": "",
+      "PipelineStages": null,
+      "Goal": "",
+      "Sources": [
+        "input.workspace"
+      ],
+      "Directives": null,
+      "CaptureBindings": [
+        {
+          "Span": {
+            "Start": {
+              "File": "testdata/recipes/16_prompt_ref.erpe",
+              "Line": 14,
+              "Column": 11
+            },
+            "End": {
+              "File": "testdata/recipes/16_prompt_ref.erpe",
+              "Line": 14,
+              "Column": 34
+            }
+          },
+          "Source": {
+            "Span": {
+              "Start": {
+                "File": "testdata/recipes/16_prompt_ref.erpe",
+                "Line": 14,
+                "Column": 11
+              },
+              "End": {
+                "File": "testdata/recipes/16_prompt_ref.erpe",
+                "Line": 14,
+                "Column": 16
+              }
+            },
+            "Raw": "result",
+            "Parts": [
+              {
+                "Span": {
+                  "Start": {
+                    "File": "testdata/recipes/16_prompt_ref.erpe",
+                    "Line": 14,
+                    "Column": 11
+                  },
+                  "End": {
+                    "File": "testdata/recipes/16_prompt_ref.erpe",
+                    "Line": 14,
+                    "Column": 16
+                  }
+                },
+                "Value": "result"
+              }
+            ]
+          },
+          "Annotation": null,
+          "Destination": {
+            "Span": {
+              "Start": {
+                "File": "testdata/recipes/16_prompt_ref.erpe",
+                "Line": 14,
+                "Column": 21
+              },
+              "End": {
+                "File": "testdata/recipes/16_prompt_ref.erpe",
+                "Line": 14,
+                "Column": 34
+              }
+            },
+            "Raw": "state.analysis",
+            "Parts": [
+              {
+                "Span": {
+                  "Start": {
+                    "File": "testdata/recipes/16_prompt_ref.erpe",
+                    "Line": 14,
+                    "Column": 21
+                  },
+                  "End": {
+                    "File": "testdata/recipes/16_prompt_ref.erpe",
+                    "Line": 14,
+                    "Column": 25
+                  }
+                },
+                "Value": "state"
+              },
+              {
+                "Span": {
+                  "Start": {
+                    "File": "testdata/recipes/16_prompt_ref.erpe",
+                    "Line": 14,
+                    "Column": 27
+                  },
+                  "End": {
+                    "File": "testdata/recipes/16_prompt_ref.erpe",
+                    "Line": 14,
+                    "Column": 34
+                  }
+                },
+                "Value": "analysis"
+              }
+            ]
+          },
+          "Forwarding": true
+        }
+      ],
+      "CapabilityID": "",
+      "Prompt": "",
+      "PromptID": "analyze",
+      "Mutation": "",
+      "HITL": "",
+      "Stream": null,
+      "Fallback": null,
+      "Inherit": null,
+      "Capture": null,
+      "Dependencies": null,
+      "ClarificationConfig": null,
+      "OnError": null,
+      "Config": {
+        "from_sources": [
+          "input.workspace"
+        ],
+        "prompt_id": "analyze"
+      }
+    }
+  ],
+  "Routes": null,
+  "Pipelines": null,
+  "Warnings": null,
+  "RouteKind": "capability"
+}

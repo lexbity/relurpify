@@ -1,0 +1,22 @@
+{
+  "graph_valid": true,
+  "start_node": "ask.7.1.0.execute",
+  "node_count": 2,
+  "edge_count": 1,
+  "exec_path": [
+    "ask.7.1.0.execute"
+  ],
+  "exec_success": true,
+  "envelope_keys": [
+    "ask.7.1.0.execute.frame_id",
+    "ask.7.1.0.execute.paused",
+    "ask.7.1.0.execute.question",
+    "euclo.execution.ask.ask.7.1.0.frame",
+    "euclo.execution.step_index",
+    "euclo.execution.step_total",
+    "euclo.interaction.frame.1",
+    "euclo.interaction.frame_seq",
+    "euclo.interaction.resume_node_id"
+  ],
+  "result_keys": null
+}

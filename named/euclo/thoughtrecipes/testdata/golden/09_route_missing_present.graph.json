@@ -1,0 +1,93 @@
+{
+  "start_node": "euclo.execution.group.route.9.1.route",
+  "nodes": [
+    {
+      "id": "euclo.execution.done",
+      "type": "terminal"
+    },
+    {
+      "id": "euclo.execution.group.route.9.1.branch.0",
+      "type": "conditional"
+    },
+    {
+      "id": "euclo.execution.group.route.9.1.branch.1",
+      "type": "conditional"
+    },
+    {
+      "id": "euclo.execution.group.route.9.1.join",
+      "type": "system"
+    },
+    {
+      "id": "euclo.execution.group.route.9.1.route",
+      "type": "conditional"
+    },
+    {
+      "id": "run.11.9.reviewer.0.execute",
+      "type": "tool"
+    },
+    {
+      "id": "run.14.9.reviewer.1.execute",
+      "type": "tool"
+    },
+    {
+      "id": "run.18.9.reviewer.2.execute",
+      "type": "tool"
+    }
+  ],
+  "edges": [
+    {
+      "from": "euclo.execution.group.route.9.1.branch.0",
+      "to": "euclo.execution.group.route.9.1.branch.1",
+      "has_condition": true,
+      "parallel": false
+    },
+    {
+      "from": "euclo.execution.group.route.9.1.branch.0",
+      "to": "run.11.9.reviewer.0.execute",
+      "has_condition": true,
+      "parallel": false
+    },
+    {
+      "from": "euclo.execution.group.route.9.1.branch.1",
+      "to": "run.14.9.reviewer.1.execute",
+      "has_condition": true,
+      "parallel": false
+    },
+    {
+      "from": "euclo.execution.group.route.9.1.branch.1",
+      "to": "run.18.9.reviewer.2.execute",
+      "has_condition": true,
+      "parallel": false
+    },
+    {
+      "from": "euclo.execution.group.route.9.1.join",
+      "to": "euclo.execution.done",
+      "has_condition": true,
+      "parallel": false
+    },
+    {
+      "from": "euclo.execution.group.route.9.1.route",
+      "to": "euclo.execution.group.route.9.1.branch.0",
+      "has_condition": false,
+      "parallel": false
+    },
+    {
+      "from": "run.11.9.reviewer.0.execute",
+      "to": "euclo.execution.group.route.9.1.join",
+      "has_condition": true,
+      "parallel": false
+    },
+    {
+      "from": "run.14.9.reviewer.1.execute",
+      "to": "euclo.execution.group.route.9.1.join",
+      "has_condition": true,
+      "parallel": false
+    },
+    {
+      "from": "run.18.9.reviewer.2.execute",
+      "to": "euclo.execution.group.route.9.1.join",
+      "has_condition": true,
+      "parallel": false
+    }
+  ]
+}

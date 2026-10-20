@@ -91,7 +91,7 @@ func executeRoot(t *testing.T, args []string, stdin string) (string, error) {
 	return out.String(), err
 }
 
-// doctorOutcomeToleratesEnvironment accepts the two degraded outcomes the
+// doctorOutcomeToleratesEnvironment accepts the degraded outcomes the
 // doctor legitimately reports on hosts without a sandbox backend, while
 // rejecting anything else.
 func doctorOutcomeToleratesEnvironment(t *testing.T, err error) {
@@ -102,7 +102,8 @@ func doctorOutcomeToleratesEnvironment(t *testing.T, err error) {
 	msg := err.Error()
 	require.True(t,
 		strings.Contains(msg, "doctor found blocking issues") ||
-			strings.Contains(msg, "doctor: workspace degraded"),
+			strings.Contains(msg, "doctor: workspace degraded") ||
+			strings.Contains(msg, "workspace not ready"),
 		"unexpected doctor error: %v", err)
 }
 

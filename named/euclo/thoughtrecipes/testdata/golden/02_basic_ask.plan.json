@@ -1,0 +1,160 @@
+{
+  "ThoughtRecipe": {
+    "RouteKind": "capability",
+    "ID": "basic_ask",
+    "Name": "basic_ask",
+    "Description": "Basic ask user.",
+    "Metadata": {
+      "Name": "basic_ask",
+      "Version": "",
+      "Author": "",
+      "Tags": null,
+      "Families": null,
+      "Keywords": null,
+      "HandoffTargets": null,
+      "Category": "",
+      "CreatedAt": "",
+      "UpdatedAt": ""
+    }
+  },
+  "Agents": {},
+  "ToolScopes": null,
+  "Steps": [
+    {
+      "ID": "ask.7.1.0",
+      "Kind": "ask",
+      "Paradigm": "euclo",
+      "Scope": null,
+      "Question": "Do you want review or refactor?",
+      "Choices": [
+        "review",
+        "refactor"
+      ],
+      "ChoiceSource": "",
+      "PipelineStages": null,
+      "Goal": "",
+      "Sources": null,
+      "Directives": null,
+      "CaptureBindings": [
+        {
+          "Span": {
+            "Start": {
+              "File": "testdata/recipes/02_basic_ask.erpe",
+              "Line": 10,
+              "Column": 11
+            },
+            "End": {
+              "File": "testdata/recipes/02_basic_ask.erpe",
+              "Line": 10,
+              "Column": 32
+            }
+          },
+          "Source": {
+            "Span": {
+              "Start": {
+                "File": "testdata/recipes/02_basic_ask.erpe",
+                "Line": 10,
+                "Column": 11
+              },
+              "End": {
+                "File": "testdata/recipes/02_basic_ask.erpe",
+                "Line": 10,
+                "Column": 16
+              }
+            },
+            "Raw": "answer",
+            "Parts": [
+              {
+                "Span": {
+                  "Start": {
+                    "File": "testdata/recipes/02_basic_ask.erpe",
+                    "Line": 10,
+                    "Column": 11
+                  },
+                  "End": {
+                    "File": "testdata/recipes/02_basic_ask.erpe",
+                    "Line": 10,
+                    "Column": 16
+                  }
+                },
+                "Value": "answer"
+              }
+            ]
+          },
+          "Annotation": null,
+          "Destination": {
+            "Span": {
+              "Start": {
+                "File": "testdata/recipes/02_basic_ask.erpe",
+                "Line": 10,
+                "Column": 21
+              },
+              "End": {
+                "File": "testdata/recipes/02_basic_ask.erpe",
+                "Line": 10,
+                "Column": 32
+              }
+            },
+            "Raw": "state.intent",
+            "Parts": [
+              {
+                "Span": {
+                  "Start": {
+                    "File": "testdata/recipes/02_basic_ask.erpe",
+                    "Line": 10,
+                    "Column": 21
+                  },
+                  "End": {
+                    "File": "testdata/recipes/02_basic_ask.erpe",
+                    "Line": 10,
+                    "Column": 25
+                  }
+                },
+                "Value": "state"
+              },
+              {
+                "Span": {
+                  "Start": {
+                    "File": "testdata/recipes/02_basic_ask.erpe",
+                    "Line": 10,
+                    "Column": 27
+                  },
+                  "End": {
+                    "File": "testdata/recipes/02_basic_ask.erpe",
+                    "Line": 10,
+                    "Column": 32
+                  }
+                },
+                "Value": "intent"
+              }
+            ]
+          },
+          "Forwarding": true
+        }
+      ],
+      "CapabilityID": "",
+      "Prompt": "Do you want review or refactor?",
+      "PromptID": "",
+      "Mutation": "",
+      "HITL": "",
+      "Stream": null,
+      "Fallback": null,
+      "Inherit": null,
+      "Capture": null,
+      "Dependencies": null,
+      "ClarificationConfig": null,
+      "OnError": null,
+      "Config": {
+        "choices": [
+          "review",
+          "refactor"
+        ],
+        "question": "Do you want review or refactor?"
+      }
+    }
+  ],
+  "Routes": null,
+  "Pipelines": null,
+  "Warnings": null,
+  "RouteKind": "capability"
+}

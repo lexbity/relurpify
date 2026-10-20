@@ -1,0 +1,20 @@
+thoughtrecipe context_stream
+"Run + delegate steps declaring context streaming (DSL context-shaping, the producer side for ExecutionStep.Stream)."
+
+trigger as capability:
+  may read workspace
+
+agent explorer uses react
+agent reviewer uses react
+
+run explorer:
+  from input.workspace
+  stream "symbols relevant to {{.Goal}}" max 256 mode blocking
+  goal "Explore the workspace."
+  capture result -> state.findings
+
+delegate to reviewer:
+  from state.findings
+  stream "prior review notes" mode background
+  goal "Review the findings."
+  capture result -> state.review

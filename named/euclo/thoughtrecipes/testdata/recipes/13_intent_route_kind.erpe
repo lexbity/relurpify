@@ -1,0 +1,15 @@
+thoughtrecipe intent_recipe
+"Intent-triggered recipe."
+
+trigger as intent:
+  may read workspace
+
+agent clarifier uses react
+
+ask user:
+  question "What should I clarify?"
+  choices ["scope", "symbols"]
+
+run clarifier:
+  from state.intent
+  goal "Clarify the request."

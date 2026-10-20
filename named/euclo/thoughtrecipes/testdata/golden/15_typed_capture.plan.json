@@ -1,0 +1,470 @@
+{
+  "ThoughtRecipe": {
+    "RouteKind": "capability",
+    "ID": "typed_capture",
+    "Name": "typed_capture",
+    "Description": "Typed capture block with annotated and union-typed bindings (capture-lowering anchor).",
+    "Metadata": {
+      "Name": "typed_capture",
+      "Version": "",
+      "Author": "",
+      "Tags": null,
+      "Families": null,
+      "Keywords": null,
+      "HandoffTargets": null,
+      "Category": "",
+      "CreatedAt": "",
+      "UpdatedAt": ""
+    }
+  },
+  "Agents": {
+    "reviewer": {
+      "Name": "reviewer",
+      "Paradigm": "react",
+      "Span": {
+        "Start": {
+          "File": "testdata/recipes/15_typed_capture.erpe",
+          "Line": 7,
+          "Column": 1
+        },
+        "End": {
+          "File": "testdata/recipes/15_typed_capture.erpe",
+          "Line": 7,
+          "Column": 25
+        }
+      }
+    }
+  },
+  "ToolScopes": null,
+  "Steps": [
+    {
+      "ID": "run.9.5.reviewer.0",
+      "Kind": "run",
+      "Paradigm": "react",
+      "Scope": null,
+      "Question": "",
+      "Choices": null,
+      "ChoiceSource": "",
+      "PipelineStages": null,
+      "Goal": "Review the codebase and classify severity.",
+      "Sources": [
+        "input.prompt"
+      ],
+      "Directives": null,
+      "CaptureBindings": [
+        {
+          "Span": {
+            "Start": {
+              "File": "testdata/recipes/15_typed_capture.erpe",
+              "Line": 13,
+              "Column": 5
+            },
+            "End": {
+              "File": "testdata/recipes/15_typed_capture.erpe",
+              "Line": 13,
+              "Column": 47
+            }
+          },
+          "Source": {
+            "Span": {
+              "Start": {
+                "File": "testdata/recipes/15_typed_capture.erpe",
+                "Line": 13,
+                "Column": 5
+              },
+              "End": {
+                "File": "testdata/recipes/15_typed_capture.erpe",
+                "Line": 13,
+                "Column": 12
+              }
+            },
+            "Raw": "findings",
+            "Parts": [
+              {
+                "Span": {
+                  "Start": {
+                    "File": "testdata/recipes/15_typed_capture.erpe",
+                    "Line": 13,
+                    "Column": 5
+                  },
+                  "End": {
+                    "File": "testdata/recipes/15_typed_capture.erpe",
+                    "Line": 13,
+                    "Column": 12
+                  }
+                },
+                "Value": "findings"
+              }
+            ]
+          },
+          "Annotation": {
+            "Span": {
+              "Start": {
+                "File": "testdata/recipes/15_typed_capture.erpe",
+                "Line": 13,
+                "Column": 16
+              },
+              "End": {
+                "File": "testdata/recipes/15_typed_capture.erpe",
+                "Line": 13,
+                "Column": 29
+              }
+            },
+            "Name": {
+              "Span": {
+                "Start": {
+                  "File": "testdata/recipes/15_typed_capture.erpe",
+                  "Line": 13,
+                  "Column": 16
+                },
+                "End": {
+                  "File": "testdata/recipes/15_typed_capture.erpe",
+                  "Line": 13,
+                  "Column": 29
+                }
+              },
+              "Raw": "ReviewFindings",
+              "Parts": [
+                {
+                  "Span": {
+                    "Start": {
+                      "File": "testdata/recipes/15_typed_capture.erpe",
+                      "Line": 13,
+                      "Column": 16
+                    },
+                    "End": {
+                      "File": "testdata/recipes/15_typed_capture.erpe",
+                      "Line": 13,
+                      "Column": 29
+                    }
+                  },
+                  "Value": "ReviewFindings"
+                }
+              ]
+            }
+          },
+          "Destination": {
+            "Span": {
+              "Start": {
+                "File": "testdata/recipes/15_typed_capture.erpe",
+                "Line": 13,
+                "Column": 34
+              },
+              "End": {
+                "File": "testdata/recipes/15_typed_capture.erpe",
+                "Line": 13,
+                "Column": 47
+              }
+            },
+            "Raw": "state.findings",
+            "Parts": [
+              {
+                "Span": {
+                  "Start": {
+                    "File": "testdata/recipes/15_typed_capture.erpe",
+                    "Line": 13,
+                    "Column": 34
+                  },
+                  "End": {
+                    "File": "testdata/recipes/15_typed_capture.erpe",
+                    "Line": 13,
+                    "Column": 38
+                  }
+                },
+                "Value": "state"
+              },
+              {
+                "Span": {
+                  "Start": {
+                    "File": "testdata/recipes/15_typed_capture.erpe",
+                    "Line": 13,
+                    "Column": 40
+                  },
+                  "End": {
+                    "File": "testdata/recipes/15_typed_capture.erpe",
+                    "Line": 13,
+                    "Column": 47
+                  }
+                },
+                "Value": "findings"
+              }
+            ]
+          },
+          "Forwarding": false
+        },
+        {
+          "Span": {
+            "Start": {
+              "File": "testdata/recipes/15_typed_capture.erpe",
+              "Line": 14,
+              "Column": 5
+            },
+            "End": {
+              "File": "testdata/recipes/15_typed_capture.erpe",
+              "Line": 14,
+              "Column": 52
+            }
+          },
+          "Source": {
+            "Span": {
+              "Start": {
+                "File": "testdata/recipes/15_typed_capture.erpe",
+                "Line": 14,
+                "Column": 5
+              },
+              "End": {
+                "File": "testdata/recipes/15_typed_capture.erpe",
+                "Line": 14,
+                "Column": 12
+              }
+            },
+            "Raw": "severity",
+            "Parts": [
+              {
+                "Span": {
+                  "Start": {
+                    "File": "testdata/recipes/15_typed_capture.erpe",
+                    "Line": 14,
+                    "Column": 5
+                  },
+                  "End": {
+                    "File": "testdata/recipes/15_typed_capture.erpe",
+                    "Line": 14,
+                    "Column": 12
+                  }
+                },
+                "Value": "severity"
+              }
+            ]
+          },
+          "Annotation": {
+            "Span": {
+              "Start": {
+                "File": "testdata/recipes/15_typed_capture.erpe",
+                "Line": 14,
+                "Column": 18
+              },
+              "End": {
+                "File": "testdata/recipes/15_typed_capture.erpe",
+                "Line": 14,
+                "Column": 34
+              }
+            },
+            "Options": [
+              {
+                "Span": {
+                  "Start": {
+                    "File": "testdata/recipes/15_typed_capture.erpe",
+                    "Line": 14,
+                    "Column": 16
+                  },
+                  "End": {
+                    "File": "testdata/recipes/15_typed_capture.erpe",
+                    "Line": 14,
+                    "Column": 18
+                  }
+                },
+                "Name": {
+                  "Span": {
+                    "Start": {
+                      "File": "testdata/recipes/15_typed_capture.erpe",
+                      "Line": 14,
+                      "Column": 16
+                    },
+                    "End": {
+                      "File": "testdata/recipes/15_typed_capture.erpe",
+                      "Line": 14,
+                      "Column": 18
+                    }
+                  },
+                  "Raw": "low",
+                  "Parts": [
+                    {
+                      "Span": {
+                        "Start": {
+                          "File": "testdata/recipes/15_typed_capture.erpe",
+                          "Line": 14,
+                          "Column": 16
+                        },
+                        "End": {
+                          "File": "testdata/recipes/15_typed_capture.erpe",
+                          "Line": 14,
+                          "Column": 18
+                        }
+                      },
+                      "Value": "low"
+                    }
+                  ]
+                }
+              },
+              {
+                "Span": {
+                  "Start": {
+                    "File": "testdata/recipes/15_typed_capture.erpe",
+                    "Line": 14,
+                    "Column": 22
+                  },
+                  "End": {
+                    "File": "testdata/recipes/15_typed_capture.erpe",
+                    "Line": 14,
+                    "Column": 27
+                  }
+                },
+                "Name": {
+                  "Span": {
+                    "Start": {
+                      "File": "testdata/recipes/15_typed_capture.erpe",
+                      "Line": 14,
+                      "Column": 22
+                    },
+                    "End": {
+                      "File": "testdata/recipes/15_typed_capture.erpe",
+                      "Line": 14,
+                      "Column": 27
+                    }
+                  },
+                  "Raw": "medium",
+                  "Parts": [
+                    {
+                      "Span": {
+                        "Start": {
+                          "File": "testdata/recipes/15_typed_capture.erpe",
+                          "Line": 14,
+                          "Column": 22
+                        },
+                        "End": {
+                          "File": "testdata/recipes/15_typed_capture.erpe",
+                          "Line": 14,
+                          "Column": 27
+                        }
+                      },
+                      "Value": "medium"
+                    }
+                  ]
+                }
+              },
+              {
+                "Span": {
+                  "Start": {
+                    "File": "testdata/recipes/15_typed_capture.erpe",
+                    "Line": 14,
+                    "Column": 31
+                  },
+                  "End": {
+                    "File": "testdata/recipes/15_typed_capture.erpe",
+                    "Line": 14,
+                    "Column": 34
+                  }
+                },
+                "Name": {
+                  "Span": {
+                    "Start": {
+                      "File": "testdata/recipes/15_typed_capture.erpe",
+                      "Line": 14,
+                      "Column": 31
+                    },
+                    "End": {
+                      "File": "testdata/recipes/15_typed_capture.erpe",
+                      "Line": 14,
+                      "Column": 34
+                    }
+                  },
+                  "Raw": "high",
+                  "Parts": [
+                    {
+                      "Span": {
+                        "Start": {
+                          "File": "testdata/recipes/15_typed_capture.erpe",
+                          "Line": 14,
+                          "Column": 31
+                        },
+                        "End": {
+                          "File": "testdata/recipes/15_typed_capture.erpe",
+                          "Line": 14,
+                          "Column": 34
+                        }
+                      },
+                      "Value": "high"
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          "Destination": {
+            "Span": {
+              "Start": {
+                "File": "testdata/recipes/15_typed_capture.erpe",
+                "Line": 14,
+                "Column": 39
+              },
+              "End": {
+                "File": "testdata/recipes/15_typed_capture.erpe",
+                "Line": 14,
+                "Column": 52
+              }
+            },
+            "Raw": "state.severity",
+            "Parts": [
+              {
+                "Span": {
+                  "Start": {
+                    "File": "testdata/recipes/15_typed_capture.erpe",
+                    "Line": 14,
+                    "Column": 39
+                  },
+                  "End": {
+                    "File": "testdata/recipes/15_typed_capture.erpe",
+                    "Line": 14,
+                    "Column": 43
+                  }
+                },
+                "Value": "state"
+              },
+              {
+                "Span": {
+                  "Start": {
+                    "File": "testdata/recipes/15_typed_capture.erpe",
+                    "Line": 14,
+                    "Column": 45
+                  },
+                  "End": {
+                    "File": "testdata/recipes/15_typed_capture.erpe",
+                    "Line": 14,
+                    "Column": 52
+                  }
+                },
+                "Value": "severity"
+              }
+            ]
+          },
+          "Forwarding": false
+        }
+      ],
+      "CapabilityID": "",
+      "Prompt": "Review the codebase and classify severity.",
+      "PromptID": "",
+      "Mutation": "",
+      "HITL": "",
+      "Stream": null,
+      "Fallback": null,
+      "Inherit": null,
+      "Capture": null,
+      "Dependencies": null,
+      "ClarificationConfig": null,
+      "OnError": null,
+      "Config": {
+        "from_sources": [
+          "input.prompt"
+        ],
+        "goals": [
+          "Review the codebase and classify severity."
+        ]
+      }
+    }
+  ],
+  "Routes": null,
+  "Pipelines": null,
+  "Warnings": null,
+  "RouteKind": "capability"
+}

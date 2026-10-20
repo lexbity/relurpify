@@ -1,0 +1,117 @@
+{
+  "ThoughtRecipe": {
+    "RouteKind": "intent",
+    "ID": "intent_recipe",
+    "Name": "intent_recipe",
+    "Description": "Intent-triggered recipe.",
+    "Metadata": {
+      "Name": "intent_recipe",
+      "Version": "",
+      "Author": "",
+      "Tags": null,
+      "Families": null,
+      "Keywords": null,
+      "HandoffTargets": null,
+      "Category": "",
+      "CreatedAt": "",
+      "UpdatedAt": ""
+    }
+  },
+  "Agents": {
+    "clarifier": {
+      "Name": "clarifier",
+      "Paradigm": "react",
+      "Span": {
+        "Start": {
+          "File": "testdata/recipes/13_intent_route_kind.erpe",
+          "Line": 7,
+          "Column": 1
+        },
+        "End": {
+          "File": "testdata/recipes/13_intent_route_kind.erpe",
+          "Line": 7,
+          "Column": 26
+        }
+      }
+    }
+  },
+  "ToolScopes": null,
+  "Steps": [
+    {
+      "ID": "ask.9.1.0",
+      "Kind": "ask",
+      "Paradigm": "euclo",
+      "Scope": null,
+      "Question": "What should I clarify?",
+      "Choices": [
+        "scope",
+        "symbols"
+      ],
+      "ChoiceSource": "",
+      "PipelineStages": null,
+      "Goal": "",
+      "Sources": null,
+      "Directives": null,
+      "CaptureBindings": null,
+      "CapabilityID": "",
+      "Prompt": "What should I clarify?",
+      "PromptID": "",
+      "Mutation": "",
+      "HITL": "",
+      "Stream": null,
+      "Fallback": null,
+      "Inherit": null,
+      "Capture": null,
+      "Dependencies": null,
+      "ClarificationConfig": null,
+      "OnError": null,
+      "Config": {
+        "choices": [
+          "scope",
+          "symbols"
+        ],
+        "question": "What should I clarify?"
+      }
+    },
+    {
+      "ID": "run.13.5.clarifier.1",
+      "Kind": "run",
+      "Paradigm": "react",
+      "Scope": null,
+      "Question": "",
+      "Choices": null,
+      "ChoiceSource": "",
+      "PipelineStages": null,
+      "Goal": "Clarify the request.",
+      "Sources": [
+        "state.intent"
+      ],
+      "Directives": null,
+      "CaptureBindings": null,
+      "CapabilityID": "",
+      "Prompt": "Clarify the request.",
+      "PromptID": "",
+      "Mutation": "",
+      "HITL": "",
+      "Stream": null,
+      "Fallback": null,
+      "Inherit": null,
+      "Capture": null,
+      "Dependencies": null,
+      "ClarificationConfig": null,
+      "OnError": null,
+      "Config": {
+        "from_sources": [
+          "state.intent"
+        ],
+        "goals": [
+          "Clarify the request."
+        ]
+      }
+    }
+  ],
+  "Routes": null,
+  "Pipelines": null,
+  "Warnings": null,
+  "RouteKind": "intent"
+}

@@ -1,0 +1,23 @@
+thoughtrecipe tool_scope
+"Tool-scoped run steps via 'may invoke' — the deny-by-default / scope anchor for Slice 4 (Q6/A-6). Every other recipe leaves ToolScopes null; this one exercises declared scopes AND an omitted-scope branch (the fail-closed case the refactor must make deny rather than allow)."
+
+trigger as capability:
+  may read workspace
+  may invoke ["file_read"]
+
+agent reviewer uses react
+
+run reviewer:
+  may invoke ["file_read", "grep"]
+  from input.workspace
+  goal "Read and search the workspace."
+  capture result -> state.findings
+
+route:
+  when state.findings contains urgent:
+    run reviewer:
+      may invoke ["file_write"]
+      goal "Apply an urgent fix."
+  otherwise:
+    run reviewer:
+      goal "No scope declared in this branch — anchors the omitted-scope case."

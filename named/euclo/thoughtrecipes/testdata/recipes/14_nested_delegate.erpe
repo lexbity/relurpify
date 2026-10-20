@@ -1,0 +1,20 @@
+thoughtrecipe nested_delegate
+"Nested delegation: a delegate whose body delegates again. CHARACTERIZATION OF CURRENT (LOSSY) BEHAVIOR: lowering keeps only the outermost delegate and SILENTLY DROPS inner delegates (no warning), despite the language guide claiming nested delegation is supported. This golden pins that behavior so any change (fix or regression) in Slice 4/5 is caught."
+
+trigger as capability:
+  may read workspace
+
+agent router uses react
+agent reviewer uses react
+agent writer uses planner
+
+delegate to router:
+  from input.prompt
+  goal "Route the request to the right specialist."
+  delegate to reviewer:
+    from state.routing
+    goal "Review the routed findings."
+    delegate to writer:
+      from state.review
+      goal "Write up the reviewed findings."
+      capture result -> state.report

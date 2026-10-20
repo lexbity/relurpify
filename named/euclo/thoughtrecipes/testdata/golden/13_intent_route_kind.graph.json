@@ -1,0 +1,31 @@
+{
+  "start_node": "ask.9.1.0.execute",
+  "nodes": [
+    {
+      "id": "ask.9.1.0.execute",
+      "type": "tool"
+    },
+    {
+      "id": "euclo.execution.done",
+      "type": "terminal"
+    },
+    {
+      "id": "run.13.5.clarifier.1.execute",
+      "type": "tool"
+    }
+  ],
+  "edges": [
+    {
+      "from": "ask.9.1.0.execute",
+      "to": "run.13.5.clarifier.1.execute",
+      "has_condition": true,
+      "parallel": false
+    },
+    {
+      "from": "run.13.5.clarifier.1.execute",
+      "to": "euclo.execution.done",
+      "has_condition": true,
+      "parallel": false
+    }
+  ]
+}

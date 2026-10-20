@@ -1,0 +1,229 @@
+{
+  "ThoughtRecipe": {
+    "RouteKind": "capability",
+    "ID": "basic_delegate",
+    "Name": "basic_delegate",
+    "Description": "Basic delegate step.",
+    "Metadata": {
+      "Name": "basic_delegate",
+      "Version": "",
+      "Author": "",
+      "Tags": null,
+      "Families": null,
+      "Keywords": null,
+      "HandoffTargets": null,
+      "Category": "",
+      "CreatedAt": "",
+      "UpdatedAt": ""
+    }
+  },
+  "Agents": {
+    "reviewer": {
+      "Name": "reviewer",
+      "Paradigm": "react",
+      "Span": {
+        "Start": {
+          "File": "testdata/recipes/03_basic_delegate.erpe",
+          "Line": 8,
+          "Column": 1
+        },
+        "End": {
+          "File": "testdata/recipes/03_basic_delegate.erpe",
+          "Line": 8,
+          "Column": 25
+        }
+      }
+    },
+    "router": {
+      "Name": "router",
+      "Paradigm": "react",
+      "Span": {
+        "Start": {
+          "File": "testdata/recipes/03_basic_delegate.erpe",
+          "Line": 7,
+          "Column": 1
+        },
+        "End": {
+          "File": "testdata/recipes/03_basic_delegate.erpe",
+          "Line": 7,
+          "Column": 23
+        }
+      }
+    }
+  },
+  "ToolScopes": null,
+  "Steps": [
+    {
+      "ID": "run.10.5.router.0",
+      "Kind": "run",
+      "Paradigm": "react",
+      "Scope": null,
+      "Question": "",
+      "Choices": null,
+      "ChoiceSource": "",
+      "PipelineStages": null,
+      "Goal": "Route the request.",
+      "Sources": [
+        "input.prompt"
+      ],
+      "Directives": null,
+      "CaptureBindings": null,
+      "CapabilityID": "",
+      "Prompt": "Route the request.",
+      "PromptID": "",
+      "Mutation": "",
+      "HITL": "",
+      "Stream": null,
+      "Fallback": null,
+      "Inherit": null,
+      "Capture": null,
+      "Dependencies": null,
+      "ClarificationConfig": null,
+      "OnError": null,
+      "Config": {
+        "from_sources": [
+          "input.prompt"
+        ],
+        "goals": [
+          "Route the request."
+        ]
+      }
+    },
+    {
+      "ID": "delegate.14.13.reviewer.1",
+      "Kind": "delegate",
+      "Paradigm": "react",
+      "Scope": null,
+      "Question": "",
+      "Choices": null,
+      "ChoiceSource": "",
+      "PipelineStages": null,
+      "Goal": "Review the findings.",
+      "Sources": [
+        "state.routing"
+      ],
+      "Directives": null,
+      "CaptureBindings": [
+        {
+          "Span": {
+            "Start": {
+              "File": "testdata/recipes/03_basic_delegate.erpe",
+              "Line": 17,
+              "Column": 11
+            },
+            "End": {
+              "File": "testdata/recipes/03_basic_delegate.erpe",
+              "Line": 17,
+              "Column": 39
+            }
+          },
+          "Source": {
+            "Span": {
+              "Start": {
+                "File": "testdata/recipes/03_basic_delegate.erpe",
+                "Line": 17,
+                "Column": 11
+              },
+              "End": {
+                "File": "testdata/recipes/03_basic_delegate.erpe",
+                "Line": 17,
+                "Column": 16
+              }
+            },
+            "Raw": "result",
+            "Parts": [
+              {
+                "Span": {
+                  "Start": {
+                    "File": "testdata/recipes/03_basic_delegate.erpe",
+                    "Line": 17,
+                    "Column": 11
+                  },
+                  "End": {
+                    "File": "testdata/recipes/03_basic_delegate.erpe",
+                    "Line": 17,
+                    "Column": 16
+                  }
+                },
+                "Value": "result"
+              }
+            ]
+          },
+          "Annotation": null,
+          "Destination": {
+            "Span": {
+              "Start": {
+                "File": "testdata/recipes/03_basic_delegate.erpe",
+                "Line": 17,
+                "Column": 21
+              },
+              "End": {
+                "File": "testdata/recipes/03_basic_delegate.erpe",
+                "Line": 17,
+                "Column": 39
+              }
+            },
+            "Raw": "state.review_result",
+            "Parts": [
+              {
+                "Span": {
+                  "Start": {
+                    "File": "testdata/recipes/03_basic_delegate.erpe",
+                    "Line": 17,
+                    "Column": 21
+                  },
+                  "End": {
+                    "File": "testdata/recipes/03_basic_delegate.erpe",
+                    "Line": 17,
+                    "Column": 25
+                  }
+                },
+                "Value": "state"
+              },
+              {
+                "Span": {
+                  "Start": {
+                    "File": "testdata/recipes/03_basic_delegate.erpe",
+                    "Line": 17,
+                    "Column": 27
+                  },
+                  "End": {
+                    "File": "testdata/recipes/03_basic_delegate.erpe",
+                    "Line": 17,
+                    "Column": 39
+                  }
+                },
+                "Value": "review_result"
+              }
+            ]
+          },
+          "Forwarding": true
+        }
+      ],
+      "CapabilityID": "",
+      "Prompt": "Review the findings.",
+      "PromptID": "",
+      "Mutation": "",
+      "HITL": "",
+      "Stream": null,
+      "Fallback": null,
+      "Inherit": null,
+      "Capture": null,
+      "Dependencies": null,
+      "ClarificationConfig": null,
+      "OnError": null,
+      "Config": {
+        "from_sources": [
+          "state.routing"
+        ],
+        "goals": [
+          "Review the findings."
+        ]
+      }
+    }
+  ],
+  "Routes": null,
+  "Pipelines": null,
+  "Warnings": null,
+  "RouteKind": "capability"
+}

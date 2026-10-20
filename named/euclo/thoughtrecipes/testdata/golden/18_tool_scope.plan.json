@@ -1,0 +1,316 @@
+{
+  "ThoughtRecipe": {
+    "RouteKind": "capability",
+    "ID": "tool_scope",
+    "Name": "tool_scope",
+    "Description": "Tool-scoped run steps via 'may invoke' — the deny-by-default / scope anchor for Slice 4 (Q6/A-6). Every other recipe leaves ToolScopes null; this one exercises declared scopes AND an omitted-scope branch (the fail-closed case the refactor must make deny rather than allow).",
+    "Metadata": {
+      "Name": "tool_scope",
+      "Version": "",
+      "Author": "",
+      "Tags": null,
+      "Families": null,
+      "Keywords": null,
+      "HandoffTargets": null,
+      "Category": "",
+      "CreatedAt": "",
+      "UpdatedAt": ""
+    }
+  },
+  "Agents": {
+    "reviewer": {
+      "Name": "reviewer",
+      "Paradigm": "react",
+      "Span": {
+        "Start": {
+          "File": "testdata/recipes/18_tool_scope.erpe",
+          "Line": 8,
+          "Column": 1
+        },
+        "End": {
+          "File": "testdata/recipes/18_tool_scope.erpe",
+          "Line": 8,
+          "Column": 25
+        }
+      }
+    }
+  },
+  "ToolScopes": [
+    {
+      "ScopeKind": "trigger",
+      "ToolNames": [
+        "file_read"
+      ],
+      "Span": {
+        "Start": {
+          "File": "testdata/recipes/18_tool_scope.erpe",
+          "Line": 6,
+          "Column": 3
+        },
+        "End": {
+          "File": "testdata/recipes/18_tool_scope.erpe",
+          "Line": 6,
+          "Column": 26
+        }
+      }
+    }
+  ],
+  "Steps": [
+    {
+      "ID": "run.10.5.reviewer.0",
+      "Kind": "run",
+      "Paradigm": "react",
+      "Scope": [
+        "file_read",
+        "grep"
+      ],
+      "Question": "",
+      "Choices": null,
+      "ChoiceSource": "",
+      "PipelineStages": null,
+      "Goal": "Read and search the workspace.",
+      "Sources": [
+        "input.workspace"
+      ],
+      "Directives": null,
+      "CaptureBindings": [
+        {
+          "Span": {
+            "Start": {
+              "File": "testdata/recipes/18_tool_scope.erpe",
+              "Line": 14,
+              "Column": 11
+            },
+            "End": {
+              "File": "testdata/recipes/18_tool_scope.erpe",
+              "Line": 14,
+              "Column": 34
+            }
+          },
+          "Source": {
+            "Span": {
+              "Start": {
+                "File": "testdata/recipes/18_tool_scope.erpe",
+                "Line": 14,
+                "Column": 11
+              },
+              "End": {
+                "File": "testdata/recipes/18_tool_scope.erpe",
+                "Line": 14,
+                "Column": 16
+              }
+            },
+            "Raw": "result",
+            "Parts": [
+              {
+                "Span": {
+                  "Start": {
+                    "File": "testdata/recipes/18_tool_scope.erpe",
+                    "Line": 14,
+                    "Column": 11
+                  },
+                  "End": {
+                    "File": "testdata/recipes/18_tool_scope.erpe",
+                    "Line": 14,
+                    "Column": 16
+                  }
+                },
+                "Value": "result"
+              }
+            ]
+          },
+          "Annotation": null,
+          "Destination": {
+            "Span": {
+              "Start": {
+                "File": "testdata/recipes/18_tool_scope.erpe",
+                "Line": 14,
+                "Column": 21
+              },
+              "End": {
+                "File": "testdata/recipes/18_tool_scope.erpe",
+                "Line": 14,
+                "Column": 34
+              }
+            },
+            "Raw": "state.findings",
+            "Parts": [
+              {
+                "Span": {
+                  "Start": {
+                    "File": "testdata/recipes/18_tool_scope.erpe",
+                    "Line": 14,
+                    "Column": 21
+                  },
+                  "End": {
+                    "File": "testdata/recipes/18_tool_scope.erpe",
+                    "Line": 14,
+                    "Column": 25
+                  }
+                },
+                "Value": "state"
+              },
+              {
+                "Span": {
+                  "Start": {
+                    "File": "testdata/recipes/18_tool_scope.erpe",
+                    "Line": 14,
+                    "Column": 27
+                  },
+                  "End": {
+                    "File": "testdata/recipes/18_tool_scope.erpe",
+                    "Line": 14,
+                    "Column": 34
+                  }
+                },
+                "Value": "findings"
+              }
+            ]
+          },
+          "Forwarding": true
+        }
+      ],
+      "CapabilityID": "",
+      "Prompt": "Read and search the workspace.",
+      "PromptID": "",
+      "Mutation": "",
+      "HITL": "",
+      "Stream": null,
+      "Fallback": null,
+      "Inherit": null,
+      "Capture": null,
+      "Dependencies": null,
+      "ClarificationConfig": null,
+      "OnError": null,
+      "Config": {
+        "effective_tool_names": [
+          "file_read",
+          "grep"
+        ],
+        "from_sources": [
+          "input.workspace"
+        ],
+        "goals": [
+          "Read and search the workspace."
+        ]
+      }
+    }
+  ],
+  "Routes": [
+    {
+      "Group": {
+        "Span": {
+          "Start": {
+            "File": "testdata/recipes/18_tool_scope.erpe",
+            "Line": 16,
+            "Column": 1
+          },
+          "End": {
+            "File": "testdata/recipes/18_tool_scope.erpe",
+            "Line": 24,
+            "Column": 1
+          }
+        },
+        "ID": "route.16.1"
+      },
+      "Branches": [
+        {
+          "Predicate": {
+            "Subject": "state.findings",
+            "Op": "contains",
+            "Value": {
+              "string_val": "urgent"
+            },
+            "Label": "state contains"
+          },
+          "Steps": [
+            {
+              "ID": "run.18.9.reviewer.1",
+              "Kind": "run",
+              "Paradigm": "react",
+              "Scope": [
+                "file_read",
+                "file_write"
+              ],
+              "Question": "",
+              "Choices": null,
+              "ChoiceSource": "",
+              "PipelineStages": null,
+              "Goal": "Apply an urgent fix.",
+              "Sources": null,
+              "Directives": null,
+              "CaptureBindings": null,
+              "CapabilityID": "",
+              "Prompt": "Apply an urgent fix.",
+              "PromptID": "",
+              "Mutation": "",
+              "HITL": "",
+              "Stream": null,
+              "Fallback": null,
+              "Inherit": null,
+              "Capture": null,
+              "Dependencies": null,
+              "ClarificationConfig": null,
+              "OnError": null,
+              "Config": {
+                "effective_tool_names": [
+                  "file_read",
+                  "file_write"
+                ],
+                "goals": [
+                  "Apply an urgent fix."
+                ]
+              }
+            }
+          ],
+          "IsElse": false
+        },
+        {
+          "Predicate": null,
+          "Steps": [
+            {
+              "ID": "run.22.9.reviewer.2",
+              "Kind": "run",
+              "Paradigm": "react",
+              "Scope": [
+                "file_read"
+              ],
+              "Question": "",
+              "Choices": null,
+              "ChoiceSource": "",
+              "PipelineStages": null,
+              "Goal": "No scope declared in this branch — anchors the omitted-scope case.",
+              "Sources": null,
+              "Directives": null,
+              "CaptureBindings": null,
+              "CapabilityID": "",
+              "Prompt": "No scope declared in this branch — anchors the omitted-scope case.",
+              "PromptID": "",
+              "Mutation": "",
+              "HITL": "",
+              "Stream": null,
+              "Fallback": null,
+              "Inherit": null,
+              "Capture": null,
+              "Dependencies": null,
+              "ClarificationConfig": null,
+              "OnError": null,
+              "Config": {
+                "effective_tool_names": [
+                  "file_read"
+                ],
+                "goals": [
+                  "No scope declared in this branch — anchors the omitted-scope case."
+                ]
+              }
+            }
+          ],
+          "IsElse": true
+        }
+      ]
+    }
+  ],
+  "Pipelines": null,
+  "Warnings": null,
+  "RouteKind": "capability"
+}

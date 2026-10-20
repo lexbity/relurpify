@@ -1,0 +1,15 @@
+thoughtrecipe route_no_otherwise
+"Route without otherwise branch."
+
+trigger as capability:
+  may read workspace
+
+agent reviewer uses react
+
+route:
+  when state.intent is review:
+    run reviewer:
+      goal "Review the code."
+  when state.intent is debug:
+    run reviewer:
+      goal "Debug the issue."

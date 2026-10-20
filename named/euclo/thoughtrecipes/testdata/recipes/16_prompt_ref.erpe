@@ -1,0 +1,14 @@
+thoughtrecipe prompt_ref
+"Goal driven by an imported prompt binding (PromptID / .prompt registry anchor)."
+
+import prompt named.euclo.code.analyze as analyze
+
+trigger as capability:
+  may read workspace
+
+agent reviewer uses react
+
+run reviewer:
+  from input.workspace
+  goal prompt analyze
+  capture result -> state.analysis

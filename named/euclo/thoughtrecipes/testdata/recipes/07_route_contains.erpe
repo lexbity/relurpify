@@ -1,0 +1,18 @@
+thoughtrecipe route_contains
+"Route with contains predicate."
+
+trigger as capability:
+  may read workspace
+
+agent reviewer uses react
+
+route:
+  when state.feedback contains urgent:
+    run reviewer:
+      goal "Prioritize urgent feedback."
+  when state.feedback contains bug:
+    run reviewer:
+      goal "Fix the reported bug."
+  otherwise:
+    run reviewer:
+      goal "Process general feedback."

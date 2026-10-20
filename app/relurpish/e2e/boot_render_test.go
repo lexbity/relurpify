@@ -22,6 +22,7 @@ import (
 // newRootModel → Init → resize → View path that pty_safety.RunWithSurface
 // uses, without a PTY.
 func TestBootRender_RealAdapter_NoPanic(t *testing.T) {
+	skipWithoutSandboxBackend(t)
 	workspace := t.TempDir()
 	testhelper.WriteCleanWorkspace(t, workspace, testhelper.WorkspaceOpts{
 		Provider: "offline",

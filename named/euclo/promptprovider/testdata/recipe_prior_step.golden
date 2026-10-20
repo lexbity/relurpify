@@ -1,0 +1,8 @@
+Previous Step Summary:
+Last Frame: execute
+Last Job: execute
+Status: completed
+Job ID: job-3
+Previous Outcome: success
+Previous Artifacts: result.txt, summary.md
+Negative Constraints: avoid_mutation

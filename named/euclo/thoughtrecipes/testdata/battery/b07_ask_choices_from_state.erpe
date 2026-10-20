@@ -1,0 +1,27 @@
+thoughtrecipe battery.ask_dynamic
+"HITL: ask with choices drawn from state."
+
+trigger as capability:
+  may read workspace
+  may ask user
+  family ["review"]
+
+input workspace: "**/*"
+
+agent explorer uses react
+
+run explorer:
+  from input.workspace
+  goal "Enumerate candidate modules."
+  capture:
+    modules: list<Text> -> state.modules
+
+ask user:
+  question "Which module should be reviewed first?"
+  choices from state.modules
+  capture answer -> user.selected_module
+
+run explorer:
+  from user.selected_module
+  goal "Review the selected module."
+  capture result -> output.result

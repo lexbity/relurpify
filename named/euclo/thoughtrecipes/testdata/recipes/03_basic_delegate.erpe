@@ -1,0 +1,17 @@
+thoughtrecipe basic_delegate
+"Basic delegate step."
+
+trigger as capability:
+  may read workspace
+
+agent router uses react
+agent reviewer uses react
+
+run router:
+  from input.prompt
+  goal "Route the request."
+
+delegate to reviewer:
+  from state.routing
+  goal "Review the findings."
+  capture result -> state.review_result

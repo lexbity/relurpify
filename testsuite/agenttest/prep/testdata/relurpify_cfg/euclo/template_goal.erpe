@@ -1,0 +1,19 @@
+thoughtrecipe prep_template_goal
+"Dry-run fixture: from/goal templating — the step's prompt is shaped by input and state references, with the query template interpolating the goal."
+
+trigger as capability:
+  may read workspace
+  keyword ["templated-heron-goal"]
+  family ["prep-fixtures"]
+
+input workspace: "**/*"
+input prompt: user.request
+
+agent worker uses react
+
+run worker:
+  may invoke ["prep_probe"]
+  from input.prompt
+  stream "notes relevant to {{.Goal}}" max 256 mode blocking
+  goal "templated-heron-goal"
+  capture result -> state.summary

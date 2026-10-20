@@ -1,0 +1,47 @@
+{
+  "graph_valid": true,
+  "start_node": "run.9.5.reviewer.0.execute",
+  "node_count": 2,
+  "edge_count": 1,
+  "exec_path": [
+    "run.9.5.reviewer.0.execute"
+  ],
+  "exec_success": false,
+  "exec_error": "react agent missing language model",
+  "envelope_keys": [
+    "euclo.execution.step.run.9.5.reviewer.0.failure_kind",
+    "euclo.execution.step.run.9.5.reviewer.0.goal",
+    "euclo.execution.step.run.9.5.reviewer.0.hitl",
+    "euclo.execution.step.run.9.5.reviewer.0.id",
+    "euclo.execution.step.run.9.5.reviewer.0.mutation",
+    "euclo.execution.step.run.9.5.reviewer.0.on_error_action",
+    "euclo.execution.step.run.9.5.reviewer.0.on_error_resolved",
+    "euclo.execution.step.run.9.5.reviewer.0.paradigm",
+    "euclo.execution.step.run.9.5.reviewer.0.prompt_id",
+    "euclo.execution.step.run.9.5.reviewer.0.question",
+    "euclo.execution.step.run.9.5.reviewer.0.sources",
+    "euclo.execution.step.run.9.5.reviewer.0.type",
+    "euclo.execution.step_index",
+    "euclo.execution.step_total",
+    "euclo.step_failure",
+    "euclo.step_failures",
+    "run.9.5.reviewer.0.execute.error",
+    "run.9.5.reviewer.0.execute.failure_kind",
+    "run.9.5.reviewer.0.execute.on_error_action",
+    "run.9.5.reviewer.0.execute.on_error_resolved"
+  ],
+  "result_keys": [
+    "euclo.execution.step.run.9.5.reviewer.0.failure_kind",
+    "euclo.execution.step.run.9.5.reviewer.0.goal",
+    "euclo.execution.step.run.9.5.reviewer.0.hitl",
+    "euclo.execution.step.run.9.5.reviewer.0.id",
+    "euclo.execution.step.run.9.5.reviewer.0.mutation",
+    "euclo.execution.step.run.9.5.reviewer.0.on_error_action",
+    "euclo.execution.step.run.9.5.reviewer.0.on_error_resolved",
+    "euclo.execution.step.run.9.5.reviewer.0.paradigm",
+    "euclo.execution.step.run.9.5.reviewer.0.prompt_id",
+    "euclo.execution.step.run.9.5.reviewer.0.question",
+    "euclo.execution.step.run.9.5.reviewer.0.sources",
+    "euclo.execution.step.run.9.5.reviewer.0.type"
+  ]
+}

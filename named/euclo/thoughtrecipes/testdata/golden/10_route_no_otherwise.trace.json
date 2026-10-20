@@ -1,0 +1,39 @@
+{
+  "graph_valid": true,
+  "start_node": "euclo.execution.group.route.9.1.route",
+  "node_count": 8,
+  "edge_count": 9,
+  "exec_path": [
+    "euclo.execution.group.route.9.1.route",
+    "euclo.execution.group.route.9.1.branch.0",
+    "euclo.execution.group.route.9.1.branch.1",
+    "euclo.execution.group.route.9.1.no-match"
+  ],
+  "exec_success": false,
+  "exec_error": "no-route: no matching branch and no otherwise",
+  "envelope_keys": [
+    "euclo.execution.group.route.9.1.branch.0.branch_id",
+    "euclo.execution.group.route.9.1.branch.0.condition_met",
+    "euclo.execution.group.route.9.1.branch.0.group_id",
+    "euclo.execution.group.route.9.1.branch.0.predicate",
+    "euclo.execution.group.route.9.1.branch.1.branch_id",
+    "euclo.execution.group.route.9.1.branch.1.condition_met",
+    "euclo.execution.group.route.9.1.branch.1.group_id",
+    "euclo.execution.group.route.9.1.branch.1.predicate",
+    "euclo.execution.group.route.9.1.branch.euclo.execution.group.route.9.1.branch.0.condition_met",
+    "euclo.execution.group.route.9.1.branch.euclo.execution.group.route.9.1.branch.1.condition_met",
+    "euclo.execution.group.route.9.1.no-match.group_id",
+    "euclo.execution.group.route.9.1.route.group_id",
+    "euclo.execution.route.route.9.1",
+    "euclo.execution.stage.euclo.execution.group.route.9.1.branch.0.branch_id",
+    "euclo.execution.stage.euclo.execution.group.route.9.1.branch.0.group_id",
+    "euclo.execution.stage.euclo.execution.group.route.9.1.branch.0.predicate",
+    "euclo.execution.stage.euclo.execution.group.route.9.1.branch.1.branch_id",
+    "euclo.execution.stage.euclo.execution.group.route.9.1.branch.1.group_id",
+    "euclo.execution.stage.euclo.execution.group.route.9.1.branch.1.predicate",
+    "euclo.execution.stage.euclo.execution.group.route.9.1.no-match.group_id",
+    "euclo.execution.stage.euclo.execution.group.route.9.1.route.group_id",
+    "euclo.execution.step_total"
+  ],
+  "result_keys": null
+}

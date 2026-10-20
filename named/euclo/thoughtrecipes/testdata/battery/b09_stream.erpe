@@ -1,0 +1,19 @@
+thoughtrecipe battery.stream
+"Context shaping: blocking and background streams."
+
+trigger as capability:
+  may read workspace
+  may invoke ["file_read", "grep"]
+  family ["investigation"]
+
+input workspace: "**/*"
+input prompt: user.request
+
+agent investigator uses react
+
+run investigator:
+  may invoke ["file_read", "grep"]
+  from input.workspace
+  stream "symbols relevant to the request" max 256 mode blocking
+  goal "Investigate with shaped context."
+  capture result -> state.findings

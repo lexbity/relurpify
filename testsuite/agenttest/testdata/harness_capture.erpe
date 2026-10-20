@@ -1,0 +1,10 @@
+thoughtrecipe harness_capture
+"Authored blackboard source: capability write grounds capture-equivalently with read provenance. Zero model calls."
+
+agent board uses blackboard
+
+run board:
+  source echo:
+    read state.note
+    do relurpic:harness_capture_echo
+    write state.echo_out

@@ -1,0 +1,21 @@
+{
+  "start_node": "delegate.11.13.router.0.execute",
+  "nodes": [
+    {
+      "id": "delegate.11.13.router.0.execute",
+      "type": "tool"
+    },
+    {
+      "id": "euclo.execution.done",
+      "type": "terminal"
+    }
+  ],
+  "edges": [
+    {
+      "from": "delegate.11.13.router.0.execute",
+      "to": "euclo.execution.done",
+      "has_condition": true,
+      "parallel": false
+    }
+  ]
+}

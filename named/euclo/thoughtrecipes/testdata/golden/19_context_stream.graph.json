@@ -1,0 +1,51 @@
+{
+  "start_node": "run.10.5.explorer.0.stream",
+  "nodes": [
+    {
+      "id": "delegate.16.13.reviewer.1.execute",
+      "type": "tool"
+    },
+    {
+      "id": "delegate.16.13.reviewer.1.stream",
+      "type": "stream"
+    },
+    {
+      "id": "euclo.execution.done",
+      "type": "terminal"
+    },
+    {
+      "id": "run.10.5.explorer.0.execute",
+      "type": "tool"
+    },
+    {
+      "id": "run.10.5.explorer.0.stream",
+      "type": "stream"
+    }
+  ],
+  "edges": [
+    {
+      "from": "delegate.16.13.reviewer.1.execute",
+      "to": "euclo.execution.done",
+      "has_condition": true,
+      "parallel": false
+    },
+    {
+      "from": "delegate.16.13.reviewer.1.stream",
+      "to": "delegate.16.13.reviewer.1.execute",
+      "has_condition": false,
+      "parallel": false
+    },
+    {
+      "from": "run.10.5.explorer.0.execute",
+      "to": "delegate.16.13.reviewer.1.stream",
+      "has_condition": true,
+      "parallel": false
+    },
+    {
+      "from": "run.10.5.explorer.0.stream",
+      "to": "run.10.5.explorer.0.execute",
+      "has_condition": false,
+      "parallel": false
+    }
+  ]
+}

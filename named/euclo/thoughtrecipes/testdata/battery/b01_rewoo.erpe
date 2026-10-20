@@ -1,0 +1,21 @@
+thoughtrecipe battery.rewoo
+"ReWOO: plan, tool steps, synthesize."
+
+trigger as capability:
+  may read workspace
+  may invoke ["file_read"]
+  family ["review"]
+
+input workspace: "**/*"
+input prompt: user.request
+
+agent executor uses rewoo
+
+run executor:
+  may invoke ["file_read"]
+  from input.workspace
+  plan "Identify the checks needed."
+  step "Check the file":
+    do relurpic:code_review
+  synthesize "Combine the results into an actionable summary."
+  capture result -> state.summary

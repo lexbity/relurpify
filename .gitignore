@@ -6,7 +6,6 @@
 .memory/
 .windsurf/
 .relurpify/
-testdata/
 relurpify/
 .relurpish/
 .relurpify_state/

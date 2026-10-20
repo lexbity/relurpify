@@ -1,0 +1,102 @@
+{
+  "ThoughtRecipe": {
+    "RouteKind": "capability",
+    "ID": "directive_clause",
+    "Name": "directive_clause",
+    "Description": "Run block carrying an agent-specific directive line (ExecutionStep.Directives / control-bus anchor for Slice 6).",
+    "Metadata": {
+      "Name": "directive_clause",
+      "Version": "",
+      "Author": "",
+      "Tags": null,
+      "Families": null,
+      "Keywords": null,
+      "HandoffTargets": null,
+      "Category": "",
+      "CreatedAt": "",
+      "UpdatedAt": ""
+    }
+  },
+  "Agents": {
+    "reviewer": {
+      "Name": "reviewer",
+      "Paradigm": "react",
+      "Span": {
+        "Start": {
+          "File": "testdata/recipes/17_directive.erpe",
+          "Line": 7,
+          "Column": 1
+        },
+        "End": {
+          "File": "testdata/recipes/17_directive.erpe",
+          "Line": 7,
+          "Column": 25
+        }
+      }
+    }
+  },
+  "ToolScopes": null,
+  "Steps": [
+    {
+      "ID": "run.9.5.reviewer.0",
+      "Kind": "run",
+      "Paradigm": "react",
+      "Scope": null,
+      "Question": "",
+      "Choices": null,
+      "ChoiceSource": "",
+      "PipelineStages": null,
+      "Goal": "Review the findings and summarize.",
+      "Sources": [
+        "input.prompt"
+      ],
+      "Directives": [
+        {
+          "Name": "summarize",
+          "TextArgs": [
+            "state.findings"
+          ],
+          "Predicate": null,
+          "Body": null,
+          "Span": {
+            "Start": {
+              "File": "testdata/recipes/17_directive.erpe",
+              "Line": 12,
+              "Column": 3
+            },
+            "End": {
+              "File": "testdata/recipes/17_directive.erpe",
+              "Line": 12,
+              "Column": 11
+            }
+          }
+        }
+      ],
+      "CaptureBindings": null,
+      "CapabilityID": "",
+      "Prompt": "Review the findings and summarize.",
+      "PromptID": "",
+      "Mutation": "",
+      "HITL": "",
+      "Stream": null,
+      "Fallback": null,
+      "Inherit": null,
+      "Capture": null,
+      "Dependencies": null,
+      "ClarificationConfig": null,
+      "OnError": null,
+      "Config": {
+        "from_sources": [
+          "input.prompt"
+        ],
+        "goals": [
+          "Review the findings and summarize."
+        ]
+      }
+    }
+  ],
+  "Routes": null,
+  "Pipelines": null,
+  "Warnings": null,
+  "RouteKind": "capability"
+}

@@ -1,0 +1,15 @@
+{
+  "graph_valid": true,
+  "start_node": "run.10.5.explorer.0.stream",
+  "node_count": 5,
+  "edge_count": 4,
+  "exec_path": [
+    "run.10.5.explorer.0.stream"
+  ],
+  "exec_success": false,
+  "exec_error": "node run.10.5.explorer.0.stream execution failed: stream trigger node \"run.10.5.explorer.0.stream\": no compiler trigger in context",
+  "envelope_keys": [
+    "euclo.execution.step_total"
+  ],
+  "result_keys": null
+}

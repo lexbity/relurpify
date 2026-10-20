@@ -1,0 +1,21 @@
+{
+  "start_node": "ask.7.1.0.execute",
+  "nodes": [
+    {
+      "id": "ask.7.1.0.execute",
+      "type": "tool"
+    },
+    {
+      "id": "euclo.execution.done",
+      "type": "terminal"
+    }
+  ],
+  "edges": [
+    {
+      "from": "ask.7.1.0.execute",
+      "to": "euclo.execution.done",
+      "has_condition": true,
+      "parallel": false
+    }
+  ]
+}

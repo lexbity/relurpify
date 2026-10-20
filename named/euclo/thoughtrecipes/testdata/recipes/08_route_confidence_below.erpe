@@ -1,0 +1,19 @@
+thoughtrecipe route_confidence
+"Route with confidence below predicate."
+
+trigger as capability:
+  may read workspace
+
+agent router uses react
+
+route:
+  when state.intent is analyze:
+    run router:
+      goal "Run analysis."
+  when state.intent confidence below 70%:
+    delegate to router:
+      from state.intent
+      goal "Clarify the intent."
+  otherwise:
+    run router:
+      goal "Proceed with default action."

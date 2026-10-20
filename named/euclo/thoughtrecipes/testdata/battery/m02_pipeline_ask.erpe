@@ -1,0 +1,48 @@
+thoughtrecipe battery.mixed.pipeline_ask
+"Pipeline of paradigms ending in a human decision."
+
+trigger as capability:
+  may read workspace
+  may ask user
+  may invoke ["file_read"]
+  family ["investigation"]
+
+input workspace: "**/*"
+
+agent explorer uses react
+agent planner uses planner
+agent executor uses rewoo
+
+pipeline:
+  stage explore:
+    run explorer:
+      may invoke ["file_read"]
+      from input.workspace
+      stream "modules and entry points" max 256 mode blocking
+      goal "Explore the workspace structure."
+      capture:
+        findings: list<Text> -> state.findings
+
+  stage plan:
+    run planner:
+      from state.findings
+      plan "Order the findings into an investigation sequence."
+      verify "Check the sequence covers every finding."
+      summarize "State the investigation plan."
+      capture:
+        plan: Text -> state.plan
+
+  stage execute:
+    run executor:
+      may invoke ["file_read"]
+      from state.plan
+      plan "Identify the checks needed."
+      step "Check the first finding":
+        do relurpic:code_review
+      synthesize "Combine the results into an actionable summary."
+      capture result -> state.summary
+
+ask user:
+  question "Proceed with the recommended change?"
+  choices ["yes", "no", "revise"]
+  capture answer -> state.decision

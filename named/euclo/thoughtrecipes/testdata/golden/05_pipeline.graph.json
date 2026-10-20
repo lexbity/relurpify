@@ -1,0 +1,71 @@
+{
+  "start_node": "pipeline.10.1.pipeline",
+  "nodes": [
+    {
+      "id": "euclo.execution.done",
+      "type": "terminal"
+    },
+    {
+      "id": "pipeline.10.1.join",
+      "type": "system"
+    },
+    {
+      "id": "pipeline.10.1.pipeline",
+      "type": "system"
+    },
+    {
+      "id": "pipeline.10.1.stage.0.explore",
+      "type": "system"
+    },
+    {
+      "id": "pipeline.10.1.stage.1.summarize",
+      "type": "system"
+    },
+    {
+      "id": "run.12.9.explorer.0.execute",
+      "type": "tool"
+    },
+    {
+      "id": "run.15.9.reviewer.1.execute",
+      "type": "tool"
+    }
+  ],
+  "edges": [
+    {
+      "from": "pipeline.10.1.join",
+      "to": "euclo.execution.done",
+      "has_condition": true,
+      "parallel": false
+    },
+    {
+      "from": "pipeline.10.1.pipeline",
+      "to": "pipeline.10.1.stage.0.explore",
+      "has_condition": false,
+      "parallel": false
+    },
+    {
+      "from": "pipeline.10.1.stage.0.explore",
+      "to": "run.12.9.explorer.0.execute",
+      "has_condition": false,
+      "parallel": false
+    },
+    {
+      "from": "pipeline.10.1.stage.1.summarize",
+      "to": "run.15.9.reviewer.1.execute",
+      "has_condition": false,
+      "parallel": false
+    },
+    {
+      "from": "run.12.9.explorer.0.execute",
+      "to": "pipeline.10.1.stage.1.summarize",
+      "has_condition": true,
+      "parallel": false
+    },
+    {
+      "from": "run.15.9.reviewer.1.execute",
+      "to": "pipeline.10.1.join",
+      "has_condition": true,
+      "parallel": false
+    }
+  ]
+}

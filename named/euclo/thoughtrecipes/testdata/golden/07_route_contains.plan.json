@@ -1,0 +1,189 @@
+{
+  "ThoughtRecipe": {
+    "RouteKind": "capability",
+    "ID": "route_contains",
+    "Name": "route_contains",
+    "Description": "Route with contains predicate.",
+    "Metadata": {
+      "Name": "route_contains",
+      "Version": "",
+      "Author": "",
+      "Tags": null,
+      "Families": null,
+      "Keywords": null,
+      "HandoffTargets": null,
+      "Category": "",
+      "CreatedAt": "",
+      "UpdatedAt": ""
+    }
+  },
+  "Agents": {
+    "reviewer": {
+      "Name": "reviewer",
+      "Paradigm": "react",
+      "Span": {
+        "Start": {
+          "File": "testdata/recipes/07_route_contains.erpe",
+          "Line": 7,
+          "Column": 1
+        },
+        "End": {
+          "File": "testdata/recipes/07_route_contains.erpe",
+          "Line": 7,
+          "Column": 25
+        }
+      }
+    }
+  },
+  "ToolScopes": null,
+  "Steps": null,
+  "Routes": [
+    {
+      "Group": {
+        "Span": {
+          "Start": {
+            "File": "testdata/recipes/07_route_contains.erpe",
+            "Line": 9,
+            "Column": 1
+          },
+          "End": {
+            "File": "testdata/recipes/07_route_contains.erpe",
+            "Line": 19,
+            "Column": 1
+          }
+        },
+        "ID": "route.9.1"
+      },
+      "Branches": [
+        {
+          "Predicate": {
+            "Subject": "state.feedback",
+            "Op": "contains",
+            "Value": {
+              "string_val": "urgent"
+            },
+            "Label": "state contains"
+          },
+          "Steps": [
+            {
+              "ID": "run.11.9.reviewer.0",
+              "Kind": "run",
+              "Paradigm": "react",
+              "Scope": null,
+              "Question": "",
+              "Choices": null,
+              "ChoiceSource": "",
+              "PipelineStages": null,
+              "Goal": "Prioritize urgent feedback.",
+              "Sources": null,
+              "Directives": null,
+              "CaptureBindings": null,
+              "CapabilityID": "",
+              "Prompt": "Prioritize urgent feedback.",
+              "PromptID": "",
+              "Mutation": "",
+              "HITL": "",
+              "Stream": null,
+              "Fallback": null,
+              "Inherit": null,
+              "Capture": null,
+              "Dependencies": null,
+              "ClarificationConfig": null,
+              "OnError": null,
+              "Config": {
+                "goals": [
+                  "Prioritize urgent feedback."
+                ]
+              }
+            }
+          ],
+          "IsElse": false
+        },
+        {
+          "Predicate": {
+            "Subject": "state.feedback",
+            "Op": "contains",
+            "Value": {
+              "string_val": "bug"
+            },
+            "Label": "state contains"
+          },
+          "Steps": [
+            {
+              "ID": "run.14.9.reviewer.1",
+              "Kind": "run",
+              "Paradigm": "react",
+              "Scope": null,
+              "Question": "",
+              "Choices": null,
+              "ChoiceSource": "",
+              "PipelineStages": null,
+              "Goal": "Fix the reported bug.",
+              "Sources": null,
+              "Directives": null,
+              "CaptureBindings": null,
+              "CapabilityID": "",
+              "Prompt": "Fix the reported bug.",
+              "PromptID": "",
+              "Mutation": "",
+              "HITL": "",
+              "Stream": null,
+              "Fallback": null,
+              "Inherit": null,
+              "Capture": null,
+              "Dependencies": null,
+              "ClarificationConfig": null,
+              "OnError": null,
+              "Config": {
+                "goals": [
+                  "Fix the reported bug."
+                ]
+              }
+            }
+          ],
+          "IsElse": false
+        },
+        {
+          "Predicate": null,
+          "Steps": [
+            {
+              "ID": "run.17.9.reviewer.2",
+              "Kind": "run",
+              "Paradigm": "react",
+              "Scope": null,
+              "Question": "",
+              "Choices": null,
+              "ChoiceSource": "",
+              "PipelineStages": null,
+              "Goal": "Process general feedback.",
+              "Sources": null,
+              "Directives": null,
+              "CaptureBindings": null,
+              "CapabilityID": "",
+              "Prompt": "Process general feedback.",
+              "PromptID": "",
+              "Mutation": "",
+              "HITL": "",
+              "Stream": null,
+              "Fallback": null,
+              "Inherit": null,
+              "Capture": null,
+              "Dependencies": null,
+              "ClarificationConfig": null,
+              "OnError": null,
+              "Config": {
+                "goals": [
+                  "Process general feedback."
+                ]
+              }
+            }
+          ],
+          "IsElse": true
+        }
+      ]
+    }
+  ],
+  "Pipelines": null,
+  "Warnings": null,
+  "RouteKind": "capability"
+}

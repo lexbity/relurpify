@@ -1,0 +1,13 @@
+thoughtrecipe capability_in_route
+"Capability invocation inside a route branch."
+
+trigger as capability:
+  may read workspace
+
+route:
+  when state.intent is review:
+    do relurpic:code_review on input.workspace
+  when state.intent is refactor:
+    do relurpic:targeted_refactor on input.workspace
+  otherwise:
+    do relurpic:ast_query on input.workspace

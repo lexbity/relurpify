@@ -1,0 +1,93 @@
+{
+  "start_node": "euclo.execution.group.route.7.1.route",
+  "nodes": [
+    {
+      "id": "capability.11.5.1.execute",
+      "type": "tool"
+    },
+    {
+      "id": "capability.13.5.2.execute",
+      "type": "tool"
+    },
+    {
+      "id": "capability.9.5.0.execute",
+      "type": "tool"
+    },
+    {
+      "id": "euclo.execution.done",
+      "type": "terminal"
+    },
+    {
+      "id": "euclo.execution.group.route.7.1.branch.0",
+      "type": "conditional"
+    },
+    {
+      "id": "euclo.execution.group.route.7.1.branch.1",
+      "type": "conditional"
+    },
+    {
+      "id": "euclo.execution.group.route.7.1.join",
+      "type": "system"
+    },
+    {
+      "id": "euclo.execution.group.route.7.1.route",
+      "type": "conditional"
+    }
+  ],
+  "edges": [
+    {
+      "from": "capability.11.5.1.execute",
+      "to": "euclo.execution.group.route.7.1.join",
+      "has_condition": true,
+      "parallel": false
+    },
+    {
+      "from": "capability.13.5.2.execute",
+      "to": "euclo.execution.group.route.7.1.join",
+      "has_condition": true,
+      "parallel": false
+    },
+    {
+      "from": "capability.9.5.0.execute",
+      "to": "euclo.execution.group.route.7.1.join",
+      "has_condition": true,
+      "parallel": false
+    },
+    {
+      "from": "euclo.execution.group.route.7.1.branch.0",
+      "to": "capability.9.5.0.execute",
+      "has_condition": true,
+      "parallel": false
+    },
+    {
+      "from": "euclo.execution.group.route.7.1.branch.0",
+      "to": "euclo.execution.group.route.7.1.branch.1",
+      "has_condition": true,
+      "parallel": false
+    },
+    {
+      "from": "euclo.execution.group.route.7.1.branch.1",
+      "to": "capability.11.5.1.execute",
+      "has_condition": true,
+      "parallel": false
+    },
+    {
+      "from": "euclo.execution.group.route.7.1.branch.1",
+      "to": "capability.13.5.2.execute",
+      "has_condition": true,
+      "parallel": false
+    },
+    {
+      "from": "euclo.execution.group.route.7.1.join",
+      "to": "euclo.execution.done",
+      "has_condition": true,
+      "parallel": false
+    },
+    {
+      "from": "euclo.execution.group.route.7.1.route",
+      "to": "euclo.execution.group.route.7.1.branch.0",
+      "has_condition": false,
+      "parallel": false
+    }
+  ]
+}

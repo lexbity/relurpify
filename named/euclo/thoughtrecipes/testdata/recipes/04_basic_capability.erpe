@@ -1,0 +1,10 @@
+thoughtrecipe basic_capability
+"Basic capability invocation."
+
+trigger as capability:
+  may read workspace
+
+agent default uses react
+
+run default:
+  do relurpic:code_review on input.workspace

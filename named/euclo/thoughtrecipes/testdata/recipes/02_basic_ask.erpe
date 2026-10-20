@@ -1,0 +1,10 @@
+thoughtrecipe basic_ask
+"Basic ask user."
+
+trigger as capability:
+  may ask user
+
+ask user:
+  question "Do you want review or refactor?"
+  choices ["review", "refactor"]
+  capture answer -> state.intent

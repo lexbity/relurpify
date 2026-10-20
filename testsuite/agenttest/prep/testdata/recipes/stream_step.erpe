@@ -1,0 +1,19 @@
+thoughtrecipe prep_stream_step
+"Dry-run fixture: one react run behind a blocking stream clause. The stream query shares its distinctive token with the seeded chunk body so retrieval ranks it."
+
+trigger as capability:
+  may read workspace
+  keyword ["wombat-fibonacci"]
+  family ["prep-fixtures"]
+
+input workspace: "**/*"
+input prompt: user.request
+
+agent worker uses react
+
+run worker:
+  may invoke ["prep_probe"]
+  from input.prompt
+  stream "wombat-fibonacci notes" max 256 mode blocking
+  goal "Summarize what the streamed context says about wombat-fibonacci."
+  capture result -> state.summary
