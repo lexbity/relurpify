@@ -131,7 +131,7 @@ func balanceJSONSnippet(s string) string {
 
 // isValidJSONEscape reports whether the rune at index j (immediately after a
 // backslash) begins a valid JSON escape: one of the simple escapes, or a
-// \uXXXX sequence with four hex digits.
+// Unicode escape sequence with four hex digits.
 func isValidJSONEscape(runes []rune, j int) bool {
 	if j >= len(runes) {
 		return false
