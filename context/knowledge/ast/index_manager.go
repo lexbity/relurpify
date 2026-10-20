@@ -798,6 +798,13 @@ func (im *IndexManager) syncGraphResult(ctx context.Context, result *ParseResult
 	existing := im.GraphDB.NodesBySource(sourcePath)
 	deleteIDs := make([]string, 0, len(existing))
 	for _, node := range existing {
+		// The per-file metadata record is saved by the store and carries the
+		// same source path, but it is not part of the AST node set: deleting
+		// it here would silently drop GetFileByPath/ListFiles/GetStats and
+		// the re-index content-hash short-circuit.
+		if node.Kind == AstFile_graph_index_store {
+			continue
+		}
 		deleteIDs = append(deleteIDs, node.ID)
 	}
 	if err := im.GraphDB.DeleteNodes(ctx, deleteIDs); err != nil {
