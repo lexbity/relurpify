@@ -31,7 +31,7 @@ func TestMain(m *testing.M) {
 	}
 	cmd := &exec.Cmd{
 		Path: goPath,
-		Args: []string{goPath, "build", "-o", filepath.Clean(bin), "./app/relurplint"},
+		Args: []string{goPath, "build", "-buildvcs=false", "-o", filepath.Clean(bin), "./app/relurplint"},
 	}
 	cmd.Dir = testRepoRoot
 	if out, err := cmd.CombinedOutput(); err != nil {

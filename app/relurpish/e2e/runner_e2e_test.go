@@ -38,7 +38,7 @@ func buildRelurpifyRunner(t *testing.T, dir string) {
 	bin := filepath.Join(dir, "relurpify-runner")
 	root, err := repoRoot()
 	require.NoError(t, err, "locate repo root")
-	build := exec.Command("go", "build", "-C", root, "-o", bin, "./ayenitd/cmd/relurpify-runner")
+	build := exec.Command("go", "build", "-C", root, "-buildvcs=false", "-o", bin, "./ayenitd/cmd/relurpify-runner")
 	build.Env = append(os.Environ(), "GOPROXY=off")
 	out, err := build.CombinedOutput()
 	require.NoError(t, err, "build relurpify-runner: %s", out)

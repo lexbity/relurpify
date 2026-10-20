@@ -22,7 +22,7 @@ import (
 func buildFakeRunner(t *testing.T) string {
 	t.Helper()
 	bin := filepath.Join(t.TempDir(), "relurpify-runner")
-	build := exec.Command("go", "build", "-o", bin, "./testdata/fakerunner")
+	build := exec.Command("go", "build", "-buildvcs=false", "-o", bin, "./testdata/fakerunner")
 	build.Env = append(os.Environ(), "GOPROXY=off")
 	out, err := build.CombinedOutput()
 	require.NoError(t, err, "build fake runner: %s", out)

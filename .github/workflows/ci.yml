@@ -76,9 +76,12 @@ jobs:
         with:
           version: v2.15.0
           args: --new-from-rev=origin/main --timeout 5m
+      # The ratchet step above installs golangci-lint v2.15.0 and adds its
+      # directory to PATH, so this step reuses that binary. Installing it again
+      # with `go install` would re-download the whole module graph and fail on
+      # transient proxy errors.
       - name: Lint graduated (whole tree)
         run: |
-          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0
           graduated=$(grep -vE '^\s*(#|$)' .golangci-graduated.txt | paste -sd,)
           if [ -n "$graduated" ]; then
             golangci-lint run --enable-only="$graduated" ./...
@@ -124,9 +127,12 @@ jobs:
       - run: go build ./...
       - run: go vet ./...
       # govulncheck is not preinstalled on GitHub runners; install it first
-      # (otherwise this step fails with "command not found").
+      # (otherwise this step fails with "command not found"). Pinned so the
+      # scan is reproducible: @latest silently moves the analyzer and the
+      # advisory database it consults between runs, so a green scan would not
+      # mean the same thing twice.
       - name: Install govulncheck
-        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+        run: go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
       - run: govulncheck ./...
       - run: make check-config-tree-drift
       - run: make check-contract-dissolution

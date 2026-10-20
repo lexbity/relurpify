@@ -1,46 +1,84 @@
 package arch
 
 import (
+	"fmt"
+	"io/fs"
 	"os"
-	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
 
-func TestEnvFencePassesOnCleanTree(t *testing.T) {
-	repoRoot := repoRoot(t)
-	cmd := exec.Command("rg", "-n", `os\.(Getenv|LookupEnv|Environ)`,
-		"--glob", "*.go",
-		"--glob", "!**/*_test.go",
-		"--glob", "!.gomodcache/**",
-		"--glob", "!.gocache/**",
-		".")
-	cmd.Dir = repoRoot
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		// rg exits 1 when no matches found — that's the pass case
-		return
-	}
+// envFencePattern is the text the env fence polices: a direct read of the
+// process environment through the os package.
+var envFencePattern = regexp.MustCompile(`os\.(Getenv|LookupEnv|Environ)`) //nolint:gochecknoglobals // immutable fence vocabulary
 
-	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+// scanEnvFence returns "path:line:text" for every line of a .go file under
+// root that matches envFencePattern. It walks the tree directly instead of
+// shelling out to ripgrep, so the fence tests hold in CI images that do not
+// ship rg. It mirrors the Makefile gate's scope: hidden trees (which includes
+// .gomodcache and .gocache), vendor, dist, and _test.go files are skipped.
+func scanEnvFence(root string) ([]string, error) {
+	var hits []string
+	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		name := d.Name()
+		if d.IsDir() {
+			if path != root && (strings.HasPrefix(name, ".") || name == "dist" || name == "vendor") {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if strings.HasPrefix(name, ".") || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+			return nil
+		}
+		data, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return readErr
+		}
+		rel, relErr := filepath.Rel(root, path)
+		if relErr != nil {
+			rel = path
+		}
+		rel = filepath.ToSlash(rel)
+		for i, line := range strings.Split(string(data), "\n") {
+			if envFencePattern.MatchString(line) {
+				hits = append(hits, fmt.Sprintf("%s:%d:%s", rel, i+1, line))
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("scan %s: %w", root, err)
+	}
+	return hits, nil
+}
+
+// envFenceViolations filters scanEnvFence output down to the lines the fence
+// actually polices: everything outside userconfig (the configuration boundary)
+// and tooling/arch (the tree that names the API it forbids).
+func envFenceViolations(root string) ([]string, error) {
+	hits, err := scanEnvFence(root)
+	if err != nil {
+		return nil, err
+	}
 	var violations []string
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
-		}
-		// userconfig is the one tree allowed to read the environment.
-		if strings.Contains(line, "userconfig/") {
-			continue
-		}
-		// tooling/arch is the tree that polices the fence: its sources name
-		// the API they forbid, in comments the grep layer cannot tell apart
-		// from a call. The AST gate (envcheck) still covers that tree.
-		if strings.Contains(line, "tooling/arch/") {
+	for _, line := range hits {
+		if strings.Contains(line, "userconfig/") || strings.Contains(line, "tooling/arch/") {
 			continue
 		}
 		violations = append(violations, line)
+	}
+	return violations, nil
+}
+
+func TestEnvFencePassesOnCleanTree(t *testing.T) {
+	violations, err := envFenceViolations(repoRoot(t))
+	if err != nil {
+		t.Fatalf("scan repo tree: %v", err)
 	}
 	if len(violations) > 0 {
 		t.Fatalf("env access outside userconfig detected:\n%s", strings.Join(violations, "\n"))
@@ -61,14 +99,20 @@ func main() {
 		t.Fatal(err)
 	}
 
-	cmd := exec.Command("rg", "-n", `os\.(Getenv|LookupEnv|Environ)`, //nolint:gosec // test invokes rg on a temp dir to verify the fence catches a planted violation
-		"--glob", "*.go",
-		"--glob", "!**/*_test.go",
-		tmpDir)
-	out, _ := cmd.CombinedOutput()
+	hits, err := scanEnvFence(tmpDir)
+	if err != nil {
+		t.Fatalf("scan temp dir: %v", err)
+	}
 
-	if !strings.Contains(string(out), "violation.go") {
-		t.Fatalf("expected fence to catch env access in violation.go, output: %s", string(out))
+	found := false
+	for _, line := range hits {
+		if strings.Contains(line, "violation.go") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected fence to catch env access in violation.go, output: %v", hits)
 	}
 }
 
