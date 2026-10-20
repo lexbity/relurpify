@@ -3,6 +3,8 @@ package envcomposition
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -10,6 +12,7 @@ import (
 	"codeburg.org/lexbit/relurpify/context/knowledge/graphdb"
 	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
 	govsandbox "codeburg.org/lexbit/relurpify/governance/sandbox"
+	"codeburg.org/lexbit/relurpify/testsuite/testsupport"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 	cfgsecurity "codeburg.org/lexbit/relurpify/userconfig/config/security"
 	ucperms "codeburg.org/lexbit/relurpify/userconfig/permissions"
@@ -127,4 +130,38 @@ func TestJoinErrorsUnwrap(t *testing.T) {
 	require.Contains(t, err.Error(), "first")
 	require.Contains(t, err.Error(), "second")
 	require.ErrorIs(t, err, first, "multiError must unwrap to its first error")
+}
+
+// TestCapabilityIndexSkipsRuntimeStateDir proves the AST workspace index never
+// descends into the runtime state directory (`.relurpify_state`). The index
+// stores its own Badger files there, so indexing them is self-referential and
+// makes every boot (and every runtime close, which waits for the index pass)
+// pay the cost of reading and hashing Badger's value log.
+//
+// Assertions use the graph store's node index rather than the store's
+// ListFiles/GetStats helpers: with a graph-backed store, persist's graph sync
+// deletes the file-metadata node it just wrote (see syncGraphResult), so those
+// helpers never observe any indexed file. The node index is the durable record
+// the graph queries actually use, and it distinguishes a parsed code file from
+// an unparsed artifact — so the state-dir file is a real .go file here.
+func TestCapabilityIndexSkipsRuntimeStateDir(t *testing.T) {
+	runner, err := testsupport.NewAuthorizedFakeRunner(testsupport.PermitAllPolicy())
+	require.NoError(t, err)
+
+	ws := t.TempDir()
+	src := filepath.Join(ws, "main.go")
+	require.NoError(t, os.WriteFile(src, []byte("package main\n\nfunc main() {}\n"), 0o644))
+	state := filepath.Join(ws, ".relurpify_state", "hidden.go")
+	require.NoError(t, os.MkdirAll(filepath.Dir(state), 0o755))
+	require.NoError(t, os.WriteFile(state, []byte("package hidden\n\nfunc Hidden() {}\n"), 0o644))
+
+	cap, err := BuildCapabilityRuntime(context.Background(), ws, runner, CapabilityRuntimeOptions{AgentID: "state-skip"})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = cap.IndexManager.Close(context.Background()) })
+
+	require.NoError(t, cap.IndexManager.WaitUntilReady(context.Background()))
+	require.NotNil(t, cap.IndexManager.GraphDB)
+
+	require.NotEmpty(t, cap.IndexManager.GraphDB.NodesBySource(src), "source file must be indexed")
+	require.Empty(t, cap.IndexManager.GraphDB.NodesBySource(state), "runtime state file must not be indexed")
 }

@@ -73,7 +73,7 @@ Relurpify is a local-first agent framework written in Go. It ships a full stack:
   decision repair for malformed output, and per-model profiles.
 - **Agent execution paradigm collection** - generic implementations 
   of common standard agent structures - react, pipeline, planner and 
-  uncommon agent execution paradigmns - HTN, blackboard, goalcon etc. 
+  uncommon agent execution paradigmns - HTN, blackboard etc. 
 - **Graph Node** - construct custom agent execution from node topologies
 - **Durable jobs queue** — at-least-once, atomic claim, executed by
   `relurpify-runner`.

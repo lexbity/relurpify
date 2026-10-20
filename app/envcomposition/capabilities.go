@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"codeburg.org/lexbit/relurpify/capability/agentspec"
 	"codeburg.org/lexbit/relurpify/capability/fs"
@@ -170,12 +172,16 @@ func BuildCapabilityRuntime(ctx context.Context, workspace string, runner *fsand
 	manager.GraphDB = astEngine
 	fileScope := fsandbox.NewFileScopePolicy(workspace, cfg.ProtectedPaths)
 	manager.SetFileScope(fileScope)
+	stateDir := filepath.Clean(paths.StateRoot())
 	manager.SetPathFilter(func(path string, isDir bool) bool {
 		action := ucperms.FileSystemRead
 		if isDir {
 			action = ucperms.FileSystemList
 		}
 		if fileScope.Check(action, path) != nil {
+			return false
+		}
+		if strings.HasPrefix(filepath.Clean(path)+string(os.PathSeparator), stateDir+string(os.PathSeparator)) {
 			return false
 		}
 		if cfg.PermissionManager == nil {
