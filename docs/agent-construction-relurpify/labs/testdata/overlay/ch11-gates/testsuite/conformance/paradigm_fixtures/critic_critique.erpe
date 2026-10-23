@@ -1,0 +1,7 @@
+thoughtrecipe critic_critique
+"Critic critique writes the verdict to the ephemeral scratch namespace."
+
+agent reviewer uses critic
+
+run reviewer:
+  critique "Judge correctness, error handling, and naming."

@@ -1,0 +1,16 @@
+thoughtrecipe critic_loop
+"Critique loop: a react draft, an independent critique phase, and a bounded conditional revision delegated to a react patcher."
+
+trigger as capability:
+  may read workspace
+
+agent fixer uses critic
+agent patcher uses react
+
+run fixer:
+  from input.prompt
+  goal "Produce the work, then submit it for independent critique."
+  critique "Check error handling and naming."
+  revise when scratch.critic.verdict contains issues:
+    delegate to patcher:
+      goal "Apply every issue the critique named."

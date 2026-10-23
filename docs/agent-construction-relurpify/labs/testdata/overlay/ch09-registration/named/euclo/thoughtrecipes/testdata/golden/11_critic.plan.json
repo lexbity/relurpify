@@ -1,0 +1,258 @@
+{
+  "ThoughtRecipe": {
+    "RouteKind": "capability",
+    "ID": "critic_demo",
+    "Name": "critic_demo",
+    "Description": "Critic loop with an authored criterion and a bounded revise.",
+    "Metadata": {
+      "Name": "critic_demo",
+      "Version": "",
+      "Author": "",
+      "Tags": null,
+      "Families": null,
+      "Keywords": null,
+      "HandoffTargets": null,
+      "Category": "",
+      "CreatedAt": "",
+      "UpdatedAt": ""
+    }
+  },
+  "Agents": {
+    "fixer": {
+      "Name": "fixer",
+      "Paradigm": "react",
+      "Span": {
+        "Start": {
+          "File": "testdata/recipes/11_critic.erpe",
+          "Line": 7,
+          "Column": 1
+        },
+        "End": {
+          "File": "testdata/recipes/11_critic.erpe",
+          "Line": 7,
+          "Column": 22
+        }
+      }
+    },
+    "reviewer": {
+      "Name": "reviewer",
+      "Paradigm": "critic",
+      "Span": {
+        "Start": {
+          "File": "testdata/recipes/11_critic.erpe",
+          "Line": 8,
+          "Column": 1
+        },
+        "End": {
+          "File": "testdata/recipes/11_critic.erpe",
+          "Line": 8,
+          "Column": 26
+        }
+      }
+    }
+  },
+  "ToolScopes": null,
+  "Steps": [
+    {
+      "ID": "run.10.5.reviewer.0",
+      "Kind": "run",
+      "Paradigm": "critic",
+      "Scope": null,
+      "Question": "",
+      "Choices": null,
+      "ChoiceSource": "",
+      "PipelineStages": null,
+      "Goal": "",
+      "Sources": null,
+      "Directives": [
+        {
+          "Name": "critique",
+          "TextArgs": [
+            "\"Check error handling and naming.\""
+          ],
+          "Predicate": null,
+          "Body": null,
+          "Span": {
+            "Start": {
+              "File": "testdata/recipes/11_critic.erpe",
+              "Line": 11,
+              "Column": 3
+            },
+            "End": {
+              "File": "testdata/recipes/11_critic.erpe",
+              "Line": 11,
+              "Column": 10
+            }
+          }
+        },
+        {
+          "Name": "revise",
+          "TextArgs": null,
+          "Predicate": {
+            "Span": {
+              "Start": {
+                "File": "testdata/recipes/11_critic.erpe",
+                "Line": 12,
+                "Column": 15
+              },
+              "End": {
+                "File": "testdata/recipes/11_critic.erpe",
+                "Line": 12,
+                "Column": 52
+              }
+            },
+            "Raw": "scratch contains",
+            "Kind": "contains",
+            "Subject": {
+              "Span": {
+                "Start": {
+                  "File": "testdata/recipes/11_critic.erpe",
+                  "Line": 12,
+                  "Column": 15
+                },
+                "End": {
+                  "File": "testdata/recipes/11_critic.erpe",
+                  "Line": 12,
+                  "Column": 36
+                }
+              },
+              "Raw": "scratch.critic.verdict",
+              "Parts": [
+                {
+                  "Span": {
+                    "Start": {
+                      "File": "testdata/recipes/11_critic.erpe",
+                      "Line": 12,
+                      "Column": 15
+                    },
+                    "End": {
+                      "File": "testdata/recipes/11_critic.erpe",
+                      "Line": 12,
+                      "Column": 21
+                    }
+                  },
+                  "Value": "scratch"
+                },
+                {
+                  "Span": {
+                    "Start": {
+                      "File": "testdata/recipes/11_critic.erpe",
+                      "Line": 12,
+                      "Column": 23
+                    },
+                    "End": {
+                      "File": "testdata/recipes/11_critic.erpe",
+                      "Line": 12,
+                      "Column": 28
+                    }
+                  },
+                  "Value": "critic"
+                },
+                {
+                  "Span": {
+                    "Start": {
+                      "File": "testdata/recipes/11_critic.erpe",
+                      "Line": 12,
+                      "Column": 30
+                    },
+                    "End": {
+                      "File": "testdata/recipes/11_critic.erpe",
+                      "Line": 12,
+                      "Column": 36
+                    }
+                  },
+                  "Value": "verdict"
+                }
+              ]
+            },
+            "Operator": "contains",
+            "Value": {
+              "Span": {
+                "Start": {
+                  "File": "testdata/recipes/11_critic.erpe",
+                  "Line": 12,
+                  "Column": 47
+                },
+                "End": {
+                  "File": "testdata/recipes/11_critic.erpe",
+                  "Line": 12,
+                  "Column": 52
+                }
+              },
+              "Raw": "issues",
+              "Parts": [
+                {
+                  "Span": {
+                    "Start": {
+                      "File": "testdata/recipes/11_critic.erpe",
+                      "Line": 12,
+                      "Column": 47
+                    },
+                    "End": {
+                      "File": "testdata/recipes/11_critic.erpe",
+                      "Line": 12,
+                      "Column": 52
+                    }
+                  },
+                  "Value": "issues"
+                }
+              ]
+            }
+          },
+          "Body": [
+            {
+              "Name": "delegate",
+              "TextArgs": [
+                "fixer"
+              ],
+              "Predicate": null,
+              "Body": null,
+              "Span": {
+                "Start": {
+                  "File": "testdata/recipes/11_critic.erpe",
+                  "Line": 13,
+                  "Column": 5
+                },
+                "End": {
+                  "File": "testdata/recipes/11_critic.erpe",
+                  "Line": 15,
+                  "Column": 1
+                }
+              }
+            }
+          ],
+          "Span": {
+            "Start": {
+              "File": "testdata/recipes/11_critic.erpe",
+              "Line": 12,
+              "Column": 3
+            },
+            "End": {
+              "File": "testdata/recipes/11_critic.erpe",
+              "Line": 15,
+              "Column": 1
+            }
+          }
+        }
+      ],
+      "CaptureBindings": null,
+      "CapabilityID": "",
+      "Prompt": "",
+      "PromptID": "",
+      "Mutation": "",
+      "HITL": "",
+      "Stream": null,
+      "Fallback": null,
+      "Inherit": null,
+      "Capture": null,
+      "Dependencies": null,
+      "ClarificationConfig": null,
+      "OnError": null,
+      "Config": null
+    }
+  ],
+  "Routes": null,
+  "Pipelines": null,
+  "Warnings": null,
+  "RouteKind": "capability"
+}

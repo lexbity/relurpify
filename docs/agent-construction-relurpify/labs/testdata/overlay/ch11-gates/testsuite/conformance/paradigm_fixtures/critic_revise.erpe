@@ -1,0 +1,12 @@
+thoughtrecipe critic_revise
+"Critic revise fires on scratch-rendered issues and re-critiques."
+
+agent reviewer uses critic
+agent fixer uses react
+
+run reviewer:
+  critique "Judge correctness, error handling, and naming."
+  revise when scratch.critic.verdict contains issues:
+    delegate to fixer:
+      goal "Address the issues found by the critique."
+  capture revisions -> state.critic_revisions

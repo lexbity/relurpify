@@ -1,0 +1,17 @@
+thoughtrecipe critic_run
+"An independent critique pass with a bounded, delegated revision."
+
+trigger as capability:
+  may read workspace
+
+agent fixer uses critic
+agent worker uses react
+
+run fixer:
+  critique "Check correctness and error handling."
+  revise when scratch.critic.verdict contains issues:
+    delegate to worker:
+      from scratch.critic.issues
+      goal "Address the critique findings."
+      capture result -> state.revised
+  capture result -> state.critique

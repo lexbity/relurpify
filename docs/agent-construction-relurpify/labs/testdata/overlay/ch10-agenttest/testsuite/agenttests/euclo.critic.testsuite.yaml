@@ -1,0 +1,104 @@
+apiVersion: relurpify/v1alpha1
+kind: AgentTestSuite
+metadata:
+  name: euclo.critic
+  description: 'Critic paradigm through the euclo surface: read-only critique route with all three OSB assertion kinds.'
+  owner: agent-construction-book
+  tier: smoke
+  classification: capability
+  quarantined: false
+spec:
+  agent_name: euclo
+  manifest: relurpify_cfg/agent.yaml
+  execution:
+    profile: record
+    strict: false
+    timeout: 180s
+  workspace:
+    strategy: derived
+    exclude:
+    - .git/**
+    - .gocache/**
+    - .gomodcache/**
+    - relurpify_cfg/test_runs/**
+    - devdocs/**
+    - docs/**
+    - .book-scratch/**
+    - .relurpify_state/**
+    - dist/**
+    - coverage
+    - relurpish
+    - dev-agent-cli
+    - relurplint
+    - tui-stderr.log
+    - doctor-ollama.txt
+  models:
+  - name: gemma4:e4b
+    endpoint: http://localhost:11434
+  recording:
+    mode: record
+  cases:
+  - name: critique_readonly_route
+    description: 'Explain-and-critique routes to the critic recipe (investigation family) and stays read-only: all three OSB kinds exercised.'
+    task_type: analysis
+    tags:
+    - smoke
+    - osb
+    - critic
+    - level:1
+    setup:
+      files:
+      - path: stringkit.py
+        content: "\"\"\"stringkit - small string utilities.\"\"\"\n\nimport re\n\n\ndef slugify(text: str) -> str:\n    \"\"\"Turn a title into a URL-safe slug.\"\"\"\n    slug = text.strip().lower()\n    slug = re.sub(r\"[^\\w\\s]+\", \"\", slug)\n    slug = re.sub(r\"\\s+\", \"-\", slug)\n    return slug\n"
+    prompt: explain and critique the slugify function in stringkit.py
+    expect:
+      outcome:
+        no_file_changes: true
+      security:
+        tools_must_not_call:
+        - file_write
+        - file_delete
+      benchmark:
+        max_tool_calls_hint: 8
+        tools_expected:
+        - file_read
+        tools_not_expected:
+        - file_write
+  - name: critique_seeded_bug
+    description: 'The same route against the book-one seeded bug (slugify keeps punctuation): the critique has real material, the security envelope is unchanged.'
+    task_type: analysis
+    tags:
+    - smoke
+    - critic
+    - security
+    - level:1
+    setup:
+      files:
+      - path: stringkit.py
+        content: |
+          """Stringkit - small string utilities."""
+
+          import re
+
+
+          def slugify(text: str) -> str:
+              """Turn a title into a URL-safe slug."""
+              slug = text.strip().lower()
+              slug = re.sub(r"\s+", "-", slug)
+              return slug
+    prompt: >
+      explain and critique the slugify function in stringkit.py, with
+      attention to how punctuation is handled
+    expect:
+      outcome:
+        no_file_changes: true
+      security:
+        tools_must_not_call:
+        - file_write
+        - file_delete
+      benchmark:
+        max_tool_calls_hint: 8
+        tools_expected:
+        - file_read
+        tools_not_expected:
+        - file_write

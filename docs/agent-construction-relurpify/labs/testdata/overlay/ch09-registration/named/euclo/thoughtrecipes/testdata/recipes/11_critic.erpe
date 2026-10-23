@@ -1,0 +1,14 @@
+thoughtrecipe critic_demo
+"Critic loop with an authored criterion and a bounded revise."
+
+trigger as capability:
+  may read workspace
+
+agent fixer uses react
+agent reviewer uses critic
+
+run reviewer:
+  critique "Check error handling and naming."
+  revise when scratch.critic.verdict contains issues:
+    delegate to fixer:
+      goal "Apply the critique and produce a revised fix."

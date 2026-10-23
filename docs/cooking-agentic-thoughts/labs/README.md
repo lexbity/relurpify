@@ -24,8 +24,10 @@ listing; Appendix D is generated from it.
   shape, and the two flagged doc-vs-build deltas.
 - `ch09-agent-tests/` — the stringkit regression suite, the red capture
   with its OSB receipt chain, and the three infra gotchas.
-- Later chapters add one folder each (`ch10-house-style/`, …) containing
-  the DSL and config artifacts at that chapter's end state.
+- `ch10-house-style/` — the live prompts with the chapter's edits, the
+  drafting recipe, the wiring finding, and the ladder cheat.
+- `ch11-out-of-loop/` — the final exam: the queued repair's transcript,
+  diff, closing receipt, and the supervision command card.
 - `verify.sh` — the tiered verifier. See below.
 
 ## Prerequisites

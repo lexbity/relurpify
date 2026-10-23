@@ -1,0 +1,187 @@
+declared:
+    - paradigm: blackboard
+      directive: source
+      status: implemented
+      cases:
+        - blackboard/source_order_and_eligibility
+        - blackboard/source_episode_rearm
+        - blackboard/write_grounds_provenance
+        - blackboard/grounding_failure_fails_cycle
+    - paradigm: chainer
+      directive: link
+      status: implemented
+      cases:
+        - chainer/link_builds_chain
+        - chainer/link_from_registry_prompt
+    - paradigm: critic
+      directive: critique
+      status: implemented
+      cases:
+        - critic/critique_writes_scratch
+        - critic/critique_pass_ends_loop
+    - paradigm: critic
+      directive: revise
+      status: implemented
+      cases:
+        - critic/revise_fires_on_predicate
+        - critic/revision_cap_bounded
+    - paradigm: htn
+      directive: method
+      status: implemented
+      cases:
+        - htn/authored_decomposition_order
+        - htn/authored_resume
+    - paradigm: htn
+      directive: task
+      status: implemented
+      cases:
+        - htn/task_capability_pin
+    - paradigm: pipeline
+      directive: ""
+      status: honored
+      cases:
+        - pipeline/stages_execute_in_order
+    - paradigm: planner
+      directive: plan
+      status: implemented
+      cases:
+        - planner/authored_plan_zero_planning_calls
+        - planner/generated_plan_bounded
+    - paradigm: planner
+      directive: step
+      status: implemented
+      cases:
+        - planner/authored_steps_execute_in_order
+    - paradigm: planner
+      directive: summarize
+      status: implemented
+      cases:
+        - planner/summarize_replaces_result
+    - paradigm: planner
+      directive: verify
+      status: implemented
+      cases:
+        - planner/verify_verdict_fields
+    - paradigm: react
+      directive: until
+      status: implemented
+      cases:
+        - react/until_bounds_iterations
+    - paradigm: reflection
+      directive: review
+      status: implemented
+      cases:
+        - reflection/review_writes_scratch
+        - reflection/review_pass_ends_loop
+    - paradigm: reflection
+      directive: revise
+      status: implemented
+      cases:
+        - reflection/revise_fires_on_predicate
+        - reflection/revision_cap_bounded
+    - paradigm: rewoo
+      directive: plan
+      status: implemented
+      cases:
+        - rewoo/authored_plan_skips_planner
+    - paradigm: rewoo
+      directive: step
+      status: implemented
+      cases:
+        - rewoo/authored_steps_execute_in_order
+    - paradigm: rewoo
+      directive: synthesize
+      status: implemented
+      cases:
+        - rewoo/synthesize_guidance
+restored:
+    - paradigm: blackboard
+      directive: source
+      status: implemented
+      cases:
+        - blackboard/source_order_and_eligibility
+        - blackboard/source_episode_rearm
+        - blackboard/write_grounds_provenance
+        - blackboard/grounding_failure_fails_cycle
+    - paradigm: htn
+      directive: method
+      status: implemented
+      cases:
+        - htn/authored_decomposition_order
+        - htn/authored_resume
+    - paradigm: htn
+      directive: task
+      status: implemented
+      cases:
+        - htn/task_capability_pin
+    - paradigm: planner
+      directive: plan
+      status: implemented
+      cases:
+        - planner/authored_plan_zero_planning_calls
+        - planner/generated_plan_bounded
+    - paradigm: planner
+      directive: step
+      status: implemented
+      cases:
+        - planner/authored_steps_execute_in_order
+    - paradigm: planner
+      directive: summarize
+      status: implemented
+      cases:
+        - planner/summarize_replaces_result
+    - paradigm: planner
+      directive: verify
+      status: implemented
+      cases:
+        - planner/verify_verdict_fields
+    - paradigm: reflection
+      directive: review
+      status: implemented
+      cases:
+        - reflection/review_writes_scratch
+        - reflection/review_pass_ends_loop
+    - paradigm: reflection
+      directive: revise
+      status: implemented
+      cases:
+        - reflection/revise_fires_on_predicate
+        - reflection/revision_cap_bounded
+    - paradigm: rewoo
+      directive: plan
+      status: implemented
+      cases:
+        - rewoo/authored_plan_skips_planner
+    - paradigm: rewoo
+      directive: step
+      status: implemented
+      cases:
+        - rewoo/authored_steps_execute_in_order
+    - paradigm: rewoo
+      directive: synthesize
+      status: implemented
+      cases:
+        - rewoo/synthesize_guidance
+deleted:
+    - clarify
+    - decompose
+    - detect
+    - retry
+    - solve
+documented_directive_keywords:
+    - clarify
+    - decompose
+    - detect
+    - link
+    - method
+    - plan
+    - retry
+    - review
+    - revise
+    - solve
+    - source
+    - step
+    - summarize
+    - task
+    - until
+    - verify

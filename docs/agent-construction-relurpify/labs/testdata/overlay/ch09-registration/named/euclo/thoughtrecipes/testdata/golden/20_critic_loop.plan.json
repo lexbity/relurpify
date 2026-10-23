@@ -1,0 +1,267 @@
+{
+  "ThoughtRecipe": {
+    "RouteKind": "capability",
+    "ID": "critic_loop",
+    "Name": "critic_loop",
+    "Description": "Critique loop: a react draft, an independent critique phase, and a bounded conditional revision delegated to a react patcher.",
+    "Metadata": {
+      "Name": "critic_loop",
+      "Version": "",
+      "Author": "",
+      "Tags": null,
+      "Families": null,
+      "Keywords": null,
+      "HandoffTargets": null,
+      "Category": "",
+      "CreatedAt": "",
+      "UpdatedAt": ""
+    }
+  },
+  "Agents": {
+    "fixer": {
+      "Name": "fixer",
+      "Paradigm": "critic",
+      "Span": {
+        "Start": {
+          "File": "testdata/recipes/20_critic_loop.erpe",
+          "Line": 7,
+          "Column": 1
+        },
+        "End": {
+          "File": "testdata/recipes/20_critic_loop.erpe",
+          "Line": 7,
+          "Column": 23
+        }
+      }
+    },
+    "patcher": {
+      "Name": "patcher",
+      "Paradigm": "react",
+      "Span": {
+        "Start": {
+          "File": "testdata/recipes/20_critic_loop.erpe",
+          "Line": 8,
+          "Column": 1
+        },
+        "End": {
+          "File": "testdata/recipes/20_critic_loop.erpe",
+          "Line": 8,
+          "Column": 24
+        }
+      }
+    }
+  },
+  "ToolScopes": null,
+  "Steps": [
+    {
+      "ID": "run.10.5.fixer.0",
+      "Kind": "run",
+      "Paradigm": "critic",
+      "Scope": null,
+      "Question": "",
+      "Choices": null,
+      "ChoiceSource": "",
+      "PipelineStages": null,
+      "Goal": "Produce the work, then submit it for independent critique.",
+      "Sources": [
+        "input.prompt"
+      ],
+      "Directives": [
+        {
+          "Name": "critique",
+          "TextArgs": [
+            "\"Check error handling and naming.\""
+          ],
+          "Predicate": null,
+          "Body": null,
+          "Span": {
+            "Start": {
+              "File": "testdata/recipes/20_critic_loop.erpe",
+              "Line": 13,
+              "Column": 3
+            },
+            "End": {
+              "File": "testdata/recipes/20_critic_loop.erpe",
+              "Line": 13,
+              "Column": 10
+            }
+          }
+        },
+        {
+          "Name": "revise",
+          "TextArgs": null,
+          "Predicate": {
+            "Span": {
+              "Start": {
+                "File": "testdata/recipes/20_critic_loop.erpe",
+                "Line": 14,
+                "Column": 15
+              },
+              "End": {
+                "File": "testdata/recipes/20_critic_loop.erpe",
+                "Line": 14,
+                "Column": 52
+              }
+            },
+            "Raw": "scratch contains",
+            "Kind": "contains",
+            "Subject": {
+              "Span": {
+                "Start": {
+                  "File": "testdata/recipes/20_critic_loop.erpe",
+                  "Line": 14,
+                  "Column": 15
+                },
+                "End": {
+                  "File": "testdata/recipes/20_critic_loop.erpe",
+                  "Line": 14,
+                  "Column": 36
+                }
+              },
+              "Raw": "scratch.critic.verdict",
+              "Parts": [
+                {
+                  "Span": {
+                    "Start": {
+                      "File": "testdata/recipes/20_critic_loop.erpe",
+                      "Line": 14,
+                      "Column": 15
+                    },
+                    "End": {
+                      "File": "testdata/recipes/20_critic_loop.erpe",
+                      "Line": 14,
+                      "Column": 21
+                    }
+                  },
+                  "Value": "scratch"
+                },
+                {
+                  "Span": {
+                    "Start": {
+                      "File": "testdata/recipes/20_critic_loop.erpe",
+                      "Line": 14,
+                      "Column": 23
+                    },
+                    "End": {
+                      "File": "testdata/recipes/20_critic_loop.erpe",
+                      "Line": 14,
+                      "Column": 28
+                    }
+                  },
+                  "Value": "critic"
+                },
+                {
+                  "Span": {
+                    "Start": {
+                      "File": "testdata/recipes/20_critic_loop.erpe",
+                      "Line": 14,
+                      "Column": 30
+                    },
+                    "End": {
+                      "File": "testdata/recipes/20_critic_loop.erpe",
+                      "Line": 14,
+                      "Column": 36
+                    }
+                  },
+                  "Value": "verdict"
+                }
+              ]
+            },
+            "Operator": "contains",
+            "Value": {
+              "Span": {
+                "Start": {
+                  "File": "testdata/recipes/20_critic_loop.erpe",
+                  "Line": 14,
+                  "Column": 47
+                },
+                "End": {
+                  "File": "testdata/recipes/20_critic_loop.erpe",
+                  "Line": 14,
+                  "Column": 52
+                }
+              },
+              "Raw": "issues",
+              "Parts": [
+                {
+                  "Span": {
+                    "Start": {
+                      "File": "testdata/recipes/20_critic_loop.erpe",
+                      "Line": 14,
+                      "Column": 47
+                    },
+                    "End": {
+                      "File": "testdata/recipes/20_critic_loop.erpe",
+                      "Line": 14,
+                      "Column": 52
+                    }
+                  },
+                  "Value": "issues"
+                }
+              ]
+            }
+          },
+          "Body": [
+            {
+              "Name": "delegate",
+              "TextArgs": [
+                "patcher"
+              ],
+              "Predicate": null,
+              "Body": null,
+              "Span": {
+                "Start": {
+                  "File": "testdata/recipes/20_critic_loop.erpe",
+                  "Line": 15,
+                  "Column": 5
+                },
+                "End": {
+                  "File": "testdata/recipes/20_critic_loop.erpe",
+                  "Line": 17,
+                  "Column": 1
+                }
+              }
+            }
+          ],
+          "Span": {
+            "Start": {
+              "File": "testdata/recipes/20_critic_loop.erpe",
+              "Line": 14,
+              "Column": 3
+            },
+            "End": {
+              "File": "testdata/recipes/20_critic_loop.erpe",
+              "Line": 17,
+              "Column": 1
+            }
+          }
+        }
+      ],
+      "CaptureBindings": null,
+      "CapabilityID": "",
+      "Prompt": "Produce the work, then submit it for independent critique.",
+      "PromptID": "",
+      "Mutation": "",
+      "HITL": "",
+      "Stream": null,
+      "Fallback": null,
+      "Inherit": null,
+      "Capture": null,
+      "Dependencies": null,
+      "ClarificationConfig": null,
+      "OnError": null,
+      "Config": {
+        "from_sources": [
+          "input.prompt"
+        ],
+        "goals": [
+          "Produce the work, then submit it for independent critique."
+        ]
+      }
+    }
+  ],
+  "Routes": null,
+  "Pipelines": null,
+  "Warnings": null,
+  "RouteKind": "capability"
+}

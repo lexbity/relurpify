@@ -1,0 +1,23 @@
+thoughtrecipe euclo.thoughtrecipe.critic_review
+"Investigation-family recipe for the critic: an independent critique of the named code with a bounded, human-approved revise. Family defaults: read-only; no writes without an explicit follow-up task."
+
+trigger as capability:
+  may read workspace
+  may invoke ["file_read", "file_list", "file_search"]
+  family ["investigation"]
+  keyword ["critique", "critic"]
+
+input workspace: "**/*"
+input prompt: user.request
+
+agent drafter uses react
+agent reviewer uses critic
+
+run reviewer:
+  may invoke ["file_read", "file_list", "file_search"]
+  from input.prompt
+  critique "Judge correctness, error handling, and naming against the workspace's own tests."
+  revise when scratch.critic.verdict contains issues:
+    delegate to drafter:
+      goal """Address the critique and produce a revised draft. The critique is: {{ index . "scratch.critic.issues" }}"""
+  capture result -> state.critique

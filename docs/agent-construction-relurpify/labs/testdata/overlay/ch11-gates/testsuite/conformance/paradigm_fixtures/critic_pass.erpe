@@ -1,0 +1,11 @@
+thoughtrecipe critic_pass
+"Critic pass verdict ends the loop without running the revise body."
+
+agent reviewer uses critic
+agent fixer uses react
+
+run reviewer:
+  critique "Judge correctness, error handling, and naming."
+  revise when scratch.critic.verdict contains issues:
+    delegate to fixer:
+      goal "Address the issues found by the critique."

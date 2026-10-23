@@ -1,0 +1,20 @@
+thoughtrecipe euclo.thoughtrecipe.draft_prompt
+"Draft one house-style line for the react system prompt into drafts/ for human review. Never touches relurpify_cfg — the human installs."
+
+trigger as capability:
+  may read workspace
+  may write workspace
+  may invoke ["file_read", "file_write"]
+  family ["implementation"]
+  keyword ["draft prompt"]
+
+input workspace: "**/*"
+input prompt: user.request
+
+agent drafter uses react
+
+run drafter:
+  may invoke ["file_read", "file_write"]
+  from input.prompt
+  goal """Read stringkit.py and test_stringkit.py. Draft exactly one new house-style line for a ReAct coding agent working in this repository — a short imperative sentence that would prevent a mistake visible in the code or tests. Write only that line to drafts/system-prompt-line.txt. Do not edit any other file. The user request is: {{ index . "task.instruction" }}"""
+  capture result -> state.draft
