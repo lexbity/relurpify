@@ -1,0 +1,95 @@
+ch05-governance — captured transcript
+=====================================
+Captured on: Linux 6.18, go1.27.3 (satisfies the go1.27.2 toolchain pin)
+Pin: tag BETA-RC1-FALL2026 (pending); captured at commit
+1bc57c62029641dcc919c04a8076593794246409
+Model backend: none (offline scenario model). No sandbox backend needed.
+
+§1 — a governed turn through the product runtime
+------------------------------------------------
+$ go test ./app/relurpish/e2e -run TestBootTurnToolCall -count=1 -v
+=== RUN   TestBootTurnToolCall
+2026/10/23 11:11:13 INFO config loaded workspace_root=/tmp/TestBootTurnToolCall3254201996/001 model_provider=offline model_name=gemma4:e4b sandbox_backend=gvisor tools_loaded=99 strict_mode=true config_fingerprint=sha256:f02b98fa3cee102bd84035d85582c81159890a08321585d667c7214faa308419
+2026/10/23 11:11:13 tool admission warning: skipping unlisted tool "query_ast"
+2026/10/23 11:11:13 service manager: registered service "scheduler"
+--- PASS: TestBootTurnToolCall (0.10s)
+PASS
+ok  	codeburg.org/lexbit/relurpify/app/relurpish/e2e	0.111s
+
+Reading the lines (Chapter 5 §5.6):
+- strict_mode=true + config_fingerprint  — the Chapter 4 configuration
+  snapshot, hashed so decisions are attributable to config content.
+- tools_loaded=99                        — the Chapter 3 tool manifests,
+  admitted into the registry.
+- tool admission warning                 — the allowlist excludes-and-names
+  an unlisted tool instead of failing the boot.
+- The turn's telemetry reaches the durable OTLP-JSON leg (the test's
+  AC-3 check, boot_turn_test.go:252-257).
+
+§2 — the machinery, package by package
+--------------------------------------
+$ go test ./governance/... -count=1
+?   	codeburg.org/lexbit/relurpify/governance	[no test files]
+ok  	codeburg.org/lexbit/relurpify/governance/authorization	0.265s
+ok  	codeburg.org/lexbit/relurpify/governance/bounded	0.003s
+ok  	codeburg.org/lexbit/relurpify/governance/classification	0.002s
+ok  	codeburg.org/lexbit/relurpify/governance/identity	0.005s
+ok  	codeburg.org/lexbit/relurpify/governance/netpolicy	0.004s
+ok  	codeburg.org/lexbit/relurpify/governance/permissions	0.006s
+ok  	codeburg.org/lexbit/relurpify/governance/policy	0.371s
+ok  	codeburg.org/lexbit/relurpify/governance/policyresolve	0.005s
+ok  	codeburg.org/lexbit/relurpify/governance/ports	0.005s
+ok  	codeburg.org/lexbit/relurpify/governance/risk	0.002s
+ok  	codeburg.org/lexbit/relurpify/governance/sandbox	0.002s
+
+11 packages ok, 0 failures.
+
+§3 — decision shapes (serialized JSON, Chapter 5 §5.4)
+------------------------------------------------------
+$ sed -n '22,47p' governance/authorization/hitl.go
+// PermissionRequest captures a pending permission escalation.
+type PermissionRequest struct {
+	ID              string                       `json:"id"`
+	Permission      ucperms.PermissionDescriptor `json:"permission"`
+	Justification   string                       `json:"justification"`
+	Scope           policy.GrantScope            `json:"scope"`
+	Duration        time.Duration                `json:"duration"`
+	Risk            policy.RiskLevel             `json:"risk"`
+	RunID           string                       `json:"run_id,omitempty"`
+	Timeout         time.Duration                `json:"timeout,omitempty"`
+	TimeoutBehavior HITLTimeoutBehavior          `json:"timeout_behavior,omitempty"`
+	RequestedAt     time.Time                    `json:"requested_at"`
+	State           string                       `json:"state"`
+}
+
+// PermissionDecision encapsulates an approval or rejection.
+type PermissionDecision struct {
+	RequestID  string            `json:"request_id"`
+	Approved   bool              `json:"approved"`
+	ApprovedBy string            `json:"approved_by"`
+	Scope      policy.GrantScope `json:"scope"`
+	ExpiresAt  time.Time         `json:"expires_at"`
+	Reason     string            `json:"reason,omitempty"`
+	Conditions map[string]string `json:"conditions,omitempty"`
+}
+
+Grant lifecycles (governance/policy/grants.go:17-24): one_time, session,
+persistent, conditional, task. Timeout behavior (hitl.go:15-19): fail or
+skip — an unanswered request never silently becomes an approval.
+
+§4 — the audit-chain entry (Chapter 5 §5.5)
+-------------------------------------------
+$ sed -n '52,61p' governance/policy/audit.go
+// AuditChainEntry captures an append-only audit record with integrity metadata.
+type AuditChainEntry struct {
+	Sequence           int64       `json:"sequence"`
+	Record             AuditRecord `json:"record"`
+	PreviousHash       string      `json:"previous_hash,omitempty"`
+	RecordHash         string      `json:"record_hash"`
+	SignatureAlgorithm string      `json:"signature_algorithm,omitempty"`
+	Signature          string      `json:"signature,omitempty"`
+}
+
+The AuditRecord inside it (audit.go:23-34) carries decision metadata
+only — agent, action, permission, result, correlation — never payloads
+(the privacy boundary; Chapter 10's attribute projection).

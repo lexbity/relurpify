@@ -1,0 +1,9 @@
+--- a/userconfig/templates/embedfs/workspace/workspace.yaml
++++ b/userconfig/templates/embedfs/workspace/workspace.yaml
+@@ -1,5 +1,6 @@
+ schema: relurpify/workspace/v1
+
+ # Workspace-local state lives outside relurpify_cfg/.
++# ch04 lab: template edit (reverted after capture)
+ paths:
+   state_dir: .relurpify_state

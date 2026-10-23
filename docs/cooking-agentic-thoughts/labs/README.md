@@ -8,8 +8,16 @@ listing; Appendix D is generated from it.
 
 - `ch01-stringkit/` — the stringkit demo repo as seeded in Chapter 1
   (buggy `slugify`, one intentionally failing test, captured transcript).
-- Later chapters add one folder each (`ch04-explain-test/`, …) containing the
-  DSL and config artifacts at that chapter's end state.
+- `ch02-first-turn/` — the Chapter 2 receipts command card and the
+  captured two-turn session table.
+- `ch03-workspace-baseline/` — the annotated `workspace.yaml`, the counted
+  tree inventory, and the captured Chapter 3 experiments.
+- `ch04-explain-test/` — the reader's first recipe, the pin acknowledgment,
+  and both route-selection receipts (pinned vs lattice).
+- `ch05-triage/` — the full-toolkit triage recipe, the zero-model
+  gate_demo recipe, the captured linter errors, and the frame finding.
+- Later chapters add one folder each (`ch06-linear-paradigms/`, …) containing
+  the DSL and config artifacts at that chapter's end state.
 - `verify.sh` — the tiered verifier. See below.
 
 ## Prerequisites

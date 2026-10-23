@@ -473,9 +473,12 @@ model obeys stated constraints far better than implied ones.
    with `s` to actually fix it.
 2. **The recipe registry, from the driver's seat.** In the TUI, run
    `/recipe` to see the shipped set (`default`, `debug_tdd_repair`,
-   `code_review`, ...). Pin one with `/recipe euclo.thoughtrecipe.explain_test`,
-   give an order, then check `euclo.route.selected` in telemetry: your
-   `decided_by` should read `pinned`. Unpin with `/recipe clear`.
+   `code_review`, ...). Pin one with
+   `/recipe euclo.thoughtrecipe.explain`, give an order like
+   "explain what test_stringkit.py covers", then check
+   `euclo.route.selected` in telemetry: your `decided_by` should read
+   `pinned`. Unpin with `/recipe clear`. (Chapter 4 has you write your own
+   recipe and pin *that* — this is the rehearsal.)
 
 ## Where next
 

@@ -180,6 +180,40 @@ app (relurpish TUI, envcomposition, relurplint)
 is the DAG itself, `tooling/arch/domaindag.go:37-117`, and the directory
 table, `docs/ARCHITECTURE.md:79-100`.
 
+Rendered as the checker sees it — every arrow is an *allowed import*
+direction, the dashed edge is the one upward fold §1.3's cycle reporter
+names, and `testsuite`/`tooling` watch everything
+(`tooling/arch/domaindag.go:37-117,115`):
+
+```mermaid
+flowchart TD
+    APP["app<br/>relurpish · envcomposition · relurplint"]
+    AYE["ayenitd<br/>the runner sidecar<br/>no capability · governance · model"]
+    NAMED["named/euclo<br/>the coding agent"]
+    COG["cognitionzoo<br/>reasoning paradigms"]
+    EXE["execution<br/>graph runtime · compiler · session"]
+    CTX["context<br/>envelope · knowledge · graphdb"]
+    CAP["capability<br/>registry · invocation · sandbox wiring"]
+    GOV["governance<br/>decides — never orchestrates"]
+    LEAF["model · jobs · telemetry · userconfig<br/>leaf substrates"]
+    PLAT["platform<br/>adapters only"]
+    TS["testsuite · tooling<br/>unrestricted observers"]
+    APP --> NAMED
+    APP --> COG
+    APP --> AYE
+    NAMED --> EXE
+    COG --> EXE
+    AYE --> EXE
+    EXE --> CTX
+    EXE --> CAP
+    EXE --> GOV
+    CAP --> CTX
+    CAP --> GOV
+    LEAF --> PLAT
+    PLAT -.->|"the one mutual pair<br/>capability ↔ platform — warn mode"| CAP
+    TS -.-> APP
+```
+
 **How to read it.** Arrows point downward. `app` may import almost
 anything; `named/euclo` (the agent) may import everything below it but
 never `app`; `execution` may import `context`, `capability`, and

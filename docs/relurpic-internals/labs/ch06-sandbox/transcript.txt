@@ -1,0 +1,88 @@
+ch06-sandbox — captured transcript
+==================================
+Captured on: Linux 6.18, go1.27.3 (satisfies the go1.27.2 toolchain pin)
+Docker 29.9.2; gVisor runsc release-20260406.0
+Pin: tag BETA-RC1-FALL2026 (pending); captured at commit
+1bc57c62029641dcc919c04a8076593794246409
+Model backend: none (the turn uses the offline backend).
+
+§1 — readiness on a real machine (scratch workspace, first doctor run)
+----------------------------------------------------------------------
+$ go build -o /tmp/relurpify-ch06/relurpish ./app/relurpish
+(clean build)
+
+$ /tmp/relurpify-ch06/relurpish doctor --workspace /tmp/ch06-ws
+2026/10/23 11:21:34 INFO config loaded workspace_root=/tmp/ch06-ws model_provider= model_name= sandbox_backend= tools_loaded=0 strict_mode=false config_fingerprint=sha256:d01f332c…
+    [… three `config loaded` lines: before, during, and after starter-config
+     materialization; the final fingerprint is the workspace's …]
+Workspace: /tmp/ch06-ws
+Config root: /tmp/ch06-ws/relurpify_cfg
+Workspace present: yes
+Config file: yes
+Manifest fingerprint: e3985117c09367091d0a4cc6f7a5b28f11519a3a9f411114410f75552a30badc
+Inference backend:
+  provider: ollama
+  endpoint: http://localhost:11434
+  state: ready
+    [… provider health table: offline ready, ollama ready (marked), others unhealthy with hints …]
+  - runner: missing [warning] (no runner status (not spawned yet))
+  - hitl_mode: ok [warning] (governed: human-approval requests block on a decision)
+  - selection_posture: ok [warning] (deterministic: ambiguous intents always ask a human via a clarification frame (workspace selection.posture: model_assisted to opt into model disambiguation))
+  - starter-templates: ok [required] (workspace template archive available)
+  - model-profile: ok [required] (default.llm.yaml)
+  - sandbox_backend: ok [required] (runsc version release-20260406.0
+spec: 1.1.0-rc.1)
+  - runsc: ok [warning] (runsc version release-20260406.0
+spec: 1.1.0-rc.1)
+  - docker: degraded [warning] (degraded: runsc runtime not registered)
+  - audit_chain: ok [required] (no audit chain yet (created on first agent run))
+  - runtime_image: degraded [required] (unpinned (tag-based; resolved from the local daemon at boot — set security.sandbox.image_digest to pin))
+Result: ready
+
+Reading the rows (Chapter 6 §6.1):
+- sandbox_backend interrogates the runsc binary — it quotes the version.
+- docker: degraded is a *pairing* verdict on a healthy daemon: gVisor is
+  not registered as a Docker runtime.
+- runtime_image: degraded is the pin warning (§6.3) — the image is
+  tag-based until security.sandbox.image_digest is set.
+- Result: ready with degraded rows = degrade loudly, never unsandboxed.
+
+§2 — the governed tool-call turn (product path)
+-----------------------------------------------
+$ go test ./app/relurpish/e2e -run TestBootTurnToolCall -count=1
+ok  	codeburg.org/lexbit/relurpify/app/relurpish/e2e	0.125s
+
+The verbose form (Chapter 5 lab) shows the admission/policy log lines.
+The harness isolates the container and auto-approves HITL; the decision
+path is the product's own.
+
+§3 — the enforcement machinery
+------------------------------
+$ go test ./capability/... -count=1
+ok  	codeburg.org/lexbit/relurpify/capability/configcheck	0.081s
+ok  	codeburg.org/lexbit/relurpify/capability/descriptor	0.007s
+ok  	codeburg.org/lexbit/relurpify/capability/fs	0.019s
+ok  	codeburg.org/lexbit/relurpify/capability/ports	0.004s
+ok  	codeburg.org/lexbit/relurpify/capability/provider	0.004s
+ok  	codeburg.org/lexbit/relurpify/capability/registry	0.010s
+ok  	codeburg.org/lexbit/relurpify/capability/result	0.006s
+ok  	codeburg.org/lexbit/relurpify/capability/runtime	0.006s
+ok  	codeburg.org/lexbit/relurpify/capability/safety	0.002s
+ok  	codeburg.org/lexbit/relurpify/capability/sandbox	1.118s
+ok  	codeburg.org/lexbit/relurpify/capability/sandbox/safeexec	0.160s
+ok  	codeburg.org/lexbit/relurpify/capability/toolcapabilities	0.005s
+
+12 packages ok, 0 failures.
+
+§4 — the declaration sites (manual checks)
+------------------------------------------
+- Backend interface:            capability/sandbox/contract_types.go:83-96
+- Pin precedence (SBH-1 D-13):  capability/sandbox/image.go:33-40
+- Default image + unpinned warn: capability/sandbox/command_runner.go:24-29
+- Pipeline entry:               capability/registry/invoke.go:32
+- ReWOO mandatory checker:      cognitionzoo/rewoo/errors.go:5-9
+- Insertion ladder (default=4): capability/result/result.go:376-390
+- Monotone merge:               capability/result/result.go:315-324
+- Manifest override tighten-only: capability/registry/capability_policy_eval.go:32
+- Summary cap 220 chars:        cognitionzoo/react/capability_insertion.go:59-62
+- Metadata-only nils data:      cognitionzoo/react/react_act_node.go:438-441

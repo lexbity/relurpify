@@ -1,0 +1,35 @@
+# The materialized workspace.yaml, as captured on the verification machine,
+# trimmed to the keys Chapter 3 teaches. Comments are the chapter's, not the
+# shipped file's (the shipped file carries its own explanatory comments).
+
+schema: relurpify/workspace/v1          # required first line — the versioning tag
+
+paths:
+  state_dir: .relurpify_state           # the output directory; output, never source
+
+model:
+  provider: ollama                      # must name a manifest in model/provider/
+  name: gemma4:e4b                      # must be served by that provider; governs turns
+
+sandbox:
+  backend: gvisor                       # gvisor | docker
+
+selection:
+  posture: deterministic                # deterministic | model_assisted (dial two)
+
+logging:
+  level: info
+  format: json
+
+audit:
+  retention_days: 7
+  enforcement: strict                   # strict fails closed; best_effort counts drops
+
+telemetry:
+  enabled: true                         # the Chapter 2 receipts exist because this ships on
+
+runner:
+  enabled: true
+  workers: 2
+  queues:
+    - knowledge

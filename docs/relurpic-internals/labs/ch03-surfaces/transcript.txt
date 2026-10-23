@@ -1,0 +1,119 @@
+ch03-surfaces — captured transcript
+===================================
+Captured on: Linux 6.18, go1.27.3 (satisfies the go1.27.2 toolchain pin)
+Pin: tag BETA-RC1-FALL2026 (pending); captured at commit
+1bc57c62029641dcc919c04a8076593794246409
+Model backend: none used.
+
+§1 — claim: config schemas are versioned
+----------------------------------------
+$ grep -rl "^schema:" relurpify_cfg/ | wc -l
+112
+
+$ grep -rn "^schema:" relurpify_cfg/ | awk -F'schema: ' '{print $2}' | sort | uniq -c
+      1 relurpify/euclo/families/v1
+      3 relurpify/model/profile/v1
+      4 relurpify/model/provider/v1
+      1 relurpify/policy/ingestion/v1
+      1 relurpify/policy/localtool/v1
+      1 relurpify/policy/sandbox/v1
+      1 relurpify/policy/shell/v1
+     99 relurpify/tool/v1
+      1 relurpify/workspace/v1
+
+Declaration sites: userconfig/config/schema.go:37 (SplitSchemaDocument),
+userconfig/config/schema_registry.go:65 (Require),
+userconfig/config/errors.go:21-28 (typed errors).
+Note: `euclo/families` is not one of the registry's eight default kinds —
+families.yaml is Euclo workspace data, loaded and validated by the
+thoughtrecipe loader (named/euclo/thoughtrecipes/families.go:18,29).
+
+§2 — claim: the streaming contract is normative and race-gated
+--------------------------------------------------------------
+$ sed -n '13,28p' model/ports.go
+	// Streaming contract (normative — every implementation MUST satisfy it):
+	//
+	// R1. The call-time ctx is the only stop signal. Implementations MUST
+	//     NOT require consumer cooperation to stop; consumers MUST cancel
+	//     (directly or via a parent) when abandoning a stream.
+	// R2. On ctx cancellation, all internal goroutines exit and the returned
+	//     channel is closed within 250 ms.
+	// R3. The channel is closed exactly once, by its producer.
+	// R4. Resources owned by the pump (HTTP response bodies, files) are
+	//     closed by that pump, exactly once, including on cancellation.
+	// R5. Producer-side encode/write failures degrade (drop, count, emit
+	//     telemetry); they MUST NOT panic.
+	// R6. Send contention on the output channel resolves by selecting on
+	//     ctx.Done(); the token is dropped and counted when ctx is done.
+
+$ make check-stream-contract
+GOPROXY=off GOSUMDB=off GOCACHE=/tmp/relurpify-go-cache GOTMPDIR=/tmp/relurpify-go-tmp go test -race ./testsuite/conformance -run TestStreamLifecycle -count=1
+ok  	codeburg.org/lexbit/relurpify/testsuite/conformance	1.021s
+
+exit code: 0 (timing is machine-specific; compare the verdict)
+
+§3 — claim: compilation records carry a deterministic digest
+------------------------------------------------------------
+$ sed -n '84,96p' execution/compiler/types.go
+type CompilationRecord struct {
+	RequestID           string
+	Timestamp           time.Time
+	Request             CompilationRequest
+	Result              CompilationResult
+	CacheHit            bool
+	EventLogSeq         uint64
+	RankersUsed         []string
+	Dependencies        []knowledge.ChunkID // Chunks used in this compilation
+	Substitutions       []SummarySubstitution
+	BudgetShortfall     int
+	DeterministicDigest string                   // Hash for determinism verification
+	AssemblyMetadata    contextdata.AssemblyMeta // Compiler assembly provenance
+}
+
+§4 — claim: checksums + SBOMs ship with every release
+-----------------------------------------------------
+$ sed -n '243,249p' .goreleaser.yaml
+checksum:
+  name_template: "checksums.txt"
+
+sboms:
+  - artifacts: archive
+    documents:
+      - "${artifact}.sbom.json"
+
+§5 — claim: the library API is not stable
+-----------------------------------------
+$ cat AGENTS.md
+no shims
+no compat
+no aliases
+no stubs
+
+Enforcement: ADR-005 (docs/ARCHITECTURE.md:273-278) and the symcheck
+removed-symbol table (tooling/arch/symcheck.go:14-49); see Chapter 2's
+captured gate runs.
+
+§6 — correction: the runner row
+-------------------------------
+The inventory (devdocs/HANDOFF-docs/API_SURFACES.md:20) grades
+`relurpify-runner` "Internal; not user-facing". Maintainer-confirmed
+(plan decision D10): the binary does not exist and never has shipped.
+The seam is real:
+
+$ sed -n '174,187p' app/relurpish/runtime/runner_supervisor.go
+// own directory (the shipped layout: relurpish and relurpify-runner side by
+// side), then PATH.
+func resolveRunnerExecutable(cfg RunnerSupervisorConfig) (string, error) {
+	for _, dir := range []string{cfg.ExecutableDir, executableDir()} {
+		if dir == "" {
+			continue
+		}
+		candidate := filepath.Join(dir, "relurpify-runner")
+		if info, err := os.Stat(candidate); err == nil && !info.IsDir() && info.Mode()&0o111 != 0 {
+			return candidate, nil
+		}
+	}
+	return exec.LookPath("relurpify-runner")
+}
+
+Verdict: the grade was generous; the tree and the maintainer agree.

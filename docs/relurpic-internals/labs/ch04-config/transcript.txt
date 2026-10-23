@@ -1,0 +1,51 @@
+ch04-config — captured transcript
+=================================
+Captured on: Linux 6.18, go1.27.3 (satisfies the go1.27.2 toolchain pin)
+Pin: tag BETA-RC1-FALL2026 (pending); captured at commit
+1bc57c62029641dcc919c04a8076593794246409
+Model backend: none used.
+All lab changes reverted in-checkout; final `git status --porcelain
+relurpify_cfg/ userconfig/templates/` is empty.
+
+§1 — baseline: the loop is closed
+---------------------------------
+$ make check-config-tree-drift
+[PASS] relurpify_cfg/ matches embedded templates
+
+§2 — template edit only: the gate fails
+---------------------------------------
+$ git apply template-edit.diff
+$ make check-config-tree-drift
+[FAIL] relurpify_cfg/ drifts from embedded templates. Run: make generate-config
+Files /tmp/tmp.ZiXVjrDWJr/out/workspace.yaml and relurpify_cfg/workspace.yaml differ
+make: *** [Makefile:27: check-config-tree-drift] Error 1
+
+Note: no file under relurpify_cfg/ changed. The gate regenerates the
+bundle into a temp dir (the /tmp/tmp.… path) and diffs it against the
+checked-in tree — a template edit is a promise the tree has not kept.
+
+§3 — regeneration absorbs the change
+------------------------------------
+$ make generate-config && make check-config-tree-drift
+[PASS] relurpify_cfg/ matches embedded templates
+
+§4 — hand edit of the checked-in tree: identical failure shape
+--------------------------------------------------------------
+$ sed -i 's|^paths:|# ch04 lab: hand edit (reverted after capture)\npaths:|' relurpify_cfg/workspace.yaml
+$ make check-config-tree-drift
+[FAIL] relurpify_cfg/ drifts from embedded templates. Run: make generate-config
+Files /tmp/tmp.7HmLb2h6JF/out/workspace.yaml and relurpify_cfg/workspace.yaml differ
+make: *** [Makefile:27: check-config-tree-drift] Error 1
+
+In this repository relurpify_cfg/ is generated, so a hand-edit is drift
+by definition (ADR-002). The remedy is always: edit the bundle, then
+`make generate-config`.
+
+§5 — full revert: the loop closes
+---------------------------------
+$ git checkout -- relurpify_cfg/workspace.yaml userconfig/templates/embedfs/workspace/workspace.yaml
+$ make check-config-tree-drift
+[PASS] relurpify_cfg/ matches embedded templates
+
+$ git status --porcelain relurpify_cfg/ userconfig/templates/
+(empty)

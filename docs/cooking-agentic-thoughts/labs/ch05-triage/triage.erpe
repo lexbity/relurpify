@@ -1,0 +1,46 @@
+thoughtrecipe euclo.thoughtrecipe.triage
+"Inspect a failing test, classify the defect, confirm the repair with the user, then repair and verify."
+
+trigger as capability:
+  may read workspace
+  may write workspace
+  may ask user
+  may invoke ["file_read", "file_list"]
+  family ["investigation"]
+  keyword ["triage"]
+
+input workspace: "**/*"
+input prompt: user.request
+
+type Finding:
+  title: Text
+  severity: low | medium | high
+  evidence: list<Text>
+
+agent inspector uses react
+agent repairer uses react
+
+run inspector:
+  may invoke ["file_read", "file_list"]
+  from input.prompt
+  goal """Read the workspace's test file, identify the failing test, and classify the defect it reveals. The user request is: {{ index . "task.instruction" }}"""
+  capture:
+    finding: Finding -> state.finding
+    severity: low | medium | high -> state.severity
+
+ask user:
+  question "Proceed with the recommended repair?"
+  choices ["yes", "no"]
+  capture answer -> state.decision
+
+route:
+  when state.decision is yes:
+    run repairer:
+      may invoke ["file_read", "file_write", "python_pytest"]
+      from state.finding
+      goal """Repair the defect described by the finding, then run python_pytest on test_stringkit.py and report the real result. The finding is: {{ index . "state.finding" }}"""
+      capture:
+        summary: Text as claimed -> state.repair_summary
+  otherwise:
+    capture:
+      state.finding -> state.plan

@@ -108,6 +108,42 @@ one is a *deleted* runner guarded by a test that keeps it deleted.
 
 Three of these deserve a second look.
 
+Rendered as the constitution's own wiring — each written rule, the
+mechanism that fails when you break it, and the meta-gate watching the
+mechanisms (§2.5):
+
+```mermaid
+flowchart LR
+    subgraph WRITTEN["Written law — docs/ARCHITECTURE.md:235-296"]
+        A1["ADR-001<br/>one env boundary"]
+        A2["ADR-002<br/>generated config"]
+        A3["ADR-003<br/>fail closed"]
+        A4["ADR-004<br/>all execution sandboxed"]
+        A5["ADR-005<br/>no shims · compat · aliases · stubs"]
+        A6["ADR-006<br/>deterministic routing"]
+        A7["ADR-007<br/>sidecar jobs"]
+    end
+    subgraph ENFORCED["Enforced law — tooling/arch + Makefile"]
+        ENV["envcheck AST gate<br/>+ env grep fence"]
+        DRIFT["check-config-tree-drift"]
+        SHAPE["decision-path defaults<br/>+ INV-1 grep fence"]
+        GUARD["guard test —<br/>the deleted runner stays deleted"]
+        SHIM["shimcheck + symcheck<br/>+ grep fence"]
+        EUCLO["posture default<br/>+ euclo-* DSL gates"]
+        DAGROW["a domain-DAG row:<br/>ayenitd's allowed imports"]
+    end
+    A1 --> ENV
+    A2 --> DRIFT
+    A3 --> SHAPE
+    A4 --> GUARD
+    A5 --> SHIM
+    A6 --> EUCLO
+    A7 --> DAGROW
+    HONEST["check-gates-honest<br/>patterns cannot be weakened"] -.->|watches| ENV
+    HONEST -.-> SHIM
+    HONEST -.-> DRIFT
+```
+
 **ADR-005's vocabulary law has an escape hatch, and the escape hatch has
 a rule.** `shimcheck` forbids "shim", "compatibility", "stub", and
 "backward compatibility" as string literals — but the short spelling

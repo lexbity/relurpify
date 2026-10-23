@@ -1,0 +1,98 @@
+ch07-substrate — captured transcript
+====================================
+Captured on: Linux 6.18, go1.27.3 (satisfies the go1.27.2 toolchain pin)
+Pin: tag BETA-RC1-FALL2026 (pending); captured at commit
+1bc57c62029641dcc919c04a8076593794246409
+Model backend: none. Sandbox: none.
+
+§1 — the substrate, package by package
+--------------------------------------
+$ go test ./context/knowledge/... -count=1
+ok  	codeburg.org/lexbit/relurpify/context/knowledge	4.519s
+ok  	codeburg.org/lexbit/relurpify/context/knowledge/ast	4.254s
+ok  	codeburg.org/lexbit/relurpify/context/knowledge/graphdb	3.825s
+ok  	codeburg.org/lexbit/relurpify/context/knowledge/ingestion	0.717s
+ok  	codeburg.org/lexbit/relurpify/context/knowledge/memory	0.010s
+ok  	codeburg.org/lexbit/relurpify/context/knowledge/retrieval	0.532s
+ok  	codeburg.org/lexbit/relurpify/context/knowledge/search	0.006s
+
+7 packages ok, 0 failures. (knowledge/ast/graphdb open real Badger
+stores under -count=1; timings are machine-specific.)
+
+§2 — index a seeded workspace, end to end
+-----------------------------------------
+$ go test ./context/knowledge -run 'TestWorkspaceBootstrap' -count=1 -v
+--- PASS: TestWorkspaceBootstrapIndexFailureDegradesNotAborts (0.00s)
+--- PASS: TestWorkspaceBootstrapSuccessIndexesAndEmitsComplete (0.00s)
+PASS
+ok  	codeburg.org/lexbit/relurpify/context/knowledge	0.006s
+
+What the success test proves (context/knowledge/bootstrap_service_test.go:75-106):
+- a seeded main.go is indexed (store.GetFileByPath returns its metadata);
+- a bootstrap_complete event arrives on the EventBus with a
+  BootstrapCompletePayload carrying WorkspaceRoot and IndexedFiles (= 1
+  for the one-file fixture);
+- the failure test (by name) pins the posture: an indexing failure
+  degrades — it never aborts boot.
+
+§3 — the chunk struct
+---------------------
+$ sed -n '168,196p' context/knowledge/chunk.go
+type KnowledgeChunk struct {
+	// Identity fields
+	ID            ChunkID `json:"id"`
+	Version       int     `json:"version"`
+	WorkspaceID   string  `json:"workspace_id"`
+	ContentHash   string  `json:"content_hash"`
+	TokenEstimate int     `json:"token_estimate"`
+
+	// Three-axis model fields
+	MemoryClass  MemoryClass  `json:"memory_class,omitempty"`
+	StorageMode  StorageMode  `json:"storage_mode,omitempty"`
+	SourceOrigin SourceOrigin `json:"source_origin,omitempty"`
+
+	// Full provenance fields
+	SourcePrincipal      identity.SubjectRef  `json:"source_principal,omitempty"`
+	AcquisitionMethod    AcquisitionMethod    `json:"acquisition_method,omitempty"`
+	AcquiredAt           time.Time            `json:"acquired_at,omitempty"`
+	TrustClass           agentspec.TrustClass `json:"trust_class,omitempty"`
+	ContentSchemaVersion string               `json:"content_schema_version,omitempty"`
+	DerivedFrom          []ChunkID            `json:"derived_from,omitempty"`
+	DerivationMethod     DerivationMethod     `json:"derivation_method,omitempty"`
+	DerivationGeneration int                  `json:"derivation_generation,omitempty"`
+	CoverageHash         string               `json:"coverage_hash,omitempty"`
+
+	// Tombstoning fields
+	Tombstoned   bool    `json:"tombstoned,omitempty"`
+	SupersededBy ChunkID `json:"superseded_by,omitempty"`
+
+	// Capture provenance fields (schema v2)
+
+§4 — the sixteen edge kinds
+---------------------------
+$ sed -n '121,136p' context/knowledge/chunk.go
+	EdgeKindGrounds            EdgeKind = "grounds"
+	EdgeKindContradicts        EdgeKind = "contradicts"
+	EdgeKindRefines            EdgeKind = "refines"
+	EdgeKindGeneralizes        EdgeKind = "generalizes"
+	EdgeKindExemplifies        EdgeKind = "exemplifies"
+	EdgeKindDerivesFrom        EdgeKind = "derives_from"
+	EdgeKindComposedOf         EdgeKind = "composed_of"
+	EdgeKindSupersedes         EdgeKind = "supersedes"
+	EdgeKindRequiresContext    EdgeKind = "requires_context"
+	EdgeKindAmplifies          EdgeKind = "amplifies"
+	EdgeKindInvalidates        EdgeKind = "invalidates"
+	EdgeKindDependsOnCodeState EdgeKind = "depends_on_code_state"
+	EdgeKindConfirmed          EdgeKind = "confirmed"
+	EdgeKindRejected           EdgeKind = "rejected"
+	EdgeKindRefinedBy          EdgeKind = "refined_by"
+	EdgeKindDeferred           EdgeKind = "deferred"
+
+§5 — the store, in its own words
+--------------------------------
+$ sed -n '1,2p' context/knowledge/graphdb/doc.go
+// Package graphdb provides a durable embedded graph engine optimized for
+// traversal queries over in-memory adjacency maps.
+
+$ sed -n '488p' context/knowledge/store.go
+// NOTE: full scan — only use in migration or tooling.

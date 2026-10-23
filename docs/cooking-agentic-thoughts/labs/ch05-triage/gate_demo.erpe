@@ -1,0 +1,21 @@
+thoughtrecipe euclo.thoughtrecipe.gate_demo
+"Ask for confirmation, then record the decision. No model calls: this recipe exists to exercise the ask-user gate and routing."
+
+trigger as capability:
+  may ask user
+  family ["investigation"]
+
+input prompt: user.request
+
+ask user:
+  question "Proceed with the recommended repair?"
+  choices ["yes", "no"]
+  capture answer -> state.decision
+
+route:
+  when state.decision is yes:
+    capture:
+      state.decision -> state.approved
+  otherwise:
+    capture:
+      state.decision -> state.plan

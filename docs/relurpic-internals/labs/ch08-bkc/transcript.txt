@@ -1,0 +1,73 @@
+ch08-bkc — captured transcript
+==============================
+Captured on: Linux 6.18, go1.27.3 (satisfies the go1.27.2 toolchain pin)
+Pin: tag BETA-RC1-FALL2026 (pending); captured at commit
+1bc57c62029641dcc919c04a8076593794246409
+Model backend: none. Sandbox: none.
+
+§1 — replay and the digest contract
+-----------------------------------
+$ go test ./execution/compiler -run 'TestStrictReplay|TestRecordLookupsNeverScan' -count=1 -v
+--- PASS: TestStrictReplayGoldenRecordPasses (0.01s)
+--- PASS: TestStrictReplayDetectsNondeterminism (0.00s)
+--- PASS: TestRecordLookupsNeverScan (0.01s)
+PASS
+ok  	codeburg.org/lexbit/relurpify/execution/compiler	0.023s
+
+- StrictReplay on a golden record: re-run produces the same digest.
+- StrictReplay on a nondeterministic record: ErrReplayMismatch (the
+  alarm fires — the system tests its own watchdog).
+- Record lookups make zero list calls: by-ID loads are graph-node gets
+  (execution/compiler/repository_impl.go:53-64). The architecture
+  doc's "compilation-record load" full-scan entry is stale as of the
+  pin (correction stated in Chapter 7 §7.5 and Chapter 8 §8.3).
+
+§2 — the epoch-scoped cache
+---------------------------
+$ go test ./execution/compiler -run 'TestCacheKeyIncludesEpoch|TestCacheRunScopePreventsCrossRunHits' -count=1 -v
+--- PASS: TestCacheKeyIncludesEpoch (0.00s)
+--- PASS: TestCacheRunScopePreventsCrossRunHits (0.00s)
+PASS
+
+The cache key (execution/compiler/compiler.go:531-538) carries five
+fingerprints: query, manifest, policy bundle, epoch, run.
+
+§3 — grounding, including the floors
+------------------------------------
+$ go test ./context/knowledge -run 'TestGroundingService' -count=1 -v
+--- PASS: TestGroundingServiceHappyPath (0.01s)
+--- PASS: TestGroundingServiceTrustFloors (0.00s)
+--- PASS: TestGroundingServiceEdges (0.00s)
+PASS
+
+Trust floors: a capture cannot ground at a trust above its provenance.
+Capture kind by origin (context/knowledge/grounding.go:687-691):
+OriginTool → ChunkKindTool; everything else → ChunkKindCapture.
+Verbatim LLM ingestion stays deferred by design — the source comment
+calls storing it without a summarizer and policy "dishonest metadata".
+
+§4 — the delivery half
+----------------------
+$ go test ./context/contextstream ./execution/agentgraph -count=1
+ok  	codeburg.org/lexbit/relurpify/context/contextstream	0.003s
+ok  	codeburg.org/lexbit/relurpify/execution/agentgraph	0.863s
+
+§5 — the digest, read whole
+---------------------------
+$ sed -n '819,832p' execution/compiler/compiler.go
+func compilationDigest(record *CompilationRecord) string {
+	h := sha256.New()
+	if record == nil {
+		return hex.EncodeToString(h.Sum(nil))
+	}
+	h.Write([]byte(record.Request.Query.Text))
+	_, _ = fmt.Fprintf(h, "%d", record.EventLogSeq)
+	for _, chunkID := range record.Dependencies {
+		h.Write([]byte(chunkID))
+	}
+	return hex.EncodeToString(h.Sum(nil))
+}
+
+Three inputs, no separators, no length prefixes — the collision
+structure of Chapter 8 §8.3: ("a", 11, ["b"]), ("a1", 1, ["b"]), and
+("a", 1, ["1b"]) all concatenate to the bytes "a11b".

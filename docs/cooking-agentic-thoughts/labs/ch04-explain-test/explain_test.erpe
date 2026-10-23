@@ -1,0 +1,19 @@
+thoughtrecipe euclo.thoughtrecipe.explain_test
+"Read a named test file and explain in plain language what behavior it covers and what a bug in the code under test would break."
+
+trigger as capability:
+  may read workspace
+  may invoke ["file_read", "file_list"]
+  family ["review"]
+  keyword ["explain_test", "test coverage"]
+
+input workspace: "**/*"
+input prompt: user.request
+
+agent explainer uses react
+
+run explainer:
+  may invoke ["file_read", "file_list"]
+  from input.prompt
+  goal """Read the test file the user names, then explain in plain language what behavior it covers and what a bug in the code under test would break. The user request is: {{ index . "task.instruction" }}"""
+  capture result -> state.explanation
