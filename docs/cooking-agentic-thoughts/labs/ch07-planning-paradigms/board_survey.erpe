@@ -1,0 +1,23 @@
+thoughtrecipe euclo.thoughtrecipe.board_survey
+"Two authored blackboard sources: explorer surveys stringkit, analyst reviews the findings. Authored sources are the data-flow skeleton; a no-do source performs no model calls."
+
+trigger as capability:
+  may read workspace
+  may invoke ["file_read", "file_list"]
+  family ["investigation"]
+  keyword ["board"]
+
+input workspace: "**/*"
+input prompt: user.request
+
+agent board uses blackboard
+
+run board:
+  may invoke ["file_read", "file_list"]
+  from input.prompt
+  source explorer:
+    read [input.prompt]
+    write state.survey
+  source analyst:
+    read [state.survey]
+    write state.review

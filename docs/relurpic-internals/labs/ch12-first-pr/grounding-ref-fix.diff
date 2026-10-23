@@ -1,0 +1,14 @@
+diff --git a/context/knowledge/grounding.go b/context/knowledge/grounding.go
+index e5e6f321..73e93159 100644
+--- a/context/knowledge/grounding.go
++++ b/context/knowledge/grounding.go
+@@ -677,8 +677,7 @@ func kindFor(item GroundingItem) ChunkKind {
+ // CaptureKindForOrigin resolves the canonical chunk kind for a runtime
+ // capture from its dataflow origin floor. It is the grounding-side heir of
+ // the output ingester's input taxonomy (the ingester was absorbed into this
+-// commit boundary; see devdocs/plans/bkc-bidirectional-context-and-hermetic-
+-// dryrun-spec.md, Phase 3): a capture whose dataflow floor is tool output
++// commit boundary): a capture whose dataflow floor is tool output
+ // grounds as a tool fact (ChunkKindTool, the kind the capture encoding already
+ // documents for tool results), while agent claims and user-given values ground
+ // as ChunkKindCapture. Verbatim LLM-response and observation ingestion stay

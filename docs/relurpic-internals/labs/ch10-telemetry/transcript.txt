@@ -1,0 +1,84 @@
+ch10-telemetry — captured transcript
+====================================
+Captured on: Linux 6.18, go1.27.3 (satisfies the go1.27.2 toolchain pin)
+Pin: tag BETA-RC1-FALL2026 (pending); captured at commit
+1bc57c62029641dcc919c04a8076593794246409
+Model backend: none. Sandbox: none. jq used for segment inspection.
+
+§1 — boot a runtime, read the run back
+--------------------------------------
+$ /tmp/relurpify-ch06/relurpish status --workspace /tmp/ch06-ws --format json
+(script-safe: boots the runtime, renders JSON, exits 0 — main.go:135-139)
+
+$ ls /tmp/ch06-ws/.relurpify_state/telemetry/otlp/
+relurpify-2026-10-23.jsonl
+
+$ wc -l /tmp/ch06-ws/.relurpify_state/telemetry/otlp/relurpify-2026-10-23.jsonl
+8 /tmp/ch06-ws/.relurpify_state/telemetry/otlp/relurpify-2026-10-23.jsonl
+
+(one JSON object per line, each a complete OTLP/HTTP JSON body;
+8 lines carried 215 log records on the capture machine)
+
+§2 — the boot, narrated by its events
+-------------------------------------
+$ jq -r '.resourceLogs[0].scopeLogs[0].logRecords[]?.eventName' \
+    /tmp/ch06-ws/.relurpify_state/telemetry/otlp/relurpify-2026-10-23.jsonl \
+    | sort | uniq -c
+      1 context_policy_reloaded
+      1 grounding.ports_unwired
+      1 runtime.shutdown_drain
+      1 sandbox.image_unpinned
+    211 state_change
+
+Reading it (Chapter 10 §10.5):
+- sandbox.image_unpinned — Chapter 6's pin warning, as an event;
+- state_change × 211 — the readiness state machine ticking through the
+  doctor's checks;
+- grounding.ports_unwired — Chapter 8's grounding seam reporting itself;
+- context_policy_reloaded — the policy bundle reload;
+- runtime.shutdown_drain — the clean shutdown.
+The boot, reconstructed from telemetry alone.
+
+§3 — the projection boundary, working
+-------------------------------------
+$ cat …/relurpify-2026-10-23.jsonl | jq -r '
+    [.resourceLogs[0].scopeLogs[0].logRecords[]?.attributes[]?.key]
+    | unique | .[]'
+abandoned
+agent_id
+agent_label
+cancelled
+capability
+capability_id
+completed
+contract_source
+exposure
+fingerprint
+kind
+provider
+ref
+scope
+security_event
+
+Decision metadata only. None of the blocklisted keys —
+args · prompt · response · text · stdout · stderr — appears anywhere
+in the segment. (telemetry/otelleg/attributes.go caps: 64 attributes,
+4096 bytes each.)
+
+§4 — the turn leg (AC-3)
+------------------------
+$ go test ./app/relurpish/e2e -run TestBootTurnToolCall -count=1
+ok  	codeburg.org/lexbit/relurpify/app/relurpish/e2e	0.125s
+
+The test's AC-3 check (app/relurpish/e2e/boot_turn_test.go:252-257)
+verified the turn's telemetry reached the durable OTLP-JSON leg:
+at least one tool span, at least ten named log records, and a segment
+file that parses line-by-line as OTLP-JSON.
+
+§5 — retention, in the source
+-----------------------------
+$ sed -n '20p' telemetry/otelleg/settings.go
+	defaultFileRetention   = 168 * time.Hour
+
+Seven days, to the hour. The segment writer prunes older segments
+(telemetry/otelleg/segment_writer.go:21-22,220).

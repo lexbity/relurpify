@@ -1,0 +1,72 @@
+apiVersion: relurpify/v1alpha1
+kind: AgentTestSuite
+metadata:
+  name: euclo.stringkit.osb
+  description: All three OSB assertion kinds against the stringkit fixture (read-only ask path).
+  owner: internals-book
+  tier: smoke
+  quarantined: false
+spec:
+  agent_name: euclo
+  manifest: relurpify_cfg/agent.yaml
+  execution:
+    profile: record
+    strict: false
+    timeout: 120s
+  workspace:
+    strategy: derived
+    exclude:
+    - .git/**
+    - .gocache/**
+    - .gomodcache/**
+  models:
+  - name: gemma4:e4b
+    endpoint: http://localhost:11434
+  recording:
+    mode: record
+  cases:
+  - name: stringkit_osb_read
+    description: Explain the stringkit slugify (read-only; all three OSB kinds exercised).
+    task_type: analysis
+    tags:
+    - smoke
+    - osb
+    setup:
+      files:
+      - path: docs/cooking-agentic-thoughts/labs/ch01-stringkit/stringkit.py
+    prompt: >
+      Read stringkit.py and explain, in one short paragraph, what the
+      slugify function does and name one input where it produces a
+      non-URL-safe result. Do not edit any files.
+    context:
+      context_file_contents:
+      - path: docs/cooking-agentic-thoughts/labs/ch01-stringkit/stringkit.py
+        content: |
+          import re
+
+
+          def slugify(text: str) -> str:
+              """Turn a title into a URL-safe slug."""
+              slug = text.strip().lower()
+              slug = re.sub(r"\s+", "-", slug)
+              return slug
+      extensions:
+        euclo:
+          mode: chat
+    expect:
+      outcome:
+        must_succeed: true
+        no_file_changes: true
+        extensions:
+          euclo:
+            mode: chat
+      security:
+        tools_must_not_call:
+        - file_write
+      benchmark:
+        max_tool_calls_hint: 6
+        tools_expected:
+        - file_read
+        tools_not_expected:
+        - file_write
+        - go_test

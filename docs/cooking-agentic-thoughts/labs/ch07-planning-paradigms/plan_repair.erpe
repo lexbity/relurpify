@@ -1,0 +1,21 @@
+thoughtrecipe euclo.thoughtrecipe.plan_repair
+"Produce a verified repair plan for a failing test in stringkit: plan, verify, summarize. Planning never writes."
+
+trigger as capability:
+  may read workspace
+  may invoke ["file_read", "file_list", "file_search"]
+  family ["planning"]
+  keyword ["plan repair", "repair plan"]
+
+input workspace: "**/*"
+input prompt: user.request
+
+agent planner uses planner
+
+run planner:
+  may invoke ["file_read", "file_list", "file_search"]
+  from input.prompt
+  plan """Produce a concrete, ordered repair plan for the failing test described by the user. Ground every step in the real files and functions of this workspace. The user request is: {{ index . "task.instruction" }}"""
+  verify "Check that every step names a real file or function in stringkit and that the plan ends with running the test suite to confirm the repair."
+  summarize "Produce the final ordered repair plan, leading with the first step the user should take."
+  capture result -> state.plan

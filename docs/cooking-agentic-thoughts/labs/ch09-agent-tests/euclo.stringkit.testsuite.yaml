@@ -1,0 +1,79 @@
+apiVersion: relurpify/v1alpha1
+kind: AgentTestSuite
+metadata:
+  name: euclo.stringkit
+  description: "Stringkit regression suite: the slugify repair, pinned as a replayable case"
+  owner: stringkit-maintainer
+  tier: stable
+  quarantined: false
+spec:
+  agent_name: euclo
+  manifest: relurpify_cfg/agents/euclo.yaml
+  execution:
+    profile: record
+    strict: false
+    timeout: 300s
+  workspace:
+    strategy: derived
+    exclude:
+    - .book-scratch/**
+    - devdocs/**
+    - .relurpify_state/**
+    - coverage
+    - dev-agent-cli
+    - relurpish
+    - relurplint
+    - .git/**
+    - .gocache/**
+    - .gomodcache/**
+    - relurpify_cfg/test_runs/**
+  models:
+  - name: gemma4:e4b
+    endpoint: http://localhost:11434
+  cases:
+  - name: slugify_repair
+    description: "The Chapter 2 turn: fix the punctuated slugify, verify with the test suite"
+    task_type: code_modification
+    tags:
+    - stable
+    - level:1
+    timeout: 300s
+    setup:
+      files:
+      - path: stringkit.py
+        content: |
+          """stringkit — small string utilities, kept tiny on purpose."""
+
+          import re
+
+
+          def slugify(text: str) -> str:
+              """Turn a title into a URL-safe slug."""
+              slug = text.strip().lower()
+              slug = re.sub(r"\s+", "-", slug)
+              return slug
+      - path: test_stringkit.py
+        content: |
+          """Tests for stringkit."""
+
+          from stringkit import slugify
+
+
+          def test_slugify_strips_punctuation():
+              assert slugify("Hello, World!") == "hello-world"
+
+
+          def test_slugify_collapses_whitespace():
+              assert slugify("  many   spaces  ") == "many-spaces"
+    prompt: >
+      The slugify function is broken: it keeps punctuation.
+      test_slugify_strips_punctuation fails. Fix slugify and run the tests to verify.
+    expect:
+      outcome:
+        must_succeed: true
+        files_changed:
+        - stringkit.py
+        files_contain:
+        - path: stringkit.py
+          contains:
+          - "re.sub"

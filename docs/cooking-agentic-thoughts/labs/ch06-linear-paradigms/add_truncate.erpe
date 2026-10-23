@@ -1,0 +1,29 @@
+thoughtrecipe euclo.thoughtrecipe.add_truncate
+"Add a truncate function to stringkit, planned first, implemented and verified second."
+
+trigger as capability:
+  may read workspace
+  may write workspace
+  may invoke ["file_read", "file_list"]
+  family ["implementation"]
+  keyword ["truncate"]
+
+input workspace: "**/*"
+input prompt: user.request
+
+agent planner uses pipeline
+agent implementer uses pipeline
+
+pipeline:
+  stage plan:
+    run planner:
+      may invoke ["file_read", "file_list"]
+      from input.prompt
+      goal """Read stringkit.py and test_stringkit.py. State where a truncate(text, limit) function fits and which behaviors a test should assert. Do not write files. The user request is: {{ index . "task.instruction" }}"""
+      capture result -> state.plan
+  stage implement:
+    run implementer:
+      may invoke ["file_read", "file_write", "python_pytest"]
+      from state.plan
+      goal """Implement truncate(text, limit) in stringkit.py per the plan, add a test to test_stringkit.py, then run python_pytest on test_stringkit.py and report the real result. The plan is: {{ index . "state.plan" }}"""
+      capture result -> state.implementation

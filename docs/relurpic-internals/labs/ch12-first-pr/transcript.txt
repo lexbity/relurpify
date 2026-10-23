@@ -1,0 +1,78 @@
+ch12-first-pr — captured transcript
+===================================
+Captured on: Linux 6.18, go1.27.3 (satisfies the go1.27.2 toolchain pin)
+Pin: tag BETA-RC1-FALL2026 (pending); walkthrough branch based at commit
+1bc57c62029641dcc919c04a8076593794246409, in the scratch clone
+/tmp/ch12-clone (branch fix/grounding-dangling-doc-ref).
+Model backend: none. Sandbox: none.
+
+§1 — branch at the pin
+----------------------
+$ git clone <repo> /tmp/ch12-clone && cd /tmp/ch12-clone
+$ git checkout -b fix/grounding-dangling-doc-ref 1bc57c62
+
+§2 — the diff (grounding-ref-fix.diff; shown in Chapter 12 §12.6)
+-----------------------------------------------------------------
+ 3 lines changed in context/knowledge/grounding.go: the stale
+ "see devdocs/plans/bkc-bidirectional-context-and-hermetic-dryrun-
+ spec.md, Phase 3" pointer is dropped; the sentence stands alone.
+ Decision (per plan D8, made at writing time): delete, do not repoint —
+ devdocs/ is not part of the public clone, so a repointed reference
+ would dangle for every public reader.
+
+§3 — the gates, locally
+-----------------------
+$ go build ./context/...
+(clean)
+
+$ go test ./context/knowledge -run 'TestGround|CaptureKind' -count=1
+ok  	codeburg.org/lexbit/relurpify/context/knowledge	0.155s
+
+$ make envcheck
+[PASS] envcheck: no env access outside userconfig (1087 files scanned)
+
+§4 — the signed commit (signed-commit.log, verbatim)
+----------------------------------------------------
+commit e87307567790737d304dee0a2fae570f381b0537
+Author: prestin liu <lexbit@users.noreply.github.com>
+Date:   Fri Oct 23 14:12:50 2026 -0700
+
+    drop dangling design-doc reference in grounding comment
+
+    The referenced plan doc (bkc-bidirectional-context-and-hermetic-
+    dryrun-spec.md) no longer exists in the tree; the sentence stands
+    without the pointer. Repointing to devdocs/ would dangle for every
+    public reader, since devdocs/ is not part of the clone.
+
+    Gates: go build ./context/... clean; context/knowledge tests ok;
+    make envcheck PASS (1087 files).
+
+    Signed-off-by: prestin liu <lexbit@users.noreply.github.com>
+
+ context/knowledge/grounding.go | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+§5 — the second rung, executed (digest-prefix.diff)
+---------------------------------------------------
+NUL-delimit the three digest inputs (execution/compiler/compiler.go,
+compilationDigest):
+
+ 	h.Write([]byte(record.Request.Query.Text))
+-	_, _ = fmt.Fprintf(h, "%d", record.EventLogSeq)
++	_, _ = fmt.Fprintf(h, "\x00%d\x00", record.EventLogSeq)
+ 	for _, chunkID := range record.Dependencies {
++		h.Write([]byte("\x00"))
+ 		h.Write([]byte(chunkID))
+ 	}
+
+$ go test ./execution/compiler -count=1
+ok  	codeburg.org/lexbit/relurpify/execution/compiler	0.209s
+
+Full suite green — strict replay included, since replay compares
+digests computed by the same function on both sides.
+
+§6 — the PR body
+----------------
+pr-body.md in this lab directory — shaped by the checklist's last
+item: what, why, gates run, and known gaps named (pointing at the
+sibling pathway rather than silently bundling it).

@@ -1,0 +1,25 @@
+thoughtrecipe euclo.thoughtrecipe.polish_docstring
+"Review stringkit's docstrings against the code, then revise the weakest one."
+
+trigger as capability:
+  may read workspace
+  may write workspace
+  may invoke ["file_read", "file_list"]
+  family ["refactor"]
+  keyword ["docstring"]
+
+input workspace: "**/*"
+input prompt: user.request
+
+agent reviewer uses reflection
+agent fixer uses react
+
+run reviewer:
+  may invoke ["file_read", "file_write", "python_pytest"]
+  from input.prompt
+  review """Read stringkit.py and test_stringkit.py. Judge whether every public function's docstring matches its actual behavior. Write a verdict listing any docstring that is wrong, stale, or missing. The user request is: {{ index . "task.instruction" }}"""
+  revise when scratch.review contains issues:
+    run fixer:
+      may invoke ["file_read", "file_write", "python_pytest"]
+      goal """Fix the docstring issues named in the review verdict, changing only docstrings and comments. Then run python_pytest on test_stringkit.py and report the real result. The verdict is: {{ index . "scratch.review" }}"""
+      capture result -> state.revision

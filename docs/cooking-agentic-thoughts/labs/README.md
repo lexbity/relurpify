@@ -16,7 +16,15 @@ listing; Appendix D is generated from it.
   and both route-selection receipts (pinned vs lattice).
 - `ch05-triage/` — the full-toolkit triage recipe, the zero-model
   gate_demo recipe, the captured linter errors, and the frame finding.
-- Later chapters add one folder each (`ch06-linear-paradigms/`, …) containing
+- `ch06-linear-paradigms/` — the three linear-paradigm recipes, the
+  three-layer validation story, and the contract pointers.
+- `ch07-planning-paradigms/` — the planning-family recipes, the captured
+  governance catch, and the `llm_calls` counter flag.
+- `ch08-prompts/` — the edited react system prompt, the resolution receipt
+  shape, and the two flagged doc-vs-build deltas.
+- `ch09-agent-tests/` — the stringkit regression suite, the red capture
+  with its OSB receipt chain, and the three infra gotchas.
+- Later chapters add one folder each (`ch10-house-style/`, …) containing
   the DSL and config artifacts at that chapter's end state.
 - `verify.sh` — the tiered verifier. See below.
 

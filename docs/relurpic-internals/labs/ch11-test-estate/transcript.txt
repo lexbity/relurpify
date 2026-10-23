@@ -1,0 +1,87 @@
+ch11-test-estate — captured transcript
+======================================
+Captured on: Linux 6.18, go1.27.3 (satisfies the go1.27.2 toolchain pin)
+Pin: tag BETA-RC1-FALL2026 (pending); captured at commit
+1bc57c62029641dcc919c04a8076593794246409
+Model backend: Ollama serving gemma4:e4b (this chapter's lab is the
+book's first model-dependent lab).
+Note: the lab suite lives in two places — as the discovery-visible
+fixture `testsuite/agenttests/euclo.stringkit.osb.testsuite.yaml`
+(untracked, book-owned) and as a copy in this lab directory.
+
+§1 — author the suite (all three OSB kinds)
+-------------------------------------------
+Fixture: euclo.stringkit.osb.testsuite.yaml — tier smoke, profile
+record, one read-only case over the Book 1 stringkit fixture with:
+  outcome:   must_succeed + no_file_changes (+ euclo mode: chat)
+  security:  tools_must_not_call [file_write]
+  benchmark: max_tool_calls_hint 6 · tools_expected [file_read] ·
+             tools_not_expected [file_write, go_test]
+
+Discovery lesson (learned live): the same file outside
+testsuite/agenttests/ never matches — "no testsuites matched the
+requested filters" (agenttest_cmd.go:105-127). And `--profile record`
+against a suite declaring `live` does not override; it filters
+(suite.go:701-709) — the suite must declare the profile.
+
+§2 — the live run: 1/1 passed, governance visible
+-------------------------------------------------
+$ dev-agent agenttest run \
+    --suite testsuite/agenttests/euclo.stringkit.osb.testsuite.yaml \
+    --profile record --out /tmp/ch11-run
+2026/10/23 13:54:33 tool admission warning: skipping unlisted tool "query_ast"
+2026/10/23 13:54:36 sandbox.denied{tool="" action="fs:list" path_hash=a3cf4870… reason="protected path: …/setup/workspace/relurpify_cfg (root: …)"}
+euclo.stringkit.osb.testsuite.yaml [record]: 1/1 passed (0 infra, 0 assertion)
+
+A real governed turn (gemma4:e4b), graded by three assertion kinds —
+with Chapter 5's admission warning and Chapter 6's protected-path
+fence visible in the log.
+
+§2b — the OSB benchmark summary: advisory, recorded, two-grade
+--------------------------------------------------------------
+$ jq -r '.osb_benchmark' /tmp/ch11-run/report.json
+{
+  "total_observations": 4,
+  "matched_observations": 3,
+  "match_rate": 0.75,
+  "by_field": {
+    "max_tool_calls_hint":  {"total": 1, "matched": 1},
+    "tools_expected":       {"total": 1, "matched": 0},
+    "tools_not_expected":   {"total": 2, "matched": 2}
+  }
+}
+
+`tools_expected: file_read` matched 0/1 — the prompt's context already
+carried the file, so the agent never read it. The miss is *recorded*
+and the case still passes: that is the advisory side of the benchmark
+kind. A threshold breach (`max_tool_calls_hint`) would have failed it
+(runner.go:698-705) — the two-grade reality of §11.3, live.
+
+§3 — promote, and meet the gap
+------------------------------
+$ dev-agent agenttest promote --run /tmp/ch11-run --all \
+    --suite testsuite/agenttests/euclo.stringkit.osb.testsuite.yaml
+case "stringkit_osb_read" tape invalid: open
+  …/execution/artifacts/tape.jsonl: no such file or directory
+
+The record run wrote no tape. Verified at the site: `llm.New` applies
+`TapePath` only for the `tape` kind, and only for replay
+(platform/llm/factory.go:57-62; providers_tape.go:29) — no recorder
+wraps provider backends at the pin. Wiring the recorder into the
+provider kinds is the chapter's first-PR candidate (§11.4).
+
+§4 — the replay half, verified
+------------------------------
+$ make test-tape-fidelity
+ok  	codeburg.org/lexbit/relurpify/testsuite/agenttest/tapes	0.005s
+
+$ make test-conformance
+ok  	codeburg.org/lexbit/relurpify/testsuite/conformance	1.020s
+
+$ make test-euclo-golden
+--- PASS: TestGoldenTraceFailsOnMutation (0.01s)
+PASS
+ok  	codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes	0.241s
+
+Replay (committed lineage corpus), conformance, and the golden
+mutation test all hold at the pin. Recording is the open seam.

@@ -1,0 +1,29 @@
+thoughtrecipe euclo.thoughtrecipe.summarize_funcs
+"Summarize stringkit in three ordered links: inventory, per-function behavior, test coverage."
+
+trigger as capability:
+  may read workspace
+  may invoke ["file_read", "file_list"]
+  family ["investigation"]
+  keyword ["summarize"]
+
+input workspace: "**/*"
+input prompt: user.request
+
+agent surveyor uses chainer
+
+run surveyor:
+  may invoke ["file_read", "file_list"]
+  from input.prompt
+  link:
+    from input.prompt
+    prompt "You are a precise code surveyor. List every public function in the Python module named in the user content, each with a one-line purpose. Output a plain list."
+    capture result -> state.inventory
+  link:
+    from state.inventory
+    prompt "You are a precise code analyst. For each function in the inventory given in the user content, describe its behavior in one sentence and name the input class it handles (plain text, whitespace-heavy, punctuated). Output the list."
+    capture result -> state.behaviors
+  link:
+    from state.behaviors
+    prompt "You are a test-coverage reviewer. The user content lists behaviors of a string module. For each behavior, state whether it is likely covered by a test suite that focuses on slugify punctuation and whitespace handling, and name the gap if not. Output the list."
+    capture result -> state.coverage

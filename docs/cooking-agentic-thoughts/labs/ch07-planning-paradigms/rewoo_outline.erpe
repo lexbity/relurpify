@@ -1,0 +1,20 @@
+thoughtrecipe euclo.thoughtrecipe.rewoo_outline
+"Plan the investigation steps up front, execute nothing, synthesize the outline. ReWOO separates planning from observation."
+
+trigger as capability:
+  may read workspace
+  may invoke ["file_read", "file_list"]
+  family ["investigation"]
+  keyword ["rewoo", "outline"]
+
+input workspace: "**/*"
+input prompt: user.request
+
+agent rewooer uses rewoo
+
+run rewooer:
+  may invoke ["file_read", "file_list"]
+  from input.prompt
+  plan """For the user's request, list the tool calls an investigator should make, in order, with each step depending only on earlier results. The user request is: {{ index . "task.instruction" }}"""
+  synthesize "Turn the plan and any step results into a concise investigation outline for the user."
+  capture result -> state.outline

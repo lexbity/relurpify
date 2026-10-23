@@ -1,0 +1,15 @@
+commit e87307567790737d304dee0a2fae570f381b0537
+Author: prestin liu <lexbit@users.noreply.github.com>
+Commit: prestin liu <lexbit@users.noreply.github.com>
+
+    drop dangling design-doc reference in grounding comment
+    
+    The referenced plan doc (bkc-bidirectional-context-and-hermetic-
+    dryrun-spec.md) no longer exists in the tree; the sentence stands
+    without the pointer. Repointing to devdocs/ would dangle for every
+    public reader, since devdocs/ is not part of the clone.
+    
+    Gates: go build ./context/... clean; context/knowledge tests ok;
+    make envcheck PASS (1087 files).
+    
+    Signed-off-by: prestin liu <lexbit@users.noreply.github.com>
