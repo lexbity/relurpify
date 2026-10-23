@@ -466,18 +466,18 @@ The TUI's first screen is the same report the doctor prints, rendered live
 — the same checks, the same severities, now with `r` (refresh), `h` (heal),
 and `p` (models) in the footer.
 
-> **Warning — flag to the author** On the verification machine, this gate
-> held chat locked on the Doctor pane even though the CLI doctor reported
-> `Result: ready`: the runner row stayed `MISSING` and the lock persisted
-> across refresh and heal attempts in captured runs. Reading the source,
-> the gate unlocks when a *refreshed* doctor report arrives healthy — and
-> two spots look unimplemented rather than intentional (a `manifest`
-> status field that is declared and read but never assigned; an empty
-> report returned when the runtime handle is not yet wired). If your boot
-> unlocks after a refresh or a heal, tell the author which key cleared it —
-> that line goes in this chapter; if it stays locked, Chapter 2's receipts
-> will be captured the moment this resolves.
-> `[NEEDS CONFIRMATION: exact TUI unlock behavior at BETA-RC1-FALL2026]`
+> **Note — a capture-harness postscript.** An earlier draft of this chapter
+> carried a warning here: on the author's capture harness, this gate
+> appeared to hold chat locked even with the CLI doctor reporting ready.
+> Root cause found: the harness drove relurpish through a terminal pseudo-
+> device with a broken window size — every locked capture also showed
+> `Terminal too narrow`. Given a real terminal (or a correctly sized
+> pseudo-terminal), the gate opens onto the Postures banner immediately,
+> and Chapter 2's turns were captured that way. One quirk in the pane
+> above is real but cosmetic: the `manifest missing` line reads from a
+> status field that the doctor report never fills in, so it displays
+> "missing" regardless of workspace health — it does not gate readiness.
+> Worth a bug report when you feel at home; the door itself works.
 
 Meanwhile you have lost nothing: the CLI doctor is this chapter's oracle,
 it says ready, and everything Chapter 2 needs — a materialized, governed,
