@@ -14,19 +14,18 @@
 
 ## Why Relurpify?
 
-Own the tools that you creatively build with.
+Own the tools you creatively build with.
 
-Not trust a black box, not rent them from a platform, not hand your
-workspace to something you cannot inspect, cannot stop, and cannot
-understand. 
+No black box, no surrendering your workspace to something you cannot inspect, cannot stop, and cannot understand. 
 
 Originally built as an Generative AI experiment - I wanted to build a 
 platform so that others on their own workstation
  build smart, deterministic, automated tools that is **theirs** ;
 safe, governed, and fully under their control.
 
-No strings attached - it's Apache 2 licensed. 
+No strings attached - it's Apache 2 licensed.
 No telemetry phoning home - OpenTelementry supported. 
+No vendor lock-in - local models through or Ollama or OpenAI/v1 endpoints supported. 
 No opaque model calls you cannot see, cannot replay, and cannot pin. 
 
 Just you, your machine, and

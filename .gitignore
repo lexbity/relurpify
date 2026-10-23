@@ -60,3 +60,4 @@ tui-stderr.log
 !capability/sandbox/testdata/
 !capability/sandbox/testdata/fake-docker/
 !capability/sandbox/testdata/fake-docker/docker
+.book-scratch/

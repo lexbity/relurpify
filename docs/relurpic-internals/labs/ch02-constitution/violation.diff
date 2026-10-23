@@ -1,0 +1,16 @@
+diff --git a/model/runtime.go b/model/runtime.go
+index db06b31e..d9bc189a 100644
+--- a/model/runtime.go
++++ b/model/runtime.go
+@@ -2,6 +2,11 @@ package model
+ 
+ import "context"
+ 
++import "os"
++
++// lab violation: one deliberate environment read
++var labViolation = os.Getenv("HOME")
++
+ // ModelBackend is the narrow model backend surface consumed by execution
+ // and workspace session code. Each backend wraps a LanguageModel with
+ // lifecycle and debug controls.

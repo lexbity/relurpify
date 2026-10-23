@@ -1,0 +1,65 @@
+ch01-repo-map — captured transcript
+===================================
+Captured on: Linux 6.18, go version go1.27.3-X:nodwarf5 linux/amd64
+(satisfies the go1.27.2 toolchain pin, go.mod:5)
+Pin: tag BETA-RC1-FALL2026 (pending); captured at commit
+1bc57c62029641dcc919c04a8076593794246409
+Model backend: none used.
+
+§1 — environment
+----------------
+$ go version
+go version go1.27.3-X:nodwarf5 linux/amd64
+
+$ git rev-parse HEAD
+1bc57c62029641dcc919c04a8076593794246409
+
+§2 — build everything
+---------------------
+$ go build ./...
+(no output)
+
+$ echo "build exit: $?"
+build exit: 0
+
+$ go list ./... | wc -l
+165
+
+§3 — unit suite
+---------------
+$ make test-unit
+GOPROXY=off GOSUMDB=off GOCACHE=/tmp/relurpify-go-cache GOTMPDIR=/tmp/relurpify-go-tmp go run ./app/relurplint --check all
+relurplint: all checks passed (0 diagnostics)
+GOPROXY=off GOSUMDB=off GOCACHE=/tmp/relurpify-go-cache GOTMPDIR=/tmp/relurpify-go-tmp go test ./... -count=1 -timeout 60s
+ok  	codeburg.org/lexbit/relurpify/app/envcomposition	4.430s
+ok  	codeburg.org/lexbit/relurpify/app/relurpish	6.342s
+ok  	codeburg.org/lexbit/relurpify/app/relurpish/e2e	25.698s
+ok  	codeburg.org/lexbit/relurpify/app/relurpish/euclotui	0.087s
+?   	codeburg.org/lexbit/relurpify/app/relurpish/relurpifyenvtui	[no test files]
+    [… 150 further ok lines — 152 `ok` packages in total, 0 failures …]
+ok  	codeburg.org/lexbit/relurpify/userconfig/templates/cmd/generate-config	0.035s
+ok  	codeburg.org/lexbit/relurpify/userconfig/templates/embedfs	0.014s
+ok  	codeburg.org/lexbit/relurpify/userconfig/tools/manifest	0.005s
+
+exit code: 0
+summary: 152 ok / 0 FAIL / timings machine-specific (do not diff)
+
+§4 — the map checks itself
+--------------------------
+$ make domain-check
+[PASS] domain-direction: no violations
+[PASS] All domain checks passed
+
+$ make domain-cycles
+[FAIL] domain-cycles: 1 violation(s)
+  capability ↔ platform: 1→30 (platform→capability)
+[PASS] All domain checks passed
+
+Note: [FAIL] here is the warn-mode reporter naming the known mutual pair;
+the command exits 0 (see Makefile:90-94). The direction check above is the
+gating one.
+
+§5 — the config split
+---------------------
+$ make check-config-tree-drift
+[PASS] relurpify_cfg/ matches embedded templates

@@ -1,0 +1,25 @@
+============================= test session starts ==============================
+platform linux -- Python 3.14.8, pytest-9.1.1, pluggy-1.7.0
+Using --randomly-seed=1418518256
+rootdir: /home/lex/Public/relurpify/.book-scratch/stringkit
+plugins: anyio-4.15.1, platformdirs-4.13.5, randomly-5.0.0, timeout-2.4.0, asyncio-1.4.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 2 items
+
+test_stringkit.py F.                                                     [100%]
+
+=================================== FAILURES ===================================
+_______________________ test_slugify_strips_punctuation ________________________
+
+    def test_slugify_strips_punctuation():
+>       assert slugify("Hello, World!") == "hello-world"
+E       AssertionError: assert 'hello,-world!' == 'hello-world'
+E         
+E         - hello-world
+E         + hello,-world!
+E         ?      +      +
+
+test_stringkit.py:11: AssertionError
+=========================== short test summary info ============================
+FAILED test_stringkit.py::test_slugify_strips_punctuation - AssertionError: a...
+========================= 1 failed, 1 passed in 0.03s ==========================

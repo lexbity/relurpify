@@ -1,0 +1,67 @@
+ch02-constitution — captured transcript
+=======================================
+Captured on: Linux 6.18, go1.27.3 (satisfies the go1.27.2 toolchain pin)
+Pin: tag BETA-RC1-FALL2026 (pending); captured at commit
+1bc57c62029641dcc919c04a8076593794246409
+Model backend: none used.
+
+§1 — baseline: the constitution holds
+-------------------------------------
+$ make lint-arch
+    [… AST gate output truncated to the tail; full run is verbose …]
+[PASS] stub: no violations
+[PASS] All architecture gates passed
+[PASS] domain-direction: no violations
+[PASS] All domain checks passed
+[PASS] governance-no-orchestration: no violations
+[PASS] All domain checks passed
+[PASS] context-ports: no violations
+[PASS] All domain checks passed
+
+exit code: 0
+
+$ make check-gates-honest
+[PASS] check-gates-honest: all gate patterns and AST gates present
+
+§2 — apply the violation
+------------------------
+$ git apply violation.diff
+(no output; model/runtime.go now reads the environment in one place)
+
+§3 — layer one: the AST gate
+----------------------------
+$ make envcheck; echo "exit=$?"
+GOPROXY=off GOSUMDB=off go run ./tooling/arch/cmd/envcheck
+  [FAIL] env: model/runtime.go:8 reads the process environment via os.Getenv
+[FAIL] envcheck: 1 env access violation(s) outside userconfig
+exit status 1
+make: *** [Makefile:123: envcheck] Error 1
+exit=2
+
+Note the verdict: file, line, and the semantic reason (a selector that
+resolves to the os package) — not a text match. An aliased import would
+produce the same verdict.
+
+§4 — layer two: the grep fence
+------------------------------
+$ make grep-architecture-gates
+[PASS] check-contract-dissolution: manifest spine removed
+[FAIL] grep-architecture-gates: direct env access remains outside userconfig
+./model/runtime.go:8:var labViolation = os.Getenv("HOME")
+make: *** [Makefile:266: grep-architecture-gates] Error 1
+
+Note the different fingerprint: the fence quotes the raw line. The two
+layers fail the same violation in two structurally different ways; the
+gates cross-check each other (tooling/arch is grep-exempt for the env
+fence because the AST gate's own source names os.Getenv in comments —
+Makefile:263-268).
+
+§5 — revert
+-----------
+$ git checkout -- model/runtime.go
+$ git status --porcelain model/
+(empty)
+
+$ make envcheck
+GOPROXY=off GOSUMDB=off go run ./tooling/arch/cmd/envcheck
+[PASS] envcheck: no env access outside userconfig (1087 files scanned)
