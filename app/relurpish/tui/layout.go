@@ -7,6 +7,7 @@ import (
 	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/ansi"
 )
 
 const (
@@ -122,19 +123,10 @@ func renderAgentCell(th *theme.Theme, agent string, width int) string {
 }
 
 func clipText(value string, width int) string {
-	if width < chromeMinCellWidth {
+	if width < 1 {
 		return ""
 	}
-	if strings.TrimSpace(value) == "" {
-		return ""
-	}
-	if len(value) <= width {
-		return value
-	}
-	if width <= 3 {
-		return value[:width]
-	}
-	return value[:width-3] + "..."
+	return ansi.Truncate(value, width, "…")
 }
 
 // SubTabBar renders the subtab row for the currently active main tab.
@@ -148,7 +140,7 @@ type SubTabBar struct {
 
 // NewSubTabBar creates a SubTabBar from a tab definition.
 func NewSubTabBar(def TabDefinition) SubTabBar {
-	active := ""
+	var active SubTabID
 	if len(def.SubTabs) > 0 {
 		active = def.SubTabs[0].ID
 	}
@@ -228,7 +220,7 @@ func (m RootModel) handleResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 		m.notifBar.SetWidth(msg.Width)
 	}
 	if m.inputBar != nil {
-		m.inputBar.SetWidth(m.layout.Region3Width())
+		m.inputBar.SetWidth(msg.Width)
 	}
 	if m.activeInput != nil {
 		m.activeInput.SetSize(m.layout.Region3Width(), 1)

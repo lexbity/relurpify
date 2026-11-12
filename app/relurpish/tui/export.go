@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -9,13 +8,8 @@ import (
 	"strings"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
-
-	runtimesvc "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
 	"codeburg.org/lexbit/relurpify/capability/fs"
 	"codeburg.org/lexbit/relurpify/capability/runtime"
-	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
-	"codeburg.org/lexbit/relurpify/platform/llm"
 	"codeburg.org/lexbit/relurpify/telemetry"
 	"codeburg.org/lexbit/relurpify/telemetry/otelleg"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
@@ -292,7 +286,10 @@ func sanitizeMessagesForExport(messages []Message) []Message {
 	for _, message := range messages {
 		clone := message
 		clone.Content.Text = redactExportString(clone.Content.Text)
+		clone.Content.Thinking = append([]ThinkingStep(nil), message.Content.Thinking...)
+		clone.Content.Changes = append([]FileChange(nil), message.Content.Changes...)
 		for i := range clone.Content.Thinking {
+			clone.Content.Thinking[i].Details = append([]string(nil), message.Content.Thinking[i].Details...)
 			clone.Content.Thinking[i].Description = redactExportString(clone.Content.Thinking[i].Description)
 			for j := range clone.Content.Thinking[i].Details {
 				clone.Content.Thinking[i].Details[j] = redactExportString(clone.Content.Thinking[i].Details[j])
@@ -312,85 +309,4 @@ func redactExportString(value string) string {
 		return value
 	}
 	return redacted
-}
-
-// NewTestRootModel exposes the internal newRootModel constructor for integration and golden view testing in the testsuite package.
-func NewTestRootModel(rt RuntimeAdapter, factory SurfaceFactory) RootModel {
-	return newRootModel(context.Background(), rt, factory)
-}
-
-// NewRuntimeAdapter exposes the internal newRuntimeAdapter constructor for test use.
-func NewRuntimeAdapter(rt *runtimesvc.Runtime) RuntimeAdapter {
-	return newRuntimeAdapter(rt)
-}
-
-// SetActiveTabForTest sets the active tab on RootModel for testing purposes.
-func (m *RootModel) SetActiveTabForTest(id TabID) {
-	m.setActiveTab(id)
-}
-
-// SetWidthHeightForTest updates the dimensions on RootModel and propagates resizing.
-func (m *RootModel) SetWidthHeightForTest(w, h int) {
-	updated, _ := m.handleResize(tea.WindowSizeMsg{Width: w, Height: h})
-	if rm, ok := updated.(RootModel); ok {
-		*m = rm
-	}
-}
-
-// OpenInteractionGuidanceForTest exposes the internal openInteractionGuidance method to simulate a HITL row for golden view tests.
-func (m *RootModel) OpenInteractionGuidanceForTest(notificationID string, frame interaction.InteractionFrame) {
-	m.openInteractionGuidance(notificationID, frame)
-}
-
-// SetAIProviderModelsForTest sets the models list on AIProviderPane for deterministic golden tests.
-func SetAIProviderModelsForTest(p *AIProviderPane, models []llm.ModelInfo) {
-	p.models = models
-}
-
-// SetAIProviderStatusForTest sets the status string on AIProviderPane.
-func SetAIProviderStatusForTest(p *AIProviderPane, status string) {
-	p.status = status
-}
-
-// ActiveAgentNameForTest returns the active agent name.
-func (m RootModel) ActiveAgentNameForTest() string {
-	return m.activeAgentName()
-}
-
-// SetFocusRegion1ForTest sets focus to Region 1 for testing.
-func (m *RootModel) SetFocusRegion1ForTest() {
-	m.setFocus(FocusRegionRegion1)
-}
-
-// SetFocusInputForTest sets focus to Region 3 (Input Bar) for testing.
-func (m *RootModel) SetFocusInputForTest() {
-	m.setFocus(FocusRegionInput)
-}
-
-// IsFocusInRegion1ForTest returns true if focus is in Region 1.
-func (m RootModel) IsFocusInRegion1ForTest() bool {
-	return m.focus.State().InRegion1()
-}
-
-// IsFocusInInputForTest returns true if focus is in Region 3 (Input Bar).
-func (m RootModel) IsFocusInInputForTest() bool {
-	return m.focus.State().InInput()
-}
-
-// InputBarValueForTest returns the current value inside the universal input bar.
-func (m RootModel) InputBarValueForTest() string {
-	if m.inputBar != nil {
-		return m.inputBar.Value()
-	}
-	return ""
-}
-
-// OverlaysForTest returns the internal overlays stack.
-func (m RootModel) OverlaysForTest() *OverlayStack {
-	return m.overlays
-}
-
-// SwitchActiveAgentForTest switches the active agent on RootModel for testing purposes.
-func (m *RootModel) SwitchActiveAgentForTest(agentName string) error {
-	return m.switchActiveAgent(agentName)
 }

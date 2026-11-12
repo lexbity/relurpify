@@ -1,6 +1,7 @@
 package tui
 
 import (
+	runtimesvc "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
 	"context"
 	"fmt"
 	"os"
@@ -28,42 +29,32 @@ const (
 	doctorSectionLogs
 )
 
-type doctorProgressMsg struct {
-	Action   doctorAction
-	Progress float64
-}
-
 type doctorStatusMsg struct {
 	Action  doctorAction
-	Report  DoctorReport
+	Report  runtimesvc.DoctorReport
 	Message string
 	Err     error
 }
 
 type DoctorPane struct {
-	runtime  RuntimeAdapter
-	report   DoctorReport
-	section  doctorSection
-	filter   string
-	working  bool
-	action   doctorAction
-	progress float64
-	status   string
-	width    int
-	height   int
+	runtime RuntimeAdapter
+	report  runtimesvc.DoctorReport
+	section doctorSection
+	filter  string
+	working bool
+	action  doctorAction
+	status  string
+	width   int
+	height  int
 	// Theme is the active semantic style source.
 	th *theme.Theme
-	// anim is the host animation manager, set by the model via SetAnimManager.
-	anim *AnimationManager
-	// bar is a determinate progress indicator for operations with a known total.
-	bar *ProgressBar
 }
 
 // Report returns the current doctor report.
-func (p *DoctorPane) Report() DoctorReport { return p.report }
+func (p *DoctorPane) Report() runtimesvc.DoctorReport { return p.report }
 
 // SetReport replaces the current doctor report.
-func (p *DoctorPane) SetReport(report DoctorReport) { p.report = report }
+func (p *DoctorPane) SetReport(report runtimesvc.DoctorReport) { p.report = report }
 
 // SetStatus overrides the visible doctor status line.
 func (p *DoctorPane) SetStatus(status string) { p.status = status }
@@ -72,7 +63,6 @@ func NewDoctorPane(rt RuntimeAdapter) *DoctorPane {
 	p := &DoctorPane{
 		th:      theme.Default(),
 		runtime: rt,
-		bar:     NewProgressBar(),
 	}
 	p.Refresh()
 	return p
@@ -89,7 +79,7 @@ func (p *DoctorPane) SetFilter(filter string) {
 
 func (p *DoctorPane) Refresh() {
 	if p.runtime == nil {
-		p.report = DoctorReport{}
+		p.report = runtimesvc.DoctorReport{}
 		return
 	}
 	p.report = p.runtime.BuildDoctorReport(context.Background())
@@ -97,16 +87,9 @@ func (p *DoctorPane) Refresh() {
 
 func (p *DoctorPane) Update(msg tea.Msg) (*DoctorPane, tea.Cmd) {
 	switch msg := msg.(type) {
-	case doctorProgressMsg:
-		if p.working && msg.Action == p.action {
-			p.progress = min(0.95, p.progress+0.12)
-			return p, p.progressCmd()
-		}
-		return p, nil
 	case doctorStatusMsg:
 		if msg.Action != "" && msg.Action == p.action {
 			p.working = false
-			p.progress = 1
 		}
 		if msg.Err != nil {
 			p.status = fmt.Sprintf("%s failed: %v", msg.Action, msg.Err)
@@ -260,11 +243,7 @@ func (p *DoctorPane) viewLogs() string {
 func (p *DoctorPane) footerLine() string {
 	footer := p.th.Dim().Render("tab checks/templates/logs  r refresh  h heal  p models")
 	if p.working {
-		barView := renderPercentBar(p.progress, 18)
-		if p.bar != nil && !p.bar.Done() {
-			barView = p.bar.View()
-		}
-		footer = p.th.Dim().Render(fmt.Sprintf("%s  %s", p.action, barView))
+		footer = p.th.Dim().Render(fmt.Sprintf("%s · waiting for observed result", p.action))
 	}
 	if p.status != "" {
 		footer = p.th.Dim().Render(p.status) + "\n" + footer
@@ -291,12 +270,8 @@ func (p *DoctorPane) runAsync(action doctorAction) tea.Cmd {
 	}
 	p.working = true
 	p.action = action
-	p.progress = 0
 	p.status = ""
-	if p.bar != nil {
-		p.bar.SetTarget(1)
-	}
-	return tea.Batch(p.progressCmd(), func() tea.Msg {
+	return func() tea.Msg {
 		ctx := context.Background()
 		switch action {
 		case doctorActionRefresh:
@@ -343,34 +318,12 @@ func (p *DoctorPane) runAsync(action doctorAction) tea.Cmd {
 		default:
 			return doctorStatusMsg{Action: action, Err: fmt.Errorf("unknown doctor action %q", action)}
 		}
-	})
-}
-
-func (p *DoctorPane) progressCmd() tea.Cmd {
-	return tea.Tick(120*time.Millisecond, func(time.Time) tea.Msg {
-		return doctorProgressMsg{Action: p.action, Progress: p.progress}
-	})
+	}
 }
 
 // SetTheme sets the active semantic style source.
 func (p *DoctorPane) SetTheme(th *theme.Theme) {
 	if th != nil {
 		p.th = th
-	}
-}
-
-// SetAnimManager links the host animation manager and wires it to the
-// progress bar so determinate animations consume the shared tick budget.
-func (p *DoctorPane) SetAnimManager(m *AnimationManager) {
-	p.anim = m
-	if p.bar != nil {
-		p.bar.SetAnimManager(m)
-	}
-}
-
-// SetReduceMotion passes the reduce-motion detector to internal components.
-func (p *DoctorPane) SetReduceMotion(r *ReduceMotion) {
-	if p.bar != nil {
-		p.bar.SetReduceMotion(r)
 	}
 }

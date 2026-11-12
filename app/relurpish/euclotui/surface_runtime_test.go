@@ -1,6 +1,7 @@
 package euclotui
 
 import (
+	runtimesvc "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
 	"context"
 	"strings"
 	"testing"
@@ -90,8 +91,8 @@ func (s *stubRuntimeAdapter) InvokeCapability(context.Context, string, map[strin
 	return nil, nil
 }
 func (s *stubRuntimeAdapter) Diagnostics() tui.DiagnosticsInfo { return tui.DiagnosticsInfo{} }
-func (s *stubRuntimeAdapter) BuildDoctorReport(context.Context) tui.DoctorReport {
-	return tui.DoctorReport{}
+func (s *stubRuntimeAdapter) BuildDoctorReport(context.Context) runtimesvc.DoctorReport {
+	return runtimesvc.DoctorReport{}
 }
 func (s *stubRuntimeAdapter) ReloadWorkspace(context.Context, string) error { return nil }
 func (s *stubRuntimeAdapter) InitializeWorkspaceFromTemplates(bool) error   { return nil }

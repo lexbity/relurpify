@@ -14,6 +14,19 @@ import (
 // exportTelemetryDir is the telemetry segment directory rendered into the export.
 const exportTelemetryDir = "telemetry/otlp"
 
+func TestExportDoesNotShareMutableMessageContent(t *testing.T) {
+	messages := []Message{{Content: MessageContent{
+		Thinking: []ThinkingStep{{Details: []string{"original detail"}}},
+		Changes:  []FileChange{{Diff: "original diff"}},
+	}}}
+	exported := sanitizeMessagesForExport(messages)
+	exported[0].Content.Thinking[0].Details[0] = "changed"
+	exported[0].Content.Changes[0].Diff = "changed"
+	if messages[0].Content.Thinking[0].Details[0] != "original detail" || messages[0].Content.Changes[0].Diff != "original diff" {
+		t.Fatal("export shares mutable content with the live transcript")
+	}
+}
+
 func TestWriteMarkdownExportTelemetrySections(t *testing.T) {
 	tests := []struct {
 		name      string

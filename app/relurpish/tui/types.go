@@ -1,6 +1,7 @@
 package tui
 
 import (
+	runtimesvc "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
 	"time"
 )
 
@@ -26,7 +27,7 @@ const (
 
 // SubTabID identifies a subtab within a main tab. Alias so string literals are
 // accepted without casting in switch statements.
-type SubTabID = string
+type SubTabID string
 
 // Surface subtab IDs used by the chat surface.
 const (
@@ -297,7 +298,7 @@ type DoctorProgressMsg struct {
 // DoctorStatusMsg reports the final state of a doctor action.
 type DoctorStatusMsg struct {
 	Action  string
-	Report  DoctorReport
+	Report  runtimesvc.DoctorReport
 	Message string
 	Err     error
 }

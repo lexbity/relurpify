@@ -17,6 +17,12 @@ import (
 	"codeburg.org/lexbit/relurpify/userconfig/config/model"
 )
 
+// ProviderModelsLoadedMsg delivers a provider catalog query result.
+type ProviderModelsLoadedMsg struct {
+	Models []llm.ModelInfo
+	Err    error
+}
+
 type aiProviderRuntime interface {
 	SessionInfo() SessionInfo
 	ReloadWorkspace(context.Context, string) error
@@ -88,6 +94,19 @@ func (p *AIProviderPane) Refresh() {
 }
 
 func (p *AIProviderPane) Update(msg tea.Msg) (*AIProviderPane, tea.Cmd) {
+	if result, ok := msg.(ProviderModelsLoadedMsg); ok {
+		if result.Err != nil {
+			p.models = nil
+			p.status = fmt.Sprintf("model list failed: %v", result.Err)
+			return p, nil
+		}
+		p.models = append([]llm.ModelInfo(nil), result.Models...)
+		if p.profile.Model == "" && len(p.models) > 0 {
+			p.profile.Model = p.models[0].Name
+		}
+		p.status = fmt.Sprintf("loaded %d models", len(p.models))
+		return p, nil
+	}
 	if msg, ok := msg.(tea.KeyMsg); ok {
 		if p.editing {
 			switch msg.String() {
@@ -264,11 +283,7 @@ func (p *AIProviderPane) refreshModels() {
 		p.models = nil
 		return
 	}
-	p.models = models
-	if p.profile.Model == "" && len(models) > 0 {
-		p.profile.Model = models[0].Name
-	}
-	p.status = fmt.Sprintf("loaded %d models", len(models))
+	_, _ = p.Update(ProviderModelsLoadedMsg{Models: models})
 }
 
 // cycleProvider switches to the next or previous catalog provider.
@@ -349,24 +364,24 @@ func (p *AIProviderPane) saveProviderCmd() tea.Cmd {
 	}
 	return func() tea.Msg {
 		if workspace == "" {
-			return chatSystemMsg{Text: "provider save failed: workspace unavailable"}
+			return ChatSystemMsg{Text: "provider save failed: workspace unavailable"}
 		}
 		path := config.New(workspace).RuntimeProvidersFile()
 		profile.LastUpdated = time.Now().Unix()
 		backup, err := config.SaveRuntimeProviderConfigWithBackup(path, profile)
 		if err != nil {
-			return chatSystemMsg{Text: fmt.Sprintf("provider save failed: %v", err)}
+			return ChatSystemMsg{Text: fmt.Sprintf("provider save failed: %v", err)}
 		}
 		if p.runtime != nil {
 			if reloader, ok := p.runtime.(interface {
 				ReloadWorkspace(context.Context, string) error
 			}); ok && reloader != nil {
 				if err := reloader.ReloadWorkspace(context.Background(), workspace); err != nil {
-					return chatSystemMsg{Text: fmt.Sprintf("provider save failed after reload: %v", err)}
+					return ChatSystemMsg{Text: fmt.Sprintf("provider save failed after reload: %v", err)}
 				}
 			}
 		}
-		return chatSystemMsg{Text: fmt.Sprintf("provider saved (backup: %s)", backup)}
+		return ChatSystemMsg{Text: fmt.Sprintf("provider saved (backup: %s)", backup)}
 	}
 }
 
@@ -375,19 +390,19 @@ func (p *AIProviderPane) testProviderCmd() tea.Cmd {
 	return func() tea.Msg {
 		backend, err := llm.New(cfg, llm.ProviderSecrets{})
 		if err != nil {
-			return chatSystemMsg{Text: fmt.Sprintf("provider test failed: %v", err)}
+			return ChatSystemMsg{Text: fmt.Sprintf("provider test failed: %v", err)}
 		}
 		defer func() { _ = backend.Close() }()
 		start := time.Now()
 		report, err := backend.Health(context.Background())
 		elapsed := time.Since(start)
 		if err != nil {
-			return chatSystemMsg{Text: fmt.Sprintf("provider test failed after %s: %v", elapsed.Truncate(time.Millisecond), err)}
+			return ChatSystemMsg{Text: fmt.Sprintf("provider test failed after %s: %v", elapsed.Truncate(time.Millisecond), err)}
 		}
 		if report != nil {
-			return chatSystemMsg{Text: fmt.Sprintf("provider %s ready in %s", report.State, elapsed.Truncate(time.Millisecond))}
+			return ChatSystemMsg{Text: fmt.Sprintf("provider %s ready in %s", report.State, elapsed.Truncate(time.Millisecond))}
 		}
-		return chatSystemMsg{Text: fmt.Sprintf("provider responded in %s", elapsed.Truncate(time.Millisecond))}
+		return ChatSystemMsg{Text: fmt.Sprintf("provider responded in %s", elapsed.Truncate(time.Millisecond))}
 	}
 }
 

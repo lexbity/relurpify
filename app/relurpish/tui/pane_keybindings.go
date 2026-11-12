@@ -335,14 +335,14 @@ func (p *KeybindingPane) persistCmd() tea.Cmd {
 	}
 	return func() tea.Msg {
 		if workspace == "" {
-			return chatSystemMsg{Text: "keybindings save failed: workspace unavailable"}
+			return ChatSystemMsg{Text: "keybindings save failed: workspace unavailable"}
 		}
 		path := config.New(workspace).RuntimeKeybindingsFile()
 		backup, err := config.SaveRuntimeKeybindingConfigWithBackup(path, cfg)
 		if err != nil {
-			return chatSystemMsg{Text: fmt.Sprintf("keybindings save failed: %v", err)}
+			return ChatSystemMsg{Text: fmt.Sprintf("keybindings save failed: %v", err)}
 		}
-		return chatSystemMsg{Text: fmt.Sprintf("keybindings saved (backup: %s)", backup)}
+		return ChatSystemMsg{Text: fmt.Sprintf("keybindings saved (backup: %s)", backup)}
 	}
 }
 

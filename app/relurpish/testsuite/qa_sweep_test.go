@@ -1,6 +1,8 @@
 package testsuite_test
 
 import (
+	"codeburg.org/lexbit/relurpify/app/relurpish/internal/uitest"
+	"context"
 	"strings"
 	"testing"
 
@@ -31,7 +33,6 @@ var allTabs = []tui.TabID{ //nolint:gochecknoglobals // test fixture data
 	tui.TabKeybindings,
 	tui.TabDoctor,
 	tui.TabChat,
-	tui.TabDiff,
 }
 
 // keySoup is a barrage of navigation / editing keys that any pane might receive.
@@ -52,11 +53,11 @@ var keySoup = []tea.KeyMsg{ //nolint:gochecknoglobals // test fixture data
 // TestQASweep_AllTabsSurviveKeySoup drives every tab through the key barrage at
 // a normal size and asserts the model never panics and always renders a frame.
 func TestQASweep_AllTabsSurviveKeySoup(t *testing.T) {
-	m := tui.NewTestRootModel(nil, euclotui.NewSurfaceFactory())
-	m.SetWidthHeightForTest(120, 40)
+	m := tui.NewRootModel(context.Background(), nil, euclotui.NewSurfaceFactory())
+	m = uitest.Resize(m, 120, 40)
 
 	for _, tab := range allTabs {
-		m.SetActiveTabForTest(tab)
+		m = uitest.Navigate(m, tab)
 		for _, key := range keySoup {
 			m = drive(t, m, key)
 			view := m.View()
@@ -74,10 +75,10 @@ func TestQASweep_ExtremeResize(t *testing.T) {
 		{40, 12}, {80, 24}, {200, 60}, {500, 200}, {3, 3},
 	}
 	for _, tab := range allTabs {
-		m := tui.NewTestRootModel(nil, euclotui.NewSurfaceFactory())
-		m.SetActiveTabForTest(tab)
+		m := tui.NewRootModel(context.Background(), nil, euclotui.NewSurfaceFactory())
+		m = uitest.Navigate(m, tab)
 		for _, s := range sizes {
-			m.SetWidthHeightForTest(s[0], s[1])
+			m = uitest.Resize(m, s[0], s[1])
 			// Render must not panic at any size.
 			_ = m.View()
 		}
@@ -87,9 +88,9 @@ func TestQASweep_ExtremeResize(t *testing.T) {
 // TestQASweep_AIProviderEditAdversarial exercises the AI provider edit fields
 // with hostile values: empty, whitespace, unicode, very long, control-ish.
 func TestQASweep_AIProviderEditAdversarial(t *testing.T) {
-	m := tui.NewTestRootModel(nil, euclotui.NewSurfaceFactory())
-	m.SetWidthHeightForTest(120, 40)
-	m.SetActiveTabForTest(tui.TabAIProvider)
+	m := tui.NewRootModel(context.Background(), nil, euclotui.NewSurfaceFactory())
+	m = uitest.Resize(m, 120, 40)
+	m = uitest.Navigate(m, tui.TabAIProvider)
 
 	// Move focus into the configurator column.
 	m = drive(t, m, tea.KeyMsg{Type: tea.KeyTab})
@@ -126,11 +127,11 @@ func TestQASweep_AIProviderEditAdversarial(t *testing.T) {
 // TestQASweep_RapidTabSwitching flips between tabs while mid-edit / mid-nav to
 // surface state bleed or stale-focus panics.
 func TestQASweep_RapidTabSwitching(t *testing.T) {
-	m := tui.NewTestRootModel(nil, euclotui.NewSurfaceFactory())
-	m.SetWidthHeightForTest(100, 30)
+	m := tui.NewRootModel(context.Background(), nil, euclotui.NewSurfaceFactory())
+	m = uitest.Resize(m, 100, 30)
 	for round := 0; round < 3; round++ {
 		for _, tab := range allTabs {
-			m.SetActiveTabForTest(tab)
+			m = uitest.Navigate(m, tab)
 			m = drive(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("e")})
 			m = drive(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("zzz")})
 			// switch away mid-edit

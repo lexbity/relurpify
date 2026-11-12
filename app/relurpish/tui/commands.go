@@ -109,6 +109,13 @@ func (r *CommandRegistry) All() []Command {
 var rootCommandRegistry *CommandRegistry //nolint:gochecknoglobals // process-wide command registry, populated once at startup
 
 func registerUniversalCommands(r *CommandRegistry) {
+	r.Register(Command{Name: "session", Description: "Open sessions", Usage: "/session", Handler: func(m *RootModel, _ []string) (*RootModel, tea.Cmd) { m.setActiveTab(TabWelcome); return m, nil }})
+	r.Register(Command{Name: "attention", Description: "Deliberately focus the pending decision", Usage: "/attention", Handler: func(m *RootModel, _ []string) (*RootModel, tea.Cmd) { m.decisionFocused = true; return m, nil }})
+	r.Register(Command{Name: "chat", Description: "Return to the conversation", Usage: "/chat", Handler: func(m *RootModel, _ []string) (*RootModel, tea.Cmd) {
+		m.setActiveTab(TabChat)
+		m.setFocus(FocusRegionInput)
+		return m, nil
+	}})
 	registerContextualCommands(r)
 	for _, cmd := range []Command{
 		{Name: "workspace", Description: "Switch workspace root", Usage: "/workspace [path]", Handler: rootHandleWorkspace},
@@ -146,14 +153,8 @@ func registerContextualCommands(reg *CommandRegistry) {
 	for _, cmd := range []Command{
 		{Name: "save", Description: "Save and reload sandbox manifest", Usage: "/save", Handler: rootHandleSave, TabFilter: []TabID{TabSandbox}},
 		{Name: "backend", Description: "Switch sandbox backend", Usage: "/backend [type]", Handler: rootHandleBackend, TabFilter: []TabID{TabSandbox}},
-		{Name: "test-latency", Description: "Test provider latency", Usage: "/test-latency", Handler: rootHandleTestLatency, TabFilter: []TabID{TabAIProvider}},
 		{Name: "save-model", Description: "Save model configuration", Usage: "/save-model", Handler: rootHandleSaveModel, TabFilter: []TabID{TabAIProvider}},
-		{Name: "test-rule", Description: "Test a security rule against input", Usage: "/test-rule", Handler: rootHandleTestRule, TabFilter: []TabID{TabSecurityGuard}},
 		{Name: "restart-all", Description: "Restart all services", Usage: "/restart-all", Handler: rootHandleRestartAll, TabFilter: []TabID{TabAIProvider}},
-		{Name: "reset-bindings", Description: "Reset all keybindings to defaults", Usage: "/reset-bindings", Handler: rootHandleResetBindings, TabFilter: []TabID{TabKeybindings}},
-		{Name: "diff-apply-all", Description: "Apply all pending diffs", Usage: "/diff-apply-all", Handler: rootHandleDiffApplyAll, TabFilter: []TabID{TabDiff}},
-		{Name: "diff-revert", Description: "Revert selected diff", Usage: "/diff-revert", Handler: rootHandleDiffRevert, TabFilter: []TabID{TabDiff}},
-		{Name: "diff-view", Description: "Toggle diff view mode", Usage: "/diff-view", Handler: rootHandleDiffView, TabFilter: []TabID{TabDiff}},
 	} {
 		reg.Register(cmd)
 	}
@@ -276,7 +277,6 @@ func rootHandleWorkspace(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 }
 
 func rootHandlePermissions(m *RootModel, _ []string) (*RootModel, tea.Cmd) {
-	_ = m.switchActiveAgent("none")
 	m.setActiveTab(TabSandbox)
 	if m.baseSurface != nil {
 		m.baseSurface.FocusFilescopes()
@@ -286,7 +286,6 @@ func rootHandlePermissions(m *RootModel, _ []string) (*RootModel, tea.Cmd) {
 }
 
 func rootHandleSecurityGuard(m *RootModel, _ []string) (*RootModel, tea.Cmd) {
-	_ = m.switchActiveAgent("none")
 	m.setActiveTab(TabSecurityGuard)
 	if m.baseSurface != nil {
 		m.baseSurface.OpenSecurityGuard()
@@ -296,7 +295,6 @@ func rootHandleSecurityGuard(m *RootModel, _ []string) (*RootModel, tea.Cmd) {
 }
 
 func rootHandleFileScopes(m *RootModel, _ []string) (*RootModel, tea.Cmd) {
-	_ = m.switchActiveAgent("none")
 	m.setActiveTab(TabSandbox)
 	if m.baseSurface != nil {
 		m.baseSurface.FocusFilescopes()
@@ -306,7 +304,6 @@ func rootHandleFileScopes(m *RootModel, _ []string) (*RootModel, tea.Cmd) {
 }
 
 func rootHandleDoctor(m *RootModel, _ []string) (*RootModel, tea.Cmd) {
-	_ = m.switchActiveAgent("none")
 	m.setActiveTab(TabDoctor)
 	if m.baseSurface != nil {
 		m.baseSurface.OpenDoctor()
@@ -347,7 +344,6 @@ func rootHandleModel(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 				available = fmt.Sprintf("\nAvailable: %s", strings.Join(models, ", "))
 			}
 		}
-		_ = m.switchActiveAgent("none")
 		m.setActiveTab(TabAIProvider)
 		if m.baseSurface != nil {
 			m.baseSurface.OpenAIProvider()
@@ -369,7 +365,6 @@ func rootHandleModel(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 	if m.sharedSess != nil {
 		m.sharedSess.Model = model
 	}
-	_ = m.switchActiveAgent("none")
 	m.setActiveTab(TabAIProvider)
 	if m.baseSurface != nil {
 		m.baseSurface.OpenAIProvider()
@@ -379,7 +374,6 @@ func rootHandleModel(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 }
 
 func rootHandleModelProvider(m *RootModel, _ []string) (*RootModel, tea.Cmd) {
-	_ = m.switchActiveAgent("none")
 	m.setActiveTab(TabAIProvider)
 	if m.baseSurface != nil {
 		m.baseSurface.OpenAIProvider()
@@ -399,7 +393,6 @@ func rootHandleModelProvider(m *RootModel, _ []string) (*RootModel, tea.Cmd) {
 }
 
 func rootHandleKeybindings(m *RootModel, _ []string) (*RootModel, tea.Cmd) {
-	_ = m.switchActiveAgent("none")
 	m.setActiveTab(TabKeybindings)
 	if m.baseSurface != nil {
 		m.baseSurface.OpenKeybindings()
@@ -925,9 +918,9 @@ func savePolicyCmd(rt RuntimeAdapter, action string) tea.Cmd {
 	}
 	return func() tea.Msg {
 		if err := rt.SaveToolPolicy(toolName, agentspec.AgentPermissionAllow); err != nil {
-			return chatSystemMsg{Text: fmt.Sprintf("Failed to save policy for %s: %v", toolName, err)}
+			return ChatSystemMsg{Text: fmt.Sprintf("Failed to save policy for %s: %v", toolName, err)}
 		}
-		return chatSystemMsg{Text: fmt.Sprintf("Policy for '%s' saved to manifest (always allow)", toolName)}
+		return ChatSystemMsg{Text: fmt.Sprintf("Policy for '%s' saved to manifest (always allow)", toolName)}
 	}
 }
 
@@ -955,9 +948,9 @@ func rootHandleService(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 		return m, func() tea.Msg {
 			err := m.runtime.StopService(serviceID)
 			if err != nil {
-				return chatSystemMsg{Text: fmt.Sprintf("Failed to stop service %s: %v", serviceID, err)}
+				return ChatSystemMsg{Text: fmt.Sprintf("Failed to stop service %s: %v", serviceID, err)}
 			}
-			return chatSystemMsg{Text: fmt.Sprintf("Service %s stopped", serviceID)}
+			return ChatSystemMsg{Text: fmt.Sprintf("Service %s stopped", serviceID)}
 		}
 
 	case "restart":
@@ -969,18 +962,18 @@ func rootHandleService(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 		return m, func() tea.Msg {
 			err := m.runtime.RestartService(context.Background(), serviceID)
 			if err != nil {
-				return chatSystemMsg{Text: fmt.Sprintf("Failed to restart service %s: %v", serviceID, err)}
+				return ChatSystemMsg{Text: fmt.Sprintf("Failed to restart service %s: %v", serviceID, err)}
 			}
-			return chatSystemMsg{Text: fmt.Sprintf("Service %s restarted", serviceID)}
+			return ChatSystemMsg{Text: fmt.Sprintf("Service %s restarted", serviceID)}
 		}
 
 	case "restart-all":
 		return m, func() tea.Msg {
 			err := m.runtime.RestartAllServices(context.Background())
 			if err != nil {
-				return chatSystemMsg{Text: fmt.Sprintf("Failed to restart all services: %v", err)}
+				return ChatSystemMsg{Text: fmt.Sprintf("Failed to restart all services: %v", err)}
 			}
-			return chatSystemMsg{Text: "All services restarted"}
+			return ChatSystemMsg{Text: "All services restarted"}
 		}
 
 	default:
@@ -1024,24 +1017,10 @@ func rootHandleBackend(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 	return m, nil
 }
 
-func rootHandleTestLatency(m *RootModel, args []string) (*RootModel, tea.Cmd) {
-	_ = args
-	m.setActiveTab(TabAIProvider)
-	m.addSystemMessage("Testing provider latency... (not yet implemented as palette command)")
-	return m, nil
-}
-
 func rootHandleSaveModel(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 	_ = args
 	m.setActiveTab(TabAIProvider)
 	m.addSystemMessage("Use /model <name> to set model")
-	return m, nil
-}
-
-func rootHandleTestRule(m *RootModel, args []string) (*RootModel, tea.Cmd) {
-	_ = args
-	m.setActiveTab(TabSecurityGuard)
-	m.addSystemMessage("Testing security rule... (not yet implemented as palette command)")
 	return m, nil
 }
 
@@ -1054,44 +1033,12 @@ func rootHandleRestartAll(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 	return m, func() tea.Msg {
 		err := m.runtime.RestartAllServices(context.Background())
 		if err != nil {
-			return chatSystemMsg{Text: fmt.Sprintf("Failed to restart all services: %v", err)}
+			return ChatSystemMsg{Text: fmt.Sprintf("Failed to restart all services: %v", err)}
 		}
-		return chatSystemMsg{Text: "All services restarted"}
+		return ChatSystemMsg{Text: "All services restarted"}
 	}
 }
 
-func rootHandleResetBindings(m *RootModel, args []string) (*RootModel, tea.Cmd) {
-	_ = args
-	m.setActiveTab(TabKeybindings)
-	m.addSystemMessage("Reset bindings requested (not yet implemented as palette command)")
-	return m, nil
-}
-
-func rootHandleDiffApplyAll(m *RootModel, args []string) (*RootModel, tea.Cmd) {
-	_ = args
-	m.setActiveTab(TabDiff)
-	m.addSystemMessage("Apply all diffs requested (not yet implemented as palette command)")
-	return m, nil
-}
-
-func rootHandleDiffRevert(m *RootModel, args []string) (*RootModel, tea.Cmd) {
-	_ = args
-	m.setActiveTab(TabDiff)
-	m.addSystemMessage("Revert diff requested (not yet implemented as palette command)")
-	return m, nil
-}
-
-func rootHandleDiffView(m *RootModel, args []string) (*RootModel, tea.Cmd) {
-	_ = args
-	m.setActiveTab(TabDiff)
-	m.addSystemMessage("Toggle diff view requested (not yet implemented as palette command)")
-	return m, nil
-}
-
-// rootHandleRecipe lists the workspace recipes, pins one for the session, or
-// clears the pin. A pinned recipe rides every submitted turn as recipe_id
-// metadata; dispatch runs exactly that recipe — selection is the user's
-// choice, deterministic by construction.
 func rootHandleRecipe(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 	if len(args) == 0 {
 		if m.runtime == nil {

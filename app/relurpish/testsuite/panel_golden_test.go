@@ -1,6 +1,7 @@
 package testsuite
 
 import (
+	"codeburg.org/lexbit/relurpify/app/relurpish/internal/uitest"
 	"context"
 	"errors"
 	"flag"
@@ -116,7 +117,7 @@ func normalizeSnapshot(view, root string) string {
 }
 
 func normalizeGoldenText(s string) string {
-	return strings.Join(strings.Fields(strings.ReplaceAll(s, "\r\n", "\n")), " ")
+	return strings.TrimRight(strings.ReplaceAll(s, "\r\n", "\n"), "\n")
 }
 
 type sandboxFixtureRuntime struct {
@@ -287,11 +288,11 @@ func TestPanelGoldenViews(t *testing.T) {
 		t.Fatalf("seed provider config: %v", err)
 	}
 	aiProvider.Refresh()
-	tui.SetAIProviderModelsForTest(aiProvider, []llm.ModelInfo{
+	_, _ = aiProvider.Update(tui.ProviderModelsLoadedMsg{Models: []llm.ModelInfo{
 		{Name: "gemma4:12b", Family: "qwen"},
 		{Name: "llama3:latest", Family: "llama"},
-	})
-	tui.SetAIProviderStatusForTest(aiProvider, "loaded 2 models")
+	}})
+
 	assertGolden(t, "aiprovider_panel.txt", aiProvider.View())
 
 	keybinds := tui.NewKeybindingPane(&sessionInfoFixture{workspace: workdir})
@@ -300,7 +301,7 @@ func TestPanelGoldenViews(t *testing.T) {
 
 	doctor := tui.NewDoctorPane(nil)
 	doctor.SetSize(96, 18)
-	doctor.SetReport(tui.DoctorReport{
+	doctor.SetReport(runtimesvc.DoctorReport{
 		Workspace:             workdir,
 		ConfigRoot:            filepath.Join(workdir, "relurpify_cfg"),
 		WorkspacePresent:      true,
@@ -361,35 +362,35 @@ func TestRootTUIViews(t *testing.T) {
 	}
 
 	// 1. Integrated Welcome TUI Screen (no-agent welcome tab)
-	m := tui.NewTestRootModel(nil, euclotui.NewSurfaceFactory())
-	m.SetWidthHeightForTest(120, 40)
-	m.SetActiveTabForTest(tui.TabWelcome)
+	m := tui.NewRootModel(context.Background(), nil, euclotui.NewSurfaceFactory())
+	m = uitest.Resize(m, 120, 40)
+	m = uitest.Navigate(m, tui.TabWelcome)
 
-	if m.ActiveAgentNameForTest() != "none" {
-		t.Errorf("expected active agent none, got %s", m.ActiveAgentNameForTest())
+	if m.InteractionState().Agent != "none" {
+		t.Errorf("expected active agent none, got %s", m.InteractionState().Agent)
 	}
 	assertGolden(t, "integrated_welcome_tui.txt", normalizeSnapshot(m.View(), workdir))
 
 	// 2. Integrated Sandbox TUI Screen
-	m.SetActiveTabForTest(tui.TabSandbox)
+	m = uitest.Navigate(m, tui.TabSandbox)
 	assertGolden(t, "integrated_sandbox_tui.txt", normalizeSnapshot(m.View(), workdir))
 
 	// 3. Integrated AI Provider TUI Screen
-	m.SetActiveTabForTest(tui.TabAIProvider)
+	m = uitest.Navigate(m, tui.TabAIProvider)
 	assertGolden(t, "integrated_aiprovider_tui.txt", normalizeSnapshot(m.View(), workdir))
 
 	// 4. Integrated Keybindings TUI Screen
-	m.SetActiveTabForTest(tui.TabKeybindings)
+	m = uitest.Navigate(m, tui.TabKeybindings)
 	assertGolden(t, "integrated_keybindings_tui.txt", normalizeSnapshot(m.View(), workdir))
 
 	// 5. Integrated HITL Row Screen (with simulated frame)
-	m2 := tui.NewTestRootModel(nil, euclotui.NewSurfaceFactory())
-	err := m2.SwitchActiveAgentForTest("euclo")
+	m2 := tui.NewRootModel(context.Background(), nil, euclotui.NewSurfaceFactory())
+	err := uitest.SelectAgent(&m2, "euclo")
 	if err != nil {
 		t.Fatalf("switch agent: %v", err)
 	}
-	m2.SetWidthHeightForTest(120, 40)
-	m2.SetActiveTabForTest("chat")
+	m2 = uitest.Resize(m2, 120, 40)
+	m2 = uitest.Navigate(m2, "chat")
 
 	now := time.Date(2020, 1, 2, 3, 4, 0, 0, time.UTC)
 	frame := interaction.NewClarificationFrame("task-1", "session-1", "Clarification needed: which parser target?", []string{"parser.go", "types.go", "manual"}, nil)
@@ -397,22 +398,23 @@ func TestRootTUIViews(t *testing.T) {
 	frame.Metadata.Timestamp = now
 	frame.CreatedAt = now
 
-	m2.OpenInteractionGuidanceForTest("frame-1", *frame)
+	m2.OpenInteractionGuidance("frame-1", *frame)
 	assertGolden(t, "integrated_hitl_row_tui.txt", normalizeSnapshot(m2.View(), workdir))
 }
 
 func TestFocusRedirectionAndAutocomplete(t *testing.T) {
-	m := tui.NewTestRootModel(nil, euclotui.NewSurfaceFactory())
-	m.SetWidthHeightForTest(120, 40)
+	m := tui.NewRootModel(context.Background(), nil, euclotui.NewSurfaceFactory())
+	m = uitest.Resize(m, 120, 40)
 
 	// Verify focus is initially in input
-	if !m.IsFocusInInputForTest() {
+	if !m.InteractionState().Focus.InInput() {
 		t.Fatalf("expected focus in input at startup")
 	}
 
-	// Focus Region 1
-	m.SetFocusRegion1ForTest()
-	if !m.IsFocusInRegion1ForTest() {
+	// Focus the conversation canvas; administration forms own their input.
+	m = uitest.Navigate(m, tui.TabChat)
+	m = uitest.FocusCanvas(m)
+	if !m.InteractionState().Focus.InRegion1() {
 		t.Fatalf("expected focus in region 1")
 	}
 
@@ -420,26 +422,26 @@ func TestFocusRedirectionAndAutocomplete(t *testing.T) {
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
 	m = updated.(tui.RootModel)
 
-	if !m.IsFocusInInputForTest() {
+	if !m.InteractionState().Focus.InInput() {
 		t.Fatalf("expected focus to return to input on printable character")
 	}
-	if m.InputBarValueForTest() != "x" {
-		t.Errorf("expected input value 'x', got %q", m.InputBarValueForTest())
+	if m.InteractionState().Draft != "x" {
+		t.Errorf("expected input value 'x', got %q", m.InteractionState().Draft)
 	}
 
 	// Test autocomplete trigger via prefix
 	// Clear input first by backspacing
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyBackspace})
 	m = updated.(tui.RootModel)
-	if m.InputBarValueForTest() != "" {
-		t.Errorf("expected input to be empty after backspace, got %q", m.InputBarValueForTest())
+	if m.InteractionState().Draft != "" {
+		t.Errorf("expected input to be empty after backspace, got %q", m.InteractionState().Draft)
 	}
 
-	// Type ':' to enter command mode and trigger palette sync
-	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{':'}})
+	// Slash enters command mode; other prefixes are ordinary requests.
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
 	m = updated.(tui.RootModel)
 
-	if m.OverlaysForTest().Len() != 1 {
-		t.Errorf("expected 1 active overlay for autocomplete list, got %d", m.OverlaysForTest().Len())
+	if m.InteractionState().Overlays != 1 {
+		t.Errorf("expected 1 active overlay for autocomplete list, got %d", m.InteractionState().Overlays)
 	}
 }

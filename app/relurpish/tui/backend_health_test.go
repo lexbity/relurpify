@@ -36,7 +36,7 @@ func (s *slowHealthRuntime) ProbeBackendHealth(ctx context.Context) string {
 func TestBootDoesNotBlockOnBackendHealth(t *testing.T) {
 	adapter := &slowHealthRuntime{delay: 10 * time.Second}
 	start := time.Now()
-	m := newRootModel(context.Background(), adapter, NewDefaultSurfaceFactory())
+	m := NewRootModel(context.Background(), adapter, NewDefaultSurfaceFactory())
 	elapsed := time.Since(start)
 
 	if elapsed > 500*time.Millisecond {
@@ -51,7 +51,7 @@ func TestBootDoesNotBlockOnBackendHealth(t *testing.T) {
 // probed state on the shared session.
 func TestBackendHealthMsgUpdatesSession(t *testing.T) {
 	adapter := &slowHealthRuntime{delay: time.Millisecond}
-	m := newRootModel(context.Background(), adapter, NewDefaultSurfaceFactory())
+	m := NewRootModel(context.Background(), adapter, NewDefaultSurfaceFactory())
 	if m.sharedSess == nil {
 		t.Fatal("shared session missing")
 	}
@@ -70,7 +70,7 @@ func TestBackendHealthMsgUpdatesSession(t *testing.T) {
 // TestRefreshBackendHealthCmdNilRuntime: degraded/headless construction
 // returns no refresh command.
 func TestRefreshBackendHealthCmdNilRuntime(t *testing.T) {
-	m := newRootModel(context.Background(), nil, NewDefaultSurfaceFactory())
+	m := NewRootModel(context.Background(), nil, NewDefaultSurfaceFactory())
 	if cmd := m.refreshBackendHealthCmd(); cmd != nil {
 		if msg := cmd(); msg != nil {
 			t.Fatalf("nil runtime produced a health msg: %#v", msg)

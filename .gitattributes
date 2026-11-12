@@ -1,0 +1,2 @@
+# Terminal snapshots preserve literal cell padding at the ends of rows.
+app/relurpish/testsuite/testdata/golden/*.txt whitespace=-blank-at-eol,-blank-at-eof

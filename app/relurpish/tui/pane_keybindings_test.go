@@ -74,8 +74,8 @@ func TestKeybindingConflictEngine(t *testing.T) {
 		t.Fatal("expected persist command after confirmation")
 	}
 	msg := cmd()
-	if got, ok := msg.(chatSystemMsg); !ok || got.Text == "" {
-		t.Fatalf("persist message = %#v, want chatSystemMsg", msg)
+	if got, ok := msg.(ChatSystemMsg); !ok || got.Text == "" {
+		t.Fatalf("persist message = %#v, want ChatSystemMsg", msg)
 	}
 	backups, err := filepath.Glob(filepath.Join(dir, ".relurpify_state", "backups", "keybindings.yaml.*.bak"))
 	if err != nil {

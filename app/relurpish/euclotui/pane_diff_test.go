@@ -60,62 +60,23 @@ func TestDiffPaneGroupsByFileAndShowsVerificationAlerts(t *testing.T) {
 	}
 }
 
-func TestDiffPaneAppliesAndRevertsCausalChanges(t *testing.T) {
+func TestDiffPaneNeverWritesWorkspace(t *testing.T) {
 	workspace := t.TempDir()
-	writeFile(t, filepath.Join(workspace, "a.txt"), "alpha-a\n")
-	writeFile(t, filepath.Join(workspace, "b.txt"), "alpha-b\n")
-	writeFile(t, filepath.Join(workspace, "c.txt"), "alpha-c\n")
-
+	path := filepath.Join(workspace, "a.txt")
+	writeFile(t, path, "original\n")
 	router := NewEucloEventRouter()
-	router.ApplyExecutionEvent(ExecutionEvent{
-		StepID:  "step-1",
-		Type:    reporting.EventTypeStepCompletedEuclo,
-		Summary: "Apply first group",
-		PatchHunks: []PatchHunk{
-			{File: "a.txt", Summary: "A", Body: "beta-a\n"},
-			{File: "b.txt", Summary: "B", Body: "beta-b\n"},
-		},
-	})
-	router.ApplyExecutionEvent(ExecutionEvent{
-		StepID:  "step-2",
-		Type:    reporting.EventTypeStepCompletedEuclo,
-		Summary: "Apply second group",
-		PatchHunks: []PatchHunk{
-			{File: "c.txt", Summary: "C", Body: "beta-c\n"},
-		},
-	})
-
+	router.ApplyExecutionEvent(ExecutionEvent{StepID: "step-1", Type: reporting.EventTypeStepCompletedEuclo, PatchHunks: []PatchHunk{{File: "a.txt", Body: "replacement\n"}}})
 	pane := NewDiffPane(router, workspace, nil)
-	pane.SetSize(140, 40)
-	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}})
-	if cmd := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}}); cmd == nil {
-		t.Fatal("expected apply-step command")
+	pane.SetSize(120, 40)
+	for _, key := range "asfhuUe" {
+		if cmd := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{key}}); cmd != nil {
+			t.Fatalf("write/editor key %q still has an action", key)
+		}
+		assertFileContents(t, path, "original\n")
 	}
-	assertFileContents(t, filepath.Join(workspace, "a.txt"), "beta-a\n")
-	assertFileContents(t, filepath.Join(workspace, "b.txt"), "beta-b\n")
-	assertFileContents(t, filepath.Join(workspace, "c.txt"), "alpha-c\n")
-
-	if cmd := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'U'}}); cmd == nil {
-		t.Fatal("expected revert-all command")
+	if strings.Contains(pane.verdictSummary(router.Snapshot()), "tests ✓") {
+		t.Fatal("missing verification was reported as success")
 	}
-	assertFileContents(t, filepath.Join(workspace, "a.txt"), "alpha-a\n")
-	assertFileContents(t, filepath.Join(workspace, "b.txt"), "alpha-b\n")
-	assertFileContents(t, filepath.Join(workspace, "c.txt"), "alpha-c\n")
-
-	pane.Update(tea.KeyMsg{Type: tea.KeyDown})
-	if cmd := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}}); cmd == nil {
-		t.Fatal("expected apply-file command")
-	}
-	assertFileContents(t, filepath.Join(workspace, "a.txt"), "beta-a\n")
-	assertFileContents(t, filepath.Join(workspace, "b.txt"), "alpha-b\n")
-	assertFileContents(t, filepath.Join(workspace, "c.txt"), "alpha-c\n")
-
-	if cmd := pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}}); cmd == nil {
-		t.Fatal("expected apply-all command")
-	}
-	assertFileContents(t, filepath.Join(workspace, "a.txt"), "beta-a\n")
-	assertFileContents(t, filepath.Join(workspace, "b.txt"), "beta-b\n")
-	assertFileContents(t, filepath.Join(workspace, "c.txt"), "beta-c\n")
 }
 
 func TestDiffPaneShowsCheckpointAnchor(t *testing.T) {

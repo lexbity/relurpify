@@ -1,10 +1,10 @@
 package tui
 
 import (
-	"reflect"
+	"github.com/charmbracelet/bubbles/textarea"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/charmbracelet/x/ansi"
 
 	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 
@@ -19,10 +19,13 @@ type InputSubmittedMsg struct {
 }
 
 type CommandInvokedMsg struct {
+	Draft  string
 	Name   string
 	Args   []string
 	Prefix string
 }
+
+type InputRejectedMsg struct{ Reason string }
 
 type GlobalKeyMsg struct{ Key string }
 
@@ -38,7 +41,7 @@ type commandItem struct {
 
 // InputBar wraps textinput with prefix-sensitive completion and file picker support.
 type InputBar struct {
-	input     textinput.Model
+	input     textarea.Model
 	history   InputHistory
 	palette   []commandItem
 	palSel    int
@@ -70,8 +73,12 @@ type InputBar struct {
 
 // NewInputBar creates a focused InputBar.
 func NewInputBar() *InputBar {
-	ti := textinput.New()
-	setInputHint(&ti, "Type a message, /help, :git status, or ?search")
+	ti := textarea.New()
+	ti.ShowLineNumbers = false
+	ti.SetHeight(1)
+	ti.CharLimit = 65536
+	ti.Prompt = ""
+	setInputHint(&ti, "Request to Euclo · / commands")
 	ti.Focus()
 	return &InputBar{input: ti, focused: true, th: theme.Default()}
 }
@@ -118,7 +125,7 @@ func (b *InputBar) IsFilePickerActive() bool {
 // SetWidth sets the input width.
 func (b *InputBar) SetWidth(w int) {
 	b.width = w
-	b.input.Width = max(1, w-4)
+	b.input.SetWidth(max(1, w-4-17))
 }
 
 // SetFocused updates the visible focus state for the input bar.
@@ -151,7 +158,7 @@ func (b *InputBar) SetSearchMode(on bool) {
 		b.SetFocused(true)
 		return
 	}
-	setInputHint(&b.input, "Type a message, /help, :git status, or ?search")
+	setInputHint(&b.input, "Request to Euclo · / commands")
 }
 
 // SetFilePickerMode enters or exits file picker mode.
@@ -162,50 +169,24 @@ func (b *InputBar) SetFilePickerMode(on bool) {
 		b.SetFocused(true)
 		return
 	}
-	setInputHint(&b.input, "Type a message, /help, :git status, or ?search")
+	setInputHint(&b.input, "Request to Euclo · / commands")
 	b.input.SetValue("")
 }
 
-func setInputHint(model *textinput.Model, value string) {
-	if model == nil {
-		return
+func setInputHint(model *textarea.Model, value string) {
+	if model != nil {
+		model.Placeholder = value
 	}
-	field := reflect.ValueOf(model).Elem().FieldByName("Place" + "holder")
-	if !field.IsValid() || !field.CanSet() || field.Kind() != reflect.String {
-		return
-	}
-	field.SetString(value)
 }
 
-func (b *InputBar) promptLabel(activeTab TabID, draft inputDraft) string {
-	if draft.promptLabel != "" {
-		return draft.promptLabel
+func (b *InputBar) promptLabel(_ TabID, draft inputDraft) string { return draft.promptLabel }
+
+// Accept clears only the exact draft accepted by the host. A blocked or stale
+// submission cannot erase text typed while its message was pending.
+func (b *InputBar) Accept(value string) {
+	if b.input.Value() == value {
+		b.input.SetValue("")
 	}
-	if b.searchMode {
-		return "search"
-	}
-	if draft.prefix != "" {
-		switch draft.prefix {
-		case "/":
-			return "slash"
-		case ":":
-			return "shell"
-		case "?":
-			return "search"
-		case ">":
-			if b.gated {
-				return "running"
-			}
-			return "prompt"
-		}
-	}
-	if b.gated {
-		return "running"
-	}
-	if activeTab == TabChat {
-		return "prompt"
-	}
-	return "filter"
 }
 
 func (b *InputBar) updatePalette(draft inputDraft) {
@@ -311,21 +292,9 @@ func (b *InputBar) Update(msg tea.Msg, activeTab TabID) (*InputBar, tea.Cmd) {
 		return b, nil
 
 	case tea.KeyMsg:
-		if b.input.Value() == "" && !b.palOpen && !b.searchMode {
-			if keyMatchesBinding(GlobalKeys.Tab1, msg.String()) ||
-				keyMatchesBinding(GlobalKeys.Tab2, msg.String()) ||
-				keyMatchesBinding(GlobalKeys.Tab3, msg.String()) ||
-				keyMatchesBinding(GlobalKeys.Tab4, msg.String()) ||
-				keyMatchesBinding(GlobalKeys.Tab5, msg.String()) ||
-				keyMatchesBinding(GlobalKeys.Tab6, msg.String()) ||
-				keyMatchesBinding(GlobalKeys.SearchMode, msg.String()) ||
-				keyMatchesBinding(GlobalKeys.Help, msg.String()) ||
-				keyMatchesBinding(GlobalKeys.FocusRegion1, msg.String()) ||
-				keyMatchesBinding(GlobalKeys.AgentPicker, msg.String()) {
-				return b, func() tea.Msg { return GlobalKeyMsg{Key: msg.String()} }
-			}
-			if msg.String() == "[" || msg.String() == "]" {
-				return b, func() tea.Msg { return GlobalKeyMsg{Key: msg.String()} }
+		if msg.Paste && len(b.input.Value())+len(string(msg.Runes)) > 65536 {
+			return b, func() tea.Msg {
+				return InputRejectedMsg{Reason: "Paste exceeds the 64 KiB request limit; draft preserved"}
 			}
 		}
 
@@ -333,17 +302,20 @@ func (b *InputBar) Update(msg tea.Msg, activeTab TabID) (*InputBar, tea.Cmd) {
 		case keyMatchesBinding(GlobalKeys.Quit, msg.String()), keyMatchesBinding(GlobalKeys.Help, msg.String()):
 			return b, func() tea.Msg { return GlobalKeyMsg{Key: msg.String()} }
 
+		case msg.String() == "alt+enter":
+			b.input.InsertString("\n")
+			return b, nil
+
 		case msg.String() == "enter":
 			if b.pickerActive && len(b.pickerResult.Results) > 0 {
 				b.completePickerSelection()
 				return b, nil
 			}
-			if b.palOpen && len(b.palette) > 0 {
+			if b.palOpen && len(b.palette) > 0 && strings.TrimSpace(b.input.Value()) != "/"+b.palette[b.palSel].Name {
 				b.completePaletteSelection()
 				return b, nil
 			}
-			raw := strings.TrimSpace(b.input.Value())
-			b.input.SetValue("")
+			raw := b.input.Value()
 			b.palOpen = false
 			b.palette = nil
 			b.palSel = 0
@@ -359,13 +331,13 @@ func (b *InputBar) Update(msg tea.Msg, activeTab TabID) (*InputBar, tea.Cmd) {
 			prefix, name, args, ok := parseCommandLine(raw)
 			if ok {
 				b.history.Push(raw)
-				return b, func() tea.Msg { return CommandInvokedMsg{Name: name, Args: args, Prefix: prefix} }
+				return b, func() tea.Msg { return CommandInvokedMsg{Draft: raw, Name: name, Args: args, Prefix: prefix} }
 			}
 			draft := parseInputDraft(raw, activeTab, b.searchMode)
 			b.history.Push(raw)
 			return b, func() tea.Msg {
 				return InputSubmittedMsg{
-					Value:  sanitizeSubmittedValue(raw, draft.prefix),
+					Value:  raw,
 					Prefix: draft.prefix,
 				}
 			}
@@ -460,7 +432,7 @@ func (b *InputBar) View(activeTab TabID, streaming bool) string {
 	var hint string
 	switch {
 	case b.gated:
-		hint = b.th.Dim().Render(" running — > blocked | : and / active | ctrl+c quit")
+		hint = b.th.Dim().Render(" running · / commands available")
 	case streaming:
 		hint = b.th.Dim().Render(" streaming…  pgup/down scroll | ctrl+c quit")
 	case b.pickerActive && len(b.pickerResult.Results) > 0:
@@ -473,7 +445,7 @@ func (b *InputBar) View(activeTab TabID, streaming bool) string {
 		hint = ""
 	}
 
-	content := prefix + b.input.View()
+	content := prefix + terminalText(b.input.View())
 	if hint != "" {
 		content += " " + hint
 	}
@@ -489,7 +461,7 @@ func (b *InputBar) View(activeTab TabID, streaming bool) string {
 			Background(b.th.Palette().Background).
 			Padding(0, 1)
 	}
-	return barStyle.Width(b.width).Render(content)
+	return barStyle.Width(max(1, b.width-2)).Render(ansi.Truncate(content, max(1, b.width-4), ""))
 }
 
 // PickerView renders the active file picker overlay.

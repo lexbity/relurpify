@@ -22,7 +22,7 @@ func TestRuntimeAdapterReloadUnderConcurrentReads(t *testing.T) {
 
 	rt, err := runtimesvc.New(context.Background(), runtimesvc.ConfigForWorkspace(runtimesvc.DefaultConfig(), t.TempDir()), config.Secrets{})
 	require.NoError(t, err)
-	adapter := newRuntimeAdapter(rt)
+	adapter := NewRuntimeAdapter(rt)
 	require.NotNil(t, adapter)
 
 	stop := make(chan struct{})

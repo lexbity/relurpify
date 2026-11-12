@@ -29,7 +29,7 @@ func (q *queueChatPane) Messages() []Message { return nil }
 // RunFinishedMsg regardless of outcome — an errored run must not stall the
 // queue (the defect this terminal message exists to retire).
 func TestRunFinishedAdvancesTaskQueueAfterError(t *testing.T) {
-	m := newRootModel(context.Background(), nil, NewDefaultSurfaceFactory())
+	m := NewRootModel(context.Background(), nil, NewDefaultSurfaceFactory())
 	chat := &queueChatPane{}
 	m.chat = chat
 	m.tasks.AddTask(TaskItem{ID: "task-1", Description: "queued work", Status: TaskPending})

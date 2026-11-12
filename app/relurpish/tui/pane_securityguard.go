@@ -410,11 +410,11 @@ func (p *SecurityGuardPane) saveCmd() tea.Cmd {
 				ReloadWorkspace(context.Context, string) error
 			}); ok && reloader != nil {
 				if err := reloader.ReloadWorkspace(context.Background(), workspace); err != nil {
-					return chatSystemMsg{Text: fmt.Sprintf("security save failed after reload: %v", err)}
+					return ChatSystemMsg{Text: fmt.Sprintf("security save failed after reload: %v", err)}
 				}
 			}
 		}
-		return chatSystemMsg{Text: fmt.Sprintf("security rules saved (backup: %s)", backup)}
+		return ChatSystemMsg{Text: fmt.Sprintf("security rules saved (backup: %s)", backup)}
 	}
 }
 

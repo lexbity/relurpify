@@ -1,6 +1,7 @@
 package tui
 
 import (
+	runtimesvc "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
 	"context"
 	"strings"
 	"testing"
@@ -14,7 +15,7 @@ import (
 type baseSurfaceFake struct {
 	activeTab TabID
 	filter    string
-	report    DoctorReport
+	report    runtimesvc.DoctorReport
 	status    string
 }
 
@@ -46,23 +47,23 @@ func (f *baseSurfaceFake) RenderNotification(item NotificationItem) string      
 func (f *baseSurfaceFake) HandleFrame(_ context.Context, _ *RootModel, _ SurfaceFrameMsg) {}
 func (fake *baseSurfaceFake) Theme() *theme.Theme                                         { return nil }
 
-func (f *baseSurfaceFake) SetSize(int, int)                             {}
-func (f *baseSurfaceFake) SetStore(*SessionStore)                       {}
-func (f *baseSurfaceFake) SetActiveTab(id TabID)                        { f.activeTab = id }
-func (f *baseSurfaceFake) SetFilter(filter string)                      { f.filter = filter }
-func (f *baseSurfaceFake) Refresh()                                     {}
-func (f *baseSurfaceFake) Update(msg tea.Msg) (Region1Surface, tea.Cmd) { return f, nil }
-func (f *baseSurfaceFake) View() string                                 { return f.filter + "|" + string(f.activeTab) }
-func (f *baseSurfaceFake) HandleInputSubmit(string) tea.Cmd             { return nil }
-func (f *baseSurfaceFake) Cleanup()                                     {}
-func (f *baseSurfaceFake) FocusFilescopes()                             {}
-func (f *baseSurfaceFake) OpenSecurityGuard()                           { f.activeTab = TabSecurityGuard }
-func (f *baseSurfaceFake) OpenAIProvider()                              { f.activeTab = TabAIProvider }
-func (f *baseSurfaceFake) OpenKeybindings()                             { f.activeTab = TabKeybindings }
-func (f *baseSurfaceFake) OpenDoctor()                                  { f.activeTab = TabDoctor }
-func (f *baseSurfaceFake) DoctorReport() DoctorReport                   { return f.report }
-func (f *baseSurfaceFake) SetDoctorReport(report DoctorReport)          { f.report = report }
-func (f *baseSurfaceFake) SetDoctorStatus(status string)                { f.status = status }
+func (f *baseSurfaceFake) SetSize(int, int)                               {}
+func (f *baseSurfaceFake) SetStore(*SessionStore)                         {}
+func (f *baseSurfaceFake) SetActiveTab(id TabID)                          { f.activeTab = id }
+func (f *baseSurfaceFake) SetFilter(filter string)                        { f.filter = filter }
+func (f *baseSurfaceFake) Refresh()                                       {}
+func (f *baseSurfaceFake) Update(msg tea.Msg) (Region1Surface, tea.Cmd)   { return f, nil }
+func (f *baseSurfaceFake) View() string                                   { return f.filter + "|" + string(f.activeTab) }
+func (f *baseSurfaceFake) HandleInputSubmit(string) tea.Cmd               { return nil }
+func (f *baseSurfaceFake) Cleanup()                                       {}
+func (f *baseSurfaceFake) FocusFilescopes()                               {}
+func (f *baseSurfaceFake) OpenSecurityGuard()                             { f.activeTab = TabSecurityGuard }
+func (f *baseSurfaceFake) OpenAIProvider()                                { f.activeTab = TabAIProvider }
+func (f *baseSurfaceFake) OpenKeybindings()                               { f.activeTab = TabKeybindings }
+func (f *baseSurfaceFake) OpenDoctor()                                    { f.activeTab = TabDoctor }
+func (f *baseSurfaceFake) DoctorReport() runtimesvc.DoctorReport          { return f.report }
+func (f *baseSurfaceFake) SetDoctorReport(report runtimesvc.DoctorReport) { f.report = report }
+func (f *baseSurfaceFake) SetDoctorStatus(status string)                  { f.status = status }
 
 // noneSurfaceFactory returns a SurfaceFactory that always resolves to "none".
 func noneSurfaceFactory() SurfaceFactory {
@@ -71,7 +72,7 @@ func noneSurfaceFactory() SurfaceFactory {
 
 func newBaseFrameworkModel() RootModel {
 	reg := noneSurfaceFactory()
-	return newRootModel(context.Background(), nil, reg)
+	return NewRootModel(context.Background(), nil, reg)
 }
 
 func TestBaseFrameworkBootsWithNoneAgent(t *testing.T) {
@@ -234,8 +235,8 @@ func TestBaseFrameworkRendersControlCenterOnNoneAgent(t *testing.T) {
 	if !strings.Contains(view, "|welcome") {
 		t.Fatalf("view missing welcome control-center marker: %s", view)
 	}
-	if !strings.Contains(view, "sandbox") || !strings.Contains(view, "doctor") {
-		t.Fatalf("view missing base-framework tabs: %s", view)
+	if strings.Contains(view, "[1] welcome") || strings.Contains(view, "[2] sandbox") {
+		t.Fatalf("unexpected persistent navigation tabs: %s", view)
 	}
 }
 

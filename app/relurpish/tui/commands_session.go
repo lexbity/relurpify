@@ -51,8 +51,6 @@ type CompactResultMsg struct {
 	Err           error
 }
 
-type compactResultMsg = CompactResultMsg
-
 // rootHandleCompact compresses the chat history to a single LLM-generated summary.
 // The current feed is snapshotted onto the undo stack before replacement, so
 // ctrl+z restores the full history. The LLM call runs via the streaming path so

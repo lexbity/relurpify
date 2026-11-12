@@ -1,1 +1,8 @@
-╭──────────────────────────╮ │ Diff Surface │ │ view by-file │ │ execution staged │ │ tests ✓ │ │ checkpoint unavailable │ │ No diff hunks available. │ ╰──────────────────────────╯
+╭──────────────────────────╮
+│ Diff Surface             │
+│ view by-file             │
+│ execution staged         │
+│ tests: not established   │
+│ checkpoint unavailable   │
+│ No diff hunks available. │
+╰──────────────────────────╯

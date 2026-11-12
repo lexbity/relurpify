@@ -10,12 +10,12 @@ import (
 func TestDoctorStartupLocksWhenReportIsBlocked(t *testing.T) {
 	surface := &fakeSurface{name: "none", chat: &fakeChatPane{}}
 	factory := &countingFactory{shared: surface}
-	m := newRootModel(context.Background(), nil, factory)
+	m := NewRootModel(context.Background(), nil, factory)
 	controller, ok := m.baseSurface.(StartupGateController)
 	if !ok {
 		t.Fatal("expected base surface to expose startup gate controller")
 	}
-	controller.SetDoctorReport(DoctorReport{})
+	controller.SetDoctorReport(runtimesvc.DoctorReport{})
 	m.applyStartupGate()
 
 	if !m.startupLocked {
@@ -39,13 +39,13 @@ func TestDoctorStartupPromotesToGuestWhenReportIsReady(t *testing.T) {
 			"guest": guestSurface,
 		},
 	}
-	m := newRootModel(context.Background(), nil, factory)
+	m := NewRootModel(context.Background(), nil, factory)
 	controller, ok := m.baseSurface.(StartupGateController)
 	if !ok {
 		t.Fatal("expected base surface to expose startup gate controller")
 	}
 
-	controller.SetDoctorReport(DoctorReport{
+	controller.SetDoctorReport(runtimesvc.DoctorReport{
 		WorkspacePresent:      true,
 		ConfigExists:          true,
 		ManifestExists:        true,
@@ -66,7 +66,7 @@ func TestDoctorStartupPromotesToGuestWhenReportIsReady(t *testing.T) {
 	if got := m.activeAgentName(); got != "none" {
 		t.Fatalf("active agent = %q, want none", got)
 	}
-	if got := m.activeTab; got != TabChat {
-		t.Fatalf("active tab = %q, want chat", got)
+	if got := m.activeTab; got != TabWelcome {
+		t.Fatalf("active tab = %q, want preserved welcome", got)
 	}
 }

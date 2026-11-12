@@ -23,7 +23,7 @@ func TestOverlayPrecedenceBlocksRegion1Routing(t *testing.T) {
 	chat := &recordingChatPane{}
 	surface := &fakeSurface{name: "guest", chat: chat}
 	factory := &countingFactory{shared: surface}
-	m := newRootModel(context.Background(), nil, factory)
+	m := NewRootModel(context.Background(), nil, factory)
 	m.setFocus(FocusRegionRegion1)
 	m.openAgentPicker()
 
@@ -52,6 +52,7 @@ func TestHITLRowAnswerAndDismissAreHandledByHost(t *testing.T) {
 	m.trackInteractionFrame("notif-1", *frame)
 	q.Push(NotificationItem{ID: "notif-1", Kind: NotifKindInteraction, Msg: "clarification"})
 	m.openInteractionGuidance("notif-1", *frame)
+	m.decisionFocused = true
 	tracked := m.interactionFrames["notif-1"]
 
 	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'1'}})
@@ -80,18 +81,16 @@ func TestHITLRowAnswerAndDismissAreHandledByHost(t *testing.T) {
 	frame2 := interaction.NewClarificationFrame("task-2", "session-2", "Pick one", []string{"review", "implement"}, nil)
 	m2.trackInteractionFrame("notif-2", *frame2)
 	m2.openInteractionGuidance("notif-2", *frame2)
+	m2.decisionFocused = true
 	tracked2 := m2.interactionFrames["notif-2"]
 
 	updated, cmd = m2.Update(tea.KeyMsg{Type: tea.KeyEsc})
 	rm = updated.(RootModel)
-	if cmd == nil {
-		t.Fatal("expected HITL row dismiss command")
+	if cmd != nil {
+		t.Fatal("Escape must not resolve or dismiss a decision")
 	}
-	updated, _ = rm.Update(cmd())
-	rm = updated.(RootModel)
-
-	if rm.hitlRow.Active() {
-		t.Fatal("expected HITL row to dismiss on esc")
+	if rm.decisionFocused {
+		t.Fatal("Escape must return focus to composer")
 	}
 	if tracked2 != nil && tracked2.Response != nil {
 		t.Fatalf("expected dismissed frame to remain unresolved, got %#v", tracked2.Response)

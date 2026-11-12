@@ -1,6 +1,7 @@
 package tui
 
 import (
+	runtimesvc "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
 	"context"
 	"fmt"
 	"os"
@@ -8,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/charmbracelet/bubbles/textarea"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
@@ -83,17 +84,20 @@ type RootModel struct {
 	session     *SessionPane
 
 	// Shared state
-	activeTab     TabID
-	searchActive  bool
-	showHelp      bool
-	help          HelpOverlay
-	ready         bool
-	width         int
-	height        int
-	focus         FocusRouter
-	activeAgent   string
-	agentPicker   *AgentPicker
-	startupLocked bool
+	activeTab       TabID
+	searchActive    bool
+	showHelp        bool
+	help            HelpOverlay
+	ready           bool
+	width           int
+	height          int
+	focus           FocusRouter
+	activeAgent     string
+	agentPicker     *AgentPicker
+	startupLocked   bool
+	decisionFocused bool
+	canvasOffset    int
+	helpOffset      int
 	// startupAgent is the agent activated at construction (before any startup
 	// gate). The gate parks the active agent at "none" while locked; on unlock
 	// it is restored to startupAgent so chat reaches the real agent surface.
@@ -103,6 +107,7 @@ type RootModel struct {
 	sharedSess     *Session
 	sharedCtx      *AgentContext
 	runtime        RuntimeAdapter
+	doctorReader   DoctorReader
 	store          *SessionStore
 	surfaceFactory SurfaceFactory
 	surfaceCache   map[string]*surfaceState
@@ -235,7 +240,7 @@ func isBaseFrameworkTab(id TabID) bool {
 	}
 }
 
-func newRootModel(parentCtx context.Context, rt RuntimeAdapter, factory SurfaceFactory) RootModel {
+func NewRootModel(parentCtx context.Context, rt RuntimeAdapter, factory SurfaceFactory) RootModel {
 	if parentCtx == nil {
 		parentCtx = context.Background()
 	}
@@ -316,6 +321,7 @@ func newRootModel(parentCtx context.Context, rt RuntimeAdapter, factory SurfaceF
 		sharedSess:        sess,
 		sharedCtx:         ctx,
 		runtime:           rt,
+		doctorReader:      rt,
 		interactionFrames: make(map[string]*interaction.InteractionFrame),
 		taskRunIDs:        make(map[string]bool),
 		cmdReg:            state.cmdReg,
@@ -383,6 +389,10 @@ func buildSurfaceState(parentCtx context.Context, factory SurfaceFactory, agentN
 		tabAware.SetActiveTab(initialTab)
 	}
 	region1 := surface.NewRegion1(rt, ctx, sess, store, notifQ)
+	if base := factory.Resolve("none"); base != nil && surface.Name() != "none" {
+		base.RegisterTabs(tabs)
+		region1 = base.NewRegion1(rt, ctx, sess, store, notifQ)
+	}
 	input := surface.NewInput(rt, ctx, sess)
 	nav := surface.NewNav(rt, ctx, sess)
 	return &surfaceState{
@@ -549,7 +559,7 @@ type ExecEventBatchMsg struct {
 // Init starts the HITL listener, spinner, text-input blink, and animation tick.
 func (m RootModel) Init() tea.Cmd {
 	cmds := []tea.Cmd{
-		textinput.Blink,
+		textarea.Blink,
 		m.session.Init(),
 		m.restorePromptCmd(),
 		m.subscribeHITLCmd(),
@@ -591,16 +601,24 @@ func (m RootModel) refreshBackendHealthCmd() tea.Cmd {
 // ready workspace boots locked on the Doctor tab until the user manually
 // refreshes ('r'): the construction-time gate only sees the empty zero-value
 // report. Returns nil when no runtime is wired (degraded/headless construction).
+// DoctorReader is a read-only bootstrap dependency, independent of execution.
+type DoctorReader interface {
+	BuildDoctorReport(context.Context) runtimesvc.DoctorReport
+}
+
 func (m RootModel) startupDoctorReportCmd() tea.Cmd {
-	rt := m.runtime
-	if rt == nil {
+	reader := m.doctorReader
+	if reader == nil {
 		return nil
 	}
+	parent := m.parentCtx
+	if parent == nil {
+		parent = context.Background()
+	}
 	return func() tea.Msg {
-		return DoctorStatusMsg{
-			Action: "refresh",
-			Report: rt.BuildDoctorReport(context.Background()),
-		}
+		ctx, cancel := context.WithTimeout(parent, 15*time.Second)
+		defer cancel()
+		return DoctorStatusMsg{Action: "refresh", Report: reader.BuildDoctorReport(ctx)}
 	}
 }
 
@@ -667,6 +685,61 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleGlobalKey(msg.Key)
 
 	case tea.KeyMsg:
+		// Rune batches are text, even when their spelling equals a key name.
+		// Route single runes so widget key maps cannot interpret "delete" as Delete.
+		if msg.Type == tea.KeyRunes && !msg.Paste && len(msg.Runes) > 1 {
+			var cmds []tea.Cmd
+			for _, r := range msg.Runes {
+				next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+				m = next.(RootModel)
+				if cmd != nil {
+					cmds = append(cmds, cmd)
+				}
+			}
+			return m, tea.Batch(cmds...)
+		}
+		if msg.Paste && m.focus.State().InInput() {
+			_, cmd := m.routeInputKey(msg)
+			return m, cmd
+		}
+		if m.activeTab == TabChat && !m.showHelp && (msg.String() == "pgup" || msg.String() == "pgdown") {
+			rows := max(1, m.height-6)
+			end := max(0, len(m.chatCanvasLines())-rows)
+			start := end
+			if m.canvasOffset > 0 {
+				start = m.canvasOffset - 1
+			}
+			if msg.String() == "pgup" {
+				start = max(0, start-rows)
+			} else {
+				start = min(end, start+rows)
+			}
+			if start == end {
+				m.canvasOffset = 0
+			} else {
+				m.canvasOffset = start + 1
+			}
+			return m, nil
+		}
+		if msg.String() == "f6" {
+			if m.focus.State().InInput() {
+				m.setFocus(FocusRegionRegion1)
+			} else {
+				m.setFocus(FocusRegionInput)
+			}
+			return m, nil
+		}
+		if m.showHelp && (msg.String() == "down" || msg.String() == "up" || msg.String() == "pgdown" || msg.String() == "pgup") {
+			delta := 1
+			if msg.String() == "up" || msg.String() == "pgup" {
+				delta = -1
+			}
+			m.helpOffset = max(0, m.helpOffset+delta)
+			return m, nil
+		}
+		if m.focus.State().InRegion1() && isBaseFrameworkTab(m.activeTab) && msg.String() != "esc" && msg.String() != "ctrl+c" && msg.String() != "ctrl+d" && msg.String() != "ctrl+g" {
+			return m, m.routeRegion1Key(msg)
+		}
 		// Quit shortcuts bypass everything.
 		if isReservedChord(msg) {
 			switch {
@@ -680,21 +753,33 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 		}
-		// A pending decision notification (HITL approval, interaction
-		// frame) owns its decision keys before the input sees them:
-		// attention priority without a modal freeze. Keys the bar does
-		// not consume keep flowing to the rest of the UI. Enter and esc
-		// yield to a non-empty draft so composing and submitting a
-		// message is never stolen by a frame default, and modal
-		// overlays keep their existing precedence.
-		if m.notifBar != nil && m.notifBar.Active() && m.overlays.Len() == 0 && m.decisionNotifTakesKey(msg) {
-			nb, cmd := m.notifBar.Update(msg)
-			m.notifBar = nb
-			if cmd != nil {
-				m.syncCommandPalette()
-				m.syncOverlayStack()
+		if msg.String() == "esc" && m.showHelp {
+			m.showHelp = false
+			return m, nil
+		}
+		if msg.String() == "ctrl+g" {
+			m.decisionFocused = true
+			return m, nil
+		}
+		if m.decisionFocused {
+			if msg.String() == "esc" {
+				m.decisionFocused = false
+				return m, nil
+			}
+			if m.hitlRow != nil && m.hitlRow.Active() {
+				if cmd, handled := m.hitlRow.HandleKey(msg); handled {
+					return m, cmd
+				}
+			}
+			if m.notifBar != nil && m.notifBar.Active() {
+				nb, cmd := m.notifBar.Update(msg)
+				m.notifBar = nb
+				if cmd != nil {
+					m.decisionFocused = false
+				}
 				return m, cmd
 			}
+			m.decisionFocused = false
 		}
 		ownsInput := m.activeInput != nil
 		if m.activeInput != nil {
@@ -718,25 +803,21 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, cmd
 			}
 		}
-		// HITL Row captures keys when active.
-		if m.hitlRow != nil && m.hitlRow.Active() {
-			if cmd, handled := m.hitlRow.HandleKey(msg); handled {
-				m.syncCommandPalette()
-				m.syncOverlayStack()
-				return m, cmd
-			}
-		}
-
-		// Notification bar decision keys were already given priority
-		// above; unmatched keys reach here with the bar still active.
 		if handled, cmd := m.routeFocusKey(msg); handled {
 			return m, cmd
 		}
 		// Route to input bar first.
+		if m.inputBar == nil {
+			return m, nil
+		}
 		ib, ibCmd := m.inputBar.Update(msg, m.activeTab)
 		m.inputBar = ib
 		m.syncCommandPalette()
 		return m, ibCmd
+
+	case InputRejectedMsg:
+		m.addSystemMessage(msg.Reason)
+		return m, nil
 
 	case InputSubmittedMsg:
 		if m.cmdPalette != nil {
@@ -750,6 +831,11 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.cmdPalette.Close()
 		}
 		m.syncOverlayStack()
+		if m.cmdReg != nil {
+			if _, ok := m.cmdReg.Lookup(msg.Name); ok && m.inputBar != nil {
+				m.inputBar.Accept(msg.Draft)
+			}
+		}
 		nm, cmd := executeCommand(&m, msg.Name, msg.Args)
 		return *nm, cmd
 
@@ -974,7 +1060,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 
 	// Chat-specific messages routed always to chat.
-	case chatSystemMsg:
+	case ChatSystemMsg:
 		p, cmd := m.chat.Update(msg)
 		m.chat = p
 		return m, cmd
@@ -1046,7 +1132,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.addSystemMessage(fmt.Sprintf("Changes since last commit:\n\n%s", msg.Output))
 		return m, nil
 
-	case compactResultMsg:
+	case CompactResultMsg:
 		if msg.Err != nil {
 			// Roll back the undo snapshot we pushed before the call.
 			if m.chat != nil {
@@ -1099,63 +1185,74 @@ func (m RootModel) routeToActivePanes(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
-// View composes the full terminal screen.
+// View renders one canvas and a persistent universal bar. It never updates gates,
+// focus or widget state; repeated renders of one model are observationally pure.
 func (m RootModel) View() string {
 	if !m.ready {
 		return "Initializing..."
 	}
-
-	parts := []string{
-		lipgloss.JoinVertical(lipgloss.Left, m.subTabBar.View(), m.activePaneView()),
+	if m.width < 1 || m.height < 1 {
+		return ""
 	}
-
-	if m.overlays != nil {
-		if overlay := m.overlays.Render(m.width, m.height); overlay != "" {
-			parts = append(parts, overlay)
+	if m.height < 6 {
+		return boundedScreen(m.inputBar.View(m.activeTab, false), m.width, m.height)
+	}
+	state := m.InteractionState()
+	label := string(state.Canvas)
+	header := m.th.Dim().Render("relurpish · " + terminalText(state.Agent) + " / " + label)
+	body := terminalText(m.activePaneView())
+	if m.activeTab == TabChat && m.chat != nil {
+		body = strings.Join(m.chatCanvasLines(), "\n")
+	}
+	if m.showHelp {
+		lines := []string{"Commands · Escape closes help", "F6 / Tab: focus canvas · Ctrl+G: open attention", "Alt+Enter: newline · PageUp/PageDown: scroll", ""}
+		if m.cmdReg != nil {
+			for _, command := range m.cmdReg.All() {
+				lines = append(lines, command.Usage+"  "+command.Description)
+			}
+		}
+		start := min(m.helpOffset, max(0, len(lines)-1))
+		body = strings.Join(lines[start:], "\n")
+	}
+	status := "ready · /help · Ctrl+G attention"
+	if m.chat == nil {
+		status = "execution unavailable · /doctor · /help"
+	}
+	if m.startupLocked {
+		status = "setup needed · /doctor · your request stays a draft"
+	}
+	if m.chat != nil && m.chat.HasActiveRuns() {
+		status = "working · /stop cancels · keep reading or composing"
+	}
+	if m.notifQ != nil && m.notifQ.Len() > 0 {
+		status = fmt.Sprintf("%d attention item(s) · Ctrl+G to open deliberately", m.notifQ.Len())
+	}
+	if m.decisionFocused {
+		status = "decision focused · Escape returns to your draft"
+		if m.hitlRow != nil && m.hitlRow.Active() {
+			body = m.hitlRow.View()
+		} else if m.notifBar != nil {
+			body = m.notifBar.View()
 		}
 	}
-
-	if m.notifBar != nil && m.notifBar.Active() {
-		parts = append(parts, m.notifBar.View())
+	if m.cmdPalette != nil && m.cmdPalette.IsOpen() {
+		body = m.cmdPalette.View()
 	}
-
-	streaming := m.chat != nil && m.chat.HasActiveRuns()
-	if m.inputGate != nil {
-		m.inputGate.SetActive(streaming)
+	if m.agentPicker != nil && m.agentPicker.IsOpen() {
+		body = m.agentPicker.Render(m.width, max(1, m.height-5))
 	}
-	if m.inputBar != nil {
-		m.inputBar.SetGated(streaming)
+	bar := m.inputBar.View(m.activeTab, m.chat != nil && m.chat.HasActiveRuns())
+	rows := max(0, m.height-2-lipgloss.Height(bar))
+	lines := strings.Split(body, "\n")
+	start := min(max(0, m.canvasOffset-1), max(0, len(lines)-rows))
+	if m.activeTab == TabChat && m.canvasOffset == 0 && len(lines) > rows && !m.showHelp {
+		start = len(lines) - rows
 	}
-
-	if m.hitlRow != nil && m.hitlRow.Active() {
-		m.hitlRow.SetWidth(m.width)
-		parts = append(parts, m.hitlRow.View())
+	content := boundedScreen(strings.Join(lines[start:], "\n"), m.width, rows)
+	for lipgloss.Height(content) < rows {
+		content += "\n"
 	}
-
-	bottom := lipgloss.JoinHorizontal(
-		lipgloss.Top,
-		renderAgentCell(m.th, m.activeAgentName(), m.layout.Region2Width()),
-		func() string {
-			if m.activeInput != nil {
-				return m.activeInput.View()
-			}
-			return m.inputBar.View(m.activeTab, streaming)
-		}(),
-	)
-	parts = append(parts, bottom)
-	if m.activeNav != nil {
-		parts = append(parts, m.activeNav.View())
-	} else {
-		parts = append(parts, m.tabBar.View())
-	}
-
-	base := lipgloss.JoinVertical(lipgloss.Left, parts...)
-
-	// Help overlay sits on top of everything.
-	if m.showHelp {
-		return m.help.View(base)
-	}
-	return base
+	return boundedScreen(strings.Join([]string{header, content, m.th.Dim().Render(status), bar}, "\n"), m.width, m.height)
 }
 
 func (m RootModel) activePaneView() string {
@@ -1181,9 +1278,6 @@ func (m RootModel) activeAgentName() string {
 // setActiveTab updates activeTab on the model, the tab bar, the tab registry,
 // and the subtab bar consistently.
 func (m *RootModel) setActiveTab(id TabID) {
-	if m.startupLocked && id != TabDoctor {
-		id = TabDoctor
-	}
 	m.activeTab = id
 	m.tabBar.SetActive(id)
 	m.tabs.SetActive(id)
@@ -1447,107 +1541,52 @@ func (m *RootModel) applyStartupGate() {
 	if m == nil {
 		return
 	}
-	report := DoctorReport{}
-	if reporter, ok := m.baseSurface.(StartupGateController); ok && reporter != nil {
+	report := runtimesvc.DoctorReport{}
+	if reporter, ok := m.baseSurface.(StartupGateController); ok {
 		report = reporter.DoctorReport()
 	}
-	if report.Ready() {
-		m.startupLocked = false
-		if controller, ok := m.baseSurface.(StartupGateController); ok && controller != nil {
-			controller.SetDoctorReport(report)
-		}
-		m.setActiveTab(TabChat)
-		return
-	}
-	m.startupLocked = true
-	m.activateSurface("none")
-	m.activeAgent = "none"
-	if m.sharedSess != nil {
-		m.sharedSess.Agent = "none"
-	}
-	m.setActiveTab(TabDoctor)
-	if controller, ok := m.baseSurface.(StartupGateController); ok && controller != nil {
-		controller.SetDoctorReport(report)
-		controller.SetDoctorStatus("startup checks failed; resolve Doctor issues to unlock guest chat")
+	m.startupLocked = !report.Ready()
+	if m.startupLocked {
+		m.setActiveTab(TabDoctor)
 	}
 }
 
-func (m *RootModel) applyDoctorReport(report DoctorReport) {
+func (m *RootModel) applyDoctorReport(report runtimesvc.DoctorReport) {
 	if m == nil {
 		return
 	}
-	if report.Ready() {
-		m.startupLocked = false
-		if controller, ok := m.baseSurface.(StartupGateController); ok && controller != nil {
-			controller.SetDoctorReport(report)
-		}
-		// The lock path parks the active agent surface at "none"; restore the
-		// real agent surface so the Chat tab renders the agent (not the gate).
-		// The runtime's active agent was never changed (parking is surface-only),
-		// so activateSurface is the correct symmetric inverse — switchActiveAgent
-		// would redundantly re-invoke runtime.SwitchAgent and can fail.
-		if m.activeAgentName() == "none" && m.startupAgent != "" && m.startupAgent != "none" {
-			if m.sharedSess != nil {
-				m.sharedSess.Agent = m.startupAgent
-			}
-			m.activateSurface(m.startupAgent)
-		}
+	wasLocked := m.startupLocked
+	m.startupLocked = !report.Ready()
+	if controller, ok := m.baseSurface.(StartupGateController); ok {
+		controller.SetDoctorReport(report)
+	}
+	if wasLocked && !m.startupLocked {
 		m.setActiveTab(TabChat)
-		m.addSystemMessage("Doctor checks passed; startup checks are healthy")
+		m.addSystemMessage("Doctor checks passed. Submit your preserved draft when ready.")
 		if postures := doctorPostureSummary(report); postures != "" {
 			m.addSystemMessage(postures)
 		}
-		return
-	}
-	m.startupLocked = true
-	if m.activeAgentName() != "none" {
-		_ = m.switchActiveAgent("none")
-	} else {
-		m.activateSurface("none")
-	}
-	m.setActiveTab(TabDoctor)
-	m.addSystemMessage("Startup checks failed; Doctor tab remains locked")
-	if controller, ok := m.baseSurface.(StartupGateController); ok && controller != nil {
-		controller.SetDoctorReport(report)
-		controller.SetDoctorStatus("startup checks failed; resolve Doctor issues to unlock guest chat")
 	}
 }
 
 // handleInputSubmitted routes a submitted value to the active pane.
 func (m RootModel) handleInputSubmitted(msg InputSubmittedMsg) (tea.Model, tea.Cmd) {
-	value := strings.TrimSpace(msg.Value)
-	if value == "" {
-		if m.cmdPalette != nil {
-			m.cmdPalette.Close()
-		}
+	if strings.TrimSpace(msg.Value) == "" {
 		return m, nil
 	}
-
-	if msg.Prefix == ">" {
-		if m.inputGate != nil && m.inputGate.Active() {
-			m.addSystemMessage("Cannot submit prompt while a run is active. Use /stop to cancel or wait for completion.")
-			return m, nil
-		}
-		if isBaseFrameworkTab(m.activeTab) {
-			return m, nil
-		}
-		if m.chat == nil {
-			return m, nil
-		}
-		cmd := m.chat.HandleInputSubmit(value)
-		return m, cmd
-	}
-	m.syncActivePaneFilter(value)
-	switch {
-	case isBaseFrameworkTab(m.activeTab):
+	if m.startupLocked || m.chat == nil {
+		m.addSystemMessage("Request kept as a draft: execution is unavailable. Open /doctor.")
 		return m, nil
-	default:
-		if m.chat == nil {
-			return m, nil
-		}
-		cmd := m.chat.HandleInputSubmit(value)
-		return m, cmd
 	}
+	if (m.inputGate != nil && m.inputGate.Active()) || m.chat.HasActiveRuns() {
+		m.addSystemMessage("Request kept as a draft while work is running. Use /stop to cancel.")
+		return m, nil
+	}
+	cmd := m.chat.HandleInputSubmit(msg.Value)
+	if cmd != nil && m.inputBar != nil {
+		m.inputBar.Accept(msg.Value)
+	}
+	return m, cmd
 }
 
 func (m RootModel) handleWorkspaceSelected(workspace string) (tea.Model, tea.Cmd) {
@@ -1746,24 +1785,11 @@ func (m RootModel) latestChanges() []FileChange {
 	return nil
 }
 
-// decisionNotifTakesKey reports whether the active decision notification
-// should see this key before the input does. Enter and esc yield to a
-// non-empty input draft: a frame's default slot is chosen with its slot
-// number or an empty-draft enter, never by consuming a composed submit.
-func (m RootModel) decisionNotifTakesKey(msg tea.KeyMsg) bool {
-	switch msg.String() {
-	case "enter", "esc":
-		return m.inputBar == nil || strings.TrimSpace(m.inputBar.Value()) == ""
-	default:
-		return true
-	}
-}
-
 // doctorPostureSummary condenses the doctor's posture rows into one boot
 // message: who answers approvals and who disambiguates intent. Deterministic
 // selection means clarification frames are always human-answered — an
 // operator reading the chat should not have to discover that from a timeout.
-func doctorPostureSummary(report DoctorReport) string {
+func doctorPostureSummary(report runtimesvc.DoctorReport) string {
 	var hitl, posture string
 	for _, dep := range report.Dependencies {
 		switch dep.Name {

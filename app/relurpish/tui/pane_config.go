@@ -162,7 +162,7 @@ func (p *ConfigPane) togglePolicy(level agentspec.AgentPermissionLevel) tea.Cmd 
 			action = "cleared"
 		}
 		return func() tea.Msg {
-			return chatSystemMsg{Text: fmt.Sprintf("class policy %q → %s", class, action)}
+			return ChatSystemMsg{Text: fmt.Sprintf("class policy %q → %s", class, action)}
 		}
 	case configSectionTools:
 		if p.sel >= len(p.tools) {
@@ -176,7 +176,7 @@ func (p *ConfigPane) togglePolicy(level agentspec.AgentPermissionLevel) tea.Cmd 
 			action = "cleared"
 		}
 		return func() tea.Msg {
-			return chatSystemMsg{Text: fmt.Sprintf("tool policy %q → %s", tool.Name, action)}
+			return ChatSystemMsg{Text: fmt.Sprintf("tool policy %q → %s", tool.Name, action)}
 		}
 	}
 	return nil

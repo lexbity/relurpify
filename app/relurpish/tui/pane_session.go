@@ -272,7 +272,7 @@ func (p *SessionPane) Update(msg tea.Msg) (*SessionPane, tea.Cmd) {
 				if p.context != nil {
 					if err := p.context.AddFile(e.Path); err == nil {
 						return p, func() tea.Msg {
-							return chatSystemMsg{Text: fmt.Sprintf("Added: %s", e.DisplayPath)}
+							return ChatSystemMsg{Text: fmt.Sprintf("Added: %s", e.DisplayPath)}
 						}
 					}
 				}
@@ -307,7 +307,7 @@ func (p *SessionPane) Update(msg tea.Msg) (*SessionPane, tea.Cmd) {
 						Args: []string{editorPath, filepath.Clean(path)},
 					}, func(err error) tea.Msg {
 						if err != nil {
-							return chatSystemMsg{Text: fmt.Sprintf("Editor error: %v", err)}
+							return ChatSystemMsg{Text: fmt.Sprintf("Editor error: %v", err)}
 						}
 						return nil
 					})

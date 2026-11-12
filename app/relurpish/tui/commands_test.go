@@ -18,40 +18,15 @@ func (s *recipeGuestSurface) RegisterCommands(reg *CommandRegistry) {
 }
 
 func TestParseInputDraftPrefixes(t *testing.T) {
-	draft := parseInputDraft("> write docs", TabChat, false)
-	if draft.prefix != ">" {
-		t.Fatalf("prefix = %q, want %q", draft.prefix, ">")
+	for _, raw := range []string{"> write docs", ":git status", "? why", "ordinary request"} {
+		draft := parseInputDraft(raw, TabSandbox, false)
+		if draft.commandMode || draft.filterMode || draft.prefix != "" || draft.current != raw {
+			t.Fatalf("ordinary request reinterpreted: %#v", draft)
+		}
 	}
-	if draft.promptLabel != "prompt" {
-		t.Fatalf("promptLabel = %q, want prompt", draft.promptLabel)
-	}
-	if got := sanitizeSubmittedValue("> write docs", draft.prefix); got != "write docs" {
-		t.Fatalf("submit value = %q, want %q", got, "write docs")
-	}
-
-	draft = parseInputDraft(":git status", TabChat, false)
-	if draft.prefix != ":" {
-		t.Fatalf("prefix = %q, want %q", draft.prefix, ":")
-	}
-	if !draft.commandMode {
-		t.Fatal("expected shell mode to be command mode")
-	}
-	if draft.command != "git" {
-		t.Fatalf("command = %q, want git", draft.command)
-	}
-	if len(draft.args) != 1 || draft.args[0] != "status" {
-		t.Fatalf("args = %#v, want [status]", draft.args)
-	}
-
-	draft = parseInputDraft("/commit fix", TabChat, false)
-	if draft.prefix != "/" {
-		t.Fatalf("prefix = %q, want %q", draft.prefix, "/")
-	}
-	if draft.command != "commit" {
-		t.Fatalf("command = %q, want commit", draft.command)
-	}
-	if len(draft.args) != 1 || draft.args[0] != "fix" {
-		t.Fatalf("args = %#v, want [fix]", draft.args)
+	draft := parseInputDraft("/commit fix", TabChat, false)
+	if !draft.commandMode || draft.command != "commit" || len(draft.args) != 1 || draft.args[0] != "fix" {
+		t.Fatalf("bad command: %#v", draft)
 	}
 }
 
@@ -78,7 +53,7 @@ func TestCommandPaletteFilteringAndTabCompletion(t *testing.T) {
 	if !open {
 		t.Fatal("expected command palette to open")
 	}
-	if label != "slash" {
+	if label != "command" {
 		t.Fatalf("label = %q, want slash", label)
 	}
 	if len(items) != 1 {
@@ -119,7 +94,7 @@ func TestHostRegistrySeparatesGuestCommands(t *testing.T) {
 			"guest": guest,
 		},
 	}
-	m := newRootModel(context.Background(), nil, factory)
+	m := NewRootModel(context.Background(), nil, factory)
 	if _, ok := m.cmdReg.Lookup("workspace"); !ok {
 		t.Fatal("expected workspace to remain a host command")
 	}

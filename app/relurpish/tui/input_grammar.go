@@ -30,19 +30,16 @@ func parseInputDraft(raw string, activeTab TabID, explicitSearch bool) inputDraf
 	}
 
 	prefix := string(trimmed[0])
-	switch prefix {
-	case "/", ":":
+	if prefix == "/" {
 		draft.prefix = prefix
 		draft.commandMode = true
-		draft.promptLabel = commandPromptLabel(prefix)
+		draft.promptLabel = "command"
 		body := strings.TrimLeft(trimmed[1:], " ")
 		draft.trailingSpace = strings.HasSuffix(body, " ")
 		tokens := strings.Fields(body)
 		if len(tokens) > 0 {
 			draft.command = tokens[0]
-			if len(tokens) > 1 {
-				draft.args = append([]string(nil), tokens[1:]...)
-			}
+			draft.args = append([]string(nil), tokens[1:]...)
 			if !draft.trailingSpace {
 				draft.current = tokens[len(tokens)-1]
 			}
@@ -50,32 +47,9 @@ func parseInputDraft(raw string, activeTab TabID, explicitSearch bool) inputDraf
 		if len(tokens) == 1 && !draft.trailingSpace {
 			draft.paletteQuery = tokens[0]
 		}
-	case ">":
-		draft.prefix = prefix
-		draft.promptLabel = "prompt"
-		body := strings.TrimLeft(trimmed[1:], " ")
-		draft.current = body
-	case "?":
-		draft.prefix = prefix
-		draft.filterMode = true
-		draft.promptLabel = "search"
-		body := strings.TrimLeft(trimmed[1:], " ")
-		draft.current = body
-		draft.paletteQuery = body
-	default:
-		if activeTab == TabChat {
-			draft.promptLabel = "prompt"
-		} else {
-			draft.promptLabel = "filter"
-			draft.filterMode = true
-		}
-		draft.current = trimmed
-		if explicitSearch {
-			draft.filterMode = true
-			if draft.promptLabel == "" {
-				draft.promptLabel = "search"
-			}
-		}
+	} else {
+		draft.promptLabel = "request to Euclo"
+		draft.current = raw
 	}
 
 	if draft.promptLabel == "" {
@@ -84,26 +58,9 @@ func parseInputDraft(raw string, activeTab TabID, explicitSearch bool) inputDraf
 	return draft
 }
 
-func defaultPromptLabel(activeTab TabID, explicitSearch bool) string {
-	if explicitSearch {
-		return "search"
-	}
-	if activeTab == TabChat {
-		return "prompt"
-	}
-	return "filter"
-}
+func defaultPromptLabel(_ TabID, _ bool) string { return "request to Euclo" }
 
-func commandPromptLabel(prefix string) string {
-	switch prefix {
-	case ":":
-		return "shell"
-	case "/":
-		return "slash"
-	default:
-		return "command"
-	}
-}
+func commandPromptLabel(_ string) string { return "command" }
 
 func parseCommandLine(raw string) (prefix string, name string, args []string, ok bool) {
 	trimmed := strings.TrimSpace(raw)
@@ -114,7 +71,7 @@ func parseCommandLine(raw string) (prefix string, name string, args []string, ok
 		return "", "", nil, false
 	}
 	prefix = string(trimmed[0])
-	if prefix != "/" && prefix != ":" {
+	if prefix != "/" {
 		return prefix, "", nil, false
 	}
 	body := strings.TrimSpace(trimmed[1:])
@@ -132,14 +89,7 @@ func parseCommandLine(raw string) (prefix string, name string, args []string, ok
 	return prefix, name, args, true
 }
 
-func isCommandPrefix(r rune) bool {
-	switch r {
-	case '/', ':', '>', '?':
-		return true
-	default:
-		return false
-	}
-}
+func isCommandPrefix(r rune) bool { return r == '/' }
 
 func isWordChar(r rune) bool {
 	return (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_'

@@ -146,7 +146,7 @@ func TestActivateSurfaceCachesPerAgent(t *testing.T) {
 		},
 	}
 
-	m := newRootModel(context.Background(), nil, factory)
+	m := NewRootModel(context.Background(), nil, factory)
 	if got := m.activeAgentName(); got != "none" {
 		t.Fatalf("initial agent = %q, want none", got)
 	}
@@ -160,8 +160,8 @@ func TestActivateSurfaceCachesPerAgent(t *testing.T) {
 	if got := m.activeAgentName(); got != "guest" {
 		t.Fatalf("agent after switch = %q, want guest", got)
 	}
-	if got := len(m.tabs.All()); got != 2 {
-		t.Fatalf("guest tab count = %d, want 2", got)
+	if got := len(m.tabs.All()); got != 8 {
+		t.Fatalf("guest tab count = %d, want 8", got)
 	}
 	if got := m.tabs.All()[0].Label; got != "chat" {
 		t.Fatalf("guest first tab label = %q, want chat", got)
@@ -209,7 +209,7 @@ func TestAgentPickerOpensFromRegion2Click(t *testing.T) {
 			"guest": &registrySurface{name: "guest", tabs: []TabDefinition{{ID: TabChat, Label: "chat"}}},
 		},
 	}
-	m := newRootModel(context.Background(), nil, factory)
+	m := NewRootModel(context.Background(), nil, factory)
 	m.width = 120
 	m.height = 40
 	m.ready = true

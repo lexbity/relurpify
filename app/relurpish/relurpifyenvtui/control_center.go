@@ -1,6 +1,7 @@
 package relurpifyenvtui
 
 import (
+	runtimesvc "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
 	tea "github.com/charmbracelet/bubbletea"
 
 	"codeburg.org/lexbit/relurpify/app/relurpish/tui"
@@ -255,14 +256,14 @@ func (p *controlCenterPane) OpenKeybindings() { p.activeTab = tui.TabKeybindings
 
 func (p *controlCenterPane) OpenDoctor() { p.activeTab = tui.TabDoctor }
 
-func (p *controlCenterPane) DoctorReport() tui.DoctorReport {
+func (p *controlCenterPane) DoctorReport() runtimesvc.DoctorReport {
 	if p.doctor == nil {
-		return tui.DoctorReport{}
+		return runtimesvc.DoctorReport{}
 	}
 	return p.doctor.Report()
 }
 
-func (p *controlCenterPane) SetDoctorReport(report tui.DoctorReport) {
+func (p *controlCenterPane) SetDoctorReport(report runtimesvc.DoctorReport) {
 	if p.doctor != nil {
 		p.doctor.SetReport(report)
 	}

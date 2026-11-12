@@ -175,7 +175,21 @@ func newChatCmd() *cobra.Command {
 		Use:   "chat",
 		Short: "Start the relurpish chat shell",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runWithRuntime(cmd, runTUI)
+			ctx := cmd.Context()
+			if _, err := runtimesvc.BootstrapStartupState(ctx, cfg, secrets); err != nil {
+				return tui.PTYSafe(func() error {
+					return tui.RunDiagnostics(ctx, cfg.Workspace, runtimesvc.NewDoctorService(cfg, secrets, err), euclotui.NewSurfaceFactory())
+				})
+			}
+			rt, err := runtimesvc.New(ctx, cfg, secrets)
+			if err != nil {
+				return tui.PTYSafe(func() error {
+					return tui.RunDiagnostics(ctx, cfg.Workspace, runtimesvc.NewDoctorService(cfg, secrets, err), euclotui.NewSurfaceFactory())
+				})
+			}
+			runtimesvc.RepointStdlibLog(rt)
+			defer func() { _ = rt.Close(context.Background()) }()
+			return runTUI(ctx, rt)
 		},
 	}
 	return cmd

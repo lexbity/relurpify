@@ -33,9 +33,6 @@ import (
 
 const contextFileMaxBytes = 8000
 
-// DoctorReport is the runtime readiness report surfaced in the base shell.
-type DoctorReport = runtimesvc.DoctorReport
-
 // ToolInfo describes a registered local tool and its current policy for the config pane.
 type ToolInfo struct {
 	Name          string
@@ -145,7 +142,7 @@ type RuntimeAdapter interface {
 	Diagnostics() DiagnosticsInfo
 	// BuildDoctorReport computes the workspace readiness report used by the
 	// base-framework Doctor tab.
-	BuildDoctorReport(ctx context.Context) DoctorReport
+	BuildDoctorReport(ctx context.Context) runtimesvc.DoctorReport
 	// ReloadWorkspace rebuilds the runtime against a different workspace root.
 	ReloadWorkspace(ctx context.Context, workspace string) error
 	// InitializeWorkspaceFromTemplates materializes the bundled relurpify_cfg
@@ -193,7 +190,7 @@ type runtimeAdapter struct {
 	rt atomic.Pointer[runtimesvc.Runtime]
 }
 
-func newRuntimeAdapter(rt *runtimesvc.Runtime) RuntimeAdapter {
+func NewRuntimeAdapter(rt *runtimesvc.Runtime) RuntimeAdapter {
 	if rt == nil {
 		return nil
 	}
@@ -1388,9 +1385,9 @@ func (r *runtimeAdapter) ResolveInteractionFrame(ctx context.Context, taskID, fr
 	return r.currentRuntime().ResolveInteractionFrame(ctx, taskID, frameID, choice, freetext)
 }
 
-func (r *runtimeAdapter) BuildDoctorReport(ctx context.Context) DoctorReport {
+func (r *runtimeAdapter) BuildDoctorReport(ctx context.Context) runtimesvc.DoctorReport {
 	if r == nil || r.currentRuntime() == nil {
-		return DoctorReport{}
+		return runtimesvc.DoctorReport{}
 	}
 	return runtimesvc.BuildDoctorReport(ctx, r.currentRuntime().Config, r.currentRuntime().Secrets())
 }

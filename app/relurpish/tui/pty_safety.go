@@ -52,8 +52,23 @@ func RunWithSurface(ctx context.Context, rt *runtimesvc.Runtime, factory Surface
 	if rt == nil {
 		return fmt.Errorf("runtime is required")
 	}
-	adapter := newRuntimeAdapter(rt)
-	m := newRootModel(ctx, adapter, factory)
+	adapter := NewRuntimeAdapter(rt)
+	m := NewRootModel(ctx, adapter, factory)
+	return runModel(ctx, m)
+}
+
+// RunDiagnostics opens the same host when execution cannot be constructed.
+// No execution adapter is synthesized; ordinary requests remain drafts.
+func RunDiagnostics(ctx context.Context, workspace string, reader DoctorReader, factory SurfaceFactory) error {
+	m := NewRootModel(ctx, nil, factory)
+	m.doctorReader = reader
+	m.sharedSess.Workspace = workspace
+	m.startupLocked = true
+	m.setActiveTab(TabDoctor)
+	return runModel(ctx, m)
+}
+
+func runModel(ctx context.Context, m RootModel) error {
 	program := tea.NewProgram(
 		m,
 		tea.WithContext(ctx),

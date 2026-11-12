@@ -1,4 +1,4 @@
-.PHONY: test-unit test-integ test-scenario test-conformance test-all check-stream-contract test-prep
+.PHONY: test-unit test-integ test-scenario test-conformance test-all check-stream-contract test-prep clean-builds
 .PHONY: test-contract-migration test-dev-agent test-tape-fidelity test-euclo-golden check-contract-dissolution grep-architecture-gates
 .PHONY: lint-config generate-config check-config-tree-drift
 .PHONY: lint-all lint-arch lint-go lint-go-fix check-makefile-phonys check-no-dead-resolver check-no-ghost-schemas lint-class-normalization lint-no-permissive-hitl
@@ -6,6 +6,14 @@
 .PHONY: grep-security-gates
 
 GO_OFFLINE_ENV := GOPROXY=off GOSUMDB=off
+
+# clean-builds deletes build/test artifacts that accumulate on disk (dist/,
+# coverage binaries, .book-scratch/bin, test-fixture target/). Dry-run by
+# default; YES=1 performs the deletion, DEEP=1 also drops the Go build caches
+# (/tmp/relurpify-go-cache, .gocache), MODCACHE=1 also the module cache
+# (.gomodcache; re-download needed since builds run with GOPROXY=off).
+clean-builds:
+	@bash tooling/clean-builds.sh $(if $(DEEP),--deep) $(if $(MODCACHE),--modcache) $(if $(YES),-y)
 
 # Architecture invariant gates (GP-9).
 # governance-no-orch and no-bucket are now in enforce mode (Slice 7).
@@ -433,3 +441,16 @@ check-gates-honest:
 		fi; \
 	done
 	@echo "[PASS] check-gates-honest: all gate patterns and AST gates present"
+
+.PHONY: check-relurpish-v2
+check-relurpish-v2:
+	$(GO_OFFLINE_ENV) go test ./tooling/arch -run '^TestRelurpishV2' -count=1
+	$(GO_OFFLINE_ENV) go run ./tooling/arch/cmd/relurpishcheck
+	$(GO_OFFLINE_ENV) go test ./app/relurpish/tui -run '^TestV2' -count=1
+
+.PHONY: test-relurpish-v2-integration
+test-relurpish-v2-integration:
+	@v2_dir=$$(mktemp -d /tmp/relurpish-v2-pty.XXXXXX); \
+	trap 'rm -rf "$$v2_dir"' EXIT; \
+	$(GO_OFFLINE_ENV) go build -o "$$v2_dir/relurpish" ./app/relurpish && \
+	$(GO_OFFLINE_ENV) go test -tags=relurpish_v2_integration ./app/relurpish/testsuite -run '^TestV2(DoctorWithoutRuntime|PTYFocusAndBounds)$$' -count=1 -timeout=60s -args -v2-binary "$$v2_dir/relurpish"

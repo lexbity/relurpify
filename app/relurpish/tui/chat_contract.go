@@ -1,15 +1,12 @@
 package tui
 
 import (
+	runtimesvc "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
 // ChatSystemMsg adds a system line to the chat feed.
 type ChatSystemMsg struct{ Text string }
-
-// chatSystemMsg remains the package-local constructor form used throughout the
-// TUI package.
-type chatSystemMsg = ChatSystemMsg
 
 // ChatPaner is the core chat surface contract used by the host shell and
 // agent-specific surfaces.
@@ -81,8 +78,8 @@ type Region1Surface interface {
 
 // StartupGateController exposes Doctor-based startup state to the host.
 type StartupGateController interface {
-	DoctorReport() DoctorReport
-	SetDoctorReport(report DoctorReport)
+	DoctorReport() runtimesvc.DoctorReport
+	SetDoctorReport(report runtimesvc.DoctorReport)
 	SetDoctorStatus(status string)
 }
 

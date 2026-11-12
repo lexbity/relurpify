@@ -1,6 +1,7 @@
 package tui
 
 import (
+	runtimesvc "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
 	"context"
 	"testing"
 
@@ -59,7 +60,7 @@ type fakeSurface struct {
 	tabCount     int
 	commandCount int
 	tabs         []TabDefinition
-	doctorReport DoctorReport
+	doctorReport runtimesvc.DoctorReport
 	doctorStatus string
 }
 
@@ -107,8 +108,8 @@ func (s *fakeSurface) InitialSubTab(TabID) SubTabID                             
 func (s *fakeSurface) RenderNotification(item NotificationItem) string          { return item.Msg }
 func (s *fakeSurface) HandleFrame(context.Context, *RootModel, SurfaceFrameMsg) {}
 func (s *fakeSurface) Theme() *theme.Theme                                      { return nil }
-func (s *fakeSurface) DoctorReport() DoctorReport                               { return s.doctorReport }
-func (s *fakeSurface) SetDoctorReport(report DoctorReport)                      { s.doctorReport = report }
+func (s *fakeSurface) DoctorReport() runtimesvc.DoctorReport                    { return s.doctorReport }
+func (s *fakeSurface) SetDoctorReport(report runtimesvc.DoctorReport)           { s.doctorReport = report }
 func (s *fakeSurface) SetDoctorStatus(status string)                            { s.doctorStatus = status }
 func (s *fakeSurface) SetSize(int, int)                                         {}
 func (s *fakeSurface) SetStore(*SessionStore)                                   {}
@@ -190,7 +191,7 @@ func (f *countingFactory) AvailableAgents() []string {
 func TestRootModelResizeAllocatesChromeRows(t *testing.T) {
 	surface := &fakeSurface{name: "guest", chat: &fakeChatPane{}}
 	factory := &countingFactory{shared: surface}
-	m := newRootModel(context.Background(), nil, factory)
+	m := NewRootModel(context.Background(), nil, factory)
 	q := &NotificationQueue{}
 	m.notifQ = q
 	m.notifBar = NewNotificationBar(q)
@@ -214,8 +215,8 @@ func TestRootModelResizeAllocatesChromeRows(t *testing.T) {
 	if got := surface.chat.(*fakeChatPane).height; got != 36 {
 		t.Fatalf("chat height = %d, want %d", got, 36)
 	}
-	if got := rm.inputBar.width; got != 100 {
-		t.Fatalf("input width = %d, want %d", got, 100)
+	if got := rm.inputBar.width; got != 120 {
+		t.Fatalf("input width = %d, want %d", got, 120)
 	}
 }
 
@@ -226,7 +227,7 @@ func TestReservedChordsBypassSurfaceOwnedInput(t *testing.T) {
 		nav:         &hostileNavSurface{},
 	}
 	factory := &countingFactory{shared: surface}
-	m := newRootModel(context.Background(), nil, factory)
+	m := NewRootModel(context.Background(), nil, factory)
 
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlA, Alt: false})
 	rm := updated.(RootModel)

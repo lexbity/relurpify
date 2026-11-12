@@ -2,9 +2,6 @@ package euclotui
 
 import (
 	"fmt"
-	"os"
-	"os/exec"
-	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -13,7 +10,6 @@ import (
 
 	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 	"codeburg.org/lexbit/relurpify/app/relurpish/tui"
-	"codeburg.org/lexbit/relurpify/capability/fs"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
@@ -43,11 +39,6 @@ const (
 	diffViewByCause
 )
 
-type diffBaseline struct {
-	Exists bool
-	Data   []byte
-}
-
 type diffFileGroup struct {
 	File                 string
 	StepIDs              []string
@@ -68,7 +59,6 @@ type DiffPane struct {
 	selectedKey  string
 	collapsed    map[string]bool
 	rejected     map[string]bool
-	baselines    map[string]diffBaseline
 	lastRendered []diffNode
 	th           *theme.Theme
 }
@@ -84,9 +74,7 @@ func NewDiffPane(router *EucloEventRouter, workspace string, th *theme.Theme) *D
 		viewMode:  diffViewByFile,
 		collapsed: make(map[string]bool),
 		rejected:  make(map[string]bool),
-		baselines: make(map[string]diffBaseline),
 	}
-	p.primeBaselines()
 	return p
 }
 
@@ -100,7 +88,6 @@ func (p *DiffPane) SetSessionStore(store *tui.SessionStore) {
 
 func (p *DiffPane) SetRouter(router *EucloEventRouter) {
 	p.router = router
-	p.primeBaselines()
 }
 
 func (p *DiffPane) SetWorkspace(workspace string) {
@@ -109,8 +96,6 @@ func (p *DiffPane) SetWorkspace(workspace string) {
 		return
 	}
 	p.workspace = workspace
-	p.baselines = make(map[string]diffBaseline)
-	p.primeBaselines()
 }
 
 func (p *DiffPane) SetSize(w, h int) {
@@ -171,41 +156,15 @@ func (p *DiffPane) Update(msg tea.Msg) tea.Cmd {
 				}
 			}
 		}
-	case "a":
-		return p.applyAllCmd()
 	case "c":
 		p.toggleViewMode()
 		return p.systemMsgCmd(p.viewModeLabel())
-	case "s":
-		if idx >= 0 {
-			return p.applySelectedCmd(nodes[idx])
-		}
-	case "f":
-		if idx >= 0 {
-			return p.applySelectedCmd(nodes[idx])
-		}
-	case "h":
-		if idx >= 0 && nodes[idx].Kind == diffNodeHunk && nodes[idx].Hunk != nil {
-			return p.applySelectedCmd(nodes[idx])
-		}
-	case "u":
-		if idx >= 0 {
-			return p.revertFileCmd(nodes[idx].File)
-		}
-	case "U":
-		return p.revertAllCmd()
 	case "x":
 		if idx >= 0 {
 			p.rejected[nodes[idx].Key] = true
 			return p.systemMsgCmd(fmt.Sprintf("Rejected %s", p.nodeLabel(nodes[idx])))
 		}
-	case "e":
-		if idx >= 0 {
-			path := p.nodeEditorPath(nodes[idx])
-			if path != "" {
-				return p.openEditorCmd(path)
-			}
-		}
+
 	}
 	return nil
 }
@@ -302,7 +261,7 @@ func (p *DiffPane) verdictSummary(snap EucloProjectionSnapshot) string {
 		}
 	}
 	if failedFiles == 0 {
-		return p.th.Dim().Render("tests ✓")
+		return p.th.Dim().Render("tests: not established")
 	}
 	if firstFailure == "" {
 		firstFailure = "verification failed"
@@ -539,8 +498,8 @@ func (p *DiffPane) renderTree(nodes []diffNode, selected int, width int) string 
 		}
 	}
 	lines = append(lines, "")
-	lines = append(lines, p.th.Dim().Render("a=apply all  c=toggle view  s=apply selected  f=apply file  h=apply hunk"))
-	lines = append(lines, p.th.Dim().Render("u=revert file  U=revert all  x=reject node  e=open editor  arrows=navigate"))
+	lines = append(lines, p.th.Dim().Render("read-only evidence · c=toggle view"))
+	lines = append(lines, p.th.Dim().Render("x=hide selected node · arrows=navigate"))
 	return p.th.Panel().Width(width).Render(strings.Join(lines, "\n"))
 }
 
@@ -805,303 +764,6 @@ func (p *DiffPane) fileGroupForSnapshot(snap EucloProjectionSnapshot, filePath s
 	return group
 }
 
-func (p *DiffPane) nodeEditorPath(node diffNode) string {
-	switch node.Kind {
-	case diffNodeHunk:
-		if node.Hunk != nil && node.Hunk.DeferredMarkdownPath != "" {
-			return p.resolvePath(node.Hunk.DeferredMarkdownPath)
-		}
-		return p.resolvePath(node.File)
-	case diffNodeFile:
-		return p.resolvePath(node.File)
-	case diffNodeStep:
-		snap := p.snapshot()
-		step := snap.Diff.Steps[node.StepID]
-		if step == nil {
-			return ""
-		}
-		for _, filePath := range step.Order {
-			if filePath != "" {
-				return p.resolvePath(filePath)
-			}
-		}
-	}
-	return ""
-}
-
-func (p *DiffPane) openEditorCmd(path string) tea.Cmd {
-	if strings.TrimSpace(path) == "" {
-		return nil
-	}
-	return tea.ExecProcess(editorProcess(path), func(err error) tea.Msg {
-		if err != nil {
-			return tui.ChatSystemMsg{Text: fmt.Sprintf("Editor error: %v", err)}
-		}
-		return nil
-	})
-}
-
-func editorProcess(path string) *exec.Cmd {
-	editor := tui.EditorPath()
-	editorPath, err := exec.LookPath(editor)
-	if err != nil {
-		editorPath = editor
-	}
-	return &exec.Cmd{
-		Path: editorPath,
-		Args: []string{editorPath, filepath.Clean(path)},
-	}
-}
-
-func (p *DiffPane) applyAllCmd() tea.Cmd {
-	nodes := p.visibleNodes()
-	if len(nodes) == 0 {
-		return p.systemMsgCmd("No diff changes available")
-	}
-	var applied int
-	for _, node := range nodes {
-		if p.rejected[node.Key] {
-			continue
-		}
-		switch p.viewMode {
-		case diffViewByCause:
-			if node.Kind != diffNodeStep {
-				continue
-			}
-			if err := p.applyStep(node.StepID); err != nil {
-				return p.systemMsgCmd(fmt.Sprintf("Apply all failed: %v", err))
-			}
-			applied++
-		default:
-			if node.Kind != diffNodeFile {
-				continue
-			}
-			if err := p.applyFileNode(node, nodes); err != nil {
-				return p.systemMsgCmd(fmt.Sprintf("Apply all failed: %v", err))
-			}
-			applied++
-		}
-	}
-	return p.systemMsgCmd(fmt.Sprintf("Applied %d item(s)", applied))
-}
-
-func (p *DiffPane) applySelectedCmd(node diffNode) tea.Cmd {
-	switch node.Kind {
-	case diffNodeStep:
-		if err := p.applyStep(node.StepID); err != nil {
-			return p.systemMsgCmd(fmt.Sprintf("Apply step failed: %v", err))
-		}
-		return p.systemMsgCmd(fmt.Sprintf("Applied step %s", node.StepID))
-	case diffNodeFile:
-		if err := p.applyFileNode(node, p.visibleNodes()); err != nil {
-			return p.systemMsgCmd(fmt.Sprintf("Apply file failed: %v", err))
-		}
-		return p.systemMsgCmd(fmt.Sprintf("Applied file %s", node.File))
-	case diffNodeHunk:
-		if node.Hunk == nil {
-			return p.systemMsgCmd("No hunk selected")
-		}
-		if err := p.applyHunk(node.File, *node.Hunk); err != nil {
-			return p.systemMsgCmd(fmt.Sprintf("Apply hunk failed: %v", err))
-		}
-		return p.systemMsgCmd(fmt.Sprintf("Applied hunk %s", node.File))
-	default:
-		return nil
-	}
-}
-
-func (p *DiffPane) revertFileCmd(filePath string) tea.Cmd {
-	if err := p.revertFile(filePath); err != nil {
-		return p.systemMsgCmd(fmt.Sprintf("Revert file failed: %v", err))
-	}
-	return p.systemMsgCmd(fmt.Sprintf("Reverted file %s", filePath))
-}
-
-func (p *DiffPane) revertAllCmd() tea.Cmd {
-	if err := p.revertAll(); err != nil {
-		return p.systemMsgCmd(fmt.Sprintf("Revert all failed: %v", err))
-	}
-	return p.systemMsgCmd("Reverted diff checkpoint")
-}
-
-func (p *DiffPane) applyStep(stepID string) error {
-	snap := p.snapshot()
-	step := snap.Diff.Steps[stepID]
-	if step == nil {
-		return fmt.Errorf("step %q not found", stepID)
-	}
-	for _, filePath := range step.Order {
-		if err := p.applyFile(stepID, filePath); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (p *DiffPane) applyFile(stepID, filePath string) error {
-	snap := p.snapshot()
-	step := snap.Diff.Steps[stepID]
-	if step == nil {
-		return fmt.Errorf("step %q not found", stepID)
-	}
-	file := step.Files[filePath]
-	if file == nil {
-		return fmt.Errorf("file %q not found", filePath)
-	}
-	return p.applyHunks(filePath, file.Hunks)
-}
-
-func (p *DiffPane) applyFileNode(node diffNode, nodes []diffNode) error {
-	if p.viewMode == diffViewByCause {
-		return p.applyFile(node.StepID, node.File)
-	}
-	hunks := p.groupHunksForFile(node.File, nodes)
-	if len(hunks) == 0 {
-		return fmt.Errorf("file %q not found", node.File)
-	}
-	return p.applyHunks(node.File, hunks)
-}
-
-func (p *DiffPane) applyHunk(filePath string, hunk DiffHunkProjection) error {
-	return p.applyHunks(filePath, []DiffHunkProjection{hunk})
-}
-
-func (p *DiffPane) groupHunksForFile(filePath string, nodes []diffNode) []DiffHunkProjection {
-	var hunks []DiffHunkProjection
-	collecting := false
-	for _, node := range nodes {
-		if node.Kind == diffNodeFile {
-			if collecting && node.File != filePath {
-				break
-			}
-			collecting = node.File == filePath
-			continue
-		}
-		if !collecting || node.File != filePath || node.Hunk == nil || p.rejected[node.Key] {
-			continue
-		}
-		hunks = append(hunks, *node.Hunk)
-	}
-	return hunks
-}
-
-func (p *DiffPane) applyHunks(filePath string, hunks []DiffHunkProjection) error {
-	if len(hunks) == 0 {
-		return nil
-	}
-	abs := p.resolvePath(filePath)
-	if abs == "" {
-		return fmt.Errorf("workspace path unavailable")
-	}
-	cleanAbs := filepath.Clean(abs)
-	workspaceRoot := filepath.Clean(p.workspace)
-	if !strings.HasPrefix(cleanAbs, workspaceRoot) {
-		return fmt.Errorf("path traversal: %s", filePath)
-	}
-	if err := p.captureBaseline(filePath); err != nil {
-		return err
-	}
-	current, err := os.ReadFile(cleanAbs)
-	if err != nil && !os.IsNotExist(err) {
-		return err
-	}
-	updated := append([]byte(nil), current...)
-	for _, hunk := range hunks {
-		updated, err = applyHunkBody(updated, hunk.Body)
-		if err != nil {
-			return fmt.Errorf("%s: %w", filePath, err)
-		}
-	}
-	if err := os.MkdirAll(filepath.Dir(cleanAbs), fs.PublicDirMode); err != nil { // public: parent dir for patch
-		return err
-	}
-	if _, err := config.CreateTimestampedBackup(cleanAbs); err != nil && !os.IsNotExist(err) {
-		return err
-	}
-	return os.WriteFile(filepath.Clean(cleanAbs), updated, fs.PublicFileMode) //nolint:gosec // workspace-scoped write after prefix check and backup capture
-}
-
-func (p *DiffPane) revertFile(filePath string) error {
-	abs := p.resolvePath(filePath)
-	if abs == "" {
-		return fmt.Errorf("workspace path unavailable")
-	}
-	baseline, ok := p.baselines[filePath]
-	if !ok {
-		if err := p.captureBaseline(filePath); err != nil {
-			return err
-		}
-		baseline = p.baselines[filePath]
-	}
-	if !baseline.Exists {
-		if err := os.Remove(abs); err != nil && !os.IsNotExist(err) {
-			return err
-		}
-		return nil
-	}
-	if err := os.MkdirAll(filepath.Dir(abs), fs.PublicDirMode); err != nil { // public: parent dir for revert
-		return err
-	}
-	return os.WriteFile(abs, baseline.Data, fs.PublicFileMode) // public: baseline content
-}
-
-func (p *DiffPane) revertAll() error {
-	for filePath := range p.baselines {
-		if err := p.revertFile(filePath); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (p *DiffPane) captureBaseline(filePath string) error {
-	if _, ok := p.baselines[filePath]; ok {
-		return nil
-	}
-	abs := p.resolvePath(filePath)
-	if abs == "" {
-		return fmt.Errorf("workspace path unavailable")
-	}
-	data, err := os.ReadFile(filepath.Clean(abs))
-	if err != nil {
-		if os.IsNotExist(err) {
-			p.baselines[filePath] = diffBaseline{Exists: false}
-			return nil
-		}
-		return err
-	}
-	p.baselines[filePath] = diffBaseline{Exists: true, Data: append([]byte(nil), data...)}
-	return nil
-}
-
-func (p *DiffPane) primeBaselines() {
-	snap := p.snapshot()
-	for _, stepID := range snap.Diff.Order {
-		step := snap.Diff.Steps[stepID]
-		if step == nil {
-			continue
-		}
-		for _, filePath := range step.Order {
-			_ = p.captureBaseline(filePath)
-		}
-	}
-}
-
-func (p *DiffPane) resolvePath(path string) string {
-	path = strings.TrimSpace(path)
-	if path == "" {
-		return ""
-	}
-	if filepath.IsAbs(path) {
-		return filepath.Clean(path)
-	}
-	root := p.workspace
-	if root == "" {
-		return filepath.Clean(path)
-	}
-	return filepath.Clean(filepath.Join(root, path))
-}
-
 func (p *DiffPane) systemMsgCmd(text string) tea.Cmd {
 	return func() tea.Msg {
 		return tui.ChatSystemMsg{Text: text}
@@ -1168,84 +830,4 @@ func diffSplitWidths(total int) (int, int) {
 		right = total - left
 	}
 	return left, right
-}
-
-func applyHunkBody(current []byte, body string) ([]byte, error) {
-	trimmed := strings.TrimSpace(body)
-	if trimmed == "" {
-		return current, nil
-	}
-	if !looksLikeUnifiedDiff(trimmed) {
-		return []byte(body), nil
-	}
-	baseLines := splitPatchLines(string(current))
-	patched, err := applyUnifiedPatch(baseLines, body)
-	if err != nil {
-		return nil, err
-	}
-	return []byte(strings.Join(patched, "\n")), nil
-}
-
-func looksLikeUnifiedDiff(body string) bool {
-	return strings.Contains(body, "\n@@") || strings.HasPrefix(body, "@@") || strings.Contains(body, "\n+++") || strings.Contains(body, "\n---")
-}
-
-func splitPatchLines(text string) []string {
-	if text == "" {
-		return nil
-	}
-	text = strings.ReplaceAll(text, "\r\n", "\n")
-	text = strings.TrimSuffix(text, "\n")
-	if text == "" {
-		return []string{""}
-	}
-	return strings.Split(text, "\n")
-}
-
-func applyUnifiedPatch(base []string, patch string) ([]string, error) {
-	lines := splitPatchLines(patch)
-	var out []string
-	idx := 0
-	for i := 0; i < len(lines); i++ {
-		line := lines[i]
-		if strings.HasPrefix(line, "--- ") || strings.HasPrefix(line, "+++ ") {
-			continue
-		}
-		if !strings.HasPrefix(line, "@@") {
-			continue
-		}
-		for i+1 < len(lines) {
-			next := lines[i+1]
-			if strings.HasPrefix(next, "@@") {
-				break
-			}
-			i++
-			switch {
-			case strings.HasPrefix(next, " "):
-				if idx < len(base) {
-					out = append(out, base[idx])
-					idx++
-				} else {
-					out = append(out, strings.TrimPrefix(next, " "))
-				}
-			case strings.HasPrefix(next, "-"):
-				if idx < len(base) {
-					idx++
-				}
-			case strings.HasPrefix(next, "+"):
-				out = append(out, strings.TrimPrefix(next, "+"))
-			case strings.HasPrefix(next, "\\"):
-				// "\ No newline at end of file" marker.
-			default:
-				out = append(out, next)
-			}
-		}
-	}
-	for ; idx < len(base); idx++ {
-		out = append(out, base[idx])
-	}
-	if len(out) == 0 && len(base) == 0 {
-		return []string{}, nil
-	}
-	return out, nil
 }
