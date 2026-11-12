@@ -42,13 +42,11 @@ func (e *Engine) ApplyBatch(ctx context.Context, batch GraphBatch) error {
 
 // ApplyBatchValidated commits nodes and edges together and applies them to
 // memory only if validate — run INSIDE the apply critical section, against
-// the current committed state — accepts (D4: the merge decision is made on
-// committed state). Because the validator reads under the same store lock the
-// apply mutates under, no writer can interleave between the re-check and the
-// apply: an accepted decision is decision-correct at apply time. A
-// ErrBatchConflict (or badger.ErrConflict) failure leaves both the durable
-// log and the memory mirror untouched by this batch. A nil validator applies
-// unconditionally (ApplyBatch semantics).
+// the current committed state — accepts. The validator runs UNDER the store
+// lock BEFORE the durable commit, ensuring that validation failures leave both
+// the durable log and memory mirror untouched by this batch (D-07). A
+// ErrBatchConflict failure leaves no persistent record. A nil validator
+// applies unconditionally (ApplyBatch semantics).
 func (e *Engine) ApplyBatchValidated(ctx context.Context, batch GraphBatch, validate func(get NodeGetter) error) error {
 	if len(batch.Nodes) == 0 && len(batch.Edges) == 0 {
 		return nil
@@ -56,6 +54,10 @@ func (e *Engine) ApplyBatchValidated(ctx context.Context, batch GraphBatch, vali
 	if err := e.checkDirty(); err != nil {
 		return err
 	}
+	e.store.mu.Lock()
+	defer e.store.mu.Unlock()
+
+	// Prepare immutable payload with timestamps
 	now := time.Now().UnixNano()
 	nodes := make([]NodeRecord, 0, len(batch.Nodes))
 	for _, node := range batch.Nodes {
@@ -72,34 +74,37 @@ func (e *Engine) ApplyBatchValidated(ctx context.Context, batch GraphBatch, vali
 		}
 		edges = append(edges, edge)
 	}
+
+	// Build getter for validation - reads current committed state under the lock
+	get := func(id string) (NodeRecord, bool) {
+		node, ok := e.store.nodes[id]
+		if !ok || node == nil || node.DeletedAt != 0 {
+			return NodeRecord{}, false
+		}
+		return cloneNode(node), true
+	}
+
+	// Validate BEFORE durable commit (D-07: reject before persist)
+	if validate != nil {
+		if err := validate(get); err != nil {
+			// Validation failed: return conflict WITHOUT persisting
+			// The durable log and memory mirror remain untouched.
+			return ErrBatchConflict
+		}
+	}
+
+	// Validation passed - now commit durably
 	if err := e.persist(ctx, "apply_batch", graphBatchOp{Nodes: nodes, Edges: edges}); err != nil {
 		return err
 	}
+
+	// Check for test hook after commit
 	if err := e.applyHook(); err != nil {
 		e.markDirty(err)
 		return err
 	}
-	e.store.mu.Lock()
-	defer e.store.mu.Unlock()
-	if validate != nil {
-		// The getter reads the mirror WITHOUT taking the store lock: the
-		// section already holds it exclusively, so the validator's reads and
-		// the apply below are one atomic critical section (D4).
-		get := func(id string) (NodeRecord, bool) {
-			node, ok := e.store.nodes[id]
-			if !ok || node == nil || node.DeletedAt != 0 {
-				return NodeRecord{}, false
-			}
-			return cloneNode(node), true
-		}
-		if err := validate(get); err != nil {
-			// The durable record of this batch is already committed; the
-			// memory apply is rejected so the mirror never carries a state
-			// the validator did not see. The caller re-decides and retries;
-			// the retry's re-commit supersedes this batch's log entry.
-			return ErrBatchConflict
-		}
-	}
+
+	// Apply to memory after successful durable commit
 	for _, node := range nodes {
 		e.applyUpsertNode(node)
 	}
