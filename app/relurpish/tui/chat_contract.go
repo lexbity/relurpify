@@ -1,7 +1,6 @@
 package tui
 
 import (
-	runtimesvc "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -76,14 +75,13 @@ type Region1Surface interface {
 	OpenDoctor()
 }
 
-// StartupGateController exposes Doctor-based startup state to the host.
-type StartupGateController interface {
-	DoctorReport() runtimesvc.DoctorReport
-	SetDoctorReport(report runtimesvc.DoctorReport)
-	SetDoctorStatus(status string)
-}
-
 // TabAwarePane lets the host tell a pane which main tab is currently active.
 type TabAwarePane interface {
 	SetActiveTab(id TabID)
+}
+
+// EscapeOwner identifies a deliberately focused editor/capture/review that
+// must consume Escape before the host moves focus back to the request bar.
+type EscapeOwner interface {
+	OwnsEscape() bool
 }

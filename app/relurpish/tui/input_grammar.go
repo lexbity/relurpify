@@ -60,8 +60,6 @@ func parseInputDraft(raw string, activeTab TabID, explicitSearch bool) inputDraf
 
 func defaultPromptLabel(_ TabID, _ bool) string { return "request to Euclo" }
 
-func commandPromptLabel(_ string) string { return "command" }
-
 func parseCommandLine(raw string) (prefix string, name string, args []string, ok bool) {
 	trimmed := strings.TrimSpace(raw)
 	if trimmed == "" {
@@ -78,8 +76,8 @@ func parseCommandLine(raw string) (prefix string, name string, args []string, ok
 	if body == "" {
 		return prefix, "", nil, false
 	}
-	fields := strings.Fields(body)
-	if len(fields) == 0 {
+	fields, err := commandWords(body)
+	if err != nil || len(fields) == 0 {
 		return prefix, "", nil, false
 	}
 	name = fields[0]
@@ -116,8 +114,6 @@ func commandPaletteItems(reg *CommandRegistry, query string, tabID TabID, subTab
 	var candidates []Command
 	if reg != nil {
 		candidates = reg.Match("", tabID, subTabID)
-	} else {
-		candidates = listCommandsSorted()
 	}
 	items := make([]commandItem, 0, len(candidates))
 	for _, cmd := range candidates {

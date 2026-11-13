@@ -55,6 +55,7 @@ func (m RootModel) handleExecEventBatch(msg ExecEventBatchMsg) (RootModel, tea.C
 		for _, ev := range msg.Events {
 			sink.ApplyExecEvent(ev)
 		}
+		m.refreshCircuit()
 	}
 	if len(msg.Events) > 1 {
 		log.Printf("exec event batch: %d events", len(msg.Events))

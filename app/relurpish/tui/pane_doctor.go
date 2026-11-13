@@ -1,329 +1,278 @@
 package tui
 
 import (
-	runtimesvc "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
 	"context"
 	"fmt"
-	"os"
-	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
+	runtimesvc "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
 	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
-
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/ansi"
 )
 
-type doctorSection int
 type doctorAction string
 
 const (
 	doctorActionRefresh doctorAction = "refresh"
-	doctorActionHeal    doctorAction = "heal"
-	doctorActionPull    doctorAction = "model-refresh"
-)
-
-const (
-	doctorSectionChecks doctorSection = iota
-	doctorSectionTemplates
-	doctorSectionLogs
+	doctorActionHeal    doctorAction = "initialize"
 )
 
 type doctorStatusMsg struct {
+	Request uint64
 	Action  doctorAction
 	Report  runtimesvc.DoctorReport
 	Message string
 	Err     error
 }
 
+// DoctorOperations is independent of the execution adapter. A bootstrap service
+// can supply initialization without pretending to be an execution runtime.
+type DoctorOperations interface {
+	InitializeWorkspaceFromTemplates(bool) error
+}
+
+// DoctorPane is a sparse, read-only findings list with deliberate detail/review.
+// It never queries files or providers from View or its constructor.
 type DoctorPane struct {
-	runtime RuntimeAdapter
-	report  runtimesvc.DoctorReport
-	section doctorSection
-	filter  string
-	working bool
-	action  doctorAction
-	status  string
-	width   int
-	height  int
-	// Theme is the active semantic style source.
-	th *theme.Theme
+	parent        context.Context
+	reader        DoctorReader
+	initializer   DoctorOperations
+	report        runtimesvc.DoctorReport
+	hasReport     bool
+	demo          bool
+	selected      string
+	detail        bool
+	offset        int
+	filter        string
+	working       bool
+	review        bool
+	request       uint64
+	status        string
+	width, height int
+	th            *theme.Theme
 }
 
-// Report returns the current doctor report.
+func NewDoctorPane(parent context.Context, reader DoctorReader, initializer DoctorOperations) *DoctorPane {
+	return &DoctorPane{parent: parent, reader: reader, initializer: initializer, th: theme.Default()}
+}
+
 func (p *DoctorPane) Report() runtimesvc.DoctorReport { return p.report }
-
-// SetReport replaces the current doctor report.
-func (p *DoctorPane) SetReport(report runtimesvc.DoctorReport) { p.report = report }
-
-// SetStatus overrides the visible doctor status line.
-func (p *DoctorPane) SetStatus(status string) { p.status = status }
-
-func NewDoctorPane(rt RuntimeAdapter) *DoctorPane {
-	p := &DoctorPane{
-		th:      theme.Default(),
-		runtime: rt,
-	}
-	p.Refresh()
-	return p
-}
-
-func (p *DoctorPane) SetSize(w, h int) {
-	p.width = w
-	p.height = h
-}
-
-func (p *DoctorPane) SetFilter(filter string) {
-	p.filter = strings.ToLower(strings.TrimSpace(filter))
-}
-
-func (p *DoctorPane) Refresh() {
-	if p.runtime == nil {
-		p.report = runtimesvc.DoctorReport{}
-		return
-	}
-	p.report = p.runtime.BuildDoctorReport(context.Background())
-}
-
-func (p *DoctorPane) Update(msg tea.Msg) (*DoctorPane, tea.Cmd) {
-	switch msg := msg.(type) {
-	case doctorStatusMsg:
-		if msg.Action != "" && msg.Action == p.action {
-			p.working = false
+func (p *DoctorPane) SetReport(report runtimesvc.DoctorReport) {
+	p.report, p.hasReport = report, true
+	if p.selected == "" {
+		items := p.items()
+		if len(items) > 0 {
+			p.selected = items[0].Name
 		}
+	}
+}
+func (p *DoctorPane) SetReader(reader DoctorReader, initializer DoctorOperations) {
+	p.reader, p.initializer = reader, initializer
+}
+func (p *DoctorPane) SetStatus(status string)   { p.status = status }
+func (p *DoctorPane) SetSize(width, height int) { p.width, p.height = width, height }
+func (p *DoctorPane) SetFilter(filter string)   { p.filter = strings.ToLower(strings.TrimSpace(filter)) }
+func (p *DoctorPane) SetTheme(th *theme.Theme) {
+	if th != nil {
+		p.th = th
+	}
+}
+func (p *DoctorPane) OwnsEscape() bool { return p.detail || p.review }
+
+func (p *DoctorPane) Update(message tea.Msg) (*DoctorPane, tea.Cmd) {
+	switch msg := message.(type) {
+	case doctorStatusMsg:
+		if msg.Request != p.request {
+			return p, nil
+		}
+		p.working = false
 		if msg.Err != nil {
 			p.status = fmt.Sprintf("%s failed: %v", msg.Action, msg.Err)
 			return p, nil
 		}
-		if msg.Message != "" {
-			p.status = msg.Message
-		}
-		p.report = msg.Report
-		// Bubble the exported DoctorStatusMsg up to the model so that
-		// applyDoctorReport can check readiness and unlock the gate.
+		p.SetReport(msg.Report)
+		p.status = msg.Message
 		return p, func() tea.Msg {
-			return DoctorStatusMsg{
-				Action:  string(msg.Action),
-				Report:  msg.Report,
-				Message: msg.Message,
-				Err:     msg.Err,
-			}
+			return DoctorStatusMsg{Action: string(msg.Action), Report: msg.Report, Message: msg.Message}
 		}
 	case tea.KeyMsg:
+		if p.review {
+			switch msg.String() {
+			case "esc":
+				p.review = false
+			case "enter":
+				p.review = false
+				return p, p.run(doctorActionHeal)
+			}
+			return p, nil
+		}
 		switch msg.String() {
-		case "tab":
-			p.section = (p.section + 1) % 3
-		case "shift+tab":
-			p.section = (p.section + 2) % 3
-		case "up", "k":
-			// no-op: sections are content panels, but keep the key live.
+		case "esc":
+			p.detail, p.offset = false, 0
+		case "enter":
+			p.detail, p.offset = true, 0
+		case "up", "down", "pgup", "pgdown":
+			delta := 1
+			if msg.String() == "up" || msg.String() == "pgup" {
+				delta = -1
+			}
+			if p.detail {
+				p.offset = max(0, p.offset+delta)
+				return p, nil
+			}
+			items := p.items()
+			for i, item := range items {
+				if item.Name == p.selected {
+					p.selected = items[min(len(items)-1, max(0, i+delta))].Name
+					return p, nil
+				}
+			}
 		case "r":
-			return p, p.refreshCmd()
+			return p, p.run(doctorActionRefresh)
 		case "h":
-			return p, p.healCmd()
-		case "p":
-			return p, p.modelRefreshCmd()
+			if p.initializer == nil {
+				p.status = "Initialization unavailable here. Run relurpish doctor --yes for this workspace."
+			} else if !p.working {
+				p.review = true
+			}
 		}
 	}
 	return p, nil
 }
 
-func (p *DoctorPane) View() string {
-	switch p.section {
-	case doctorSectionTemplates:
-		return p.viewTemplates()
-	case doctorSectionLogs:
-		return p.viewLogs()
-	default:
-		return p.viewChecks()
-	}
-}
-
-func (p *DoctorPane) viewChecks() string {
-	lines := make([]string, 0, len(p.report.Dependencies))
-	for _, dep := range p.report.Dependencies {
-		if p.filter != "" && !strings.Contains(strings.ToLower(dep.Name+" "+dep.Details), p.filter) {
-			continue
-		}
-		state := "OK"
-		if !dep.Available {
-			state = "MISSING"
-		}
-		if dep.Blocking {
-			state = "ERROR"
-		}
-		lines = append(lines, fmt.Sprintf("%-12s %-8s %s", dep.Name, state, dep.Details))
-	}
-	if len(lines) == 0 {
-		lines = []string{p.th.Dim().Render("No matching checks")}
-	}
-	header := []string{
-		p.th.Dim().Render("workspace") + "  " + fallback(p.report.Workspace, "(unset)"),
-		p.th.Dim().Render("config") + "  " + fallback(p.report.ConfigRoot, "(unset)"),
-		p.th.Dim().Render("manifest") + "  " + func() string {
-			if p.report.ManifestExists {
-				return "present"
-			}
-			return "missing"
-		}(),
-		p.th.Dim().Render("fingerprint") + "  " + fallback(p.report.ManifestFingerprint, "(none)"),
-	}
-	if len(p.report.ManifestWarnings) > 0 {
-		header = append(header, p.th.Dim().Render("warnings")+"  "+strings.Join(p.report.ManifestWarnings, "; "))
-	}
-	return strings.Join([]string{
-		sectionPanel(p.th, "Doctor / Checks", p.width, append(header, sectionList(p.th, lines, 0, p.height-8))...),
-		p.footerLine(),
-	}, "\n\n")
-}
-
-func (p *DoctorPane) viewTemplates() string {
-	root := p.report.ConfigRoot
-	if root == "" {
-		root = "."
-	}
-	paths := []string{
-		filepath.Join(root, "agents"),
-		filepath.Join(root, "skills"),
-		filepath.Join(root, "logs"),
-		filepath.Join(root, "telemetry"),
-	}
-	var lines []string
-	for _, path := range paths {
-		info, err := os.Stat(path)
-		state := "missing"
-		if err == nil && info.IsDir() {
-			state = "present"
-		}
-		if p.filter != "" && !strings.Contains(strings.ToLower(path+" "+state), p.filter) {
-			continue
-		}
-		lines = append(lines, fmt.Sprintf("%-12s %s", state, path))
-	}
-	if len(lines) == 0 {
-		lines = []string{p.th.Dim().Render("No matching template roots")}
-	}
-	return strings.Join([]string{
-		sectionPanel(p.th, "Doctor / Templates", p.width, sectionList(p.th, lines, 0, p.height-6)),
-		p.footerLine(),
-	}, "\n\n")
-}
-
-func (p *DoctorPane) viewLogs() string {
-	lines := []string{
-		fmt.Sprintf("Checked at: %s", p.report.CheckedAt.Format(time.RFC3339)),
-		fmt.Sprintf("Config error: %s", fallback(p.report.ConfigError, "(none)")),
-		fmt.Sprintf("Manifest error: %s", fallback(p.report.ManifestError, "(none)")),
-		fmt.Sprintf("Inference state: %s", fallback(string(p.report.Inference.State), "(unknown)")),
-	}
-	if len(p.report.DeprecationNotices) > 0 {
-		lines = append(lines, "Deprecations:")
-		for _, notice := range p.report.DeprecationNotices {
-			lines = append(lines, "  - "+notice)
-		}
-	}
-	if p.filter != "" {
-		var filtered []string
-		for _, line := range lines {
-			if strings.Contains(strings.ToLower(line), p.filter) {
-				filtered = append(filtered, line)
-			}
-		}
-		lines = filtered
-	}
-	if len(lines) == 0 {
-		lines = []string{p.th.Dim().Render("No matching logs")}
-	}
-	return strings.Join([]string{
-		sectionPanel(p.th, "Doctor / Logs", p.width, lines...),
-		p.footerLine(),
-	}, "\n\n")
-}
-
-func (p *DoctorPane) footerLine() string {
-	footer := p.th.Dim().Render("tab checks/templates/logs  r refresh  h heal  p models")
-	if p.working {
-		footer = p.th.Dim().Render(fmt.Sprintf("%s · waiting for observed result", p.action))
-	}
-	if p.status != "" {
-		footer = p.th.Dim().Render(p.status) + "\n" + footer
-	}
-	return footer
-}
-
-func (p *DoctorPane) refreshCmd() tea.Cmd {
-	return p.runAsync(doctorActionRefresh)
-}
-
-func (p *DoctorPane) healCmd() tea.Cmd {
-	return p.runAsync(doctorActionHeal)
-}
-
-func (p *DoctorPane) modelRefreshCmd() tea.Cmd {
-	return p.runAsync(doctorActionPull)
-}
-
-func (p *DoctorPane) runAsync(action doctorAction) tea.Cmd {
-	if p.runtime == nil {
-		p.status = "runtime unavailable"
+func (p *DoctorPane) items() []runtimesvc.DependencyStatus {
+	if !p.hasReport {
 		return nil
 	}
-	p.working = true
-	p.action = action
-	p.status = ""
-	return func() tea.Msg {
-		ctx := context.Background()
-		switch action {
-		case doctorActionRefresh:
-			report := p.runtime.BuildDoctorReport(ctx)
-			return doctorStatusMsg{
-				Action:  action,
-				Report:  report,
-				Message: "dependency check complete",
+	configDetail := p.report.ConfigRoot
+	if p.report.ConfigError != "" {
+		configDetail = p.report.ConfigError
+	}
+	items := []runtimesvc.DependencyStatus{
+		{Name: "workspace configuration", Available: p.report.ConfigExists && p.report.ConfigError == "", Blocking: !p.report.ConfigExists || p.report.ConfigError != "", Details: configDetail},
+		{Name: "model", Available: p.report.ModelReady, Blocking: !p.report.ModelReady, Details: strings.TrimSpace(p.report.Inference.Provider + " / " + p.report.Inference.SelectedModel + " · " + string(p.report.Inference.State) + " " + p.report.Inference.Error)},
+	}
+	items = append(items, p.report.Dependencies...)
+	sort.SliceStable(items, func(i, j int) bool {
+		rank := func(d runtimesvc.DependencyStatus) int {
+			if d.Blocking {
+				return 0
 			}
-		case doctorActionHeal:
-			if err := p.runtime.InitializeWorkspaceFromTemplates(false); err != nil {
-				return doctorStatusMsg{Action: action, Err: err}
+			if d.Degraded || !d.Available {
+				return 1
 			}
-			// Reload the workspace so the new config/templates take effect,
-			// then recompute the doctor report. The model handles the
-			// exported DoctorStatusMsg to call applyDoctorReport which
-			// may unlock the startup gate.
-			workspace := p.report.Workspace
-			if workspace != "" {
-				if reloadErr := p.runtime.ReloadWorkspace(ctx, workspace); reloadErr != nil {
-					return doctorStatusMsg{Action: action, Err: reloadErr}
-				}
-			}
-			report := p.runtime.BuildDoctorReport(ctx)
-			return doctorStatusMsg{
-				Action:  action,
-				Report:  report,
-				Message: "workspace reloaded after template materialization",
-			}
-		case doctorActionPull:
-			models, err := p.runtime.InferenceModels(ctx)
-			if err != nil {
-				return doctorStatusMsg{Action: action, Err: err}
-			}
-			report := p.runtime.BuildDoctorReport(ctx)
-			if len(models) > 0 {
-				report.Inference.Models = append([]string(nil), models...)
-			}
-			return doctorStatusMsg{
-				Action:  action,
-				Report:  report,
-				Message: fmt.Sprintf("refreshed %d models", len(models)),
-			}
-		default:
-			return doctorStatusMsg{Action: action, Err: fmt.Errorf("unknown doctor action %q", action)}
+			return 2
+		}
+		return rank(items[i]) < rank(items[j])
+	})
+	if p.filter == "" {
+		return items
+	}
+	filtered := make([]runtimesvc.DependencyStatus, 0, len(items))
+	for _, item := range items {
+		if strings.Contains(strings.ToLower(item.Name+" "+item.Details), p.filter) {
+			filtered = append(filtered, item)
 		}
 	}
+	return filtered
 }
 
-// SetTheme sets the active semantic style source.
-func (p *DoctorPane) SetTheme(th *theme.Theme) {
-	if th != nil {
-		p.th = th
+func (p *DoctorPane) View() string {
+	if p.review {
+		lines := []string{"Doctor / Review initialization", "", "Target: " + terminalText(p.report.Workspace), "", "Create missing bundled configuration and prompt files", "under relurpify_cfg, plus workspace state directories.", "Existing files are preserved. No model is downloaded."}
+		if p.demo {
+			lines = append(lines, "DEMO: this changes scenario memory only.")
+		}
+		return p.bounded(append(lines, "", "Enter confirms initialization · Escape cancels"))
+	}
+	if !p.hasReport {
+		return p.bounded([]string{"Doctor", "", "Checking workspace readiness…", "", "Your request remains in the bar. Checks do not submit it."})
+	}
+	items := p.items()
+	verdict := "Setup needed"
+	if p.report.Ready() {
+		verdict = "Ready"
+	}
+	if p.detail {
+		for _, item := range items {
+			if item.Name == p.selected {
+				lines := []string{"Doctor / " + terminalText(item.Name), "", doctorFindingState(item), "", terminalText(item.Details), "", "Workspace: " + terminalText(p.report.Workspace), "Checked: " + p.report.CheckedAt.Format(time.RFC3339), "", "Escape returns to findings · ↑/↓ scroll"}
+				wrapped := strings.Split(ansi.Hardwrap(strings.Join(lines, "\n"), max(1, p.width), true), "\n")
+				start := min(p.offset, max(0, len(wrapped)-p.height))
+				return p.bounded(wrapped[start:])
+			}
+		}
+	}
+	lines := []string{"Doctor / " + verdict, ""}
+	if p.report.NeedsInitialization() {
+		lines = append(lines, "Workspace configuration is missing. h reviews initialization.", "")
+	}
+	selected := 0
+	for i, item := range items {
+		if item.Name == p.selected {
+			selected = i
+		}
+	}
+	budget := max(1, p.height-len(lines)-4)
+	start := max(0, selected-budget+1)
+	for _, item := range items[start:min(len(items), start+budget)] {
+		marker := " "
+		if item.Name == p.selected {
+			marker = ">"
+		}
+		lines = append(lines, fmt.Sprintf("%s %-28s %s", marker, terminalText(item.Name), doctorFindingState(item)))
+	}
+	lines = append(lines, "")
+	if p.working {
+		lines = append(lines, "Waiting for the observed result…")
+	} else {
+		lines = append(lines, "↑/↓ select · Enter detail · r recheck · h initialize")
+	}
+	if p.status != "" {
+		lines = append(lines, terminalText(p.status))
+	}
+	return p.bounded(lines)
+}
+
+func doctorFindingState(item runtimesvc.DependencyStatus) string {
+	if item.Blocking {
+		return "[!] blocked"
+	}
+	if item.Degraded {
+		return "[~] degraded"
+	}
+	if item.Available {
+		return "[+] checked"
+	}
+	return "[?] unavailable"
+}
+
+func (p *DoctorPane) bounded(lines []string) string {
+	return boundedScreen(strings.Join(lines, "\n"), max(1, p.width), max(1, p.height))
+}
+
+func (p *DoctorPane) run(action doctorAction) tea.Cmd {
+	if p.working || p.reader == nil {
+		p.status = "Doctor service unavailable"
+		return nil
+	}
+	if action == doctorActionHeal && p.initializer == nil {
+		p.status = "Initialization unavailable"
+		return nil
+	}
+	p.working, p.request = true, p.request+1
+	request, parent, reader, initializer := p.request, p.parent, p.reader, p.initializer
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(parent, 15*time.Second)
+		defer cancel()
+		if action == doctorActionHeal {
+			if err := initializer.InitializeWorkspaceFromTemplates(false); err != nil {
+				return doctorStatusMsg{Request: request, Action: action, Err: err}
+			}
+		}
+		return doctorStatusMsg{Request: request, Action: action, Report: reader.BuildDoctorReport(ctx), Message: "Checks complete. Submit your request when execution is available."}
 	}
 }

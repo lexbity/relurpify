@@ -10,7 +10,7 @@ import (
 func TestChromeLayoutReservesNoExtraRowWhenNoHITLOrNotifications(t *testing.T) {
 	surface := &fakeSurface{name: "guest", chat: &fakeChatPane{}}
 	factory := &countingFactory{shared: surface}
-	m := NewRootModel(context.Background(), nil, factory)
+	m := NewRootModel(context.Background(), HostOptions{SurfaceFactory: factory})
 
 	updated, _ := m.handleResize(tea.WindowSizeMsg{Width: 120, Height: 40})
 	rm := updated.(RootModel)
@@ -26,7 +26,7 @@ func TestChromeLayoutReservesNoExtraRowWhenNoHITLOrNotifications(t *testing.T) {
 func TestChromeLayoutReservesRowForActiveHITLRow(t *testing.T) {
 	surface := &fakeSurface{name: "guest", chat: &fakeChatPane{}}
 	factory := &countingFactory{shared: surface}
-	m := NewRootModel(context.Background(), nil, factory)
+	m := NewRootModel(context.Background(), HostOptions{SurfaceFactory: factory})
 	m.hitlRow.Open("frame-1", "Question?", []string{"one"}, []string{"One"})
 
 	updated, _ := m.handleResize(tea.WindowSizeMsg{Width: 120, Height: 40})

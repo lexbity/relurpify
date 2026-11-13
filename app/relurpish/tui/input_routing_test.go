@@ -23,7 +23,7 @@ func TestOverlayPrecedenceBlocksRegion1Routing(t *testing.T) {
 	chat := &recordingChatPane{}
 	surface := &fakeSurface{name: "guest", chat: chat}
 	factory := &countingFactory{shared: surface}
-	m := NewRootModel(context.Background(), nil, factory)
+	m := NewRootModel(context.Background(), HostOptions{SurfaceFactory: factory})
 	m.setFocus(FocusRegionRegion1)
 	m.openAgentPicker()
 
@@ -42,13 +42,9 @@ func TestOverlayPrecedenceBlocksRegion1Routing(t *testing.T) {
 }
 
 func TestHITLRowAnswerAndDismissAreHandledByHost(t *testing.T) {
-	q := &NotificationQueue{}
+	m := NewRootModel(t.Context(), HostOptions{})
+	q := m.notifQ
 	frame := interaction.NewClarificationFrame("task-1", "session-1", "Pick one", []string{"review", "implement"}, nil)
-	m := RootModel{
-		notifQ:            q,
-		hitlRow:           &HITLRow{},
-		interactionFrames: make(map[string]*interaction.InteractionFrame),
-	}
 	m.trackInteractionFrame("notif-1", *frame)
 	q.Push(NotificationItem{ID: "notif-1", Kind: NotifKindInteraction, Msg: "clarification"})
 	m.openInteractionGuidance("notif-1", *frame)
@@ -73,11 +69,7 @@ func TestHITLRowAnswerAndDismissAreHandledByHost(t *testing.T) {
 		t.Fatalf("expected notification queue to drain, got %d", q.Len())
 	}
 
-	m2 := RootModel{
-		notifQ:            &NotificationQueue{},
-		hitlRow:           &HITLRow{},
-		interactionFrames: make(map[string]*interaction.InteractionFrame),
-	}
+	m2 := NewRootModel(t.Context(), HostOptions{})
 	frame2 := interaction.NewClarificationFrame("task-2", "session-2", "Pick one", []string{"review", "implement"}, nil)
 	m2.trackInteractionFrame("notif-2", *frame2)
 	m2.openInteractionGuidance("notif-2", *frame2)

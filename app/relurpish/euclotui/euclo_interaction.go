@@ -2,6 +2,7 @@ package euclotui
 
 import (
 	"cmp"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -163,6 +164,7 @@ type EucloEventRouter struct {
 	chat        ChatProjection
 	diff        DiffProjection
 	recipe      *surface.RecipeProjection
+	recipeError string
 	stepRuntime map[string]surface.StepRuntime
 	macro       surface.MacroPhase
 }
@@ -227,12 +229,12 @@ func (r *EucloEventRouter) Snapshot() EucloProjectionSnapshot {
 
 func (r *EucloEventRouter) snapshotLocked() EucloProjectionSnapshot {
 	snap := EucloProjectionSnapshot{
-		Chat: r.chat.clone(),
-		Diff: r.diff.clone(),
+		Chat:            r.chat.clone(),
+		Diff:            r.diff.clone(),
+		ProjectionError: r.recipeError,
 	}
 	if r.recipe != nil {
-		cp := *r.recipe
-		snap.Recipe = &cp
+		snap.Recipe = copyRecipeProjection(*r.recipe)
 	}
 	if len(r.stepRuntime) > 0 {
 		snap.StepRuntime = make(map[string]surface.StepRuntime, len(r.stepRuntime))
@@ -266,7 +268,14 @@ func (r *EucloEventRouter) applyRecipeEvent(ev ExecutionEvent) {
 	case reporting.EventTypeFamilySelected, reporting.EventTypeRouteSelected:
 		r.macro = surface.MacroRoute
 	case reporting.EventTypeRecipeSelected:
-		r.recipe = cloneRecipeProjectionFromPayload(ev.Payload)
+		projection, err := recipeProjectionFromPayload(ev.Payload)
+		r.recipe, r.recipeError = projection, ""
+		if err != nil {
+			r.recipeError = "Recipe projection unavailable: " + err.Error()
+		}
+		// A fresh recipe selection starts a new observation scope. Reused step
+		// IDs must not inherit success/failure from the preceding execution.
+		r.stepRuntime = make(map[string]surface.StepRuntime)
 		r.macro = surface.MacroExecute
 	case reporting.EventTypeProjectionCompleted:
 		if r.macro < surface.MacroExecute {
@@ -389,17 +398,46 @@ func (r *EucloEventRouter) ApplyResumeData(data RecipeResumeData, lookup surface
 	r.macro = data.Macro
 }
 
-func cloneRecipeProjectionFromPayload(payload map[string]any) *surface.RecipeProjection {
-	if payload == nil {
-		return nil
-	}
+func recipeProjectionFromPayload(payload map[string]any) (*surface.RecipeProjection, error) {
 	raw, ok := payload["recipe"]
 	if !ok {
-		return nil
+		return nil, fmt.Errorf("selection event has no recipe graph")
 	}
-	proj, ok := raw.(surface.RecipeProjection)
-	if !ok {
-		return nil
+	// The real typed emitter JSON-encodes payloads into metadata. Normalize at
+	// this ingress; the router always stores a validated, detached graph.
+	data, err := json.Marshal(raw)
+	if err != nil {
+		return nil, fmt.Errorf("encode graph: %w", err)
+	}
+	var proj surface.RecipeProjection
+	if err := json.Unmarshal(data, &proj); err != nil {
+		return nil, fmt.Errorf("decode graph: %w", err)
+	}
+	if proj.RecipeID == "" || len(proj.Steps) > 4096 {
+		return nil, fmt.Errorf("graph requires a recipe ID and at most 4096 steps")
+	}
+	seen := make(map[string]bool, len(proj.Steps))
+	for _, step := range proj.Steps {
+		if step.StepID == "" || seen[step.StepID] {
+			return nil, fmt.Errorf("step IDs must be nonempty and unique")
+		}
+		seen[step.StepID] = true
+	}
+	return &proj, nil
+}
+
+// copyRecipeProjection detaches nested graph slices on both ingress and egress.
+// A caller editing a snapshot must not mutate the router under its mutex.
+func copyRecipeProjection(proj surface.RecipeProjection) *surface.RecipeProjection {
+	proj.HITLGates = append([]string(nil), proj.HITLGates...)
+	proj.Steps = append([]surface.ProjectedStep(nil), proj.Steps...)
+	for i := range proj.Steps {
+		proj.Steps[i].DependsOn = append([]string(nil), proj.Steps[i].DependsOn...)
+		proj.Steps[i].ToolScopes = append([]string(nil), proj.Steps[i].ToolScopes...)
+	}
+	proj.Groups = append([]surface.ProjectedGroup(nil), proj.Groups...)
+	for i := range proj.Groups {
+		proj.Groups[i].MemberStepIDs = append([]string(nil), proj.Groups[i].MemberStepIDs...)
 	}
 	return &proj
 }
@@ -572,11 +610,12 @@ func (p DiffProjection) clone() DiffProjection {
 
 // EucloProjectionSnapshot is the immutable view of all Euclo surfaces.
 type EucloProjectionSnapshot struct {
-	Chat        ChatProjection
-	Diff        DiffProjection
-	Recipe      *surface.RecipeProjection      `json:"recipe,omitempty"`
-	StepRuntime map[string]surface.StepRuntime `json:"step_runtime,omitempty"`
-	Macro       surface.MacroPhase             `json:"macro"`
+	ProjectionError string
+	Chat            ChatProjection
+	Diff            DiffProjection
+	Recipe          *surface.RecipeProjection      `json:"recipe,omitempty"`
+	StepRuntime     map[string]surface.StepRuntime `json:"step_runtime,omitempty"`
+	Macro           surface.MacroPhase             `json:"macro"`
 }
 
 // RecipeResumeData holds the minimal durable state needed to restore the recipe

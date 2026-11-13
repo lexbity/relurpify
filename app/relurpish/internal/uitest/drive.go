@@ -14,7 +14,7 @@ func Resize(m tui.RootModel, width, height int) tui.RootModel {
 }
 
 func Navigate(m tui.RootModel, canvas tui.TabID) tui.RootModel {
-	commands := map[tui.TabID]string{tui.TabChat: "chat", tui.TabWelcome: "session", tui.TabSandbox: "permissions", tui.TabAIProvider: "model-provider", tui.TabSecurityGuard: "securityguard", tui.TabKeybindings: "keybindings", tui.TabDoctor: "doctor"}
+	commands := map[tui.TabID]string{tui.TabChat: "chat", tui.TabRun: "run", tui.TabSettings: "settings", tui.TabWelcome: "session", tui.TabSandbox: "permissions", tui.TabAIProvider: "model-provider", tui.TabSecurityGuard: "securityguard", tui.TabKeybindings: "keybindings", tui.TabDoctor: "doctor"}
 	command, ok := commands[canvas]
 	if !ok {
 		panic(fmt.Sprintf("no command for canvas %q", canvas))

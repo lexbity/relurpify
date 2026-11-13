@@ -7,23 +7,18 @@ import (
 
 	runtimesvc "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
 	"codeburg.org/lexbit/relurpify/execution/session"
-	"codeburg.org/lexbit/relurpify/execution/workspace"
 )
 
 func TestSessionInfo_DegradedRuntimeNoPanic(t *testing.T) {
 	ws := session.DegradedWorkspace("test degradation")
 	ws.Registration = &session.Registration{ID: "degraded"}
 
-	id, _ := workspace.New("/tmp/test")
-	rt := &runtimesvc.Runtime{}
-	sess := &session.WorkspaceSession{
-		ID:        "degraded",
-		Workspace: id,
-	}
-
-	_ = ws
-	_ = sess
-	_ = rt
+	root := t.TempDir()
+	rt := &runtimesvc.Runtime{Config: runtimesvc.Config{Workspace: root}, Workspace: ws}
+	info := adapterWithRuntime(rt).SessionInfo()
+	require.Equal(t, root, info.Workspace)
+	require.Equal(t, defaultBackendState, info.BackendState)
+	require.Positive(t, info.MaxTokens)
 }
 
 func TestSessionInfo_NilAdapterNoPanic(t *testing.T) {
@@ -69,8 +64,9 @@ func TestDiagnostics_NilWorkspaceNoPanic(t *testing.T) {
 	require.Empty(t, diag.ManifestPolicy)
 }
 
-func TestListServices_NilWorkspaceNoPanic(t *testing.T) {
+func TestServices_NilWorkspaceReportsUnavailable(t *testing.T) {
 	ad := adapterWithRuntime(&runtimesvc.Runtime{})
-	services := ad.ListServices()
+	services, err := ad.Services(t.Context())
 	require.Nil(t, services)
+	require.ErrorContains(t, err, "service manager unavailable")
 }

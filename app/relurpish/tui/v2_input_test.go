@@ -1,7 +1,7 @@
 package tui
 
 import (
- runtimesvc "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
+	runtimesvc "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
 	"context"
 	"strings"
 	"testing"

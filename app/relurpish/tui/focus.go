@@ -76,8 +76,6 @@ func (r FocusRouter) Route(msg tea.KeyMsg) FocusRoute {
 		return FocusRoute{Action: FocusActionRouteRegion1}
 	}
 	switch msg.String() {
-	case "tab", "ctrl+down":
-		return FocusRoute{Action: FocusActionFocusRegion1}
 	case "esc":
 		return FocusRoute{Action: FocusActionIgnore}
 	}

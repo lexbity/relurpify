@@ -224,6 +224,8 @@ func (p *SandboxPane) Update(msg tea.Msg) (*SandboxPane, tea.Cmd) {
 	return p, nil
 }
 
+func (p *SandboxPane) OwnsEscape() bool { return p.editing || p.confirmBackend }
+
 func (p *SandboxPane) View() string {
 	if p.root == nil {
 		if p.status == "" {

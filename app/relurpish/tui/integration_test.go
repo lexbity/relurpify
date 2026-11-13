@@ -18,7 +18,7 @@ func TestReservedChordsSurviveAllFocusStates(t *testing.T) {
 		nav:         &hostileNavSurface{},
 	}
 	factory := &countingFactory{shared: surface}
-	m := NewRootModel(context.Background(), nil, factory)
+	m := NewRootModel(context.Background(), HostOptions{SurfaceFactory: factory})
 
 	// Test ctrl+a opens agent picker.
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlA, Alt: false})
@@ -29,12 +29,12 @@ func TestReservedChordsSurviveAllFocusStates(t *testing.T) {
 	}
 
 	// Re-create for ctrl+c test.
-	m2 := NewRootModel(context.Background(), nil, factory)
+	m2 := NewRootModel(context.Background(), HostOptions{SurfaceFactory: factory})
 	updated2, _ := m2.Update(tea.KeyMsg{Type: tea.KeyCtrlC, Alt: false})
 	_ = updated2
 
 	// Test f1 opens help.
-	m3 := NewRootModel(context.Background(), nil, factory)
+	m3 := NewRootModel(context.Background(), HostOptions{SurfaceFactory: factory})
 	updated3, _ := m3.Update(tea.KeyMsg{Type: tea.KeyF1})
 	rm3 := updated3.(RootModel)
 	if !rm3.showHelp {

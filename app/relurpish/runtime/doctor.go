@@ -537,85 +537,48 @@ func firstNonEmpty(values ...string) string {
 	return ""
 }
 
-func errorString(err error) string {
-	if err == nil {
-		return ""
-	}
-	return err.Error()
-}
-
-// probeAuditChain reports audit-chain readiness: dir writability and chain
-// integrity across every agent chain under <state>/audit. In strict
-// enforcement (the default) a broken chain or unwritable state dir is
-// BLOCKING — governed actions fail closed without durable audit (SBH-1 D-10).
-// In best_effort the same conditions degrade to warnings.
+// probeAuditChain observes existing chains without creating directories or
+// writing probe files. Writability can only be established by execution boot:
+// authorization.NewRuntime constructs the durable logger before admitting tools.
+// A missing chain is pending initialization, not evidence of writable storage.
 func probeAuditChain(cfg Config) DependencyStatus {
 	auditRoot := filepath.Join(config.DefaultWorkspaceStateDir(cfg.Workspace), "audit")
 	strict := !strings.EqualFold(strings.TrimSpace(cfg.AuditEnforcement), "best_effort")
-	writable := probeWritableDir(auditRoot)
-
-	// Aggregate over every agent chain subdirectory. A single broken chain is
-	// a broken chain; the probe result carries the worst finding.
-	var probe policy.ChainProbe
-	present := false
-	broken := false
+	dep := DependencyStatus{Name: "audit_chain", Required: true}
 	entries, err := os.ReadDir(auditRoot)
-	if err == nil {
-		for _, e := range entries {
-			if !e.IsDir() || strings.HasPrefix(e.Name(), ".") {
-				continue
-			}
-			p := policy.ProbeChainDir(filepath.Join(auditRoot, e.Name()))
-			if p.Present {
-				present = true
-			}
-			if p.Broken {
-				broken = true
-				probe = p
-			} else if !present {
-				probe = p
-			}
+	if errors.Is(err, fs.ErrNotExist) {
+		dep.Degraded = true
+		dep.Details = "no audit chain yet; durable storage is checked during execution boot"
+		return dep
+	}
+	if err != nil {
+		dep.Blocking, dep.Degraded = strict, !strict
+		dep.Details = "cannot inspect audit directory: " + err.Error()
+		return dep
+	}
+	chains := 0
+	for _, entry := range entries {
+		if !entry.IsDir() || strings.HasPrefix(entry.Name(), ".") {
+			continue
+		}
+		probe := policy.ProbeChainDir(filepath.Join(auditRoot, entry.Name()))
+		if probe.Broken {
+			dep.Blocking, dep.Degraded = strict, !strict
+			dep.Details = "audit chain integrity FAILED (" + entry.Name() + ": " + probe.Failure + ")"
+			return dep
+		}
+		if probe.Present {
+			chains++
 		}
 	}
-
-	detail := ""
-	switch {
-	case !present && !writable:
-		detail = "audit dir missing and not writable — governed actions will fail closed"
-	case !present:
-		detail = "no audit chain yet (created on first agent run)"
-	case broken:
-		detail = "audit chain integrity FAILED (" + probe.Failure + ")"
-		detail = strings.TrimSpace(detail) + " — tamper detected, chain rotated on next boot"
-	default:
-		detail = fmt.Sprintf("audit chain ok (last sequence %d)", probe.LastSeq)
+	dep.Available = chains > 0
+	dep.Degraded = chains == 0
+	if chains == 0 {
+		dep.Details = "no audit chain yet; durable storage is checked during execution boot"
+	} else {
+		dep.Details = fmt.Sprintf("%d audit chains verified; writability is checked during execution boot", chains)
 	}
-	return DependencyStatus{
-		Name:      "audit_chain",
-		Required:  true,
-		Available: !broken && writable,
-		Degraded:  !strict && (broken || !writable),
-		Blocking:  strict && (broken || !writable),
-		Details:   detail,
-	}
-}
-
-// probeWritableDir verifies the directory exists and can host a fresh file.
-func probeWritableDir(dir string) bool {
-	if dir == "" {
-		return false
-	}
-	if err := os.MkdirAll(dir, platformfs.PublicDirMode); err != nil {
-		return false
-	}
-	probe := filepath.Join(dir, ".doctor-write-probe")
-	f, err := os.OpenFile(probe, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
-	if err != nil {
-		return false
-	}
-	_ = f.Close()
-	_ = os.Remove(probe)
-	return true
+	return dep
 }
 
 // probeRuntimeImage surfaces the sandbox runtime image pin posture (SBH-1

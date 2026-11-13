@@ -58,7 +58,7 @@ func newFocusTestModel() (RootModel, *recordingChatPane) {
 	chat := &recordingChatPane{}
 	surface := &fakeSurface{name: "guest", chat: chat}
 	factory := &countingFactory{shared: surface}
-	m := NewRootModel(context.Background(), nil, factory)
+	m := NewRootModel(context.Background(), HostOptions{SurfaceFactory: factory})
 	return m, chat
 }
 

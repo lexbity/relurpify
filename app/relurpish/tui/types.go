@@ -17,16 +17,20 @@ const (
 	TabAIProvider    TabID = "ai-provider"
 	TabKeybindings   TabID = "keybindings"
 	TabDoctor        TabID = "doctor"
+	TabSettings      TabID = "settings"
+	TabConfiguration TabID = "configuration"
+	TabServices      TabID = "services"
 )
 
 // Guest tab IDs — registered by the active surface on init.
 const (
-	TabChat TabID = "chat"
-	TabDiff TabID = "diff"
+	TabChat     TabID = "chat"
+	TabDiff     TabID = "diff"
+	TabRun      TabID = "run"
+	TabWorkshop TabID = "workshop"
 )
 
-// SubTabID identifies a subtab within a main tab. Alias so string literals are
-// accepted without casting in switch statements.
+// SubTabID identifies a subtab within a main tab.
 type SubTabID string
 
 // Surface subtab IDs used by the chat surface.
@@ -40,7 +44,6 @@ const (
 	// Session subtabs — universal.
 	SubTabSessionLive     SubTabID = "live"
 	SubTabSessionTasks    SubTabID = "tasks"
-	SubTabSessionServices SubTabID = "services"
 	SubTabSessionSettings SubTabID = "settings"
 )
 
@@ -247,11 +250,6 @@ type OpenDoctorMsg struct{}
 // session pane's live subtab.
 type DiagnosticsUpdatedMsg struct {
 	Info DiagnosticsInfo
-}
-
-// ServicesUpdatedMsg delivers a fresh service list to the session services subtab.
-type ServicesUpdatedMsg struct {
-	Services []ServiceInfo
 }
 
 // SessionLiveSnapshotMsg delivers the richer runtime-backed snapshot for the

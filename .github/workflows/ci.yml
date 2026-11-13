@@ -162,7 +162,7 @@ jobs:
 
   release:
     name: Release
-    needs: [architecture-gates, lint, test, build, coverage]
+    needs: [architecture-gates, lint, test, build, coverage, relurpish-frontend]
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-26.04
     permissions:
@@ -187,3 +187,23 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  relurpish-frontend:
+    name: Relurpish interaction gates (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-26.04, macos-15]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.27.2"
+          cache: true
+      - name: Download pinned dependencies
+        run: go mod download
+      - name: Source and interaction gates
+        run: make check-relurpish-v2
+      - name: Actual terminal startup and focus
+        run: make test-relurpish-v2-integration

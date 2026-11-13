@@ -16,6 +16,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"codeburg.org/lexbit/relurpify/app/relurpish/demo"
 	"codeburg.org/lexbit/relurpify/app/relurpish/euclotui"
 	runtimesvc "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
 	"codeburg.org/lexbit/relurpify/app/relurpish/tui"
@@ -83,11 +84,25 @@ func newRootCmd() *cobra.Command {
 		SilenceErrors: false,
 		Version:       version,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			if scenario, _ := cmd.Flags().GetString("demo"); scenario != "" {
+				if cmd.Name() != "relurpish" && cmd.Name() != "chat" {
+					return errors.New("--demo is supported only by relurpish and relurpish chat")
+				}
+				return nil
+			}
 			if offline, _ := cmd.Flags().GetBool("offline"); offline {
 				cfg.InferenceProvider = "offline"
 			}
 			return cfg.Normalize()
 		},
+	}
+	root.PersistentFlags().String("demo", "", "Explicit isolated UI scenario: "+strings.Join(demo.Scenarios(), ", "))
+	root.RunE = func(cmd *cobra.Command, _ []string) error {
+		scenario, _ := cmd.Flags().GetString("demo")
+		if scenario == "" {
+			return cmd.Help()
+		}
+		return runDemoSession(cmd.Context(), scenario)
 	}
 	// A non-empty Version makes cobra register --version; the template renders
 	// the link-time build metadata. The name is taken from the command itself
@@ -176,9 +191,13 @@ func newChatCmd() *cobra.Command {
 		Short: "Start the relurpish chat shell",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
-			if _, err := runtimesvc.BootstrapStartupState(ctx, cfg, secrets); err != nil {
+			if scenario, _ := cmd.Flags().GetString("demo"); scenario != "" {
+				return runDemoSession(ctx, scenario)
+			}
+			report := runtimesvc.BuildDoctorReport(ctx, cfg, secrets)
+			if !report.Ready() {
 				return tui.PTYSafe(func() error {
-					return tui.RunDiagnostics(ctx, cfg.Workspace, runtimesvc.NewDoctorService(cfg, secrets, err), euclotui.NewSurfaceFactory())
+					return tui.RunDiagnostics(ctx, cfg.Workspace, runtimesvc.NewDoctorService(cfg, secrets, nil), euclotui.NewSurfaceFactory())
 				})
 			}
 			rt, err := runtimesvc.New(ctx, cfg, secrets)
@@ -189,10 +208,23 @@ func newChatCmd() *cobra.Command {
 			}
 			runtimesvc.RepointStdlibLog(rt)
 			defer func() { _ = rt.Close(context.Background()) }()
+			if rt.ActiveAgent() == nil {
+				return tui.PTYSafe(func() error {
+					return tui.RunDiagnostics(ctx, cfg.Workspace, runtimesvc.NewDoctorService(cfg, secrets, errors.New("execution runtime could not be composed; inspect runtime diagnostics")), euclotui.NewSurfaceFactory())
+				})
+			}
 			return runTUI(ctx, rt)
 		},
 	}
 	return cmd
+}
+
+func runDemoSession(ctx context.Context, scenario string) error {
+	session, err := demo.New(scenario, nil)
+	if err != nil {
+		return err
+	}
+	return tui.RunHost(ctx, tui.HostOptions{DemoScenario: scenario, Conversation: session, Doctor: session, Initializer: session, Recipes: session, Configuration: session, Services: session})
 }
 
 // runWithRuntime ensures the runtime is created and cleaned up for the command.
