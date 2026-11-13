@@ -13,8 +13,12 @@ func TestV2CommandMigrationInventory(t *testing.T) {
 	RegisterEucloCommands(registry)
 	// Full 45-command inventory from 3dd026c2. A removal has an explicit reason;
 	// existing real operations remain registered until their replacement ships.
-	retained := strings.Fields(`workspace permissions securityguard filescopes doctor model model-provider keybindings help mode agent recipe stop retry export workflows workflow rerun cancelwf resume hitl queue service save backend save-model restart-all add remove context clear approve reject diff parallel commit local-review checkpoint compact`)
+	retained := strings.Fields(`workspace permissions securityguard filescopes doctor model model-provider keybindings help mode agent retry export workflows workflow rerun cancelwf resume hitl queue service save backend save-model restart-all add remove context clear diff parallel commit local-review checkpoint compact`)
 	removed := map[string]string{
+		"approve":        "message status mutation is not authorization; focused /attention handles actual decisions",
+		"reject":         "message status mutation is not a governed denial; focused /attention handles actual decisions",
+		"recipe":         "session pinning retired; canonical recipe paths use the shared workshop",
+		"stop":           "replaced directly by /cancel",
 		"test-latency":   "advertised handler had no implementation; provider panel retains its real probe",
 		"test-rule":      "advertised handler had no implementation; guard panel retains its pattern test",
 		"reset-bindings": "advertised handler had no implementation; focused keybinding panel retains reset",

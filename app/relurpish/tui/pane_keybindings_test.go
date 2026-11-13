@@ -94,3 +94,29 @@ func TestV2KeybindingLoadRejectsUnknownActions(t *testing.T) {
 		t.Fatal("obsolete actions were silently accepted or changed the map")
 	}
 }
+
+func TestV2KeybindingRejectsUnrepresentableChords(t *testing.T) {
+	for _, chord := range []string{"ctrl+potato", "ctrl+ctrl+a", "alt+", "f24", "shift+a", "esc", "ctrl+q"} {
+		if validHostChord(chord) {
+			t.Fatalf("unrepresentable/reserved chord %q accepted", chord)
+		}
+	}
+	for _, chord := range []string{"ctrl+a", "alt+f", "shift+tab", "ctrl+shift+up", "f20"} {
+		if !validHostChord(chord) {
+			t.Fatalf("real normalized chord %q rejected", chord)
+		}
+	}
+	pane := NewKeybindingPane(NewKeyMap(), t.TempDir(), false)
+	pane.propose("open_help", []string{"f2"})
+	cmd := pane.persist()
+	pane.Update(cmd())
+	raw, err := os.ReadFile(config.New(pane.workspace).RuntimeKeybindingsFile())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, derived := range []string{"description:", "default_keys:", "source:"} {
+		if strings.Contains(string(raw), derived) {
+			t.Fatalf("derived key metadata was persisted: %s", derived)
+		}
+	}
+}

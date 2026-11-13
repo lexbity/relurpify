@@ -50,7 +50,6 @@ func (p *recordingChatPane) SetAllowParallel(bool)                   {}
 func (p *recordingChatPane) LastPrompt() string                      { return "" }
 func (p *recordingChatPane) StopLatestRun() tea.Cmd                  { return nil }
 func (p *recordingChatPane) RetryLastRun() tea.Cmd                   { return nil }
-func (p *recordingChatPane) ApplyPendingChanges(ChangeStatus) int    { return 0 }
 func (p *recordingChatPane) MutateMessages(func([]Message))          {}
 func (p *recordingChatPane) AddFile(string) tea.Cmd                  { return nil }
 

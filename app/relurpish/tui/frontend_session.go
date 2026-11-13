@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"codeburg.org/lexbit/relurpify/app/relurpish/ports"
 	"codeburg.org/lexbit/relurpify/telemetry"
@@ -50,7 +51,7 @@ type HostOptions struct {
 	Conversation   ConversationSession
 	Doctor         DoctorReader
 	Initializer    DoctorOperations
-	Recipes        ports.RecipeWorkspace
+	Recipes        ports.RecipeLibrary
 	Workspace      string
 	Configuration  ConfigurationReader
 	Services       ServicePort
@@ -63,6 +64,7 @@ type frontendSnapshotMsg struct {
 	Observed bool
 }
 type frontendSubmitMsg struct {
+	Sequence uint64
 	Draft    string
 	Snapshot FrontendSnapshot
 	Err      error
@@ -110,7 +112,7 @@ func (m RootModel) nextFrontendCmd() tea.Cmd {
 	}
 }
 
-func (m RootModel) submitFrontend(text string) (tea.Model, tea.Cmd) {
+func (m RootModel) submitFrontend(text string, sequence uint64) (tea.Model, tea.Cmd) {
 	if m.frontendPending || m.frontendState.Running || m.startupLocked {
 		m.addSystemMessage("Request kept as a draft while execution is unavailable or busy.")
 		return m, nil
@@ -118,15 +120,19 @@ func (m RootModel) submitFrontend(text string) (tea.Model, tea.Cmd) {
 	m.frontendPending = true
 	port, parent := m.conversation, m.parentCtx
 	return m, func() tea.Msg {
-		snapshot, err := port.Submit(parent, text)
-		return frontendSubmitMsg{Draft: text, Snapshot: snapshot, Err: err}
+		ctx, cancel := context.WithTimeout(parent, 5*time.Second)
+		defer cancel()
+		snapshot, err := port.Submit(ctx, text)
+		return frontendSubmitMsg{Draft: text, Sequence: sequence, Snapshot: snapshot, Err: err}
 	}
 }
 
 func (m RootModel) cancelFrontendCmd() tea.Cmd {
 	port, parent := m.conversation, m.parentCtx
 	return func() tea.Msg {
-		snapshot, err := port.Cancel(parent)
+		ctx, cancel := context.WithTimeout(parent, 5*time.Second)
+		defer cancel()
+		snapshot, err := port.Cancel(ctx)
 		return frontendSnapshotMsg{Snapshot: snapshot, Err: err}
 	}
 }
@@ -193,7 +199,9 @@ func (m *RootModel) frontendDecisionKey(msg tea.KeyMsg) tea.Cmd {
 	port, parent, id := m.conversation, m.parentCtx, decision.ID
 	m.decisionFocused, m.decisionEditing = false, false
 	return func() tea.Msg {
-		snapshot, err := port.Answer(parent, id, choice, answer)
+		ctx, cancel := context.WithTimeout(parent, 5*time.Second)
+		defer cancel()
+		snapshot, err := port.Answer(ctx, id, choice, answer)
 		return frontendSnapshotMsg{Snapshot: snapshot, Err: err}
 	}
 }

@@ -21,10 +21,18 @@ type Command struct {
 	Description string
 	Usage       string
 	Handler     CommandHandler
+	Arguments   *ArgumentCount
 	// TabFilter restricts the command to specific tabs. Empty = available in all tabs.
 	TabFilter []TabID
 	// SubTabFilter restricts the command to specific subtabs. Empty = available in all subtabs.
 	SubTabFilter []SubTabID
+}
+
+// ArgumentCount is checked before dispatch or clearing a command draft.
+type ArgumentCount struct{ Min, Max int }
+
+func (c Command) validArguments(args []string) bool {
+	return c.Arguments == nil || (len(args) >= c.Arguments.Min && len(args) <= c.Arguments.Max)
 }
 
 // CommandRegistry holds a set of slash commands and supports context-aware lookup.
@@ -97,6 +105,18 @@ func (r *CommandRegistry) Lookup(name string) (Command, bool) {
 	return Command{}, false
 }
 
+// resolve selects the longest registered path. The command lexer has already
+// decoded arguments; path resolution never unescapes or invokes a shell.
+func (r *CommandRegistry) resolve(name string, args []string) (Command, []string, bool) {
+	words := append([]string{name}, args...)
+	for n := len(words); n > 0; n-- {
+		if command, ok := r.Lookup(strings.Join(words[:n], " ")); ok {
+			return command, words[n:], true
+		}
+	}
+	return Command{}, nil, false
+}
+
 // retain limits an explicitly composed session to its delivered capabilities.
 // It reuses the same handlers and catalog metadata as a live session.
 func (r *CommandRegistry) retain(names ...string) {
@@ -122,6 +142,8 @@ func (r *CommandRegistry) All() []Command {
 }
 
 func registerUniversalCommands(r *CommandRegistry) {
+	r.Register(Command{Name: "back", Usage: "/back", Description: "Return to the previous canvas and reading position", Handler: rootHandleBack, Arguments: &ArgumentCount{}})
+	r.Register(Command{Name: "quit", Usage: "/quit", Description: "Review pending work and unsaved drafts before leaving", Handler: rootHandleQuit, Arguments: &ArgumentCount{}})
 	r.Register(Command{Name: "activity", Description: "Inspect existing OTel pipeline observations", Usage: "/activity [all|calls|graph|knowledge|prompts|system]", Handler: rootHandleActivity})
 	r.Register(Command{Name: "config", Description: "Inspect effective configuration without mutating it", Usage: "/config", Handler: rootHandleConfiguration})
 	r.Register(Command{Name: "services", Description: "Inspect managed services and review lifecycle actions", Usage: "/services", Handler: rootHandleServices})
@@ -149,8 +171,7 @@ func registerUniversalCommands(r *CommandRegistry) {
 		{Name: "help", Description: "Show available commands", Usage: "/help [command]", Handler: rootHandleHelp},
 		{Name: "mode", Description: "Set agent mode", Usage: "/mode <mode>", Handler: rootHandleMode},
 		{Name: "agent", Description: "Switch agent type", Usage: "/agent <name>", Handler: rootHandleAgent},
-		{Name: "recipe", Description: "List recipes or pin one for this session", Usage: "/recipe [id|clear]", Handler: rootHandleRecipe},
-		{Name: "stop", Description: "Stop current run", Usage: "/stop", Handler: rootHandleStop},
+		{Name: "cancel", Description: "Request cancellation of the current run", Usage: "/cancel", Handler: rootHandleStop, Arguments: &ArgumentCount{}},
 		{Name: "retry", Description: "Retry last prompt", Usage: "/retry", Handler: rootHandleRetry},
 		{Name: "export", Description: "Export session", Usage: "/export [md|json] [path]", Handler: rootHandleExport},
 		{Name: "workflows", Description: "List persisted workflows", Usage: "/workflows [limit]", Handler: rootHandleWorkflows},
@@ -189,8 +210,6 @@ func RegisterEucloCommands(reg *CommandRegistry) {
 		{Name: "remove", Description: "Remove file from context", Usage: "/remove <path>", Handler: rootHandleRemove, TabFilter: []TabID{TabChat}},
 		{Name: "context", Description: "Show current context", Usage: "/context", Handler: rootHandleContext, TabFilter: []TabID{TabChat}},
 		{Name: "clear", Description: "Clear chat history", Usage: "/clear", Handler: rootHandleClear, TabFilter: []TabID{TabChat}},
-		{Name: "approve", Description: "Approve pending changes", Usage: "/approve", Handler: rootHandleApprove, TabFilter: []TabID{TabChat}},
-		{Name: "reject", Description: "Reject pending changes", Usage: "/reject", Handler: rootHandleReject, TabFilter: []TabID{TabChat}},
 		{Name: "diff", Description: "Toggle diff expansion", Usage: "/diff [index|path]", Handler: rootHandleDiff, TabFilter: []TabID{TabChat}},
 		{Name: "parallel", Description: "Toggle parallel runs", Usage: "/parallel on|off", Handler: rootHandleParallel, TabFilter: []TabID{TabChat}},
 		{Name: "commit", Description: "Commit modified files to git", Usage: "/commit [message]", Handler: rootHandleCommit, TabFilter: []TabID{TabChat}},
@@ -205,7 +224,6 @@ func RegisterEucloCommands(reg *CommandRegistry) {
 func newHostCommandRegistry() *CommandRegistry {
 	registry := NewCommandRegistry()
 	registerUniversalCommands(registry)
-	RegisterRecipeCommands(registry)
 	return registry
 }
 
@@ -219,32 +237,38 @@ func executeCommand(m *RootModel, name string, args []string) (*RootModel, tea.C
 		m.addSystemMessage("Command catalog unavailable")
 		return m, nil
 	}
-	cmd, ok := reg.Lookup(name)
+	cmd, args, ok := reg.resolve(name, args)
 	if !ok {
-		m.addSystemMessage(fmt.Sprintf("Unknown command: /%s. Try /help.", name))
+		m.rejectCommand(fmt.Sprintf("Unknown command: /%s. Try /help.", name))
 		return m, nil
 	}
 	if !reg.eligible(cmd, m.activeTab, m.tabs.ActiveSubTab()) {
-		m.addSystemMessage("Command /" + name + " is unavailable in this canvas. /help shows its commands.")
+		m.rejectCommand("Command /" + name + " is unavailable in this canvas. /help shows its commands.")
+		return m, nil
+	}
+	if !cmd.validArguments(args) {
+		m.rejectCommand("Usage: " + cmd.Usage)
 		return m, nil
 	}
 	return cmd.Handler(m, args)
 }
 
+func (m *RootModel) rejectCommand(reason string) {
+	m.commandRejected = true
+	m.addSystemMessage(reason)
+}
+
 // --- handlers ---
 
 func rootHandleHelp(m *RootModel, args []string) (*RootModel, tea.Cmd) {
-	if len(args) > 1 {
-		m.addSystemMessage("Usage: /help [command]")
-		return m, nil
-	}
 	m.helpCommand = ""
-	if len(args) == 1 {
-		if _, ok := m.cmdReg.Lookup(args[0]); !ok {
-			m.addSystemMessage("Unknown command: /" + args[0])
+	if len(args) > 0 {
+		path := strings.Join(args, " ")
+		if _, ok := m.cmdReg.Lookup(path); !ok {
+			m.rejectCommand("Unknown command: /" + path)
 			return m, nil
 		}
-		m.helpCommand = args[0]
+		m.helpCommand = path
 	}
 	m.showHelp, m.helpOffset = true, 0
 	return m, nil
@@ -527,32 +551,6 @@ func rootHandleQueueTask(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 	}
 	m.setActiveTab(TabAIProvider)
 	return m, m.dequeueNextTask()
-}
-
-func rootHandleApprove(m *RootModel, _ []string) (*RootModel, tea.Cmd) {
-	if m.chat == nil {
-		return m, nil
-	}
-	count := m.chat.ApplyPendingChanges(StatusApproved)
-	if count == 0 {
-		m.addSystemMessage("No pending changes")
-	} else {
-		m.addSystemMessage(fmt.Sprintf("Approved %d change(s)", count))
-	}
-	return m, nil
-}
-
-func rootHandleReject(m *RootModel, _ []string) (*RootModel, tea.Cmd) {
-	if m.chat == nil {
-		return m, nil
-	}
-	count := m.chat.ApplyPendingChanges(StatusRejected)
-	if count == 0 {
-		m.addSystemMessage("No pending changes")
-	} else {
-		m.addSystemMessage(fmt.Sprintf("Rejected %d change(s)", count))
-	}
-	return m, nil
 }
 
 func rootHandleDiff(m *RootModel, args []string) (*RootModel, tea.Cmd) {
@@ -1038,91 +1036,6 @@ func rootHandleSaveModel(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 
 func rootHandleRestartAll(m *RootModel, _ []string) (*RootModel, tea.Cmd) {
 	return rootHandleService(m, []string{"restart-all"})
-}
-
-func rootHandleRecipe(m *RootModel, args []string) (*RootModel, tea.Cmd) {
-	if len(args) == 0 {
-		if m.runtime == nil {
-			m.addSystemMessage("Runtime unavailable: cannot list recipes")
-			return m, nil
-		}
-		recipes := m.runtime.RegisteredRecipes()
-		warnings := m.runtime.RecipeLoadWarnings()
-		if len(recipes) == 0 && len(warnings) == 0 {
-			m.addSystemMessage("No recipes registered in this workspace.")
-			return m, nil
-		}
-		var b strings.Builder
-		if len(recipes) > 0 {
-			b.WriteString("Registered recipes:")
-			for _, r := range recipes {
-				b.WriteString("\n  " + r.ID)
-				if len(r.Families) > 0 {
-					b.WriteString("  [" + strings.Join(r.Families, ",") + "]")
-				}
-				if r.Description != "" {
-					b.WriteString("  — " + r.Description)
-				}
-			}
-			b.WriteString("\nPin one with /recipe <id>; clear with /recipe clear")
-		} else {
-			b.WriteString("No recipes registered in this workspace.")
-		}
-		for _, w := range warnings {
-			b.WriteString("\nSkipped: " + w)
-		}
-		if len(warnings) > 0 {
-			b.WriteString("\nRecipes load once at boot: restart relurpish to pick up new or fixed recipe files.")
-		}
-		if m.sharedSess != nil && m.sharedSess.PinnedRecipe != "" {
-			b.WriteString("\nPinned: " + m.sharedSess.PinnedRecipe)
-		}
-		m.addSystemMessage(b.String())
-		return m, nil
-	}
-	choice := strings.TrimSpace(args[0])
-	if choice == "clear" {
-		if m.sharedSess != nil {
-			m.sharedSess.PinnedRecipe = ""
-		}
-		m.addSystemMessage("Recipe pin cleared; normal selection applies.")
-		return m, nil
-	}
-	if m.sharedSess == nil {
-		m.addSystemMessage("No active session: cannot pin a recipe")
-		return m, nil
-	}
-	// Validate the pin against the loaded registry: an unknown id would
-	// otherwise fail the whole turn at dispatch. Recipes load once per
-	// boot, so a file authored after startup is not pinnable until restart.
-	if m.runtime != nil {
-		registered := false
-		for _, r := range m.runtime.RegisteredRecipes() {
-			if r.ID == choice {
-				registered = true
-				break
-			}
-		}
-		if !registered {
-			var b strings.Builder
-			b.WriteString("Cannot pin " + choice + ": not registered in this workspace.")
-			b.WriteString("\nRecipes load once at boot — restart relurpish to pick up new recipe files.")
-			if recipes := m.runtime.RegisteredRecipes(); len(recipes) > 0 {
-				b.WriteString("\nRegistered:")
-				for _, r := range recipes {
-					b.WriteString("\n  " + r.ID)
-				}
-			}
-			for _, w := range m.runtime.RecipeLoadWarnings() {
-				b.WriteString("\nSkipped: " + w)
-			}
-			m.addSystemMessage(b.String())
-			return m, nil
-		}
-	}
-	m.sharedSess.PinnedRecipe = choice
-	m.addSystemMessage("Pinned recipe for this session: " + choice + " (dispatch runs exactly this recipe; /recipe clear to unpin)")
-	return m, nil
 }
 
 func rootHandleLiteralRequest(m *RootModel, args []string) (*RootModel, tea.Cmd) {

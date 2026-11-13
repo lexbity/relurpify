@@ -2,432 +2,181 @@ package tui
 
 import (
 	"context"
-	"fmt"
+	"path"
+	"path/filepath"
 	"strings"
+	"time"
+	"unicode"
 
 	"codeburg.org/lexbit/relurpify/app/relurpish/ports"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-// recipeWorkspaceKey is the context key for storing the ports.RecipeWorkspace.
-type recipeWorkspaceKey struct{}
+type recipeAction uint8
 
-// WithRecipeWorkspace adds a ports.RecipeWorkspace to the context.
-func WithRecipeWorkspace(ctx context.Context, workspace ports.RecipeWorkspace) context.Context {
-	return context.WithValue(ctx, recipeWorkspaceKey{}, workspace)
+const (
+	recipeCloseAction recipeAction = iota
+	recipeSourceAction
+	recipeValidateAction
+	recipeUndoAction
+	recipeRedoAction
+	recipeAddAction
+	recipeSaveAction
+)
+
+// registerRecipeCommands exposes only operations supplied by this session.
+// All authoring uses Workshop's single source document, parser and review flow.
+func registerRecipeCommands(parent context.Context, registry *CommandRegistry, library ports.RecipeLibrary) {
+	if library == nil {
+		return
+	}
+	commands := []Command{
+		{Name: "recipe open", Usage: "/recipe open [path]", Description: "Open one saved recipe, or choose from the library", Handler: recipeOpenCommand, Arguments: &ArgumentCount{Max: 1}},
+		{Name: "recipe close", Usage: "/recipe close", Description: "Close the recipe after reviewing unsaved edits", Handler: recipeEditCommand(parent, recipeCloseAction), Arguments: &ArgumentCount{}},
+		{Name: "recipe source", Usage: "/recipe source", Description: "Edit the complete local source draft", Handler: recipeEditCommand(parent, recipeSourceAction), Arguments: &ArgumentCount{}},
+		{Name: "recipe validate", Usage: "/recipe validate", Description: "Check source with the parser and installed strategy contracts", Handler: recipeEditCommand(parent, recipeValidateAction), Arguments: &ArgumentCount{}},
+		{Name: "recipe undo", Usage: "/recipe undo", Description: "Undo a local source transaction", Handler: recipeEditCommand(parent, recipeUndoAction), Arguments: &ArgumentCount{}},
+		{Name: "recipe redo", Usage: "/recipe redo", Description: "Redo a local source transaction", Handler: recipeEditCommand(parent, recipeRedoAction), Arguments: &ArgumentCount{}},
+		{Name: "step add", Usage: "/step add <agent-name>", Description: "Add a source run with an installed strategy", Handler: recipeEditCommand(parent, recipeAddAction), Arguments: &ArgumentCount{Min: 1, Max: 1}, TabFilter: []TabID{TabWorkshop}},
+	}
+	if _, ok := library.(ports.RecipeWriter); ok {
+		commands = append(commands,
+			Command{Name: "recipe save", Usage: "/recipe save", Description: "Review saving the validated local source", Handler: recipeEditCommand(parent, recipeSaveAction), Arguments: &ArgumentCount{}},
+			Command{Name: "recipe new", Usage: "/recipe new <path>", Description: "Start a new local recipe; saving requires review", Handler: recipeNewCommand, Arguments: &ArgumentCount{Min: 1, Max: 1}})
+	}
+	if _, ok := library.(ports.RecipeRunner); ok {
+		commands = append(commands, Command{Name: "recipe run", Usage: "/recipe run <path>", Description: "Review an exact saved recipe and supply its task input", Handler: recipeRunCommand, Arguments: &ArgumentCount{Min: 1, Max: 1}})
+	}
+	for _, command := range commands {
+		registry.Register(command)
+	}
 }
 
-// GetRecipeWorkspace retrieves the ports.RecipeWorkspace from the context.
-func GetRecipeWorkspace(ctx context.Context) ports.RecipeWorkspace {
-	if v := ctx.Value(recipeWorkspaceKey{}); v != nil {
-		return v.(ports.RecipeWorkspace)
+func recipeOpenCommand(m *RootModel, args []string) (*RootModel, tea.Cmd) {
+	p := m.workshop
+	m.setActiveTab(TabWorkshop)
+	m.setFocus(FocusRegionRegion1)
+	if p.working {
+		m.rejectCommand("Wait for the pending recipe operation")
+		return m, nil
 	}
-	return nil
+	if p.Dirty() {
+		m.rejectCommand("Local recipe draft retained; save or close it before opening another recipe")
+		return m, nil
+	}
+	id := ""
+	if len(args) == 1 {
+		id = args[0]
+	}
+	return m, p.load(m.parentCtx, id)
 }
 
-// RegisterRecipeCommands registers all recipe-related commands with the registry.
-// These commands use the ports.RecipeWorkspace interface for lossless editing and file execution.
-func RegisterRecipeCommands(r *CommandRegistry) {
-	// /recipe list - List all recipes
-	r.Register(Command{
-		Name:        "recipe list",
-		Description: "List all recipe files in the workspace",
-		Usage:       "/recipe list",
-		Handler:     handleRecipeList,
-	})
-
-	// /recipe open <path> - Open a recipe for editing
-	r.Register(Command{
-		Name:        "recipe open",
-		Description: "Open a recipe file for editing",
-		Usage:       "/recipe open <path>",
-		Handler:     handleRecipeOpen,
-	})
-
-	// /recipe new <path> - Create a new recipe file
-	r.Register(Command{
-		Name:        "recipe new",
-		Description: "Create a new recipe file",
-		Usage:       "/recipe new <path>",
-		Handler:     handleRecipeNew,
-	})
-
-	// /recipe save - Save the current recipe
-	r.Register(Command{
-		Name:        "recipe save",
-		Description: "Save the current recipe file",
-		Usage:       "/recipe save",
-		Handler:     handleRecipeSave,
-	})
-
-	// /recipe close - Close the current recipe
-	r.Register(Command{
-		Name:        "recipe close",
-		Description: "Close the current recipe editor",
-		Usage:       "/recipe close",
-		Handler:     handleRecipeClose,
-	})
-
-	// /recipe validate - Validate the current recipe
-	r.Register(Command{
-		Name:        "recipe validate",
-		Description: "Validate the current recipe",
-		Usage:       "/recipe validate",
-		Handler:     handleRecipeValidate,
-	})
-
-	// /recipe run <path> - Run a recipe file
-	r.Register(Command{
-		Name:        "recipe run",
-		Description: "Run a recipe file",
-		Usage:       "/recipe run <path>",
-		Handler:     handleRecipeRun,
-	})
-
-	// /recipe undo - Undo the last edit
-	r.Register(Command{
-		Name:        "recipe undo",
-		Description: "Undo the last edit in the recipe editor",
-		Usage:       "/recipe undo",
-		Handler:     handleRecipeUndo,
-	})
-
-	// /recipe redo - Redo the last undone edit
-	r.Register(Command{
-		Name:        "recipe redo",
-		Description: "Redo the last undone edit in the recipe editor",
-		Usage:       "/recipe redo",
-		Handler:     handleRecipeRedo,
-	})
-
-	// /recipe source - Show the raw source of the current recipe
-	r.Register(Command{
-		Name:        "recipe source",
-		Description: "Show the raw source of the current recipe",
-		Usage:       "/recipe source",
-		Handler:     handleRecipeSource,
-	})
+func recipeRunCommand(m *RootModel, args []string) (*RootModel, tea.Cmd) {
+	p := m.workshop
+	m.setActiveTab(TabWorkshop)
+	m.setFocus(FocusRegionRegion1)
+	if p.working || p.Dirty() {
+		m.rejectCommand("Save or close the local draft and wait for pending work before reviewing a saved-file run")
+		return m, nil
+	}
+	if p.file.Path == args[0] && p.file.Revision != "" {
+		p.reviewRun()
+		return m, nil
+	}
+	p.runAfterLoad = true
+	return m, p.load(m.parentCtx, args[0])
 }
 
-func handleRecipeList(m *RootModel, args []string) (*RootModel, tea.Cmd) {
-	if m.workshop == nil || m.workshop.port == nil {
-		m.addSystemMessage("Recipe workspace unavailable")
+func recipeNewCommand(m *RootModel, args []string) (*RootModel, tea.Cmd) {
+	p := m.workshop
+	if p.working || p.Dirty() {
+		m.rejectCommand("Save or close the current draft before creating a recipe")
 		return m, nil
 	}
-
-	ctx := context.Background()
-	recipes, err := m.workshop.port.ListRecipes(ctx)
-	if err != nil {
-		m.addSystemMessage(fmt.Sprintf("Error listing recipes: %v", err))
+	filename := args[0]
+	if !strings.HasSuffix(filename, ".erpe") || !filepath.IsLocal(filename) || path.Clean(filename) != filename || strings.ContainsRune(filename, '\\') || strings.ContainsFunc(filename, unicode.IsControl) {
+		m.rejectCommand("Use a workspace-relative .erpe path without traversal or control characters")
 		return m, nil
 	}
-
-	if len(recipes) == 0 {
-		m.addSystemMessage("No recipes found in workspace")
+	id := strings.TrimSuffix(path.Base(filename), ".erpe")
+	if !validRecipeIdentifier(id) {
+		m.rejectCommand("Recipe filename must use letters, digits and underscore")
 		return m, nil
 	}
-
-	var sb strings.Builder
-	sb.WriteString("Recipes:\n")
-	for _, r := range recipes {
-		if len(r.Revision) >= 8 {
-			sb.WriteString(fmt.Sprintf("  %s (rev: %s)\n", r.Path, r.Revision[:8]))
-		} else {
-			sb.WriteString(fmt.Sprintf("  %s\n", r.Path))
-		}
+	p.epoch++
+	epoch, port, parent := p.epoch, p.port, p.parent
+	p.working = true
+	m.setActiveTab(TabWorkshop)
+	m.setFocus(FocusRegionRegion1)
+	return m, func() tea.Msg {
+		ctx, cancel := context.WithTimeout(parent, 5*time.Second)
+		defer cancel()
+		catalog, err := port.RecipeCatalog(ctx)
+		return workshopResultMsg{Epoch: epoch, Operation: workshopCreate, Catalog: catalog, File: ports.RecipeFile{ID: id, Path: filename}, Err: err}
 	}
-	sb.WriteString("\nUse /recipe open <path> to edit or /recipe run <path> to execute")
-
-	m.addSystemMessage(sb.String())
-	return m, nil
 }
 
-func handleRecipeOpen(m *RootModel, args []string) (*RootModel, tea.Cmd) {
-	if m.workshop == nil || m.workshop.port == nil {
-		m.addSystemMessage("Recipe workspace unavailable")
-		return m, nil
-	}
-
-	if len(args) == 0 {
-		m.addSystemMessage("Usage: /recipe open <path>")
-		return m, nil
-	}
-
-	path := args[0]
-	ctx := context.Background()
-
-	file, err := m.workshop.port.OpenRecipe(ctx, path)
-	if err != nil {
-		m.addSystemMessage(fmt.Sprintf("Error opening recipe: %v", err))
-		return m, nil
-	}
-
-	// Switch to workshop tab and load the recipe
-	m.activeTab = TabWorkshop
-	m.workshop.mode = workshopSource
-	m.workshop.file = file
-	m.workshop.source = file.Source
-	m.workshop.files = []ports.RecipeFile{file}
-
-	m.addSystemMessage(fmt.Sprintf("Opened recipe: %s", file.Path))
-	return m, nil
-}
-
-func handleRecipeNew(m *RootModel, args []string) (*RootModel, tea.Cmd) {
-	if m.workshop == nil || m.workshop.port == nil {
-		m.addSystemMessage("Recipe workspace unavailable")
-		return m, nil
-	}
-
-	if len(args) == 0 {
-		m.addSystemMessage("Usage: /recipe new <path>")
-		return m, nil
-	}
-
-	path := args[0]
-	if !strings.HasSuffix(path, ".erpe") {
-		path += ".erpe"
-	}
-
-	// Create a new empty recipe
-	newRecipe := ports.RecipeFile{
-		ID:       path,
-		Path:     path,
-		Revision: "",
-		Source:   "thoughtrecipe " + path + "\n",
-	}
-
-	m.activeTab = TabWorkshop
-	m.workshop.mode = workshopSource
-	m.workshop.file = newRecipe
-	m.workshop.source = newRecipe.Source
-	m.workshop.files = []ports.RecipeFile{newRecipe}
-
-	m.addSystemMessage(fmt.Sprintf("New recipe: %s", path))
-	return m, nil
-}
-
-func handleRecipeSave(m *RootModel, args []string) (*RootModel, tea.Cmd) {
-	if m.workshop == nil || m.workshop.port == nil {
-		m.addSystemMessage("Recipe workspace unavailable")
-		return m, nil
-	}
-
-	if m.workshop.mode != workshopSource && m.workshop.mode != workshopGoal {
-		m.addSystemMessage("Not in recipe source editing mode")
-		return m, nil
-	}
-
-	// Create a new file with the updated source
-	newFile := ports.RecipeFile{
-		ID:       m.workshop.file.ID,
-		Path:     m.workshop.file.Path,
-		Revision: m.workshop.file.Revision,
-		Source:   m.workshop.source,
-	}
-
-	ctx := context.Background()
-	saved, err := m.workshop.port.SaveRecipe(ctx, newFile)
-	if err != nil {
-		m.addSystemMessage(fmt.Sprintf("Error saving recipe: %v", err))
-		return m, nil
-	}
-
-	// Update the workshop with the saved file
-	m.workshop.file = saved
-	m.workshop.file.Revision = saved.Revision
-	m.workshop.source = saved.Source
-	m.workshop.undo = nil
-	m.workshop.redo = nil
-
-	m.addSystemMessage(fmt.Sprintf("Recipe saved: %s (rev: %s)", saved.Path, saved.Revision[:8]))
-	return m, nil
-}
-
-func handleRecipeClose(m *RootModel, args []string) (*RootModel, tea.Cmd) {
-	if m.workshop == nil {
-		m.addSystemMessage("Recipe workspace not available")
-		return m, nil
-	}
-
-	// Check if there's unsaved work
-	if m.workshop.Dirty() {
-		m.addSystemMessage("Recipe has unsaved changes. Use /recipe save first or discard changes.")
-		return m, nil
-	}
-
-	// Close by switching to a different tab
-	m.activeTab = TabChat
-
-	m.addSystemMessage("Recipe editor closed")
-	return m, nil
-}
-
-func handleRecipeValidate(m *RootModel, args []string) (*RootModel, tea.Cmd) {
-	if m.workshop == nil {
-		m.addSystemMessage("Recipe workspace not available")
-		return m, nil
-	}
-
-	if m.workshop.mode != workshopSource && m.workshop.mode != workshopGoal {
-		m.addSystemMessage("Not in recipe editing mode")
-		return m, nil
-	}
-
-	// For P04, we just check if the recipe parses correctly
-	if strings.TrimSpace(m.workshop.source) == "" {
-		m.addSystemMessage("Recipe is empty")
-		return m, nil
-	}
-
-	// Check if it starts with "thoughtrecipe"
-	if !strings.HasPrefix(m.workshop.source, "thoughtrecipe") {
-		m.addSystemMessage("Warning: Recipe should start with 'thoughtrecipe' declaration")
-		return m, nil
-	}
-
-	m.addSystemMessage("Recipe syntax OK")
-	return m, nil
-}
-
-func handleRecipeRun(m *RootModel, args []string) (*RootModel, tea.Cmd) {
-	if m.workshop == nil || m.workshop.port == nil {
-		m.addSystemMessage("Recipe workspace unavailable")
-		return m, nil
-	}
-
-	var path string
-	if len(args) > 0 {
-		path = args[0]
-	} else if m.workshop.file.Path != "" {
-		path = m.workshop.file.Path
-	} else {
-		m.addSystemMessage("Usage: /recipe run <path> or open a recipe first")
-		return m, nil
-	}
-
-	ctx := context.Background()
-
-	// If we have unsaved changes, save them first
-	if m.workshop.Dirty() {
-		// Save the current source
-		newFile := ports.RecipeFile{
-			ID:       m.workshop.file.ID,
-			Path:     m.workshop.file.Path,
-			Revision: m.workshop.file.Revision,
-			Source:   m.workshop.source,
-		}
-		_, err := m.workshop.port.SaveRecipe(ctx, newFile)
-		if err != nil {
-			m.addSystemMessage(fmt.Sprintf("Error saving recipe before run: %v", err))
+func recipeEditCommand(parent context.Context, operation recipeAction) CommandHandler {
+	return func(m *RootModel, args []string) (*RootModel, tea.Cmd) {
+		p := m.workshop
+		if p.working {
+			m.rejectCommand("Wait for the pending recipe operation")
 			return m, nil
 		}
-		m.addSystemMessage("Saved draft before execution")
-	}
-
-	// Open the recipe to get the latest version
-	file, err := m.workshop.port.OpenRecipe(ctx, path)
-	if err != nil {
-		m.addSystemMessage(fmt.Sprintf("Error opening recipe for execution: %v", err))
-		return m, nil
-	}
-
-	// Trigger the recipe
-	// Use the first line as the entry point if not specified
-	entry := ""
-	if strings.HasPrefix(file.Source, "thoughtrecipe") {
-		lines := strings.Split(file.Source, "\n")
-		if len(lines) > 0 {
-			parts := strings.Fields(lines[0])
-			if len(parts) > 1 {
-				entry = parts[1]
+		if p.file.ID == "" {
+			m.rejectCommand("Open a recipe before authoring it")
+			return m, nil
+		}
+		if p.Editing() {
+			// Source typing is a draft transaction. Leaving the field keeps its
+			// bytes, including invalid source, rather than saving behind the user.
+			if !p.keepField() {
+				m.rejectCommand(p.status)
+				return m, nil
 			}
 		}
-	}
-
-	result, err := m.workshop.port.TriggerRecipe(ctx, file, entry)
-	if err != nil {
-		m.addSystemMessage(fmt.Sprintf("Error triggering recipe: %v", err))
+		switch operation {
+		case recipeSourceAction:
+			p.openField(workshopSource, p.source)
+		case recipeSaveAction:
+			p.reviewSave()
+		case recipeValidateAction:
+			p.parse()
+			p.mode = workshopDiagnostics
+		case recipeUndoAction:
+			p.history(false)
+		case recipeRedoAction:
+			p.history(true)
+		case recipeCloseAction:
+			if p.Dirty() {
+				p.mode = workshopClose
+			} else {
+				return m, p.load(parent, "")
+			}
+		case recipeAddAction:
+			if !validRecipeIdentifier(args[0]) {
+				m.rejectCommand("Agent name must use letters, digits and underscore")
+				return m, nil
+			}
+			if p.document == nil {
+				m.rejectCommand("Repair source diagnostics before adding a step")
+				return m, nil
+			}
+			for _, step := range p.steps {
+				if step.name == args[0] {
+					m.rejectCommand("Agent name already appears in this recipe")
+					return m, nil
+				}
+			}
+			strategy := p.defaultStrategy()
+			if strategy == "" {
+				m.rejectCommand("No installed strategy is available")
+				return m, nil
+			}
+			p.structuredChange(strings.TrimRight(p.source, "\n") + "\n\nagent " + args[0] + " uses " + strategy + "\n\nrun " + args[0] + ":\n  from input.prompt\n  goal \"Complete the task\"\n  capture result -> state." + args[0] + "\n")
+		}
+		m.setActiveTab(TabWorkshop)
+		m.setFocus(FocusRegionRegion1)
 		return m, nil
 	}
-
-	m.addSystemMessage(fmt.Sprintf("Recipe %s triggered: %s", file.Path, result.Status))
-	return m, nil
-}
-
-func handleRecipeUndo(m *RootModel, args []string) (*RootModel, tea.Cmd) {
-	if m.workshop == nil {
-		m.addSystemMessage("Recipe workspace not available")
-		return m, nil
-	}
-
-	if m.workshop.mode != workshopSource && m.workshop.mode != workshopGoal {
-		m.addSystemMessage("Not in recipe editing mode")
-		return m, nil
-	}
-
-	// For P04, undo is handled by the workshop
-	if len(m.workshop.undo) > 0 {
-		// Pop the last undo state
-		lastUndo := m.workshop.undo[len(m.workshop.undo)-1]
-		m.workshop.undo = m.workshop.undo[:len(m.workshop.undo)-1]
-
-		// Push to redo stack
-		m.workshop.redo = append(m.workshop.redo, m.workshop.source)
-
-		// Restore the source
-		m.workshop.source = lastUndo
-		m.workshop.field.SetValue(lastUndo)
-		m.addSystemMessage("Undo applied")
-	} else {
-		m.addSystemMessage("Nothing to undo")
-	}
-
-	return m, nil
-}
-
-func handleRecipeRedo(m *RootModel, args []string) (*RootModel, tea.Cmd) {
-	if m.workshop == nil {
-		m.addSystemMessage("Recipe workspace not available")
-		return m, nil
-	}
-
-	if m.workshop.mode != workshopSource && m.workshop.mode != workshopGoal {
-		m.addSystemMessage("Not in recipe editing mode")
-		return m, nil
-	}
-
-	// For P04, redo is handled by the workshop
-	if len(m.workshop.redo) > 0 {
-		// Pop the last redo state
-		lastRedo := m.workshop.redo[len(m.workshop.redo)-1]
-		m.workshop.redo = m.workshop.redo[:len(m.workshop.redo)-1]
-
-		// Push to undo stack
-		m.workshop.undo = append(m.workshop.undo, m.workshop.source)
-
-		// Restore the source
-		m.workshop.source = lastRedo
-		m.workshop.field.SetValue(lastRedo)
-		m.addSystemMessage("Redo applied")
-	} else {
-		m.addSystemMessage("Nothing to redo")
-	}
-
-	return m, nil
-}
-
-func handleRecipeSource(m *RootModel, args []string) (*RootModel, tea.Cmd) {
-	if m.workshop == nil {
-		m.addSystemMessage("Recipe workspace not available")
-		return m, nil
-	}
-
-	if m.workshop.file.Path == "" {
-		m.addSystemMessage("No recipe open")
-		return m, nil
-	}
-
-	m.addSystemMessage(fmt.Sprintf("Recipe source:\n%s", m.workshop.source))
-	return m, nil
 }

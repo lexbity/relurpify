@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textarea"
@@ -15,15 +16,17 @@ import (
 
 // Messages emitted by InputBar.
 type InputSubmittedMsg struct {
-	Value  string
-	Prefix string
+	Value    string
+	Prefix   string
+	Sequence uint64
 }
 
 type CommandInvokedMsg struct {
-	Draft  string
-	Name   string
-	Args   []string
-	Prefix string
+	Draft    string
+	Name     string
+	Args     []string
+	Prefix   string
+	Sequence uint64
 }
 
 type InputRejectedMsg struct{ Reason string }
@@ -61,6 +64,10 @@ type InputBar struct {
 	pickerResult filePickerResultMsg
 	pickerSel    int
 	workspace    string
+	parent       context.Context
+	pickerEpoch  uint64
+	pickerEdit   uint64
+	pickerCaret  int
 	runtime      RuntimeAdapter
 
 	// Context-aware command registry.
@@ -69,6 +76,8 @@ type InputBar struct {
 	ctxSub       SubTabID
 	gated        bool
 	savedRequest *string
+	editSequence uint64
+	historyDraft *string
 	// Theme is the active semantic style source.
 	th *theme.Theme
 }
@@ -80,7 +89,7 @@ func NewInputBar() *InputBar {
 	ti.SetHeight(1)
 	ti.CharLimit = 65536
 	ti.Prompt = ""
-	setInputHint(&ti, "Request to Euclo · / commands")
+	setInputHint(&ti, "Type here · / commands")
 	ti.Focus()
 	return &InputBar{input: ti, focused: true, th: theme.Default(), cmdReg: newHostCommandRegistry()}
 }
@@ -91,8 +100,8 @@ func (b *InputBar) SetWorkspace(path string) {
 }
 
 // SetRuntime sets the runtime adapter used to invoke capabilities for the file picker.
-func (b *InputBar) SetRuntime(rt RuntimeAdapter) {
-	b.runtime = rt
+func (b *InputBar) SetRuntime(parent context.Context, rt RuntimeAdapter) {
+	b.runtime, b.parent = rt, parent
 }
 
 // SetCommandRegistry sets the registry used for context-aware palette matching.
@@ -148,7 +157,12 @@ func (b *InputBar) Focused() bool {
 func (b *InputBar) Value() string { return b.input.Value() }
 
 // SetValue sets the input text.
-func (b *InputBar) SetValue(v string) { b.input.SetValue(v) }
+func (b *InputBar) SetValue(v string) {
+	if b.input.Value() != v {
+		b.editSequence++
+	}
+	b.input.SetValue(v)
+}
 
 // SetSearchMode enters or exits explicit search mode.
 func (b *InputBar) SetSearchMode(on bool) {
@@ -159,7 +173,7 @@ func (b *InputBar) SetSearchMode(on bool) {
 		b.SetFocused(true)
 		return
 	}
-	setInputHint(&b.input, "Request to Euclo · / commands")
+	setInputHint(&b.input, "Type here · / commands")
 }
 
 // SetFilePickerMode enters or exits file picker mode.
@@ -170,7 +184,7 @@ func (b *InputBar) SetFilePickerMode(on bool) {
 		b.SetFocused(true)
 		return
 	}
-	setInputHint(&b.input, "Request to Euclo · / commands")
+	setInputHint(&b.input, "Type here · / commands")
 	b.input.SetValue("")
 }
 
@@ -184,10 +198,10 @@ func (b *InputBar) promptLabel(_ TabID, draft inputDraft) string { return draft.
 
 // Accept clears only the exact draft accepted by the host. A blocked or stale
 // submission cannot erase text typed while its message was pending.
-func (b *InputBar) Accept(value string) {
-	if b.input.Value() == value {
+func (b *InputBar) Accept(value string, sequence uint64) {
+	if b.input.Value() == value && b.editSequence == sequence {
 		if b.savedRequest != nil {
-			b.input.SetValue(*b.savedRequest)
+			b.SetValue(*b.savedRequest)
 			b.savedRequest = nil
 		} else {
 			b.input.SetValue("")
@@ -202,7 +216,7 @@ func (b *InputBar) OpenCommands() {
 	if b.savedRequest == nil && !strings.HasPrefix(strings.TrimSpace(b.input.Value()), "/") {
 		draft := b.input.Value()
 		b.savedRequest = &draft
-		b.input.SetValue("/")
+		b.SetValue("/")
 	}
 	b.updatePalette(parseInputDraft(b.input.Value(), b.ctxTab, false))
 }
@@ -210,7 +224,7 @@ func (b *InputBar) CancelCommands() bool {
 	if b.savedRequest == nil {
 		return false
 	}
-	b.input.SetValue(*b.savedRequest)
+	b.SetValue(*b.savedRequest)
 	b.savedRequest = nil
 	b.updatePalette(parseInputDraft(b.input.Value(), b.ctxTab, false))
 	return true
@@ -225,7 +239,16 @@ func (b *InputBar) updatePalette(draft inputDraft) {
 		b.palLabel = ""
 		return
 	}
-	shouldOpen := draft.command == "" || (len(draft.args) == 0 && !draft.trailingSpace)
+	// A multiword path is completed as one catalog entry. Once arguments
+	// follow a complete path there are no command-name suggestions.
+	shouldOpen := true
+	if b.cmdReg != nil {
+		for _, command := range b.cmdReg.All() {
+			if strings.HasPrefix(draft.paletteQuery, command.Name+" ") {
+				shouldOpen = false
+			}
+		}
+	}
 	if !shouldOpen {
 		b.palOpen = false
 		b.palette = nil
@@ -242,36 +265,39 @@ func (b *InputBar) updatePalette(draft inputDraft) {
 	b.palLabel = draft.promptLabel
 }
 
-func (b *InputBar) updateFilePicker(raw string, draft inputDraft, activeTab TabID) tea.Cmd {
-	if draft.commandMode || draft.prefix == "?" {
-		b.pickerActive = false
-		b.pickerResult.Results = nil
-		b.pickerSel = 0
-		b.pickerQuery = ""
+func (b *InputBar) caretByteOffset() int {
+	value := b.input.Value()
+	lines := strings.Split(value, "\n")
+	row := min(b.input.Line(), len(lines)-1)
+	info := b.input.LineInfo()
+	column := min(info.StartColumn+info.ColumnOffset, len([]rune(lines[row])))
+	offset := len(string([]rune(lines[row])[:column]))
+	for _, line := range lines[:row] {
+		offset += len(line) + 1
+	}
+	return offset
+}
+
+func (b *InputBar) requestFileCompletion() tea.Cmd {
+	if b.runtime == nil || b.parent == nil || b.workspace == "" {
+		return func() tea.Msg { return InputRejectedMsg{Reason: "File completion unavailable in this session"} }
+	}
+	raw := b.input.Value()
+	if strings.HasPrefix(strings.TrimSpace(raw), "/") {
 		return nil
 	}
-	if draft.prefix == "" && activeTab != TabChat {
-		b.pickerActive = false
-		b.pickerResult.Results = nil
-		b.pickerSel = 0
-		b.pickerQuery = ""
-		return nil
+	caret := b.caretByteOffset()
+	query, start, end, ok := filePickerTokenAt(raw, caret)
+	if !ok {
+		return func() tea.Msg {
+			return InputRejectedMsg{Reason: "Place the cursor after an @ reference, then use Alt+F to complete it"}
+		}
 	}
-	token, ok := filePickerTokenPrefix(raw)
-	if !ok || b.workspace == "" || b.runtime == nil {
-		b.pickerActive = false
-		b.pickerResult.Results = nil
-		b.pickerSel = 0
-		b.pickerQuery = ""
-		return nil
-	}
-	if token == b.pickerQuery && b.pickerActive {
-		return nil
-	}
-	b.pickerActive = true
-	b.pickerQuery = token
-	b.pickerSel = 0
-	return filePickerQueryCmd(b.runtime, b.workspace, token)
+	b.pickerEpoch++
+	b.pickerActive, b.pickerQuery, b.pickerSel = true, query, 0
+	b.pickerEdit, b.pickerCaret = b.editSequence, caret
+	request := filePickerResultMsg{Query: query, Workspace: b.workspace, Request: b.pickerEpoch, Edit: b.editSequence, Start: start, End: end}
+	return filePickerQueryCmd(b.parent, b.runtime, request)
 }
 
 func (b *InputBar) completePaletteSelection() {
@@ -282,8 +308,7 @@ func (b *InputBar) completePaletteSelection() {
 		b.palSel = 0
 	}
 	item := b.palette[b.palSel]
-	raw := b.input.Value()
-	b.input.SetValue(replaceTokenAtPrefix(raw, b.palPrefix, item.Name))
+	b.SetValue("/" + item.Name + " ")
 	b.input.CursorEnd()
 	b.palOpen = false
 	b.palette = nil
@@ -299,12 +324,14 @@ func (b *InputBar) completePickerSelection() {
 	if b.pickerSel < 0 || b.pickerSel >= len(b.pickerResult.Results) {
 		b.pickerSel = 0
 	}
-	selectedFile := b.pickerResult.Results[b.pickerSel]
-	currentVal := b.input.Value()
-	if updated := filePickerReplaceToken(currentVal, selectedFile); updated != currentVal {
-		b.input.SetValue(updated)
-		b.input.CursorEnd()
+	result := b.pickerResult
+	current := b.input.Value()
+	if result.Edit != b.editSequence || result.Workspace != b.workspace || result.Request != b.pickerEpoch || b.caretByteOffset() != b.pickerCaret || result.End > len(current) {
+		return
 	}
+	selectedFile := result.Results[b.pickerSel]
+	b.SetValue(current[:result.Start] + "@" + selectedFile + current[result.End:])
+	b.input.CursorEnd()
 	b.pickerActive = false
 	b.pickerResult.Results = nil
 	b.pickerSel = 0
@@ -313,9 +340,28 @@ func (b *InputBar) completePickerSelection() {
 
 // Update processes key input and emits typed messages.
 func (b *InputBar) Update(msg tea.Msg, activeTab TabID) (*InputBar, tea.Cmd) {
+	before := b.input.Value()
+	defer func() {
+		if b.input.Value() != before {
+			b.editSequence++
+		}
+	}()
 	switch msg := msg.(type) {
 	case filePickerResultMsg:
+		if !b.pickerActive || msg.Request != b.pickerEpoch || msg.Edit != b.editSequence || msg.Workspace != b.workspace || b.caretByteOffset() != b.pickerCaret {
+			return b, nil
+		}
 		b.pickerResult = msg
+		if msg.Err != nil {
+			b.pickerActive = false
+			return b, func() tea.Msg { return InputRejectedMsg{Reason: "File completion failed: " + msg.Err.Error()} }
+		}
+		if len(msg.Results) == 0 {
+			b.pickerActive = false
+			return b, func() tea.Msg {
+				return InputRejectedMsg{Reason: "No matching file references; the request is unchanged"}
+			}
+		}
 		return b, nil
 
 	case tea.KeyMsg:
@@ -326,6 +372,8 @@ func (b *InputBar) Update(msg tea.Msg, activeTab TabID) (*InputBar, tea.Cmd) {
 		}
 
 		switch {
+		case msg.String() == "alt+f":
+			return b, b.requestFileCompletion()
 		case msg.String() == "alt+enter":
 			b.input.InsertString("\n")
 			return b, nil
@@ -349,13 +397,16 @@ func (b *InputBar) Update(msg tea.Msg, activeTab TabID) (*InputBar, tea.Cmd) {
 			b.pickerResult.Results = nil
 			b.pickerSel = 0
 			b.pickerQuery = ""
-			if raw == "" {
+			if strings.TrimSpace(raw) == "" {
 				return b, nil
 			}
 			prefix, name, args, ok := parseCommandLine(raw)
 			if ok {
 				b.history.Push(raw)
-				return b, func() tea.Msg { return CommandInvokedMsg{Draft: raw, Name: name, Args: args, Prefix: prefix} }
+				sequence := b.editSequence
+				return b, func() tea.Msg {
+					return CommandInvokedMsg{Draft: raw, Name: name, Args: args, Prefix: prefix, Sequence: sequence}
+				}
 			}
 			if strings.HasPrefix(strings.TrimSpace(raw), "/") {
 				return b, func() tea.Msg {
@@ -364,10 +415,12 @@ func (b *InputBar) Update(msg tea.Msg, activeTab TabID) (*InputBar, tea.Cmd) {
 			}
 			draft := parseInputDraft(raw, activeTab, b.searchMode)
 			b.history.Push(raw)
+			sequence := b.editSequence
 			return b, func() tea.Msg {
 				return InputSubmittedMsg{
-					Value:  raw,
-					Prefix: draft.prefix,
+					Value:    raw,
+					Prefix:   draft.prefix,
+					Sequence: sequence,
 				}
 			}
 
@@ -397,9 +450,16 @@ func (b *InputBar) Update(msg tea.Msg, activeTab TabID) (*InputBar, tea.Cmd) {
 				b.pickerSel--
 				return b, nil
 			}
-			if b.palOpen && b.palSel > 0 {
-				b.palSel--
+			if b.palOpen {
+				b.palSel = max(0, b.palSel-1)
 				return b, nil
+			}
+			if b.input.LineCount() > 1 {
+				break
+			}
+			if b.historyDraft == nil {
+				value := b.input.Value()
+				b.historyDraft = &value
 			}
 			prev := b.history.Prev()
 			if prev != "" {
@@ -413,11 +473,21 @@ func (b *InputBar) Update(msg tea.Msg, activeTab TabID) (*InputBar, tea.Cmd) {
 				b.pickerSel++
 				return b, nil
 			}
-			if b.palOpen && b.palSel < len(b.palette)-1 {
-				b.palSel++
+			if b.palOpen {
+				b.palSel = min(len(b.palette)-1, b.palSel+1)
+				return b, nil
+			}
+			if b.input.LineCount() > 1 {
+				break
+			}
+			if b.historyDraft == nil {
 				return b, nil
 			}
 			next := b.history.Next()
+			if b.history.cursor == len(b.history.entries) {
+				next = *b.historyDraft
+				b.historyDraft = nil
+			}
 			b.input.SetValue(next)
 			b.input.CursorEnd()
 			return b, nil
@@ -438,8 +508,10 @@ func (b *InputBar) Update(msg tea.Msg, activeTab TabID) (*InputBar, tea.Cmd) {
 		raw := b.input.Value()
 		draft := parseInputDraft(raw, activeTab, b.searchMode)
 		b.updatePalette(draft)
-		if pickerCmd := b.updateFilePicker(raw, draft, activeTab); pickerCmd != nil {
-			return b, pickerCmd
+		if b.pickerActive && (b.input.Value() != before || b.caretByteOffset() != b.pickerCaret) {
+			b.pickerActive = false
+			b.pickerEpoch++
+			b.pickerResult.Results = nil
 		}
 		return b, cmd
 	}
@@ -463,7 +535,7 @@ func (b *InputBar) View(activeTab TabID, streaming bool) string {
 	case b.gated:
 		hint = b.th.Dim().Render(" running · / commands available")
 	case streaming:
-		hint = b.th.Dim().Render(" streaming…  pgup/down scroll | ctrl+c quit")
+		hint = b.th.Dim().Render(" streaming · /cancel · Ctrl+Q quit")
 	case b.pickerActive && len(b.pickerResult.Results) > 0:
 		hint = b.th.Dim().Render(" enter/tab select | esc cancel | ↑↓ navigate")
 	case b.palOpen && len(b.palette) > 0:
@@ -504,7 +576,7 @@ func (b *InputBar) PickerView() string {
 func (b *InputBar) renderPicker() string {
 	lines := []string{b.th.Subhead().Render("Files")}
 	for i, file := range b.pickerResult.Results {
-		label := file
+		label := terminalText(file)
 		if i == b.pickerSel {
 			label = b.th.Active().Render(label)
 		} else {

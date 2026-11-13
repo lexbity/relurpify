@@ -70,11 +70,11 @@ func TestV2ReboundHelpUsesHostMapWithoutOldAlias(t *testing.T) {
 	m = press(m, tea.KeyF6)
 	m, _ = update(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'e'}})
 	m = press(m, tea.KeyF2, tea.KeyEnter, tea.KeyF6, tea.KeyF2)
-	if !strings.Contains(m.View(), "Commands · Escape") {
+	if !strings.Contains(m.View(), "Commands /") {
 		t.Fatal("rebound help key did not dispatch through the host map")
 	}
 	m = press(m, tea.KeyEsc, tea.KeyF1)
-	if strings.Contains(m.View(), "Commands · Escape") {
+	if strings.Contains(m.View(), "Commands /") {
 		t.Fatal("old help chord remained as an undocumented alias")
 	}
 }

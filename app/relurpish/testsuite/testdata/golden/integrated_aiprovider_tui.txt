@@ -36,5 +36,5 @@ tab switch focus  arrows navigate  enter select  e edit  r models  t test  s sav
 
 Opened model provider configuration
 ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
-│ request to Euclo Request to Euclo · / commands                                                                       │
+│ request to Euclo Type here · / commands                                                                              │
 └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘

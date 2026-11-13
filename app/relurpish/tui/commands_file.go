@@ -2,103 +2,87 @@ package tui
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
+	"unicode"
+	"unicode/utf8"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-// filePickerResultMsg is emitted when file picker query results are ready.
+// filePickerResultMsg carries the exact request identity and replacement span.
+// Editing, moving the caret, canceling, or switching workspace invalidates it.
 type filePickerResultMsg struct {
-	Query   string
-	Results []string // relative paths matching the query
-	Err     error
+	Query, Workspace string
+	Request, Edit    uint64
+	Start, End       int
+	Results          []string
+	Err              error
 }
 
-// filePickerQueryCmd performs an async file search for files matching a query
-// prefix. It routes through the capability registry (cli_find) so that the
-// same workspace-bounds, permission checks, and audit trail apply as for agent
-// tool calls. Results are returned as workspace-relative paths.
-func filePickerQueryCmd(rt RuntimeAdapter, workspace, prefix string) tea.Cmd {
+func filePickerQueryCmd(parent context.Context, rt RuntimeAdapter, request filePickerResultMsg) tea.Cmd {
 	return func() tea.Msg {
-		if prefix == "" {
-			return filePickerResultMsg{Query: prefix}
-		}
-
-		// Strip leading '@' to get the raw pattern fragment
-		pattern := strings.TrimPrefix(prefix, "@")
-		if pattern == "" {
-			pattern = "*"
-		} else {
-			pattern += "*"
-		}
-
-		result, err := rt.InvokeCapability(context.Background(), "cli_find", map[string]any{
-			"args": []string{
-				workspace,
-				"-maxdepth", "4",
-				"-name", pattern,
-				"-type", "f",
-				"-not", "-path", "*/.*",
-			},
-		})
+		ctx, cancel := context.WithTimeout(parent, 2*time.Second)
+		defer cancel()
+		pattern := strings.TrimPrefix(request.Query, "@") + "*"
+		result, err := rt.InvokeCapability(ctx, "cli_find", map[string]any{CapArgs: []string{request.Workspace, "-maxdepth", "4", "-name", pattern, "-type", "f", "-not", "-path", "*/.*", "-print0"}})
 		if err != nil {
-			return filePickerResultMsg{Query: prefix, Err: err}
+			request.Err = err
+			return request
 		}
-
 		output := ""
 		if result != nil {
-			if s, ok := result.Data["stdout"].(string); ok {
-				output = s
-			}
+			output, _ = result.Data["stdout"].(string)
 		}
-
-		var results []string
-		for _, line := range strings.Split(output, "\n") {
-			line = strings.TrimSpace(line)
-			if line == "" {
+		if len(output) > 1<<20 || !utf8.ValidString(output) {
+			request.Err = fmt.Errorf("file completion exceeds the 1 MiB UTF-8 result limit")
+			return request
+		}
+		for _, filename := range strings.Split(output, "\x00") {
+			if filename == "" {
 				continue
 			}
-			rel, err := filepath.Rel(workspace, line)
-			if err != nil {
+			relative, err := filepath.Rel(request.Workspace, filename)
+			if err != nil || !filepath.IsLocal(relative) {
 				continue
 			}
-			results = append(results, rel)
+			request.Results = append(request.Results, relative)
 		}
-
-		sort.Strings(results)
-		if len(results) > 10 {
-			results = results[:10]
+		sort.Strings(request.Results)
+		if len(request.Results) > 10 {
+			request.Results = request.Results[:10]
 		}
-
-		return filePickerResultMsg{Query: prefix, Results: results}
+		return request
 	}
 }
 
-// filePickerTokenPrefix returns the active @-prefixed token in the provided
-// input buffer, if one exists at a token boundary.
-func filePickerTokenPrefix(input string) (string, bool) {
-	idx := strings.LastIndex(input, "@")
-	if idx < 0 {
-		return "", false
+// filePickerTokenAt uses UTF-8 byte spans, independent of terminal cell width.
+// @ text is ordinary request text until completion is explicitly requested.
+func filePickerTokenAt(input string, caret int) (string, int, int, bool) {
+	if caret < 0 || caret > len(input) || !utf8.ValidString(input[:caret]) {
+		return "", 0, 0, false
 	}
-	if idx > 0 && isWordChar(rune(input[idx-1])) {
-		return "", false
+	start := caret
+	for start > 0 {
+		r, size := utf8.DecodeLastRuneInString(input[:start])
+		if unicode.IsSpace(r) {
+			break
+		}
+		start -= size
 	}
-	return input[idx:], true
-}
-
-// filePickerReplaceToken replaces the active @ token with the selected file
-// path while preserving any trailing text.
-func filePickerReplaceToken(input, selected string) string {
-	token, ok := filePickerTokenPrefix(input)
-	if !ok {
-		return input
+	end := caret
+	for end < len(input) {
+		r, size := utf8.DecodeRuneInString(input[end:])
+		if unicode.IsSpace(r) {
+			break
+		}
+		end += size
 	}
-	idx := strings.LastIndex(input, token)
-	if idx < 0 {
-		return input
+	if start >= caret || input[start] != '@' {
+		return "", 0, 0, false
 	}
-	return input[:idx] + "@" + selected + input[idx+len(token):]
+	return input[start:caret], start, end, true
 }

@@ -86,6 +86,12 @@ func MissingRelurpishV2Tests(listing string) []string {
 	var missing []string
 	for _, name := range []string{
 		"TestV2PlainTextEverySurface", "TestV2DraftSurvivesNavigation",
+		"TestV2ComposerAcknowledgementRejectsRecreatedDraft", "TestV2ComposerHistoryAndPalettePreserveDraft",
+		"TestV2QuitRequiresFocusedReviewAndPreservesDraft", "TestV2HelpOwnsPrintableAndPasteKeys", "TestV2BackRestoresCanvasReadingAndFocus",
+		"TestV2CanonicalRecipeCommandsUseOneAsyncWorkshop", "TestV2RecipeEscapeRetainsInvalidSourceDraft", "TestV2LateRecipeRunCannotReplaceChosenCanvas",
+		"TestV2CircuitDiagramKeepsGeometryAndHonestEdges", "TestV2FileCompletionIsExplicitBoundedAndSpanChecked", "TestV2FileCompletionTokenBytesAndCancellation",
+		"TestV2AgentChooserConsumesKeysBeforeSettings", "TestV2AttentionPasteCannotEditUnderlyingRequest", "TestV2RecipeNewSaveReopenAndConflict",
+		"TestV2KeybindingRejectsUnrepresentableChords", "TestV2HelpSupportsScopedDrilldown",
 		"TestV2ApprovalCannotStealTyping", "TestV2PasteDoesNotSubmit",
 		"TestV2ViewIsPure", "TestV2DoctorWithoutRuntime",
 		"TestV2TextBatchesAreNeverControlKeys",
@@ -113,7 +119,7 @@ func MissingRelurpishV2Tests(listing string) []string {
 
 func MissingRelurpishV2IntegrationTests(listing string) []string {
 	var missing []string
-	for _, name := range []string{"TestV2DoctorWithoutRuntime", "TestV2PTYFocusAndBounds", "TestV2PTYDemoCommandDraftRoundTrip", "TestV2PTYActivityProviderAndDraft"} {
+	for _, name := range []string{"TestV2DoctorWithoutRuntime", "TestV2PTYFocusAndBounds", "TestV2PTYDemoCommandDraftRoundTrip", "TestV2PTYActivityProviderAndDraft", "TestV2PTYRecipeAuthorSaveRunAndQuit"} {
 		found := false
 		for _, line := range strings.Split(listing, "\n") {
 			if strings.TrimSpace(line) == name {

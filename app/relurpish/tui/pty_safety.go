@@ -9,7 +9,6 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"codeburg.org/lexbit/relurpify/app/relurpish/ports"
 	runtimesvc "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
 )
 
@@ -44,11 +43,7 @@ func RunWithSurface(ctx context.Context, rt *runtimesvc.Runtime, factory Surface
 	}
 	adapter := NewRuntimeAdapter(rt)
 
-	// Wire the runtime recipe service through its consumer-port adapter.
-	var recipes ports.RecipeWorkspace
-	if recipeSvc, err := rt.RecipeWorkspace(); err == nil {
-		recipes = runtimesvc.NewRecipeWorkspaceAdapter(recipeSvc)
-	}
+	recipes := runtimesvc.NewRecipeLibrary(rt.Config.Workspace)
 
 	m := NewRootModel(ctx, HostOptions{
 		Runtime:        adapter,

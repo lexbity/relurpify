@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"codeburg.org/lexbit/relurpify/app/relurpish/ports"
@@ -13,6 +14,9 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
 )
+
+const recipeSourceLimit = 1 << 20
+const workshopCreate = "create-recipe"
 
 type workshopMode string
 
@@ -32,20 +36,21 @@ const (
 )
 
 type workshopResultMsg struct {
-	Epoch     uint64
-	Operation string
-	Files     []ports.RecipeFile
-	File      ports.RecipeFile
-	Catalog   ports.RecipeCatalog
-	RunResult ports.RecipeRunResult
-	Err       error
+	Epoch      uint64
+	Navigation uint64
+	Operation  string
+	Files      []ports.RecipeFile
+	File       ports.RecipeFile
+	Catalog    ports.RecipeCatalog
+	RunResult  ports.RecipeRunResult
+	Err        error
 }
 
 // Workshop edits one concrete source artifact deeply. Its local undo history
 // never carries execution markers or claims that a draft was run.
 type Workshop struct {
 	parent          context.Context
-	port            ports.RecipeWorkspace
+	port            ports.RecipeLibrary
 	mode            workshopMode
 	files           []ports.RecipeFile
 	file            ports.RecipeFile
@@ -63,22 +68,24 @@ type Workshop struct {
 	epoch           uint64
 	width, height   int
 	promptPreview   bool
+	runAfterLoad    bool
+	viewEpoch       uint64
 	demo            bool
 	previewOffset   int
 }
 
 // NewWorkshop constructs the single-document recipe authoring surface.
-func NewWorkshop(parent context.Context, port ports.RecipeWorkspace) *Workshop {
+func NewWorkshop(parent context.Context, port ports.RecipeLibrary) *Workshop {
 	field := textarea.New()
 	field.ShowLineNumbers = false
-	field.CharLimit = 262144
+	field.CharLimit = recipeSourceLimit
 	field.Prompt = ""
 	return &Workshop{parent: parent, port: port, mode: workshopLibrary, field: field}
 }
 func (p *Workshop) SetSize(width, height int) {
 	p.width, p.height = width, height
 	p.field.SetWidth(max(1, width-2))
-	p.field.SetHeight(max(1, height-9))
+	p.field.SetHeight(max(1, height-11))
 }
 func (p *Workshop) Dirty() bool {
 	return p.source != p.file.Source || ((p.mode == workshopSource || p.mode == workshopGoal) && p.field.Value() != p.fieldOriginal)
@@ -88,24 +95,26 @@ func (p *Workshop) Editing() bool {
 	return p.mode == workshopSource || p.mode == workshopGoal || p.mode == workshopRun
 }
 
-func (p *Workshop) load(id string) tea.Cmd {
+func (p *Workshop) load(parent context.Context, id string) tea.Cmd {
 	if p.port == nil {
 		p.status = "Recipe authoring service unavailable in this session"
 		return nil
 	}
 	p.epoch++
-	epoch, port, parent := p.epoch, p.port, p.parent
+	epoch, port := p.epoch, p.port
 	p.working = true
 	return func() tea.Msg {
-		catalog, err := port.RecipeCatalog(parent)
+		ctx, cancel := context.WithTimeout(parent, 5*time.Second)
+		defer cancel()
+		catalog, err := port.RecipeCatalog(ctx)
 		if err != nil {
 			return workshopResultMsg{Epoch: epoch, Err: err}
 		}
 		if id == "" {
-			files, err := port.ListRecipes(parent)
+			files, err := port.ListRecipes(ctx)
 			return workshopResultMsg{Epoch: epoch, Operation: "list", Files: files, Catalog: catalog, Err: err}
 		}
-		file, err := port.OpenRecipe(parent, id)
+		file, err := port.OpenRecipe(ctx, id)
 		return workshopResultMsg{Epoch: epoch, Operation: "open", File: file, Catalog: catalog, Err: err}
 	}
 }
@@ -116,18 +125,25 @@ func (p *Workshop) apply(msg workshopResultMsg) {
 	}
 	p.working = false
 	if msg.Err != nil {
+		p.runAfterLoad = false
 		p.status = msg.Err.Error()
 		return
 	}
 	switch msg.Operation {
+	case workshopCreate:
+		p.catalog = msg.Catalog
+		p.newDraft(msg.File)
 	case "list":
+		p.file = ports.RecipeFile{}
+		p.source, p.document, p.steps = "", nil, nil
+		p.undo, p.redo = nil, nil
 		p.files = msg.Files
 		p.catalog = msg.Catalog
 		p.mode = workshopLibrary
 		p.selection = 0
 	case "open":
-		if len(msg.File.Source) > 262144 || !utf8.ValidString(msg.File.Source) {
-			p.status = "Recipe source must be valid UTF-8 and at most 256 KiB"
+		if len(msg.File.Source) > recipeSourceLimit || !utf8.ValidString(msg.File.Source) {
+			p.status = "Recipe source must be valid UTF-8 and at most 1 MiB"
 			return
 		}
 		p.file = msg.File
@@ -138,6 +154,10 @@ func (p *Workshop) apply(msg workshopResultMsg) {
 		p.mode = workshopCanvas
 		p.step = 0
 		p.status = "Saved source opened; no execution was triggered"
+		if p.runAfterLoad {
+			p.runAfterLoad = false
+			p.reviewRun()
+		}
 	case "save":
 		p.file = msg.File
 		p.status = "Saved source revision " + msg.File.Revision
@@ -172,8 +192,8 @@ func (p *Workshop) parse() {
 }
 
 func (p *Workshop) change(source string) bool {
-	if len(source) > 262144 {
-		p.status = "Local source exceeds 256 KiB; the previous draft was retained"
+	if len(source) > recipeSourceLimit {
+		p.status = "Local source exceeds 1 MiB; the previous draft was retained"
 		return false
 	}
 	if source == p.source {
@@ -193,6 +213,34 @@ func (p *Workshop) change(source string) bool {
 	p.parse()
 	p.status = "Local draft changed; saved recipe is unchanged"
 	return true
+}
+
+func (p *Workshop) structuredChange(source string) bool {
+	document, err := thoughtrecipe.ParseSource(p.file.Path, source)
+	if err != nil {
+		p.status = "Edit rejected: " + err.Error()
+		return false
+	}
+	if diagnostics := thoughtrecipe.ValidateAgainstContracts(document, nil); len(diagnostics) > 0 {
+		p.status = "Edit rejected: " + diagnostics[0].Error()
+		return false
+	}
+	return p.change(source)
+}
+
+func (p *Workshop) newDraft(file ports.RecipeFile) {
+	strategy := p.defaultStrategy()
+	if strategy == "" {
+		p.status = "No installed strategy is available; no draft was replaced"
+		return
+	}
+	p.file = file
+	p.source = "thoughtrecipe " + file.ID + "\n\"New recipe\"\n\ninput prompt: user.request\n\nagent worker uses " + strategy + "\n\nrun worker:\n  from input.prompt\n  goal \"Complete the task\"\n  capture result -> state.summary\n"
+	p.undo, p.redo = nil, nil
+	p.step = 0
+	p.parse()
+	p.mode = workshopCanvas
+	p.status = "New local draft; no file has been created"
 }
 
 func (p *Workshop) history(redo bool) {
@@ -220,9 +268,46 @@ func (p *Workshop) openField(mode workshopMode, text string) {
 		return
 	}
 	p.mode = mode
-	p.fieldOriginal = text
 	p.field.SetValue(text)
+	p.fieldOriginal = p.field.Value()
 	p.field.Focus()
+}
+
+func (p *Workshop) defaultStrategy() string {
+	for _, strategy := range p.catalog.Strategies {
+		if strategy.Name == "react" {
+			return strategy.Name
+		}
+	}
+	if len(p.catalog.Strategies) > 0 {
+		return p.catalog.Strategies[0].Name
+	}
+	return ""
+}
+
+// keepField closes a field without discarding its unsaved bytes. Invalid
+// source remains a local recovery draft and cannot be saved or run.
+func (p *Workshop) keepField() bool {
+	switch p.mode {
+	case workshopSource:
+		if p.field.Value() != p.fieldOriginal && !p.change(p.field.Value()) {
+			return false
+		}
+	case workshopGoal:
+		if p.field.Value() != p.fieldOriginal && len(p.steps) > 0 {
+			source, err := patchRecipeGoal(p.source, p.steps[p.step], p.field.Value())
+			if err != nil {
+				p.status = err.Error()
+				return false
+			}
+			if !p.change(source) {
+				return false
+			}
+		}
+	}
+	p.field.Blur()
+	p.mode = workshopCanvas
+	return true
 }
 
 func (p *Workshop) key(msg tea.KeyMsg) (tea.Cmd, bool) {
@@ -234,8 +319,7 @@ func (p *Workshop) key(msg tea.KeyMsg) (tea.Cmd, bool) {
 	}
 	if p.Editing() {
 		if msg.String() == "esc" {
-			p.mode = workshopCanvas
-			p.field.Blur()
+			p.keepField()
 			return nil, true
 		}
 		if msg.String() == "ctrl+s" {
@@ -320,7 +404,7 @@ func (p *Workshop) key(msg tea.KeyMsg) (tea.Cmd, bool) {
 	switch p.mode {
 	case workshopLibrary:
 		if len(p.files) > 0 {
-			return p.load(p.files[p.selection].ID), true
+			return p.load(p.parent, p.files[p.selection].Path), true
 		}
 	case workshopCanvas:
 		if len(p.steps) > 0 {
@@ -359,15 +443,16 @@ func (p *Workshop) key(msg tea.KeyMsg) (tea.Cmd, bool) {
 			p.status = err.Error()
 			return nil, true
 		}
-		p.change(source)
-		p.mode = workshopCanvas
+		if p.structuredChange(source) {
+			p.mode = workshopCanvas
+		}
 	case workshopSave:
 		return p.save(), true
 	case workshopClose:
 		p.source = p.file.Source
 		p.parse()
 		p.undo, p.redo = nil, nil
-		return p.load(""), true
+		return p.load(p.parent, ""), true
 	}
 	return nil, true
 }
@@ -399,6 +484,10 @@ func (p *Workshop) reviewSave() {
 	if p.working {
 		return
 	}
+	if _, ok := p.port.(ports.RecipeWriter); !ok {
+		p.status = "Live recipe saving is unavailable until confined source transactions are integrated; the local draft is retained"
+		return
+	}
 	if len(p.diagnostics) > 0 {
 		p.mode = workshopDiagnostics
 		return
@@ -407,6 +496,10 @@ func (p *Workshop) reviewSave() {
 }
 func (p *Workshop) reviewRun() {
 	if p.working {
+		return
+	}
+	if _, ok := p.port.(ports.RecipeRunner); !ok {
+		p.status = "Saved-file execution is unavailable in this session; validation does not execute a recipe"
 		return
 	}
 	if p.Dirty() {
@@ -427,10 +520,17 @@ func (p *Workshop) save() tea.Cmd {
 	}
 	file := p.file
 	file.Source = p.source
-	epoch, port, parent := p.epoch, p.port, p.parent
+	port, ok := p.port.(ports.RecipeWriter)
+	if !ok {
+		p.reviewSave()
+		return nil
+	}
+	epoch, parent := p.epoch, p.parent
 	p.working = true
 	return func() tea.Msg {
-		saved, err := port.SaveRecipe(parent, file)
+		ctx, cancel := context.WithTimeout(parent, 5*time.Second)
+		defer cancel()
+		saved, err := port.SaveRecipe(ctx, file)
 		return workshopResultMsg{Epoch: epoch, Operation: "save", File: saved, Err: err}
 	}
 }
@@ -439,16 +539,23 @@ func (p *Workshop) trigger(input string) tea.Cmd {
 		p.status = "Trigger requires a saved file and a request input"
 		return nil
 	}
-	file, epoch, port, parent := p.file, p.epoch, p.port, p.parent
+	port, ok := p.port.(ports.RecipeRunner)
+	if !ok {
+		p.reviewRun()
+		return nil
+	}
+	file, epoch, parent, navigation := p.file, p.epoch, p.parent, p.viewEpoch
 	p.working = true
 	return func() tea.Msg {
-		snapshot, err := port.TriggerRecipe(parent, file, input)
-		return workshopResultMsg{Epoch: epoch, Operation: "trigger", RunResult: snapshot, Err: err}
+		ctx, cancel := context.WithTimeout(parent, 5*time.Second)
+		defer cancel()
+		snapshot, err := port.TriggerRecipe(ctx, file, input)
+		return workshopResultMsg{Epoch: epoch, Navigation: navigation, Operation: "trigger", RunResult: snapshot, Err: err}
 	}
 }
 
 func (p *Workshop) View() string {
-	title := "Workshop / " + terminalText(p.file.ID)
+	title := "Recipe / " + terminalText(p.file.Path)
 	if p.file.ID == "" {
 		title = "Recipe library"
 	}
@@ -458,13 +565,34 @@ func (p *Workshop) View() string {
 	lines := []string{title, ""}
 	if p.Editing() {
 		label := map[workshopMode]string{workshopSource: "Source draft", workshopGoal: "Goal draft", workshopRun: "Trigger saved file: " + p.file.Path}[p.mode]
-		lines = append(lines, terminalText(label), "", p.field.View(), "", "Ctrl+S confirms · Escape cancels this field")
+		lines = append(lines, terminalText(label), "", p.field.View(), "", "Ctrl+S confirms · Escape keeps a local draft")
 	} else {
 		switch p.mode {
 		case workshopCanvas:
+			var definitions []CircuitStep
+			for i, step := range p.steps {
+				definition := CircuitStep{ID: step.name, Strategy: step.strategy}
+				for _, prior := range p.steps[:i] {
+					if slices.Contains(prior.captures, step.from) {
+						definition.Dependencies = append(definition.Dependencies, prior.name)
+					}
+				}
+				definitions = append(definitions, definition)
+			}
+			selected := ""
+			if p.step < len(p.steps) {
+				selected = p.steps[p.step].name
+			}
+			diagram, graph := circuitDiagram(definitions, selected, p.width, true)
+			if graph && p.height >= 16 {
+				lines = append(lines, "", diagram, "", "Authoring · arrows show source bindings; no run outcomes")
+			}
 			budget := max(1, p.height-7)
 			start := max(0, p.step-budget+1)
 			for i := start; i < min(len(p.steps), start+budget); i++ {
+				if graph && p.height >= 16 {
+					break
+				}
 				step := p.steps[i]
 				marker := " "
 				if i == p.step {
@@ -473,9 +601,14 @@ func (p *Workshop) View() string {
 				lines = append(lines, fmt.Sprintf("%s [ ] %-18s %s", marker, terminalText(step.name), terminalText(step.strategy)))
 			}
 			if len(p.steps) == 0 {
-				lines = append(lines, "No editable top-level runs. /source opens the complete source.")
+				lines = append(lines, "No editable top-level runs. /recipe source opens the complete source.")
 			}
-			lines = append(lines, "", "↑/↓ select · Enter edit step · /source · /save-recipe · /trigger")
+			lines = append(lines, "", "↑/↓ select · Enter edit step · /recipe source")
+			if _, ok := p.port.(ports.RecipeWriter); ok {
+				lines = append(lines, "/recipe save reviews saving this draft")
+			} else {
+				lines = append(lines, "Local draft only · live save/run integration unavailable")
+			}
 		case workshopDiagnostics:
 			lines = append(lines, "Diagnostics", "")
 			if len(p.diagnostics) == 0 {
@@ -485,15 +618,15 @@ func (p *Workshop) View() string {
 					lines = append(lines, terminalText(diagnostic))
 				}
 			}
-			lines = append(lines, "", "Escape returns · /source edits the full source")
+			lines = append(lines, "", "Escape returns · /recipe source edits the full source")
 		case workshopSave:
 			lines = append(lines, "Review saved source change", "", terminalText(p.file.Path), "Expected saved revision: "+terminalText(p.file.Revision), fmt.Sprintf("Source: %d → %d bytes", len(p.file.Source), len(p.source)), "", "Existing source outside selected edits is preserved.", "Syntax/strategy checks do not prove runtime behavior.", "", "Enter saves this revision · Escape keeps the local draft")
 		case workshopClose:
-			lines = append(lines, "Discard unsaved local edits?", "", "Enter discards edits and returns to the recipe library.", "Escape keeps editing. /save-recipe reviews saving first.")
+			lines = append(lines, "Discard unsaved local edits?", "", "Enter discards edits and returns to the recipe library.", "Escape keeps editing. /recipe save reviews saving first.")
 		default:
 			lines = append(lines, strings.ReplaceAll(string(p.mode), "-", " "), "")
 			options := p.options()
-			budget := max(1, p.height-9)
+			budget := max(1, p.height-11)
 			if p.mode == workshopPrompt && p.promptPreview {
 				budget = max(1, p.height/4)
 			}
@@ -531,79 +664,4 @@ func (p *Workshop) View() string {
 		lines = append(lines, "", terminalText(p.status))
 	}
 	return boundedScreen(strings.Join(lines, "\n"), max(1, p.width), max(1, p.height))
-}
-
-func registerWorkshopCommands(registry *CommandRegistry) {
-	registry.Register(Command{Name: "workshop", Usage: "/workshop [recipe-id]", Description: "Open a saved recipe for deliberate authoring", Handler: func(m *RootModel, args []string) (*RootModel, tea.Cmd) {
-		if len(args) > 1 {
-			m.addSystemMessage("Usage: /workshop [recipe-id]")
-			return m, nil
-		}
-		if m.workshop.Dirty() {
-			m.workshop.mode = workshopClose
-			m.setActiveTab(TabWorkshop)
-			m.setFocus(FocusRegionRegion1)
-			return m, nil
-		}
-		id := ""
-		if len(args) == 1 {
-			id = args[0]
-		}
-		m.setActiveTab(TabWorkshop)
-		m.setFocus(FocusRegionRegion1)
-		return m, m.workshop.load(id)
-	}})
-	for _, name := range []string{"source", "save-recipe", "trigger", "diagnostics", "undo", "redo", "step-add"} {
-		registry.Register(Command{Name: name, Usage: "/" + name, Description: map[string]string{"source": "Edit the full recipe source draft", "save-recipe": "Review saving the recipe source", "trigger": "Review triggering the saved recipe file", "diagnostics": "Inspect source and strategy diagnostics", "undo": "Undo a local recipe edit", "redo": "Redo a local recipe edit", "step-add": "Add a local run: /step-add <agent-name>"}[name], TabFilter: []TabID{TabWorkshop}, Handler: workshopCommand(name)})
-	}
-}
-
-func workshopCommand(name string) CommandHandler {
-	return func(m *RootModel, args []string) (*RootModel, tea.Cmd) {
-		p := m.workshop
-		if p.Editing() {
-			m.addSystemMessage("Apply or cancel the active recipe field before another recipe operation")
-			return m, nil
-		}
-		if p.working {
-			m.addSystemMessage("Wait for the pending recipe operation")
-			return m, nil
-		}
-		if p.file.ID == "" {
-			m.addSystemMessage("Open a recipe before authoring it")
-			return m, nil
-		}
-		switch name {
-		case "source":
-			p.openField(workshopSource, p.source)
-		case "save-recipe":
-			p.reviewSave()
-		case "trigger":
-			p.reviewRun()
-		case "diagnostics":
-			p.mode = workshopDiagnostics
-		case "undo":
-			p.history(false)
-		case "redo":
-			p.history(true)
-		case "step-add":
-			if len(args) != 1 || !validRecipeIdentifier(args[0]) {
-				m.addSystemMessage("Usage: /step-add <agent-name> (letters, digits, underscore)")
-				return m, nil
-			}
-			if p.document == nil {
-				m.addSystemMessage("Repair source diagnostics before adding a step")
-				return m, nil
-			}
-			for _, declaration := range p.document.Declarations {
-				if agent, ok := declaration.(*thoughtrecipe.AgentDecl); ok && agent.Name.Value == args[0] {
-					m.addSystemMessage("Agent name already appears in this recipe")
-					return m, nil
-				}
-			}
-			p.change(strings.TrimRight(p.source, "\n") + fmt.Sprintf("\n\nagent %s uses react\n\nrun %s:\n  from input.prompt\n  goal \"Complete the task\"\n  capture result -> state.%s\n", args[0], args[0], args[0]))
-		}
-		m.setFocus(FocusRegionRegion1)
-		return m, nil
-	}
 }

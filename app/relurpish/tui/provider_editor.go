@@ -157,7 +157,7 @@ func (p *ProviderPane) apply(msg providerResultMsg) {
 		p.status = "Observed probe: " + msg.Probe.State + " · " + msg.Probe.Detail
 	}
 	if p.demo {
-		p.status = "DEMO: " + p.status + " (scenario state only)"
+		p.status = "DEMO: " + strings.TrimPrefix(p.status, "DEMO: ") + " (scenario state only)"
 	}
 }
 func (p *ProviderPane) values() []string {

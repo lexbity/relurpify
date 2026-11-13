@@ -46,7 +46,7 @@ func TestV2BlockedAndStaleSubmissionRetainsDraft(t *testing.T) {
 		t.Fatal("blocked submit lost draft or dispatched")
 	}
 	m.inputBar.SetValue("newer draft")
-	m.inputBar.Accept("my request")
+	m.inputBar.Accept("my request", m.inputBar.editSequence-1)
 	if m.inputBar.Value() != "newer draft" {
 		t.Fatal("late acknowledgement erased a newer edit")
 	}

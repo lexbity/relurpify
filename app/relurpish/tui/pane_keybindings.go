@@ -149,7 +149,7 @@ func (p *KeybindingPane) persist() tea.Cmd {
 	p.working = true
 	entries := make([]config.RuntimeKeybindingEntry, 0, 10)
 	for _, target := range buildKeybindingTargets(proposal.keys) {
-		entries = append(entries, config.RuntimeKeybindingEntry{Action: target.Action, Keys: slices.Clone(target.bindingKeys()), Scope: target.Scope, Description: target.Description, DefaultKeys: slices.Clone(target.DefaultKeys)})
+		entries = append(entries, config.RuntimeKeybindingEntry{Action: target.Action, Keys: slices.Clone(target.bindingKeys()), Scope: target.Scope})
 	}
 	return func() tea.Msg {
 		if demo {
@@ -191,7 +191,7 @@ func (p *KeybindingPane) load() {
 		}
 		for _, chord := range entry.Keys {
 			if !validHostChord(chord) {
-				p.status = "Bindings contain a reserved/empty chord; defaults retained"
+				p.status = "Bindings contain an unsupported/reserved chord; defaults retained"
 				return
 			}
 			if other, ok := seen[chord]; ok && other != entry.Action {
@@ -220,7 +220,7 @@ func (p *KeybindingPane) View() string {
 	lines := []string{"Settings / Keybindings", ""}
 	if p.waitingForKey {
 		target := p.currentTarget()
-		lines = append(lines, "Rebind "+target.Action, "Current: "+strings.Join(target.bindingKeys(), ", "), "", "Press the new key chord.", "Escape cancels · Ctrl+Q always quits")
+		lines = append(lines, "Rebind "+target.Action, "Current: "+strings.Join(target.bindingKeys(), ", "), "", "Press the new key chord.", "Escape cancels · Ctrl+Q always opens quit review")
 	} else if p.proposal != nil {
 		lines = append(lines, "Review shortcut change", "", p.proposal.description)
 		lines = append(lines, p.proposal.conflicts...)

@@ -1,9 +1,9 @@
 package tui
 
 import (
-	"slices"
-	"strconv"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
@@ -42,9 +42,9 @@ func (keys *KeyMap) clone() *KeyMap {
 }
 
 func keyMatchesBinding(binding key.Binding, value string) bool {
-	value = strings.ToLower(strings.TrimSpace(value))
+	value = strings.TrimSpace(value)
 	for _, candidate := range binding.Keys() {
-		if strings.ToLower(candidate) == value {
+		if candidate == value {
 			return true
 		}
 	}
@@ -68,24 +68,27 @@ func validHostChord(chord string) bool {
 	if chord == "esc" || chord == "ctrl+q" || chord == "" || strings.ContainsAny(chord, "\x1b\x00\n\r ") {
 		return false
 	}
-	parts := strings.Split(chord, "+")
-	if len(parts) > 1 {
-		for _, modifier := range parts[:len(parts)-1] {
-			if modifier != "ctrl" && modifier != "alt" && modifier != "shift" {
-				return false
+	// Validate against the same normalized events Bubble Tea actually emits.
+	// Arbitrary modifier strings such as ctrl+potato are not terminal chords.
+	for kind := tea.KeyF20; kind <= tea.KeyUp; kind++ {
+		for _, alt := range []bool{false, true} {
+			event := tea.KeyMsg{Type: kind, Alt: alt}
+			if event.String() == chord && (kind != tea.KeySpace || alt) {
+				return true
 			}
 		}
-		if parts[len(parts)-1] == "" {
-			return false
+	}
+	for kind := tea.KeyType(0); kind <= tea.KeyBackspace; kind++ {
+		for _, alt := range []bool{false, true} {
+			if (tea.KeyMsg{Type: kind, Alt: alt}).String() == chord {
+				return true
+			}
 		}
-		return true
 	}
-	if slices.Contains([]string{"tab", "pgup", "pgdown"}, chord) {
-		return true
-	}
-	if strings.HasPrefix(chord, "f") {
-		number, err := strconv.Atoi(chord[1:])
-		return err == nil && number >= 1 && number <= 24
+	if strings.HasPrefix(chord, "alt+") {
+		value := strings.TrimPrefix(chord, "alt+")
+		r, size := utf8.DecodeRuneInString(value)
+		return value != "" && size == len(value) && unicode.IsGraphic(r) && !unicode.IsSpace(r)
 	}
 	return false
 }

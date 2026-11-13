@@ -36,21 +36,17 @@ func TestV2QuitCannotBeCapturedByAdministration(t *testing.T) {
 		m := tui.NewRootModel(context.Background(), tui.HostOptions{SurfaceFactory: euclotui.NewSurfaceFactory()})
 		m = uitest.Resize(m, 80, 24)
 		m = uitest.FocusCanvas(uitest.Navigate(m, canvas))
-		_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlQ})
+		next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlQ})
+		m = next.(tui.RootModel)
+		if cmd != nil || !strings.Contains(m.View(), "Leave relurpish?") {
+			t.Fatalf("%s did not open quit review", canvas)
+		}
+		m = drive(t, m, tea.KeyMsg{Type: tea.KeyDown})
+		_, cmd = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 		if cmd == nil {
-			t.Fatalf("%s consumed immutable quit", canvas)
+			t.Fatalf("%s consumed confirmed quit", canvas)
 		}
-		batch, ok := cmd().(tea.BatchMsg)
-		if !ok {
-			t.Fatalf("%s did not schedule clean shutdown", canvas)
-		}
-		quit := false
-		for _, action := range batch {
-			if _, ok := action().(tea.QuitMsg); ok {
-				quit = true
-			}
-		}
-		if !quit {
+		if _, ok := cmd().(tea.QuitMsg); !ok {
 			t.Fatalf("%s never quit", canvas)
 		}
 	}

@@ -50,20 +50,26 @@ type RecipeRunResult struct {
 	RunID string
 }
 
-// RecipeWorkspace is the consumer port for recipe file operations.
-// It provides lossless editing and file execution capabilities.
-// Implementations must be stateless with respect to editing state.
-type RecipeWorkspace interface {
+// RecipeLibrary supplies saved source and the installed authoring catalog.
+// Reading source does not imply that saving or execution is integrated.
+type RecipeLibrary interface {
 	// ListRecipes returns all recipe files in the workspace.
 	ListRecipes(context.Context) ([]RecipeFile, error)
 	// OpenRecipe opens a recipe file and returns its content.
 	OpenRecipe(context.Context, string) (RecipeFile, error)
 	// RecipeCatalog returns the available strategies and prompts.
 	RecipeCatalog(context.Context) (RecipeCatalog, error)
+}
+
+// RecipeWriter saves a validated source revision against its expected revision.
+type RecipeWriter interface {
 	// SaveRecipe saves a recipe file with revision checking.
 	SaveRecipe(context.Context, RecipeFile) (RecipeFile, error)
+}
+
+// RecipeRunner admits the exact reviewed saved file with explicit task input.
+type RecipeRunner interface {
 	// TriggerRecipe triggers execution of a recipe file.
-	// The entry parameter specifies the entry point (may be empty for default).
-	// For P04, this returns a simple status result.
+	// The string parameter contains task input, separate from recipe identity.
 	TriggerRecipe(context.Context, RecipeFile, string) (RecipeRunResult, error)
 }

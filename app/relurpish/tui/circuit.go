@@ -125,8 +125,16 @@ func (c circuitCanvas) view(width, rows int, focused bool) string {
 		return "Execution\n\nNo observed recipe yet. Submit a request in the bar.\n\nThe circuit appears when Euclo reports its selected recipe."
 	}
 	lines := []string{"Execution / " + terminalText(name), ""}
+	if diagram, ok := circuitDiagram(c.snapshot.Steps, c.selected, width, false); ok && rows >= 12 {
+		padding := max(0, (rows-9)/2)
+		for range padding {
+			lines = append(lines, "")
+		}
+		lines = append(lines, diagram, "", "F6 selects steps · Enter inspects · /chat returns")
+		return boundedScreen(strings.Join(lines, "\n"), width, rows)
+	}
 	// Reserve a fixed row per step. Activity changes its marker, not geometry.
-	budget := max(1, rows-5)
+	budget := max(1, (rows-5)/2)
 	start := max(0, c.index()-budget+1)
 	for _, step := range c.snapshot.Steps[start:min(len(c.snapshot.Steps), start+budget)] {
 		selection := " "
@@ -139,6 +147,11 @@ func (c circuitCanvas) view(width, rows int, focused bool) string {
 			strategy = step.Capability
 		}
 		lines = append(lines, fmt.Sprintf("%s [%s] %-16s %s · %s", selection, marker, terminalText(step.ID), terminalText(strategy), status))
+		dependencies := "  no declared dependencies"
+		if len(step.Dependencies) > 0 {
+			dependencies = "  after: " + terminalText(strings.Join(step.Dependencies, ", "))
+		}
+		lines = append(lines, dependencies)
 	}
 	if len(c.snapshot.Steps) == 0 {
 		lines = append(lines, "No step observations in this projection.")

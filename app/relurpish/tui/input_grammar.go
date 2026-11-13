@@ -3,6 +3,7 @@ package tui
 import (
 	"sort"
 	"strings"
+	"unicode"
 )
 
 type inputDraft struct {
@@ -20,7 +21,7 @@ type inputDraft struct {
 
 func parseInputDraft(raw string, activeTab TabID, explicitSearch bool) inputDraft {
 	draft := inputDraft{raw: raw}
-	trimmed := strings.TrimLeft(raw, " ")
+	trimmed := strings.TrimLeftFunc(raw, unicode.IsSpace)
 	if trimmed == "" {
 		draft.promptLabel = defaultPromptLabel(activeTab, explicitSearch)
 		if explicitSearch {
@@ -44,9 +45,7 @@ func parseInputDraft(raw string, activeTab TabID, explicitSearch bool) inputDraf
 				draft.current = tokens[len(tokens)-1]
 			}
 		}
-		if len(tokens) == 1 && !draft.trailingSpace {
-			draft.paletteQuery = tokens[0]
-		}
+		draft.paletteQuery = body
 	} else {
 		draft.promptLabel = "request to Euclo"
 		draft.current = raw
@@ -89,27 +88,6 @@ func parseCommandLine(raw string) (prefix string, name string, args []string, ok
 
 func isCommandPrefix(r rune) bool { return r == '/' }
 
-func isWordChar(r rune) bool {
-	return (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_'
-}
-
-func replaceTokenAtPrefix(raw, prefix, replacement string) string {
-	if prefix == "" {
-		return replacement
-	}
-	body := strings.TrimLeft(raw[len(prefix):], " ")
-	if body == "" {
-		return prefix + replacement + " "
-	}
-	idx := strings.IndexFunc(body, func(r rune) bool {
-		return r == ' ' || r == '\t'
-	})
-	if idx < 0 {
-		return prefix + replacement + " "
-	}
-	return prefix + replacement + body[idx:]
-}
-
 func commandPaletteItems(reg *CommandRegistry, query string, tabID TabID, subTabID SubTabID) []commandItem {
 	var candidates []Command
 	if reg != nil {
@@ -119,13 +97,17 @@ func commandPaletteItems(reg *CommandRegistry, query string, tabID TabID, subTab
 	for _, cmd := range candidates {
 		score := 0
 		if query != "" {
-			if ok, s := fuzzyMatchScore(query, cmd.Name); ok {
-				score = s
-			} else if ok2, s2 := fuzzyMatchScore(query, cmd.Usage); ok2 {
-				score = s2 - 2
-			} else {
+			if !strings.HasPrefix(cmd.Name, query) {
 				continue
 			}
+			if cmd.Name == query {
+				score = 2
+			}
+		}
+		if len(cmd.SubTabFilter) > 0 {
+			score++
+		} else if len(cmd.TabFilter) > 0 {
+			score++
 		}
 		items = append(items, commandItem{
 			Name:        cmd.Name,

@@ -42,7 +42,7 @@ func (s *Session) loadRecipes() error {
 }
 
 // DEMO ONLY: Lists mutable in-memory copies of real bundled recipe sources.
-// LIVE CONTRACT: ports.RecipeWorkspace.ListRecipes/OpenRecipe.
+// LIVE CONTRACT: ports.RecipeLibrary.ListRecipes/OpenRecipe.
 // REPLACEMENT: Supply the live recipe workspace's source/revision records.
 // SIDE EFFECTS: Demo state only; no files, services, model calls, or grants.
 func (s *Session) ListRecipes(ctx context.Context) ([]ports.RecipeFile, error) {
@@ -60,7 +60,7 @@ func (s *Session) ListRecipes(ctx context.Context) ([]ports.RecipeFile, error) {
 }
 
 // DEMO ONLY: Retrieves the scenario's current saved source revision.
-// LIVE CONTRACT: ports.RecipeWorkspace.OpenRecipe.
+// LIVE CONTRACT: ports.RecipeLibrary.OpenRecipe.
 // REPLACEMENT: Supply live source identity, content, and revision through the port.
 // SIDE EFFECTS: Demo state only; no files, services, model calls, or grants.
 func (s *Session) OpenRecipe(ctx context.Context, id string) (ports.RecipeFile, error) {
@@ -71,6 +71,14 @@ func (s *Session) OpenRecipe(ctx context.Context, id string) (ports.RecipeFile, 
 	defer s.mu.Unlock()
 	file, ok := s.recipes[id]
 	if !ok {
+		for _, candidate := range s.recipes {
+			if candidate.Path == id {
+				file, ok = candidate, true
+				break
+			}
+		}
+	}
+	if !ok {
 		return ports.RecipeFile{}, fmt.Errorf("recipe %q is not in the demo workspace", id)
 	}
 	return file, nil
@@ -78,7 +86,7 @@ func (s *Session) OpenRecipe(ctx context.Context, id string) (ports.RecipeFile, 
 
 // DEMO ONLY: Adds illustrative prompt records to the actual installed strategy
 // contract catalog. Prompt text is explicitly preview data, never actual-call evidence.
-// LIVE CONTRACT: ports.RecipeWorkspace.RecipeCatalog.
+// LIVE CONTRACT: ports.RecipeLibrary.RecipeCatalog.
 // REPLACEMENT: Supply the live prompt registry's references, versions and previews.
 // SIDE EFFECTS: Demo state only; no files, services, model calls, or grants.
 func (s *Session) RecipeCatalog(ctx context.Context) (ports.RecipeCatalog, error) {
@@ -98,7 +106,7 @@ func (s *Session) RecipeCatalog(ctx context.Context) (ports.RecipeCatalog, error
 
 // DEMO ONLY: Saves a source revision to scenario memory after real parser and
 // installed strategy-contract validation. Import/tool resolution is deferred.
-// LIVE CONTRACT: ports.RecipeWorkspace.SaveRecipe, source revision compare-and-swap.
+// LIVE CONTRACT: ports.RecipeWriter.SaveRecipe, source revision compare-and-swap.
 // REPLACEMENT: Supply the governed, lossless live source owner's save result.
 // SIDE EFFECTS: Demo state only; no files, services, model calls, or grants.
 func (s *Session) SaveRecipe(ctx context.Context, file ports.RecipeFile) (ports.RecipeFile, error) {
@@ -121,12 +129,20 @@ func (s *Session) SaveRecipe(ctx context.Context, file ports.RecipeFile) (ports.
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	existing, ok := s.recipes[file.ID]
-	if !ok || existing.Revision != file.Revision {
+	if (ok && existing.Revision != file.Revision) || (!ok && file.Revision != "") {
 		return ports.RecipeFile{}, errors.New("saved source changed; local draft retained, reopen after reviewing the conflict")
 	}
-	revision, err := strconv.ParseUint(existing.Revision, 10, 64)
-	if err != nil {
-		return ports.RecipeFile{}, err
+	var revision uint64
+	if ok {
+		revision, err = strconv.ParseUint(existing.Revision, 10, 64)
+		if err != nil {
+			return ports.RecipeFile{}, err
+		}
+	}
+	for _, candidate := range s.recipes {
+		if candidate.Path == file.Path && candidate.ID != file.ID {
+			return ports.RecipeFile{}, errors.New("destination already exists")
+		}
 	}
 	file.Revision = strconv.FormatUint(revision+1, 10)
 	s.recipes[file.ID] = file
@@ -175,7 +191,7 @@ func circuitFromDocument(document *thoughtrecipe.Document) tui.CircuitSnapshot {
 
 // DEMO ONLY: Triggers exactly the saved scenario source and its parsed run graph.
 // The request input is separate from ordinary intent/chat recipe selection.
-// LIVE CONTRACT: ports.RecipeWorkspace.TriggerRecipe, saved-file admission.
+// LIVE CONTRACT: ports.RecipeRunner.TriggerRecipe, saved-file admission.
 // REPLACEMENT: Supply real file identity/revision capture and execution admission.
 // SIDE EFFECTS: Demo state only; no files, services, model calls, or grants.
 func (s *Session) TriggerRecipe(ctx context.Context, file ports.RecipeFile, input string) (ports.RecipeRunResult, error) {
@@ -191,21 +207,26 @@ func (s *Session) TriggerRecipe(ctx context.Context, file ports.RecipeFile, inpu
 	if s.state.Running {
 		return ports.RecipeRunResult{}, errors.New("a demo request is already running")
 	}
-	if strings.TrimSpace(input) == "" {
+	if strings.TrimSpace(input) == "" || len(input) > 65536 {
 		return ports.RecipeRunResult{}, errors.New("recipe request input is required")
 	}
 	document, err := thoughtrecipe.ParseSource(saved.Path, saved.Source)
 	if err != nil {
 		return ports.RecipeRunResult{}, err
 	}
-	if len(document.Declarations) == 0 {
+	if diagnostics := thoughtrecipe.ValidateAgainstContracts(document, nil); len(diagnostics) > 0 {
+		return ports.RecipeRunResult{}, diagnostics[0]
+	}
+	circuit := circuitFromDocument(document)
+	if len(circuit.Steps) == 0 {
 		return ports.RecipeRunResult{}, errors.New("this demo executor supports top-level run declarations; this file has none")
 	}
 	s.beginLocked("Trigger saved file " + saved.Path + " @" + saved.Revision + ": " + input)
-	s.state.Circuit = circuitFromDocument(document)
+	s.state.Circuit = circuit
 	s.state.Status = "DEMO · " + saved.Path + " running · /run inspects execution"
+	s.publishLocked()
 	return ports.RecipeRunResult{
-		Revision: s.state.Revision + 1,
+		Revision: s.state.Revision,
 		Status:   "DEMO ONLY: parsed saved source revision " + saved.Revision + ". Strategy execution, prompt imports and tools are simulated, not runtime verified.",
 		Running:  true,
 		RunID:    "demo-run-" + saved.ID,

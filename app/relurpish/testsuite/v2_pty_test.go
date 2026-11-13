@@ -67,7 +67,7 @@ func launchV2Terminal(t *testing.T, arguments ...string) (*terminalRecording, fu
 	drained := make(chan struct{})
 	go func() { _, _ = io.Copy(recording, terminal); close(drained) }()
 	t.Cleanup(func() {
-		_, _ = terminal.Write([]byte{3})
+		_, _ = terminal.Write([]byte("\x11\x1b[B\r"))
 		finished := make(chan error, 1)
 		go func() { finished <- cmd.Wait() }()
 		select {
@@ -180,4 +180,27 @@ func TestV2PTYActivityProviderAndDraft(t *testing.T) {
 	awaitV2Text(t, recording, "activated in scenario memory")
 	write("\x1b[17~!")
 	awaitV2Text(t, recording, "retained request!")
+}
+
+func TestV2PTYRecipeAuthorSaveRunAndQuit(t *testing.T) {
+	recording, write := launchV2Terminal(t, "--demo", "quiet", "--inference-provider", "deliberately-invalid")
+	awaitV2Text(t, recording, "DEMO")
+	write("preserve this draft")
+	write("\x10recipe new recipes/new_flow.erpe\r")
+	awaitV2Text(t, recording, "New local draft")
+	write("\x10recipe save\r")
+	awaitV2Text(t, recording, "Review saved source change")
+	write("\r")
+	awaitV2Text(t, recording, "DEMO: source saved in memory @1")
+	write("\x10recipe run recipes/new_flow.erpe\r")
+	awaitV2Text(t, recording, "Trigger saved file")
+	write("\x13") // Ctrl+S deliberately confirms the separate task-input field.
+	awaitV2Text(t, recording, "Execution / new_flow")
+	awaitV2Text(t, recording, "DEMO · completed")
+	write("\x11") // The immutable quit chord opens a review, even from a field.
+	awaitV2Text(t, recording, "Leave relurpish?")
+	write("\x1b")
+	time.Sleep(100 * time.Millisecond)
+	write("\x1b[17~!")
+	awaitV2Text(t, recording, "preserve this draft!")
 }

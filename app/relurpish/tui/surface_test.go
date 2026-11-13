@@ -48,7 +48,6 @@ func (p *fakeChatPane) SetAllowParallel(bool)                                   
 func (p *fakeChatPane) LastPrompt() string                                            { return "" }
 func (p *fakeChatPane) StopLatestRun() tea.Cmd                                        { return nil }
 func (p *fakeChatPane) RetryLastRun() tea.Cmd                                         { return nil }
-func (p *fakeChatPane) ApplyPendingChanges(ChangeStatus) int                          { return 0 }
 func (p *fakeChatPane) MutateMessages(func([]Message))                                {}
 func (p *fakeChatPane) AddFile(string) tea.Cmd                                        { return nil }
 

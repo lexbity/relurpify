@@ -42,7 +42,6 @@ type ChatPaner interface {
 	LastPrompt() string
 	StopLatestRun() tea.Cmd
 	RetryLastRun() tea.Cmd
-	ApplyPendingChanges(status ChangeStatus) int
 	MutateMessages(fn func(msgs []Message))
 	AddFile(path string) tea.Cmd
 }

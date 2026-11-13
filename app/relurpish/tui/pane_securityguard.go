@@ -5,15 +5,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
-
-	policy "codeburg.org/lexbit/relurpify/governance/policy"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"gopkg.in/yaml.v3"
@@ -39,11 +37,9 @@ type SecurityGuardPane struct {
 	runtime securityGuardRuntime
 
 	shellRules []sandbox.BlacklistRule
-	guardRules []policy.PolicyRule
 
 	activePanel securityPanel
 	shellSel    int
-	guardSel    int
 
 	editing    bool
 	editBuffer string
@@ -83,6 +79,12 @@ func (p *SecurityGuardPane) Refresh() {
 
 func (p *SecurityGuardPane) Update(msg tea.Msg) (*SecurityGuardPane, tea.Cmd) {
 	if msg, ok := msg.(tea.KeyMsg); ok {
+		if p.activePanel == securityPanelIngestion {
+			if msg.String() == "tab" || msg.String() == "shift+tab" {
+				p.activePanel = securityPanelShell
+			}
+			return p, nil
+		}
 		if p.confirmDrop {
 			switch msg.String() {
 			case "y", "enter":
@@ -106,12 +108,17 @@ func (p *SecurityGuardPane) Update(msg tea.Msg) (*SecurityGuardPane, tea.Cmd) {
 				return p, nil
 			case "backspace", "delete":
 				if len(p.testBuffer) > 0 {
-					p.testBuffer = p.testBuffer[:len(p.testBuffer)-1]
+					_, size := utf8.DecodeLastRuneInString(p.testBuffer)
+					p.testBuffer = p.testBuffer[:len(p.testBuffer)-size]
 				}
 				return p, nil
 			}
 			if len(msg.Runes) > 0 {
-				p.testBuffer += string(msg.Runes)
+				if len(p.testBuffer)+len(string(msg.Runes)) <= 65536 {
+					p.testBuffer += string(msg.Runes)
+				} else {
+					p.status = "Test input exceeds 64 KiB; previous text retained"
+				}
 			}
 			return p, nil
 		}
@@ -127,12 +134,17 @@ func (p *SecurityGuardPane) Update(msg tea.Msg) (*SecurityGuardPane, tea.Cmd) {
 				return p, nil
 			case "backspace", "delete":
 				if len(p.editBuffer) > 0 {
-					p.editBuffer = p.editBuffer[:len(p.editBuffer)-1]
+					_, size := utf8.DecodeLastRuneInString(p.editBuffer)
+					p.editBuffer = p.editBuffer[:len(p.editBuffer)-size]
 				}
 				return p, nil
 			}
 			if len(msg.Runes) > 0 {
-				p.editBuffer += string(msg.Runes)
+				if len(p.editBuffer)+len(string(msg.Runes)) <= 8192 {
+					p.editBuffer += string(msg.Runes)
+				} else {
+					p.status = "Rule pattern exceeds 8 KiB; previous text retained"
+				}
 			}
 			return p, nil
 		}
@@ -161,12 +173,16 @@ func (p *SecurityGuardPane) Update(msg tea.Msg) (*SecurityGuardPane, tea.Cmd) {
 	return p, nil
 }
 
-func (p *SecurityGuardPane) OwnsEscape() bool { return p.editing || p.confirmDrop }
+// OwnsEscape keeps edit, deletion review and pattern testing inside their focus frame.
+func (p *SecurityGuardPane) OwnsEscape() bool { return p.editing || p.confirmDrop || p.testMode }
 
 func (p *SecurityGuardPane) View() string {
-	shell := p.renderShellPanel()
-	ingest := p.renderIngestionPanel()
+	panel := p.renderShellPanel()
 	footer := p.th.Dim().Render("tab switch panel  arrows navigate  e edit  n new  d delete  t test  space toggle")
+	if p.activePanel == securityPanelIngestion {
+		panel = p.renderIngestionPanel()
+		footer = p.th.Dim().Render("Tab returns to shell rules · ingestion mutation is unavailable")
+	}
 	switch {
 	case p.testMode:
 		footer = warningText(p.th, fmt.Sprintf("Test %s: %s", p.testLabel, p.testBuffer)) + "\n" + footer
@@ -178,7 +194,7 @@ func (p *SecurityGuardPane) View() string {
 	if p.status != "" {
 		footer = p.th.Dim().Render(p.status) + "\n" + footer
 	}
-	return strings.Join([]string{shell, ingest, footer}, "\n\n")
+	return strings.Join([]string{panel, footer}, "\n\n")
 }
 
 func (p *SecurityGuardPane) loadShellRules() {
@@ -216,14 +232,6 @@ func (p *SecurityGuardPane) beginEdit() {
 		p.editLabel = "pattern"
 		p.editBuffer = rule.Raw
 		p.editing = true
-	case securityPanelIngestion:
-		rule := p.selectedGuardRule()
-		if rule == nil {
-			return
-		}
-		p.editLabel = "rule name"
-		p.editBuffer = rule.Name
-		p.editing = true
 	}
 }
 
@@ -234,12 +242,6 @@ func (p *SecurityGuardPane) commitEdit() {
 		if rule := p.selectedShellRule(); rule != nil {
 			rule.Raw = value
 			rule.Pattern = nil
-		}
-	case securityPanelIngestion:
-		if rule := p.selectedGuardRule(); rule != nil {
-			if value != "" {
-				rule.Name = value
-			}
 		}
 	}
 	p.editing = false
@@ -258,19 +260,6 @@ func (p *SecurityGuardPane) addNewRule() {
 		})
 		p.shellSel = len(p.shellRules) - 1
 		p.beginEdit()
-	case securityPanelIngestion:
-		p.guardRules = append(p.guardRules, policy.PolicyRule{
-			ID:       fmt.Sprintf("policy-%d", time.Now().UnixNano()),
-			Name:     "new guardrail",
-			Priority: len(p.guardRules) + 100,
-			Enabled:  true,
-			Effect: policy.PolicyEffect{
-				Action: "deny",
-				Reason: "created from SecurityGuard",
-			},
-		})
-		p.guardSel = len(p.guardRules) - 1
-		p.beginEdit()
 	}
 }
 
@@ -283,13 +272,6 @@ func (p *SecurityGuardPane) dropSelectedCmd() tea.Cmd {
 		idx := clampIndex(p.shellSel, len(p.shellRules))
 		p.shellRules = append(p.shellRules[:idx], p.shellRules[idx+1:]...)
 		p.shellSel = clampIndex(p.shellSel, len(p.shellRules))
-	case securityPanelIngestion:
-		if len(p.guardRules) == 0 {
-			return nil
-		}
-		idx := clampIndex(p.guardSel, len(p.guardRules))
-		p.guardRules = append(p.guardRules[:idx], p.guardRules[idx+1:]...)
-		p.guardSel = clampIndex(p.guardSel, len(p.guardRules))
 	}
 	return p.saveCmd()
 }
@@ -302,12 +284,6 @@ func (p *SecurityGuardPane) moveSelection(delta int) {
 			return
 		}
 		p.shellSel = clampIndex(p.shellSel+delta, len(p.shellRules))
-	case securityPanelIngestion:
-		if len(p.guardRules) == 0 {
-			p.guardSel = 0
-			return
-		}
-		p.guardSel = clampIndex(p.guardSel+delta, len(p.guardRules))
 	}
 }
 
@@ -322,23 +298,12 @@ func (p *SecurityGuardPane) toggleSelectedState() {
 		}
 		return
 	}
-	if rule := p.selectedGuardRule(); rule != nil {
-		rule.Enabled = !rule.Enabled
-	}
 }
 
 func (p *SecurityGuardPane) beginTest() {
 	switch p.activePanel {
 	case securityPanelShell:
 		rule := p.selectedShellRule()
-		if rule == nil {
-			return
-		}
-		p.testLabel = rule.ID
-		p.testBuffer = ""
-		p.testMode = true
-	case securityPanelIngestion:
-		rule := p.selectedGuardRule()
 		if rule == nil {
 			return
 		}
@@ -356,31 +321,14 @@ func (p *SecurityGuardPane) runTest() {
 		if rule == nil {
 			return
 		}
-		re, err := regexp.Compile(rule.Raw)
+		matcher, err := sandbox.NewShellBlacklist([]sandbox.BlacklistRule{*rule})
 		switch {
 		case err != nil:
-			p.testResult = fmt.Sprintf("invalid regex: %v", err)
-		case re.MatchString(sample):
-			p.testResult = fmt.Sprintf("%q matches %s", sample, rule.ID)
+			p.testResult = "Invalid shell rule: " + err.Error()
+		case matcher.Check(sample) != nil:
+			p.testResult = "Matches selected rule: " + string(rule.Action) + " · pattern only; command not executed"
 		default:
-			p.testResult = fmt.Sprintf("%q does not match %s", sample, rule.ID)
-		}
-	case securityPanelIngestion:
-		rule := p.selectedGuardRule()
-		if rule == nil {
-			return
-		}
-		matched := false
-		for _, value := range append(append([]string{}, rule.Conditions.Capabilities...), rule.Conditions.ExportNames...) {
-			if strings.TrimSpace(value) != "" && strings.Contains(strings.ToLower(sample), strings.ToLower(value)) {
-				matched = true
-				break
-			}
-		}
-		if matched {
-			p.testResult = fmt.Sprintf("%q hits %s", sample, rule.ID)
-		} else {
-			p.testResult = fmt.Sprintf("%q does not hit %s", sample, rule.ID)
+			p.testResult = "No match · pattern only; this does not establish authorization"
 		}
 	}
 	p.status = p.testResult
@@ -428,14 +376,6 @@ func (p *SecurityGuardPane) selectedShellRule() *sandbox.BlacklistRule {
 	return &p.shellRules[idx]
 }
 
-func (p *SecurityGuardPane) selectedGuardRule() *policy.PolicyRule {
-	if len(p.guardRules) == 0 {
-		return nil
-	}
-	idx := clampIndex(p.guardSel, len(p.guardRules))
-	return &p.guardRules[idx]
-}
-
 func (p *SecurityGuardPane) renderShellPanel() string {
 	lines := []string{p.th.Subhead().Render("Shell Command Blacklist")}
 	if len(p.shellRules) == 0 {
@@ -459,29 +399,8 @@ func (p *SecurityGuardPane) renderShellPanel() string {
 }
 
 func (p *SecurityGuardPane) renderIngestionPanel() string {
-	lines := []string{p.th.Subhead().Render("Ingestion Guardrails")}
-	if len(p.guardRules) == 0 {
-		lines = append(lines, p.th.Dim().Render("(no guardrails configured)"))
-	} else {
-		for i, rule := range p.guardRules {
-			prefix := "off"
-			if rule.Enabled {
-				prefix = "on"
-			}
-			line := fmt.Sprintf("%s  %s", prefix, rule.Name)
-			if i == p.guardSel && p.activePanel == securityPanelIngestion {
-				line = p.th.Active().Render(line)
-			}
-			lines = append(lines, line)
-			if rule.Effect.Reason != "" {
-				lines = append(lines, p.th.Dim().Render("  "+rule.Effect.Reason))
-			}
-		}
-	}
-	if p.activePanel == securityPanelIngestion && p.testResult != "" {
-		lines = append(lines, "", p.th.Dim().Render("test: "+p.testResult))
-	}
-	return sectionPanel(p.th, "Ingestion Guardrails", p.width, strings.Join(lines, "\n"))
+	return sectionPanel(p.th, "Ingestion policy", p.width,
+		"Ingestion policy owner is not connected.\nInspection and editing are unavailable.\nShell pattern tests do not establish authorization.")
 }
 
 // SetTheme sets the active semantic style source.

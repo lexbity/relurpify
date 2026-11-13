@@ -437,7 +437,7 @@ func (p *ChatPane) StartRunWithMetadata(prompt string, extra map[string]any) (te
 		return nil, ""
 	}
 	if !p.allowParallel && p.HasActiveRuns() {
-		p.addSystemMessage("Run already in progress. Use /stop to cancel.")
+		p.addSystemMessage("Run already in progress. Use /cancel to request cancellation.")
 		return nil, ""
 	}
 	userMsg := tui.Message{
@@ -675,28 +675,6 @@ func (p *ChatPane) RetryLastRun() tea.Cmd {
 	cmd, _ := p.StartRun(p.lastPrompt)
 	return cmd
 }
-func (p *ChatPane) ApplyPendingChanges(status tui.ChangeStatus) int {
-	count := 0
-	p.feed.Mutate(func(msgs []tui.Message) {
-		for i := len(msgs) - 1; i >= 0; i-- {
-			msg := &msgs[i]
-			if msg.Role != tui.RoleAgent || len(msg.Content.Changes) == 0 {
-				continue
-			}
-			for j := range msg.Content.Changes {
-				c := &msg.Content.Changes[j]
-				if c.Status == tui.StatusPending {
-					c.Status = status
-					count++
-				}
-			}
-			if count > 0 {
-				return
-			}
-		}
-	})
-	return count
-}
 func (p *ChatPane) MutateMessages(fn func(msgs []tui.Message)) { p.feed.Mutate(fn) }
 func (p *ChatPane) AddFile(path string) tea.Cmd {
 	if p.context == nil {
@@ -915,9 +893,6 @@ func (p *ChatPane) buildMetadata(ctx context.Context) map[string]any {
 		}
 		if p.session.Strategy != "" {
 			meta["strategy"] = p.session.Strategy
-		}
-		if p.session.PinnedRecipe != "" {
-			meta["recipe_id"] = p.session.PinnedRecipe
 		}
 	}
 	if p.activeSubTab != "" {
