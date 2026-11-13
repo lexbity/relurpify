@@ -75,13 +75,21 @@ func (e *Engine) ApplyBatchValidated(ctx context.Context, batch GraphBatch, vali
 		edges = append(edges, edge)
 	}
 
-	// Build getter for validation - reads current committed state under the lock
+	// Build getter for validation - reads current committed state under the lock.
+	// In LRU mode a cache miss MUST NOT mean record absence: fall back to the
+	// authoritative durable backend (D-07).
 	get := func(id string) (NodeRecord, bool) {
 		node, ok := e.store.nodes[id]
-		if !ok || node == nil || node.DeletedAt != 0 {
-			return NodeRecord{}, false
+		if ok && node != nil && node.DeletedAt == 0 {
+			return cloneNode(node), true
 		}
-		return cloneNode(node), true
+		if e.bk != nil {
+			rec, err := e.bk.getNodeRecord(id)
+			if err == nil && rec != nil && rec.DeletedAt == 0 {
+				return *rec, true
+			}
+		}
+		return NodeRecord{}, false
 	}
 
 	// Validate BEFORE durable commit (D-07: reject before persist)

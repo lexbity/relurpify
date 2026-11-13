@@ -3,6 +3,8 @@ package graphdb
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -13,299 +15,178 @@ import (
 // persistent record in either the durable log or memory mirror (D-07).
 func TestV2RejectedBatchNeverPersists(t *testing.T) {
 	t.Run("validation rejection leaves no durable record", func(t *testing.T) {
-		// Create a temporary engine
 		ctx := context.Background()
-		tmpDir := t.TempDir()
-		opts := DefaultOptions(tmpDir)
+		opts := DefaultOptions(t.TempDir())
 		engine, err := Open(ctx, opts)
 		require.NoError(t, err)
-		defer func() {
-			_ = engine.Close(ctx)
-		}()
 
-		// Create a node that will cause validation to fail
 		conflictingID := "test_node_conflict"
-		
-		// First, add a node directly
-		firstNode := NodeRecord{
-			ID:   conflictingID,
-			Kind: "test",
-			Body: []byte(`{"initial": true}`),
-		}
-		batch1 := GraphBatch{
-			Nodes: []NodeRecord{firstNode},
-		}
-		err = engine.ApplyBatch(ctx, batch1)
-		require.NoError(t, err)
+		require.NoError(t, engine.ApplyBatch(ctx, GraphBatch{Nodes: []NodeRecord{{
+			ID:    conflictingID,
+			Kind:  NodeKind("test"),
+			Props: json.RawMessage(`{"initial":true}`),
+		}}}))
 
-		// Now try to add the same node with different content using validation
-		// The validator should reject this
-		conflictingNode := NodeRecord{
-			ID:   conflictingID,
-			Kind: "test",
-			Body: []byte(`{"conflict": true}`),
-		}
-		batch2 := GraphBatch{
-			Nodes: []NodeRecord{conflictingNode},
-		}
-
-		// Validator that rejects if node with this ID already exists with different content
 		validate := func(get NodeGetter) error {
-			existing, exists := get(conflictingID)
-			if exists {
-				// Node exists - this is a conflict
+			if _, exists := get(conflictingID); exists {
 				return ErrBatchConflict
 			}
 			return nil
 		}
+		err = engine.ApplyBatchValidated(ctx, GraphBatch{Nodes: []NodeRecord{{
+			ID:    conflictingID,
+			Kind:  NodeKind("test"),
+			Props: json.RawMessage(`{"conflict":true}`),
+		}}}, validate)
+		require.ErrorIs(t, err, ErrBatchConflict)
 
-		// This should fail with ErrBatchConflict
-		err = engine.ApplyBatchValidated(ctx, batch2, validate)
-		assert.Equal(t, ErrBatchConflict, err)
+		node, exists := engine.GetNode(conflictingID)
+		require.True(t, exists)
+		assert.JSONEq(t, `{"initial":true}`, string(node.Props))
 
-		// Verify the conflicting node was NOT persisted
-		// Check in-memory
-		_, exists := engine.GetNode(ctx, conflictingID)
-		// Should still have the original node
-		assert.True(t, exists)
+		require.NoError(t, engine.Close(ctx))
 
-		// Close and reopen to verify durability
-		err = engine.Close(ctx)
+		reopened, err := Open(ctx, opts)
 		require.NoError(t, err)
+		defer func() { _ = reopened.Close(ctx) }()
 
-		// Reopen
-		engine2, err := Open(ctx, opts)
-		require.NoError(t, err)
-		defer func() {
-			_ = engine2.Close(ctx)
-		}()
-
-		// The original node should still exist
-		node, exists := engine2.GetNode(ctx, conflictingID)
-		assert.True(t, exists)
-		assert.Equal(t, []byte(`{"initial": true}`), node.Body)
-
-		// The conflicting content should NOT exist
-		var data map[string]bool
-		err = json.Unmarshal(node.Body, &data)
-		require.NoError(t, err)
-		assert.True(t, data["initial"])
-		assert.False(t, data["conflict"])
+		node, exists = reopened.GetNode(conflictingID)
+		require.True(t, exists)
+		assert.JSONEq(t, `{"initial":true}`, string(node.Props))
 	})
 
 	t.Run("validation before commit - no rejected durable batches", func(t *testing.T) {
 		ctx := context.Background()
-		tmpDir := t.TempDir()
-		opts := DefaultOptions(tmpDir)
+		opts := DefaultOptions(t.TempDir())
 		engine, err := Open(ctx, opts)
 		require.NoError(t, err)
-		defer func() {
-			_ = engine.Close(ctx)
-		}()
 
-		// Track validation calls
 		validationCalled := false
-		
-		// Try to apply a batch that will be rejected by validation
-		node := NodeRecord{
-			ID:   "test_reject",
-			Kind: "test",
-			Body: []byte(`{"test": true}`),
-		}
-		batch := GraphBatch{
-			Nodes: []NodeRecord{node},
-		}
-
-		validate := func(get NodeGetter) error {
+		validate := func(NodeGetter) error {
 			validationCalled = true
-			// Always reject
 			return ErrBatchConflict
 		}
+		err = engine.ApplyBatchValidated(ctx, GraphBatch{Nodes: []NodeRecord{{
+			ID:    "test_reject",
+			Kind:  NodeKind("test"),
+			Props: json.RawMessage(`{"test":true}`),
+		}}}, validate)
+		require.ErrorIs(t, err, ErrBatchConflict)
+		require.True(t, validationCalled, "validation should have been called")
 
-		err = engine.ApplyBatchValidated(ctx, batch, validate)
-		assert.Equal(t, ErrBatchConflict, err)
-		assert.True(t, validationCalled, "validation should have been called")
-
-		// Node should NOT exist in memory
-		_, exists := engine.GetNode(ctx, "test_reject")
+		_, exists := engine.GetNode("test_reject")
 		assert.False(t, exists, "rejected node should not exist in memory")
 
-		// Close and reopen
-		err = engine.Close(ctx)
-		require.NoError(t, err)
+		require.NoError(t, engine.Close(ctx))
 
-		engine2, err := Open(ctx, opts)
+		reopened, err := Open(ctx, opts)
 		require.NoError(t, err)
-		defer func() {
-			_ = engine2.Close(ctx)
-		}()
+		defer func() { _ = reopened.Close(ctx) }()
 
-		// Node should NOT exist after reopen
-		_, exists = engine2.GetNode(ctx, "test_reject")
+		_, exists = reopened.GetNode("test_reject")
 		assert.False(t, exists, "rejected node should not exist after reopen")
 	})
 }
 
-// TestV2MutationOrderMatchesReopen verifies that the commit order is preserved
-// across close/reopen cycles (D-07).
+// TestV2MutationOrderMatchesReopen verifies that committed mutations survive a
+// close/reopen cycle with their payloads intact (D-07).
 func TestV2MutationOrderMatchesReopen(t *testing.T) {
-	t.Run("committed mutations survive reopen in order", func(t *testing.T) {
-		ctx := context.Background()
-		tmpDir := t.TempDir()
-		opts := DefaultOptions(tmpDir)
-		engine, err := Open(ctx, opts)
-		require.NoError(t, err)
+	ctx := context.Background()
+	opts := DefaultOptions(t.TempDir())
+	engine, err := Open(ctx, opts)
+	require.NoError(t, err)
 
-		// Add multiple nodes in sequence
-		nodeIDs := []string{"node1", "node2", "node3"}
-		for i, id := range nodeIDs {
-			node := NodeRecord{
-				ID:   id,
-				Kind: "test",
-				Body: []byte(`{"order": ` + string(rune('0'+i+1)) + `}`),
-			}
-			batch := GraphBatch{
-				Nodes: []NodeRecord{node},
-			}
-			err = engine.ApplyBatch(ctx, batch)
-			require.NoError(t, err)
-		}
+	nodeIDs := []string{"node1", "node2", "node3"}
+	for i, id := range nodeIDs {
+		require.NoError(t, engine.ApplyBatch(ctx, GraphBatch{Nodes: []NodeRecord{{
+			ID:    id,
+			Kind:  NodeKind("test"),
+			Props: json.RawMessage(fmt.Sprintf(`{"order":%d}`, i+1)),
+		}}}))
+	}
 
-		// Verify order in memory
-		for i, id := range nodeIDs {
-			node, exists := engine.GetNode(ctx, id)
-			assert.True(t, exists)
-			var data map[string]string
-			err = json.Unmarshal(node.Body, &data)
-			require.NoError(t, err)
-			assert.Equal(t, string(rune('0'+i+1)), data["order"])
-		}
+	for i, id := range nodeIDs {
+		node, exists := engine.GetNode(id)
+		require.True(t, exists)
+		assert.JSONEq(t, fmt.Sprintf(`{"order":%d}`, i+1), string(node.Props))
+	}
 
-		// Close and reopen
-		err = engine.Close(ctx)
-		require.NoError(t, err)
+	require.NoError(t, engine.Close(ctx))
 
-		engine2, err := Open(ctx, opts)
-		require.NoError(t, err)
-		defer func() {
-			_ = engine2.Close(ctx)
-		}()
+	reopened, err := Open(ctx, opts)
+	require.NoError(t, err)
+	defer func() { _ = reopened.Close(ctx) }()
 
-		// Verify order is preserved after reopen
-		for i, id := range nodeIDs {
-			node, exists := engine2.GetNode(ctx, id)
-			assert.True(t, exists)
-			var data map[string]string
-			err = json.Unmarshal(node.Body, &data)
-			require.NoError(t, err)
-			assert.Equal(t, string(rune('0'+i+1)), data["order"])
-		}
-	})
+	for i, id := range nodeIDs {
+		node, exists := reopened.GetNode(id)
+		require.True(t, exists)
+		assert.JSONEq(t, fmt.Sprintf(`{"order":%d}`, i+1), string(node.Props))
+	}
 }
 
-// TestV2DirtyAuthorityReadFails verifies that authority reads fail when the
-// engine is dirty (memory apply failed after commit) (D-07).
+// TestV2DirtyAuthorityReadFails verifies that a post-commit memory apply
+// failure marks the engine dirty and blocks authoritative work until rebuild.
 func TestV2DirtyAuthorityReadFails(t *testing.T) {
-	t.Run("dirty engine rejects authority reads", func(t *testing.T) {
-		ctx := context.Background()
-		tmpDir := t.TempDir()
-		opts := DefaultOptions(tmpDir)
-		engine, err := Open(ctx, opts)
-		require.NoError(t, err)
-		defer func() {
-			_ = engine.Close(ctx)
-		}()
+	ctx := context.Background()
+	opts := DefaultOptions(t.TempDir())
+	engine, err := Open(ctx, opts)
+	require.NoError(t, err)
+	defer func() { _ = engine.Close(ctx) }()
 
-		// Set up a test hook that will cause a memory apply failure
-		// We need to access the internal test hook
-		// For this test, we'll use the Rebuild method which marks dirty on failure
+	engine.testHookApplyFailure = errors.New("hook: apply failed")
+	err = engine.ApplyBatch(ctx, GraphBatch{Nodes: []NodeRecord{{
+		ID:   "test_node",
+		Kind: NodeKind("test"),
+	}}})
+	require.Error(t, err)
+	require.Error(t, engine.checkDirty(), "dirty authority gate must reject reads")
 
-		// First, add a node
-		node := NodeRecord{
-			ID:   "test_node",
-			Kind: "test",
-			Body: []byte(`{"test": true}`),
-		}
-		batch := GraphBatch{
-			Nodes: []NodeRecord{node},
-		}
-		err = engine.ApplyBatch(ctx, batch)
-		require.NoError(t, err)
+	engine.testHookApplyFailure = nil
+	require.NoError(t, engine.Rebuild(ctx))
+	require.NoError(t, engine.checkDirty())
 
-		// Verify node exists
-		_, exists := engine.GetNode(ctx, "test_node")
-		assert.True(t, exists)
-
-		// Now, we need to simulate a dirty state
-		// In the current implementation, we can use markDirty
-		// This is a test-only method, so we need to use reflection or make it accessible
-		// For now, let's skip this part as it requires internal access
-		t.Skip("Requires internal access to markDirty")
-	})
+	_, exists := engine.GetNode("test_node")
+	require.True(t, exists, "committed node must be visible after rebuild")
 }
 
-// TestV2LRUValidationFindsUncachedRecord verifies that LRU cache misses
-// properly fall back to the durable backend (D-07).
+// TestV2LRUValidationFindsUncachedRecord verifies that LRU cache misses fall
+// back to the durable backend during validated batch decisions (D-07).
 func TestV2LRUValidationFindsUncachedRecord(t *testing.T) {
-	t.Run("LRU miss falls back to backend", func(t *testing.T) {
-		ctx := context.Background()
-		tmpDir := t.TempDir()
-		opts := DefaultOptions(tmpDir)
-		opts.LRUCapacity = 1 // Very small LRU to force misses
-		
-		engine, err := Open(ctx, opts)
-		require.NoError(t, err)
-		defer func() {
-			_ = engine.Close(ctx)
-		}()
+	ctx := context.Background()
+	opts := DefaultOptions(t.TempDir())
+	opts.LRUCapacity = 1
 
-		// Add multiple nodes to exceed LRU capacity
-		for i := 0; i < 5; i++ {
-			node := NodeRecord{
-				ID:   fmt.Sprintf("node_%d", i),
-				Kind: "test",
-				Body: []byte(`{"index": ` + string(rune('0'+i)) + `}`),
-			}
-			batch := GraphBatch{
-				Nodes: []NodeRecord{node},
-			}
-			err = engine.ApplyBatch(ctx, batch)
-			require.NoError(t, err)
-		}
+	engine, err := Open(ctx, opts)
+	require.NoError(t, err)
+	for i := 0; i < 5; i++ {
+		require.NoError(t, engine.ApplyBatch(ctx, GraphBatch{Nodes: []NodeRecord{{
+			ID:    fmt.Sprintf("node_%d", i),
+			Kind:  NodeKind("test"),
+			Props: json.RawMessage(fmt.Sprintf(`{"index":%d}`, i)),
+		}}}))
+	}
+	require.NoError(t, engine.Close(ctx))
 
-		// Force LRU eviction by getting nodes
-		for i := 0; i < 5; i++ {
-			_, _ = engine.GetNode(ctx, fmt.Sprintf("node_%d", i))
-		}
+	reopened, err := Open(ctx, opts)
+	require.NoError(t, err)
+	defer func() { _ = reopened.Close(ctx) }()
 
-		// Now try to validate a batch that references an evicted node
-		// The validator should still find it via backend lookup
-		validator := func(get NodeGetter) error {
-			// Try to get a node that might be evicted
-			_, exists := get("node_0")
-			if !exists {
-				return fmt.Errorf("node_0 not found")
-			}
-			return nil
-		}
+	// Load node_0, then node_1: capacity 1 evicts node_0 from memory.
+	_, exists := reopened.GetNode("node_0")
+	require.True(t, exists)
+	_, exists = reopened.GetNode("node_1")
+	require.True(t, exists)
 
-		// Create a batch that would conflict with node_0
-		conflictingNode := NodeRecord{
-			ID:   "node_0",
-			Kind: "test",
-			Body: []byte(`{"conflict": true}`),
+	validator := func(get NodeGetter) error {
+		if _, exists := get("node_0"); !exists {
+			return errors.New("node_0 not found")
 		}
-		batch := GraphBatch{
-			Nodes: []NodeRecord{conflictingNode},
-		}
-
-		// This should fail because node_0 exists (validation finds it)
-		err = engine.ApplyBatchValidated(ctx, batch, validator)
-		// The validator should have found node_0 and not returned an error
-		// But our validator always returns error if node_0 exists
-		// So this should fail
-		assert.Error(t, err)
-	})
+		return ErrBatchConflict
+	}
+	err = reopened.ApplyBatchValidated(ctx, GraphBatch{Nodes: []NodeRecord{{
+		ID:    "node_0",
+		Kind:  NodeKind("test"),
+		Props: json.RawMessage(`{"conflict":true}`),
+	}}}, validator)
+	require.ErrorIs(t, err, ErrBatchConflict, "validator must find the uncached record in the backend")
 }
-
-import "fmt"

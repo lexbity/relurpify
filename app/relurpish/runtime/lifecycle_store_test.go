@@ -2,7 +2,6 @@ package runtime
 
 import (
 	"context"
-	"errors"
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/context/knowledge/graphdb"
@@ -203,6 +202,3 @@ func TestJournalAdapterValidation(t *testing.T) {
 		// have a way to inject validation failures
 	})
 }
-
-// Ensure errors package is imported
-var _ = errors.New("test")

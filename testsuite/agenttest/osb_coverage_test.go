@@ -7,17 +7,18 @@ import (
 )
 
 // TestCommittedSuitesOSBCoverage is the "no silent pass" gate (Phase 7): every
-// OSB assertion the committed 24-suite catalog declares must be either
-// evaluated by the harness, recognised as runtime-enforced, or recognised as
-// advisory. A suite that declares an assertion with no evaluator support fails
-// here instead of passing unverified.
+// OSB assertion the committed suite catalog declares must be either evaluated
+// by the harness, recognised as runtime-enforced, or recognised as advisory. A
+// suite that declares an assertion with no evaluator support fails here instead
+// of passing unverified. The minimum also catches accidental suite deletion.
 func TestCommittedSuitesOSBCoverage(t *testing.T) {
 	paths, err := filepath.Glob(filepath.Join("..", "agenttests", "*.testsuite.yaml"))
 	if err != nil {
 		t.Fatalf("glob committed suites: %v", err)
 	}
-	if len(paths) != 24 {
-		t.Fatalf("expected 24 committed suites, found %d", len(paths))
+	const minimumCommittedSuites = 24
+	if len(paths) < minimumCommittedSuites {
+		t.Fatalf("expected at least %d committed suites, found %d", minimumCommittedSuites, len(paths))
 	}
 
 	for _, path := range paths {
@@ -40,8 +41,8 @@ func TestCommittedSuitesOSBCoverage(t *testing.T) {
 // TestCommittedSuitesColdRunEvaluation proves the evaluators do not trip on a
 // clean run: with an empty (zero tool activity, zero tokens) case report, every
 // committed OSB assertion must evaluate to success. This is the deterministic,
-// backend-free stand-in for "all 24 suites pass" — live pass/fail additionally
-// requires a real model backend.
+// backend-free stand-in for "all committed suites pass" — live pass/fail
+// additionally requires a real model backend.
 func TestCommittedSuitesColdRunEvaluation(t *testing.T) {
 	paths, err := filepath.Glob(filepath.Join("..", "agenttests", "*.testsuite.yaml"))
 	if err != nil {
