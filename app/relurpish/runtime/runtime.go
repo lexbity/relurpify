@@ -46,6 +46,7 @@ import (
 	"codeburg.org/lexbit/relurpify/telemetry/otelleg"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 	"codeburg.org/lexbit/relurpify/userconfig/modelselect"
+	"codeburg.org/lexbit/relurpify/app/relurpish/ports"
 )
 
 // Runtime wires the relurpish CLI, Bubble Tea UI, and API server to the shared
@@ -106,6 +107,9 @@ type Runtime struct {
 	// knowledgeBridge forwards knowledge bus chunk commits onto the runtime
 	// telemetry surface; closed before the knowledge runtime on teardown.
 	knowledgeBridge *knowledge.EventBusTelemetryBridge
+	// EvidenceRegistry provides P06 evidence extraction from existing telemetry.
+	// It consumes events from execSink and provides structured evidence access.
+	EvidenceRegistry *EvidenceRegistry
 
 	providersMu          sync.Mutex
 	providers            []runtimeProviderRecord
@@ -128,6 +132,16 @@ func (r *Runtime) TelemetryDir() string {
 		return ""
 	}
 	return r.Workspace.TelemetryChain.SegmentDir()
+}
+
+// EvidencePort returns the evidence port for P06 evidence access.
+// This provides read-only access to evidence collected from existing telemetry.
+func (r *Runtime) EvidencePort() ports.EvidencePort {
+	if r == nil || r.EvidenceRegistry == nil {
+		// Return a no-op port if evidence registry is not available
+		return &noOpEvidencePort{}
+	}
+	return newEvidencePortAdapter(r.EvidenceRegistry)
 }
 
 // ProviderSecrets returns env-only provider credentials for backend construction.
@@ -557,6 +571,13 @@ func buildRuntime(ctx context.Context, cfg Config, secrets config.Secrets) (*Run
 		modelBackend:         modelProduct.Backend,
 		execSink:             execSink,
 		knowledge:            knowledgeRuntime,
+	}
+	// Initialize P06 evidence registry from the execution sink
+	rt.EvidenceRegistry = NewEvidenceRegistry(execSink)
+	if err := rt.EvidenceRegistry.Start(context.Background()); err != nil {
+		// Log error but don't fail runtime construction
+		// Evidence functionality will be unavailable but runtime continues
+		_ = err
 	}
 	// Bridge the knowledge bus onto the runtime telemetry surface — the same
 	// composition the harness and dry run use — so grounded-chunk commits are

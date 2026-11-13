@@ -8,6 +8,18 @@ import (
 )
 
 // Ports define cohesive consumer interfaces for the TUI.
+
+// EvidenceKind identifies the type of evidence.
+type EvidenceKind string
+
+const (
+	// EvidenceKindPreview indicates deterministic preview resolution.
+	EvidenceKindPreview EvidenceKind = "preview"
+	// EvidenceKindRuntime indicates actual runtime resolution.
+	EvidenceKindRuntime EvidenceKind = "runtime"
+	// EvidenceKindActualCall indicates final transport-level evidence.
+	EvidenceKindActualCall EvidenceKind = "actual_call"
+)
 // These are narrow, typed interfaces that views depend on.
 // The runtime owns the implementations; the TUI never imports runtime.
 
@@ -300,6 +312,147 @@ type SettingsCommand struct {
 	
 	// ExpectedChecksum is the expected checksum for optimistic concurrency.
 	ExpectedChecksum string
+}
+
+// EvidencePort provides evidence inspection operations.
+type EvidencePort interface {
+	// GetPromptEvidence retrieves prompt evidence for a given ID and kind.
+	GetPromptEvidence(ctx context.Context, promptID string, kind string) (PromptEvidenceSnapshot, error)
+	
+	// GetModelAttemptEvidence retrieves model attempt evidence for a given call ID.
+	GetModelAttemptEvidence(ctx context.Context, callID string) (ModelAttemptSnapshot, error)
+	
+	// GetKnowledgeFlowEvidence retrieves knowledge flow evidence for a given operation ID.
+	GetKnowledgeFlowEvidence(ctx context.Context, operationID string) (KnowledgeFlowSnapshot, error)
+	
+	// ListPromptEvidence lists all prompt evidence IDs.
+	ListPromptEvidence(ctx context.Context) ([]string, error)
+	
+	// ListModelAttempts lists all model attempt IDs.
+	ListModelAttempts(ctx context.Context) ([]string, error)
+	
+	// ListKnowledgeFlows lists all knowledge flow IDs.
+	ListKnowledgeFlows(ctx context.Context) ([]string, error)
+}
+
+// PromptEvidenceSnapshot represents prompt evidence for display.
+type PromptEvidenceSnapshot struct {
+	// ID is the prompt identifier.
+	ID string
+	
+	// Kind distinguishes preview, runtime, or actual call.
+	Kind string
+	
+	// SourceReference identifies the source.
+	SourceReference string
+	
+	// SourceRevision is the revision at resolution time.
+	SourceRevision string
+	
+	// ResolvedAt is when resolution occurred.
+	ResolvedAt string
+	
+	// IncludedBlocks is the count of included blocks.
+	IncludedBlocks int
+	
+	// ExcludedBlocks is the count of excluded blocks.
+	ExcludedBlocks int
+	
+	// OutputLength is the length of the resolved output.
+	OutputLength int
+	
+	// DurationMS is the resolution duration.
+	DurationMS int64
+	
+	// Error contains any resolution error.
+	Error string
+	
+	// CallID links to the associated call.
+	CallID string
+	
+	// AttemptID links to the associated attempt.
+	AttemptID string
+	
+	// IsPreview indicates this is preview evidence only.
+	IsPreview bool
+	
+	// IsActualCall indicates this is actual call evidence.
+	IsActualCall bool
+}
+
+// ModelAttemptSnapshot represents model attempt evidence for display.
+type ModelAttemptSnapshot struct {
+	// CallID is the logical call identifier.
+	CallID string
+	
+	// AttemptID is the physical attempt identifier.
+	AttemptID string
+	
+	// Model identifies the model used.
+	Model string
+	
+	// Provider identifies the provider.
+	Provider string
+	
+	// PromptID links to the prompt evidence.
+	PromptID string
+	
+	// InputTokens is the estimated input token count.
+	InputTokens int
+	
+	// OutputTokens is the estimated output token count.
+	OutputTokens int
+	
+	// FinishReason is the model's finish reason.
+	FinishReason string
+	
+	// DurationMS is the attempt duration.
+	DurationMS int64
+	
+	// StartedAt is when the attempt started.
+	StartedAt string
+	
+	// CompletedAt is when the attempt completed.
+	CompletedAt string
+	
+	// Error contains any attempt error.
+	Error string
+	
+	// TransportReclaimed indicates if transport was reclaimed.
+	TransportReclaimed bool
+}
+
+// KnowledgeFlowSnapshot represents knowledge flow evidence for display.
+type KnowledgeFlowSnapshot struct {
+	// ID identifies this knowledge flow.
+	ID string
+	
+	// Kind identifies the flow type.
+	Kind string
+	
+	// Direction is "input" or "output".
+	Direction string
+	
+	// Operation is the specific operation.
+	Operation string
+	
+	// ItemsSelected is the number of items.
+	ItemsSelected int
+	
+	// BudgetUsed is the budget consumed.
+	BudgetUsed int
+	
+	// DurationMS is the operation duration.
+	DurationMS int64
+	
+	// StartedAt is when the operation started.
+	StartedAt string
+	
+	// CompletedAt is when the operation completed.
+	CompletedAt string
+	
+	// Error contains any operation error.
+	Error string
 }
 
 // DoctorPort provides Doctor operations.
