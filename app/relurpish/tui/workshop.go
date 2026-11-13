@@ -7,6 +7,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"codeburg.org/lexbit/relurpify/app/relurpish/ports"
 	thoughtrecipe "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
 	"github.com/charmbracelet/bubbles/textarea"
 	tea "github.com/charmbracelet/bubbletea"
@@ -33,10 +34,10 @@ const (
 type workshopResultMsg struct {
 	Epoch     uint64
 	Operation string
-	Files     []RecipeFile
-	File      RecipeFile
-	Catalog   RecipeCatalog
-	RunResult RecipeRunResult
+	Files     []ports.RecipeFile
+	File      ports.RecipeFile
+	Catalog   ports.RecipeCatalog
+	RunResult ports.RecipeRunResult
 	Err       error
 }
 
@@ -44,13 +45,13 @@ type workshopResultMsg struct {
 // never carries execution markers or claims that a draft was run.
 type Workshop struct {
 	parent          context.Context
-	port            RecipeWorkspace
+	port            ports.RecipeWorkspace
 	mode            workshopMode
-	files           []RecipeFile
-	file            RecipeFile
+	files           []ports.RecipeFile
+	file            ports.RecipeFile
 	source          string
 	document        *thoughtrecipe.Document
-	catalog         RecipeCatalog
+	catalog         ports.RecipeCatalog
 	diagnostics     []string
 	steps           []recipeStepSource
 	step, selection int
@@ -66,7 +67,8 @@ type Workshop struct {
 	previewOffset   int
 }
 
-func NewWorkshop(parent context.Context, port RecipeWorkspace) *Workshop {
+// NewWorkshop constructs the single-document recipe authoring surface.
+func NewWorkshop(parent context.Context, port ports.RecipeWorkspace) *Workshop {
 	field := textarea.New()
 	field.ShowLineNumbers = false
 	field.CharLimit = 262144

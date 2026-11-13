@@ -56,6 +56,14 @@ func (e *Engine) ApplyBatchValidated(ctx context.Context, batch GraphBatch, vali
 	}
 	e.store.mu.Lock()
 	defer e.store.mu.Unlock()
+	// A waiting batch must recheck after acquiring its serialization lock:
+	// the preceding writer may have committed and failed mirror application.
+	if err := e.checkDirty(); err != nil {
+		return err
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 
 	// Prepare immutable payload with timestamps
 	now := time.Now().UnixNano()

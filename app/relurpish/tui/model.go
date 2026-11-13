@@ -1,13 +1,14 @@
 package tui
 
 import (
-	runtimesvc "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
 	"context"
 	"fmt"
 	"os"
 	"sort"
 	"strings"
 	"time"
+
+	runtimesvc "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
 
 	"github.com/charmbracelet/bubbles/textarea"
 	tea "github.com/charmbracelet/bubbletea"
@@ -98,6 +99,9 @@ type RootModel struct {
 	configurationEpoch  uint64
 	configuration       documentInspector
 	services            *ServicesPane
+	activity            activityCanvas
+	demoObserved        uint64
+	provider            *ProviderPane
 
 	// Shared state
 	activeTab       TabID
@@ -130,7 +134,8 @@ type RootModel struct {
 	hitlCh <-chan fauthorization.HITLEvent
 
 	// Execution event subscription
-	execEventCh <-chan telemetry.Event
+	execEventCh      <-chan telemetry.Event
+	observationEpoch uint64
 
 	// Interaction frames keyed by notification ID and frame ID so the host can
 	// resolve slot selections and freetext answers back into the pending frame.
@@ -392,6 +397,11 @@ func NewRootModel(parentCtx context.Context, options HostOptions) RootModel {
 	}
 	m.services = NewServicesPane(parentCtx, servicePort, options.DemoScenario != "")
 	m.services.workspace = info.Workspace
+	m.activity.demo = options.DemoScenario != ""
+	if options.Providers != nil {
+		activator, _ := options.Providers.(ProviderActivationPort)
+		m.provider = NewProviderPane(parentCtx, options.Providers, activator, options.DemoScenario != "")
+	}
 	if options.Recipes != nil {
 		registerWorkshopCommands(m.cmdReg)
 		m.tabs.Register(TabDefinition{ID: TabWorkshop, Label: "workshop"})
@@ -409,7 +419,7 @@ func NewRootModel(parentCtx context.Context, options HostOptions) RootModel {
 	m.setActiveTab(m.activeTab)
 	if options.DemoScenario != "" {
 		m.applyFrontend(options.Conversation.Current())
-		m.cmdReg.retain("ask", "chat", "run", "inspect", "attention", "stop", "doctor", "help", "keybindings", "settings", "config", "services", "service")
+		m.cmdReg.retain("ask", "chat", "run", "inspect", "attention", "stop", "doctor", "help", "keybindings", "settings", "config", "services", "service", "activity", "model-provider", "model", "save-model")
 		if options.Recipes != nil {
 			registerWorkshopCommands(m.cmdReg)
 		}
@@ -433,6 +443,9 @@ func buildSurfaceState(parentCtx context.Context, factory SurfaceFactory, agentN
 	surface.RegisterTabs(tabs)
 	tabs.Register(TabDefinition{ID: TabRun, Label: "run"})
 	tabs.Register(TabDefinition{ID: TabSettings, Label: "settings"})
+	tabs.Register(TabDefinition{ID: TabConfiguration, Label: "configuration"})
+	tabs.Register(TabDefinition{ID: TabServices, Label: string(TabServices)})
+	tabs.Register(TabDefinition{ID: TabActivity, Label: "activity"})
 	initialTab := surface.InitialTab()
 	if initialTab == "" {
 		initialTab = tabs.ActiveTab().ID
@@ -609,18 +622,22 @@ type sessionFoundMsg struct{ rec SessionRecord }
 
 // hitlSubscribedMsg carries the HITL subscription info from initialization.
 type hitlSubscribedMsg struct {
+	epoch uint64
 	ch    <-chan fauthorization.HITLEvent
 	unsub func()
 }
 
 // execEventsSubscribedMsg carries the execution event subscription info.
 type execEventsSubscribedMsg struct {
+	epoch uint64
 	ch    <-chan telemetry.Event
 	unsub func()
 }
 
 // ExecEventBatchMsg delivers a batch of telemetry events for live projection.
 type ExecEventBatchMsg struct {
+	epoch  uint64
+	source <-chan telemetry.Event
 	Events []telemetry.Event
 }
 
@@ -704,25 +721,27 @@ func (m RootModel) restorePromptCmd() tea.Cmd {
 
 // subscribeHITLCmd subscribes to HITL events and returns the subscription info.
 func (m RootModel) subscribeHITLCmd() tea.Cmd {
+	epoch := m.observationEpoch
 	rt := m.runtime
 	return func() tea.Msg {
 		if rt == nil {
 			return nil
 		}
 		ch, unsub := rt.SubscribeHITL()
-		return hitlSubscribedMsg{ch: ch, unsub: unsub}
+		return hitlSubscribedMsg{ch: ch, unsub: unsub, epoch: epoch}
 	}
 }
 
 // subscribeExecEventsCmd subscribes to execution telemetry events.
 func (m RootModel) subscribeExecEventsCmd() tea.Cmd {
+	epoch := m.observationEpoch
 	rt := m.runtime
 	return func() tea.Msg {
 		if rt == nil {
 			return nil
 		}
 		ch, unsub := rt.SubscribeExecutionEvents()
-		return execEventsSubscribedMsg{ch: ch, unsub: unsub}
+		return execEventsSubscribedMsg{ch: ch, unsub: unsub, epoch: epoch}
 	}
 }
 
@@ -742,6 +761,18 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case servicesResultMsg:
 		m.services.apply(msg)
 		return m, nil
+	case ProviderModelsLoadedMsg:
+		if m.baseSurface != nil {
+			pane, cmd := m.baseSurface.Update(msg)
+			m.baseSurface = pane
+			return m, cmd
+		}
+		return m, nil
+	case providerResultMsg:
+		if m.provider != nil {
+			m.provider.apply(msg)
+		}
+		return m, nil
 	case keybindingsSavedMsg:
 		_, cmd := m.keybindings.Update(msg)
 		return m, cmd
@@ -750,9 +781,12 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.workshop.apply(msg)
-		// For P04: trigger result is stored in RunResult, not Snapshot
-		// Full integration with FrontendSnapshot will come in later phases
 		if msg.Err == nil && msg.Operation == "trigger" {
+			if m.conversation != nil {
+				m.applyFrontend(m.conversation.Current())
+			}
+			m.refreshCircuit()
+			m.setActiveTab(TabRun)
 			m.addSystemMessage(fmt.Sprintf("Recipe triggered: %s", msg.RunResult.Status))
 		}
 		return m, nil
@@ -817,6 +851,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		formOwnsKeys := m.activeTab == TabWorkshop && m.focus.State().InRegion1() && m.workshop.Editing()
 		formOwnsKeys = formOwnsKeys || (m.activeTab == TabKeybindings && m.focus.State().InRegion1() && m.keybindings.OwnsEscape())
+		formOwnsKeys = formOwnsKeys || (m.provider != nil && m.activeTab == TabAIProvider && m.focus.State().InRegion1() && m.provider.ownsEscape())
 		if owner, ok := m.baseSurface.(EscapeOwner); ok && m.focus.State().InRegion1() && isBaseFrameworkTab(m.activeTab) {
 			formOwnsKeys = formOwnsKeys || owner.OwnsEscape()
 		}
@@ -872,7 +907,15 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, cmd
 			}
 		}
+		if m.provider != nil && m.activeTab == TabAIProvider && m.focus.State().InRegion1() && !m.showHelp && !m.decisionFocused {
+			if cmd, handled := m.provider.key(msg); handled || msg.Type != tea.KeyEsc {
+				return m, cmd
+			}
+		}
 		if m.activeTab == TabConfiguration && m.focus.State().InRegion1() && !m.showHelp && !m.decisionFocused && m.configuration.key(msg) {
+			return m, nil
+		}
+		if m.activeTab == TabActivity && m.focus.State().InRegion1() && !m.showHelp && !m.decisionFocused && m.activity.inspector.key(msg) {
 			return m, nil
 		}
 		if m.activeTab == TabServices && m.focus.State().InRegion1() && !m.showHelp && !m.decisionFocused {
@@ -1185,18 +1228,30 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// HITL subscription initialization.
 	case hitlSubscribedMsg:
+		if msg.epoch != m.observationEpoch {
+			if msg.unsub != nil {
+				msg.unsub()
+			}
+			return m, nil
+		}
 		m.hitlCh = msg.ch
-		m.lifetime.add(msg.unsub)
+		m.lifetime.replace("hitl", msg.unsub)
 		if m.hitlCh != nil {
-			return m, listenHITLEvents(m.hitlCh)
+			return m, listenHITLEvents(m.hitlCh, m.observationEpoch)
 		}
 		return m, nil
 
 	case execEventsSubscribedMsg:
+		if msg.epoch != m.observationEpoch {
+			if msg.unsub != nil {
+				msg.unsub()
+			}
+			return m, nil
+		}
 		m.execEventCh = msg.ch
-		m.lifetime.add(msg.unsub)
+		m.lifetime.replace("execution", msg.unsub)
 		if m.execEventCh != nil {
-			return m, listenExecEvents(m.execEventCh)
+			return m, listenExecEvents(m.execEventCh, m.observationEpoch)
 		}
 		return m, nil
 
@@ -1475,6 +1530,12 @@ func (m RootModel) View() string {
 }
 
 func (m RootModel) activePaneView() string {
+	if m.provider != nil && m.activeTab == TabAIProvider {
+		return m.provider.view()
+	}
+	if m.activeTab == TabActivity {
+		return m.activity.inspector.view(m.width, max(1, m.height-5))
+	}
 	if m.activeTab == TabConfiguration {
 		return m.configuration.view(m.width, max(1, m.height-5))
 	}
@@ -1728,6 +1789,16 @@ func (m RootModel) handleInputSubmitted(msg InputSubmittedMsg) (tea.Model, tea.C
 }
 
 func (m RootModel) handleWorkspaceSelected(workspace string) (tea.Model, tea.Cmd) {
+	if m.chat != nil && m.chat.HasActiveRuns() {
+		m.addSystemMessage("Stop or finish the active execution before switching workspace")
+		return m, nil
+	}
+
+	if m.provider != nil && (m.provider.working || m.provider.dirty()) {
+		m.addSystemMessage("Save or discard the provider draft and finish pending operations before switching workspace")
+		return m, nil
+	}
+
 	if m.services.working {
 		m.addSystemMessage("Wait for the pending service operation before switching workspace")
 		return m, nil
@@ -1753,6 +1824,23 @@ func (m RootModel) handleWorkspaceSelected(workspace string) (tea.Model, tea.Cmd
 	}
 	m.configurationEpoch++
 	m.configuration = documentInspector{}
+	if m.provider != nil {
+		previous := m.provider
+		m.provider = NewProviderPane(m.parentCtx, previous.port, previous.activator, m.demoScenario != "")
+		m.provider.resize(m.width, max(1, m.height-5))
+	}
+	m.activity = activityCanvas{demo: m.demoScenario != ""}
+	m.observationEpoch++
+	m.execEventCh = nil
+	m.hitlCh = nil
+	m.lifetime.replace("execution", nil)
+	m.lifetime.replace("hitl", nil)
+	m.notifQ.Clear()
+	m.hitlRow.Close()
+	m.decisionFocused = false
+	m.interactionFrames = make(map[string]*interaction.InteractionFrame)
+	m.circuit = circuitCanvas{}
+
 	m.services.epoch++
 	m.services.workspace = workspace
 	m.services.items = nil
@@ -1788,6 +1876,7 @@ func (m RootModel) handleWorkspaceSelected(workspace string) (tea.Model, tea.Cmd
 	if m.chat != nil {
 		cmds = append(cmds, m.chat.Init())
 	}
+	cmds = append(cmds, m.subscribeExecEventsCmd(), m.subscribeHITLCmd())
 	m.addSystemMessage(fmt.Sprintf("Workspace switched to %s", workspace))
 	return m, tea.Batch(cmds...)
 }

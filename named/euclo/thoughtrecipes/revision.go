@@ -2,8 +2,11 @@
 package thoughtrecipe
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"path/filepath"
+	"sort"
 	"strings"
 )
 
@@ -102,14 +105,25 @@ func (m *RecipeManifest) AddImport(path string, rev RecipeRevision) {
 // Digest returns a combined digest of all components in the manifest.
 // This uniquely identifies the complete closure.
 func (m *RecipeManifest) Digest() string {
-	var parts []string
-	parts = append(parts, m.Root.Digest)
-	for _, imp := range m.Imports {
-		parts = append(parts, imp.Digest)
+	h := sha256.New()
+	write := func(value string) {
+		_, _ = h.Write([]byte(value))
+		_, _ = h.Write([]byte{0})
 	}
-	parts = append(parts, m.Entry, m.ParserVersion, m.LoweringVersion)
-	// Simple concatenation for now; a real implementation would hash this.
-	return strings.Join(parts, "|")
+	write(m.Root.Digest)
+	paths := make([]string, 0, len(m.Imports))
+	for path := range m.Imports {
+		paths = append(paths, path)
+	}
+	sort.Strings(paths)
+	for _, path := range paths {
+		write(path)
+		write(m.Imports[path].Digest)
+	}
+	write(m.Entry)
+	write(m.ParserVersion)
+	write(m.LoweringVersion)
+	return hex.EncodeToString(h.Sum(nil))
 }
 
 // Validate checks that all imports in the manifest have valid digests.
@@ -144,7 +158,7 @@ func (ctx *ResolutionContext) ResolveImportPath(importPath string) string {
 	}
 	// Handle workspace-relative paths
 	if strings.HasPrefix(importPath, "**/") || strings.HasPrefix(importPath, "*") {
-		// Glob patterns - for now, treat as relative to recipe root
+		// Glob patterns resolve relative to the recipe root.
 		return filepath.Join(ctx.RecipeRoot, importPath)
 	}
 	// Relative to current file's directory

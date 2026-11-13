@@ -1,10 +1,11 @@
 package tui
 
 import (
-	runtimesvc "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
 	"context"
 	"strings"
 	"testing"
+
+	runtimesvc "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"

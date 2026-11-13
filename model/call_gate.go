@@ -99,10 +99,10 @@ type CallGate struct {
 }
 
 type activeCall struct {
-	callID    CallID
-	attemptID AttemptID
-	cancel    context.CancelFunc
-	timer     *time.Timer
+	callID           CallID
+	attemptID        AttemptID
+	cancel           context.CancelFunc
+	stopCancellation func() bool
 }
 
 type queuedCall struct {
@@ -249,8 +249,8 @@ func (g *CallGate) grantLocked(parent context.Context, callID CallID, attemptID 
 	marked := context.WithValue(parent, gateActiveKey{}, struct{}{})
 	activeCtx, cancel := context.WithTimeout(marked, g.config.ActiveTimeout)
 	active := &activeCall{callID: callID, attemptID: attemptID, cancel: cancel}
-	active.timer = time.AfterFunc(g.config.ActiveTimeout, func() {
-		g.activeTimeout(callID, attemptID)
+	active.stopCancellation = context.AfterFunc(activeCtx, func() {
+		g.checkReclamation(active)
 	})
 	g.active = active
 	g.activeCount.Store(1)
@@ -261,36 +261,38 @@ func (g *CallGate) grantLocked(parent context.Context, callID CallID, attemptID 
 		AttemptID: attemptID,
 		Context:   activeCtx,
 		Released: func() GateState {
-			return g.release(callID, attemptID)
+			return g.release(active)
 		},
 		Poison: func(reason string) GateState {
-			return g.poisonTicket(callID, attemptID, reason)
+			return g.poisonTicket(active, reason)
 		},
 	}
 }
 
-// activeTimeout poisons the lane when an active request is not reclaimed
-// within the cancellation grace period after its deadline.
-func (g *CallGate) activeTimeout(callID CallID, attemptID AttemptID) {
+// checkReclamation fences a request that survives caller cancellation or its
+// active deadline. Identity is the lease object, not reusable caller IDs.
+func (g *CallGate) checkReclamation(active *activeCall) {
 	time.AfterFunc(g.config.CancellationGracePeriod, func() {
 		g.mu.Lock()
-		defer g.mu.Unlock()
-		if g.active == nil || g.active.callID != callID || g.active.attemptID != attemptID {
+		if g.active != active {
+			g.mu.Unlock()
 			return
 		}
-		g.poisonLocked("active request not reclaimed after deadline")
+		g.poisonLocked("active request not reclaimed after cancellation")
+		g.mu.Unlock()
+		g.notify()
 	})
 }
 
 // release reclaims the active ticket and grants the next queued call.
-func (g *CallGate) release(callID CallID, attemptID AttemptID) GateState {
+func (g *CallGate) release(active *activeCall) GateState {
 	g.mu.Lock()
-	if g.active == nil || g.active.callID != callID || g.active.attemptID != attemptID {
+	if g.active != active {
 		state := g.stateLocked()
 		g.mu.Unlock()
 		return state
 	}
-	g.active.timer.Stop()
+	g.active.stopCancellation()
 	g.active.cancel()
 	g.active = nil
 	g.activeCount.Store(0)
@@ -314,9 +316,9 @@ func (g *CallGate) release(callID CallID, attemptID AttemptID) GateState {
 }
 
 // poisonTicket poisons the lane if the ticket is still the active one.
-func (g *CallGate) poisonTicket(callID CallID, attemptID AttemptID, reason string) GateState {
+func (g *CallGate) poisonTicket(active *activeCall, reason string) GateState {
 	g.mu.Lock()
-	if g.active == nil || g.active.callID != callID || g.active.attemptID != attemptID {
+	if g.active != active {
 		state := g.stateLocked()
 		g.mu.Unlock()
 		return state
@@ -335,11 +337,9 @@ func (g *CallGate) poisonLocked(reason string) GateState {
 	g.poisonCount.Add(1)
 
 	if g.active != nil {
-		g.active.timer.Stop()
+		g.active.stopCancellation()
 		g.active.cancel()
-		g.active = nil
 	}
-	g.activeCount.Store(0)
 
 	for _, queued := range g.queue {
 		queued.result <- acquireResult{err: ErrGatePoisoned}
@@ -361,10 +361,11 @@ func (g *CallGate) Poison(reason string) GateState {
 }
 
 // Recover clears the poisoned state and allows new requests. It must only be
-// called after the problematic backend has been recovered.
+// called after the problematic backend has been recovered. While its lease is
+// unreclaimed, recovery is refused and the returned snapshot remains poisoned.
 func (g *CallGate) Recover() GateState {
 	g.mu.Lock()
-	if g.poisoned {
+	if g.poisoned && g.active == nil {
 		g.poisoned = false
 		g.poisonReason = ""
 	}
@@ -400,11 +401,9 @@ func (g *CallGate) Close() {
 	g.closed = true
 
 	if g.active != nil {
-		g.active.timer.Stop()
+		g.active.stopCancellation()
 		g.active.cancel()
-		g.active = nil
 	}
-	g.activeCount.Store(0)
 
 	for _, queued := range g.queue {
 		queued.result <- acquireResult{err: ErrGateClosed}
@@ -460,3 +459,6 @@ func (g *CallGate) String() string {
 	return fmt.Sprintf("CallGate{queued=%d, active=%v, poisoned=%v, activeCall=%s}",
 		state.Queued, state.Active, state.Poisoned, state.ActiveCallID)
 }
+
+// CancellationGracePeriod is the immutable physical reclamation budget.
+func (g *CallGate) CancellationGracePeriod() time.Duration { return g.config.CancellationGracePeriod }

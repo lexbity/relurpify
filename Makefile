@@ -453,4 +453,4 @@ test-relurpish-v2-integration:
 	@v2_dir=$$(mktemp -d /tmp/relurpish-v2-pty.XXXXXX); \
 	trap 'rm -rf "$$v2_dir"' EXIT; \
 	$(GO_OFFLINE_ENV) go build -o "$$v2_dir/relurpish" ./app/relurpish && \
-	$(GO_OFFLINE_ENV) go test -tags=relurpish_v2_integration ./app/relurpish/testsuite -run '^TestV2(DoctorWithoutRuntime|PTYFocusAndBounds|PTYDemoCommandDraftRoundTrip)$$' -count=1 -timeout=60s -args -v2-binary "$$v2_dir/relurpish"
+	$(GO_OFFLINE_ENV) go test -tags=relurpish_v2_integration ./app/relurpish/testsuite -run '^TestV2(DoctorWithoutRuntime|PTYFocusAndBounds|PTYDemoCommandDraftRoundTrip|PTYActivityProviderAndDraft)$$' -count=1 -timeout=60s -args -v2-binary "$$v2_dir/relurpish"

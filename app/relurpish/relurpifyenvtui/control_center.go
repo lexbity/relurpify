@@ -128,6 +128,12 @@ func (p *controlCenterPane) Update(msg tea.Msg) (tui.Region1Surface, tea.Cmd) {
 			p.SetStore(tui.NewSessionStore(msg.Workspace))
 		}
 		return p, nil
+	case tui.ProviderModelsLoadedMsg:
+		if p.aiprovider != nil {
+			_, cmd := p.aiprovider.Update(msg)
+			return p, cmd
+		}
+		return p, nil
 	case tui.ConfigRefreshMsg:
 		p.Refresh()
 		return p, nil

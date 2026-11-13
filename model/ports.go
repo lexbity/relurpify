@@ -76,6 +76,9 @@ type ToolCall struct {
 	Args map[string]any
 }
 
+// RepairStrategyHeuristicOnly is the default model tool-call repair policy.
+const RepairStrategyHeuristicOnly = "heuristic-only"
+
 // ProfiledModel extends LanguageModel with profile metadata.
 type ProfiledModel interface {
 	LanguageModel
@@ -149,7 +152,7 @@ func (p *ModelProfile) Normalize() {
 	p.Model = strings.TrimSpace(p.Model)
 	p.Pattern = strings.TrimSpace(p.Pattern)
 	if p.Repair.Strategy == "" {
-		p.Repair.Strategy = "heuristic-only"
+		p.Repair.Strategy = RepairStrategyHeuristicOnly
 	}
 	if p.Repair.MaxAttempts < 0 {
 		p.Repair.MaxAttempts = 0

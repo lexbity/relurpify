@@ -2,7 +2,11 @@ package runtime
 
 import (
 	"context"
+	"encoding/binary"
+	"encoding/hex"
+	"sync"
 	"testing"
+	"time"
 
 	"codeburg.org/lexbit/relurpify/context/knowledge/graphdb"
 	"github.com/stretchr/testify/assert"
@@ -114,91 +118,110 @@ func TestJournalAdapterAdmitCommand(t *testing.T) {
 	})
 }
 
-// TestWorkspaceOwner tests the workspace owner actor.
-func TestWorkspaceOwner(t *testing.T) {
-	t.Run("admit run creates run record", func(t *testing.T) {
-		ctx := context.Background()
-		tmpDir := t.TempDir()
-		db, err := graphdb.Open(ctx, graphdb.DefaultOptions(tmpDir))
-		require.NoError(t, err)
-		defer func() {
-			_ = db.Close(ctx)
+func TestV2RunAdmissionIsAtomicIdempotentAndReopens(t *testing.T) {
+	ctx := context.Background()
+	opts := graphdb.DefaultOptions(t.TempDir())
+	db, err := graphdb.Open(ctx, opts)
+	require.NoError(t, err)
+	id := generateRequestID()
+	const count = 24
+	runs := make([]string, count)
+	errs := make([]error, count)
+	var wg sync.WaitGroup
+	for i := range count {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			store := NewRunAdmissionStore("workspace", db)
+			run, err := store.AdmitRun(ctx, id, "intent")
+			errs[i] = err
+			if run != nil {
+				runs[i] = run.RunID
+			}
 		}()
-
-		workspace := WorkspaceID("test_workspace")
-		wo := NewWorkspaceOwner(workspace, db)
-		defer wo.Close()
-
-		// Admit a run
-		run, err := wo.AdmitRun(ctx, "", "run_digest")
-		require.NoError(t, err)
-		assert.NotNil(t, run)
-		assert.Contains(t, run.RunID, "run_")
-		assert.Equal(t, string(workspace), run.WorkflowID)
-		assert.Equal(t, "queued", run.Status)
-	})
-
-	t.Run("close workspace owner", func(t *testing.T) {
-		ctx := context.Background()
-		tmpDir := t.TempDir()
-		db, err := graphdb.Open(ctx, graphdb.DefaultOptions(tmpDir))
-		require.NoError(t, err)
-		defer func() {
-			_ = db.Close(ctx)
-		}()
-
-		workspace := WorkspaceID("test_workspace")
-		wo := NewWorkspaceOwner(workspace, db)
-
-		// Close should not panic
-		err = wo.Close()
-		assert.NoError(t, err)
-	})
+	}
+	wg.Wait()
+	for i := range count {
+		require.NoError(t, errs[i])
+		require.NotEmpty(t, runs[i])
+		require.Equal(t, runs[0], runs[i])
+	}
+	require.Len(t, db.ListNodes("run"), 1)
+	require.Len(t, db.ListNodes("receipt"), 1)
+	require.NoError(t, db.Close(ctx))
+	db, err = graphdb.Open(ctx, opts)
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, db.Close(ctx)) })
+	store := NewRunAdmissionStore("workspace", db)
+	run, err := store.AdmitRun(ctx, id, "intent")
+	require.NoError(t, err)
+	require.Equal(t, runs[0], run.RunID)
+	run.Status = "tampered local copy"
+	run, err = store.AdmitRun(ctx, id, "intent")
+	require.NoError(t, err)
+	require.Equal(t, "queued", run.Status)
+	_, err = store.AdmitRun(ctx, id, "different")
+	require.ErrorIs(t, err, ErrReceiptConflict)
+	require.Len(t, db.ListNodes("run"), 1)
 }
 
-// TestJournalAdapterClockSkew tests clock skew handling per D-08.
-func TestJournalAdapterClockSkew(t *testing.T) {
-	t.Run("backward clock jump blocks admission", func(t *testing.T) {
-		ctx := context.Background()
-		tmpDir := t.TempDir()
-		db, err := graphdb.Open(ctx, graphdb.DefaultOptions(tmpDir))
-		require.NoError(t, err)
-		defer func() {
-			_ = db.Close(ctx)
-		}()
-
-		workspace := WorkspaceID("test_workspace")
-		ja := NewJournalAdapter(db, workspace)
-
-		// Submit a request to establish a clock baseline
-		_, err = ja.AdmitCommand(ctx, "", "digest1", "target1")
-		require.NoError(t, err)
-
-		// Now we would need to simulate a backward clock jump
-		// This test is limited by our current timestamp extraction
-		// In a real implementation, we'd mock the clock
-		t.Skip("Requires mockable clock for backward jump test")
-	})
+func TestV2AdmissionFreshnessAndClockDoNotBypassConflict(t *testing.T) {
+	ctx := context.Background()
+	db, err := graphdb.Open(ctx, graphdb.DefaultOptions(t.TempDir()))
+	require.NoError(t, err)
+	defer func() { require.NoError(t, db.Close(ctx)) }()
+	ja := NewJournalAdapter(db, "workspace")
+	base := time.Now().UTC()
+	ja.now = func() time.Time { return base }
+	original, err := ja.AdmitCommand(ctx, "", "digest", "target")
+	require.NoError(t, err)
+	require.Equal(t, original.OperationID, original.Receipt.OperationID)
+	ja.now = func() time.Time { return base.Add(6 * time.Minute) }
+	_, err = ja.AdmitCommand(ctx, original.Receipt.RequestID, "other", "target")
+	require.ErrorIs(t, err, ErrReceiptConflict)
+	_, err = ja.AdmitCommand(ctx, original.Receipt.RequestID, "digest", "other")
+	require.ErrorIs(t, err, ErrReceiptConflict)
+	retry, err := ja.AdmitCommand(ctx, original.Receipt.RequestID, "digest", "target")
+	require.NoError(t, err)
+	require.Equal(t, original, retry)
+	_, err = ja.AdmitCommand(ctx, generateRequestID(), "new", "target")
+	require.ErrorIs(t, err, ErrReceiptExpired)
+	ja.now = func() time.Time { return base.Add(-31 * time.Second) }
+	// This UUID still meets the future-skew allowance at -30s; use a previously
+	// issued ID to isolate the clock fence from freshness validation.
+	id := requestIDAt(t, base.Add(-time.Minute))
+	_, err = ja.AdmitCommand(ctx, id, "new", "target")
+	require.ErrorContains(t, err, "clock moved backward")
+	_, err = ja.AdmitCommand(ctx, original.Receipt.RequestID, "digest", "target")
+	require.NoError(t, err)
+	require.Len(t, db.ListNodes("receipt"), 1)
 }
 
-// TestJournalAdapterValidation tests validation before commit.
-func TestJournalAdapterValidation(t *testing.T) {
-	t.Run("validation happens before durable commit", func(t *testing.T) {
-		ctx := context.Background()
-		tmpDir := t.TempDir()
-		db, err := graphdb.Open(ctx, graphdb.DefaultOptions(tmpDir))
-		require.NoError(t, err)
-		defer func() {
-			_ = db.Close(ctx)
-		}()
+func requestIDAt(t *testing.T, at time.Time) RequestID {
+	t.Helper()
+	raw, err := hex.DecodeString(string(generateRequestID())[4:])
+	require.NoError(t, err)
+	var timestamp [8]byte
+	binary.BigEndian.PutUint64(timestamp[:], uint64(at.UnixMilli()))
+	copy(raw[:6], timestamp[2:])
+	return RequestID("req_" + hex.EncodeToString(raw))
+}
 
-		workspace := WorkspaceID("test_workspace")
-		_ = NewJournalAdapter(db, workspace)
-
-		// The AdmitCommand should validate before committing to durable storage
-		// This is tested implicitly by the other tests that verify durability
-		// A more comprehensive test would verify that a rejected validation
-		// leaves no durable record, but our current implementation doesn't
-		// have a way to inject validation failures
-	})
+func TestV2AdmissionWorkspaceIsolationAndCancellation(t *testing.T) {
+	ctx := context.Background()
+	db, err := graphdb.Open(ctx, graphdb.DefaultOptions(t.TempDir()))
+	require.NoError(t, err)
+	defer func() { require.NoError(t, db.Close(ctx)) }()
+	a, b := NewJournalAdapter(db, "a"), NewJournalAdapter(db, "b")
+	id := generateRequestID()
+	_, err = a.AdmitCommand(ctx, id, "one", "target")
+	require.NoError(t, err)
+	_, err = b.AdmitCommand(ctx, id, "two", "target")
+	require.NoError(t, err)
+	require.Len(t, db.ListNodes("receipt"), 2)
+	canceled, cancel := context.WithCancel(ctx)
+	cancel()
+	_, err = a.AdmitCommand(canceled, "", "new", "target")
+	require.ErrorIs(t, err, context.Canceled)
+	require.Len(t, db.ListNodes("receipt"), 2)
 }

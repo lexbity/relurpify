@@ -224,7 +224,7 @@ func runDemoSession(ctx context.Context, scenario string) error {
 	if err != nil {
 		return err
 	}
-	return tui.RunHost(ctx, tui.HostOptions{DemoScenario: scenario, Conversation: session, Doctor: session, Initializer: session, Recipes: session, Configuration: session, Services: session})
+	return tui.RunHost(ctx, tui.HostOptions{DemoScenario: scenario, Conversation: session, Doctor: session, Initializer: session, Recipes: session, Configuration: session, Services: session, Providers: session})
 }
 
 // runWithRuntime ensures the runtime is created and cleaned up for the command.

@@ -171,7 +171,7 @@ func (t *EditTransaction) ApplyToString(src string) (string, error) {
 	// Update the transaction's base revision to match the buffer
 	txnForBuffer := NewEditTransaction(NewRecipeRevisionFromSource(buffer), t.Description)
 	txnForBuffer.Operations = t.Operations
-	
+
 	result, err := txnForBuffer.Apply(buffer)
 	if err != nil {
 		return "", err
@@ -234,10 +234,10 @@ type EditHistory struct {
 // NewEditHistory creates a new edit history from an initial source buffer.
 func NewEditHistory(source *SourceBuffer) *EditHistory {
 	return &EditHistory{
-		Current:       NewRecipeRevisionFromSource(source),
-		Transactions:  make([]*EditTransaction, 0),
-		CurrentIndex:  -1,
-		Source:        source,
+		Current:      NewRecipeRevisionFromSource(source),
+		Transactions: make([]*EditTransaction, 0),
+		CurrentIndex: -1,
+		Source:       source,
 	}
 }
 
@@ -287,7 +287,7 @@ func (h *EditHistory) Undo() error {
 
 	// Get the transaction to undo
 	txn := h.Transactions[h.CurrentIndex]
-	
+
 	// Create reverse transaction
 	undoTxn := txn.Reverse()
 	// Update the base revision to match the current source
@@ -391,14 +391,6 @@ func (k TypedEditKind) String() string {
 	}
 }
 
-// ConvertToEditOperation converts a typed edit to a byte-level edit operation.
-// This requires knowledge of the current source to generate the exact byte spans.
-func (e TypedEdit) ConvertToEditOperation(currentSource *SourceBuffer) (EditOperation, error) {
-	// This is a placeholder; the actual implementation needs to
-	// map AST paths to byte spans using the parser's position information.
-	return EditOperation{}, fmt.Errorf("not implemented: convert typed edit to byte operation")
-}
-
 // TextEdit represents a simple text edit (insert, delete, or replace text).
 type TextEdit struct {
 	// Offset is the byte offset where the edit starts.
@@ -430,15 +422,6 @@ func (e TextEdit) ToEditOperation() EditOperation {
 	}
 }
 
-// FindNodeAtOffset finds the AST node at a given byte offset.
-// This is used for mapping cursor positions to AST nodes.
-func FindNodeAtOffset(doc *Document, offset int) Node {
-	// This is a placeholder; the actual implementation needs to
-	// traverse the AST and check spans.
-	// The parser needs to be updated to populate byte spans on all nodes.
-	return nil
-}
-
 // TokenToByteSpan converts a token's line/column to byte offsets.
 // This properly handles both LF and CRLF line endings by scanning the source bytes.
 // Note: For best results, use TokenWithSpanToByteSpan which uses the pre-computed
@@ -451,13 +434,13 @@ func TokenToByteSpan(src string, tok Token) ByteSpan {
 	// Calculate start byte offset by scanning through lines
 	startOffset := 0
 	currentLine := 1
-	
+
 	// Iterate through the source to find the line
 	for i := 0; i < len(src); i++ {
 		if currentLine >= tok.Line {
 			break
 		}
-		
+
 		// Check for line endings
 		if src[i] == '\n' {
 			currentLine++
@@ -473,18 +456,18 @@ func TokenToByteSpan(src string, tok Token) ByteSpan {
 			}
 		}
 	}
-	
+
 	if currentLine != tok.Line {
 		// Line not found
 		return ByteSpan{}
 	}
-	
+
 	// Add column offset (columns are 1-indexed)
 	startOffset += tok.Column - 1
-	
+
 	// End offset is start + lexeme length
 	endOffset := startOffset + len(tok.Lexeme)
-	
+
 	// Validate bounds
 	if startOffset < 0 || startOffset > len(src) || endOffset > len(src) {
 		return ByteSpan{}

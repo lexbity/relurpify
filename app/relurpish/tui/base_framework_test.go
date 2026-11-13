@@ -87,7 +87,7 @@ func TestBaseFrameworkBootsWithNoneAgent(t *testing.T) {
 
 func TestBaseFrameworkRegistersAdministrationAndExecutionCanvases(t *testing.T) {
 	m := newBaseFrameworkModel()
-	want := []TabID{TabWelcome, TabSandbox, TabSecurityGuard, TabAIProvider, TabKeybindings, TabDoctor, TabRun, TabSettings}
+	want := []TabID{TabWelcome, TabSandbox, TabSecurityGuard, TabAIProvider, TabKeybindings, TabDoctor, TabRun, TabSettings, TabConfiguration, TabServices, TabActivity}
 	got := m.tabs.All()
 	if len(got) != len(want) {
 		t.Fatalf("expected %d tabs, got %d: %v", len(want), len(got), tabIDs(got))

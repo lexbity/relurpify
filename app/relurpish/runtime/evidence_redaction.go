@@ -3,13 +3,21 @@ package runtime
 import (
 	"context"
 	"crypto/hmac"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"strings"
 	"sync"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/execution/prompt"
 	"codeburg.org/lexbit/relurpify/telemetry"
+)
+
+const (
+	metadataPromptID = "prompt_id"
+	metadataBlockID  = "block_id"
 )
 
 // RedactionPolicy defines what data is redacted in evidence.
@@ -34,10 +42,10 @@ type RedactionPolicy struct {
 // By default, secrets are redacted but previews are allowed with limits.
 func DefaultRedactionPolicy() RedactionPolicy {
 	return RedactionPolicy{
-		RedactSecrets:      true,
-		RedactPromptBodies: false, // Allow previews by default
+		RedactSecrets:        true,
+		RedactPromptBodies:   false, // Allow previews by default
 		RedactResponseBodies: false,
-		MaxPreviewLength:   256,
+		MaxPreviewLength:     256,
 		SecretPatterns: []string{
 			"api_key",
 			"apikey",
@@ -53,10 +61,10 @@ func DefaultRedactionPolicy() RedactionPolicy {
 // StrictRedactionPolicy returns a policy that redacts all bodies.
 func StrictRedactionPolicy() RedactionPolicy {
 	return RedactionPolicy{
-		RedactSecrets:      true,
-		RedactPromptBodies: true,
+		RedactSecrets:        true,
+		RedactPromptBodies:   true,
 		RedactResponseBodies: true,
-		MaxPreviewLength:   0,
+		MaxPreviewLength:     0,
 		SecretPatterns: []string{
 			"api_key",
 			"apikey",
@@ -71,7 +79,7 @@ func StrictRedactionPolicy() RedactionPolicy {
 
 // EvidenceRedactor redacts sensitive data from evidence.
 type EvidenceRedactor struct {
-	mu sync.RWMutex
+	mu     sync.RWMutex
 	policy RedactionPolicy
 
 	// secretCache caches known secret hashes for efficient redaction.
@@ -84,18 +92,19 @@ type EvidenceRedactor struct {
 // NewEvidenceRedactor creates a new evidence redactor with the given policy.
 func NewEvidenceRedactor(policy RedactionPolicy) *EvidenceRedactor {
 	return &EvidenceRedactor{
-		policy:     policy,
+		policy:      policy,
 		secretCache: make(map[string]struct{}),
-		hmacKey:    generateRandomKey(),
+		hmacKey:     generateRandomKey(),
 	}
 }
 
 // generateRandomKey generates a random 32-byte key for HMAC.
 func generateRandomKey() []byte {
-	// Use a fixed key for now - in production this should be randomly generated
-	// and persisted securely.
-	key := sha256.Sum256([]byte("relurpify-evidence-hmac-key"))
-	return key[:]
+	key := make([]byte, 32)
+	if _, err := rand.Read(key); err != nil {
+		panic(fmt.Sprintf("evidence redaction: key entropy unavailable: %v", err))
+	}
+	return key
 }
 
 // SetPolicy updates the redaction policy.
@@ -380,9 +389,9 @@ func (m *RedactionMiddleware) GetAllEvidence(ctx context.Context) (*CompleteEvid
 	}
 
 	redacted := &CompleteEvidence{
-		Prompts:   make([]*PromptEvidence, 0, len(ev.Prompts)),
-		Calls:     make([]*ModelAttemptEvidence, 0, len(ev.Calls)),
-		Knowledge: make([]*KnowledgeFlowEvidence, 0, len(ev.Knowledge)),
+		Prompts:     make([]*PromptEvidence, 0, len(ev.Prompts)),
+		Calls:       make([]*ModelAttemptEvidence, 0, len(ev.Calls)),
+		Knowledge:   make([]*KnowledgeFlowEvidence, 0, len(ev.Knowledge)),
 		CollectedAt: ev.CollectedAt,
 		StartedAt:   ev.StartedAt,
 	}
@@ -405,18 +414,18 @@ func (m *RedactionMiddleware) GetAllEvidence(ctx context.Context) (*CompleteEvid
 // Subscribe subscribes to evidence events with redaction applied.
 func (m *RedactionMiddleware) Subscribe(bufferSize int) <-chan EvidenceEvent {
 	ch := m.registry.Subscribe(bufferSize)
-	
+
 	// Create a new channel that applies redaction
 	redactedCh := make(chan EvidenceEvent, bufferSize)
-	
+
 	go func() {
 		defer close(redactedCh)
 		for ev := range ch {
 			redactedEv := EvidenceEvent{
-				Kind:   ev.Kind,
+				Kind:      ev.Kind,
 				Timestamp: ev.Timestamp,
 			}
-			
+
 			if ev.PromptEvidence != nil {
 				redactedEv.PromptEvidence = m.redactor.RedactPromptEvidence(ev.PromptEvidence)
 			}
@@ -426,7 +435,7 @@ func (m *RedactionMiddleware) Subscribe(bufferSize int) <-chan EvidenceEvent {
 			if ev.KnowledgeFlowEvidence != nil {
 				redactedEv.KnowledgeFlowEvidence = m.redactor.RedactKnowledgeFlowEvidence(ev.KnowledgeFlowEvidence)
 			}
-			
+
 			select {
 			case redactedCh <- redactedEv:
 			default:
@@ -434,7 +443,7 @@ func (m *RedactionMiddleware) Subscribe(bufferSize int) <-chan EvidenceEvent {
 			}
 		}
 	}()
-	
+
 	return redactedCh
 }
 
@@ -459,14 +468,14 @@ func NewPromptTelemetryBridge(sink telemetry.Telemetry) *PromptTelemetryBridge {
 }
 
 // EmitPromptResolved implements prompt.PromptTelemetry.
-func (b *PromptTelemetryBridge) EmitPromptResolved(ctx context.Context, e PromptResolvedEvent) {
+func (b *PromptTelemetryBridge) EmitPromptResolved(ctx context.Context, e prompt.ResolvedEvent) {
 	if b == nil || b.sink == nil {
 		return
 	}
 
 	// Convert prompt resolved event to telemetry event
 	metadata := map[string]any{
-		"prompt_id":        e.ID,
+		metadataPromptID:  e.ID,
 		"paradigm":        e.Paradigm,
 		"output_length":   e.OutputLength,
 		"blocks_included": e.BlocksIncluded,
@@ -482,22 +491,22 @@ func (b *PromptTelemetryBridge) EmitPromptResolved(ctx context.Context, e Prompt
 		Message:   "prompt resolved",
 		Metadata:  metadata,
 	}
-	
+
 	telemetry.StampCorrelation(ctx, &ev)
 	b.sink.Emit(ev)
 }
 
 // EmitPromptResolveFailed implements prompt.PromptTelemetry.
-func (b *PromptTelemetryBridge) EmitPromptResolveFailed(ctx context.Context, e PromptResolveFailedEvent) {
+func (b *PromptTelemetryBridge) EmitPromptResolveFailed(ctx context.Context, e prompt.ResolveFailedEvent) {
 	if b == nil || b.sink == nil {
 		return
 	}
 
 	metadata := map[string]any{
-		"prompt_id": e.ID,
-		"paradigm":  e.Paradigm,
-		"error":     e.Error,
-		"duration_ms": e.DurationMs,
+		metadataPromptID: e.ID,
+		"paradigm":       e.Paradigm,
+		"error":          e.Error,
+		"duration_ms":    e.DurationMs,
 	}
 
 	ev := telemetry.Event{
@@ -506,22 +515,22 @@ func (b *PromptTelemetryBridge) EmitPromptResolveFailed(ctx context.Context, e P
 		Message:   "prompt resolve failed",
 		Metadata:  metadata,
 	}
-	
+
 	telemetry.StampCorrelation(ctx, &ev)
 	b.sink.Emit(ev)
 }
 
 // EmitPromptContextMissing implements prompt.PromptTelemetry.
-func (b *PromptTelemetryBridge) EmitPromptContextMissing(ctx context.Context, e PromptContextMissingEvent) {
+func (b *PromptTelemetryBridge) EmitPromptContextMissing(ctx context.Context, e prompt.ContextMissingEvent) {
 	if b == nil || b.sink == nil {
 		return
 	}
 
 	metadata := map[string]any{
-		"prompt_id": e.PromptID,
-		"block_id":  e.BlockID,
-		"key":       e.Key,
-		"message":   e.Message,
+		metadataPromptID: e.PromptID,
+		metadataBlockID:  e.BlockID,
+		"key":            e.Key,
+		"message":        e.Message,
 	}
 
 	ev := telemetry.Event{
@@ -530,21 +539,22 @@ func (b *PromptTelemetryBridge) EmitPromptContextMissing(ctx context.Context, e 
 		Message:   "prompt context missing",
 		Metadata:  metadata,
 	}
-	
+
 	telemetry.StampCorrelation(ctx, &ev)
 	b.sink.Emit(ev)
 }
 
 // EmitPromptValidationIssue implements prompt.PromptTelemetry.
-func (b *PromptTelemetryBridge) EmitPromptValidationIssue(ctx context.Context, e PromptValidationIssueEvent) {
+func (b *PromptTelemetryBridge) EmitPromptValidationIssue(ctx context.Context, e prompt.ValidationIssueEvent) {
 	if b == nil || b.sink == nil {
 		return
 	}
 
 	metadata := map[string]any{
-		"issue_code":    e.Issue.Code,
-		"issue_message": e.Issue.Message,
-		"issue_severity": e.Issue.Severity,
+		metadataPromptID: e.Issue.PromptID,
+		metadataBlockID:  e.Issue.BlockID,
+		"issue_message":  e.Issue.Message,
+		"issue_severity": e.Issue.Severity.String(),
 	}
 
 	ev := telemetry.Event{
@@ -553,22 +563,22 @@ func (b *PromptTelemetryBridge) EmitPromptValidationIssue(ctx context.Context, e
 		Message:   "prompt validation issue",
 		Metadata:  metadata,
 	}
-	
+
 	telemetry.StampCorrelation(ctx, &ev)
 	b.sink.Emit(ev)
 }
 
 // EmitPromptProviderFailed implements prompt.PromptTelemetry.
-func (b *PromptTelemetryBridge) EmitPromptProviderFailed(ctx context.Context, e PromptProviderFailedEvent) {
+func (b *PromptTelemetryBridge) EmitPromptProviderFailed(ctx context.Context, e prompt.ProviderFailedEvent) {
 	if b == nil || b.sink == nil {
 		return
 	}
 
 	metadata := map[string]any{
-		"prompt_id":     e.PromptID,
-		"block_id":      e.BlockID,
-		"provider_name": e.ProviderName,
-		"error":         e.Error,
+		metadataPromptID: e.PromptID,
+		metadataBlockID:  e.BlockID,
+		"provider_name":  e.ProviderName,
+		"error":          e.Error,
 	}
 
 	ev := telemetry.Event{
@@ -577,50 +587,7 @@ func (b *PromptTelemetryBridge) EmitPromptProviderFailed(ctx context.Context, e 
 		Message:   "prompt provider failed",
 		Metadata:  metadata,
 	}
-	
+
 	telemetry.StampCorrelation(ctx, &ev)
 	b.sink.Emit(ev)
-}
-
-// Import types from execution/prompt package for the bridge
-type PromptResolvedEvent = struct {
-	ID             string
-	Paradigm       string
-	OutputLength   int
-	BlocksIncluded int
-	BlocksExcluded int
-	ProvidersUsed  []string
-	DurationMs     int64
-	CacheHit       bool
-}
-
-type PromptResolveFailedEvent = struct {
-	ID         string
-	Paradigm   string
-	Error      string
-	DurationMs int64
-}
-
-type PromptContextMissingEvent = struct {
-	PromptID string
-	BlockID  string
-	Key      string
-	Message  string
-}
-
-type PromptValidationIssueEvent = struct {
-	Issue ValidationIssue
-}
-
-type ValidationIssue = struct {
-	Code     string
-	Message  string
-	Severity string
-}
-
-type PromptProviderFailedEvent = struct {
-	PromptID     string
-	BlockID      string
-	ProviderName string
-	Error        string
 }

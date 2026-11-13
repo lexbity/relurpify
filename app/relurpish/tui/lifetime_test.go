@@ -46,3 +46,20 @@ func TestV2HostCleanupContinuesAfterResourcePanic(t *testing.T) {
 		t.Fatalf("resource failure skipped earlier owners: %v", order)
 	}
 }
+
+func TestV2HostReplacesSubscriptionsWithoutAccumulatingOwners(t *testing.T) {
+	_, cancel := context.WithCancel(context.Background())
+	lifetime := &hostLifetime{cancel: cancel}
+	var released atomic.Int64
+	for range 1000 {
+		lifetime.replace("execution", func() { released.Add(1) })
+	}
+	if released.Load() != 999 || len(lifetime.resources) != 1 || len(lifetime.callbacks) != 0 {
+		t.Fatal("replacing subscriptions leaked ownership")
+	}
+	lifetime.close()
+	lifetime.replace("execution", func() { released.Add(1) })
+	if released.Load() != 1001 {
+		t.Fatal("shutdown or late subscription release was lost")
+	}
+}

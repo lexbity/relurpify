@@ -19,9 +19,11 @@ func (m RootModel) settingsEntries() []settingsEntry {
 	if m.services.port != nil {
 		entries = append(entries, settingsEntry{label: "Managed services", command: "services", detail: "Review a scoped stop or restart and retain partial failures"})
 	}
+	if m.provider != nil || m.baseSurface != nil {
+		entries = append(entries, settingsEntry{label: "Provider and model", command: "model-provider", detail: "Separate local draft, saved preferences and active configuration"})
+	}
 	if m.baseSurface != nil {
 		entries = append(entries,
-			settingsEntry{label: "Provider and model", command: "model-provider", detail: "Provider configuration and probes"},
 			settingsEntry{label: "Sandbox and permissions", command: "permissions", detail: "Workspace, commands, tools and network"},
 			settingsEntry{label: "Security guard", command: "securityguard", detail: "Patterns and ingestion controls"})
 	}

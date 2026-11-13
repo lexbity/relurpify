@@ -7,7 +7,11 @@ type FocusAction int
 
 // keyEsc is the escape key name, shared by the focus router so the literal is
 // not duplicated across the package.
-const keyEsc = "esc"
+const (
+	keyEsc   = "esc"
+	keyEnter = "enter"
+	keyDown  = "down"
+)
 
 const (
 	FocusActionIgnore FocusAction = iota

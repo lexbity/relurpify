@@ -1,8 +1,9 @@
 package tui
 
 import (
-	runtimesvc "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
 	"time"
+
+	runtimesvc "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
 )
 
 // TabID identifies one of the main TUI tabs. String-based to support
@@ -20,6 +21,7 @@ const (
 	TabSettings      TabID = "settings"
 	TabConfiguration TabID = "configuration"
 	TabServices      TabID = "services"
+	TabActivity      TabID = "activity"
 )
 
 // Guest tab IDs — registered by the active surface on init.

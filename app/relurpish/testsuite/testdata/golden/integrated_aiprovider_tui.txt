@@ -6,12 +6,12 @@ relurpish · none / ai-provider
 │ Endpoint: http://mock-ollama                               ││ model: gemma4:12b                                       
 │                                                            ││ timeout: 30s                                            
 │ Models                                                     ││ native_tool_calling: true                               
-│ gemma4:12b                                                 │╰─────────────────────────────────────────────────────────
-│ llama3:latest                                              │                                                          
+│ (no models found)                                          │╰─────────────────────────────────────────────────────────
 ╰────────────────────────────────────────────────────────────╯                                                          
 
-loaded 2 models
-tab switch focus  arrows navigate  enter select  e edit  t test  s save
+Model list not probed for this draft; r explicitly queries it
+tab switch focus  arrows navigate  enter select  e edit  r models  t test  s save
+
 
 
 

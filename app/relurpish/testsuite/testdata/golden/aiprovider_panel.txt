@@ -2,7 +2,7 @@
 │ Models                                         ││ Configurator                                   │
 │ AI Provider                                    ││ provider: mock-ollama                          │
 │ Provider: mock-ollama                          ││ endpoint:                                      │
-│ Endpoint:                                      ││ model: gemma4:12b                              │
+│ Endpoint:                                      ││ model:                                         │
 │                                                ││ timeout:                                       │
 │ Models                                         ││ native_tool_calling: false                     │
 │ gemma4:12b                                     │╰────────────────────────────────────────────────╯
@@ -10,4 +10,4 @@
 ╰────────────────────────────────────────────────╯                                                  
 
 loaded 2 models
-tab switch focus  arrows navigate  enter select  e edit  t test  s save
+tab switch focus  arrows navigate  enter select  e edit  r models  t test  s save

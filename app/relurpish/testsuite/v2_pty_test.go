@@ -150,3 +150,34 @@ func TestV2PTYDemoCommandDraftRoundTrip(t *testing.T) {
 	write("!")
 	awaitV2Text(t, recording, "keep this request!")
 }
+
+func TestV2PTYActivityProviderAndDraft(t *testing.T) {
+	recording, write := launchV2Terminal(t, "--demo", "quiet", "--inference-provider", "deliberately-invalid")
+	awaitV2Text(t, recording, "DEMO")
+	write("retained request")
+	write("\x10activity calls\r")
+	awaitV2Text(t, recording, "Activity / calls")
+	write("\r")
+	awaitV2Text(t, recording, "DEMO: simulated telemetry fixture")
+	write("\x1b")
+	time.Sleep(100 * time.Millisecond) // Distinguish two Escape keys from a terminal chord.
+	write("\x1b")
+	time.Sleep(100 * time.Millisecond)
+	write("\x10model-provider\r")
+	awaitV2Text(t, recording, "Settings / Provider")
+	awaitV2Text(t, recording, "demo-small")
+	write("\x1b[B\x1b[B\r") // Select the model and explicitly enter its editor.
+	awaitV2Text(t, recording, "Edit Model")
+	write("\x01\x0bdemo-coder\r") // Emacs home, kill-to-end, replacement, stage.
+	awaitV2Text(t, recording, "demo-coder")
+	write("s")
+	awaitV2Text(t, recording, "Review save")
+	write("\r")
+	awaitV2Text(t, recording, "active scenario did not change")
+	write("a")
+	awaitV2Text(t, recording, "Review activate")
+	write("\r")
+	awaitV2Text(t, recording, "activated in scenario memory")
+	write("\x1b[17~!")
+	awaitV2Text(t, recording, "retained request!")
+}

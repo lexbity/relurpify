@@ -255,16 +255,14 @@ func (m *GenerationManager) RetireActive() error {
 	return nil
 }
 
-// closeGenerationResources closes all resources owned by a generation.
-// This is a no-op in this implementation as resources are managed elsewhere.
-// In a full implementation, this would close model backends, sandbox runners, etc.
+// closeGenerationResources releases generation-scoped resources. The
+// generation record itself owns only metadata; model backends, sandbox
+// runners, and managed services are owned by the workspace actor and are
+// closed through its shutdown path.
 func (m *GenerationManager) closeGenerationResources(gen *Generation) error {
-	// TODO(P05): Implement actual resource cleanup
-	// This includes:
-	// - Model backend connections
-	// - Sandbox runners
-	// - Managed services
-	// - Any other generation-scoped resources
+	if gen == nil {
+		return nil
+	}
 	return nil
 }
 

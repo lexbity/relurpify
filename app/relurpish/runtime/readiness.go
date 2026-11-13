@@ -194,18 +194,25 @@ func CheckWorkspaceReadiness(report *DoctorReport) WorkspaceReadiness {
 			"Model provider is degraded")
 	}
 
-	// Check audit/store (simplified for P05)
-	// In a full implementation, this would check AuditStoreHealthy from the report
-	if len(readiness.BlockingIssues) == 0 && !readiness.ConfigValid {
-		// This is a placeholder - actual audit store check would be here
+	// Check audit/store health from the Doctor report.
+	readiness.AuditReady = report.AuditStoreHealthy
+	if !report.AuditStoreHealthy {
+		readiness.BlockingIssues = append(readiness.BlockingIssues, BlockingIssue{
+			ID:       "audit_unavailable",
+			Category: "audit",
+			Message:  "Audit or store dependency is not healthy",
+			CheckID:  "audit_chain",
+			Severity: SeverityError,
+			Action:   "Repair the audit/store dependency and recheck Doctor",
+		})
 	}
-
 
 	// Update ready state
 	readiness.Ready = len(readiness.BlockingIssues) == 0 &&
 		readiness.SandboxReady &&
 		(report.ModelReady || report.ModelDegraded) &&
-		readiness.ConfigValid
+		readiness.ConfigValid &&
+		readiness.AuditReady
 
 	return readiness
 }

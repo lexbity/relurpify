@@ -337,7 +337,7 @@ func (t *MultiFileTransaction) Rollback() error {
 		for _, err := range errors {
 			msg.WriteString(fmt.Sprintf("\n  - %v", err))
 		}
-		return fmt.Errorf(msg.String())
+		return fmt.Errorf("%s", msg.String())
 	}
 
 	return nil

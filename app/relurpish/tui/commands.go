@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"context"
 	"fmt"
 	"sort"
 	"strconv"
@@ -123,6 +122,7 @@ func (r *CommandRegistry) All() []Command {
 }
 
 func registerUniversalCommands(r *CommandRegistry) {
+	r.Register(Command{Name: "activity", Description: "Inspect existing OTel pipeline observations", Usage: "/activity [all|calls|graph|knowledge|prompts|system]", Handler: rootHandleActivity})
 	r.Register(Command{Name: "config", Description: "Inspect effective configuration without mutating it", Usage: "/config", Handler: rootHandleConfiguration})
 	r.Register(Command{Name: "services", Description: "Inspect managed services and review lifecycle actions", Usage: "/services", Handler: rootHandleServices})
 	r.Register(Command{Name: "settings", Description: "Open compact settings navigation", Usage: "/settings", Handler: rootHandleSettings})
@@ -351,22 +351,39 @@ func rootHandleDoctor(m *RootModel, _ []string) (*RootModel, tea.Cmd) {
 }
 
 func rootHandleModel(m *RootModel, args []string) (*RootModel, tea.Cmd) {
+	if m.provider != nil {
+		if len(args) > 1 {
+			m.addSystemMessage("Usage: /model [model_name]")
+			return m, nil
+		}
+		m.setActiveTab(TabAIProvider)
+		m.setFocus(FocusRegionRegion1)
+		if len(args) == 0 {
+			return m, m.provider.open()
+		}
+		if m.provider.state.Revision == "" {
+			m.addSystemMessage("Open /model-provider before staging a model")
+			return m, m.provider.open()
+		}
+		if m.provider.working || m.provider.ownsEscape() {
+			m.addSystemMessage("Finish the provider operation or field edit before staging a model")
+			return m, nil
+		}
+		m.provider.selected = 2
+		m.provider.stage(args[0])
+		return m, nil
+	}
+
 	if len(args) == 0 {
 		current := ""
 		if m.sharedSess != nil {
 			current = m.sharedSess.Model
 		}
-		available := ""
-		if m.runtime != nil {
-			if models, err := m.runtime.InferenceModels(context.Background()); err == nil && len(models) > 0 {
-				available = fmt.Sprintf("\nAvailable: %s", strings.Join(models, ", "))
-			}
-		}
 		m.setActiveTab(TabAIProvider)
 		if m.baseSurface != nil {
 			m.baseSurface.OpenAIProvider()
 		}
-		m.addSystemMessage(fmt.Sprintf("Current model: %s%s", current, available))
+		m.addSystemMessage(fmt.Sprintf("Current model: %s. Use the provider panel to explicitly query available models.", current))
 		return m, nil
 	}
 	model := strings.TrimSpace(args[0])
@@ -392,6 +409,12 @@ func rootHandleModel(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 }
 
 func rootHandleModelProvider(m *RootModel, _ []string) (*RootModel, tea.Cmd) {
+	if m.provider != nil {
+		m.setActiveTab(TabAIProvider)
+		m.setFocus(FocusRegionRegion1)
+		return m, m.provider.open()
+	}
+
 	m.setActiveTab(TabAIProvider)
 	if m.baseSurface != nil {
 		m.baseSurface.OpenAIProvider()
@@ -419,60 +442,46 @@ func rootHandleKeybindings(m *RootModel, _ []string) (*RootModel, tea.Cmd) {
 	return m, nil
 }
 
+// Context commands select paths for the next request. Actual content is loaded
+// and authorized through ResolveContextFiles when the turn builds its metadata.
 func rootHandleAdd(m *RootModel, args []string) (*RootModel, tea.Cmd) {
-	if len(args) == 0 {
+	if len(args) != 1 {
 		m.addSystemMessage("Usage: /add <path>")
 		return m, nil
 	}
-	path := args[0]
-	if m.runtime != nil {
-		if err := m.runtime.AddFileToContext(path); err != nil {
-			m.addSystemMessage(fmt.Sprintf("Error adding file: %v", err))
-		} else {
-			m.addSystemMessage(fmt.Sprintf("Added to context: %s", path))
-			// Also add to shared context for immediate UI update
-			if m.sharedCtx != nil {
-				_ = m.sharedCtx.AddFile(path)
-			}
-			// Update chat sidebar if visible
-			if sidebar, ok := m.chat.(ChatSidebarController); ok {
-				_ = sidebar.AddFileToSidebar(path)
-			}
-		}
-	} else if m.chat != nil {
-		return m, m.chat.AddFile(path)
+	if m.sharedCtx == nil {
+		m.addSystemMessage("Context selection unavailable")
+		return m, nil
 	}
+	var err error
+	if sidebar, ok := m.chat.(ChatSidebarController); ok {
+		err = sidebar.AddFileToSidebar(args[0])
+	} else {
+		err = m.sharedCtx.AddFile(args[0])
+	}
+	if err != nil {
+		m.addSystemMessage(fmt.Sprintf("Context selection failed: %v", err))
+		return m, nil
+	}
+	m.addSystemMessage(fmt.Sprintf("Selected for future request context: %s (read authorization happens when used)", args[0]))
 	return m, nil
 }
 
 func rootHandleRemove(m *RootModel, args []string) (*RootModel, tea.Cmd) {
-	if len(args) == 0 {
+	if len(args) != 1 {
 		m.addSystemMessage("Usage: /remove <path>")
 		return m, nil
 	}
-	path := args[0]
-	if m.runtime != nil {
-		if err := m.runtime.DropFileFromContext(path); err != nil {
-			m.addSystemMessage(fmt.Sprintf("Error removing file: %v", err))
-		} else {
-			m.addSystemMessage(fmt.Sprintf("Removed from context: %s", path))
-			// Also remove from shared context for immediate UI update
-			if m.sharedCtx != nil {
-				m.sharedCtx.RemoveFile(path)
-			}
-			// Update chat sidebar if visible
-			if sidebar, ok := m.chat.(ChatSidebarController); ok {
-				sidebar.RemoveFileFromSidebar(path)
-			}
-		}
-	} else if m.sharedCtx != nil {
-		m.sharedCtx.RemoveFile(path)
-		m.addSystemMessage(fmt.Sprintf("Removed from context: %s", path))
-		// Update chat sidebar if visible
-		if sidebar, ok := m.chat.(ChatSidebarController); ok {
-			sidebar.RemoveFileFromSidebar(path)
-		}
+	if m.sharedCtx == nil {
+		m.addSystemMessage("Context selection unavailable")
+		return m, nil
 	}
+	if sidebar, ok := m.chat.(ChatSidebarController); ok {
+		sidebar.RemoveFileFromSidebar(args[0])
+	} else {
+		m.sharedCtx.RemoveFile(args[0])
+	}
+	m.addSystemMessage(fmt.Sprintf("Removed from future request context: %s", args[0]))
 	return m, nil
 }
 
@@ -1006,6 +1015,21 @@ func rootHandleBackend(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 }
 
 func rootHandleSaveModel(m *RootModel, args []string) (*RootModel, tea.Cmd) {
+	if m.provider != nil {
+		m.setActiveTab(TabAIProvider)
+		m.setFocus(FocusRegionRegion1)
+		if m.provider.editing {
+			m.addSystemMessage("Apply or cancel the current provider field before reviewing save")
+			return m, nil
+		}
+		if err := ValidateProviderDraft(m.provider.draft); err != nil {
+			m.addSystemMessage(err.Error())
+			return m, nil
+		}
+		m.provider.review = providerSave
+		return m, nil
+	}
+
 	_ = args
 	m.setActiveTab(TabAIProvider)
 	m.addSystemMessage("Use /model <name> to set model")

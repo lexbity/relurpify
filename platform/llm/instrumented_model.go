@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"codeburg.org/lexbit/relurpify/model"
@@ -56,13 +57,24 @@ func (m *InstrumentedModel) GenerateStream(ctx context.Context, prompt string, o
 		"prompt_preview": clip(prompt, 1024),
 	}, m.Debug, map[string]any{"prompt": clip(prompt, 8192)})
 	ch, err := m.Inner.GenerateStream(ctx, prompt, options)
-	// For stream, we only emit that a stream started; callers can still see tool calls/results via other telemetry.
 	if err != nil {
 		m.emitResponse(ctx, "generate_stream", nil, err)
-	} else {
-		m.emitResponse(ctx, "generate_stream", &model.LLMResponse{FinishReason: "stream"}, nil)
+		return nil, err
 	}
-	return ch, err
+	out := make(chan string, 100)
+	go func() {
+		var drops atomic.Int64
+		// Stream establishment is not a response. Use the canonical pump and emit
+		// a terminal observation only when the observed stream closes/cancels.
+		// The token-only transport cannot prove a protocol finish or report usage.
+		pumpStream(ctx, ch, out, &drops)
+		if ctx.Err() != nil {
+			m.emitResponse(ctx, "generate_stream", nil, ctx.Err())
+		} else {
+			m.emitResponse(ctx, "generate_stream", &model.LLMResponse{FinishReason: "stream_closed"}, nil)
+		}
+	}()
+	return out, nil
 }
 
 // Chat implements model.LanguageModel.
@@ -102,7 +114,7 @@ func (m *InstrumentedModel) ToolRepairStrategy() string {
 			return profiled.ToolRepairStrategy()
 		}
 	}
-	return "heuristic-only"
+	return model.RepairStrategyHeuristicOnly
 }
 
 // MaxToolsPerCall implements model.ProfiledModel when the wrapped model

@@ -5,27 +5,28 @@ import (
 	"fmt"
 	"strings"
 
+	"codeburg.org/lexbit/relurpify/app/relurpish/ports"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-// recipeWorkspaceKey is the context key for storing the RecipeWorkspace.
+// recipeWorkspaceKey is the context key for storing the ports.RecipeWorkspace.
 type recipeWorkspaceKey struct{}
 
-// WithRecipeWorkspace adds a RecipeWorkspace to the context.
-func WithRecipeWorkspace(ctx context.Context, workspace RecipeWorkspace) context.Context {
+// WithRecipeWorkspace adds a ports.RecipeWorkspace to the context.
+func WithRecipeWorkspace(ctx context.Context, workspace ports.RecipeWorkspace) context.Context {
 	return context.WithValue(ctx, recipeWorkspaceKey{}, workspace)
 }
 
-// GetRecipeWorkspace retrieves the RecipeWorkspace from the context.
-func GetRecipeWorkspace(ctx context.Context) RecipeWorkspace {
+// GetRecipeWorkspace retrieves the ports.RecipeWorkspace from the context.
+func GetRecipeWorkspace(ctx context.Context) ports.RecipeWorkspace {
 	if v := ctx.Value(recipeWorkspaceKey{}); v != nil {
-		return v.(RecipeWorkspace)
+		return v.(ports.RecipeWorkspace)
 	}
 	return nil
 }
 
 // RegisterRecipeCommands registers all recipe-related commands with the registry.
-// These commands use the RecipeWorkspace interface for lossless editing and file execution.
+// These commands use the ports.RecipeWorkspace interface for lossless editing and file execution.
 func RegisterRecipeCommands(r *CommandRegistry) {
 	// /recipe list - List all recipes
 	r.Register(Command{
@@ -154,7 +155,7 @@ func handleRecipeOpen(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 
 	path := args[0]
 	ctx := context.Background()
-	
+
 	file, err := m.workshop.port.OpenRecipe(ctx, path)
 	if err != nil {
 		m.addSystemMessage(fmt.Sprintf("Error opening recipe: %v", err))
@@ -166,7 +167,7 @@ func handleRecipeOpen(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 	m.workshop.mode = workshopSource
 	m.workshop.file = file
 	m.workshop.source = file.Source
-	m.workshop.files = []RecipeFile{file}
+	m.workshop.files = []ports.RecipeFile{file}
 
 	m.addSystemMessage(fmt.Sprintf("Opened recipe: %s", file.Path))
 	return m, nil
@@ -189,7 +190,7 @@ func handleRecipeNew(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 	}
 
 	// Create a new empty recipe
-	newRecipe := RecipeFile{
+	newRecipe := ports.RecipeFile{
 		ID:       path,
 		Path:     path,
 		Revision: "",
@@ -200,7 +201,7 @@ func handleRecipeNew(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 	m.workshop.mode = workshopSource
 	m.workshop.file = newRecipe
 	m.workshop.source = newRecipe.Source
-	m.workshop.files = []RecipeFile{newRecipe}
+	m.workshop.files = []ports.RecipeFile{newRecipe}
 
 	m.addSystemMessage(fmt.Sprintf("New recipe: %s", path))
 	return m, nil
@@ -218,7 +219,7 @@ func handleRecipeSave(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 	}
 
 	// Create a new file with the updated source
-	newFile := RecipeFile{
+	newFile := ports.RecipeFile{
 		ID:       m.workshop.file.ID,
 		Path:     m.workshop.file.Path,
 		Revision: m.workshop.file.Revision,
@@ -306,11 +307,11 @@ func handleRecipeRun(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 	}
 
 	ctx := context.Background()
-	
+
 	// If we have unsaved changes, save them first
 	if m.workshop.Dirty() {
 		// Save the current source
-		newFile := RecipeFile{
+		newFile := ports.RecipeFile{
 			ID:       m.workshop.file.ID,
 			Path:     m.workshop.file.Path,
 			Revision: m.workshop.file.Revision,
@@ -370,10 +371,10 @@ func handleRecipeUndo(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 		// Pop the last undo state
 		lastUndo := m.workshop.undo[len(m.workshop.undo)-1]
 		m.workshop.undo = m.workshop.undo[:len(m.workshop.undo)-1]
-		
+
 		// Push to redo stack
 		m.workshop.redo = append(m.workshop.redo, m.workshop.source)
-		
+
 		// Restore the source
 		m.workshop.source = lastUndo
 		m.workshop.field.SetValue(lastUndo)
@@ -381,7 +382,7 @@ func handleRecipeUndo(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 	} else {
 		m.addSystemMessage("Nothing to undo")
 	}
-	
+
 	return m, nil
 }
 
@@ -401,10 +402,10 @@ func handleRecipeRedo(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 		// Pop the last redo state
 		lastRedo := m.workshop.redo[len(m.workshop.redo)-1]
 		m.workshop.redo = m.workshop.redo[:len(m.workshop.redo)-1]
-		
+
 		// Push to undo stack
 		m.workshop.undo = append(m.workshop.undo, m.workshop.source)
-		
+
 		// Restore the source
 		m.workshop.source = lastRedo
 		m.workshop.field.SetValue(lastRedo)
@@ -412,7 +413,7 @@ func handleRecipeRedo(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 	} else {
 		m.addSystemMessage("Nothing to redo")
 	}
-	
+
 	return m, nil
 }
 

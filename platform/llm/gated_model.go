@@ -3,6 +3,7 @@ package llm
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"codeburg.org/lexbit/relurpify/model"
 )
@@ -70,14 +71,22 @@ func (m *gatedModel) GenerateStream(ctx context.Context, prompt string, options 
 
 	out := make(chan string, 100)
 	go func() {
-		defer func() {
-			ticket.Released()
-			close(out)
-		}()
-		for token := range underlying {
+		defer close(out)
+		for {
 			select {
-			case out <- token:
+			case token, ok := <-underlying:
+				if !ok {
+					ticket.Released()
+					return
+				}
+				select {
+				case out <- token:
+				case <-ticket.Context.Done():
+					reclaimStream(underlying, ticket, m.gate.CancellationGracePeriod())
+					return
+				}
 			case <-ticket.Context.Done():
+				reclaimStream(underlying, ticket, m.gate.CancellationGracePeriod())
 				return
 			}
 		}
@@ -106,3 +115,55 @@ func (m *gatedModel) ChatWithTools(ctx context.Context, messages []model.Message
 	resp, err := m.LanguageModel.ChatWithTools(ticket.Context, messages, tools, options) //nolint:contextcheck // ticket.Context derives from ctx and carries the lane marker
 	return resp, callError(ctx, ticket, err)
 }
+
+// reclaimStream waits for producer closure before acknowledging physical
+// reclamation. If closure is unaccounted for, poison keeps later transports out.
+func reclaimStream(source <-chan string, ticket *model.Ticket, grace time.Duration) {
+	timer := time.NewTimer(grace)
+	defer timer.Stop()
+	for {
+		select {
+		case _, ok := <-source:
+			if !ok {
+				ticket.Released()
+				return
+			}
+		case <-timer.C:
+			ticket.Poison("stream producer did not close after cancellation")
+			return
+		}
+	}
+}
+
+// SetProfile preserves the inner model's profile contract through the lane.
+func (m *gatedModel) SetProfile(profile *model.ModelProfile) {
+	if setter, ok := m.LanguageModel.(interface{ SetProfile(*model.ModelProfile) }); ok {
+		setter.SetProfile(profile)
+	}
+}
+
+// ToolRepairStrategy reports the inner model's effective repair policy.
+func (m *gatedModel) ToolRepairStrategy() string {
+	if profiled, ok := m.LanguageModel.(model.ProfiledModel); ok {
+		return profiled.ToolRepairStrategy()
+	}
+	return model.RepairStrategyHeuristicOnly
+}
+
+// MaxToolsPerCall reports the inner profile's tool limit.
+func (m *gatedModel) MaxToolsPerCall() int {
+	if profiled, ok := m.LanguageModel.(model.ProfiledModel); ok {
+		return profiled.MaxToolsPerCall()
+	}
+	return 0
+}
+
+// UsesNativeToolCalling preserves native calling mode through the lane.
+func (m *gatedModel) UsesNativeToolCalling() bool {
+	if profiled, ok := m.LanguageModel.(model.ProfiledModel); ok {
+		return profiled.UsesNativeToolCalling()
+	}
+	return false
+}
+
+var _ model.ProfiledModel = (*gatedModel)(nil)
