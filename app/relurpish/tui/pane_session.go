@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"context"
 	"fmt"
 	"os/exec"
 	"path/filepath"
@@ -53,12 +52,10 @@ type SessionPane struct {
 	workflows   []WorkflowInfo
 	providers   []LiveProviderInfo
 	approvals   []ApprovalInfo
-	services    []ServiceInfo
 	liveSection liveSection
 	workflowSel int
 	providerSel int
 	approvalSel int
-	serviceSel  int
 	workflow    *WorkflowDetails
 	provider    *LiveProviderDetail
 	approval    *ApprovalDetail
@@ -117,11 +114,6 @@ func (p *SessionPane) SetLiveSnapshot(d DiagnosticsInfo, workflows []WorkflowInf
 	p.providers = append([]LiveProviderInfo(nil), providers...)
 	p.approvals = append([]ApprovalInfo(nil), approvals...)
 
-	// Load services
-	if p.runtime != nil {
-		p.services = p.runtime.ListServices()
-	}
-
 	if p.workflowSel >= len(p.workflows) {
 		p.workflowSel = max(0, len(p.workflows)-1)
 	}
@@ -130,9 +122,6 @@ func (p *SessionPane) SetLiveSnapshot(d DiagnosticsInfo, workflows []WorkflowInf
 	}
 	if p.approvalSel >= len(p.approvals) {
 		p.approvalSel = max(0, len(p.approvals)-1)
-	}
-	if p.serviceSel >= len(p.services) {
-		p.serviceSel = max(0, len(p.services)-1)
 	}
 	p.refreshLiveDetails()
 }
@@ -160,13 +149,6 @@ func (p *SessionPane) SyncContext(ctx *AgentContext) {
 // Update handles navigation and async messages.
 func (p *SessionPane) Update(msg tea.Msg) (*SessionPane, tea.Cmd) {
 	switch msg := msg.(type) {
-	case ServicesUpdatedMsg:
-		p.services = append([]ServiceInfo(nil), msg.Services...)
-		if p.serviceSel >= len(p.services) {
-			p.serviceSel = max(0, len(p.services)-1)
-		}
-		return p, nil
-
 	case fileIndexMsg:
 		p.loading = false
 		if msg.err != nil {
@@ -206,33 +188,6 @@ func (p *SessionPane) Update(msg tea.Msg) (*SessionPane, tea.Cmd) {
 				p.moveLiveSelection(-1)
 			case "down", "j":
 				p.moveLiveSelection(1)
-			}
-			return p, nil
-		}
-		if p.activeSubTab == SubTabSessionServices {
-			switch msg.String() {
-			case "up", "k":
-				if p.serviceSel > 0 {
-					p.serviceSel--
-				}
-			case "down", "j":
-				if p.serviceSel < len(p.services)-1 {
-					p.serviceSel++
-				}
-			case "s":
-				if p.runtime != nil && p.serviceSel >= 0 && p.serviceSel < len(p.services) {
-					serviceID := p.services[p.serviceSel].ID
-					_ = p.runtime.StopService(serviceID)
-				}
-			case "r":
-				if p.runtime != nil && p.serviceSel >= 0 && p.serviceSel < len(p.services) {
-					serviceID := p.services[p.serviceSel].ID
-					_ = p.runtime.RestartService(context.Background(), serviceID)
-				}
-			case "R":
-				if p.runtime != nil {
-					_ = p.runtime.RestartAllServices(context.Background())
-				}
 			}
 			return p, nil
 		}
@@ -363,8 +318,6 @@ func (p *SessionPane) View() string {
 			return p.viewChanges()
 		}
 		return p.viewFiles()
-	case SubTabSessionServices:
-		return p.viewServices()
 	case SubTabSessionSettings:
 		return p.viewSessionSettings()
 	default:
@@ -966,67 +919,6 @@ func (p *SessionPane) viewSessionSettings() string {
 
 	b.WriteString("\n" + p.th.Dim().Render("full policy config → config tab"))
 	return b.String()
-}
-
-func (p *SessionPane) viewServices() string {
-	var b strings.Builder
-	b.WriteString(p.th.Subhead().Render("ayenitd services") + "\n\n")
-
-	if len(p.services) == 0 {
-		b.WriteString(p.th.Dim().Render("No services registered.") + "\n")
-	} else {
-		for i, svc := range p.services {
-			var statusBadge string
-			switch svc.Status {
-			case ServiceStatusRunning:
-				statusBadge = p.th.Success().Render("[running]")
-			case ServiceStatusStopped:
-				statusBadge = p.th.Dim().Render("[stopped]")
-			case ServiceStatusError:
-				statusBadge = p.th.Error().Render("[error]")
-			default:
-				statusBadge = p.th.Dim().Render("[unknown]")
-			}
-			line := fmt.Sprintf("%-24s %s", svc.ID, statusBadge)
-			if i == p.serviceSel {
-				line = p.th.Active().Render(line)
-			} else {
-				line = p.th.Body().Render(line)
-			}
-			b.WriteString(line + "\n")
-			if i == p.serviceSel {
-				if detail := serviceSummaryLines(p.th, svc); len(detail) > 0 {
-					for _, line := range detail {
-						b.WriteString(p.th.Dim().Render("  ") + line + "\n")
-					}
-					b.WriteString("\n")
-				}
-			}
-		}
-	}
-
-	b.WriteString("\n" + p.th.Dim().Render("[s] stop  [r] restart  [R] restart-all  ↑↓ navigate"))
-	return b.String()
-}
-
-func serviceSummaryLines(th *theme.Theme, svc ServiceInfo) []string {
-	if strings.TrimSpace(svc.Source) == "" && strings.TrimSpace(svc.Owner) == "" && len(svc.Notes) == 0 {
-		return nil
-	}
-	lines := make([]string, 0, 3+len(svc.Notes))
-	if strings.TrimSpace(svc.Source) != "" {
-		lines = append(lines, th.Dim().Render("source")+"  "+th.Body().Render(svc.Source))
-	}
-	if strings.TrimSpace(svc.Owner) != "" {
-		lines = append(lines, th.Dim().Render("owner")+"  "+th.Body().Render(svc.Owner))
-	}
-	if len(svc.Notes) > 0 {
-		lines = append(lines, th.Dim().Render("notes"))
-		for _, note := range svc.Notes {
-			lines = append(lines, "    "+th.Body().Render(note))
-		}
-	}
-	return lines
 }
 
 func changeStatusDisplay(th *theme.Theme, s ChangeStatus) (string, func(string) string) {

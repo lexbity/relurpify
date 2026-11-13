@@ -6,6 +6,7 @@ import (
 	"context"
 	"flag"
 	"io"
+	"os"
 	"os/exec"
 	"strings"
 	"sync"
@@ -38,18 +39,25 @@ func (r *terminalRecording) contains(value string) bool {
 func (r *terminalRecording) tail() string {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	text:=r.text.String()
-	if len(text)>8192 { text=text[len(text)-8192:] }
+	text := r.text.String()
+	if len(text) > 8192 {
+		text = text[len(text)-8192:]
+	}
 	return text
 }
 
-func launchV2Terminal(t *testing.T) (*terminalRecording, func(string)) {
+func launchV2Terminal(t *testing.T, arguments ...string) (*terminalRecording, func(string)) {
 	t.Helper()
 	if *v2Binary == "" {
 		t.Fatal("-v2-binary is required; build the real executable before running this suite")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	cmd := exec.CommandContext(ctx, *v2Binary, "chat", "--offline", "--workspace", t.TempDir())
+	workspace := t.TempDir()
+	if len(arguments) == 0 {
+		arguments = []string{"chat", "--offline"}
+	}
+	arguments = append(arguments, "--workspace", workspace)
+	cmd := exec.CommandContext(ctx, *v2Binary, arguments...)
 	terminal, err := pty.StartWithSize(cmd, &pty.Winsize{Rows: 24, Cols: 80})
 	if err != nil {
 		cancel()
@@ -75,6 +83,10 @@ func launchV2Terminal(t *testing.T) (*terminalRecording, func(string)) {
 		cancel()
 		_ = terminal.Close()
 		<-drained
+		entries, err := os.ReadDir(workspace)
+		if err != nil || len(entries) != 0 {
+			t.Errorf("read-only first launch changed workspace: entries=%v error=%v", entries, err)
+		}
 	})
 	write := func(text string) {
 		t.Helper()
@@ -94,7 +106,7 @@ func awaitV2Text(t *testing.T, recording *terminalRecording, text string) {
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	t.Fatalf("actual terminal did not show %q; last output: %q", text,recording.tail())
+	t.Fatalf("actual terminal did not show %q; last output: %q", text, recording.tail())
 }
 
 func TestV2DoctorWithoutRuntime(t *testing.T) {
@@ -124,4 +136,17 @@ func TestV2PTYFocusAndBounds(t *testing.T) {
 	// The renderer's own cell bounds are exhaustively checked by the model suite;
 	// here the real 80x24 PTY also has to retain its bottom-row command bar.
 	awaitV2Text(t, recording, "\x1b[24;")
+}
+
+func TestV2PTYDemoCommandDraftRoundTrip(t *testing.T) {
+	recording, write := launchV2Terminal(t, "--demo", "quiet", "--inference-provider", "deliberately-invalid")
+	awaitV2Text(t, recording, "DEMO")
+	write("keep this request")
+	awaitV2Text(t, recording, "keep this request")
+	write("\x10") // Ctrl+P borrows the bar for a command.
+	write("settings\r")
+	awaitV2Text(t, recording, "Settings")
+	write("\x1b[17~") // F6 returns to the preserved request draft.
+	write("!")
+	awaitV2Text(t, recording, "keep this request!")
 }

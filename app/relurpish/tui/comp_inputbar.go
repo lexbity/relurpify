@@ -1,8 +1,9 @@
 package tui
 
 import (
-	"github.com/charmbracelet/bubbles/textarea"
 	"strings"
+
+	"github.com/charmbracelet/bubbles/textarea"
 
 	"github.com/charmbracelet/x/ansi"
 
@@ -39,7 +40,7 @@ type commandItem struct {
 	Score       int
 }
 
-// InputBar wraps textinput with prefix-sensitive completion and file picker support.
+// InputBar owns multiline request editing and contextual slash completion.
 type InputBar struct {
 	input     textarea.Model
 	history   InputHistory
@@ -51,7 +52,7 @@ type InputBar struct {
 	width     int
 	focused   bool
 
-	// searchMode is the explicit Ctrl+F mode. Typed `?` is still parsed from the buffer.
+	// searchMode is entered explicitly with Ctrl+F; typed '?' remains request text.
 	searchMode bool
 
 	// File picker state.
@@ -63,10 +64,11 @@ type InputBar struct {
 	runtime      RuntimeAdapter
 
 	// Context-aware command registry.
-	cmdReg *CommandRegistry
-	ctxTab TabID
-	ctxSub SubTabID
-	gated  bool
+	cmdReg       *CommandRegistry
+	ctxTab       TabID
+	ctxSub       SubTabID
+	gated        bool
+	savedRequest *string
 	// Theme is the active semantic style source.
 	th *theme.Theme
 }
@@ -80,7 +82,7 @@ func NewInputBar() *InputBar {
 	ti.Prompt = ""
 	setInputHint(&ti, "Request to Euclo · / commands")
 	ti.Focus()
-	return &InputBar{input: ti, focused: true, th: theme.Default()}
+	return &InputBar{input: ti, focused: true, th: theme.Default(), cmdReg: newHostCommandRegistry()}
 }
 
 // SetWorkspace sets the workspace path for file picker globbing.
@@ -104,8 +106,7 @@ func (b *InputBar) SetContext(tab TabID, sub SubTabID) {
 	b.ctxSub = sub
 }
 
-// SetGated marks whether the input bar should block prompt submissions (>).
-// Slash commands, shell commands, and search remain active.
+// SetGated marks request availability; commands remain usable during setup.
 func (b *InputBar) SetGated(v bool) {
 	b.gated = v
 }
@@ -185,8 +186,34 @@ func (b *InputBar) promptLabel(_ TabID, draft inputDraft) string { return draft.
 // submission cannot erase text typed while its message was pending.
 func (b *InputBar) Accept(value string) {
 	if b.input.Value() == value {
-		b.input.SetValue("")
+		if b.savedRequest != nil {
+			b.input.SetValue(*b.savedRequest)
+			b.savedRequest = nil
+		} else {
+			b.input.SetValue("")
+		}
+		b.updatePalette(parseInputDraft(b.input.Value(), b.ctxTab, false))
 	}
+}
+
+// OpenCommands borrows the same bar for a command and retains the exact Euclo
+// draft. Acceptance or Escape restores it; there is no second request composer.
+func (b *InputBar) OpenCommands() {
+	if b.savedRequest == nil && !strings.HasPrefix(strings.TrimSpace(b.input.Value()), "/") {
+		draft := b.input.Value()
+		b.savedRequest = &draft
+		b.input.SetValue("/")
+	}
+	b.updatePalette(parseInputDraft(b.input.Value(), b.ctxTab, false))
+}
+func (b *InputBar) CancelCommands() bool {
+	if b.savedRequest == nil {
+		return false
+	}
+	b.input.SetValue(*b.savedRequest)
+	b.savedRequest = nil
+	b.updatePalette(parseInputDraft(b.input.Value(), b.ctxTab, false))
+	return true
 }
 
 func (b *InputBar) updatePalette(draft inputDraft) {
@@ -299,9 +326,6 @@ func (b *InputBar) Update(msg tea.Msg, activeTab TabID) (*InputBar, tea.Cmd) {
 		}
 
 		switch {
-		case keyMatchesBinding(GlobalKeys.Quit, msg.String()), keyMatchesBinding(GlobalKeys.Help, msg.String()):
-			return b, func() tea.Msg { return GlobalKeyMsg{Key: msg.String()} }
-
 		case msg.String() == "alt+enter":
 			b.input.InsertString("\n")
 			return b, nil
@@ -332,6 +356,11 @@ func (b *InputBar) Update(msg tea.Msg, activeTab TabID) (*InputBar, tea.Cmd) {
 			if ok {
 				b.history.Push(raw)
 				return b, func() tea.Msg { return CommandInvokedMsg{Draft: raw, Name: name, Args: args, Prefix: prefix} }
+			}
+			if strings.HasPrefix(strings.TrimSpace(raw), "/") {
+				return b, func() tea.Msg {
+					return InputRejectedMsg{Reason: "Invalid command syntax; use JSON-quoted arguments and /help"}
+				}
 			}
 			draft := parseInputDraft(raw, activeTab, b.searchMode)
 			b.history.Push(raw)
@@ -484,23 +513,6 @@ func (b *InputBar) renderPicker() string {
 		lines = append(lines, label)
 	}
 	return b.th.Panel().Width(b.width).Render(strings.Join(lines, "\n"))
-}
-
-func sanitizeSubmittedValue(raw, prefix string) string {
-	if prefix == "" {
-		return raw
-	}
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return ""
-	}
-	if raw == prefix {
-		return ""
-	}
-	if raw[0] == prefix[0] && len(raw) > 1 {
-		return strings.TrimSpace(raw[1:])
-	}
-	return raw
 }
 
 // SetTheme sets the active semantic style source.

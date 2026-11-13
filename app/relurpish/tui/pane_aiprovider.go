@@ -184,6 +184,8 @@ func (p *AIProviderPane) Update(msg tea.Msg) (*AIProviderPane, tea.Cmd) {
 	return p, nil
 }
 
+func (p *AIProviderPane) OwnsEscape() bool { return p.editing }
+
 func (p *AIProviderPane) View() string {
 	left := p.renderModelList()
 	right := p.renderConfigPanel()

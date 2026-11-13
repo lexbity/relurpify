@@ -98,6 +98,22 @@ func (r *CommandRegistry) Lookup(name string) (Command, bool) {
 	return Command{}, false
 }
 
+// retain limits an explicitly composed session to its delivered capabilities.
+// It reuses the same handlers and catalog metadata as a live session.
+func (r *CommandRegistry) retain(names ...string) {
+	allowed := make(map[string]bool, len(names))
+	for _, name := range names {
+		allowed[name] = true
+	}
+	commands := r.cmds[:0]
+	for _, command := range r.cmds {
+		if allowed[command.Name] {
+			commands = append(commands, command)
+		}
+	}
+	r.cmds = commands
+}
+
 // All returns all registered commands sorted by name.
 func (r *CommandRegistry) All() []Command {
 	out := make([]Command, len(r.cmds))
@@ -106,9 +122,13 @@ func (r *CommandRegistry) All() []Command {
 	return out
 }
 
-var rootCommandRegistry *CommandRegistry //nolint:gochecknoglobals // process-wide command registry, populated once at startup
-
 func registerUniversalCommands(r *CommandRegistry) {
+	r.Register(Command{Name: "config", Description: "Inspect effective configuration without mutating it", Usage: "/config", Handler: rootHandleConfiguration})
+	r.Register(Command{Name: "services", Description: "Inspect managed services and review lifecycle actions", Usage: "/services", Handler: rootHandleServices})
+	r.Register(Command{Name: "settings", Description: "Open compact settings navigation", Usage: "/settings", Handler: rootHandleSettings})
+	r.Register(Command{Name: "run", Description: "Open the observed recipe circuit", Usage: "/run", Handler: rootHandleRun})
+	r.Register(Command{Name: "inspect", Description: "Inspect an observed recipe step", Usage: "/inspect [step-id]", Handler: rootHandleInspect, TabFilter: []TabID{TabRun}})
+	r.Register(Command{Name: "ask", Description: "Submit literal request text, including a leading slash", Usage: "/ask --text <JSON-string>", Handler: rootHandleLiteralRequest})
 	r.Register(Command{Name: "session", Description: "Open sessions", Usage: "/session", Handler: func(m *RootModel, _ []string) (*RootModel, tea.Cmd) { m.setActiveTab(TabWelcome); return m, nil }})
 	r.Register(Command{Name: "attention", Description: "Deliberately focus the pending decision", Usage: "/attention", Handler: func(m *RootModel, _ []string) (*RootModel, tea.Cmd) { m.decisionFocused = true; return m, nil }})
 	r.Register(Command{Name: "chat", Description: "Return to the conversation", Usage: "/chat", Handler: func(m *RootModel, _ []string) (*RootModel, tea.Cmd) {
@@ -140,7 +160,7 @@ func registerUniversalCommands(r *CommandRegistry) {
 		{Name: "resume", Description: "Resume architect execution from a workflow", Usage: "/resume <workflow-id> | /resume latest", Handler: rootHandleResume},
 		{Name: "hitl", Description: "Show pending HITL approvals", Usage: "/hitl", Handler: rootHandleHITL},
 		{Name: "queue", Description: "Queue a task for sequential execution", Usage: "/queue <instruction>", Handler: rootHandleQueueTask},
-		{Name: "service", Description: "Service management commands", Usage: "/service <stop|restart|restart-all> <id>", Handler: rootHandleService, TabFilter: []TabID{TabAIProvider}},
+		{Name: "service", Description: "Review a managed-service operation", Usage: "/service <stop|restart|restart-all> [id]", Handler: rootHandleService},
 	} {
 		r.Register(cmd)
 	}
@@ -182,14 +202,10 @@ func RegisterEucloCommands(reg *CommandRegistry) {
 	}
 }
 
-func registerPlannerCommands(_ *CommandRegistry) {
-	// Planner-specific commands to be added here as they are implemented.
-}
-
-func init() {
-	rootCommandRegistry = NewCommandRegistry()
-	registerUniversalCommands(rootCommandRegistry)
-	registerPlannerCommands(rootCommandRegistry)
+func newHostCommandRegistry() *CommandRegistry {
+	registry := NewCommandRegistry()
+	registerUniversalCommands(registry)
+	return registry
 }
 
 // executeCommand dispatches a command by name.
@@ -199,36 +215,37 @@ func executeCommand(m *RootModel, name string, args []string) (*RootModel, tea.C
 	}
 	reg := m.cmdReg
 	if reg == nil {
-		reg = rootCommandRegistry
+		m.addSystemMessage("Command catalog unavailable")
+		return m, nil
 	}
 	cmd, ok := reg.Lookup(name)
 	if !ok {
 		m.addSystemMessage(fmt.Sprintf("Unknown command: /%s. Try /help.", name))
 		return m, nil
 	}
+	if !reg.eligible(cmd, m.activeTab, m.tabs.ActiveSubTab()) {
+		m.addSystemMessage("Command /" + name + " is unavailable in this canvas. /help shows its commands.")
+		return m, nil
+	}
 	return cmd.Handler(m, args)
-}
-
-// listCommandsSorted returns all commands sorted alphabetically (used by InputBar palette).
-func listCommandsSorted() []Command {
-	return rootCommandRegistry.All()
 }
 
 // --- handlers ---
 
 func rootHandleHelp(m *RootModel, args []string) (*RootModel, tea.Cmd) {
-	if len(args) > 0 {
-		if cmd, ok := rootCommandRegistry.Lookup(args[0]); ok {
-			m.addSystemMessage(fmt.Sprintf("%s - %s\nUsage: %s", cmd.Name, cmd.Description, cmd.Usage))
+	if len(args) > 1 {
+		m.addSystemMessage("Usage: /help [command]")
+		return m, nil
+	}
+	m.helpCommand = ""
+	if len(args) == 1 {
+		if _, ok := m.cmdReg.Lookup(args[0]); !ok {
+			m.addSystemMessage("Unknown command: /" + args[0])
 			return m, nil
 		}
+		m.helpCommand = args[0]
 	}
-	var b strings.Builder
-	_, _ = b.WriteString("Available commands:\n\n")
-	for _, cmd := range rootCommandRegistry.All() {
-		_, _ = fmt.Fprintf(&b, "  %s - %s\n", cmd.Usage, cmd.Description)
-	}
-	m.addSystemMessage(b.String())
+	m.showHelp, m.helpOffset = true, 0
 	return m, nil
 }
 
@@ -329,7 +346,7 @@ func rootHandleDoctor(m *RootModel, _ []string) (*RootModel, tea.Cmd) {
 		}
 	}
 	m.addSystemMessage(fmt.Sprintf("Doctor: workspace=%s provider=%s model=%s", workspace, provider, model))
-	return m, nil
+	return m, m.startupDoctorReportCmd()
 }
 
 func rootHandleModel(m *RootModel, args []string) (*RootModel, tea.Cmd) {
@@ -705,6 +722,9 @@ func rootHandleParallel(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 }
 
 func rootHandleStop(m *RootModel, _ []string) (*RootModel, tea.Cmd) {
+	if m.conversation != nil {
+		return m, m.cancelFrontendCmd()
+	}
 	if m.chat == nil {
 		return m, nil
 	}
@@ -924,65 +944,34 @@ func savePolicyCmd(rt RuntimeAdapter, action string) tea.Cmd {
 	}
 }
 
-// rootHandleService handles service management commands
+// rootHandleService opens the same reviewed service flow as the keyboard UI.
 func rootHandleService(m *RootModel, args []string) (*RootModel, tea.Cmd) {
-	if len(args) < 1 {
-		m.addSystemMessage("Usage: /service <stop|restart|restart-all> <id>")
+	if len(args) < 1 || len(args) > 2 {
+		m.addSystemMessage("Usage: /service <stop|restart> <id> | /service restart-all")
 		return m, nil
 	}
-
-	action := strings.ToLower(args[0])
-	if m.runtime == nil {
-		m.addSystemMessage("Runtime unavailable")
-		return m, nil
-	}
-	m.setActiveTab(TabAIProvider)
-
-	switch action {
-	case "stop":
-		if len(args) < 2 {
-			m.addSystemMessage("Usage: /service stop <service-id>")
+	operation := ServiceOperation{Action: args[0]}
+	switch operation.Action {
+	case "stop", "restart":
+		if len(args) != 2 {
+			m.addSystemMessage("A registered service ID is required")
 			return m, nil
 		}
-		serviceID := args[1]
-		return m, func() tea.Msg {
-			err := m.runtime.StopService(serviceID)
-			if err != nil {
-				return ChatSystemMsg{Text: fmt.Sprintf("Failed to stop service %s: %v", serviceID, err)}
-			}
-			return ChatSystemMsg{Text: fmt.Sprintf("Service %s stopped", serviceID)}
-		}
-
-	case "restart":
-		if len(args) < 2 {
-			m.addSystemMessage("Usage: /service restart <service-id>")
-			return m, nil
-		}
-		serviceID := args[1]
-		return m, func() tea.Msg {
-			err := m.runtime.RestartService(context.Background(), serviceID)
-			if err != nil {
-				return ChatSystemMsg{Text: fmt.Sprintf("Failed to restart service %s: %v", serviceID, err)}
-			}
-			return ChatSystemMsg{Text: fmt.Sprintf("Service %s restarted", serviceID)}
-		}
-
+		operation.IDs = []string{args[1]}
 	case "restart-all":
-		return m, func() tea.Msg {
-			err := m.runtime.RestartAllServices(context.Background())
-			if err != nil {
-				return ChatSystemMsg{Text: fmt.Sprintf("Failed to restart all services: %v", err)}
-			}
-			return ChatSystemMsg{Text: "All services restarted"}
+		if len(args) != 1 {
+			m.addSystemMessage("Usage: /service restart-all")
+			return m, nil
 		}
-
 	default:
-		m.addSystemMessage("Unknown service action. Use: stop, restart, restart-all")
+		m.addSystemMessage("Unknown service action")
 		return m, nil
 	}
+	m.setActiveTab(TabServices)
+	m.setFocus(FocusRegionRegion1)
+	return m, m.services.open(operation)
 }
 
-// denyHITLRootCmd denies a HITL request.
 func denyHITLRootCmd(svc HITLServiceIface, requestID string) tea.Cmd {
 	return func() tea.Msg {
 		if svc == nil {
@@ -992,8 +981,6 @@ func denyHITLRootCmd(svc HITLServiceIface, requestID string) tea.Cmd {
 		return hitlResolvedMsg{requestID: requestID, approved: false, err: err}
 	}
 }
-
-// ── Contextual command handlers ──────────────────────────────────────────
 
 func rootHandleSave(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 	_ = args
@@ -1024,19 +1011,8 @@ func rootHandleSaveModel(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 	return m, nil
 }
 
-func rootHandleRestartAll(m *RootModel, args []string) (*RootModel, tea.Cmd) {
-	_ = args
-	if m.runtime == nil {
-		m.addSystemMessage("Runtime unavailable")
-		return m, nil
-	}
-	return m, func() tea.Msg {
-		err := m.runtime.RestartAllServices(context.Background())
-		if err != nil {
-			return ChatSystemMsg{Text: fmt.Sprintf("Failed to restart all services: %v", err)}
-		}
-		return ChatSystemMsg{Text: "All services restarted"}
-	}
+func rootHandleRestartAll(m *RootModel, _ []string) (*RootModel, tea.Cmd) {
+	return rootHandleService(m, []string{"restart-all"})
 }
 
 func rootHandleRecipe(m *RootModel, args []string) (*RootModel, tea.Cmd) {
@@ -1122,4 +1098,15 @@ func rootHandleRecipe(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 	m.sharedSess.PinnedRecipe = choice
 	m.addSystemMessage("Pinned recipe for this session: " + choice + " (dispatch runs exactly this recipe; /recipe clear to unpin)")
 	return m, nil
+}
+
+func rootHandleLiteralRequest(m *RootModel, args []string) (*RootModel, tea.Cmd) {
+	if len(args) != 2 || args[0] != "--text" {
+		m.addSystemMessage("Usage: /ask --text <JSON-string>")
+		return m, nil
+	}
+	next, cmd := m.handleInputSubmitted(InputSubmittedMsg{Value: args[1]})
+	result := next.(RootModel)
+	*m = result
+	return m, cmd
 }

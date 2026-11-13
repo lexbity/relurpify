@@ -1,7 +1,6 @@
 package relurpifyenvtui
 
 import (
-	runtimesvc "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
 	tea "github.com/charmbracelet/bubbletea"
 
 	"codeburg.org/lexbit/relurpify/app/relurpish/tui"
@@ -17,12 +16,23 @@ type controlCenterPane struct {
 	sandbox       *tui.SandboxPane
 	securityguard *tui.SecurityGuardPane
 	aiprovider    *tui.AIProviderPane
-	keybindings   *tui.KeybindingPane
-	doctor        *tui.DoctorPane
 
 	activeTab tui.TabID
 	width     int
 	height    int
+}
+
+func (p *controlCenterPane) OwnsEscape() bool {
+	switch p.activeTab {
+	case tui.TabSandbox:
+		return p.sandbox.OwnsEscape()
+	case tui.TabAIProvider:
+		return p.aiprovider.OwnsEscape()
+	case tui.TabSecurityGuard:
+		return p.securityguard.OwnsEscape()
+	default:
+		return false
+	}
 }
 
 func newControlCenterPane(rt tui.RuntimeAdapter, ctx *tui.AgentContext, sess *tui.Session, store *tui.SessionStore, _ *tui.NotificationQueue) tui.Region1Surface {
@@ -36,8 +46,6 @@ func newControlCenterPane(rt tui.RuntimeAdapter, ctx *tui.AgentContext, sess *tu
 	p.sandbox = tui.NewSandboxPane(rt)
 	p.securityguard = tui.NewSecurityGuardPane(rt)
 	p.aiprovider = tui.NewAIProviderPane(rt)
-	p.keybindings = tui.NewKeybindingPane(rt)
-	p.doctor = tui.NewDoctorPane(rt)
 	p.activeTab = tui.TabWelcome
 	return p
 }
@@ -61,12 +69,6 @@ func (p *controlCenterPane) SetStore(store *tui.SessionStore) {
 	}
 	if p.aiprovider != nil {
 		p.aiprovider.Refresh()
-	}
-	if p.keybindings != nil {
-		p.keybindings.Refresh()
-	}
-	if p.doctor != nil {
-		p.doctor.Refresh()
 	}
 	p.Refresh()
 }
@@ -94,14 +96,6 @@ func (p *controlCenterPane) SetFilter(filter string) {
 		if p.aiprovider != nil {
 			p.aiprovider.SetFilter(filter)
 		}
-	case tui.TabKeybindings:
-		if p.keybindings != nil {
-			p.keybindings.SetFilter(filter)
-		}
-	case tui.TabDoctor:
-		if p.doctor != nil {
-			p.doctor.SetFilter(filter)
-		}
 	}
 }
 
@@ -123,14 +117,6 @@ func (p *controlCenterPane) Refresh() {
 		if p.aiprovider != nil {
 			p.aiprovider.Refresh()
 		}
-	case tui.TabKeybindings:
-		if p.keybindings != nil {
-			p.keybindings.Refresh()
-		}
-	case tui.TabDoctor:
-		if p.doctor != nil {
-			p.doctor.Refresh()
-		}
 	}
 	p.applySize()
 }
@@ -150,16 +136,11 @@ func (p *controlCenterPane) Update(msg tea.Msg) (tui.Region1Surface, tea.Cmd) {
 			p.sandbox.Refresh()
 		}
 		return p, nil
-	case tui.DoctorStatusMsg:
-		if p.doctor != nil {
-			p.doctor.Refresh()
-		}
-		return p, nil
 	case tea.KeyMsg:
 		// ? opens help when Region 1 has focus (control center).
 		if msg.String() == "?" {
 			return p, func() tea.Msg {
-				return tui.GlobalKeyMsg{Key: "f1"}
+				return tui.CommandInvokedMsg{Name: "help"}
 			}
 		}
 		switch p.activeTab {
@@ -187,18 +168,6 @@ func (p *controlCenterPane) Update(msg tea.Msg) (tui.Region1Surface, tea.Cmd) {
 				p.aiprovider = pa
 				return p, cmd
 			}
-		case tui.TabKeybindings:
-			if p.keybindings != nil {
-				kp, cmd := p.keybindings.Update(msg)
-				p.keybindings = kp
-				return p, cmd
-			}
-		case tui.TabDoctor:
-			if p.doctor != nil {
-				dp, cmd := p.doctor.Update(msg)
-				p.doctor = dp
-				return p, cmd
-			}
 		}
 	}
 	return p, nil
@@ -221,14 +190,6 @@ func (p *controlCenterPane) View() string {
 	case tui.TabAIProvider:
 		if p.aiprovider != nil {
 			return p.aiprovider.View()
-		}
-	case tui.TabKeybindings:
-		if p.keybindings != nil {
-			return p.keybindings.View()
-		}
-	case tui.TabDoctor:
-		if p.doctor != nil {
-			return p.doctor.View()
 		}
 	}
 	return ""
@@ -256,25 +217,6 @@ func (p *controlCenterPane) OpenKeybindings() { p.activeTab = tui.TabKeybindings
 
 func (p *controlCenterPane) OpenDoctor() { p.activeTab = tui.TabDoctor }
 
-func (p *controlCenterPane) DoctorReport() runtimesvc.DoctorReport {
-	if p.doctor == nil {
-		return runtimesvc.DoctorReport{}
-	}
-	return p.doctor.Report()
-}
-
-func (p *controlCenterPane) SetDoctorReport(report runtimesvc.DoctorReport) {
-	if p.doctor != nil {
-		p.doctor.SetReport(report)
-	}
-}
-
-func (p *controlCenterPane) SetDoctorStatus(status string) {
-	if p.doctor != nil {
-		p.doctor.SetStatus(status)
-	}
-}
-
 func (p *controlCenterPane) applySize() {
 	paneH := p.height
 	if paneH < 1 {
@@ -291,11 +233,5 @@ func (p *controlCenterPane) applySize() {
 	}
 	if p.aiprovider != nil {
 		p.aiprovider.SetSize(p.width, paneH)
-	}
-	if p.keybindings != nil {
-		p.keybindings.SetSize(p.width, paneH)
-	}
-	if p.doctor != nil {
-		p.doctor.SetSize(p.width, paneH)
 	}
 }

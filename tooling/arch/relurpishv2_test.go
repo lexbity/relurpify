@@ -1,6 +1,9 @@
 package arch
 
-import "testing"
+import (
+	"slices"
+	"testing"
+)
 
 func TestRelurpishV2RejectsProhibitedConstructs(t *testing.T) {
 	for name, source := range map[string]string{
@@ -21,10 +24,11 @@ func TestRelurpishV2RejectsProhibitedConstructs(t *testing.T) {
 
 func TestRelurpishV2TestInventoryRejectsMissingTests(t *testing.T) {
 	missing := MissingRelurpishV2Tests("ok example/package 0.1s [no tests to run]\n")
-	if len(missing) != 7 {
+	if !slices.Contains(missing, "TestV2PlainTextEverySurface") || !slices.Contains(missing, "TestV2CircuitSelectionSurvivesProgress") {
 		t.Fatalf("missing test gate did not fail: %v", missing)
 	}
-	if len(MissingRelurpishV2Tests("TestV2PlainTextEverySurface\n")) != 6 {
+	partial := MissingRelurpishV2Tests("TestV2PlainTextEverySurface\n")
+	if len(partial) != len(missing)-1 || slices.Contains(partial, "TestV2PlainTextEverySurface") {
 		t.Fatal("partial inventory accepted")
 	}
 }

@@ -1,15 +1,15 @@
-╭────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ Keybindings                                                                                    │
-│ switch surface 1         1                  shell      built-in                                │
-│ switch surface 2         2                  shell      built-in                                │
-│ switch surface 3         3                  shell      built-in                                │
-│ switch surface 4         4                  shell      built-in                                │
-│ switch surface 5         5                  shell      built-in                                │
-│ switch surface 6         6                  shell      built-in                                │
-│ open agent picker        ctrl+a             shell      built-in                                │
-│ open help                f1                 shell      built-in                                │
-│ move focus to region 1   tab, ctrl+down     shell      built-in                                │
-│ quit                     ctrl+c, ctrl+d     shell      built-in                                │
-╰────────────────────────────────────────────────────────────────────────────────────────────────╯
+Settings / Keybindings
 
-up/down navigate  e rebind  r reset  R reset all
+> open_help              f1
+  agent_picker           ctrl+a
+  toggle_focus           f6
+  focus_canvas           tab, ctrl+down
+  open_attention         ctrl+g
+  open_commands          ctrl+p
+  page_up                pgup
+  page_down              pgdown
+  undo                   ctrl+z
+  redo                   ctrl+y
+  quit                   ctrl+c, ctrl+d
+
+↑/↓ select · e capture · r reset one · R reset all

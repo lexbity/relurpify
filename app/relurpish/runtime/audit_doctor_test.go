@@ -143,4 +143,42 @@ func TestDoctorReport_FreshWorkspaceAuditDepIsNonBlocking(t *testing.T) {
 	if dep.Blocking {
 		t.Fatalf("a fresh workspace must not report a blocking audit chain: %+v", dep)
 	}
+	if dep.Available || !dep.Degraded || !strings.Contains(dep.Details, "checked during execution boot") {
+		t.Fatalf("missing audit storage must remain explicitly unverified: %+v", dep)
+	}
+	if _, err := os.Stat(config.DefaultWorkspaceStateDir(workspace)); !os.IsNotExist(err) {
+		t.Fatalf("read-only Doctor created workspace state: %v", err)
+	}
+}
+
+func TestDoctorAuditProbeDoesNotOverwriteFiles(t *testing.T) {
+	workspace := t.TempDir()
+	auditDir := filepath.Join(config.DefaultWorkspaceStateDir(workspace), "audit")
+	if err := os.MkdirAll(auditDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	// The removed write probe truncated a user's file with this name.
+	path := filepath.Join(auditDir, ".doctor-write-probe")
+	const content = "must survive diagnostics"
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	probeAuditChain(Config{Workspace: workspace, AuditEnforcement: "strict"})
+	got, err := os.ReadFile(path)
+	if err != nil || string(got) != content {
+		t.Fatalf("diagnosis mutated existing content: %q, %v", got, err)
+	}
+}
+
+func TestDoctorAuditProbeRejectsUninspectableRoot(t *testing.T) {
+	workspace := t.TempDir()
+	if err := os.WriteFile(config.DefaultWorkspaceStateDir(workspace), []byte("not a directory"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, enforcement := range []string{"strict", "best_effort"} {
+		dep := probeAuditChain(Config{Workspace: workspace, AuditEnforcement: enforcement})
+		if dep.Available || dep.Blocking != (enforcement == "strict") || !strings.Contains(dep.Details, "cannot inspect") {
+			t.Fatalf("uninspectable storage got a false pass: %+v", dep)
+		}
+	}
 }

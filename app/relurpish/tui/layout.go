@@ -109,19 +109,6 @@ func (c ChromeLayout) Region1Rows() int {
 	return chromeSubtabRows + chromeMinCellWidth
 }
 
-// renderAgentCell renders the active-agent chrome cell for Region 2.
-func renderAgentCell(th *theme.Theme, agent string, width int) string {
-	if width < chromeMinCellWidth {
-		width = chromeMinCellWidth
-	}
-	label := strings.TrimSpace(agent)
-	if label == "" {
-		label = "none"
-	}
-	label = clipText(label, width)
-	return th.Active().Width(width).Render(label)
-}
-
 func clipText(value string, width int) string {
 	if width < 1 {
 		return ""
@@ -225,9 +212,17 @@ func (m RootModel) handleResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	if m.activeInput != nil {
 		m.activeInput.SetSize(m.layout.Region3Width(), 1)
 	}
-	m.help.SetSize(msg.Width, msg.Height)
 
 	paneH := m.layout.Region1PaneRows()
+	if m.doctor != nil {
+		m.doctor.SetSize(msg.Width, max(1, msg.Height-5))
+	}
+	if m.workshop != nil {
+		m.workshop.SetSize(msg.Width, max(1, msg.Height-5))
+	}
+	if m.keybindings != nil {
+		m.keybindings.SetSize(msg.Width, max(1, msg.Height-5))
+	}
 	if m.chat != nil {
 		m.chat.SetSize(msg.Width, paneH)
 	}

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -124,12 +125,6 @@ type RuntimeAdapter interface {
 	GetApprovalDetail(id string) (*ApprovalDetail, error)
 	// GetClassPolicies returns the current capability-class permission policies.
 	GetClassPolicies() map[string]agentspec.AgentPermissionLevel
-	// SetToolPolicyLive updates a per-tool execution policy in-memory (current session only).
-	// Pass level="" to clear the override.
-	SetToolPolicyLive(name string, level agentspec.AgentPermissionLevel)
-	// SetClassPolicyLive updates a class permission policy in-memory (current session only).
-	// Pass level="" to clear the class policy.
-	SetClassPolicyLive(class string, level agentspec.AgentPermissionLevel)
 	ListWorkflows(limit int) ([]WorkflowInfo, error)
 	GetWorkflow(workflowID string) (*WorkflowDetails, error)
 	CancelWorkflow(workflowID string) error
@@ -153,11 +148,6 @@ type RuntimeAdapter interface {
 	// the agent mode, tool enablement, or context strategy accordingly.
 	// The TUI continues regardless of whether this call returns an error.
 	ApplyChatPolicy(subtab SubTabID) error
-	// Service management
-	ListServices() []ServiceInfo
-	StopService(id string) error
-	RestartService(ctx context.Context, id string) error
-	RestartAllServices(ctx context.Context) error
 	// Context file management
 	AddFileToContext(path string) error
 	DropFileFromContext(path string) error
@@ -666,18 +656,23 @@ func (r *runtimeAdapter) ListApprovals() []ApprovalInfo {
 }
 
 func (r *runtimeAdapter) ListCapabilities() []CapabilityInfo {
-	if r == nil || r.currentRuntime() == nil || r.currentRuntime().Tools == nil {
+	live := r.currentRuntime()
+	if live == nil || live.Tools == nil {
 		return nil
 	}
-	caps := r.currentRuntime().Tools.AllCapabilities()
+	caps := live.Tools.AllCapabilities()
 	out := make([]CapabilityInfo, 0, len(caps))
 	for _, cap := range caps {
+		exposure := live.Tools.EffectiveExposure(cap)
 		out = append(out, CapabilityInfo{
+			ID: cap.ID, RuntimeFamily: string(cap.RuntimeFamily), Category: cap.Category,
+			TrustClass: string(cap.TrustClass), ProviderID: cap.Source.ProviderID, Scope: string(cap.Source.Scope), Exposure: string(exposure), Callable: exposure == agentspec.CapabilityExposureCallable,
 			Name:        cap.Name,
 			Description: cap.Description,
 			Kind:        string(cap.Kind),
 		})
 	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
 	return out
 }
 
@@ -910,7 +905,25 @@ func (r *runtimeAdapter) GetResourceDetail(idOrURI string) (*ResourceDetail, err
 }
 
 func (r *runtimeAdapter) ListToolsInfo() []ToolInfo {
-	return nil
+	live := r.currentRuntime()
+	if live == nil || live.Tools == nil {
+		return nil
+	}
+	policies := live.Tools.GetToolPolicies()
+	var tools []ToolInfo
+	for _, capability := range live.Tools.AllCapabilities() {
+		if capability.Kind != agentspec.CapabilityKindTool {
+			continue
+		}
+		policy, hasPolicy := policies[capability.Name]
+		info := ToolInfo{Name: capability.Name, RuntimeFamily: string(capability.RuntimeFamily), Scope: string(capability.Source.Scope), Tags: slices.Clone(capability.Tags), TrustClass: string(capability.TrustClass), Exposure: string(live.Tools.EffectiveExposure(capability)), Policy: policy.Execute, HasPolicy: hasPolicy}
+		for _, effect := range capability.EffectClasses {
+			info.EffectClasses = append(info.EffectClasses, string(effect))
+		}
+		tools = append(tools, info)
+	}
+	sort.Slice(tools, func(i, j int) bool { return tools[i].Name < tools[j].Name })
+	return tools
 }
 
 func (r *runtimeAdapter) ListLiveProviders() []LiveProviderInfo {
@@ -970,20 +983,6 @@ func (r *runtimeAdapter) GetClassPolicies() map[string]agentspec.AgentPermission
 		return nil
 	}
 	return r.currentRuntime().Tools.GetClassPolicies()
-}
-
-func (r *runtimeAdapter) SetToolPolicyLive(name string, level agentspec.AgentPermissionLevel) {
-	if r == nil || r.currentRuntime() == nil || r.currentRuntime().Tools == nil {
-		return
-	}
-	r.currentRuntime().Tools.UpdateToolPolicy(name, agentspec.ToolPolicy{Execute: level})
-}
-
-func (r *runtimeAdapter) SetClassPolicyLive(class string, level agentspec.AgentPermissionLevel) {
-	if r == nil || r.currentRuntime() == nil || r.currentRuntime().Tools == nil {
-		return
-	}
-	r.currentRuntime().Tools.UpdateClassPolicy(class, level)
 }
 
 func (r *runtimeAdapter) SaveToolPolicy(toolName string, level agentspec.AgentPermissionLevel) error {
@@ -1242,58 +1241,6 @@ func (r *runtimeAdapter) ApplyChatPolicy(subtab SubTabID) error {
 	// propagating the mode hint via metadata on the next ExecuteInstruction
 	// call (which happens via buildMetadata in ChatPane). Nothing to do here.
 	return nil
-}
-
-// Service management methods
-func (r *runtimeAdapter) ListServices() []ServiceInfo {
-	if r == nil || r.currentRuntime() == nil || r.currentRuntime().AgentWorkspace() == nil || r.currentRuntime().AgentWorkspace().ServiceManager == nil {
-		return nil
-	}
-	snapshots := r.currentRuntime().AgentWorkspace().ServiceManager.Snapshot()
-	infos := make([]ServiceInfo, 0, len(snapshots))
-	for _, snapshot := range snapshots {
-		status := ServiceStatusStopped
-		switch snapshot.Status {
-		case "running":
-			status = ServiceStatusRunning
-		case "stopped":
-			status = ServiceStatusStopped
-		case "error":
-			status = ServiceStatusError
-		}
-		infos = append(infos, ServiceInfo{
-			ID:     snapshot.ID,
-			Status: status,
-			Source: snapshot.Source,
-			Owner:  snapshot.Owner,
-			Notes:  append([]string(nil), snapshot.Notes...),
-		})
-	}
-	return infos
-}
-
-func (r *runtimeAdapter) StopService(id string) error {
-	if r == nil || r.currentRuntime() == nil || r.currentRuntime().AgentWorkspace() == nil || r.currentRuntime().AgentWorkspace().ServiceManager == nil {
-		return fmt.Errorf("runtime unavailable")
-	}
-	return r.currentRuntime().AgentWorkspace().ServiceManager.Stop(id)
-}
-
-func (r *runtimeAdapter) RestartService(ctx context.Context, id string) error {
-	if r == nil || r.currentRuntime() == nil || r.currentRuntime().AgentWorkspace() == nil || r.currentRuntime().AgentWorkspace().ServiceManager == nil {
-		return fmt.Errorf("runtime unavailable")
-	}
-	return r.currentRuntime().AgentWorkspace().ServiceManager.Restart(ctx, id)
-}
-
-func (r *runtimeAdapter) RestartAllServices(ctx context.Context) error {
-	if r == nil || r.currentRuntime() == nil || r.currentRuntime().AgentWorkspace() == nil || r.currentRuntime().AgentWorkspace().ServiceManager == nil {
-		return fmt.Errorf("runtime unavailable")
-	}
-	if err := r.currentRuntime().AgentWorkspace().ServiceManager.StopAll(); err != nil {
-		return fmt.Errorf("stop all: %w", err)
-	}
-	return r.currentRuntime().AgentWorkspace().ServiceManager.StartAll(ctx)
 }
 
 // Context file management

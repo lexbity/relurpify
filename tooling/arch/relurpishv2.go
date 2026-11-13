@@ -50,6 +50,12 @@ func CheckRelurpishV2Source(filename string, source []byte) ([]string, error) {
 			if value.Sel.Name == "FieldByName" {
 				report(value.Pos(), "reflective widget field access")
 			}
+			if name, ok := value.X.(*ast.Ident); ok && (imports[name.Name] == "os" || imports[name.Name] == "syscall") {
+				switch value.Sel.Name {
+				case "Getenv", "LookupEnv", "Environ", "Setenv", "Unsetenv", "Clearenv", "ExpandEnv":
+					report(value.Pos(), "environment access outside userconfig")
+				}
+			}
 			if strings.Contains(filename, "euclotui/") {
 				if name, ok := value.X.(*ast.Ident); ok && imports[name.Name] == "os" {
 					switch value.Sel.Name {
@@ -83,8 +89,35 @@ func MissingRelurpishV2Tests(listing string) []string {
 		"TestV2ApprovalCannotStealTyping", "TestV2PasteDoesNotSubmit",
 		"TestV2ViewIsPure", "TestV2DoctorWithoutRuntime",
 		"TestV2TextBatchesAreNeverControlKeys",
+		"TestV2CommandArguments", "TestV2LiteralRequestRetainsBlockedDraft",
+		"TestV2CircuitSelectionSurvivesProgress", "TestV2CircuitHostRetainsDraftAndFocus",
+		"TestV2CircuitBoundsAndNoInventedStatus",
+		"TestV2CommandMigrationInventory", "TestV2HelpUsesCurrentCatalogWithoutRuntime",
+		"TestV2HostCleanupIsSharedAndIdempotent", "TestV2HostCleanupContinuesAfterResourcePanic",
+		"TestV2KeybindingConflictReviewSaveAndIsolation", "TestV2KeybindingSaveFailureRetainsActiveMap", "TestV2KeybindingResetRequiresReviewAndCancelPreservesMap",
+		"TestV2WorkshopSourceEditsPreserveUntouchedBytes", "TestV2WorkshopConnectionsExcludeFutureCaptures",
+		"TestV2WorkshopCompleteAuthorConnectBindSaveTrigger", "TestV2WorkshopInvalidSourceCannotSaveAndUndoRecovers", "TestV2WorkshopSaveConflictDoesNotOverwrite",
+		"TestV2DemoDecisionUsesSharedHostAndPreservesDraft", "TestV2DemoInitializationReviewCancelAndApply", "TestV2DemoClockCancellationAndSnapshotIsolation",
+		"TestV2CircuitConsumesActualEucloEmitter", "TestV2CircuitInvalidTelemetryRemainsVisible",
 	} {
 		if !found[name] {
+			missing = append(missing, name)
+		}
+	}
+	return missing
+}
+
+func MissingRelurpishV2IntegrationTests(listing string) []string {
+	var missing []string
+	for _, name := range []string{"TestV2DoctorWithoutRuntime", "TestV2PTYFocusAndBounds", "TestV2PTYDemoCommandDraftRoundTrip"} {
+		found := false
+		for _, line := range strings.Split(listing, "\n") {
+			if strings.TrimSpace(line) == name {
+				found = true
+				break
+			}
+		}
+		if !found {
 			missing = append(missing, name)
 		}
 	}

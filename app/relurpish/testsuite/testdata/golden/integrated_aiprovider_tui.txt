@@ -34,7 +34,7 @@ tab switch focus  arrows navigate  enter select  e edit  t test  s save
 
 
 
-execution unavailable · /doctor · /help
+Opened model provider configuration
 ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
 │ request to Euclo Request to Euclo · / commands                                                                       │
 └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘

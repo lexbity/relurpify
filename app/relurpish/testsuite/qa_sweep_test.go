@@ -33,6 +33,7 @@ var allTabs = []tui.TabID{ //nolint:gochecknoglobals // test fixture data
 	tui.TabKeybindings,
 	tui.TabDoctor,
 	tui.TabChat,
+	tui.TabRun,
 }
 
 // keySoup is a barrage of navigation / editing keys that any pane might receive.
@@ -53,7 +54,7 @@ var keySoup = []tea.KeyMsg{ //nolint:gochecknoglobals // test fixture data
 // TestQASweep_AllTabsSurviveKeySoup drives every tab through the key barrage at
 // a normal size and asserts the model never panics and always renders a frame.
 func TestQASweep_AllTabsSurviveKeySoup(t *testing.T) {
-	m := tui.NewRootModel(context.Background(), nil, euclotui.NewSurfaceFactory())
+	m := tui.NewRootModel(context.Background(), tui.HostOptions{SurfaceFactory: euclotui.NewSurfaceFactory()})
 	m = uitest.Resize(m, 120, 40)
 
 	for _, tab := range allTabs {
@@ -75,7 +76,7 @@ func TestQASweep_ExtremeResize(t *testing.T) {
 		{40, 12}, {80, 24}, {200, 60}, {500, 200}, {3, 3},
 	}
 	for _, tab := range allTabs {
-		m := tui.NewRootModel(context.Background(), nil, euclotui.NewSurfaceFactory())
+		m := tui.NewRootModel(context.Background(), tui.HostOptions{SurfaceFactory: euclotui.NewSurfaceFactory()})
 		m = uitest.Navigate(m, tab)
 		for _, s := range sizes {
 			m = uitest.Resize(m, s[0], s[1])
@@ -88,7 +89,7 @@ func TestQASweep_ExtremeResize(t *testing.T) {
 // TestQASweep_AIProviderEditAdversarial exercises the AI provider edit fields
 // with hostile values: empty, whitespace, unicode, very long, control-ish.
 func TestQASweep_AIProviderEditAdversarial(t *testing.T) {
-	m := tui.NewRootModel(context.Background(), nil, euclotui.NewSurfaceFactory())
+	m := tui.NewRootModel(context.Background(), tui.HostOptions{SurfaceFactory: euclotui.NewSurfaceFactory()})
 	m = uitest.Resize(m, 120, 40)
 	m = uitest.Navigate(m, tui.TabAIProvider)
 
@@ -127,7 +128,7 @@ func TestQASweep_AIProviderEditAdversarial(t *testing.T) {
 // TestQASweep_RapidTabSwitching flips between tabs while mid-edit / mid-nav to
 // surface state bleed or stale-focus panics.
 func TestQASweep_RapidTabSwitching(t *testing.T) {
-	m := tui.NewRootModel(context.Background(), nil, euclotui.NewSurfaceFactory())
+	m := tui.NewRootModel(context.Background(), tui.HostOptions{SurfaceFactory: euclotui.NewSurfaceFactory()})
 	m = uitest.Resize(m, 100, 30)
 	for round := 0; round < 3; round++ {
 		for _, tab := range allTabs {

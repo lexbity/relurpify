@@ -295,11 +295,11 @@ func TestPanelGoldenViews(t *testing.T) {
 
 	assertGolden(t, "aiprovider_panel.txt", aiProvider.View())
 
-	keybinds := tui.NewKeybindingPane(&sessionInfoFixture{workspace: workdir})
+	keybinds := tui.NewKeybindingPane(tui.NewKeyMap(), workdir, false)
 	keybinds.SetSize(96, 18)
 	assertGolden(t, "keybindings_panel.txt", keybinds.View())
 
-	doctor := tui.NewDoctorPane(nil)
+	doctor := tui.NewDoctorPane(context.Background(), nil, nil)
 	doctor.SetSize(96, 18)
 	doctor.SetReport(runtimesvc.DoctorReport{
 		Workspace:             workdir,
@@ -362,7 +362,7 @@ func TestRootTUIViews(t *testing.T) {
 	}
 
 	// 1. Integrated Welcome TUI Screen (no-agent welcome tab)
-	m := tui.NewRootModel(context.Background(), nil, euclotui.NewSurfaceFactory())
+	m := tui.NewRootModel(context.Background(), tui.HostOptions{SurfaceFactory: euclotui.NewSurfaceFactory()})
 	m = uitest.Resize(m, 120, 40)
 	m = uitest.Navigate(m, tui.TabWelcome)
 
@@ -384,7 +384,7 @@ func TestRootTUIViews(t *testing.T) {
 	assertGolden(t, "integrated_keybindings_tui.txt", normalizeSnapshot(m.View(), workdir))
 
 	// 5. Integrated HITL Row Screen (with simulated frame)
-	m2 := tui.NewRootModel(context.Background(), nil, euclotui.NewSurfaceFactory())
+	m2 := tui.NewRootModel(context.Background(), tui.HostOptions{SurfaceFactory: euclotui.NewSurfaceFactory()})
 	err := uitest.SelectAgent(&m2, "euclo")
 	if err != nil {
 		t.Fatalf("switch agent: %v", err)
@@ -403,7 +403,7 @@ func TestRootTUIViews(t *testing.T) {
 }
 
 func TestFocusRedirectionAndAutocomplete(t *testing.T) {
-	m := tui.NewRootModel(context.Background(), nil, euclotui.NewSurfaceFactory())
+	m := tui.NewRootModel(context.Background(), tui.HostOptions{SurfaceFactory: euclotui.NewSurfaceFactory()})
 	m = uitest.Resize(m, 120, 40)
 
 	// Verify focus is initially in input

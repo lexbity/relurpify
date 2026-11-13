@@ -37,30 +37,25 @@ func Run(ctx context.Context, rt *runtimesvc.Runtime) error {
 // RunWithSurface bootstraps the TUI with an agent-surface factory.
 // A deferred panic recovery gate ensures the terminal is restored to a sane
 // state even if the program panics during rendering or event handling.
-func RunWithSurface(ctx context.Context, rt *runtimesvc.Runtime, factory SurfaceFactory) (err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			fmt.Fprint(os.Stderr, "\033[?1049l") // exit alternate screen
-			fmt.Fprint(os.Stderr, "\033[?25h")   // restore cursor visibility
-			fmt.Fprint(os.Stderr, "\033[0m")     // reset color attributes
-			log.Printf("relurpish panic recovered: %v", r)
-			debug.PrintStack()
-			err = fmt.Errorf("relurpish panic: %v", r)
-		}
-	}()
-
+func RunWithSurface(ctx context.Context, rt *runtimesvc.Runtime, factory SurfaceFactory) error {
 	if rt == nil {
 		return fmt.Errorf("runtime is required")
 	}
 	adapter := NewRuntimeAdapter(rt)
-	m := NewRootModel(ctx, adapter, factory)
+	m := NewRootModel(ctx, HostOptions{Runtime: adapter, SurfaceFactory: factory})
 	return runModel(ctx, m)
+}
+
+// RunHost composes application ports into the same host used by live execution.
+// The constructor enforces separation of explicit demo and live dependencies.
+func RunHost(ctx context.Context, options HostOptions) error {
+	return PTYSafe(func() error { return runModel(ctx, NewRootModel(ctx, options)) })
 }
 
 // RunDiagnostics opens the same host when execution cannot be constructed.
 // No execution adapter is synthesized; ordinary requests remain drafts.
 func RunDiagnostics(ctx context.Context, workspace string, reader DoctorReader, factory SurfaceFactory) error {
-	m := NewRootModel(ctx, nil, factory)
+	m := NewRootModel(ctx, HostOptions{SurfaceFactory: factory, Workspace: workspace, Doctor: reader})
 	m.doctorReader = reader
 	m.sharedSess.Workspace = workspace
 	m.startupLocked = true
@@ -69,6 +64,7 @@ func RunDiagnostics(ctx context.Context, workspace string, reader DoctorReader, 
 }
 
 func runModel(ctx context.Context, m RootModel) error {
+	defer m.cleanup()
 	program := tea.NewProgram(
 		m,
 		tea.WithContext(ctx),

@@ -81,7 +81,7 @@ func TestCommandPaletteFilteringAndTabCompletion(t *testing.T) {
 }
 
 func TestHostRegistrySeparatesGuestCommands(t *testing.T) {
-	if _, ok := rootCommandRegistry.Lookup("workspace"); !ok {
+	if _, ok := newHostCommandRegistry().Lookup("workspace"); !ok {
 		t.Fatal("expected workspace to remain a host command")
 	}
 
@@ -94,7 +94,7 @@ func TestHostRegistrySeparatesGuestCommands(t *testing.T) {
 			"guest": guest,
 		},
 	}
-	m := NewRootModel(context.Background(), nil, factory)
+	m := NewRootModel(context.Background(), HostOptions{SurfaceFactory: factory})
 	if _, ok := m.cmdReg.Lookup("workspace"); !ok {
 		t.Fatal("expected workspace to remain a host command")
 	}

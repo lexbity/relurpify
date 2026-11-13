@@ -76,18 +76,33 @@ type RootModel struct {
 	overlays   *OverlayStack
 
 	// Panes (pointer types — mutations survive tea.Model value copies)
-	chat        ChatPaner
-	baseSurface Region1Surface
-	activeInput InputSurface
-	activeNav   NavSurface
-	tasks       *TasksPane
-	session     *SessionPane
+	chat                ChatPaner
+	baseSurface         Region1Surface
+	activeInput         InputSurface
+	activeNav           NavSurface
+	tasks               *TasksPane
+	session             *SessionPane
+	doctor              *DoctorPane
+	workshop            *Workshop
+	keys                *KeyMap
+	keybindings         *KeybindingPane
+	demoScenario        string
+	conversation        ConversationSession
+	frontendState       FrontendSnapshot
+	frontendPending     bool
+	decisionChoice      int
+	decisionAnswer      string
+	decisionEditing     bool
+	settingsSelection   int
+	configurationReader ConfigurationReader
+	configurationEpoch  uint64
+	configuration       documentInspector
+	services            *ServicesPane
 
 	// Shared state
 	activeTab       TabID
 	searchActive    bool
 	showHelp        bool
-	help            HelpOverlay
 	ready           bool
 	width           int
 	height          int
@@ -98,11 +113,9 @@ type RootModel struct {
 	decisionFocused bool
 	canvasOffset    int
 	helpOffset      int
-	// startupAgent is the agent activated at construction (before any startup
-	// gate). The gate parks the active agent at "none" while locked; on unlock
-	// it is restored to startupAgent so chat reaches the real agent surface.
-	startupAgent string
-
+	helpCommand     string
+	circuit         circuitCanvas
+	notice          string
 	// Session-level state shared across panes
 	sharedSess     *Session
 	sharedCtx      *AgentContext
@@ -114,12 +127,10 @@ type RootModel struct {
 	activeSurface  AgentSurface
 
 	// HITL subscription
-	hitlCh    <-chan fauthorization.HITLEvent
-	hitlUnsub func()
+	hitlCh <-chan fauthorization.HITLEvent
 
 	// Execution event subscription
-	execEventCh    <-chan telemetry.Event
-	execEventUnsub func()
+	execEventCh <-chan telemetry.Event
 
 	// Interaction frames keyed by notification ID and frame ID so the host can
 	// resolve slot selections and freetext answers back into the pending frame.
@@ -128,6 +139,7 @@ type RootModel struct {
 	// Task queue: maps run IDs that originated from the task queue.
 	taskRunIDs map[string]bool
 	parentCtx  context.Context
+	lifetime   *hostLifetime
 
 	// HITL notification row: renders between Region 1 and the bottom bar
 	// when the agent emits an interaction frame.
@@ -193,7 +205,6 @@ func (m *RootModel) propagateTheme() {
 	if m.overlays != nil {
 		m.overlays.SetTheme(m.th)
 	}
-	m.help.SetTheme(m.th)
 }
 
 // propagateAnimManager distributes the animation manager to components that
@@ -240,13 +251,25 @@ func isBaseFrameworkTab(id TabID) bool {
 	}
 }
 
-func NewRootModel(parentCtx context.Context, rt RuntimeAdapter, factory SurfaceFactory) RootModel {
-	if parentCtx == nil {
-		parentCtx = context.Background()
+func NewRootModel(parentCtx context.Context, options HostOptions) RootModel {
+	rt, factory := options.Runtime, options.SurfaceFactory
+	if options.DemoScenario != "" && (rt != nil || factory != nil || options.Conversation == nil) {
+		panic("demo requires isolated application ports, no live runtime or surface factory")
 	}
+	if parentCtx == nil {
+		panic("NewRootModel requires a parent context")
+	}
+	parentCtx, cancel := context.WithCancel(parentCtx)
+	lifetime := &hostLifetime{cancel: cancel}
 	info := SessionInfo{MaxTokens: 100000}
 	if rt != nil {
 		info = rt.SessionInfo()
+	}
+	if info.Workspace == "" {
+		info.Workspace = options.Workspace
+	}
+	if options.DemoScenario != "" {
+		info.Agent = "euclo"
 	}
 
 	sess := &Session{
@@ -295,6 +318,7 @@ func NewRootModel(parentCtx context.Context, rt RuntimeAdapter, factory SurfaceF
 		initialAgent = "none"
 	}
 	state := buildSurfaceState(parentCtx, factory, initialAgent, rt, ctx, sess, store, notifQ)
+	lifetime.ownSurface(state)
 	inputBar.SetCommandRegistry(state.cmdReg)
 	inputBar.SetContext(state.tabs.ActiveTab().ID, state.tabs.ActiveSubTab())
 
@@ -302,7 +326,11 @@ func NewRootModel(parentCtx context.Context, rt RuntimeAdapter, factory SurfaceF
 	tabBar.SetRegistry(state.tabs)
 
 	m := RootModel{
+		keys:              NewKeyMap(),
+		demoScenario:      options.DemoScenario,
+		conversation:      options.Conversation,
 		parentCtx:         parentCtx,
+		lifetime:          lifetime,
 		tabs:              state.tabs,
 		subTabBar:         NewSubTabBar(state.tabs.ActiveTab()),
 		hitlRow:           &HITLRow{th: theme.Default()},
@@ -314,7 +342,6 @@ func NewRootModel(parentCtx context.Context, rt RuntimeAdapter, factory SurfaceF
 		notifQ:            notifQ,
 		overlays:          NewOverlayStack(),
 		activeAgent:       initialAgent,
-		startupAgent:      initialAgent,
 		agentPicker:       NewAgentPicker(),
 		activeTab:         state.tabs.ActiveTab().ID,
 		focus:             NewFocusRouter(),
@@ -343,6 +370,32 @@ func NewRootModel(parentCtx context.Context, rt RuntimeAdapter, factory SurfaceF
 	m.store = store
 
 	m.chat = state.chat
+	if options.Doctor != nil {
+		m.doctorReader = options.Doctor
+	}
+	initializer := options.Initializer
+	if initializer == nil && rt != nil {
+		initializer = rt
+	}
+	m.doctor = NewDoctorPane(parentCtx, m.doctorReader, initializer)
+	m.doctor.demo = options.DemoScenario != ""
+	m.workshop = NewWorkshop(parentCtx, options.Recipes)
+	m.workshop.demo = options.DemoScenario != ""
+	m.keybindings = NewKeybindingPane(m.keys, info.Workspace, options.DemoScenario != "")
+	m.configurationReader = options.Configuration
+	if m.configurationReader == nil {
+		m.configurationReader, _ = rt.(ConfigurationReader)
+	}
+	servicePort := options.Services
+	if servicePort == nil {
+		servicePort, _ = rt.(ServicePort)
+	}
+	m.services = NewServicesPane(parentCtx, servicePort, options.DemoScenario != "")
+	m.services.workspace = info.Workspace
+	if options.Recipes != nil {
+		registerWorkshopCommands(m.cmdReg)
+		m.tabs.Register(TabDefinition{ID: TabWorkshop, Label: "workshop"})
+	}
 	if setter, ok := m.chat.(interface{ SetSessionStore(*SessionStore) }); ok && setter != nil {
 		setter.SetSessionStore(m.store)
 	}
@@ -354,6 +407,18 @@ func NewRootModel(parentCtx context.Context, rt RuntimeAdapter, factory SurfaceF
 	}
 	m.setFocus(FocusRegionInput)
 	m.setActiveTab(m.activeTab)
+	if options.DemoScenario != "" {
+		m.applyFrontend(options.Conversation.Current())
+		m.cmdReg.retain("ask", "chat", "run", "inspect", "attention", "stop", "doctor", "help", "keybindings", "settings", "config", "services", "service")
+		if options.Recipes != nil {
+			registerWorkshopCommands(m.cmdReg)
+		}
+		m.setActiveTab(TabChat)
+		if options.DemoScenario == "first-launch" || strings.HasPrefix(options.DemoScenario, "doctor-") {
+			m.setActiveTab(TabDoctor)
+			m.startupLocked = true
+		}
+	}
 	m.syncActivePaneFilter(m.inputBar.Value())
 
 	return m
@@ -366,6 +431,8 @@ func buildSurfaceState(parentCtx context.Context, factory SurfaceFactory, agentN
 	}
 	tabs := NewTabRegistry()
 	surface.RegisterTabs(tabs)
+	tabs.Register(TabDefinition{ID: TabRun, Label: "run"})
+	tabs.Register(TabDefinition{ID: TabSettings, Label: "settings"})
 	initialTab := surface.InitialTab()
 	if initialTab == "" {
 		initialTab = tabs.ActiveTab().ID
@@ -381,8 +448,7 @@ func buildSurfaceState(parentCtx context.Context, factory SurfaceFactory, agentN
 	if initialSub != "" {
 		tabs.SetSubActive(initialTab, initialSub)
 	}
-	cmdReg := NewCommandRegistry()
-	registerUniversalCommands(cmdReg)
+	cmdReg := newHostCommandRegistry()
 	surface.RegisterCommands(cmdReg)
 	chat := surface.NewChat(parentCtx, rt, ctx, sess, notifQ)
 	if tabAware, ok := chat.(TabAwarePane); ok {
@@ -444,6 +510,7 @@ func (m *RootModel) activateSurface(agentName string) {
 		m.baseSurface = state.region1
 	}
 	m.activeTab = m.tabs.ActiveTab().ID
+	m.refreshCircuit()
 	m.setActiveTab(m.activeTab)
 	propagateSurfaceTheme(m, state.surface)
 	// Surfaces are built lazily — after the boot's initial WindowSizeMsg a
@@ -472,6 +539,7 @@ func (m *RootModel) surfaceStateFor(agentName string) *surfaceState {
 	state, ok := m.surfaceCache[key]
 	if !ok || state == nil {
 		state = buildSurfaceState(m.parentCtx, m.surfaceFactory, key, m.runtime, m.sharedCtx, m.sharedSess, m.store, m.notifQ)
+		m.lifetime.ownSurface(state)
 		m.surfaceCache[key] = state
 	}
 	return state
@@ -558,6 +626,9 @@ type ExecEventBatchMsg struct {
 
 // Init starts the HITL listener, spinner, text-input blink, and animation tick.
 func (m RootModel) Init() tea.Cmd {
+	if m.demoScenario != "" {
+		return tea.Batch(textarea.Blink, m.nextFrontendCmd(), m.startupDoctorReportCmd())
+	}
 	cmds := []tea.Cmd{
 		textarea.Blink,
 		m.session.Init(),
@@ -611,15 +682,9 @@ func (m RootModel) startupDoctorReportCmd() tea.Cmd {
 	if reader == nil {
 		return nil
 	}
-	parent := m.parentCtx
-	if parent == nil {
-		parent = context.Background()
-	}
-	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(parent, 15*time.Second)
-		defer cancel()
-		return DoctorStatusMsg{Action: "refresh", Report: reader.BuildDoctorReport(ctx)}
-	}
+	initializer, _ := reader.(DoctorOperations)
+	m.doctor.SetReader(reader, initializer)
+	return m.doctor.run(doctorActionRefresh)
 }
 
 // restorePromptCmd checks for a saved session and emits sessionFoundMsg if one exists.
@@ -664,6 +729,50 @@ func (m RootModel) subscribeExecEventsCmd() tea.Cmd {
 // Update is the central message router.
 func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case configurationLoadedMsg:
+		if msg.Epoch != m.configurationEpoch {
+			return m, nil
+		}
+		if msg.Err != nil {
+			m.notice = "Configuration inspection failed: " + msg.Err.Error()
+		} else {
+			m.configuration.apply(msg.Document)
+		}
+		return m, nil
+	case servicesResultMsg:
+		m.services.apply(msg)
+		return m, nil
+	case keybindingsSavedMsg:
+		_, cmd := m.keybindings.Update(msg)
+		return m, cmd
+	case workshopResultMsg:
+		if msg.Epoch != m.workshop.epoch {
+			return m, nil
+		}
+		m.workshop.apply(msg)
+		if msg.Err == nil && msg.Operation == "trigger" {
+			m.applyFrontend(msg.Snapshot)
+			m.setActiveTab(TabRun)
+			m.setFocus(FocusRegionInput)
+		}
+		return m, nil
+	case frontendSnapshotMsg:
+		next, cmd := m.handleFrontendSnapshot(msg)
+		result := next.(RootModel)
+		if msg.Observed && msg.Err == nil {
+			return result, result.nextFrontendCmd()
+		}
+		return result, cmd
+	case frontendSubmitMsg:
+		m.frontendPending = false
+		if msg.Err != nil {
+			m.notice = "Request kept as a draft: " + msg.Err.Error()
+			return m, nil
+		}
+		m.inputBar.Accept(msg.Draft)
+		m.notice = ""
+		m.applyFrontend(msg.Snapshot)
+		return m, nil
 
 	case tea.WindowSizeMsg:
 		return m.handleResize(msg)
@@ -702,14 +811,86 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			_, cmd := m.routeInputKey(msg)
 			return m, cmd
 		}
-		if m.activeTab == TabChat && !m.showHelp && (msg.String() == "pgup" || msg.String() == "pgdown") {
+		// Ctrl+Q is immutable and cannot be rebound or captured by a form.
+		if msg.Type == tea.KeyCtrlQ || (isReservedChord(msg, m.keys) && keyMatchesBinding(m.keys.Quit, msg.String())) {
+			return m, tea.Batch(func() tea.Msg { m.cleanup(); return nil }, tea.Quit)
+		}
+		formOwnsKeys := m.activeTab == TabWorkshop && m.focus.State().InRegion1() && m.workshop.Editing()
+		formOwnsKeys = formOwnsKeys || (m.activeTab == TabKeybindings && m.focus.State().InRegion1() && m.keybindings.OwnsEscape())
+		if owner, ok := m.baseSurface.(EscapeOwner); ok && m.focus.State().InRegion1() && isBaseFrameworkTab(m.activeTab) {
+			formOwnsKeys = formOwnsKeys || owner.OwnsEscape()
+		}
+		if isReservedChord(msg, m.keys) && (!formOwnsKeys || m.showHelp) {
+			switch {
+			case keyMatchesBinding(m.keys.Help, msg.String()):
+				m.showHelp = !m.showHelp
+				return m, nil
+			case keyMatchesBinding(m.keys.AgentPicker, msg.String()):
+				m.openAgentPicker()
+				return m, nil
+			}
+		}
+		if keyMsgMatchesBinding(msg, m.keys.FocusToggle) && !m.decisionFocused && !(m.activeTab == TabKeybindings && m.keybindings.OwnsEscape() && m.focus.State().InRegion1()) {
+			if m.focus.State().InInput() {
+				m.setFocus(FocusRegionRegion1)
+			} else {
+				m.setFocus(FocusRegionInput)
+			}
+			return m, nil
+		}
+		if !formOwnsKeys && !m.decisionFocused && !m.showHelp {
+			// Focus can leave an editor without applying or discarding its field.
+			if msg.Type == tea.KeyEsc && m.inputBar.CancelCommands() {
+				m.syncCommandPalette()
+				return m, nil
+			}
+			if keyMsgMatchesBinding(msg, m.keys.Commands) {
+				m.inputBar.OpenCommands()
+				m.setFocus(FocusRegionInput)
+				m.syncCommandPalette()
+				return m, nil
+			}
+			if m.focus.State().InInput() && keyMsgMatchesBinding(msg, m.keys.FocusRegion1) && !m.cmdPalette.IsOpen() {
+				m.setFocus(FocusRegionRegion1)
+				return m, nil
+			}
+			if m.focus.State().InRegion1() && (keyMsgMatchesBinding(msg, m.keys.Undo) || keyMsgMatchesBinding(msg, m.keys.Redo)) {
+				return m.handleGlobalKey(msg.String())
+			}
+		}
+		if m.activeTab == TabKeybindings && m.focus.State().InRegion1() && m.keybindings.OwnsEscape() && !m.showHelp && !m.decisionFocused {
+			_, cmd := m.keybindings.Update(msg)
+			return m, cmd
+		}
+		if m.activeTab == TabWorkshop && m.focus.State().InRegion1() && !m.showHelp && !m.decisionFocused {
+			if cmd, handled := m.workshop.key(msg); handled {
+				return m, cmd
+			}
+		}
+		if m.activeTab == TabSettings && m.focus.State().InRegion1() && !m.showHelp && !m.decisionFocused {
+			if cmd, handled := m.settingsKey(msg); handled {
+				return m, cmd
+			}
+		}
+		if m.activeTab == TabConfiguration && m.focus.State().InRegion1() && !m.showHelp && !m.decisionFocused && m.configuration.key(msg) {
+			return m, nil
+		}
+		if m.activeTab == TabServices && m.focus.State().InRegion1() && !m.showHelp && !m.decisionFocused {
+			if cmd, handled := m.services.key(msg); handled {
+				return m, cmd
+			}
+		}
+		if m.activeTab == TabRun && m.focus.State().InRegion1() && !m.showHelp && !m.decisionFocused && m.circuit.key(msg) {
+			return m, nil
+		}
+		if m.activeTab == TabChat && !m.showHelp && (keyMsgMatchesBinding(msg, m.keys.PageUp) || keyMsgMatchesBinding(msg, m.keys.ScrollDown)) {
 			rows := max(1, m.height-6)
 			end := max(0, len(m.chatCanvasLines())-rows)
 			start := end
 			if m.canvasOffset > 0 {
 				start = m.canvasOffset - 1
 			}
-			if msg.String() == "pgup" {
+			if keyMsgMatchesBinding(msg, m.keys.PageUp) {
 				start = max(0, start-rows)
 			} else {
 				start = min(end, start+rows)
@@ -721,14 +902,6 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
-		if msg.String() == "f6" {
-			if m.focus.State().InInput() {
-				m.setFocus(FocusRegionRegion1)
-			} else {
-				m.setFocus(FocusRegionInput)
-			}
-			return m, nil
-		}
 		if m.showHelp && (msg.String() == "down" || msg.String() == "up" || msg.String() == "pgdown" || msg.String() == "pgup") {
 			delta := 1
 			if msg.String() == "up" || msg.String() == "pgup" {
@@ -737,31 +910,36 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.helpOffset = max(0, m.helpOffset+delta)
 			return m, nil
 		}
-		if m.focus.State().InRegion1() && isBaseFrameworkTab(m.activeTab) && msg.String() != "esc" && msg.String() != "ctrl+c" && msg.String() != "ctrl+d" && msg.String() != "ctrl+g" {
-			return m, m.routeRegion1Key(msg)
+		if m.focus.State().InRegion1() && m.activeTab == TabDoctor && msg.String() == "r" && m.doctorReader != nil {
+			return m, m.startupDoctorReportCmd()
 		}
-		// Quit shortcuts bypass everything.
-		if isReservedChord(msg) {
-			switch {
-			case keyMatchesBinding(GlobalKeys.Quit, msg.String()):
-				return m, tea.Batch(func() tea.Msg { m.cleanup(); return nil }, tea.Quit)
-			case keyMatchesBinding(GlobalKeys.Help, msg.String()):
-				m.showHelp = !m.showHelp
-				return m, nil
-			case keyMatchesBinding(GlobalKeys.AgentPicker, msg.String()):
-				m.openAgentPicker()
-				return m, nil
-			}
+		if m.activeTab == TabKeybindings && m.focus.State().InRegion1() && !m.showHelp && !m.decisionFocused && msg.String() != "esc" && !keyMsgMatchesBinding(msg, m.keys.Attention) {
+			_, cmd := m.keybindings.Update(msg)
+			return m, cmd
+		}
+		if m.focus.State().InRegion1() && m.activeTab == TabDoctor && !m.showHelp && !m.decisionFocused && (msg.String() != "esc" || m.doctor.OwnsEscape()) && !keyMsgMatchesBinding(msg, m.keys.Attention) {
+			_, cmd := m.doctor.Update(msg)
+			return m, cmd
+		}
+		ownsEscape := false
+		if owner, ok := m.baseSurface.(EscapeOwner); ok {
+			ownsEscape = owner.OwnsEscape()
+		}
+		if m.focus.State().InRegion1() && isBaseFrameworkTab(m.activeTab) && !m.showHelp && !m.decisionFocused && (msg.String() != "esc" || ownsEscape) && !keyMsgMatchesBinding(msg, m.keys.Attention) {
+			return m, m.routeRegion1Key(msg)
 		}
 		if msg.String() == "esc" && m.showHelp {
 			m.showHelp = false
 			return m, nil
 		}
-		if msg.String() == "ctrl+g" {
+		if keyMsgMatchesBinding(msg, m.keys.Attention) {
 			m.decisionFocused = true
 			return m, nil
 		}
 		if m.decisionFocused {
+			if m.conversation != nil && m.frontendState.Decision != nil {
+				return m, m.frontendDecisionKey(msg)
+			}
 			if msg.String() == "esc" {
 				m.decisionFocused = false
 				return m, nil
@@ -831,9 +1009,26 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.cmdPalette.Close()
 		}
 		m.syncOverlayStack()
+		if msg.Name == "ask" {
+			next, cmd := rootHandleLiteralRequest(&m, msg.Args)
+			if cmd != nil && m.conversation != nil {
+				operation := cmd
+				cmd = func() tea.Msg {
+					result := operation().(frontendSubmitMsg)
+					result.Draft = msg.Draft
+					return result
+				}
+				return *next, cmd
+			}
+			if cmd != nil && next.inputBar != nil {
+				next.inputBar.Accept(msg.Draft)
+			}
+			return *next, cmd
+		}
 		if m.cmdReg != nil {
-			if _, ok := m.cmdReg.Lookup(msg.Name); ok && m.inputBar != nil {
+			if command, ok := m.cmdReg.Lookup(msg.Name); ok && m.cmdReg.eligible(command, m.activeTab, m.tabs.ActiveSubTab()) && m.inputBar != nil {
 				m.inputBar.Accept(msg.Draft)
+				m.notice = ""
 			}
 		}
 		nm, cmd := executeCommand(&m, msg.Name, msg.Args)
@@ -991,7 +1186,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// HITL subscription initialization.
 	case hitlSubscribedMsg:
 		m.hitlCh = msg.ch
-		m.hitlUnsub = msg.unsub
+		m.lifetime.add(msg.unsub)
 		if m.hitlCh != nil {
 			return m, listenHITLEvents(m.hitlCh)
 		}
@@ -999,7 +1194,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case execEventsSubscribedMsg:
 		m.execEventCh = msg.ch
-		m.execEventUnsub = msg.unsub
+		m.lifetime.add(msg.unsub)
 		if m.execEventCh != nil {
 			return m, listenExecEvents(m.execEventCh)
 		}
@@ -1031,6 +1226,12 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.applyDoctorReport(msg.Report)
 		if msg.Err != nil {
 			m.addSystemMessage(fmt.Sprintf("%s failed: %v", msg.Action, msg.Err))
+		}
+		return m, nil
+	case doctorStatusMsg:
+		_, cmd := m.doctor.Update(msg)
+		if cmd != nil {
+			return m.Update(cmd())
 		}
 		return m, nil
 
@@ -1093,7 +1294,8 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Surface interaction frame handling.
 	case SurfaceFrameMsg:
 		if m.activeSurface != nil {
-			m.activeSurface.HandleFrame(context.Background(), &m, msg)
+			m.activeSurface.HandleFrame(m.parentCtx, &m, msg)
+			m.refreshCircuit()
 		}
 		return m, nil
 
@@ -1195,28 +1397,36 @@ func (m RootModel) View() string {
 		return ""
 	}
 	if m.height < 6 {
+		if m.demoScenario != "" {
+			return boundedScreen("DEMO\n"+m.inputBar.View(m.activeTab, false), m.width, m.height)
+		}
 		return boundedScreen(m.inputBar.View(m.activeTab, false), m.width, m.height)
 	}
 	state := m.InteractionState()
 	label := string(state.Canvas)
 	header := m.th.Dim().Render("relurpish · " + terminalText(state.Agent) + " / " + label)
+	if m.demoScenario != "" {
+		header = m.th.Dim().Render("DEMO · relurpish / " + label + " · " + terminalText(m.demoScenario))
+	}
 	body := terminalText(m.activePaneView())
-	if m.activeTab == TabChat && m.chat != nil {
+	if m.activeTab == TabChat {
 		body = strings.Join(m.chatCanvasLines(), "\n")
 	}
+	if m.activeTab == TabRun {
+		body = m.circuit.view(m.width, max(1, m.height-5), m.focus.State().InRegion1())
+	}
+	if m.activeTab == TabWorkshop {
+		body = m.workshop.View()
+	}
 	if m.showHelp {
-		lines := []string{"Commands · Escape closes help", "F6 / Tab: focus canvas · Ctrl+G: open attention", "Alt+Enter: newline · PageUp/PageDown: scroll", ""}
-		if m.cmdReg != nil {
-			for _, command := range m.cmdReg.All() {
-				lines = append(lines, command.Usage+"  "+command.Description)
-			}
-		}
-		start := min(m.helpOffset, max(0, len(lines)-1))
-		body = strings.Join(lines[start:], "\n")
+		body = m.helpView()
 	}
 	status := "ready · /help · Ctrl+G attention"
 	if m.chat == nil {
 		status = "execution unavailable · /doctor · /help"
+	}
+	if m.conversation != nil {
+		status = m.frontendState.Status
 	}
 	if m.startupLocked {
 		status = "setup needed · /doctor · your request stays a draft"
@@ -1224,8 +1434,14 @@ func (m RootModel) View() string {
 	if m.chat != nil && m.chat.HasActiveRuns() {
 		status = "working · /stop cancels · keep reading or composing"
 	}
+	if m.notice != "" {
+		status = terminalText(m.notice)
+	}
 	if m.notifQ != nil && m.notifQ.Len() > 0 {
 		status = fmt.Sprintf("%d attention item(s) · Ctrl+G to open deliberately", m.notifQ.Len())
+	}
+	if m.frontendState.Decision != nil {
+		status = "Decision waiting · Ctrl+G opens it · typing stays in your request"
 	}
 	if m.decisionFocused {
 		status = "decision focused · Escape returns to your draft"
@@ -1233,6 +1449,9 @@ func (m RootModel) View() string {
 			body = m.hitlRow.View()
 		} else if m.notifBar != nil {
 			body = m.notifBar.View()
+		}
+		if m.conversation != nil && m.frontendState.Decision != nil {
+			body = m.frontendDecisionView()
 		}
 	}
 	if m.cmdPalette != nil && m.cmdPalette.IsOpen() {
@@ -1256,6 +1475,21 @@ func (m RootModel) View() string {
 }
 
 func (m RootModel) activePaneView() string {
+	if m.activeTab == TabConfiguration {
+		return m.configuration.view(m.width, max(1, m.height-5))
+	}
+	if m.activeTab == TabServices {
+		return m.services.view(m.width, max(1, m.height-5))
+	}
+	if m.activeTab == TabSettings {
+		return m.settingsView()
+	}
+	if m.activeTab == TabKeybindings {
+		return m.keybindings.View()
+	}
+	if m.activeTab == TabDoctor {
+		return m.doctor.View()
+	}
 	if isBaseFrameworkTab(m.activeTab) && m.baseSurface != nil {
 		return m.baseSurface.View()
 	}
@@ -1278,6 +1512,9 @@ func (m RootModel) activeAgentName() string {
 // setActiveTab updates activeTab on the model, the tab bar, the tab registry,
 // and the subtab bar consistently.
 func (m *RootModel) setActiveTab(id TabID) {
+	if m.activeTab != id {
+		m.canvasOffset = 0
+	}
 	m.activeTab = id
 	m.tabBar.SetActive(id)
 	m.tabs.SetActive(id)
@@ -1318,138 +1555,41 @@ func (m *RootModel) setActiveSubTab(sub SubTabID) {
 	}
 }
 
-// handleGlobalKey processes navigation keys emitted by InputBar when the
-// input field is empty.
-func (m RootModel) handleGlobalKey(key string) (tea.Model, tea.Cmd) {
+// handleGlobalKey resolves delivered host actions through this host's map.
+func (m RootModel) handleGlobalKey(chord string) (tea.Model, tea.Cmd) {
 	switch {
-	case keyMatchesBinding(GlobalKeys.Quit, key):
+	case keyMatchesBinding(m.keys.Quit, chord), chord == "ctrl+q":
 		return m, tea.Batch(func() tea.Msg { m.cleanup(); return nil }, tea.Quit)
-	case keyMatchesBinding(GlobalKeys.Tab1, key):
-		idx := 0
-		id := m.tabs.TabAtIndex(idx)
-		if id != "" {
-			m.setActiveTab(id)
-			m.refreshActivePane()
-			return m, nil
-		}
-	case keyMatchesBinding(GlobalKeys.Tab2, key):
-		idx := 1
-		id := m.tabs.TabAtIndex(idx)
-		if id != "" {
-			m.setActiveTab(id)
-			m.refreshActivePane()
-			return m, nil
-		}
-	case keyMatchesBinding(GlobalKeys.Tab3, key):
-		idx := 2
-		id := m.tabs.TabAtIndex(idx)
-		if id != "" {
-			m.setActiveTab(id)
-			m.refreshActivePane()
-			return m, nil
-		}
-	case keyMatchesBinding(GlobalKeys.Tab4, key):
-		idx := 3
-		id := m.tabs.TabAtIndex(idx)
-		if id != "" {
-			m.setActiveTab(id)
-			m.refreshActivePane()
-			return m, nil
-		}
-	case keyMatchesBinding(GlobalKeys.Tab5, key):
-		idx := 4
-		id := m.tabs.TabAtIndex(idx)
-		if id != "" {
-			m.setActiveTab(id)
-			m.refreshActivePane()
-			return m, nil
-		}
-	case keyMatchesBinding(GlobalKeys.Tab6, key):
-		idx := 5
-		id := m.tabs.TabAtIndex(idx)
-		if id != "" {
-			m.setActiveTab(id)
-			m.refreshActivePane()
-			return m, nil
-		}
-	case key == "]":
-		m.setActiveSubTab(m.tabs.CycleSubNext())
-		return m, m.refreshActiveSurfaceCmd()
-	case key == "[":
-		m.setActiveSubTab(m.tabs.CycleSubPrev())
-		return m, m.refreshActiveSurfaceCmd()
-	case keyMatchesBinding(GlobalKeys.FocusRegion1, key):
-		m.setFocus(FocusRegionRegion1)
-		return m, nil
-	case keyMatchesBinding(GlobalKeys.AgentPicker, key):
+	case keyMatchesBinding(m.keys.Help, chord):
+		m.showHelp = !m.showHelp
+		m.helpOffset = 0
+		m.helpCommand = ""
+	case keyMatchesBinding(m.keys.AgentPicker, chord):
 		m.openAgentPicker()
-		return m, nil
-	case keyMatchesBinding(GlobalKeys.SearchMode, key):
-		m.searchActive = !m.searchActive
-		m.inputBar.SetSearchMode(m.searchActive)
-		if !m.searchActive && m.chat != nil {
-			m.chat.SetSearchFilter("")
-		}
-		m.syncActivePaneFilter(m.inputBar.Value())
-		if !m.searchActive {
+	case keyMatchesBinding(m.keys.FocusRegion1, chord):
+		m.setFocus(FocusRegionRegion1)
+	case keyMatchesBinding(m.keys.FocusToggle, chord):
+		if m.focus.State().InInput() {
+			m.setFocus(FocusRegionRegion1)
+		} else {
 			m.setFocus(FocusRegionInput)
 		}
-	case keyMatchesBinding(GlobalKeys.Help, key):
-		m.showHelp = !m.showHelp
-	case key == "esc":
-		if m.showHelp {
-			m.showHelp = false
-			return m, nil
+	case keyMatchesBinding(m.keys.Attention, chord):
+		m.decisionFocused = true
+	case keyMatchesBinding(m.keys.Undo, chord):
+		if m.activeTab == TabWorkshop {
+			m.workshop.history(false)
+		} else if m.chat != nil && !m.chat.Undo() {
+			m.addSystemMessage("Nothing to undo")
 		}
+	case keyMatchesBinding(m.keys.Redo, chord):
+		if m.activeTab == TabWorkshop {
+			m.workshop.history(true)
+		} else if m.chat != nil && !m.chat.Redo() {
+			m.addSystemMessage("Nothing to redo")
+		}
+	case chord == "esc":
 		m.searchActive = false
-		m.inputBar.SetSearchMode(false)
-		if m.chat != nil {
-			m.chat.SetSearchFilter("")
-		}
-	case keyMatchesBinding(GlobalKeys.Undo, key):
-		// Undo: revert to previous feed snapshot
-		if m.chat != nil {
-			if !m.chat.Undo() {
-				m.addSystemMessage("nothing to undo")
-			}
-		}
-	case keyMatchesBinding(GlobalKeys.Redo, key):
-		// Redo: restore the next feed snapshot
-		if m.chat != nil {
-			if !m.chat.Redo() {
-				m.addSystemMessage("nothing to redo")
-			}
-		}
-	case keyMatchesBinding(GlobalKeys.ScrollUp, key):
-		// Scroll up: scroll the chat feed up
-		if m.chat != nil && (m.activeTab == TabChat || m.activeTab == TabDiff) {
-			m.chat.ScrollUp()
-		}
-	case keyMatchesBinding(GlobalKeys.ScrollDown, key):
-		// Page down: scroll the chat feed down by page
-		if m.chat != nil && (m.activeTab == TabChat || m.activeTab == TabDiff) {
-			m.chat.PageDown()
-		}
-	case keyMatchesBinding(GlobalKeys.PageUp, key):
-		// Page up: scroll the chat feed up by page
-		if m.chat != nil && (m.activeTab == TabChat || m.activeTab == TabDiff) {
-			m.chat.PageUp()
-		}
-	case keyMatchesBinding(GlobalKeys.FilePicker, key):
-		// File picker: enable file selection mode in input
-		m.inputBar.SetFilePickerMode(true)
-	case keyMatchesBinding(GlobalKeys.SidebarToggle, key):
-		// Toggle chat context sidebar
-		if m.chat != nil && (m.activeTab == TabChat || m.activeTab == TabDiff) {
-			if sidebar, ok := m.chat.(ChatSidebarController); ok {
-				sidebar.ToggleSidebar()
-			}
-		}
-	case keyMatchesBinding(GlobalKeys.Compact, key):
-		// Compact: toggle message compactness in chat feed
-		if m.chat != nil {
-			m.chat.ToggleCompact()
-		}
 	}
 	return m, nil
 }
@@ -1541,10 +1681,7 @@ func (m *RootModel) applyStartupGate() {
 	if m == nil {
 		return
 	}
-	report := runtimesvc.DoctorReport{}
-	if reporter, ok := m.baseSurface.(StartupGateController); ok {
-		report = reporter.DoctorReport()
-	}
+	report := m.doctor.Report()
 	m.startupLocked = !report.Ready()
 	if m.startupLocked {
 		m.setActiveTab(TabDoctor)
@@ -1557,11 +1694,8 @@ func (m *RootModel) applyDoctorReport(report runtimesvc.DoctorReport) {
 	}
 	wasLocked := m.startupLocked
 	m.startupLocked = !report.Ready()
-	if controller, ok := m.baseSurface.(StartupGateController); ok {
-		controller.SetDoctorReport(report)
-	}
+	m.doctor.SetReport(report)
 	if wasLocked && !m.startupLocked {
-		m.setActiveTab(TabChat)
 		m.addSystemMessage("Doctor checks passed. Submit your preserved draft when ready.")
 		if postures := doctorPostureSummary(report); postures != "" {
 			m.addSystemMessage(postures)
@@ -1574,6 +1708,9 @@ func (m RootModel) handleInputSubmitted(msg InputSubmittedMsg) (tea.Model, tea.C
 	if strings.TrimSpace(msg.Value) == "" {
 		return m, nil
 	}
+	if m.conversation != nil {
+		return m.submitFrontend(msg.Value)
+	}
 	if m.startupLocked || m.chat == nil {
 		m.addSystemMessage("Request kept as a draft: execution is unavailable. Open /doctor.")
 		return m, nil
@@ -1585,11 +1722,16 @@ func (m RootModel) handleInputSubmitted(msg InputSubmittedMsg) (tea.Model, tea.C
 	cmd := m.chat.HandleInputSubmit(msg.Value)
 	if cmd != nil && m.inputBar != nil {
 		m.inputBar.Accept(msg.Value)
+		m.notice = ""
 	}
 	return m, cmd
 }
 
 func (m RootModel) handleWorkspaceSelected(workspace string) (tea.Model, tea.Cmd) {
+	if m.services.working {
+		m.addSystemMessage("Wait for the pending service operation before switching workspace")
+		return m, nil
+	}
 	workspace = strings.TrimSpace(workspace)
 	if workspace == "" {
 		m.addSystemMessage("Workspace selection is empty")
@@ -1602,10 +1744,19 @@ func (m RootModel) handleWorkspaceSelected(workspace string) (tea.Model, tea.Cmd
 		m.addSystemMessage("Workspace reload unavailable")
 		return m, nil
 	}
-	if err := reloader.ReloadWorkspace(context.Background(), workspace); err != nil {
+	if err := reloader.ReloadWorkspace(m.parentCtx, workspace); err != nil {
 		m.addSystemMessage(fmt.Sprintf("Workspace reload failed: %v", err))
 		return m, nil
 	}
+	if canonical := m.runtime.SessionInfo().Workspace; canonical != "" {
+		workspace = canonical
+	}
+	m.configurationEpoch++
+	m.configuration = documentInspector{}
+	m.services.epoch++
+	m.services.workspace = workspace
+	m.services.items = nil
+	m.services.review = nil
 	if m.sharedSess != nil {
 		m.sharedSess.Workspace = workspace
 	}
@@ -1695,6 +1846,7 @@ func (m RootModel) handleRestoreSession(id string) (tea.Model, tea.Cmd) {
 
 // addSystemMessage adds a system line to the chat feed.
 func (m *RootModel) addSystemMessage(text string) {
+	m.notice = text
 	if m.chat != nil {
 		m.chat.AddSystemMessage(text)
 	}
@@ -1737,14 +1889,8 @@ func (m RootModel) autoSave(workflowID string) {
 
 // cleanup cancels all runs and unsubscribes HITL.
 func (m RootModel) cleanup() {
-	if m.hitlUnsub != nil {
-		m.hitlUnsub()
-	}
-	if m.execEventUnsub != nil {
-		m.execEventUnsub()
-	}
-	if m.chat != nil {
-		m.chat.Cleanup()
+	if m.lifetime != nil {
+		m.lifetime.close()
 	}
 }
 

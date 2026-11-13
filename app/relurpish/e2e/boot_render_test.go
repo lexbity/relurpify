@@ -58,7 +58,7 @@ func TestBootRender_RealAdapter_NoPanic(t *testing.T) {
 	// here we execute that command and feed its DoctorStatusMsg back through
 	// Update, mirroring the bubbletea runtime, so the startup gate re-evaluates
 	// against the real (ready) report and unlocks chat.
-	m := tui.NewRootModel(context.Background(), adapter, euclotui.NewSurfaceFactory())
+	m := tui.NewRootModel(context.Background(), tui.HostOptions{Runtime: adapter, SurfaceFactory: euclotui.NewSurfaceFactory()})
 	initCmd := m.Init()
 	if initCmd == nil {
 		t.Fatal("Init() returned nil command; startup doctor probe not dispatched")

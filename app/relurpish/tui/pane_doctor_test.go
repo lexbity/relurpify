@@ -10,12 +10,8 @@ import (
 func TestDoctorStartupLocksWhenReportIsBlocked(t *testing.T) {
 	surface := &fakeSurface{name: "none", chat: &fakeChatPane{}}
 	factory := &countingFactory{shared: surface}
-	m := NewRootModel(context.Background(), nil, factory)
-	controller, ok := m.baseSurface.(StartupGateController)
-	if !ok {
-		t.Fatal("expected base surface to expose startup gate controller")
-	}
-	controller.SetDoctorReport(runtimesvc.DoctorReport{})
+	m := NewRootModel(context.Background(), HostOptions{SurfaceFactory: factory})
+	m.doctor.SetReport(runtimesvc.DoctorReport{})
 	m.applyStartupGate()
 
 	if !m.startupLocked {
@@ -39,13 +35,8 @@ func TestDoctorStartupPromotesToGuestWhenReportIsReady(t *testing.T) {
 			"guest": guestSurface,
 		},
 	}
-	m := NewRootModel(context.Background(), nil, factory)
-	controller, ok := m.baseSurface.(StartupGateController)
-	if !ok {
-		t.Fatal("expected base surface to expose startup gate controller")
-	}
-
-	controller.SetDoctorReport(runtimesvc.DoctorReport{
+	m := NewRootModel(context.Background(), HostOptions{SurfaceFactory: factory})
+	m.doctor.SetReport(runtimesvc.DoctorReport{
 		WorkspacePresent:      true,
 		ConfigExists:          true,
 		ManifestExists:        true,

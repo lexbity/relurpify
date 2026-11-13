@@ -161,6 +161,8 @@ func (p *SecurityGuardPane) Update(msg tea.Msg) (*SecurityGuardPane, tea.Cmd) {
 	return p, nil
 }
 
+func (p *SecurityGuardPane) OwnsEscape() bool { return p.editing || p.confirmDrop }
+
 func (p *SecurityGuardPane) View() string {
 	shell := p.renderShellPanel()
 	ingest := p.renderIngestionPanel()

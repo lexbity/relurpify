@@ -163,7 +163,7 @@ var _ tui.ChatSidebarController = (*ChatPane)(nil)
 
 // NewChatPane constructs the Euclo chat surface. parentCtx anchors every
 // run's cancellable context (typically the program's signal context); runs
-// die with it. A nil parentCtx is treated as context.Background().
+// die with it. The caller must provide a non-nil parent context.
 func NewChatPane(parentCtx context.Context, rt tui.RuntimeAdapter, ctx *tui.AgentContext, sess *tui.Session, notifQ *tui.NotificationQueue, router *EucloEventRouter, th *theme.Theme, anim *tui.AnimationManager) *ChatPane {
 	sp := spinner.New()
 	sp.Spinner = spinner.Dot
@@ -174,7 +174,7 @@ func NewChatPane(parentCtx context.Context, rt tui.RuntimeAdapter, ctx *tui.Agen
 		th = theme.Default()
 	}
 	if parentCtx == nil {
-		parentCtx = context.Background()
+		panic("NewChatPane requires a parent context")
 	}
 	pane := &ChatPane{
 		feed:             tui.NewFeed(),

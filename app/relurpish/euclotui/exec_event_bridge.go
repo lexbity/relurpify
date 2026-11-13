@@ -124,14 +124,20 @@ func patchHunksFromEditMeta(meta map[string]any) []PatchHunk {
 // dropped, preventing duplicate or out-of-order application.
 type ExecEventApplier struct {
 	router    *EucloEventRouter
-	highWater map[string]uint64
+	highWater map[execEventKey]uint64
+}
+
+type execEventKey struct {
+	taskID string
+	typeID reporting.EventType
+	stepID string
 }
 
 // NewExecEventApplier creates an applier backed by the given router.
 func NewExecEventApplier(router *EucloEventRouter) *ExecEventApplier {
 	return &ExecEventApplier{
 		router:    router,
-		highWater: make(map[string]uint64),
+		highWater: make(map[execEventKey]uint64),
 	}
 }
 
@@ -148,9 +154,10 @@ func (a *ExecEventApplier) Apply(ev telemetry.Event) (EucloProjectionSnapshot, b
 		return EucloProjectionSnapshot{}, false
 	}
 
-	// Seq guard: drop if Seq ≤ highWater for (Type, StepID).
+	// Task identity scopes sequence numbers. A later run may reuse step IDs
+	// and restart its event sequence without being mistaken for a stale event.
 	if ev.Seq > 0 {
-		key := string(execEv.Type) + "|" + execEv.StepID
+		key := execEventKey{taskID: ev.TaskID, typeID: execEv.Type, stepID: execEv.StepID}
 		if last, exists := a.highWater[key]; exists && ev.Seq <= last {
 			return a.router.Snapshot(), false
 		}
