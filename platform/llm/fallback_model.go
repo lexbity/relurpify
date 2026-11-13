@@ -14,35 +14,40 @@ import (
 // It renders the tool set into the prompt, delegates to Generate, and parses
 // tool calls back out of the returned text.
 type FallbackToolModel struct {
-	inner LanguageModel
+	inner model.LanguageModel
 }
 
-func NewFallbackToolModel(inner LanguageModel) *FallbackToolModel {
+// NewFallbackToolModel wraps a model with text-protocol tool-call fallback.
+func NewFallbackToolModel(inner model.LanguageModel) *FallbackToolModel {
 	return &FallbackToolModel{inner: inner}
 }
 
-func (m *FallbackToolModel) Generate(ctx context.Context, prompt string, options *LLMOptions) (*LLMResponse, error) {
+// Generate implements model.LanguageModel.
+func (m *FallbackToolModel) Generate(ctx context.Context, prompt string, options *model.LLMOptions) (*model.LLMResponse, error) {
 	if m == nil || m.inner == nil {
 		return nil, nil
 	}
 	return m.inner.Generate(ctx, prompt, options)
 }
 
-func (m *FallbackToolModel) GenerateStream(ctx context.Context, prompt string, options *LLMOptions) (<-chan string, error) {
+// GenerateStream implements model.LanguageModel.
+func (m *FallbackToolModel) GenerateStream(ctx context.Context, prompt string, options *model.LLMOptions) (<-chan string, error) {
 	if m == nil || m.inner == nil {
 		return nil, nil
 	}
 	return m.inner.GenerateStream(ctx, prompt, options)
 }
 
-func (m *FallbackToolModel) Chat(ctx context.Context, messages []Message, options *LLMOptions) (*LLMResponse, error) {
+// Chat implements model.LanguageModel.
+func (m *FallbackToolModel) Chat(ctx context.Context, messages []model.Message, options *model.LLMOptions) (*model.LLMResponse, error) {
 	if m == nil || m.inner == nil {
 		return nil, nil
 	}
 	return m.inner.Chat(ctx, messages, options)
 }
 
-func (m *FallbackToolModel) ChatWithTools(ctx context.Context, messages []Message, tools []LLMToolSpec, options *LLMOptions) (*LLMResponse, error) {
+// ChatWithTools implements model.LanguageModel.
+func (m *FallbackToolModel) ChatWithTools(ctx context.Context, messages []model.Message, tools []model.LLMToolSpec, options *model.LLMOptions) (*model.LLMResponse, error) {
 	if m == nil || m.inner == nil {
 		return nil, nil
 	}
@@ -85,7 +90,7 @@ func (m *FallbackToolModel) UsesNativeToolCalling() bool {
 	return false
 }
 
-func buildFallbackToolPrompt(messages []Message, tools []LLMToolSpec) string {
+func buildFallbackToolPrompt(messages []model.Message, tools []model.LLMToolSpec) string {
 	var b strings.Builder
 	b.WriteString("Conversation:\n")
 	for _, msg := range messages {
@@ -185,7 +190,7 @@ func extractFallbackTopLevelJSONObjects(text string) []string {
 type callingModeManagedBackend struct {
 	inner   ManagedBackend
 	mu      sync.RWMutex
-	profile *ModelProfile
+	profile *model.ModelProfile
 }
 
 func newCallingModeManagedBackend(inner ManagedBackend) ManagedBackend {
@@ -199,7 +204,7 @@ func newCallingModeManagedBackend(inner ManagedBackend) ManagedBackend {
 	return wrapped
 }
 
-func (b *callingModeManagedBackend) Model() LanguageModel {
+func (b *callingModeManagedBackend) Model() model.LanguageModel {
 	if b == nil || b.inner == nil {
 		return nil
 	}
@@ -216,9 +221,9 @@ func (b *callingModeManagedBackend) Embedder() Embedder {
 	return b.inner.Embedder()
 }
 
-func (b *callingModeManagedBackend) Capabilities() BackendCapabilities {
+func (b *callingModeManagedBackend) Capabilities() model.BackendCapabilities {
 	if b == nil || b.inner == nil {
-		return BackendCapabilities{}
+		return model.BackendCapabilities{}
 	}
 	return b.inner.Capabilities()
 }
@@ -265,7 +270,7 @@ func (b *callingModeManagedBackend) SetDebugLogging(enabled bool) {
 	b.inner.SetDebugLogging(enabled)
 }
 
-func (b *callingModeManagedBackend) SetProfile(profile *ModelProfile) {
+func (b *callingModeManagedBackend) SetProfile(profile *model.ModelProfile) {
 	if b == nil || b.inner == nil {
 		return
 	}
@@ -295,7 +300,7 @@ func (b *pullableCallingModeManagedBackend) Pull(ctx context.Context, model stri
 	return pullable.Pull(ctx, model)
 }
 
-func wrapForCallingMode(inner LanguageModel, caps BackendCapabilities, profile *ModelProfile) LanguageModel {
+func wrapForCallingMode(inner model.LanguageModel, caps model.BackendCapabilities, profile *model.ModelProfile) model.LanguageModel {
 	if inner == nil {
 		return nil
 	}
@@ -308,7 +313,7 @@ func wrapForCallingMode(inner LanguageModel, caps BackendCapabilities, profile *
 	return &FallbackToolModel{inner: inner}
 }
 
-func shouldUseNativeToolCalling(caps BackendCapabilities, profile *ModelProfile) bool {
+func shouldUseNativeToolCalling(caps model.BackendCapabilities, profile *model.ModelProfile) bool {
 	if !caps.NativeToolCalling {
 		return false
 	}

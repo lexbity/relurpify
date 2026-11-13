@@ -37,22 +37,22 @@ func (r *recordingTelemetry) snapshot() []telemetry.Event {
 // a prompt and a response event per call.
 type promptStubModel struct{}
 
-func (promptStubModel) Generate(_ context.Context, _ string, _ *llm.LLMOptions) (*llm.LLMResponse, error) {
-	return &llm.LLMResponse{Text: "ok", FinishReason: "stop"}, nil
+func (promptStubModel) Generate(_ context.Context, _ string, _ *model.LLMOptions) (*model.LLMResponse, error) {
+	return &model.LLMResponse{Text: "ok", FinishReason: "stop"}, nil
 }
 
-func (promptStubModel) GenerateStream(context.Context, string, *llm.LLMOptions) (<-chan string, error) {
+func (promptStubModel) GenerateStream(context.Context, string, *model.LLMOptions) (<-chan string, error) {
 	ch := make(chan string)
 	close(ch)
 	return ch, nil
 }
 
-func (promptStubModel) Chat(_ context.Context, _ []model.Message, _ *llm.LLMOptions) (*llm.LLMResponse, error) {
-	return &llm.LLMResponse{Text: "ok", FinishReason: "stop"}, nil
+func (promptStubModel) Chat(_ context.Context, _ []model.Message, _ *model.LLMOptions) (*model.LLMResponse, error) {
+	return &model.LLMResponse{Text: "ok", FinishReason: "stop"}, nil
 }
 
-func (promptStubModel) ChatWithTools(_ context.Context, _ []model.Message, _ []llm.LLMToolSpec, _ *llm.LLMOptions) (*llm.LLMResponse, error) {
-	return &llm.LLMResponse{Text: "ok", FinishReason: "stop"}, nil
+func (promptStubModel) ChatWithTools(_ context.Context, _ []model.Message, _ []model.LLMToolSpec, _ *model.LLMOptions) (*model.LLMResponse, error) {
+	return &model.LLMResponse{Text: "ok", FinishReason: "stop"}, nil
 }
 
 func waitEvents(t *testing.T, r *recordingTelemetry, n int) []telemetry.Event {

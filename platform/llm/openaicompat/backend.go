@@ -22,27 +22,32 @@ type BackendConfig struct {
 type Backend struct {
 	client *Client
 	cfg    BackendConfig
+	gate   *model.CallGate
 }
 
 // NewBackend constructs a managed backend for an OpenAI-compatible provider.
-func NewBackend(cfg BackendConfig, apiKey string) *Backend {
+// For P03: gate is the model gate for physical request enforcement.
+func NewBackend(cfg BackendConfig, apiKey string, gate *model.CallGate) *Backend {
 	clientCfg := OpenAICompatConfig{
 		Endpoint:          cfg.Endpoint,
 		Timeout:           cfg.Timeout,
 		NativeToolCalling: cfg.NativeToolCalling,
 	}
+	client := NewClient(clientCfg, apiKey)
 	return &Backend{
-		client: NewClient(clientCfg, apiKey),
+		client: client,
 		cfg:    cfg,
+		gate:   gate,
 	}
 }
 
 // Model returns the underlying language model client.
-func (b *Backend) Model() llm.LanguageModel {
+// For P03: when gate is set, the model is wrapped with gate enforcement.
+func (b *Backend) Model() model.LanguageModel {
 	if b == nil {
 		return nil
 	}
-	return b.client
+	return llm.NewGatedModel(b.client, b.gate)
 }
 
 // Embedder returns an OpenAI-compatible embedder bound to the endpoint.

@@ -44,7 +44,7 @@ func contextWindowServer(t *testing.T, contextLength int) (*Backend, *chatPayloa
 	mux.HandleFunc("/api/chat", capture.handler)
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
-	return NewBackend(Config{Endpoint: srv.URL, Model: "test-model"}, ""), capture
+	return NewBackend(Config{Endpoint: srv.URL, Model: "test-model"}, "", nil), capture
 }
 
 func decodedOptions(t *testing.T, capture *chatPayloadCapture) map[string]any {
@@ -78,7 +78,7 @@ func TestModelDerivesNumCtxFromServerCapability(t *testing.T) {
 // memory stays bounded by the configured posture).
 func TestModelClampsWindowToProfileBudget(t *testing.T) {
 	backend, capture := contextWindowServer(t, 131072)
-	backend.SetProfile(&ModelProfile{ContextSize: 8192})
+	backend.SetProfile(&model.ModelProfile{ContextSize: 8192})
 
 	_, err := backend.Model().Chat(context.Background(), []model.Message{{Role: "user", Content: "hi"}}, nil)
 	require.NoError(t, err)
@@ -92,7 +92,7 @@ func TestModelClampsWindowToProfileBudget(t *testing.T) {
 // down — a budget the server cannot attend to must never be requested.
 func TestModelClampsBudgetToServerCapability(t *testing.T) {
 	backend, capture := contextWindowServer(t, 4096)
-	backend.SetProfile(&ModelProfile{ContextSize: 8192})
+	backend.SetProfile(&model.ModelProfile{ContextSize: 8192})
 
 	_, err := backend.Model().Chat(context.Background(), []model.Message{{Role: "user", Content: "hi"}}, nil)
 	require.NoError(t, err)
@@ -107,7 +107,7 @@ func TestExplicitCallerWindowWins(t *testing.T) {
 	backend, capture := contextWindowServer(t, 131072)
 
 	_, err := backend.Model().Chat(context.Background(), []model.Message{{Role: "user", Content: "hi"}},
-		&LLMOptions{ContextWindow: 2048})
+		&model.LLMOptions{ContextWindow: 2048})
 	require.NoError(t, err)
 
 	opts := decodedOptions(t, capture)
@@ -127,7 +127,7 @@ func TestUnreachableServerLeavesDefault(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	backend := NewBackend(Config{Endpoint: srv.URL, Model: "test-model"}, "")
+	backend := NewBackend(Config{Endpoint: srv.URL, Model: "test-model"}, "", nil)
 	_, err := backend.Model().Chat(context.Background(), []model.Message{{Role: "user", Content: "hi"}}, nil)
 	require.NoError(t, err)
 

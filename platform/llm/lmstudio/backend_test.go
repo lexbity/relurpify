@@ -16,7 +16,6 @@ import (
 	"codeburg.org/lexbit/relurpify/model"
 	"codeburg.org/lexbit/relurpify/platform/llm"
 	"codeburg.org/lexbit/relurpify/platform/llm/conformance"
-	"codeburg.org/lexbit/relurpify/platform/llm/openaicompat"
 )
 
 func TestBackend_ConformanceSuite(t *testing.T) {
@@ -28,7 +27,7 @@ func TestBackend_ConformanceSuite(t *testing.T) {
 				Endpoint:          endpoint,
 				Model:             "test-model",
 				NativeToolCalling: nativeToolCalling,
-			}, "")
+			}, "", nil)
 		},
 		NewServer: func(t *testing.T, scenario string, nativeToolCalling bool) *httptest.Server {
 			t.Helper()
@@ -170,7 +169,7 @@ func TestLMStudioBackend_Warm_Reachable(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	backend := NewBackend(Config{Endpoint: srv.URL, Model: "test-model"}, "")
+	backend := NewBackend(Config{Endpoint: srv.URL, Model: "test-model"}, "", nil)
 	assert.NoError(t, backend.Warm(context.Background()))
 }
 
@@ -180,12 +179,12 @@ func TestLMStudioBackend_Warm_Unreachable(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	backend := NewBackend(Config{Endpoint: srv.URL, Model: "test-model"}, "")
+	backend := NewBackend(Config{Endpoint: srv.URL, Model: "test-model"}, "", nil)
 	assert.Error(t, backend.Warm(context.Background()))
 }
 
 func TestLMStudioBackend_Capabilities(t *testing.T) {
-	backend := NewBackend(Config{NativeToolCalling: true}, "")
+	backend := NewBackend(Config{NativeToolCalling: true}, "", nil)
 	caps := backend.Capabilities()
 	require.True(t, caps.NativeToolCalling)
 	require.True(t, caps.UsageReporting)
@@ -193,8 +192,8 @@ func TestLMStudioBackend_Capabilities(t *testing.T) {
 }
 
 func TestLMStudioBackend_ModelContextSize_ProfileOverride(t *testing.T) {
-	backend := NewBackend(Config{Endpoint: "http://localhost:1234", Model: "test-model"}, "")
-	backend.SetProfile(&openaicompat.ModelProfile{ContextSize: 4096})
+	backend := NewBackend(Config{Endpoint: "http://localhost:1234", Model: "test-model"}, "", nil)
+	backend.SetProfile(&model.ModelProfile{ContextSize: 4096})
 	size, err := backend.ModelContextSize(context.Background())
 	require.NoError(t, err)
 	require.Equal(t, 4096, size)
@@ -213,7 +212,7 @@ func TestLMStudioBackend_Chat(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	backend := NewBackend(Config{Endpoint: srv.URL, Model: "test-model"}, "")
+	backend := NewBackend(Config{Endpoint: srv.URL, Model: "test-model"}, "", nil)
 	resp, err := backend.Model().Chat(context.Background(), []model.Message{{Role: "user", Content: "ping"}}, nil)
 	require.NoError(t, err)
 	assert.Equal(t, "response", resp.Text)
@@ -233,7 +232,7 @@ func TestLMStudioBackend_Streaming(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	backend := NewBackend(Config{Endpoint: srv.URL, Model: "test-model"}, "")
+	backend := NewBackend(Config{Endpoint: srv.URL, Model: "test-model"}, "", nil)
 	var got strings.Builder
 	resp, err := backend.Model().ChatWithTools(context.Background(), []model.Message{{Role: "user", Content: "ping"}}, nil, &model.LLMOptions{
 		StreamCallback: func(token string) { got.WriteString(token) },
@@ -272,7 +271,7 @@ func TestLMStudioBackend_ChatWithTools_Native(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	backend := NewBackend(Config{Endpoint: srv.URL, Model: "test-model", NativeToolCalling: true}, "")
+	backend := NewBackend(Config{Endpoint: srv.URL, Model: "test-model", NativeToolCalling: true}, "", nil)
 	resp, err := backend.Model().ChatWithTools(context.Background(), []model.Message{{Role: "user", Content: "ping"}}, []model.LLMToolSpec{{Name: "echo"}}, nil)
 	require.NoError(t, err)
 	assert.Len(t, resp.ToolCalls, 1)
@@ -290,7 +289,7 @@ func TestLMStudioBackend_BearerAuth(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	backend := NewBackend(Config{Endpoint: srv.URL, Model: "test-model"}, "secret")
+	backend := NewBackend(Config{Endpoint: srv.URL, Model: "test-model"}, "secret", nil)
 	_, err := backend.Model().Chat(context.Background(), []model.Message{{Role: "user", Content: "ping"}}, nil)
 	assert.NoError(t, err)
 }
@@ -306,7 +305,7 @@ func TestLMStudioBackend_NoAuth(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	backend := NewBackend(Config{Endpoint: srv.URL, Model: "test-model"}, "")
+	backend := NewBackend(Config{Endpoint: srv.URL, Model: "test-model"}, "", nil)
 	_, err := backend.Model().Chat(context.Background(), []model.Message{{Role: "user", Content: "ping"}}, nil)
 	assert.NoError(t, err)
 }
@@ -325,7 +324,7 @@ func TestLMStudioBackend_Embeddings(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	backend := NewBackend(Config{Endpoint: srv.URL, Model: "embed-model"}, "")
+	backend := NewBackend(Config{Endpoint: srv.URL, Model: "embed-model"}, "", nil)
 	embedder := backend.Embedder()
 	assert.NotNil(t, embedder)
 	vectors, err := embedder.Embed(context.Background(), []string{"hello"})
@@ -345,7 +344,7 @@ func TestLMStudioBackend_ListModels(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	backend := NewBackend(Config{Endpoint: srv.URL, Model: "test-model"}, "")
+	backend := NewBackend(Config{Endpoint: srv.URL, Model: "test-model"}, "", nil)
 	models, err := backend.ListModels(context.Background())
 	require.NoError(t, err)
 	assert.Len(t, models, 2)
@@ -361,14 +360,14 @@ func TestLMStudioBackend_Health(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	backend := NewBackend(Config{Endpoint: srv.URL, Model: "test-model"}, "")
+	backend := NewBackend(Config{Endpoint: srv.URL, Model: "test-model"}, "", nil)
 	report, err := backend.Health(context.Background())
 	require.NoError(t, err)
 	assert.Equal(t, llm.BackendHealthReady, report.State)
 }
 
 func TestLMStudioBackend_CloseAndDebugLogging(t *testing.T) {
-	backend := NewBackend(Config{Endpoint: "http://example.invalid", Model: "test-model"}, "")
+	backend := NewBackend(Config{Endpoint: "http://example.invalid", Model: "test-model"}, "", nil)
 	require.NoError(t, backend.Close())
 	require.NoError(t, backend.Close())
 	backend.SetDebugLogging(true)

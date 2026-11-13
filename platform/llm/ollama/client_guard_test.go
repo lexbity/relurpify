@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/model"
 	"github.com/stretchr/testify/require"
 )
 
@@ -13,8 +14,8 @@ func TestClient_ChatWithTools_NonNativeReturnsGuardError(t *testing.T) {
 
 	resp, err := client.ChatWithTools(
 		context.Background(),
-		[]Message{{Role: "user", Content: "ping"}},
-		[]LLMToolSpec{{Name: "echo"}},
+		[]model.Message{{Role: "user", Content: "ping"}},
+		[]model.LLMToolSpec{{Name: "echo"}},
 		nil,
 	)
 

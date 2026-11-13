@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/model"
+
 	"github.com/stretchr/testify/require"
 )
 
@@ -34,7 +36,7 @@ func TestRegisteredKindsDoesNotContainEmptyOrUnknown(t *testing.T) {
 
 func TestRegisterKindPanicsOnDuplicateInTests(t *testing.T) {
 	require.Panics(t, func() {
-		RegisterKind(factoryTestProviderOffline, func(ProviderConfig, ProviderSecrets) (ManagedBackend, error) {
+		RegisterKind(factoryTestProviderOffline, func(ProviderConfig, ProviderSecrets, *model.CallGate) (ManagedBackend, error) {
 			return offlineBackend{}, nil
 		})
 	})
@@ -56,8 +58,8 @@ func TestNew_TapeProvider(t *testing.T) {
 		},
 		{
 			Kind:        factoryTestTapeGenerateKind,
-			Fingerprint: fingerprint(factoryTestTapeGenerateKind, tapeRequest{Prompt: factoryTestTapePrompt, Options: &LLMOptions{Model: factoryTestTapeModel}}),
-			Response:    &LLMResponse{Text: factoryTestTapeResponse},
+			Fingerprint: fingerprint(factoryTestTapeGenerateKind, tapeRequest{Prompt: factoryTestTapePrompt, Options: &model.LLMOptions{Model: factoryTestTapeModel}}),
+			Response:    &model.LLMResponse{Text: factoryTestTapeResponse},
 		},
 	})
 
@@ -65,7 +67,7 @@ func TestNew_TapeProvider(t *testing.T) {
 		Kind:     factoryTestProviderTape,
 		Model:    factoryTestTapeModel,
 		TapePath: tapePath,
-	}, ProviderSecrets{})
+	}, ProviderSecrets{}, nil)
 	require.NoError(t, err)
 	require.NotNil(t, backend)
 
@@ -74,7 +76,7 @@ func TestNew_TapeProvider(t *testing.T) {
 	require.NotNil(t, health)
 	require.Equal(t, BackendHealthReady, health.State)
 
-	resp, err := backend.Model().Generate(context.Background(), factoryTestTapePrompt, &LLMOptions{Model: factoryTestTapeModel})
+	resp, err := backend.Model().Generate(context.Background(), factoryTestTapePrompt, &model.LLMOptions{Model: factoryTestTapeModel})
 	require.NoError(t, err)
 	require.Equal(t, factoryTestTapeResponse, resp.Text)
 
@@ -100,8 +102,8 @@ func TestNew_TapeProviderFromProviderField(t *testing.T) {
 		},
 		{
 			Kind:        factoryTestTapeGenerateKind,
-			Fingerprint: fingerprint(factoryTestTapeGenerateKind, tapeRequest{Prompt: factoryTestTapePrompt, Options: &LLMOptions{Model: factoryTestTapeModel}}),
-			Response:    &LLMResponse{Text: factoryTestTapeResponse},
+			Fingerprint: fingerprint(factoryTestTapeGenerateKind, tapeRequest{Prompt: factoryTestTapePrompt, Options: &model.LLMOptions{Model: factoryTestTapeModel}}),
+			Response:    &model.LLMResponse{Text: factoryTestTapeResponse},
 		},
 	})
 
@@ -109,7 +111,7 @@ func TestNew_TapeProviderFromProviderField(t *testing.T) {
 		Provider: factoryTestProviderTape,
 		Model:    factoryTestTapeModel,
 		TapePath: tapePath,
-	}, ProviderSecrets{})
+	}, ProviderSecrets{}, nil)
 	require.NoError(t, err)
 	require.NotNil(t, backend)
 
@@ -123,7 +125,7 @@ func TestNew_TapeProviderRequiresTapePath(t *testing.T) {
 	backend, err := New(ProviderConfig{
 		Kind:  factoryTestProviderTape,
 		Model: factoryTestTapeModel,
-	}, ProviderSecrets{})
+	}, ProviderSecrets{}, nil)
 	require.Error(t, err)
 	require.Nil(t, backend)
 	require.Contains(t, err.Error(), "tape_path required")
@@ -134,7 +136,7 @@ func TestNew_UnknownKind(t *testing.T) {
 		Kind:     "vllm",
 		Endpoint: factoryTestEndpoint,
 		Model:    factoryTestModel,
-	}, ProviderSecrets{})
+	}, ProviderSecrets{}, nil)
 	require.Error(t, err)
 	require.Nil(t, backend)
 	require.Contains(t, err.Error(), "unknown provider kind")
@@ -145,7 +147,7 @@ func TestNew_UnknownProvider(t *testing.T) {
 		Provider: "mystery",
 		Endpoint: factoryTestEndpoint,
 		Model:    factoryTestModel,
-	}, ProviderSecrets{})
+	}, ProviderSecrets{}, nil)
 	require.Error(t, err)
 	require.Nil(t, backend)
 	require.Contains(t, err.Error(), "unknown provider kind")

@@ -3,11 +3,12 @@ package agenttest
 import (
 	"time"
 
+	"codeburg.org/lexbit/relurpify/model"
 	"codeburg.org/lexbit/relurpify/platform/llm"
 )
 
 // buildCaseManagedBackend constructs a ManagedBackend using the provider-agnostic factory.
-func buildCaseManagedBackend(execution resolvedCaseExecution, profile *llm.ModelProfile, debug bool) (llm.ManagedBackend, error) {
+func buildCaseManagedBackend(execution resolvedCaseExecution, profile *model.ModelProfile, debug bool) (llm.ManagedBackend, error) {
 	cfg := llm.ProviderConfig{
 		Provider: execution.Provider,
 		Endpoint: execution.Endpoint,
@@ -16,7 +17,8 @@ func buildCaseManagedBackend(execution resolvedCaseExecution, profile *llm.Model
 		Debug:    debug,
 	}
 
-	backend, err := llm.New(cfg, llm.ProviderSecrets{})
+	// For P03: pass nil gate for test backend (tests manage their own gate)
+	backend, err := llm.New(cfg, llm.ProviderSecrets{}, nil)
 	if err != nil {
 		return nil, err
 	}

@@ -7,13 +7,6 @@ import (
 	"codeburg.org/lexbit/relurpify/model"
 )
 
-// Re-export contract types for local usage
-type (
-	LanguageModel       = model.LanguageModel
-	BackendCapabilities = model.BackendCapabilities
-	ModelProfile        = model.ModelProfile
-)
-
 // Embedder produces dense vector representations of text.
 type Embedder interface {
 	Embed(ctx context.Context, texts []string) ([][]float32, error)
@@ -24,16 +17,16 @@ type Embedder interface {
 // ManagedBackend owns the lifecycle and capability surface for a local
 // inference backend.
 type ManagedBackend interface {
-	Model() LanguageModel
+	Model() model.LanguageModel
 	Embedder() Embedder
-	Capabilities() BackendCapabilities
+	Capabilities() model.BackendCapabilities
 	ModelContextSize(ctx context.Context) (int, error)
 	Health(ctx context.Context) (*HealthReport, error)
 	ListModels(ctx context.Context) ([]ModelInfo, error)
 	Warm(ctx context.Context) error
 	Close() error
 	SetDebugLogging(enabled bool)
-	SetProfile(profile *ModelProfile)
+	SetProfile(profile *model.ModelProfile)
 	Reset(ctx context.Context, strategy string) error
 }
 

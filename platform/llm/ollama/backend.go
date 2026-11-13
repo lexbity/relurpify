@@ -15,27 +15,12 @@ import (
 	"codeburg.org/lexbit/relurpify/platform/llm"
 )
 
-// Re-export contract types for local usage
-type (
-	LanguageModel       = model.LanguageModel
-	LLMOptions          = model.LLMOptions
-	LLMResponse         = model.LLMResponse
-	Message             = model.Message
-	LLMToolSpec         = model.LLMToolSpec
-	BackendClass        = model.BackendClass
-	BackendCapabilities = model.BackendCapabilities
-	ModelProfile        = model.ModelProfile
-)
-
-const (
-	BackendClassTransport = model.BackendClassTransport
-)
-
 // Backend implements the managed backend facade for Ollama transports.
 type Backend struct {
 	client *Client
 	cfg    Config
 	apiKey string
+	gate   *model.CallGate
 
 	mu                sync.Mutex
 	cachedContextSize int
@@ -54,10 +39,11 @@ type managedModel struct {
 }
 
 // NewBackend constructs a managed Ollama backend.
-func NewBackend(cfg Config, apiKey string) *Backend {
+// For P03: gate is the model gate for physical request enforcement.
+func NewBackend(cfg Config, apiKey string, gate *model.CallGate) *Backend {
 	client := NewClient(cfg.Endpoint, cfg.Model, apiKey)
 	client.SetNativeToolCalling(cfg.NativeToolCalling)
-	return &Backend{client: client, cfg: cfg, apiKey: strings.TrimSpace(apiKey)}
+	return &Backend{client: client, cfg: cfg, apiKey: strings.TrimSpace(apiKey), gate: gate}
 }
 
 // Model returns the underlying language model client. The returned model
@@ -65,8 +51,10 @@ func NewBackend(cfg Config, apiKey string) *Backend {
 // server-discovered capability)): without it the server applies its own
 // default window and silently truncates prompts regardless of the
 // configured budget — nothing consumed the discovery path before.
-func (b *Backend) Model() LanguageModel {
-	return &contextWindowModel{managedModel: managedModel{client: b.client}, backend: b}
+// For P03: when gate is set, the model is wrapped with gate enforcement.
+func (b *Backend) Model() model.LanguageModel {
+	inner := &contextWindowModel{managedModel: managedModel{client: b.client}, backend: b}
+	return llm.NewGatedModel(inner, b.gate)
 }
 
 // contextWindowModel stamps the derived served window onto every call whose
@@ -93,13 +81,13 @@ func (m *contextWindowModel) resolveContextWindow() int {
 	}
 }
 
-func (m *contextWindowModel) applyWindow(options *LLMOptions) *LLMOptions {
+func (m *contextWindowModel) applyWindow(options *model.LLMOptions) *model.LLMOptions {
 	window := m.resolveContextWindow()
 	if window <= 0 {
 		return options
 	}
 	if options == nil {
-		return &LLMOptions{ContextWindow: window}
+		return &model.LLMOptions{ContextWindow: window}
 	}
 	if options.ContextWindow > 0 {
 		return options // an explicit caller window wins
@@ -130,13 +118,13 @@ func (b *Backend) Embedder() llm.Embedder {
 }
 
 // Capabilities reports the transport-backed feature set.
-func (b *Backend) Capabilities() BackendCapabilities {
-	return BackendCapabilities{
+func (b *Backend) Capabilities() model.BackendCapabilities {
+	return model.BackendCapabilities{
 		NativeToolCalling:    b.cfg.NativeToolCalling,
 		Streaming:            true,
 		Embeddings:           true,
 		ModelListing:         true,
-		BackendClass:         BackendClassTransport,
+		BackendClass:         model.BackendClassTransport,
 		UsageReporting:       true,
 		ContextSizeDiscovery: true,
 	}
@@ -318,7 +306,7 @@ func (b *Backend) SetDebugLogging(enabled bool) {
 }
 
 // SetProfile attaches a resolved model profile to the underlying client.
-func (b *Backend) SetProfile(p *ModelProfile) {
+func (b *Backend) SetProfile(p *model.ModelProfile) {
 	if b == nil || b.client == nil {
 		return
 	}
@@ -451,38 +439,38 @@ func asIntString(text string) int {
 	return n
 }
 
-func (m managedModel) Generate(ctx context.Context, prompt string, options *LLMOptions) (*LLMResponse, error) {
+func (m managedModel) Generate(ctx context.Context, prompt string, options *model.LLMOptions) (*model.LLMResponse, error) {
 	return m.client.Generate(ctx, prompt, options)
 }
 
-func (m managedModel) GenerateStream(ctx context.Context, prompt string, options *LLMOptions) (<-chan string, error) {
+func (m managedModel) GenerateStream(ctx context.Context, prompt string, options *model.LLMOptions) (<-chan string, error) {
 	return m.client.GenerateStream(ctx, prompt, options)
 }
 
-func (m managedModel) Chat(ctx context.Context, messages []Message, options *LLMOptions) (*LLMResponse, error) {
+func (m managedModel) Chat(ctx context.Context, messages []model.Message, options *model.LLMOptions) (*model.LLMResponse, error) {
 	return m.client.Chat(ctx, messages, options)
 }
 
-func (m managedModel) ChatWithTools(ctx context.Context, messages []Message, tools []LLMToolSpec, options *LLMOptions) (*LLMResponse, error) {
+func (m managedModel) ChatWithTools(ctx context.Context, messages []model.Message, tools []model.LLMToolSpec, options *model.LLMOptions) (*model.LLMResponse, error) {
 	return m.client.ChatWithTools(ctx, messages, tools, options)
 }
 
 // The context-window overrides: every call path stamps the derived served
 // window before delegating to the transport.
 
-func (m *contextWindowModel) Generate(ctx context.Context, prompt string, options *LLMOptions) (*LLMResponse, error) {
+func (m *contextWindowModel) Generate(ctx context.Context, prompt string, options *model.LLMOptions) (*model.LLMResponse, error) {
 	return m.client.Generate(ctx, prompt, m.applyWindow(options))
 }
 
-func (m *contextWindowModel) GenerateStream(ctx context.Context, prompt string, options *LLMOptions) (<-chan string, error) {
+func (m *contextWindowModel) GenerateStream(ctx context.Context, prompt string, options *model.LLMOptions) (<-chan string, error) {
 	return m.client.GenerateStream(ctx, prompt, m.applyWindow(options))
 }
 
-func (m *contextWindowModel) Chat(ctx context.Context, messages []Message, options *LLMOptions) (*LLMResponse, error) {
+func (m *contextWindowModel) Chat(ctx context.Context, messages []model.Message, options *model.LLMOptions) (*model.LLMResponse, error) {
 	return m.client.Chat(ctx, messages, m.applyWindow(options))
 }
 
-func (m *contextWindowModel) ChatWithTools(ctx context.Context, messages []Message, tools []LLMToolSpec, options *LLMOptions) (*LLMResponse, error) {
+func (m *contextWindowModel) ChatWithTools(ctx context.Context, messages []model.Message, tools []model.LLMToolSpec, options *model.LLMOptions) (*model.LLMResponse, error) {
 	return m.client.ChatWithTools(ctx, messages, tools, m.applyWindow(options))
 }
 

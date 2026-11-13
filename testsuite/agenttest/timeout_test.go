@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/model"
+
 	"github.com/stretchr/testify/require"
 
 	"codeburg.org/lexbit/relurpify/app/envcomposition"
@@ -111,10 +113,10 @@ func TestTimeoutZeroDisables(t *testing.T) {
 // pattern-gated reset path.
 type resetCountingBackend struct{ resets int }
 
-func (b *resetCountingBackend) Model() llm.LanguageModel { return nil }
-func (b *resetCountingBackend) Embedder() llm.Embedder   { return nil }
-func (b *resetCountingBackend) Capabilities() llm.BackendCapabilities {
-	return llm.BackendCapabilities{}
+func (b *resetCountingBackend) Model() model.LanguageModel { return nil }
+func (b *resetCountingBackend) Embedder() llm.Embedder     { return nil }
+func (b *resetCountingBackend) Capabilities() model.BackendCapabilities {
+	return model.BackendCapabilities{}
 }
 func (b *resetCountingBackend) ModelContextSize(context.Context) (int, error) {
 	return 0, nil
@@ -125,10 +127,10 @@ func (b *resetCountingBackend) Health(context.Context) (*llm.HealthReport, error
 func (b *resetCountingBackend) ListModels(context.Context) ([]llm.ModelInfo, error) {
 	return nil, nil
 }
-func (b *resetCountingBackend) Warm(context.Context) error   { return nil }
-func (b *resetCountingBackend) Close() error                 { return nil }
-func (b *resetCountingBackend) SetDebugLogging(bool)         {}
-func (b *resetCountingBackend) SetProfile(*llm.ModelProfile) {}
+func (b *resetCountingBackend) Warm(context.Context) error     { return nil }
+func (b *resetCountingBackend) Close() error                   { return nil }
+func (b *resetCountingBackend) SetDebugLogging(bool)           {}
+func (b *resetCountingBackend) SetProfile(*model.ModelProfile) {}
 func (b *resetCountingBackend) Reset(context.Context, string) error {
 	b.resets++
 	return nil

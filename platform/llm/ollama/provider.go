@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/model"
 	llm "codeburg.org/lexbit/relurpify/platform/llm"
 )
 
@@ -17,7 +18,7 @@ var (
 )
 
 func init() {
-	llm.RegisterKind("ollama", func(cfg llm.ProviderConfig, secrets llm.ProviderSecrets) (llm.ManagedBackend, error) {
+	llm.RegisterKind("ollama", func(cfg llm.ProviderConfig, secrets llm.ProviderSecrets, gate *model.CallGate) (llm.ManagedBackend, error) {
 		if err := cfg.Validate(); err != nil {
 			return nil, err
 		}
@@ -29,7 +30,7 @@ func init() {
 			NativeToolCalling: cfg.NativeToolCalling,
 			Debug:             cfg.Debug,
 			Config:            cfg.Config,
-		}, secrets.APIKey), nil
+		}, secrets.APIKey, gate), nil
 	})
 }
 

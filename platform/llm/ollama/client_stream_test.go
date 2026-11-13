@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"codeburg.org/lexbit/relurpify/model"
 )
 
 // Tool calls arrive mid-stream (the terminal chunk is a usage summary). The
@@ -27,9 +29,9 @@ func TestChatWithToolsCollectsMidStreamToolCalls(t *testing.T) {
 	client := NewClient(server.URL, "m", "")
 	client.Debug = true
 	resp, err := client.ChatWithTools(context.Background(),
-		[]Message{{Role: "user", Content: "list the files"}},
-		[]LLMToolSpec{{Name: "file_list", Description: "lists files"}},
-		&LLMOptions{StreamCallback: func(string) {}})
+		[]model.Message{{Role: "user", Content: "list the files"}},
+		[]model.LLMToolSpec{{Name: "file_list", Description: "lists files"}},
+		&model.LLMOptions{StreamCallback: func(string) {}})
 	if err != nil {
 		t.Fatalf("ChatWithTools failed: %v", err)
 	}
@@ -62,8 +64,8 @@ func TestStreamDebugLogIsNotTruncated(t *testing.T) {
 	client := NewClient(server.URL, "m", "")
 	client.Debug = true
 	_, err := client.ChatWithTools(context.Background(),
-		[]Message{{Role: "user", Content: string(big)}},
-		[]LLMToolSpec{{Name: "file_list", Description: string(big)}},
+		[]model.Message{{Role: "user", Content: string(big)}},
+		[]model.LLMToolSpec{{Name: "file_list", Description: string(big)}},
 		nil)
 	if err != nil {
 		t.Fatalf("ChatWithTools failed: %v", err)

@@ -36,7 +36,7 @@ type Client struct {
 	client            *http.Client
 	Debug             bool
 	apiKey            string
-	profile           *ModelProfile
+	profile           *model.ModelProfile
 	nativeToolCalling bool
 }
 
@@ -81,7 +81,7 @@ type ollamaResponse struct {
 }
 
 // NewClientWithProfile builds a new Ollama client with an active model profile.
-func NewClientWithProfile(endpoint, model string, p *ModelProfile) *Client {
+func NewClientWithProfile(endpoint, model string, p *model.ModelProfile) *Client {
 	c := NewClient(endpoint, model, "")
 	c.profile = p
 	return c
@@ -104,7 +104,7 @@ func NewClient(endpoint, model, apiKey string) *Client {
 }
 
 // Generate implements single prompt completion.
-func (c *Client) Generate(ctx context.Context, prompt string, options *LLMOptions) (*LLMResponse, error) {
+func (c *Client) Generate(ctx context.Context, prompt string, options *model.LLMOptions) (*model.LLMResponse, error) {
 	payload := map[string]any{
 		"model":  c.model(options),
 		"prompt": prompt,
@@ -150,7 +150,7 @@ func (c *Client) ModelTemplate(ctx context.Context, model string) (string, error
 }
 
 // GenerateStream returns a simple streaming channel.
-func (c *Client) GenerateStream(ctx context.Context, prompt string, options *LLMOptions) (<-chan string, error) {
+func (c *Client) GenerateStream(ctx context.Context, prompt string, options *model.LLMOptions) (<-chan string, error) {
 	payload := map[string]any{
 		"model":  c.model(options),
 		"prompt": prompt,
@@ -191,7 +191,7 @@ func (c *Client) GenerateStream(ctx context.Context, prompt string, options *LLM
 }
 
 // Chat implements chat style conversation.
-func (c *Client) Chat(ctx context.Context, messages []Message, options *LLMOptions) (*LLMResponse, error) {
+func (c *Client) Chat(ctx context.Context, messages []model.Message, options *model.LLMOptions) (*model.LLMResponse, error) {
 	payload := map[string]any{
 		"model":    c.model(options),
 		"messages": convertMessages(messages),
@@ -202,7 +202,7 @@ func (c *Client) Chat(ctx context.Context, messages []Message, options *LLMOptio
 }
 
 // ChatWithTools handles tool calling metadata.
-func (c *Client) ChatWithTools(ctx context.Context, messages []Message, tools []LLMToolSpec, options *LLMOptions) (*LLMResponse, error) {
+func (c *Client) ChatWithTools(ctx context.Context, messages []model.Message, tools []model.LLMToolSpec, options *model.LLMOptions) (*model.LLMResponse, error) {
 	if !c.nativeToolCallingEnabled() {
 		return nil, ErrNativeToolCallingRequired
 	}
@@ -225,7 +225,7 @@ func (c *Client) SetDebugLogging(enabled bool) {
 }
 
 // SetProfile sets the model profile for this client.
-func (c *Client) SetProfile(p *ModelProfile) {
+func (c *Client) SetProfile(p *model.ModelProfile) {
 	c.profile = p
 }
 
@@ -287,7 +287,7 @@ func (c *Client) getHTTPClient() *http.Client {
 	return c.client
 }
 
-func (c *Client) model(options *LLMOptions) string {
+func (c *Client) model(options *model.LLMOptions) string {
 	if options != nil && options.Model != "" {
 		return options.Model
 	}
@@ -297,7 +297,7 @@ func (c *Client) model(options *LLMOptions) string {
 	return "codellama"
 }
 
-func (c *Client) applyOptions(payload map[string]any, options *LLMOptions) {
+func (c *Client) applyOptions(payload map[string]any, options *model.LLMOptions) {
 	if options == nil {
 		return
 	}
@@ -345,7 +345,7 @@ func (c *Client) ollamaAPIEndpoint() string {
 	return strings.TrimRight(parsed.String(), "/")
 }
 
-func (c *Client) doRequest(ctx context.Context, apiPath string, payload any) (*LLMResponse, error) {
+func (c *Client) doRequest(ctx context.Context, apiPath string, payload any) (*model.LLMResponse, error) {
 	promptTokens := estimatePromptTokensFromPayload(payload)
 	body, err := json.Marshal(payload)
 	if err != nil {
@@ -381,7 +381,7 @@ func (c *Client) doRequest(ctx context.Context, apiPath string, payload any) (*L
 	return c.decodeLLMResponse(bytes.NewReader(responseBody), promptTokens)
 }
 
-func (c *Client) doRequestStream(ctx context.Context, apiPath string, payload map[string]any, callback func(string)) (*LLMResponse, error) {
+func (c *Client) doRequestStream(ctx context.Context, apiPath string, payload map[string]any, callback func(string)) (*model.LLMResponse, error) {
 	payload["stream"] = true
 	promptTokens := estimatePromptTokensFromPayload(payload)
 	body, err := json.Marshal(payload)
@@ -461,7 +461,7 @@ func (c *Client) doRequestStream(ctx context.Context, apiPath string, payload ma
 	if len(streamLines) > 0 {
 		c.logResponse(apiPath, []byte(strings.Join(streamLines, "\n")))
 	}
-	result := &LLMResponse{
+	result := &model.LLMResponse{
 		Text:         fullText.String(),
 		FinishReason: finalChunk.DoneReason,
 		Usage:        normalizeUsage(finalChunk, promptTokens, fullText.String()),
@@ -470,7 +470,7 @@ func (c *Client) doRequestStream(ctx context.Context, apiPath string, payload ma
 	return result, nil
 }
 
-func convertMessages(messages []Message) []map[string]any {
+func convertMessages(messages []model.Message) []map[string]any {
 	out := make([]map[string]any, 0, len(messages))
 	for _, msg := range messages {
 		m := map[string]any{
@@ -513,7 +513,7 @@ func convertMessages(messages []Message) []map[string]any {
 	return out
 }
 
-func convertLLMToolSpecs(specs []LLMToolSpec) []toolDef {
+func convertLLMToolSpecs(specs []model.LLMToolSpec) []toolDef {
 	res := make([]toolDef, 0, len(specs))
 	for _, spec := range specs {
 		res = append(res, toolDef{
@@ -557,12 +557,12 @@ func schemaToOllamaParameters(schema *model.Schema) map[string]any {
 	return parameters
 }
 
-func (c *Client) decodeLLMResponse(body io.Reader, promptTokens int) (*LLMResponse, error) {
+func (c *Client) decodeLLMResponse(body io.Reader, promptTokens int) (*model.LLMResponse, error) {
 	var raw ollamaResponse
 	if err := json.NewDecoder(body).Decode(&raw); err != nil {
 		return nil, err
 	}
-	resp := &LLMResponse{
+	resp := &model.LLMResponse{
 		Text:         cmp.Or(raw.Text, raw.Response),
 		FinishReason: raw.DoneReason,
 		Usage:        normalizeUsage(raw, promptTokens, cmp.Or(raw.Text, raw.Response)),

@@ -31,20 +31,20 @@ const (
 )
 
 type tapeEntry struct {
-	Timestamp   time.Time    `json:"timestamp"`
-	Kind        string       `json:"kind"`
-	Fingerprint string       `json:"fingerprint"`
-	Request     tapeRequest  `json:"request"`
-	Response    *LLMResponse `json:"response,omitempty"`
-	Error       string       `json:"error,omitempty"`
+	Timestamp   time.Time          `json:"timestamp"`
+	Kind        string             `json:"kind"`
+	Fingerprint string             `json:"fingerprint"`
+	Request     tapeRequest        `json:"request"`
+	Response    *model.LLMResponse `json:"response,omitempty"`
+	Error       string             `json:"error,omitempty"`
 }
 
 type tapeRequest struct {
-	Prompt    string      `json:"prompt,omitempty"`
-	Messages  []Message   `json:"messages,omitempty"`
-	ToolNames []string    `json:"tool_names,omitempty"`
-	Options   *LLMOptions `json:"options,omitempty"`
-	Header    *TapeHeader `json:"header,omitempty"`
+	Prompt    string            `json:"prompt,omitempty"`
+	Messages  []model.Message   `json:"messages,omitempty"`
+	ToolNames []string          `json:"tool_names,omitempty"`
+	Options   *model.LLMOptions `json:"options,omitempty"`
+	Header    *TapeHeader       `json:"header,omitempty"`
 }
 
 type TapeHeader struct {
@@ -59,7 +59,7 @@ type TapeHeader struct {
 }
 
 type TapeModel struct {
-	inner LanguageModel
+	inner model.LanguageModel
 	mode  TapeMode
 	path  string
 
@@ -105,7 +105,8 @@ type TapeInspection struct {
 
 const staleTapeWarningThreshold = 30 * 24 * time.Hour
 
-func NewTapeModel(inner LanguageModel, path string, mode string) (*TapeModel, error) {
+// NewTapeModel opens a tape-backed model in the requested mode.
+func NewTapeModel(inner model.LanguageModel, path string, mode string) (*TapeModel, error) {
 	if path == "" {
 		return nil, errors.New("tape path required")
 	}

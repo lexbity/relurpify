@@ -3,6 +3,7 @@ package openaicompat
 import (
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/model"
 	llm "codeburg.org/lexbit/relurpify/platform/llm"
 
 	"github.com/stretchr/testify/require"
@@ -13,7 +14,7 @@ func TestOpenAICompatBackendConstructs(t *testing.T) {
 		Kind:     "openai_compatible",
 		Endpoint: "http://localhost:8080/v1",
 		Model:    "test-model",
-	}, llm.ProviderSecrets{})
+	}, llm.ProviderSecrets{}, nil)
 	require.NoError(t, err)
 	require.NotNil(t, backend)
 
@@ -26,7 +27,7 @@ func TestOpenAICompatRequiresEndpoint(t *testing.T) {
 	backend, err := llm.New(llm.ProviderConfig{
 		Kind:  "openai_compatible",
 		Model: "test-model",
-	}, llm.ProviderSecrets{})
+	}, llm.ProviderSecrets{}, nil)
 	require.Error(t, err)
 	require.Nil(t, backend)
 	require.Contains(t, err.Error(), "endpoint required")
@@ -38,7 +39,7 @@ func TestOpenAICompatFromProviderField(t *testing.T) {
 		Provider: "openai_compatible",
 		Endpoint: "http://localhost:8080/v1",
 		Model:    "test-model",
-	}, llm.ProviderSecrets{})
+	}, llm.ProviderSecrets{}, nil)
 	require.NoError(t, err)
 	require.NotNil(t, backend)
 }
@@ -49,7 +50,7 @@ func TestOpenAICompatCapabilities(t *testing.T) {
 		Endpoint:          "http://localhost:8080/v1",
 		Model:             "test-model",
 		NativeToolCalling: true,
-	}, llm.ProviderSecrets{})
+	}, llm.ProviderSecrets{}, nil)
 	require.NoError(t, err)
 
 	caps := backend.Capabilities()
@@ -64,10 +65,10 @@ func TestOpenAICompatSetProfile(t *testing.T) {
 		Kind:     "openai_compatible",
 		Endpoint: "http://localhost:8080/v1",
 		Model:    "test-model",
-	}, llm.ProviderSecrets{})
+	}, llm.ProviderSecrets{}, nil)
 	require.NoError(t, err)
 
 	// SetProfile should not panic
 	backend.SetProfile(nil)
-	backend.SetProfile(&llm.ModelProfile{})
+	backend.SetProfile(&model.ModelProfile{})
 }

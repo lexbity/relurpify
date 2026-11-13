@@ -10,25 +10,17 @@ import (
 	"codeburg.org/lexbit/relurpify/platform/llm/openaicompat"
 )
 
-// Re-export contract types for local usage
-type (
-	LanguageModel       = model.LanguageModel
-	BackendCapabilities = model.BackendCapabilities
-)
-
-const (
-	BackendClassTransport = model.BackendClassTransport
-)
-
 // Backend implements the managed backend facade for LM Studio.
 type Backend struct {
 	client *openaicompat.Client
 	cfg    Config
 	apiKey string
+	gate   *model.CallGate
 }
 
 // NewBackend constructs a managed LM Studio backend.
-func NewBackend(cfg Config, apiKey string) *Backend {
+// For P03: gate is the model gate for physical request enforcement.
+func NewBackend(cfg Config, apiKey string, gate *model.CallGate) *Backend {
 	endpoint := strings.TrimSpace(cfg.Endpoint)
 	if endpoint == "" {
 		endpoint = "http://localhost:1234"
@@ -43,15 +35,17 @@ func NewBackend(cfg Config, apiKey string) *Backend {
 		client: openaicompat.NewClient(clientCfg, apiKey),
 		cfg:    cfg,
 		apiKey: strings.TrimSpace(apiKey),
+		gate:   gate,
 	}
 }
 
 // Model returns the underlying language model client.
-func (b *Backend) Model() LanguageModel {
+// For P03: when gate is set, the model is wrapped with gate enforcement.
+func (b *Backend) Model() model.LanguageModel {
 	if b == nil {
 		return nil
 	}
-	return b.client
+	return llm.NewGatedModel(b.client, b.gate)
 }
 
 // Embedder returns an OpenAI-compatible embedder bound to the LM Studio endpoint.
@@ -71,16 +65,16 @@ func (b *Backend) Embedder() llm.Embedder {
 }
 
 // Capabilities reports the transport-backed feature set.
-func (b *Backend) Capabilities() BackendCapabilities {
+func (b *Backend) Capabilities() model.BackendCapabilities {
 	if b == nil {
-		return BackendCapabilities{}
+		return model.BackendCapabilities{}
 	}
-	return BackendCapabilities{
+	return model.BackendCapabilities{
 		NativeToolCalling:    b.cfg.NativeToolCalling,
 		Streaming:            true,
 		Embeddings:           true,
 		ModelListing:         true,
-		BackendClass:         BackendClassTransport,
+		BackendClass:         model.BackendClassTransport,
 		UsageReporting:       true,
 		ContextSizeDiscovery: false,
 	}
@@ -163,7 +157,7 @@ func (b *Backend) SetDebugLogging(enabled bool) {
 }
 
 // SetProfile attaches a resolved model profile to the underlying client.
-func (b *Backend) SetProfile(p *openaicompat.ModelProfile) {
+func (b *Backend) SetProfile(p *model.ModelProfile) {
 	if b == nil || b.client == nil {
 		return
 	}

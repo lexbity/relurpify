@@ -3,6 +3,7 @@ package envcomposition
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"codeburg.org/lexbit/relurpify/context/contextdata"
@@ -19,10 +20,20 @@ import (
 
 // ModelRuntime bundles the app-composed LLM backend. The instrumented model
 // is created at workspace-open time when telemetry is available.
+// For P03: gate is the shared model gate for physical request enforcement.
 type ModelRuntime struct {
 	Backend      llm.ManagedBackend
 	ModelFactory model.ModelFactory
+	Gate         *model.CallGate
 }
+
+// modelRuntimeGate is the process-wide model gate, created once.
+var (
+	//nolint:gochecknoglobals // D-04 requires one physical model lane per process host
+	modelRuntimeGate *model.CallGate
+	//nolint:gochecknoglobals // guards the process-wide gate across runtime generations
+	modelRuntimeGateOnce sync.Once
+)
 
 // ModelRuntimeInput carries parameters for BuildModelRuntime.
 type ModelRuntimeInput struct {
@@ -38,10 +49,17 @@ type ModelRuntimeInput struct {
 }
 
 // BuildModelRuntime constructs the LLM backend and applies the profile.
+// For P03: creates a shared model gate and injects it into the backend.
 func BuildModelRuntime(input ModelRuntimeInput) (*ModelRuntime, error) {
 	if input.Provider == "" {
 		return nil, fmt.Errorf("inference provider required")
 	}
+
+	// Create or get the process-wide model gate
+	modelRuntimeGateOnce.Do(func() {
+		modelRuntimeGate = model.NewDefaultCallGate()
+	})
+
 	providerCfg := llm.ProviderConfig{
 		Provider:          input.Provider,
 		Kind:              input.Kind,
@@ -51,7 +69,7 @@ func BuildModelRuntime(input ModelRuntimeInput) (*ModelRuntime, error) {
 		Timeout:           input.Timeout,
 		NativeToolCalling: input.NativeToolCalling,
 	}
-	backend, err := llm.New(providerCfg, input.Secrets)
+	backend, err := llm.New(providerCfg, input.Secrets, modelRuntimeGate)
 	if err != nil {
 		return nil, fmt.Errorf("build inference backend: %w", err)
 	}
@@ -60,6 +78,7 @@ func BuildModelRuntime(input ModelRuntimeInput) (*ModelRuntime, error) {
 	}
 	return &ModelRuntime{
 		Backend: backend,
+		Gate:    modelRuntimeGate,
 		ModelFactory: func(tel model.EventSink, debug bool) model.LanguageModel {
 			backend.SetDebugLogging(debug)
 			instrumented := llm.NewInstrumentedModel(backend.Model(), tel, debug)

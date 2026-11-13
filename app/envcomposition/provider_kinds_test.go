@@ -22,7 +22,7 @@ func TestNewDispatchesOnKind(t *testing.T) {
 		Kind:     "ollama",
 		Endpoint: "http://localhost:11434",
 		Model:    "test-model",
-	}, llm.ProviderSecrets{})
+	}, llm.ProviderSecrets{}, nil)
 	require.NoError(t, err)
 	require.NotNil(t, backend)
 }
@@ -32,7 +32,7 @@ func TestNewDispatchesOnProviderWhenKindEmpty(t *testing.T) {
 		Provider: "ollama",
 		Endpoint: "http://localhost:11434",
 		Model:    "test-model",
-	}, llm.ProviderSecrets{})
+	}, llm.ProviderSecrets{}, nil)
 	require.NoError(t, err)
 	require.NotNil(t, backend)
 }
@@ -41,7 +41,7 @@ func TestNewDefaultsToOllamaWhenBothEmpty(t *testing.T) {
 	backend, err := llm.New(llm.ProviderConfig{
 		Endpoint: "http://localhost:11434",
 		Model:    "test-model",
-	}, llm.ProviderSecrets{})
+	}, llm.ProviderSecrets{}, nil)
 	require.NoError(t, err)
 	require.NotNil(t, backend)
 }
@@ -51,7 +51,7 @@ func TestNew_LMStudio(t *testing.T) {
 		Kind:     "lmstudio",
 		Endpoint: "http://localhost:1234",
 		Model:    "test-model",
-	}, llm.ProviderSecrets{})
+	}, llm.ProviderSecrets{}, nil)
 	require.NoError(t, err)
 	require.NotNil(t, backend)
 }

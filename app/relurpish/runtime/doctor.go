@@ -192,9 +192,10 @@ func BuildDoctorReport(ctx context.Context, cfg Config, secrets config.Secrets) 
 	report.RecipesMissing = recipesCheck.missing
 
 	var env EnvironmentReport
+	// For P03: pass nil gate for diagnostic probing (gate is for execution enforcement)
 	backend, err := llm.New(llm.ProviderConfigFromRuntimeConfig(cfg), llm.ProviderSecrets{
 		APIKey: secrets.LLMAPIKey,
-	})
+	}, nil)
 	if err != nil {
 		env = ProbeEnvironment(ctx, cfg, secrets, nil)
 		if env.Inference.Error == "" {
@@ -672,7 +673,8 @@ func applyProviderProbe(ctx context.Context, ph *ProviderHealth, def *model.Reso
 		Kind:     def.Kind,
 		Endpoint: def.Endpoint,
 	}
-	pbe, pberr := llm.New(pcfg, llm.ProviderSecrets{APIKey: secrets.LLMAPIKey})
+	// For P03: pass nil gate for diagnostic probing
+	pbe, pberr := llm.New(pcfg, llm.ProviderSecrets{APIKey: secrets.LLMAPIKey}, nil)
 	if pberr != nil {
 		ph.State = "unhealthy"
 		ph.Error = pberr.Error()

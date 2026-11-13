@@ -6,9 +6,11 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"codeburg.org/lexbit/relurpify/model"
 )
 
-type kindFactory func(ProviderConfig, ProviderSecrets) (ManagedBackend, error)
+type kindFactory func(ProviderConfig, ProviderSecrets, *model.CallGate) (ManagedBackend, error)
 
 var (
 	kindFactoriesMu sync.RWMutex               //nolint:gochecknoglobals // backend kind registry guarded by a mutex
@@ -17,6 +19,7 @@ var (
 
 // RegisterKind makes a backend kind available to the managed factory.
 // Provider subpackages call this from init without creating an import cycle.
+// For P03: factories must accept a *model.CallGate parameter for gate injection.
 func RegisterKind(kind string, factory kindFactory) {
 	kind = strings.ToLower(strings.TrimSpace(kind))
 	if kind == "" || factory == nil {
@@ -35,7 +38,8 @@ func RegisterKind(kind string, factory kindFactory) {
 // New builds a managed backend from the provided transport configuration.
 // Dispatch is on cfg.Kind; when Kind is empty, cfg.Provider is used as the kind
 // (name-as-kind fallback for back-compat and CLI fakes).
-func New(cfg ProviderConfig, secrets ProviderSecrets) (ManagedBackend, error) {
+// For P03: gate is the model gate for physical request enforcement.
+func New(cfg ProviderConfig, secrets ProviderSecrets, gate *model.CallGate) (ManagedBackend, error) {
 	kind := strings.ToLower(strings.TrimSpace(cfg.Kind))
 	if kind == "" {
 		kind = strings.ToLower(strings.TrimSpace(cfg.Provider))
@@ -55,7 +59,7 @@ func New(cfg ProviderConfig, secrets ProviderSecrets) (ManagedBackend, error) {
 	if !ok {
 		return nil, fmt.Errorf("unknown provider kind %q", kind)
 	}
-	backend, err := factory(cfg, secrets)
+	backend, err := factory(cfg, secrets, gate)
 	if err != nil {
 		return nil, err
 	}

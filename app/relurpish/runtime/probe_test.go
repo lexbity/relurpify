@@ -7,21 +7,24 @@ import (
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/capability/fs"
+	"codeburg.org/lexbit/relurpify/model"
 	"codeburg.org/lexbit/relurpify/platform/llm"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
 )
 
 type fakeProbeBackend struct {
-	model llm.LanguageModel
+	model model.LanguageModel
 }
 
-func (f *fakeProbeBackend) Model() llm.LanguageModel {
+func (f *fakeProbeBackend) Model() model.LanguageModel {
 	return f.model
 }
 
 func (f *fakeProbeBackend) Embedder() llm.Embedder { return nil }
 
-func (f *fakeProbeBackend) Capabilities() llm.BackendCapabilities { return llm.BackendCapabilities{} }
+func (f *fakeProbeBackend) Capabilities() model.BackendCapabilities {
+	return model.BackendCapabilities{}
+}
 
 func (f *fakeProbeBackend) ModelContextSize(context.Context) (int, error) { return 0, nil }
 
@@ -39,7 +42,7 @@ func (f *fakeProbeBackend) Close() error { return nil }
 
 func (f *fakeProbeBackend) SetDebugLogging(bool) {}
 
-func (f *fakeProbeBackend) SetProfile(*llm.ModelProfile) {}
+func (f *fakeProbeBackend) SetProfile(*model.ModelProfile) {}
 
 func (f *fakeProbeBackend) Reset(context.Context, string) error { return nil }
 
@@ -112,22 +115,22 @@ type probeToolModel struct {
 	native bool
 }
 
-func (m probeToolModel) Generate(context.Context, string, *llm.LLMOptions) (*llm.LLMResponse, error) {
-	return &llm.LLMResponse{Text: "ok"}, nil
+func (m probeToolModel) Generate(context.Context, string, *model.LLMOptions) (*model.LLMResponse, error) {
+	return &model.LLMResponse{Text: "ok"}, nil
 }
 
-func (m probeToolModel) GenerateStream(context.Context, string, *llm.LLMOptions) (<-chan string, error) {
+func (m probeToolModel) GenerateStream(context.Context, string, *model.LLMOptions) (<-chan string, error) {
 	ch := make(chan string)
 	close(ch)
 	return ch, nil
 }
 
-func (m probeToolModel) Chat(context.Context, []llm.Message, *llm.LLMOptions) (*llm.LLMResponse, error) {
-	return &llm.LLMResponse{Text: "ok"}, nil
+func (m probeToolModel) Chat(context.Context, []model.Message, *model.LLMOptions) (*model.LLMResponse, error) {
+	return &model.LLMResponse{Text: "ok"}, nil
 }
 
-func (m probeToolModel) ChatWithTools(context.Context, []llm.Message, []llm.LLMToolSpec, *llm.LLMOptions) (*llm.LLMResponse, error) {
-	return &llm.LLMResponse{Text: "ok"}, nil
+func (m probeToolModel) ChatWithTools(context.Context, []model.Message, []model.LLMToolSpec, *model.LLMOptions) (*model.LLMResponse, error) {
+	return &model.LLMResponse{Text: "ok"}, nil
 }
 
 func (m probeToolModel) ToolRepairStrategy() string {

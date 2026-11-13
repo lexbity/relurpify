@@ -162,7 +162,8 @@ func detectInferenceBackend(ctx context.Context, cfg Config, secrets config.Secr
 	ownedBackend := false
 	if backend == nil {
 		var err error
-		backend, err = llm.New(llm.ProviderConfigFromRuntimeConfig(cfg), llm.ProviderSecrets{APIKey: secrets.LLMAPIKey})
+		// For P03: pass nil gate for diagnostic probing
+		backend, err = llm.New(llm.ProviderConfigFromRuntimeConfig(cfg), llm.ProviderSecrets{APIKey: secrets.LLMAPIKey}, nil)
 		if err != nil {
 			report.Error = err.Error()
 			report.State = llm.BackendHealthUnhealthy

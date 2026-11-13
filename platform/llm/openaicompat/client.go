@@ -18,22 +18,12 @@ import (
 	"codeburg.org/lexbit/relurpify/telemetry"
 )
 
-// Re-export contract types for local usage
-type (
-	LanguageModel = model.LanguageModel
-	LLMOptions    = model.LLMOptions
-	LLMResponse   = model.LLMResponse
-	Message       = model.Message
-	LLMToolSpec   = model.LLMToolSpec
-	ModelProfile  = model.ModelProfile
-)
-
 // Client implements LanguageModel for OpenAI-compatible backends.
 type Client struct {
 	cfg        OpenAICompatConfig
 	httpClient *http.Client
 	apiKey     string
-	profile    *ModelProfile
+	profile    *model.ModelProfile
 }
 
 func NewClient(cfg OpenAICompatConfig, apiKey string) *Client {
@@ -50,19 +40,21 @@ func NewClient(cfg OpenAICompatConfig, apiKey string) *Client {
 	}
 }
 
-func (c *Client) Generate(ctx context.Context, prompt string, options *LLMOptions) (*LLMResponse, error) {
-	return c.chat(ctx, []Message{{Role: "user", Content: prompt}}, nil, options, false, false, nil)
+// Generate implements model.LanguageModel.
+func (c *Client) Generate(ctx context.Context, prompt string, options *model.LLMOptions) (*model.LLMResponse, error) {
+	return c.chat(ctx, []model.Message{{Role: "user", Content: prompt}}, nil, options, false, false, nil)
 }
 
-func (c *Client) GenerateStream(ctx context.Context, prompt string, options *LLMOptions) (<-chan string, error) {
-	return c.streamChat(ctx, []Message{{Role: "user", Content: prompt}}, nil, options, false)
+// GenerateStream implements model.LanguageModel.
+func (c *Client) GenerateStream(ctx context.Context, prompt string, options *model.LLMOptions) (<-chan string, error) {
+	return c.streamChat(ctx, []model.Message{{Role: "user", Content: prompt}}, nil, options, false)
 }
 
 // streamChat is the single pump for both streaming entry points. The
 // goroutine owns the output channel (closed exactly once via the helper) and
 // the HTTP response body (closed inside doChatStream). Token sends select on
 // ctx.Done(); the call-time ctx is the only stop signal (contract R1-R6).
-func (c *Client) streamChat(ctx context.Context, messages []Message, tools []LLMToolSpec, options *LLMOptions, includeTools bool) (<-chan string, error) {
+func (c *Client) streamChat(ctx context.Context, messages []model.Message, tools []model.LLMToolSpec, options *model.LLMOptions, includeTools bool) (<-chan string, error) {
 	out := make(chan string)
 	go func() {
 		defer close(out)
@@ -79,11 +71,13 @@ func (c *Client) streamChat(ctx context.Context, messages []Message, tools []LLM
 	return out, nil
 }
 
-func (c *Client) Chat(ctx context.Context, messages []Message, options *LLMOptions) (*LLMResponse, error) {
+// Chat implements model.LanguageModel.
+func (c *Client) Chat(ctx context.Context, messages []model.Message, options *model.LLMOptions) (*model.LLMResponse, error) {
 	return c.chat(ctx, messages, nil, options, false, false, nil)
 }
 
-func (c *Client) ChatWithTools(ctx context.Context, messages []Message, tools []LLMToolSpec, options *LLMOptions) (*LLMResponse, error) {
+// ChatWithTools implements model.LanguageModel.
+func (c *Client) ChatWithTools(ctx context.Context, messages []model.Message, tools []model.LLMToolSpec, options *model.LLMOptions) (*model.LLMResponse, error) {
 	if options != nil && options.StreamCallback != nil {
 		callback := options.StreamCallback
 		return c.chat(ctx, messages, tools, options, c.nativeToolCallingEnabled(), true, func(token string) error {
@@ -116,7 +110,7 @@ func (c *Client) UsesNativeToolCalling() bool {
 }
 
 // SetProfile attaches a resolved model profile to the client.
-func (c *Client) SetProfile(p *ModelProfile) {
+func (c *Client) SetProfile(p *model.ModelProfile) {
 	c.profile = p
 }
 
@@ -128,7 +122,8 @@ func (c *Client) ContextSize() int {
 	return c.profile.ContextSize
 }
 
-func (c *Client) ChatStream(ctx context.Context, messages []Message, tools []LLMToolSpec, options *LLMOptions) (<-chan string, error) {
+// ChatStream streams a chat completion with tool support.
+func (c *Client) ChatStream(ctx context.Context, messages []model.Message, tools []model.LLMToolSpec, options *model.LLMOptions) (<-chan string, error) {
 	return c.streamChat(ctx, messages, tools, options, c.nativeToolCallingEnabled())
 }
 
@@ -136,7 +131,7 @@ func (c *Client) ChatStream(ctx context.Context, messages []Message, tools []LLM
 // (when non-nil) receives each content delta; a sink error aborts the read
 // loop and is returned, which is how the streaming pump propagates ctx
 // cancellation into body teardown.
-func (c *Client) chat(ctx context.Context, messages []Message, tools []LLMToolSpec, options *LLMOptions, includeTools bool, stream bool, sink func(string) error) (*LLMResponse, error) {
+func (c *Client) chat(ctx context.Context, messages []model.Message, tools []model.LLMToolSpec, options *model.LLMOptions, includeTools bool, stream bool, sink func(string) error) (*model.LLMResponse, error) {
 	reqBody := map[string]any{
 		"model":    modelFromOptions(options),
 		"messages": convertMessages(messages),
@@ -152,7 +147,7 @@ func (c *Client) chat(ctx context.Context, messages []Message, tools []LLMToolSp
 	return c.doChat(ctx, reqBody)
 }
 
-func (c *Client) applyOptions(payload map[string]any, options *LLMOptions) {
+func (c *Client) applyOptions(payload map[string]any, options *model.LLMOptions) {
 	if options == nil {
 		return
 	}
@@ -183,7 +178,7 @@ func (c *Client) nativeToolCallingEnabled() bool {
 	return c.profile.ToolCalling.NativeAPI
 }
 
-func (c *Client) doChat(ctx context.Context, payload map[string]any) (*LLMResponse, error) {
+func (c *Client) doChat(ctx context.Context, payload map[string]any) (*model.LLMResponse, error) {
 	promptTokens := estimatePromptTokensFromPayload(payload)
 	req, err := c.newRequest(ctx, http.MethodPost, "/v1/chat/completions", payload)
 	if err != nil {
@@ -204,7 +199,7 @@ func (c *Client) doChat(ctx context.Context, payload map[string]any) (*LLMRespon
 	return decodeChatResponse(raw, promptTokens)
 }
 
-func (c *Client) doChatStream(ctx context.Context, payload map[string]any, tokenSink func(string) error) (*LLMResponse, error) {
+func (c *Client) doChatStream(ctx context.Context, payload map[string]any, tokenSink func(string) error) (*model.LLMResponse, error) {
 	promptTokens := estimatePromptTokensFromPayload(payload)
 	req, err := c.newRequest(ctx, http.MethodPost, "/v1/chat/completions", payload)
 	if err != nil {
@@ -265,7 +260,7 @@ func (c *Client) doChatStream(ctx context.Context, payload map[string]any, token
 	if err := scanner.Err(); err != nil {
 		return nil, err
 	}
-	respOut := &LLMResponse{
+	respOut := &model.LLMResponse{
 		Text:         fullText.String(),
 		FinishReason: firstFinishReason(final),
 		Usage:        normalizeUsage(final.Usage, promptTokens, fullText.String()),
@@ -334,14 +329,14 @@ func (c *Client) Embedder(model string) *Embedder {
 	return &Embedder{client: c, model: model}
 }
 
-func modelFromOptions(options *LLMOptions) string {
+func modelFromOptions(options *model.LLMOptions) string {
 	if options != nil && options.Model != "" {
 		return options.Model
 	}
 	return ""
 }
 
-func convertMessages(messages []Message) []map[string]any {
+func convertMessages(messages []model.Message) []map[string]any {
 	out := make([]map[string]any, 0, len(messages))
 	for _, msg := range messages {
 		entry := map[string]any{
@@ -383,7 +378,7 @@ func convertMessageToolCalls(calls []model.ToolCall) []map[string]any {
 	return out
 }
 
-func convertTools(tools []LLMToolSpec) []map[string]any {
+func convertTools(tools []model.LLMToolSpec) []map[string]any {
 	out := make([]map[string]any, 0, len(tools))
 	for _, tool := range tools {
 		out = append(out, map[string]any{
@@ -462,8 +457,8 @@ func parseArgs(raw string) map[string]any {
 	return map[string]any{"_raw": raw}
 }
 
-func decodeChatResponse(raw chatCompletionResponse, promptTokens int) (*LLMResponse, error) {
-	resp := &LLMResponse{}
+func decodeChatResponse(raw chatCompletionResponse, promptTokens int) (*model.LLMResponse, error) {
+	resp := &model.LLMResponse{}
 	if len(raw.Choices) == 0 {
 		resp.Usage = normalizeUsage(raw.Usage, promptTokens, resp.Text)
 		return resp, nil

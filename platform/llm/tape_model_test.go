@@ -24,20 +24,20 @@ type stubModel struct {
 	streamText string
 }
 
-func (s stubModel) Generate(context.Context, string, *LLMOptions) (*LLMResponse, error) {
-	return &LLMResponse{Text: "ok", FinishReason: "stop"}, nil
+func (s stubModel) Generate(context.Context, string, *model.LLMOptions) (*model.LLMResponse, error) {
+	return &model.LLMResponse{Text: "ok", FinishReason: "stop"}, nil
 }
-func (s stubModel) GenerateStream(context.Context, string, *LLMOptions) (<-chan string, error) {
+func (s stubModel) GenerateStream(context.Context, string, *model.LLMOptions) (<-chan string, error) {
 	ch := make(chan string, 1)
 	ch <- s.streamText
 	close(ch)
 	return ch, nil
 }
-func (s stubModel) Chat(context.Context, []Message, *LLMOptions) (*LLMResponse, error) {
-	return &LLMResponse{Text: "chat", FinishReason: "stop"}, nil
+func (s stubModel) Chat(context.Context, []model.Message, *model.LLMOptions) (*model.LLMResponse, error) {
+	return &model.LLMResponse{Text: "chat", FinishReason: "stop"}, nil
 }
-func (s stubModel) ChatWithTools(context.Context, []Message, []LLMToolSpec, *LLMOptions) (*LLMResponse, error) {
-	return &LLMResponse{Text: "tools", FinishReason: "stop", ToolCalls: []model.ToolCall{{Name: "file_read", Args: map[string]any{"path": "x"}}}}, nil
+func (s stubModel) ChatWithTools(context.Context, []model.Message, []model.LLMToolSpec, *model.LLMOptions) (*model.LLMResponse, error) {
+	return &model.LLMResponse{Text: "tools", FinishReason: "stop", ToolCalls: []model.ToolCall{{Name: "file_read", Args: map[string]any{"path": "x"}}}}, nil
 }
 
 func TestTapeModelRecordThenReplay(t *testing.T) {
@@ -59,13 +59,13 @@ func TestTapeModelRecordThenReplay(t *testing.T) {
 	}
 	defer func() { _ = rec.Close() }()
 
-	if _, err := rec.Generate(context.Background(), "p", &LLMOptions{Model: "m"}); err != nil {
+	if _, err := rec.Generate(context.Background(), "p", &model.LLMOptions{Model: "m"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := rec.Chat(context.Background(), []Message{{Role: "user", Content: "hi"}}, nil); err != nil {
+	if _, err := rec.Chat(context.Background(), []model.Message{{Role: "user", Content: "hi"}}, nil); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := rec.ChatWithTools(context.Background(), []Message{{Role: "user", Content: "hi"}}, nil, nil); err != nil {
+	if _, err := rec.ChatWithTools(context.Background(), []model.Message{{Role: "user", Content: "hi"}}, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	stream, err := rec.GenerateStream(context.Background(), "p", nil)
@@ -88,13 +88,13 @@ func TestTapeModelRecordThenReplay(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if resp, err := replay.Generate(context.Background(), "p", &LLMOptions{Model: "m"}); err != nil || resp.Text != "ok" {
+	if resp, err := replay.Generate(context.Background(), "p", &model.LLMOptions{Model: "m"}); err != nil || resp.Text != "ok" {
 		t.Fatalf("replay generate: resp=%+v err=%v", resp, err)
 	}
-	if resp, err := replay.Chat(context.Background(), []Message{{Role: "user", Content: "hi"}}, nil); err != nil || resp.Text != "chat" {
+	if resp, err := replay.Chat(context.Background(), []model.Message{{Role: "user", Content: "hi"}}, nil); err != nil || resp.Text != "chat" {
 		t.Fatalf("replay chat: resp=%+v err=%v", resp, err)
 	}
-	if resp, err := replay.ChatWithTools(context.Background(), []Message{{Role: "user", Content: "hi"}}, nil, nil); err != nil || resp.Text != "tools" {
+	if resp, err := replay.ChatWithTools(context.Background(), []model.Message{{Role: "user", Content: "hi"}}, nil, nil); err != nil || resp.Text != "tools" {
 		t.Fatalf("replay chat_with_tools: resp=%+v err=%v", resp, err)
 	}
 	ch, err := replay.GenerateStream(context.Background(), "p", nil)
@@ -155,7 +155,7 @@ func TestTapeModelRecordWritesHeaderFirst(t *testing.T) {
 func TestTapeModelReplayWarnsOnProviderMismatch(t *testing.T) {
 	tape := writeTapeFixture(t, []tapeEntry{
 		{Kind: "_header", Request: tapeRequest{Header: &TapeHeader{Kind: "_header", ProviderID: "ollama", ModelName: "model-a"}}},
-		{Kind: "generate", Fingerprint: fingerprint("generate", tapeRequest{Prompt: "p"}), Response: &LLMResponse{Text: "ok"}},
+		{Kind: "generate", Fingerprint: fingerprint("generate", tapeRequest{Prompt: "p"}), Response: &model.LLMResponse{Text: "ok"}},
 	})
 
 	var buf bytes.Buffer
@@ -178,7 +178,7 @@ func TestTapeModelReplayWarnsOnProviderMismatch(t *testing.T) {
 func TestTapeModelReplayRejectsMismatchedModelHeader(t *testing.T) {
 	tape := writeTapeFixture(t, []tapeEntry{
 		{Kind: "_header", Request: tapeRequest{Header: &TapeHeader{Kind: "_header", ModelName: "model-a"}}},
-		{Kind: "generate", Fingerprint: fingerprint("generate", tapeRequest{Prompt: "p"}), Response: &LLMResponse{Text: "ok"}},
+		{Kind: "generate", Fingerprint: fingerprint("generate", tapeRequest{Prompt: "p"}), Response: &model.LLMResponse{Text: "ok"}},
 	})
 
 	replay, err := NewTapeModel(stubModel{}, tape, "replay")
@@ -194,7 +194,7 @@ func TestTapeModelReplayRejectsMismatchedModelHeader(t *testing.T) {
 func TestTapeModelReplayRejectsMismatchedDigestHeader(t *testing.T) {
 	tape := writeTapeFixture(t, []tapeEntry{
 		{Kind: "_header", Request: tapeRequest{Header: &TapeHeader{Kind: "_header", ModelName: "model-a", ModelDigest: "sha256:abc123456789"}}},
-		{Kind: "generate", Fingerprint: fingerprint("generate", tapeRequest{Prompt: "p"}), Response: &LLMResponse{Text: "ok"}},
+		{Kind: "generate", Fingerprint: fingerprint("generate", tapeRequest{Prompt: "p"}), Response: &model.LLMResponse{Text: "ok"}},
 	})
 
 	replay, err := NewTapeModel(stubModel{}, tape, "replay")
@@ -209,7 +209,7 @@ func TestTapeModelReplayRejectsMismatchedDigestHeader(t *testing.T) {
 
 func TestTapeModelReplayAllowsLegacyTapeWithoutHeader(t *testing.T) {
 	tape := writeTapeFixture(t, []tapeEntry{
-		{Kind: "generate", Fingerprint: fingerprint("generate", tapeRequest{Prompt: "p"}), Response: &LLMResponse{Text: "ok"}},
+		{Kind: "generate", Fingerprint: fingerprint("generate", tapeRequest{Prompt: "p"}), Response: &model.LLMResponse{Text: "ok"}},
 	})
 
 	replay, err := NewTapeModel(stubModel{}, tape, "replay")
@@ -234,7 +234,7 @@ func TestTapeModelReplayRejectsMismatchedFirstRequest(t *testing.T) {
 			CaseName:   "basic_edit_task",
 			RecordedAt: time.Now().UTC().Format(time.RFC3339),
 		}}},
-		{Kind: "generate", Fingerprint: fingerprint("generate", tapeRequest{Prompt: "old prompt"}), Response: &LLMResponse{Text: "ok"}},
+		{Kind: "generate", Fingerprint: fingerprint("generate", tapeRequest{Prompt: "old prompt"}), Response: &model.LLMResponse{Text: "ok"}},
 	})
 
 	replay, err := NewTapeModel(stubModel{}, tape, "replay")
@@ -259,7 +259,7 @@ func TestTapeModelReplayWarnsOnStaleTapeAge(t *testing.T) {
 			CaseName:   "basic_edit_task",
 			RecordedAt: time.Now().UTC().Add(-45 * 24 * time.Hour).Format(time.RFC3339),
 		}}},
-		{Kind: "generate", Fingerprint: fingerprint("generate", tapeRequest{Prompt: "p"}), Response: &LLMResponse{Text: "ok"}},
+		{Kind: "generate", Fingerprint: fingerprint("generate", tapeRequest{Prompt: "p"}), Response: &model.LLMResponse{Text: "ok"}},
 	})
 
 	var buf bytes.Buffer
@@ -289,7 +289,7 @@ func TestInspectTapeReturnsHeaderAndRecordedAt(t *testing.T) {
 			CaseName:   "case-a",
 			RecordedAt: recordedAt,
 		}}},
-		{Kind: "generate", Fingerprint: fingerprint("generate", tapeRequest{Prompt: "p"}), Response: &LLMResponse{Text: "ok"}},
+		{Kind: "generate", Fingerprint: fingerprint("generate", tapeRequest{Prompt: "p"}), Response: &model.LLMResponse{Text: "ok"}},
 	})
 
 	inspection, err := InspectTape(tape)
@@ -343,11 +343,11 @@ func newBlockingStreamModel() *blockingStreamModel {
 
 func (b *blockingStreamModel) emit(tok string) { b.tokens <- tok }
 
-func (b *blockingStreamModel) Generate(ctx context.Context, _ string, _ *LLMOptions) (*LLMResponse, error) {
-	return &LLMResponse{Text: "ok", FinishReason: "stop"}, nil
+func (b *blockingStreamModel) Generate(ctx context.Context, _ string, _ *model.LLMOptions) (*model.LLMResponse, error) {
+	return &model.LLMResponse{Text: "ok", FinishReason: "stop"}, nil
 }
 
-func (b *blockingStreamModel) GenerateStream(ctx context.Context, _ string, _ *LLMOptions) (<-chan string, error) {
+func (b *blockingStreamModel) GenerateStream(ctx context.Context, _ string, _ *model.LLMOptions) (<-chan string, error) {
 	out := make(chan string)
 	go func() {
 		defer close(out)
@@ -367,12 +367,12 @@ func (b *blockingStreamModel) GenerateStream(ctx context.Context, _ string, _ *L
 	return out, nil
 }
 
-func (b *blockingStreamModel) Chat(_ context.Context, _ []Message, _ *LLMOptions) (*LLMResponse, error) {
-	return &LLMResponse{Text: "chat", FinishReason: "stop"}, nil
+func (b *blockingStreamModel) Chat(_ context.Context, _ []model.Message, _ *model.LLMOptions) (*model.LLMResponse, error) {
+	return &model.LLMResponse{Text: "chat", FinishReason: "stop"}, nil
 }
 
-func (b *blockingStreamModel) ChatWithTools(_ context.Context, _ []Message, _ []LLMToolSpec, _ *LLMOptions) (*LLMResponse, error) {
-	return &LLMResponse{Text: "tools", FinishReason: "stop"}, nil
+func (b *blockingStreamModel) ChatWithTools(_ context.Context, _ []model.Message, _ []model.LLMToolSpec, _ *model.LLMOptions) (*model.LLMResponse, error) {
+	return &model.LLMResponse{Text: "tools", FinishReason: "stop"}, nil
 }
 
 type recordingTelemetry struct {

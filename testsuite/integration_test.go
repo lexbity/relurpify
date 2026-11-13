@@ -55,30 +55,30 @@ func (o *phase9EventSink) Emit(_ context.Context, event any) {
 
 type phase9UsageModel struct{}
 
-func (phase9UsageModel) Generate(context.Context, string, *llm.LLMOptions) (*llm.LLMResponse, error) {
-	return &llm.LLMResponse{
+func (phase9UsageModel) Generate(context.Context, string, *model.LLMOptions) (*model.LLMResponse, error) {
+	return &model.LLMResponse{
 		Text:         "hello",
 		FinishReason: "stop",
 		Usage:        model.TokenUsage{PromptTokens: 600, CompletionTokens: 10, TotalTokens: 610},
 	}, nil
 }
 
-func (phase9UsageModel) GenerateStream(context.Context, string, *llm.LLMOptions) (<-chan string, error) {
+func (phase9UsageModel) GenerateStream(context.Context, string, *model.LLMOptions) (<-chan string, error) {
 	ch := make(chan string)
 	close(ch)
 	return ch, nil
 }
 
-func (phase9UsageModel) Chat(context.Context, []llm.Message, *llm.LLMOptions) (*llm.LLMResponse, error) {
-	return &llm.LLMResponse{
+func (phase9UsageModel) Chat(context.Context, []model.Message, *model.LLMOptions) (*model.LLMResponse, error) {
+	return &model.LLMResponse{
 		Text:         "hello",
 		FinishReason: "stop",
 		Usage:        model.TokenUsage{PromptTokens: 600, CompletionTokens: 10, TotalTokens: 610},
 	}, nil
 }
 
-func (phase9UsageModel) ChatWithTools(context.Context, []llm.Message, []llm.LLMToolSpec, *llm.LLMOptions) (*llm.LLMResponse, error) {
-	return &llm.LLMResponse{
+func (phase9UsageModel) ChatWithTools(context.Context, []model.Message, []model.LLMToolSpec, *model.LLMOptions) (*model.LLMResponse, error) {
+	return &model.LLMResponse{
 		Text:         "hello",
 		FinishReason: "stop",
 		Usage:        model.TokenUsage{PromptTokens: 600, CompletionTokens: 10, TotalTokens: 610},
@@ -235,10 +235,10 @@ func TestProvenance_FullChain(t *testing.T) {
 func TestBudgetExhaustion_ResetProtocol(t *testing.T) {
 	advisor := &telemetry.ContextBudgetAdvisor{ModelContextSize: 2048}
 	tel := &phase9Telemetry{}
-	model := llm.NewInstrumentedModel(phase9UsageModel{}, &phase9EventSink{parent: tel}, false)
+	instrumented := llm.NewInstrumentedModel(phase9UsageModel{}, &phase9EventSink{parent: tel}, false)
 	ctx := telemetry.WithAdvisor(context.Background(), advisor)
 
-	_, err := model.Chat(ctx, []llm.Message{{Role: "user", Content: "ping"}}, nil)
+	_, err := instrumented.Chat(ctx, []model.Message{{Role: "user", Content: "ping"}}, nil)
 	require.NoError(t, err)
 
 	require.Eventually(t, func() bool {
@@ -255,7 +255,7 @@ func TestBudgetExhaustion_ResetProtocol(t *testing.T) {
 	advisor.Reset()
 	require.False(t, advisor.ShouldReset())
 
-	_, err = model.Chat(ctx, []llm.Message{{Role: "user", Content: "ping"}}, nil)
+	_, err = instrumented.Chat(ctx, []model.Message{{Role: "user", Content: "ping"}}, nil)
 	require.NoError(t, err)
 	require.Eventually(t, func() bool {
 		count := 0

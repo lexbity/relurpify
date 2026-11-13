@@ -243,7 +243,7 @@ func asStringSlice(value any) []string {
 	}
 }
 
-func lastMessageByRole(messages []llm.Message, role string) string {
+func lastMessageByRole(messages []model.Message, role string) string {
 	for i := len(messages) - 1; i >= 0; i-- {
 		if strings.EqualFold(strings.TrimSpace(messages[i].Role), role) {
 			return strings.TrimSpace(messages[i].Content)

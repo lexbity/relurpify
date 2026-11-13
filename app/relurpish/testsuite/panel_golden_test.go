@@ -1,7 +1,6 @@
 package testsuite
 
 import (
-	"codeburg.org/lexbit/relurpify/app/relurpish/internal/uitest"
 	"context"
 	"errors"
 	"flag"
@@ -12,6 +11,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"codeburg.org/lexbit/relurpify/app/relurpish/internal/uitest"
 
 	"codeburg.org/lexbit/relurpify/app/relurpish/euclotui"
 	runtimesvc "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
@@ -62,9 +63,10 @@ func (b *mockOllamaBackend) SetProfile(profile *model.ModelProfile)           {}
 func (b *mockOllamaBackend) Reset(ctx context.Context, strategy string) error { return nil }
 
 func init() {
-	llm.RegisterKind("mock-ollama", func(cfg llm.ProviderConfig, secrets llm.ProviderSecrets) (llm.ManagedBackend, error) {
+	llm.RegisterKind("mock-ollama", func(cfg llm.ProviderConfig, secrets llm.ProviderSecrets, gate *model.CallGate) (llm.ManagedBackend, error) {
 		_ = cfg
 		_ = secrets
+		_ = gate
 		return &mockOllamaBackend{}, nil
 	})
 }

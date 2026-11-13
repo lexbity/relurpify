@@ -27,7 +27,7 @@ func TestBackend_ConformanceSuite(t *testing.T) {
 				Model:             "test-model",
 				EmbeddingModel:    "embed-model",
 				NativeToolCalling: nativeToolCalling,
-			}, "")
+			}, "", nil)
 		},
 		NewServer: func(t *testing.T, scenario string, nativeToolCalling bool) *httptest.Server {
 			t.Helper()
@@ -175,7 +175,7 @@ func TestBackend_Warm_Reachable(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	backend := NewBackend(Config{Endpoint: srv.URL, Model: "test-model"}, "")
+	backend := NewBackend(Config{Endpoint: srv.URL, Model: "test-model"}, "", nil)
 	assert.NoError(t, backend.Warm(context.Background()))
 }
 
@@ -190,7 +190,7 @@ func TestBackend_ListModels(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	backend := NewBackend(Config{Endpoint: srv.URL, Model: "test-model"}, "")
+	backend := NewBackend(Config{Endpoint: srv.URL, Model: "test-model"}, "", nil)
 	models, err := backend.ListModels(context.Background())
 	require.NoError(t, err)
 	assert.Len(t, models, 1)
@@ -200,7 +200,7 @@ func TestBackend_ListModels(t *testing.T) {
 }
 
 func TestBackend_Capabilities(t *testing.T) {
-	backend := NewBackend(Config{NativeToolCalling: true}, "")
+	backend := NewBackend(Config{NativeToolCalling: true}, "", nil)
 	caps := backend.Capabilities()
 	require.True(t, caps.NativeToolCalling)
 	require.True(t, caps.Streaming)
@@ -211,8 +211,8 @@ func TestBackend_Capabilities(t *testing.T) {
 }
 
 func TestBackend_ModelContextSize_ProfileOverride(t *testing.T) {
-	backend := NewBackend(Config{Model: "test-model"}, "")
-	backend.SetProfile(&ModelProfile{ContextSize: 8192})
+	backend := NewBackend(Config{Model: "test-model"}, "", nil)
+	backend.SetProfile(&model.ModelProfile{ContextSize: 8192})
 	size, err := backend.ModelContextSize(context.Background())
 	require.NoError(t, err)
 	require.Equal(t, 8192, size)
@@ -262,7 +262,7 @@ func TestBackend_Chat_RoundTrip(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	backend := NewBackend(Config{Endpoint: srv.URL, Model: "test-model"}, "")
+	backend := NewBackend(Config{Endpoint: srv.URL, Model: "test-model"}, "", nil)
 	resp, err := backend.Model().Chat(context.Background(), []model.Message{{Role: "user", Content: "ping"}}, nil)
 	require.NoError(t, err)
 	assert.Equal(t, "response", resp.Text)
@@ -279,7 +279,7 @@ func TestBackend_ChatWithTools_NativeDisabled(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	backend := NewBackend(Config{Endpoint: srv.URL, Model: "test-model", NativeToolCalling: false}, "")
+	backend := NewBackend(Config{Endpoint: srv.URL, Model: "test-model", NativeToolCalling: false}, "", nil)
 	resp, err := backend.Model().ChatWithTools(context.Background(), []model.Message{{Role: "user", Content: "ping"}}, nil, nil)
 	require.ErrorIs(t, err, ErrNativeToolCallingRequired)
 	require.Nil(t, resp)
@@ -297,7 +297,7 @@ func TestBackend_Streaming(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	backend := NewBackend(Config{Endpoint: srv.URL, Model: "test-model", NativeToolCalling: true}, "")
+	backend := NewBackend(Config{Endpoint: srv.URL, Model: "test-model", NativeToolCalling: true}, "", nil)
 	var got strings.Builder
 	resp, err := backend.Model().ChatWithTools(context.Background(), []model.Message{{Role: "user", Content: "ping"}}, nil, &model.LLMOptions{
 		StreamCallback: func(token string) { got.WriteString(token) },

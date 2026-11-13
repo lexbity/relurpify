@@ -87,7 +87,7 @@ func (s *observabilitySink) snapshot() []telemetry.Event {
 // paradigm node (e.g. the ReAct think node) drives the model.
 type llmCallNode struct {
 	id    string
-	model llm.LanguageModel
+	model model.LanguageModel
 	ctx   context.Context
 }
 

@@ -5,11 +5,12 @@ import (
 	"strings"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/model"
 	"codeburg.org/lexbit/relurpify/platform/llm/offline"
 )
 
 func init() {
-	RegisterKind("offline", func(cfg ProviderConfig, secrets ProviderSecrets) (ManagedBackend, error) {
+	RegisterKind("offline", func(cfg ProviderConfig, secrets ProviderSecrets, gate *model.CallGate) (ManagedBackend, error) {
 		_ = secrets
 		if err := cfg.Validate(); err != nil {
 			return nil, err
@@ -20,6 +21,7 @@ func init() {
 		return offlineBackend{
 			model:     offline.NewModel(),
 			modelName: strings.TrimSpace(cfg.Model),
+			gate:      gate,
 		}, nil
 	})
 }
@@ -27,21 +29,22 @@ func init() {
 type offlineBackend struct {
 	model     offline.Model
 	modelName string
+	gate      *model.CallGate
 }
 
-func (b offlineBackend) Model() LanguageModel {
-	return b.model
+func (b offlineBackend) Model() model.LanguageModel {
+	return NewGatedModel(b.model, b.gate)
 }
 
 func (b offlineBackend) Embedder() Embedder {
 	return nil
 }
 
-func (b offlineBackend) Capabilities() BackendCapabilities {
-	return BackendCapabilities{
+func (b offlineBackend) Capabilities() model.BackendCapabilities {
+	return model.BackendCapabilities{
 		Streaming:            true,
 		ModelListing:         true,
-		BackendClass:         BackendClassTransport,
+		BackendClass:         model.BackendClassTransport,
 		UsageReporting:       false,
 		ContextSizeDiscovery: false,
 	}
@@ -73,7 +76,7 @@ func (b offlineBackend) Close() error {
 
 func (b offlineBackend) SetDebugLogging(bool) {}
 
-func (b offlineBackend) SetProfile(*ModelProfile) {}
+func (b offlineBackend) SetProfile(*model.ModelProfile) {}
 
 func (b offlineBackend) Reset(context.Context, string) error {
 	return nil

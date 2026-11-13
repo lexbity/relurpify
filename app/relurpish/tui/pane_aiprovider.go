@@ -272,7 +272,8 @@ func (p *AIProviderPane) loadProfile() {
 
 func (p *AIProviderPane) refreshModels() {
 	cfg := p.llmConfig()
-	backend, err := llm.New(cfg, llm.ProviderSecrets{})
+	// For P03: pass nil gate for model listing (diagnostic, not execution)
+	backend, err := llm.New(cfg, llm.ProviderSecrets{}, nil)
 	if err != nil {
 		p.status = fmt.Sprintf("backend error: %v", err)
 		p.models = nil
@@ -390,7 +391,8 @@ func (p *AIProviderPane) saveProviderCmd() tea.Cmd {
 func (p *AIProviderPane) testProviderCmd() tea.Cmd {
 	cfg := p.llmConfig()
 	return func() tea.Msg {
-		backend, err := llm.New(cfg, llm.ProviderSecrets{})
+		// For P03: pass nil gate for provider test (diagnostic, not execution)
+		backend, err := llm.New(cfg, llm.ProviderSecrets{}, nil)
 		if err != nil {
 			return ChatSystemMsg{Text: fmt.Sprintf("provider test failed: %v", err)}
 		}

@@ -5,7 +5,7 @@ import "codeburg.org/lexbit/relurpify/model"
 // ToolCallingModeLabel returns the resolved tool-calling mode for a model.
 // Unknown or nil models are treated as "unknown"; profiled models are mapped
 // to "native" or "fallback" based on their UsesNativeToolCalling contract.
-func ToolCallingModeLabel(lm LanguageModel) string {
+func ToolCallingModeLabel(lm model.LanguageModel) string {
 	if lm == nil {
 		return "unknown"
 	}

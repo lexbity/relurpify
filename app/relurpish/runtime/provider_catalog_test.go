@@ -200,7 +200,7 @@ func TestNewWithKindFromCatalog(t *testing.T) {
 		Kind:     def.Kind,
 		Endpoint: def.Endpoint,
 		Model:    "test-model",
-	}, llm.ProviderSecrets{})
+	}, llm.ProviderSecrets{}, nil)
 	require.NoError(t, err)
 	require.NotNil(t, backend)
 }
@@ -211,7 +211,7 @@ func TestNewWithProviderFallbackFromCatalog(t *testing.T) {
 		Provider: "ollama",
 		Endpoint: "http://localhost:11434",
 		Model:    "test-model",
-	}, llm.ProviderSecrets{})
+	}, llm.ProviderSecrets{}, nil)
 	require.NoError(t, err)
 	require.NotNil(t, backend)
 }
@@ -219,7 +219,7 @@ func TestNewWithProviderFallbackFromCatalog(t *testing.T) {
 func TestNewUnknownKind(t *testing.T) {
 	_, err := llm.New(llm.ProviderConfig{
 		Kind: "vllm",
-	}, llm.ProviderSecrets{})
+	}, llm.ProviderSecrets{}, nil)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "unknown provider kind")
 }
@@ -243,7 +243,7 @@ func TestOpenAICompatFromCatalog(t *testing.T) {
 		Kind:     def.Kind,
 		Endpoint: def.Endpoint,
 		Model:    "test-model",
-	}, llm.ProviderSecrets{})
+	}, llm.ProviderSecrets{}, nil)
 	require.NoError(t, err)
 	require.NotNil(t, backend)
 }

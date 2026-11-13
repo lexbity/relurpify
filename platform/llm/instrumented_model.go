@@ -26,16 +26,18 @@ func stampObservabilityCorrelation(ctx context.Context, ev *telemetry.Event) {
 
 // InstrumentedModel wraps a LanguageModel and emits telemetry for prompts and responses.
 type InstrumentedModel struct {
-	Inner     LanguageModel
+	Inner     model.LanguageModel
 	Telemetry model.EventSink
 	Debug     bool
 }
 
-func NewInstrumentedModel(inner LanguageModel, telemetry model.EventSink, debug bool) *InstrumentedModel {
+// NewInstrumentedModel wraps a model with logical-call telemetry.
+func NewInstrumentedModel(inner model.LanguageModel, telemetry model.EventSink, debug bool) *InstrumentedModel {
 	return &InstrumentedModel{Inner: inner, Telemetry: telemetry, Debug: debug}
 }
 
-func (m *InstrumentedModel) Generate(ctx context.Context, prompt string, options *LLMOptions) (*LLMResponse, error) {
+// Generate implements model.LanguageModel.
+func (m *InstrumentedModel) Generate(ctx context.Context, prompt string, options *model.LLMOptions) (*model.LLMResponse, error) {
 	m.emitPrompt(ctx, "generate", map[string]any{
 		"model":          modelFromOptions(options),
 		"prompt_chars":   len(prompt),
@@ -46,7 +48,8 @@ func (m *InstrumentedModel) Generate(ctx context.Context, prompt string, options
 	return resp, err
 }
 
-func (m *InstrumentedModel) GenerateStream(ctx context.Context, prompt string, options *LLMOptions) (<-chan string, error) {
+// GenerateStream implements model.LanguageModel.
+func (m *InstrumentedModel) GenerateStream(ctx context.Context, prompt string, options *model.LLMOptions) (<-chan string, error) {
 	m.emitPrompt(ctx, "generate_stream", map[string]any{
 		"model":          modelFromOptions(options),
 		"prompt_chars":   len(prompt),
@@ -57,12 +60,13 @@ func (m *InstrumentedModel) GenerateStream(ctx context.Context, prompt string, o
 	if err != nil {
 		m.emitResponse(ctx, "generate_stream", nil, err)
 	} else {
-		m.emitResponse(ctx, "generate_stream", &LLMResponse{FinishReason: "stream"}, nil)
+		m.emitResponse(ctx, "generate_stream", &model.LLMResponse{FinishReason: "stream"}, nil)
 	}
 	return ch, err
 }
 
-func (m *InstrumentedModel) Chat(ctx context.Context, messages []Message, options *LLMOptions) (*LLMResponse, error) {
+// Chat implements model.LanguageModel.
+func (m *InstrumentedModel) Chat(ctx context.Context, messages []model.Message, options *model.LLMOptions) (*model.LLMResponse, error) {
 	meta := chatMeta(messages, nil, options)
 	m.emitPrompt(ctx, "chat", meta.base, m.Debug, meta.debug)
 	resp, err := m.Inner.Chat(ctx, messages, options)
@@ -70,7 +74,8 @@ func (m *InstrumentedModel) Chat(ctx context.Context, messages []Message, option
 	return resp, err
 }
 
-func (m *InstrumentedModel) ChatWithTools(ctx context.Context, messages []Message, tools []LLMToolSpec, options *LLMOptions) (*LLMResponse, error) {
+// ChatWithTools implements model.LanguageModel.
+func (m *InstrumentedModel) ChatWithTools(ctx context.Context, messages []model.Message, tools []model.LLMToolSpec, options *model.LLMOptions) (*model.LLMResponse, error) {
 	meta := chatMeta(messages, tools, options)
 	m.emitPrompt(ctx, "chat_with_tools", meta.base, m.Debug, meta.debug)
 	resp, err := m.Inner.ChatWithTools(ctx, messages, tools, options)
@@ -80,11 +85,11 @@ func (m *InstrumentedModel) ChatWithTools(ctx context.Context, messages []Messag
 
 // SetProfile forwards a resolved model profile to the wrapped model when it
 // supports profile mutation.
-func (m *InstrumentedModel) SetProfile(profile *ModelProfile) {
+func (m *InstrumentedModel) SetProfile(profile *model.ModelProfile) {
 	if m == nil || m.Inner == nil || profile == nil {
 		return
 	}
-	if setter, ok := m.Inner.(interface{ SetProfile(*ModelProfile) }); ok {
+	if setter, ok := m.Inner.(interface{ SetProfile(*model.ModelProfile) }); ok {
 		setter.SetProfile(profile)
 	}
 }
@@ -127,7 +132,7 @@ type chatMetaPayload struct {
 	debug map[string]any
 }
 
-func chatMeta(messages []Message, tools []LLMToolSpec, options *LLMOptions) chatMetaPayload {
+func chatMeta(messages []model.Message, tools []model.LLMToolSpec, options *model.LLMOptions) chatMetaPayload {
 	var roles []string
 	preview := make([]map[string]any, 0, min(len(messages), 20))
 	for i, msg := range messages {
@@ -199,7 +204,7 @@ func (m *InstrumentedModel) emitPrompt(ctx context.Context, kind string, base ma
 	m.Telemetry.Emit(ctx, ev)
 }
 
-func (m *InstrumentedModel) emitResponse(ctx context.Context, kind string, resp *LLMResponse, err error) {
+func (m *InstrumentedModel) emitResponse(ctx context.Context, kind string, resp *model.LLMResponse, err error) {
 	if m == nil {
 		return
 	}
@@ -255,7 +260,7 @@ func (m *InstrumentedModel) emitResponse(ctx context.Context, kind string, resp 
 	m.Telemetry.Emit(ctx, ev)
 }
 
-func modelFromOptions(options *LLMOptions) string {
+func modelFromOptions(options *model.LLMOptions) string {
 	if options != nil && options.Model != "" {
 		return options.Model
 	}

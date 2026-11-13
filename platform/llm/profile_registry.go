@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	registry "codeburg.org/lexbit/relurpify/capability/registry"
+	"codeburg.org/lexbit/relurpify/model"
 )
 
 // ProfileRegistry loads ModelProfile files from a directory and matches them
@@ -15,14 +16,14 @@ type ProfileRegistry struct {
 }
 
 type profileEntry struct {
-	profile    *ModelProfile
+	profile    *model.ModelProfile
 	sourcePath string
 	isDefault  bool
 }
 
 // ProfileResolution captures the selected profile together with match metadata.
 type ProfileResolution struct {
-	Profile    *ModelProfile
+	Profile    *model.ModelProfile
 	SourcePath string
 	Reason     string
 	MatchKind  string
@@ -34,7 +35,7 @@ type ProfileResolution struct {
 // profiles. The framework/llmconfig adapter is responsible for converting YAML
 // config DTOs into these domain profiles, keeping platform/llm free of any
 // dependency on framework configuration loaders.
-func NewProfileRegistryFromProfiles(profiles []*ModelProfile) *ProfileRegistry {
+func NewProfileRegistryFromProfiles(profiles []*model.ModelProfile) *ProfileRegistry {
 	reg := &ProfileRegistry{}
 	for _, profile := range profiles {
 		if profile == nil {
@@ -112,17 +113,17 @@ func (r *ProfileRegistry) Resolve(provider, model string) ProfileResolution {
 
 // Match preserves the older single-argument API by resolving against a model
 // name without provider scoping.
-func (r *ProfileRegistry) Match(modelName string) *ModelProfile {
+func (r *ProfileRegistry) Match(modelName string) *model.ModelProfile {
 	return r.Resolve("", modelName).Profile
 }
 
 // ApplyProfile attaches profile metadata to a profile-aware object when
 // supported. It returns true if the target accepted the profile.
-func ApplyProfile(target any, profile *ModelProfile) bool {
+func ApplyProfile(target any, profile *model.ModelProfile) bool {
 	if target == nil || profile == nil {
 		return false
 	}
-	setter, ok := target.(interface{ SetProfile(*ModelProfile) })
+	setter, ok := target.(interface{ SetProfile(*model.ModelProfile) })
 	if !ok {
 		return false
 	}
@@ -142,13 +143,13 @@ func builtinProfileResolution(provider, model string) ProfileResolution {
 	}
 }
 
-func builtinDefaultProfile() *ModelProfile {
-	profile := &ModelProfile{Pattern: "*"}
+func builtinDefaultProfile() *model.ModelProfile {
+	profile := &model.ModelProfile{Pattern: "*"}
 	profile.Normalize()
 	return profile
 }
 
-func profileScore(profile *ModelProfile, isDefault bool, provider, model string) (int, string) {
+func profileScore(profile *model.ModelProfile, isDefault bool, provider, model string) (int, string) {
 	if profile == nil {
 		return -1, ""
 	}
@@ -212,7 +213,7 @@ func specificityScore(pattern string) int {
 	return idx
 }
 
-func profileReason(kind string, profile *ModelProfile, provider, model string, isDefault bool) string {
+func profileReason(kind string, profile *model.ModelProfile, provider, model string, isDefault bool) string {
 	switch kind {
 	case "provider-model-exact":
 		return fmt.Sprintf("provider/model exact match for %s/%s", provider, model)

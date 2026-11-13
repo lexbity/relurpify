@@ -171,12 +171,12 @@ func TestFallbackToolModel_FileListTraversalStopsAfterRead(t *testing.T) {
 
 type callingModeBackendStub struct {
 	model   model.LanguageModel
-	caps    BackendCapabilities
-	profile *ModelProfile
+	caps    model.BackendCapabilities
+	profile *model.ModelProfile
 	pulls   int
 }
 
-func (b *callingModeBackendStub) Model() LanguageModel {
+func (b *callingModeBackendStub) Model() model.LanguageModel {
 	return b.model
 }
 
@@ -184,7 +184,7 @@ func (b *callingModeBackendStub) Embedder() Embedder {
 	return nil
 }
 
-func (b *callingModeBackendStub) Capabilities() BackendCapabilities {
+func (b *callingModeBackendStub) Capabilities() model.BackendCapabilities {
 	return b.caps
 }
 
@@ -210,7 +210,7 @@ func (b *callingModeBackendStub) Close() error {
 
 func (b *callingModeBackendStub) SetDebugLogging(bool) {}
 
-func (b *callingModeBackendStub) SetProfile(profile *ModelProfile) {
+func (b *callingModeBackendStub) SetProfile(profile *model.ModelProfile) {
 	b.profile = profile.Clone()
 }
 
@@ -267,15 +267,15 @@ func TestFactoryWrapsFallbackModels(t *testing.T) {
 	}
 	backend := &callingModeBackendStub{
 		model: inner,
-		caps:  BackendCapabilities{NativeToolCalling: false},
+		caps:  model.BackendCapabilities{NativeToolCalling: false},
 	}
-	RegisterKind(providerName, func(ProviderConfig, ProviderSecrets) (ManagedBackend, error) {
+	RegisterKind(providerName, func(ProviderConfig, ProviderSecrets, *model.CallGate) (ManagedBackend, error) {
 		return backend, nil
 	})
 
-	managed, err := New(ProviderConfig{Provider: providerName, Model: "test-model"}, ProviderSecrets{})
+	managed, err := New(ProviderConfig{Provider: providerName, Model: "test-model"}, ProviderSecrets{}, nil)
 	require.NoError(t, err)
-	managed.SetProfile(&ModelProfile{ToolCalling: model.ModelToolCalling{NativeAPI: false, MaxToolsPerCall: 1}})
+	managed.SetProfile(&model.ModelProfile{ToolCalling: model.ModelToolCalling{NativeAPI: false, MaxToolsPerCall: 1}})
 
 	lm := managed.Model()
 	_, ok := lm.(*FallbackToolModel)
@@ -294,15 +294,15 @@ func TestFactoryLeavesNativeModelsUnwrapped(t *testing.T) {
 	inner := &callingModeNativeModelStub{}
 	backend := &callingModeBackendStub{
 		model: inner,
-		caps:  BackendCapabilities{NativeToolCalling: true},
+		caps:  model.BackendCapabilities{NativeToolCalling: true},
 	}
-	RegisterKind(providerName, func(ProviderConfig, ProviderSecrets) (ManagedBackend, error) {
+	RegisterKind(providerName, func(ProviderConfig, ProviderSecrets, *model.CallGate) (ManagedBackend, error) {
 		return backend, nil
 	})
 
-	managed, err := New(ProviderConfig{Provider: providerName, Model: "test-model"}, ProviderSecrets{})
+	managed, err := New(ProviderConfig{Provider: providerName, Model: "test-model"}, ProviderSecrets{}, nil)
 	require.NoError(t, err)
-	managed.SetProfile(&ModelProfile{ToolCalling: model.ModelToolCalling{NativeAPI: true, MaxToolsPerCall: 1}})
+	managed.SetProfile(&model.ModelProfile{ToolCalling: model.ModelToolCalling{NativeAPI: true, MaxToolsPerCall: 1}})
 
 	lm := managed.Model()
 	_, ok := lm.(*FallbackToolModel)

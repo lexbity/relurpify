@@ -56,7 +56,7 @@ func (s *stubManagedBackend) Close() error {
 
 func (s *stubManagedBackend) SetDebugLogging(bool) {}
 
-func (s *stubManagedBackend) SetProfile(*ModelProfile) {}
+func (s *stubManagedBackend) SetProfile(*model.ModelProfile) {}
 
 func (s *stubManagedBackend) Reset(context.Context, string) error {
 	return nil

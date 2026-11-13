@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"codeburg.org/lexbit/relurpify/model"
 	"github.com/stretchr/testify/require"
 
 	"go.uber.org/goleak"
@@ -71,7 +72,7 @@ func TestChatStreamSlowConsumerCancel(t *testing.T) {
 	client := NewClient(OpenAICompatConfig{Endpoint: srv.URL}, "")
 
 	ctx, cancel := context.WithCancel(context.Background())
-	stream, err := client.ChatStream(ctx, []Message{{Role: "user", Content: "hi"}}, nil, nil)
+	stream, err := client.ChatStream(ctx, []model.Message{{Role: "user", Content: "hi"}}, nil, nil)
 	require.NoError(t, err)
 	<-stream
 	// Stop reading entirely; cancel is the only stop signal.

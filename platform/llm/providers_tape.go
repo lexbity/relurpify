@@ -5,12 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	"codeburg.org/lexbit/relurpify/model"
 )
 
 const tapeProviderName = "tape"
 
 func init() {
-	RegisterKind(tapeProviderName, func(cfg ProviderConfig, secrets ProviderSecrets) (ManagedBackend, error) {
+	RegisterKind(tapeProviderName, func(cfg ProviderConfig, secrets ProviderSecrets, gate *model.CallGate) (ManagedBackend, error) {
 		_ = secrets
 		if err := cfg.Validate(); err != nil {
 			return nil, err
@@ -55,6 +57,7 @@ func init() {
 		return tapeBackendAdapter{
 			model:     tapeModel,
 			modelName: modelName,
+			gate:      gate,
 		}, nil
 	})
 }
@@ -62,20 +65,21 @@ func init() {
 type tapeBackendAdapter struct {
 	model     *TapeModel
 	modelName string
+	gate      *model.CallGate
 }
 
-func (a tapeBackendAdapter) Model() LanguageModel {
-	return a.model
+func (a tapeBackendAdapter) Model() model.LanguageModel {
+	return NewGatedModel(a.model, a.gate)
 }
 
 func (a tapeBackendAdapter) Embedder() Embedder {
 	return nil
 }
 
-func (a tapeBackendAdapter) Capabilities() BackendCapabilities {
-	return BackendCapabilities{
+func (a tapeBackendAdapter) Capabilities() model.BackendCapabilities {
+	return model.BackendCapabilities{
 		Streaming:            true,
-		BackendClass:         BackendClassTransport,
+		BackendClass:         model.BackendClassTransport,
 		ContextSizeDiscovery: false,
 	}
 }
@@ -111,7 +115,7 @@ func (a tapeBackendAdapter) Close() error {
 
 func (a tapeBackendAdapter) SetDebugLogging(bool) {}
 
-func (a tapeBackendAdapter) SetProfile(*ModelProfile) {}
+func (a tapeBackendAdapter) SetProfile(*model.ModelProfile) {}
 
 func (a tapeBackendAdapter) Reset(context.Context, string) error {
 	return nil

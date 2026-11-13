@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"codeburg.org/lexbit/relurpify/model"
+
 	"codeburg.org/lexbit/relurpify/app/envcomposition"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	"codeburg.org/lexbit/relurpify/execution"
@@ -40,9 +42,11 @@ type fakeManagedBackend struct {
 	resetCount int
 }
 
-func (f *fakeManagedBackend) Model() llm.LanguageModel                          { return nil }
-func (f *fakeManagedBackend) Embedder() llm.Embedder                            { return nil }
-func (f *fakeManagedBackend) Capabilities() llm.BackendCapabilities             { return llm.BackendCapabilities{} }
+func (f *fakeManagedBackend) Model() model.LanguageModel { return nil }
+func (f *fakeManagedBackend) Embedder() llm.Embedder     { return nil }
+func (f *fakeManagedBackend) Capabilities() model.BackendCapabilities {
+	return model.BackendCapabilities{}
+}
 func (f *fakeManagedBackend) ModelContextSize(ctx context.Context) (int, error) { return 0, nil }
 func (f *fakeManagedBackend) Health(ctx context.Context) (*llm.HealthReport, error) {
 	return &llm.HealthReport{State: "ready"}, nil
@@ -50,10 +54,10 @@ func (f *fakeManagedBackend) Health(ctx context.Context) (*llm.HealthReport, err
 func (f *fakeManagedBackend) ListModels(ctx context.Context) ([]llm.ModelInfo, error) {
 	return nil, nil
 }
-func (f *fakeManagedBackend) Warm(ctx context.Context) error       { return nil }
-func (f *fakeManagedBackend) Close() error                         { return nil }
-func (f *fakeManagedBackend) SetDebugLogging(enabled bool)         {}
-func (f *fakeManagedBackend) SetProfile(profile *llm.ModelProfile) {}
+func (f *fakeManagedBackend) Warm(ctx context.Context) error         { return nil }
+func (f *fakeManagedBackend) Close() error                           { return nil }
+func (f *fakeManagedBackend) SetDebugLogging(enabled bool)           {}
+func (f *fakeManagedBackend) SetProfile(profile *model.ModelProfile) {}
 func (f *fakeManagedBackend) Reset(ctx context.Context, strategy string) error {
 	f.resetCount++
 	return nil

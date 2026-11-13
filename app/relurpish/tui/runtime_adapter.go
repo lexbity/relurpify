@@ -520,7 +520,8 @@ func (r *runtimeAdapter) InferenceModels(ctx context.Context) ([]string, error) 
 			return models, nil
 		}
 	}
-	backend, err := llm.New(llm.ProviderConfigFromRuntimeConfig(r.currentRuntime().Config), r.currentRuntime().ProviderSecrets())
+	// For P03: pass nil gate for model listing (diagnostic, not execution)
+	backend, err := llm.New(llm.ProviderConfigFromRuntimeConfig(r.currentRuntime().Config), r.currentRuntime().ProviderSecrets(), nil)
 	if err != nil {
 		return nil, err
 	}
