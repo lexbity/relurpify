@@ -36,7 +36,7 @@ type workshopResultMsg struct {
 	Files     []RecipeFile
 	File      RecipeFile
 	Catalog   RecipeCatalog
-	Snapshot  FrontendSnapshot
+	RunResult RecipeRunResult
 	Err       error
 }
 
@@ -441,7 +441,7 @@ func (p *Workshop) trigger(input string) tea.Cmd {
 	p.working = true
 	return func() tea.Msg {
 		snapshot, err := port.TriggerRecipe(parent, file, input)
-		return workshopResultMsg{Epoch: epoch, Operation: "trigger", Snapshot: snapshot, Err: err}
+		return workshopResultMsg{Epoch: epoch, Operation: "trigger", RunResult: snapshot, Err: err}
 	}
 }
 

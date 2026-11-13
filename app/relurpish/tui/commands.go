@@ -205,6 +205,7 @@ func RegisterEucloCommands(reg *CommandRegistry) {
 func newHostCommandRegistry() *CommandRegistry {
 	registry := NewCommandRegistry()
 	registerUniversalCommands(registry)
+	RegisterRecipeCommands(registry)
 	return registry
 }
 

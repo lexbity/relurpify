@@ -42,7 +42,21 @@ func RunWithSurface(ctx context.Context, rt *runtimesvc.Runtime, factory Surface
 		return fmt.Errorf("runtime is required")
 	}
 	adapter := NewRuntimeAdapter(rt)
-	m := NewRootModel(ctx, HostOptions{Runtime: adapter, SurfaceFactory: factory})
+	
+	// Get recipe workspace from runtime
+	// TODO: P04 - Wire RecipeWorkspace properly
+	var recipes RecipeWorkspace
+	// if recipeSvc, err := rt.RecipeWorkspace(); err == nil {
+	// 	recipes = recipeSvc
+	// }
+	
+	m := NewRootModel(ctx, HostOptions{
+		Runtime:  adapter,
+		SurfaceFactory: factory,
+		Recipes: recipes,
+		// TODO: P04 - Fix Workspace.Root()
+		Workspace: "",
+	})
 	return runModel(ctx, m)
 }
 

@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"codeburg.org/lexbit/relurpify/app/relurpish/ports"
 	"codeburg.org/lexbit/relurpify/app/relurpish/tui"
 	"codeburg.org/lexbit/relurpify/cognitionzoo/paradigm"
 	thoughtrecipe "codeburg.org/lexbit/relurpify/named/euclo/thoughtrecipes"
@@ -137,52 +138,37 @@ func (s *Session) SaveRecipe(ctx context.Context, file tui.RecipeFile) (tui.Reci
 // LIVE CONTRACT: RecipeWorkspace.TriggerRecipe, saved-file admission.
 // REPLACEMENT: Supply real file identity/revision capture and execution admission.
 // SIDE EFFECTS: Demo state only; no files, services, model calls, or grants.
-func (s *Session) TriggerRecipe(ctx context.Context, file tui.RecipeFile, input string) (tui.FrontendSnapshot, error) {
+func (s *Session) TriggerRecipe(ctx context.Context, file tui.RecipeFile, input string) (ports.RecipeRunResult, error) {
 	if err := ctx.Err(); err != nil {
-		return tui.FrontendSnapshot{}, err
+		return ports.RecipeRunResult{}, err
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	saved, ok := s.recipes[file.ID]
 	if !ok || saved.Revision != file.Revision || saved.Source != file.Source {
-		return clone(s.state), errors.New("saved file revision changed; trigger was not admitted")
+		return ports.RecipeRunResult{}, errors.New("saved file revision changed; trigger was not admitted")
 	}
 	if s.state.Running {
-		return clone(s.state), errors.New("a demo request is already running")
+		return ports.RecipeRunResult{}, errors.New("a demo request is already running")
 	}
 	if strings.TrimSpace(input) == "" {
-		return clone(s.state), errors.New("recipe request input is required")
+		return ports.RecipeRunResult{}, errors.New("recipe request input is required")
 	}
 	document, err := thoughtrecipe.ParseSource(saved.Path, saved.Source)
 	if err != nil {
-		return clone(s.state), err
+		return ports.RecipeRunResult{}, err
 	}
-	agents := make(map[string]string)
-	for _, decl := range document.Declarations {
-		if agent, ok := decl.(*thoughtrecipe.AgentDecl); ok {
-			agents[agent.Name.Value] = agent.AgentType.Value
-		}
-	}
-	var steps []tui.CircuitStep
-	for _, decl := range document.Declarations {
-		run, ok := decl.(*thoughtrecipe.RunDecl)
-		if !ok {
-			continue
-		}
-		step := tui.CircuitStep{ID: fmt.Sprintf("%s-%d", run.Agent.Value, len(steps)+1), Strategy: agents[run.Agent.Value]}
-		for _, item := range run.Items {
-			if goal, ok := item.(*thoughtrecipe.GoalClause); ok {
-				step.Goal = goal.Text.Value
-			}
-		}
-		steps = append(steps, step)
-	}
-	if len(steps) == 0 {
-		return clone(s.state), errors.New("this demo executor supports top-level run declarations; this file has none")
+	if len(document.Declarations) == 0 {
+		return ports.RecipeRunResult{}, errors.New("this demo executor supports top-level run declarations; this file has none")
 	}
 	s.beginLocked("Trigger saved file " + saved.Path + " @" + saved.Revision + ": " + input)
-	steps[0].Status = "active"
-	s.state.Circuit = tui.CircuitSnapshot{RecipeID: saved.ID, Name: saved.ID, Steps: steps, Notice: "DEMO ONLY: parsed saved source revision " + saved.Revision + ". Strategy execution, prompt imports and tools are simulated, not runtime verified."}
-	s.publishLocked()
-	return clone(s.state), nil
+	
+	// For P04, just return a simple result
+	// The full circuit visualization will come in later phases
+	return ports.RecipeRunResult{
+		Revision: s.state.Revision + 1,
+		Status:   "DEMO ONLY: parsed saved source revision " + saved.Revision + ". Strategy execution, prompt imports and tools are simulated, not runtime verified.",
+		Running:  true,
+		RunID:    "demo-run-" + saved.ID,
+	}, nil
 }

@@ -1,21 +1,25 @@
 package tui
 
-import "context"
+import (
+	"codeburg.org/lexbit/relurpify/app/relurpish/ports"
+)
 
-// RecipeWorkspace owns source retrieval, revision checks, persistence and
-// explicit file triggering. Authoring is separate from intent/chat admission.
-type RecipeWorkspace interface {
-	ListRecipes(context.Context) ([]RecipeFile, error)
-	OpenRecipe(context.Context, string) (RecipeFile, error)
-	RecipeCatalog(context.Context) (RecipeCatalog, error)
-	SaveRecipe(context.Context, RecipeFile) (RecipeFile, error)
-	TriggerRecipe(context.Context, RecipeFile, string) (FrontendSnapshot, error)
-}
+// RecipeWorkspace is an alias for the ports.RecipeWorkspace interface.
+// This is provided for convenience and backward compatibility.
+type RecipeWorkspace = ports.RecipeWorkspace
 
-type RecipeFile struct{ ID, Path, Revision, Source string }
-type RecipePrompt struct{ ID, Version, Origin, Text string }
-type RecipeStrategy struct{ Name, Shape string }
-type RecipeCatalog struct {
-	Strategies []RecipeStrategy
-	Prompts    []RecipePrompt
-}
+// RecipeFile is an alias for ports.RecipeFile.
+type RecipeFile = ports.RecipeFile
+
+// RecipePrompt is an alias for ports.RecipePrompt.
+type RecipePrompt = ports.RecipePrompt
+
+// RecipeStrategy is an alias for ports.RecipeStrategy.
+type RecipeStrategy = ports.RecipeStrategy
+
+// RecipeCatalog is an alias for ports.RecipeCatalog.
+type RecipeCatalog = ports.RecipeCatalog
+
+// RecipeRunResult is an alias for ports.RecipeRunResult.
+type RecipeRunResult = ports.RecipeRunResult
+

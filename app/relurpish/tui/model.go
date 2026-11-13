@@ -750,10 +750,10 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.workshop.apply(msg)
+		// For P04: trigger result is stored in RunResult, not Snapshot
+		// Full integration with FrontendSnapshot will come in later phases
 		if msg.Err == nil && msg.Operation == "trigger" {
-			m.applyFrontend(msg.Snapshot)
-			m.setActiveTab(TabRun)
-			m.setFocus(FocusRegionInput)
+			m.addSystemMessage(fmt.Sprintf("Recipe triggered: %s", msg.RunResult.Status))
 		}
 		return m, nil
 	case frontendSnapshotMsg:

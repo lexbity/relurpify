@@ -1762,3 +1762,12 @@ func (r *Runtime) DenyHITL(requestID, reason string) error {
 	}
 	return r.registration.HITL.Deny(requestID, reason)
 }
+
+// RecipeWorkspace returns the recipe workspace service for recipe file operations.
+// This provides lossless recipe editing and immutable saved-file execution (P04).
+func (r *Runtime) RecipeWorkspace() (*RecipeService, error) {
+	if r == nil {
+		return nil, errors.New("runtime is nil")
+	}
+	return NewRecipeService(r.Config.Workspace)
+}
