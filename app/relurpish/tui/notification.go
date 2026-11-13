@@ -94,6 +94,10 @@ func (q *NotificationQueue) Current() (NotificationItem, bool) {
 	return q.items[0], true
 }
 
+// Clear removes local presentation state without resolving or authorizing any
+// runtime decision. Workspace changes must not retain the previous attention UI.
+func (q *NotificationQueue) Clear() { q.mu.Lock(); defer q.mu.Unlock(); q.items = nil }
+
 // Len returns the number of queued notifications.
 func (q *NotificationQueue) Len() int {
 	q.mu.Lock()

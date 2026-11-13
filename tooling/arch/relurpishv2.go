@@ -99,6 +99,10 @@ func MissingRelurpishV2Tests(listing string) []string {
 		"TestV2WorkshopCompleteAuthorConnectBindSaveTrigger", "TestV2WorkshopInvalidSourceCannotSaveAndUndoRecovers", "TestV2WorkshopSaveConflictDoesNotOverwrite",
 		"TestV2DemoDecisionUsesSharedHostAndPreservesDraft", "TestV2DemoInitializationReviewCancelAndApply", "TestV2DemoClockCancellationAndSnapshotIsolation",
 		"TestV2CircuitConsumesActualEucloEmitter", "TestV2CircuitInvalidTelemetryRemainsVisible",
+		"TestV2ContextCommandsChangeFutureSelectionWithoutFakeRuntimeSuccess", "TestV2ActivityDistinguishesMissingEstimatedAndInvalidUsage", "TestV2ActivityUsesTelemetryWithoutRetainingPayloads", "TestV2ActivityRetainsReadingAndBounds", "TestV2ActivityHostFilterAndDraftSurviveProgress",
+		"TestV2ObservationsRejectPreviousWorkspaceAndSubscription", "TestV2AttentionRejectsStaleWorkspaceAndResolutionFailure",
+		"TestV2HostReplacesSubscriptionsWithoutAccumulatingOwners",
+		"TestV2ProviderReviewSaveActivateAndRetainedDraft", "TestV2ProviderActivationFailureRetainsLastGoodState", "TestV2ProviderStaleProbeAndSaveFailureRetainDraft", "TestV2ProviderRejectsQuestionableFields", "TestV2LegacyProviderNavigationNeverProbes", "TestV2DemoActivityIsLabeledAndDoesNotDuplicate",
 	} {
 		if !found[name] {
 			missing = append(missing, name)
@@ -109,7 +113,7 @@ func MissingRelurpishV2Tests(listing string) []string {
 
 func MissingRelurpishV2IntegrationTests(listing string) []string {
 	var missing []string
-	for _, name := range []string{"TestV2DoctorWithoutRuntime", "TestV2PTYFocusAndBounds", "TestV2PTYDemoCommandDraftRoundTrip"} {
+	for _, name := range []string{"TestV2DoctorWithoutRuntime", "TestV2PTYFocusAndBounds", "TestV2PTYDemoCommandDraftRoundTrip", "TestV2PTYActivityProviderAndDraft"} {
 		found := false
 		for _, line := range strings.Split(listing, "\n") {
 			if strings.TrimSpace(line) == name {

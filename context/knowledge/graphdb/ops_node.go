@@ -101,11 +101,6 @@ func (e *Engine) getNodeMaybe(id string) *NodeRecord {
 	return nil
 }
 
-// getNodeMaybeInRLock is an alias for getNodeMaybe.
-func (e *Engine) getNodeMaybeInRLock(id string) *NodeRecord {
-	return e.getNodeMaybe(id)
-}
-
 // GetNode returns a node by ID.  When the node is not in the in-memory
 // cache and the LRU is active, it lazy-loads from the backend.
 func (e *Engine) GetNode(id string) (NodeRecord, bool) {
@@ -148,7 +143,7 @@ func (e *Engine) ListNodes(kind NodeKind) []NodeRecord {
 	ids := e.store.nodeIDsByKind(kind)
 	out := make([]NodeRecord, 0, len(ids))
 	for _, id := range ids {
-		node := e.getNodeMaybeInRLock(id)
+		node := e.getNodeMaybe(id)
 		if node == nil || node.DeletedAt != 0 {
 			continue
 		}
@@ -167,7 +162,7 @@ func (e *Engine) ListNodesByLabel(kind NodeKind, label string) []NodeRecord {
 	ids := e.store.labels.Lookup(label)
 	out := make([]NodeRecord, 0, len(ids))
 	for _, id := range ids {
-		node := e.getNodeMaybeInRLock(id)
+		node := e.getNodeMaybe(id)
 		if node == nil || node.DeletedAt != 0 {
 			continue
 		}
@@ -186,7 +181,7 @@ func (e *Engine) ListNodesByLabelPrefix(kind NodeKind, labelPrefix string) []Nod
 	ids := e.store.labels.LookupPrefix(labelPrefix)
 	out := make([]NodeRecord, 0, len(ids))
 	for _, id := range ids {
-		node := e.getNodeMaybeInRLock(id)
+		node := e.getNodeMaybe(id)
 		if node == nil || node.DeletedAt != 0 {
 			continue
 		}
@@ -205,7 +200,7 @@ func (e *Engine) NodesBySource(sourceID string) []NodeRecord {
 	nodeIDs := e.store.bySource[sourceID]
 	out := make([]NodeRecord, 0, len(nodeIDs))
 	for nodeID := range nodeIDs {
-		node := e.getNodeMaybeInRLock(nodeID)
+		node := e.getNodeMaybe(nodeID)
 		if node == nil || node.DeletedAt != 0 || node.SourceID != sourceID {
 			continue
 		}

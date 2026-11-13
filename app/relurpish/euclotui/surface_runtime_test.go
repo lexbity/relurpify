@@ -96,13 +96,10 @@ func (s *stubRuntimeAdapter) BuildDoctorReport(context.Context) runtimesvc.Docto
 }
 func (s *stubRuntimeAdapter) ReloadWorkspace(context.Context, string) error { return nil }
 func (s *stubRuntimeAdapter) InitializeWorkspaceFromTemplates(bool) error   { return nil }
-func (s *stubRuntimeAdapter) ApplyChatPolicy(tui.SubTabID) error            { return nil }
 func (s *stubRuntimeAdapter) ListServices() []tui.ServiceInfo               { return nil }
 func (s *stubRuntimeAdapter) StopService(string) error                      { return nil }
 func (s *stubRuntimeAdapter) RestartService(context.Context, string) error  { return nil }
 func (s *stubRuntimeAdapter) RestartAllServices(context.Context) error      { return nil }
-func (s *stubRuntimeAdapter) AddFileToContext(string) error                 { return nil }
-func (s *stubRuntimeAdapter) DropFileFromContext(string) error              { return nil }
 func (s *stubRuntimeAdapter) ActiveWorkflowID() string                      { return "" }
 func (s *stubRuntimeAdapter) ProbeBackendHealth(ctx context.Context) string { return "checking" }
 func (s *stubRuntimeAdapter) ResolveInteractionFrame(context.Context, string, string, string, string) error {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"github.com/stretchr/testify/require"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -290,10 +291,9 @@ func TestPanelGoldenViews(t *testing.T) {
 		t.Fatalf("seed provider config: %v", err)
 	}
 	aiProvider.Refresh()
-	_, _ = aiProvider.Update(tui.ProviderModelsLoadedMsg{Models: []llm.ModelInfo{
-		{Name: "gemma4:12b", Family: "qwen"},
-		{Name: "llama3:latest", Family: "llama"},
-	}})
+	_, modelsCmd := aiProvider.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
+	require.NotNil(t, modelsCmd)
+	_, _ = aiProvider.Update(modelsCmd())
 
 	assertGolden(t, "aiprovider_panel.txt", aiProvider.View())
 
@@ -350,10 +350,8 @@ func TestRootTUIViews(t *testing.T) {
 		t.Fatalf("mkdir config: %v", err)
 	}
 
-	// Pin the AI provider to the in-process mock-ollama backend so the AI
-	// provider tab renders a deterministic model list instead of probing a
-	// real ollama on localhost:11434 (which makes the golden non-hermetic:
-	// it passes only when no ollama is running on the dev machine).
+	// The saved provider selection is deterministic. Navigation deliberately
+	// leaves the model catalog unqueried; listing requires explicit r input.
 	providerPath := config.New(workdir).RuntimeProvidersFile()
 	if err := fs.MkdirAllSecure(filepath.Dir(providerPath)); err != nil {
 		t.Fatalf("mkdir provider state dir: %v", err)

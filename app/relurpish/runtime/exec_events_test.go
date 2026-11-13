@@ -11,7 +11,9 @@ import (
 
 	governanceports "codeburg.org/lexbit/relurpify/governance/ports"
 	"codeburg.org/lexbit/relurpify/telemetry"
+	"codeburg.org/lexbit/relurpify/telemetry/otelleg"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
+	"github.com/stretchr/testify/require"
 )
 
 // TestExecEvents_SubscriberReceivesEvents proves that events emitted through
@@ -275,4 +277,57 @@ func TestExecEvents_SubscribeAfterClose(t *testing.T) {
 		t.Fatal("expected closed channel after Runtime.Close")
 	}
 	cancel()
+}
+
+// TestV2ModelTelemetryReachesLiveObserverAndOTel proves instrumentation created
+// during workspace composition reaches both the live view and the real OTel
+// file exporter. Emitting straight into ws.Telemetry cannot prove this wiring.
+func TestV2ModelTelemetryReachesLiveObserverAndOTel(t *testing.T) {
+	workspace := t.TempDir()
+	copyTree(t, filepath.Join("..", "..", "..", "relurpify_cfg"), filepath.Join(workspace, "relurpify_cfg"))
+	cfg := ConfigForWorkspace(Config{AgentName: AgentLabelEuclo}, workspace)
+	cfg.InferenceProvider = "offline"
+	cfg.InferenceModel = "offline-synthetic"
+	cfg.SecurityRunner = fakeCommandRunner{}
+	cfg.SandboxBackendFactory = func(context.Context, string, sandbox.SandboxConfig, string, string) (governanceports.SandboxRuntime, error) {
+		return &fakeSandboxRuntime{}, nil
+	}
+	rt, err := New(context.Background(), cfg, config.Secrets{})
+	require.NoError(t, err)
+	ch, cancel := rt.SubscribeExecutionEvents()
+	closed := false
+	t.Cleanup(func() {
+		cancel()
+		if !closed {
+			require.NoError(t, rt.Close(context.Background()))
+		}
+	})
+	ctx := telemetry.WithRunContext(context.Background(), telemetry.RunContext{RunID: "observed-real-model-call"})
+	_, err = rt.Model.Generate(ctx, "Offline fixture request", nil)
+	require.NoError(t, err)
+	seen := map[telemetry.EventType]int{}
+	for range 2 {
+		select {
+		case event := <-ch:
+			require.Equal(t, "observed-real-model-call", event.RunID)
+			seen[event.Type]++
+		case <-time.After(time.Second):
+			t.Fatal("composed model telemetry never reached live observer")
+		}
+	}
+	require.Equal(t, 1, seen[telemetry.EventLLMPrompt])
+	require.Equal(t, 1, seen[telemetry.EventLLMResponse])
+	dir := rt.TelemetryDir()
+	require.NoError(t, rt.Close(context.Background()))
+	closed = true
+	records, err := otelleg.ReadSegmentDirLogRecords(dir)
+	require.NoError(t, err)
+	exported := map[string]int{}
+	for _, record := range records {
+		if record.Attr("run.id") == "observed-real-model-call" {
+			exported[record.Name]++
+		}
+	}
+	require.Equal(t, 1, exported[string(telemetry.EventLLMPrompt)])
+	require.Equal(t, 1, exported[string(telemetry.EventLLMResponse)])
 }

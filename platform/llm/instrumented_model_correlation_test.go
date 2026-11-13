@@ -197,3 +197,27 @@ func (m *profileAwareStubModel) ChatWithTools(context.Context, []model.Message, 
 func (m *profileAwareStubModel) SetProfile(profile *model.ModelProfile) {
 	m.profile = profile
 }
+
+func TestV2ModelStreamTelemetryDoesNotInventEarlyResponse(t *testing.T) {
+	source := make(chan string)
+	inner := &controlledStreamModel{source: source}
+	sink := &correlationSink{}
+	instrumented := NewInstrumentedModel(inner, sink, false)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	out, err := instrumented.GenerateStream(ctx, "test", nil)
+	require.NoError(t, err)
+	require.Len(t, sink.Snapshot(), 1)
+	require.Equal(t, telemetry.EventLLMPrompt, sink.Snapshot()[0].Type)
+	source <- "hello"
+	require.Equal(t, "hello", <-out)
+	require.Len(t, sink.Snapshot(), 1, "a token did not finish the stream")
+	close(source)
+	for range out {
+	}
+	require.Eventually(t, func() bool { return len(sink.Snapshot()) == 2 }, time.Second, time.Millisecond)
+	events := sink.Snapshot()
+	require.Equal(t, telemetry.EventLLMResponse, events[1].Type)
+	require.Equal(t, "stream_closed", events[1].Metadata["finish_reason"])
+	require.NotContains(t, events[1].Metadata, "usage_established")
+}

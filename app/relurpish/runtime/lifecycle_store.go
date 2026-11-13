@@ -1,9 +1,9 @@
-// Package runtime provides the Relurpish V2 journal adapter and workspace owner.
 package runtime
 
 import (
 	"context"
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
@@ -16,22 +16,15 @@ import (
 	"codeburg.org/lexbit/relurpify/execution/agentlifecycle"
 )
 
-// JournalAdapterError types for P02 requirements.
 var (
-	// ErrReceiptConflict is returned when a duplicate request ID with different digest is submitted.
+	// ErrReceiptConflict means the request identity was already used for another payload or target.
 	ErrReceiptConflict = errors.New("lifecycle: receipt conflict")
-
-	// ErrReceiptExpired is returned when a request ID has expired and is no longer eligible.
+	// ErrReceiptExpired means an unknown request is outside the admission window.
 	ErrReceiptExpired = errors.New("lifecycle: receipt expired")
-
-	// ErrCursorExpired is returned when a cursor is below the retained floor.
-	ErrCursorExpired = errors.New("lifecycle: cursor expired")
-
-	// ErrJournalUnavailable is returned when the journal backend is unavailable.
+	// ErrJournalUnavailable means admission cannot establish authoritative state.
 	ErrJournalUnavailable = errors.New("lifecycle: journal unavailable")
 )
 
-// receiptRecord stores command receipts durably.
 type receiptRecord struct {
 	RequestID      RequestID     `json:"request_id"`
 	Digest         string        `json:"digest"`
@@ -39,54 +32,40 @@ type receiptRecord struct {
 	AdmittedAt     time.Time     `json:"admitted_at"`
 	ProtectedUntil time.Time     `json:"protected_until"`
 	Status         ReceiptStatus `json:"status"`
-	OperationID    string        `json:"operation_id,omitempty"`
-	Result         string        `json:"result,omitempty"`
-	ErrorClass     string        `json:"error_class,omitempty"`
+	OperationID    string        `json:"operation_id"`
 }
 
-// ReceiptStatus enumerates the possible states of a command receipt.
+// ReceiptStatus is the persisted command admission result.
 type ReceiptStatus string
 
-// Receipt status values for admitted commands.
-const (
-	ReceiptStatusUnknown  ReceiptStatus = "unknown"
-	ReceiptStatusAccepted ReceiptStatus = "accepted"
-	ReceiptStatusRejected ReceiptStatus = "rejected"
-)
+// ReceiptStatusAccepted records storage admission, not dispatch or completion.
+const ReceiptStatusAccepted ReceiptStatus = "accepted"
 
-// SubmissionOutcome is returned by command admission.
+// SubmissionOutcome identifies a persisted admission and any conflicting reuse.
 type SubmissionOutcome struct {
 	Status      ReceiptStatus
 	Receipt     receiptRecord
 	OperationID string
 	Conflict    bool
-	Error       error
 }
 
-// JournalAdapter provides durable command receipts and journal operations.
-// It implements the journal contract required by D-07 and D-08.
+// JournalAdapter stores command admissions. It does not own or dispatch running
+// executions. The runtime-owned dispatcher and durable event cursor required by
+// P02 are not implemented by this storage primitive.
 type JournalAdapter struct {
-	db        *graphdb.Engine
-	workspace WorkspaceID
-
-	// lastAdmissionClock tracks the greatest admission clock value
-	// to prevent backward clock jumps per D-08.
-	lastAdmissionClock int64
-
-	// clockMu protects lastAdmissionClock
-	clockMu sync.RWMutex
+	db                 *graphdb.Engine
+	workspace          WorkspaceID
+	mu                 sync.Mutex
+	lastAdmissionClock time.Time
+	now                func() time.Time
 }
 
-// NewJournalAdapter creates a new journal adapter for the given workspace.
+// NewJournalAdapter binds admissions to one workspace namespace.
 func NewJournalAdapter(db *graphdb.Engine, workspace WorkspaceID) *JournalAdapter {
-	return &JournalAdapter{
-		db:        db,
-		workspace: workspace,
-	}
+	return &JournalAdapter{db: db, workspace: workspace, now: time.Now}
 }
 
-// generateRequestID generates a UUIDv7 request ID with the req_ prefix per
-// RFC 9562 §5.7 and D-08.
+// generateRequestID returns a UUIDv7 request ID (RFC 9562 §5.7).
 func generateRequestID() RequestID {
 	var raw [16]byte
 	if _, err := rand.Read(raw[:]); err != nil {
@@ -95,164 +74,122 @@ func generateRequestID() RequestID {
 	var timestamp [8]byte
 	binary.BigEndian.PutUint64(timestamp[:], uint64(time.Now().UnixMilli()))
 	copy(raw[0:6], timestamp[2:8])
-	raw[6] = (raw[6] & 0x0f) | 0x70 // version 7
-	raw[8] = (raw[8] & 0x3f) | 0x80 // RFC 9562 variant
+	raw[6] = (raw[6] & 0x0f) | 0x70
+	raw[8] = (raw[8] & 0x3f) | 0x80
 	return RequestID("req_" + hex.EncodeToString(raw[:]))
 }
 
-// AdmitCommand implements durable idempotent admission per D-08.
-// It returns:
-// - Accepted receipt if new and valid
-// - Existing receipt if same ID/same digest
-// - Conflict error if same ID/different digest
-// - Expired error if request ID is too old
-func (ja *JournalAdapter) AdmitCommand(ctx context.Context, requestID RequestID, digest string, target string) (SubmissionOutcome, error) {
-	// Check if this is a new request or a retry
-	if requestID == "" {
-		// Generate a new request ID
-		requestID = generateRequestID()
-	}
+func (ja *JournalAdapter) receiptKey(id RequestID) string {
+	return "admission:" + base64.RawURLEncoding.EncodeToString([]byte(ja.workspace)) + ":" + string(id)
+}
 
-	// Check request ID format and freshness per D-08
-	if !isValidRequestID(requestID) {
-		return SubmissionOutcome{}, fmt.Errorf("invalid request ID: %s", requestID)
-	}
+// AdmitCommand commits a receipt, or returns the original receipt for an exact
+// retry. Known receipts are checked before freshness and clock checks; different
+// payloads always conflict, including after the admission window expires.
+func (ja *JournalAdapter) AdmitCommand(ctx context.Context, id RequestID, digest, target string) (SubmissionOutcome, error) {
+	outcome, _, err := ja.admit(ctx, id, digest, target, false)
+	return outcome, err
+}
 
-	// Check if request is within the 5-minute freshness window and the
-	// 30-second future-skew allowance (D-08).
-	issuanceTime, ok := extractIssuanceTime(requestID)
+func (ja *JournalAdapter) admit(ctx context.Context, id RequestID, digest, target string, withRun bool) (SubmissionOutcome, *agentlifecycle.WorkflowRunRecord, error) {
+	ja.mu.Lock()
+	defer ja.mu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return SubmissionOutcome{}, nil, err
+	}
+	if ja.db == nil || ja.workspace == "" {
+		return SubmissionOutcome{}, nil, ErrJournalUnavailable
+	}
+	if digest == "" || target == "" || len(digest) > 256 || len(target) > 256 {
+		return SubmissionOutcome{}, nil, errors.New("lifecycle: bounded digest and target required")
+	}
+	if id == "" {
+		id = generateRequestID()
+	}
+	issued, ok := extractIssuanceTime(id)
 	if !ok {
-		return SubmissionOutcome{}, fmt.Errorf("invalid request ID: %s", requestID)
+		return SubmissionOutcome{}, nil, fmt.Errorf("invalid request ID: %s", id)
 	}
-	now := time.Now().UTC()
-	if now.Sub(issuanceTime) > 5*time.Minute || issuanceTime.After(now.Add(30*time.Second)) {
-		// Check if we have a known receipt regardless of freshness
-		receipt, exists, err := ja.getReceipt(ctx, requestID)
-		if err != nil {
-			return SubmissionOutcome{}, err
-		}
-		if exists {
-			// Known receipt resolves regardless of freshness window
-			return SubmissionOutcome{
-				Status:      receipt.Status,
-				Receipt:     receipt,
-				OperationID: receipt.OperationID,
-			}, nil
-		}
-		return SubmissionOutcome{}, ErrReceiptExpired
+	now := ja.now().UTC()
+	receipt := receiptRecord{RequestID: id, Digest: digest, Target: target, AdmittedAt: now, ProtectedUntil: now.Add(10 * time.Minute), Status: ReceiptStatusAccepted, OperationID: string(id)}
+	var run *agentlifecycle.WorkflowRunRecord
+	if withRun {
+		run = &agentlifecycle.WorkflowRunRecord{RunID: graphdb.GenerateID("run"), WorkflowID: string(ja.workspace), Status: "queued", StartedAt: now}
+		receipt.OperationID = run.RunID
 	}
-
-	// Check for backward clock jump
-	ja.clockMu.RLock()
-	lastClock := ja.lastAdmissionClock
-	ja.clockMu.RUnlock()
-
-	requestClock := issuanceTime.Unix()
-	if lastClock > 0 && requestClock < lastClock-30 {
-		// Backward clock jump exceeds 30 seconds
-		return SubmissionOutcome{}, fmt.Errorf("clock jumped backward: %d < %d", requestClock, lastClock)
-	}
-
-	// Use V2 transaction ordering for the receipt store
-	// Prepare the receipt record
-	receipt := receiptRecord{
-		RequestID:      requestID,
-		Digest:         digest,
-		Target:         target,
-		AdmittedAt:     now,
-		ProtectedUntil: now.Add(10 * time.Minute),
-		Status:         ReceiptStatusAccepted,
-	}
-
-	// Check for existing receipt atomically
-	existingReceipt, exists, err := ja.getReceipt(ctx, requestID)
-	if err != nil {
-		return SubmissionOutcome{}, err
-	}
-
-	if exists {
-		// Same ID exists - check digest
-		if existingReceipt.Digest == digest {
-			// Same ID, same digest - return existing receipt
-			return SubmissionOutcome{
-				Status:      existingReceipt.Status,
-				Receipt:     existingReceipt,
-				OperationID: existingReceipt.OperationID,
-			}, nil
-		}
-		// Same ID, different digest - conflict
-		return SubmissionOutcome{Conflict: true}, ErrReceiptConflict
-	}
-
-	// Create new receipt and encode it as a graph node.
 	encoded, err := encodeReceipt(receipt)
 	if err != nil {
-		return SubmissionOutcome{}, err
+		return SubmissionOutcome{}, nil, err
 	}
-	receiptNode := graphdb.NodeRecord{
-		ID:     string(requestID),
-		Kind:   graphdb.NodeKind("receipt"),
-		Props:  encoded,
-		Labels: []string{"receipt", fmt.Sprintf("workspace_%s", ja.workspace)},
+	nodes := []graphdb.NodeRecord{{ID: ja.receiptKey(id), Kind: "receipt", Props: encoded}}
+	if run != nil {
+		data, err := json.Marshal(run)
+		if err != nil {
+			return SubmissionOutcome{}, nil, err
+		}
+		nodes = append(nodes, graphdb.NodeRecord{ID: run.RunID, Kind: "run", Props: data})
 	}
-
-	batch := graphdb.GraphBatch{
-		Nodes: []graphdb.NodeRecord{receiptNode},
-	}
-
-	// Use ApplyBatchValidated for proper ordering
-	err = ja.db.ApplyBatchValidated(ctx, batch, func(get graphdb.NodeGetter) error {
-		_, exists := get(string(requestID))
-		if exists {
-			return graphdb.ErrBatchConflict
+	var decisionErr error
+	var existing bool
+	// Receipt and run commit together. Validation is also the authoritative read
+	// barrier for exact retries, avoiding cache reads after an indeterminate write.
+	err = ja.db.ApplyBatchValidated(ctx, graphdb.GraphBatch{Nodes: nodes}, func(get graphdb.NodeGetter) error {
+		if node, found := get(ja.receiptKey(id)); found {
+			if node.Kind != "receipt" {
+				decisionErr = ErrJournalUnavailable
+				return decisionErr
+			}
+			known, _, decodeErr := decodeReceipt(node.Props)
+			if decodeErr != nil || known.RequestID != id || known.OperationID == "" {
+				decisionErr = ErrJournalUnavailable
+				return decisionErr
+			}
+			if known.Digest != digest || known.Target != target {
+				decisionErr = ErrReceiptConflict
+				return decisionErr
+			}
+			if withRun {
+				record, found := get(known.OperationID)
+				if !found || record.Kind != "run" {
+					decisionErr = ErrJournalUnavailable
+					return decisionErr
+				}
+				var stored agentlifecycle.WorkflowRunRecord
+				if json.Unmarshal(record.Props, &stored) != nil || stored.RunID != known.OperationID || stored.WorkflowID != string(ja.workspace) {
+					decisionErr = ErrJournalUnavailable
+					return decisionErr
+				}
+				run = &stored
+			}
+			receipt, existing = known, true
+			return graphdb.ErrBatchConflict // read-only retry: never write the candidate
+		}
+		if now.Sub(issued) > 5*time.Minute || issued.After(now.Add(30*time.Second)) {
+			decisionErr = ErrReceiptExpired
+			return decisionErr
+		}
+		if !ja.lastAdmissionClock.IsZero() && now.Before(ja.lastAdmissionClock.Add(-30*time.Second)) {
+			decisionErr = errors.New("lifecycle: admission clock moved backward")
+			return decisionErr
+		}
+		if run != nil {
+			if _, found := get(run.RunID); found {
+				decisionErr = ErrJournalUnavailable
+				return decisionErr
+			}
 		}
 		return nil
 	})
-
-	if err != nil {
-		if errors.Is(err, graphdb.ErrBatchConflict) {
-			// Re-check after potential concurrent write
-			existingReceipt, exists, err := ja.getReceipt(ctx, requestID)
-			if err != nil {
-				return SubmissionOutcome{}, err
-			}
-			if exists {
-				if existingReceipt.Digest == digest {
-					return SubmissionOutcome{
-						Status:      existingReceipt.Status,
-						Receipt:     existingReceipt,
-						OperationID: existingReceipt.OperationID,
-					}, nil
-				}
-				return SubmissionOutcome{Conflict: true}, ErrReceiptConflict
-			}
-			return SubmissionOutcome{}, fmt.Errorf("validation conflict: %w", err)
-		}
-		return SubmissionOutcome{}, err
+	if decisionErr != nil {
+		return SubmissionOutcome{Conflict: errors.Is(decisionErr, ErrReceiptConflict)}, nil, decisionErr
 	}
-
-	// Update last admission clock
-	ja.clockMu.Lock()
-	ja.lastAdmissionClock = requestClock
-	ja.clockMu.Unlock()
-
-	return SubmissionOutcome{
-		Status:      ReceiptStatusAccepted,
-		Receipt:     receipt,
-		OperationID: string(requestID),
-	}, nil
-}
-
-// getReceipt retrieves a receipt by request ID.
-func (ja *JournalAdapter) getReceipt(ctx context.Context, requestID RequestID) (receiptRecord, bool, error) {
-	node, ok := ja.db.GetNode(string(requestID))
-	if !ok {
-		return receiptRecord{}, false, nil
+	if err != nil && (!existing || !errors.Is(err, graphdb.ErrBatchConflict)) {
+		return SubmissionOutcome{}, nil, err
 	}
-	if node.Kind != graphdb.NodeKind("receipt") {
-		return receiptRecord{}, false, nil
+	if !existing && now.After(ja.lastAdmissionClock) {
+		ja.lastAdmissionClock = now
 	}
-	return decodeReceipt(node.Props)
+	return SubmissionOutcome{Status: receipt.Status, Receipt: receipt, OperationID: receipt.OperationID}, run, nil
 }
 
 // isValidRequestID checks that a request ID has the req_ prefix, a 128-bit
@@ -301,80 +238,19 @@ func decodeReceipt(props json.RawMessage) (receiptRecord, bool, error) {
 	return r, true, nil
 }
 
-// WorkspaceOwner implements the workspace actor per D-07.
-// It serializes metadata/admission and journal commits.
-type WorkspaceOwner struct {
-	mu          sync.Mutex
-	workspaceID WorkspaceID
-	journal     *JournalAdapter
-	activeRuns  map[string]*agentlifecycle.WorkflowRunRecord
-	stopCh      chan struct{}
-	wg          sync.WaitGroup
+// RunAdmissionStore atomically stores run intent with its receipt. It is a
+// storage primitive, not a workspace actor: it starts no goroutines, dispatches
+// no effects, and has no second in-memory run authority to reconcile.
+type RunAdmissionStore struct{ journal *JournalAdapter }
+
+// NewRunAdmissionStore binds run admissions to a workspace and graph engine.
+func NewRunAdmissionStore(workspace WorkspaceID, db *graphdb.Engine) *RunAdmissionStore {
+	return &RunAdmissionStore{journal: NewJournalAdapter(db, workspace)}
 }
 
-// NewWorkspaceOwner creates a new workspace owner.
-func NewWorkspaceOwner(workspaceID WorkspaceID, db *graphdb.Engine) *WorkspaceOwner {
-	return &WorkspaceOwner{
-		workspaceID: workspaceID,
-		journal:     NewJournalAdapter(db, workspaceID),
-		activeRuns:  make(map[string]*agentlifecycle.WorkflowRunRecord),
-		stopCh:      make(chan struct{}),
-	}
-}
-
-// AdmitRun admits a new run with durable receipt.
-func (wo *WorkspaceOwner) AdmitRun(ctx context.Context, requestID RequestID, digest string) (*agentlifecycle.WorkflowRunRecord, error) {
-	wo.mu.Lock()
-	defer wo.mu.Unlock()
-
-	// Use journal adapter for durable admission
-	outcome, err := wo.journal.AdmitCommand(ctx, requestID, digest, "run")
-	if err != nil {
-		return nil, err
-	}
-
-	if outcome.Conflict {
-		return nil, ErrReceiptConflict
-	}
-
-	// Create a new run record
-	run := &agentlifecycle.WorkflowRunRecord{
-		RunID:      graphdb.GenerateID("run"),
-		WorkflowID: string(wo.workspaceID),
-		Status:     "queued",
-		StartedAt:  time.Now().UTC(),
-	}
-
-	// Persist the run durably before publishing it in memory. A failed commit
-	// must not leave an admitted run that only exists in this process.
-	encoded, err := json.Marshal(run)
-	if err != nil {
-		return nil, fmt.Errorf("encode run %s: %w", run.RunID, err)
-	}
-	node := graphdb.NodeRecord{
-		ID:     run.RunID,
-		Kind:   graphdb.NodeKind("run"),
-		Props:  json.RawMessage(encoded),
-		Labels: []string{"run", fmt.Sprintf("workspace_%s", wo.workspaceID)},
-	}
-	err = wo.journal.db.ApplyBatchValidated(ctx, graphdb.GraphBatch{Nodes: []graphdb.NodeRecord{node}}, func(get graphdb.NodeGetter) error {
-		if _, exists := get(run.RunID); exists {
-			return graphdb.ErrBatchConflict
-		}
-		return nil
-	})
-	if err != nil {
-		return nil, fmt.Errorf("persist run %s: %w", run.RunID, err)
-	}
-
-	wo.activeRuns[run.RunID] = run
-
-	return run, nil
-}
-
-// Close stops the workspace owner and waits for pending work.
-func (wo *WorkspaceOwner) Close() error {
-	close(wo.stopCh)
-	wo.wg.Wait()
-	return nil
+// AdmitRun returns the same persisted run for every exact retry, including after
+// reopening. Receipt admission and queued run creation are one graph transaction.
+func (s *RunAdmissionStore) AdmitRun(ctx context.Context, id RequestID, digest string) (*agentlifecycle.WorkflowRunRecord, error) {
+	_, run, err := s.journal.admit(ctx, id, digest, "run", true)
+	return run, err
 }

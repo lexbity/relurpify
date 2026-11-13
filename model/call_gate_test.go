@@ -206,7 +206,10 @@ func TestV2GatePoisonAndRecover(t *testing.T) {
 	_, err = gate.Acquire(ctx, GenerateCallID(), GenerateAttemptID())
 	require.Equal(t, ErrGatePoisoned, err)
 
-	// Recover
+	// Recovery cannot bypass a transport whose lease is still outstanding.
+	require.True(t, gate.Recover().Poisoned)
+	ticket.Released()
+	// Recover only after physical reclamation.
 	recoverState := gate.Recover()
 	require.False(t, recoverState.Poisoned)
 
@@ -904,4 +907,26 @@ func TestV2GatePoisonIdempotent(t *testing.T) {
 	// Should still be poisoned
 	state := gate.State()
 	require.True(t, state.Poisoned)
+}
+
+func TestV2GateCanceledLeaseCannotBeRecoveredOrReused(t *testing.T) {
+	gate := NewCallGate(GateConfig{ActiveTimeout: time.Hour, CancellationGracePeriod: 10 * time.Millisecond})
+	ctx, cancel := context.WithCancel(context.Background())
+	first, err := gate.Acquire(ctx, "same-call", "same-attempt")
+	require.NoError(t, err)
+	cancel()
+	require.Eventually(t, func() bool { return gate.State().Poisoned }, time.Second, time.Millisecond)
+	require.True(t, gate.State().Active, "cancellation is not physical reclamation")
+	require.True(t, gate.Recover().Poisoned, "recovery bypassed outstanding transport")
+	first.Released()
+	require.False(t, gate.State().Active)
+	require.False(t, gate.Recover().Poisoned)
+	second, err := gate.Acquire(context.Background(), "same-call", "same-attempt")
+	require.NoError(t, err)
+	first.Released()
+	first.Poison("stale lease")
+	require.True(t, gate.State().Active)
+	require.False(t, gate.State().Poisoned)
+	second.Released()
+	require.EqualValues(t, 2, gate.TotalReclaimed())
 }

@@ -20,6 +20,7 @@ const (
 	TabSettings      TabID = "settings"
 	TabConfiguration TabID = "configuration"
 	TabServices      TabID = "services"
+	TabActivity      TabID = "activity"
 )
 
 // Guest tab IDs — registered by the active surface on init.

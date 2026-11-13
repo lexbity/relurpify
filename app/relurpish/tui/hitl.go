@@ -21,9 +21,13 @@ type HITLServiceIface interface {
 	SubscribeHITL() (<-chan authorization.HITLEvent, func())
 }
 
-type hitlEventMsg struct{ event authorization.HITLEvent }
+type hitlEventMsg struct {
+	event  authorization.HITLEvent
+	epoch  uint64
+	source <-chan authorization.HITLEvent
+}
 
-func listenHITLEvents(ch <-chan authorization.HITLEvent) tea.Cmd {
+func listenHITLEvents(ch <-chan authorization.HITLEvent, epoch uint64) tea.Cmd {
 	if ch == nil {
 		return nil
 	}
@@ -32,7 +36,7 @@ func listenHITLEvents(ch <-chan authorization.HITLEvent) tea.Cmd {
 		if !ok {
 			return nil
 		}
-		return hitlEventMsg{event: ev}
+		return hitlEventMsg{event: ev, epoch: epoch, source: ch}
 	}
 }
 
@@ -221,6 +225,9 @@ func prettyFrameLabel(value string) string {
 
 // handleHITLEvent processes HITL events from the subscription.
 func (m RootModel) handleHITLEvent(msg hitlEventMsg) (RootModel, tea.Cmd) {
+	if msg.epoch != m.observationEpoch || msg.source != m.hitlCh {
+		return m, nil
+	}
 	var pending []*authorization.PermissionRequest
 	if m.chat != nil {
 		if svc := m.chat.HITLService(); svc != nil {
@@ -248,12 +255,12 @@ func (m RootModel) handleHITLEvent(msg hitlEventMsg) (RootModel, tea.Cmd) {
 			m.addSystemMessage(fmt.Sprintf("Permission %s expired: %s", msg.event.Request.ID, reason))
 		}
 	}
-	return m, listenHITLEvents(m.hitlCh)
+	return m, listenHITLEvents(m.hitlCh, m.observationEpoch)
 }
 
 // handleHITLResolved processes HITL resolution messages.
 func (m RootModel) handleHITLResolved(msg hitlResolvedMsg) (RootModel, tea.Cmd) {
-	if m.notifQ != nil {
+	if m.notifQ != nil && msg.err == nil {
 		m.notifQ.Resolve(msg.requestID)
 	}
 	switch {
@@ -264,5 +271,5 @@ func (m RootModel) handleHITLResolved(msg hitlResolvedMsg) (RootModel, tea.Cmd) 
 	default:
 		m.addSystemMessage(fmt.Sprintf("Denied %s", msg.requestID))
 	}
-	return m, listenHITLEvents(m.hitlCh)
+	return m, nil
 }

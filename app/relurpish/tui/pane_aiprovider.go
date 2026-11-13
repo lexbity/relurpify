@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -19,8 +20,10 @@ import (
 
 // ProviderModelsLoadedMsg delivers a provider catalog query result.
 type ProviderModelsLoadedMsg struct {
-	Models []llm.ModelInfo
-	Err    error
+	owner    *AIProviderPane
+	revision uint64
+	Models   []llm.ModelInfo
+	Err      error
 }
 
 type aiProviderRuntime interface {
@@ -50,9 +53,10 @@ type catalogProviderInfo struct {
 type AIProviderPane struct {
 	runtime aiProviderRuntime
 
-	profile config.RuntimeProviderConfig
-	models  []llm.ModelInfo
-	status  string
+	modelsRevision uint64
+	profile        config.RuntimeProviderConfig
+	models         []llm.ModelInfo
+	status         string
 
 	catalog    []catalogProviderInfo
 	catalogIdx int // index into catalog for the currently selected provider
@@ -90,20 +94,20 @@ func (p *AIProviderPane) Refresh() {
 	p.loadCatalog()
 	p.loadProfile()
 	p.syncCatalogSelection()
-	p.refreshModels()
+	p.invalidateModels()
 }
 
 func (p *AIProviderPane) Update(msg tea.Msg) (*AIProviderPane, tea.Cmd) {
 	if result, ok := msg.(ProviderModelsLoadedMsg); ok {
+		if result.owner != p || result.revision != p.modelsRevision {
+			return p, nil
+		}
 		if result.Err != nil {
 			p.models = nil
 			p.status = fmt.Sprintf("model list failed: %v", result.Err)
 			return p, nil
 		}
 		p.models = append([]llm.ModelInfo(nil), result.Models...)
-		if p.profile.Model == "" && len(p.models) > 0 {
-			p.profile.Model = p.models[0].Name
-		}
 		p.status = fmt.Sprintf("loaded %d models", len(p.models))
 		return p, nil
 	}
@@ -175,6 +179,8 @@ func (p *AIProviderPane) Update(msg tea.Msg) (*AIProviderPane, tea.Cmd) {
 			p.beginEdit()
 		case "e":
 			p.beginEdit()
+		case "r":
+			return p, p.loadModelsCmd()
 		case "t":
 			return p, p.testProviderCmd()
 		case "s":
@@ -189,7 +195,7 @@ func (p *AIProviderPane) OwnsEscape() bool { return p.editing }
 func (p *AIProviderPane) View() string {
 	left := p.renderModelList()
 	right := p.renderConfigPanel()
-	footer := p.th.Dim().Render("tab switch focus  arrows navigate  enter select  e edit  t test  s save")
+	footer := p.th.Dim().Render("tab switch focus  arrows navigate  enter select  e edit  r models  t test  s save")
 	if p.editing {
 		footer = warningText(p.th, fmt.Sprintf("Edit %s: %s", p.editLabel, p.editBuf)) + "\n" + footer
 	}
@@ -270,27 +276,33 @@ func (p *AIProviderPane) loadProfile() {
 	p.profile = loaded
 }
 
-func (p *AIProviderPane) refreshModels() {
-	cfg := p.llmConfig()
-	// For P03: pass nil gate for model listing (diagnostic, not execution)
-	backend, err := llm.New(cfg, llm.ProviderSecrets{}, nil)
-	if err != nil {
-		p.status = fmt.Sprintf("backend error: %v", err)
-		p.models = nil
-		return
-	}
-	defer func() { _ = backend.Close() }()
-	models, err := backend.ListModels(context.Background())
-	if err != nil {
-		p.status = fmt.Sprintf("model list failed: %v", err)
-		p.models = nil
-		return
-	}
-	_, _ = p.Update(ProviderModelsLoadedMsg{Models: models})
+func (p *AIProviderPane) invalidateModels() {
+	p.modelsRevision++
+	p.models = nil
+	p.status = "Model list not probed for this draft; r explicitly queries it"
 }
 
-// cycleProvider switches to the next or previous catalog provider.
-// Always fills endpoint and native_tool_calling from the catalog definition.
+func (p *AIProviderPane) loadModelsCmd() tea.Cmd {
+	cfg := p.llmConfig()
+	p.modelsRevision++
+	revision := p.modelsRevision
+	p.status = "Querying model catalog…"
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		result := ProviderModelsLoadedMsg{owner: p, revision: revision}
+		// Health/listing is an explicit diagnostic and cannot generate tokens.
+		backend, err := llm.New(cfg, llm.ProviderSecrets{}, nil)
+		if err != nil {
+			result.Err = err
+			return result
+		}
+		result.Models, result.Err = backend.ListModels(ctx)
+		result.Err = errors.Join(result.Err, backend.Close())
+		return result
+	}
+}
+
 func (p *AIProviderPane) cycleProvider(delta int) {
 	if len(p.catalog) == 0 {
 		return
@@ -304,7 +316,7 @@ func (p *AIProviderPane) cycleProvider(delta int) {
 	p.profile.Endpoint = cp.Endpoint
 	p.profile.NativeToolCalling = cp.NativeToolCalling
 	p.setupHint = cp.SetupHint
-	p.refreshModels()
+	p.invalidateModels()
 }
 
 func (p *AIProviderPane) beginEdit() {
@@ -356,7 +368,7 @@ func (p *AIProviderPane) commitEdit() {
 	p.editing = false
 	p.editBuf = ""
 	p.editLabel = ""
-	p.refreshModels()
+	p.invalidateModels()
 }
 
 func (p *AIProviderPane) saveProviderCmd() tea.Cmd {

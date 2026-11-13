@@ -25,7 +25,7 @@ func model(t *testing.T, scenario string) (tui.RootModel, *demo.Session) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	m := tui.NewRootModel(t.Context(), tui.HostOptions{DemoScenario: scenario, Conversation: session, Doctor: session, Initializer: session, Recipes: session, Configuration: session, Services: session})
+	m := tui.NewRootModel(t.Context(), tui.HostOptions{DemoScenario: scenario, Conversation: session, Doctor: session, Initializer: session, Recipes: session, Configuration: session, Services: session, Providers: session})
 	m, _ = update(m, tea.WindowSizeMsg{Width: 80, Height: 24})
 	m, _ = update(m, tui.DoctorStatusMsg{Report: session.BuildDoctorReport(t.Context())})
 	return m, session

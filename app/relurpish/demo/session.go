@@ -1,6 +1,7 @@
 // Package demo supplies explicitly selected, stateful application scenarios to
-// the production frontend. It has no filesystem, process, network, environment,
-// authorization, or live runtime dependencies. Restarting discards all changes.
+// the production frontend. It never opens workspace files, starts processes,
+// contacts providers, reads environment variables, grants permissions, or
+// constructs a live runtime. Restarting discards all changes.
 //
 // Simulated contract inventory:
 //   - Submit/Next: model admission, recipe execution, and tool outcomes.
@@ -10,6 +11,8 @@
 //   - List/Open/Save/TriggerRecipe and RecipeCatalog: source artifacts and prompts.
 //   - InspectConfiguration: scenario configuration and actual strategy metadata.
 //   - Services/ControlServices: scoped lifecycle state and partial restart failure.
+//   - ProviderSettings/Save/Probe/Activate: distinct saved and active scenario state.
+//   - Observations: fixed examples of the existing telemetry contract, never emitted.
 //
 // Real execution ownership, actual-call provenance, and atomic initialization
 // remain integration work. Scenarios exercise the same host reducers, command
@@ -20,13 +23,35 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"sync"
 	"time"
 
 	runtimesvc "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
 	"codeburg.org/lexbit/relurpify/app/relurpish/tui"
+	"codeburg.org/lexbit/relurpify/model"
 	"codeburg.org/lexbit/relurpify/platform/llm"
+	"codeburg.org/lexbit/relurpify/telemetry"
+	"codeburg.org/lexbit/relurpify/userconfig/config"
+)
+
+const (
+	demoWorkspace       = "DEMO"
+	demoStepActive      = "active"
+	demoReact           = "react"
+	demoObservationTask = "demo-task"
+	demoFinishStop      = "stop"
+	scenarioQuiet       = "quiet"
+	scenarioExecution   = "execution"
+	scenarioQuestion    = "question"
+	scenarioApproval    = "approval"
+	scenarioExpired     = "expired"
+	scenarioFailure     = "failure"
+	scenarioFirstLaunch = "first-launch"
+	stepUnderstand      = "understand"
+	stepRepair          = "repair"
+	stepVerify          = "verify"
 )
 
 // Clock schedules application events; frontend animation never decides results.
@@ -39,20 +64,22 @@ func (wallClock) After(duration time.Duration) <-chan time.Time { return time.Af
 
 // Scenarios returns the available explicit starting states.
 func Scenarios() []string {
-	return []string{"quiet", "execution", "question", "approval", "expired", "failure", "first-launch", "doctor-ready", "doctor-degraded", "doctor-blocked", "services-partial"}
+	return []string{scenarioQuiet, scenarioExecution, scenarioQuestion, scenarioApproval, scenarioExpired, scenarioFailure, scenarioFirstLaunch, "doctor-ready", "doctor-degraded", "doctor-blocked", "services-partial", "provider-failure"}
 }
 
 type Session struct {
-	mu          sync.Mutex
-	clock       Clock
-	scenario    string
-	changed     chan struct{}
-	state       tui.FrontendSnapshot
-	phase       int
-	run         uint64
-	initialized bool
-	recipes     map[string]tui.RecipeFile
-	services    []tui.ServiceInfo
+	mu              sync.Mutex
+	clock           Clock
+	scenario        string
+	changed         chan struct{}
+	state           tui.FrontendSnapshot
+	phase           int
+	run             uint64
+	initialized     bool
+	recipes         map[string]tui.RecipeFile
+	services        []tui.ServiceInfo
+	provider        tui.ProviderEditorState
+	providerVersion uint64
 }
 
 func New(scenario string, clock Clock) (*Session, error) {
@@ -62,7 +89,7 @@ func New(scenario string, clock Clock) (*Session, error) {
 	if clock == nil {
 		clock = wallClock{}
 	}
-	s := &Session{clock: clock, scenario: scenario, changed: make(chan struct{}, 1), initialized: scenario != "first-launch"}
+	s := &Session{clock: clock, scenario: scenario, changed: make(chan struct{}, 1), initialized: scenario != scenarioFirstLaunch}
 	if err := s.loadRecipes(); err != nil {
 		return nil, err
 	}
@@ -71,13 +98,24 @@ func New(scenario string, clock Clock) (*Session, error) {
 		{ID: "knowledge.index", Status: tui.ServiceStatusRunning, Owner: "DEMO workspace", Source: "DEMO in memory"},
 		{ID: "telemetry.flush", Status: tui.ServiceStatusRunning, Owner: "DEMO workspace", Source: "DEMO in memory"},
 	}
+	s.providerVersion = 1
+	s.provider = tui.ProviderEditorState{Workspace: demoWorkspace, Saved: config.RuntimeProviderConfig{Provider: "demo-local", Endpoint: "http://localhost:11434", Model: "demo-small", Timeout: "30s", NativeToolCalling: true}, Revision: "demo-provider-1", ActiveRevision: "demo-provider-1", ActiveSummary: "demo-local / demo-small", Notice: "DEMO: saved preferences and active scenario match", Catalog: []tui.ProviderOption{{Name: "demo-local", Kind: "ollama", Endpoint: "http://localhost:11434"}, {Name: "demo-remote", Kind: "openaicompat", Endpoint: "https://example.invalid/v1"}}}
+
 	s.state = tui.FrontendSnapshot{Revision: 1, Status: "DEMO · ready · type a request or open /run"}
-	if scenario == "first-launch" {
+	// DEMO ONLY: fixed examples of the existing OTel event contract. These are
+	// inspection fixtures, not emitted logs or claimed model/compiler effects.
+	// LIVE REPLACEMENT: runtime.SubscribeExecutionEvents supplies real facts.
+	s.state.Observations = []telemetry.Event{
+		{Type: telemetry.EventCompilerCompleted, Seq: 1, TaskID: demoObservationTask, NodeID: stepUnderstand, Timestamp: time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC), Metadata: map[string]any{"token_estimate": 2400, "duration_ms": 12}},
+		{Type: telemetry.EventLLMPrompt, Seq: 2, TaskID: demoObservationTask, NodeID: stepUnderstand, Timestamp: time.Date(2026, 1, 1, 12, 0, 1, 0, time.UTC), Metadata: map[string]any{"kind": "chat_with_tools", "model": "DEMO model", "message_count": 4, "tool_count": 2}},
+		{Type: telemetry.EventLLMResponse, Seq: 3, TaskID: demoObservationTask, NodeID: stepUnderstand, Timestamp: time.Date(2026, 1, 1, 12, 0, 2, 0, time.UTC), Metadata: map[string]any{"finish_reason": demoFinishStop, "usage": model.TokenUsage{PromptTokens: 2400, CompletionTokens: 180, TotalTokens: 2580}}},
+	}
+	if scenario == scenarioFirstLaunch {
 		s.state.Status = "DEMO · configuration missing · /doctor"
 	}
-	if slices.Contains([]string{"execution", "failure", "question", "approval", "expired"}, scenario) {
+	if slices.Contains([]string{scenarioExecution, scenarioFailure, scenarioQuestion, scenarioApproval, scenarioExpired}, scenario) {
 		s.beginLocked("Repair slugify and verify its tests")
-		if slices.Contains([]string{"question", "approval", "expired"}, scenario) {
+		if slices.Contains([]string{scenarioQuestion, scenarioApproval, scenarioExpired}, scenario) {
 			s.openDecisionLocked()
 		}
 	}
@@ -121,9 +159,9 @@ func (s *Session) beginLocked(text string) {
 	s.state.Decision = nil
 	s.state.Messages = append(s.state.Messages, tui.ConversationLine{Role: "user", Text: text})
 	s.state.Circuit = tui.CircuitSnapshot{RecipeID: "demo.repair", Name: "Repair and verify", Route: "debug", Notice: "DEMO ONLY: illustrative step and context observations; no live execution occurred.", Steps: []tui.CircuitStep{
-		{ID: "understand", Strategy: "react", Goal: "Read the failing behavior and identify the smallest repair", Status: "active", ToolScopes: []string{"file_read", "file_search"}},
-		{ID: "repair", Strategy: "react", Goal: "Repair slugify", Dependencies: []string{"understand"}, Gate: "one-time approval", ToolScopes: []string{"file_write"}},
-		{ID: "verify", Strategy: "react", Goal: "Run focused tests and inspect the result", Dependencies: []string{"repair"}, ToolScopes: []string{"python_pytest"}},
+		{ID: stepUnderstand, Strategy: demoReact, Goal: "Read the failing behavior and identify the smallest repair", Status: demoStepActive, ToolScopes: []string{"file_read", "file_search"}},
+		{ID: stepRepair, Strategy: demoReact, Goal: "Repair slugify", Dependencies: []string{stepUnderstand}, Gate: "one-time approval", ToolScopes: []string{"file_write"}},
+		{ID: stepVerify, Strategy: demoReact, Goal: "Run focused tests and inspect the result", Dependencies: []string{stepRepair}, ToolScopes: []string{"python_pytest"}},
 	}}
 	s.state.Status = "DEMO · understand active · /run inspects execution"
 	s.state.Revision++
@@ -135,7 +173,7 @@ func (s *Session) beginLocked(text string) {
 // SIDE EFFECTS: Demo state only; no files, services, model calls, or grants.
 func (s *Session) Next(ctx context.Context) (tui.FrontendSnapshot, error) {
 	s.mu.Lock()
-	scheduled := s.state.Running && (s.state.Decision == nil || s.scenario == "expired")
+	scheduled := s.state.Running && (s.state.Decision == nil || s.scenario == scenarioExpired)
 	s.mu.Unlock()
 	var tick <-chan time.Time
 	if scheduled {
@@ -150,7 +188,7 @@ func (s *Session) Next(ctx context.Context) (tui.FrontendSnapshot, error) {
 		s.mu.Lock()
 		defer s.mu.Unlock()
 		if s.state.Running {
-			if s.state.Decision != nil && s.scenario == "expired" {
+			if s.state.Decision != nil && s.scenario == scenarioExpired {
 				s.state.Decision = nil
 				s.state.Running = false
 				s.state.Status = "DEMO · decision expired; no answer was applied"
@@ -171,11 +209,11 @@ func (s *Session) advanceLocked() {
 	steps[s.phase].Status = "done"
 	steps[s.phase].DurationMS = 1400
 	s.phase++
-	if s.phase == 1 && s.phase < len(steps) && slices.Contains([]string{"question", "approval"}, s.scenario) {
+	if s.phase == 1 && s.phase < len(steps) && slices.Contains([]string{scenarioQuestion, scenarioApproval}, s.scenario) {
 		s.openDecisionLocked()
 		return
 	}
-	if s.phase == 2 && s.scenario == "failure" {
+	if s.phase == 2 && s.scenario == scenarioFailure {
 		steps[1].Status = "failed"
 		steps[1].Error = "Simulated sandbox write failed: workspace became read-only"
 		s.state.Running = false
@@ -189,15 +227,15 @@ func (s *Session) advanceLocked() {
 		s.state.Messages = append(s.state.Messages, tui.ConversationLine{Role: "agent", Text: "DEMO: The simulated repair and verification completed. No workspace files were modified and no tests actually ran."})
 		return
 	}
-	steps[s.phase].Status = "active"
+	steps[s.phase].Status = demoStepActive
 	s.state.Status = "DEMO · " + steps[s.phase].ID + " active · /run"
 }
 
 func (s *Session) openDecisionLocked() {
-	kind, question := "question", "Which behavior should slugify preserve?"
+	kind, question := scenarioQuestion, "Which behavior should slugify preserve?"
 	choices := []tui.DecisionChoice{{ID: "ascii", Label: "ASCII letters and numbers"}, {ID: "unicode", Label: "Unicode letters and numbers"}}
 	text := true
-	if s.scenario == "approval" || s.scenario == "expired" {
+	if s.scenario == scenarioApproval || s.scenario == scenarioExpired {
 		kind, question = "permission", "Allow the simulated repair to write stringkit.py once?"
 		choices = []tui.DecisionChoice{{ID: "once", Label: "Allow this operation once"}, {ID: "deny", Label: "Deny this operation"}}
 		text = false
@@ -237,7 +275,7 @@ func (s *Session) Answer(ctx context.Context, id, choice, text string) (tui.Fron
 		if s.phase == 0 {
 			s.state.Circuit.Steps[0].Status = "done"
 			s.phase = 1
-			s.state.Circuit.Steps[1].Status = "active"
+			s.state.Circuit.Steps[1].Status = demoStepActive
 		}
 	}
 	s.state.Revision++
@@ -274,7 +312,7 @@ func (s *Session) BuildDoctorReport(ctx context.Context) runtimesvc.DoctorReport
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	r := runtimesvc.DoctorReport{Workspace: "DEMO workspace (memory only)", ConfigRoot: "DEMO/relurpify_cfg", WorkspacePresent: s.initialized, ConfigExists: s.initialized, StarterTemplatesReady: true, SandboxReady: s.initialized, ModelReady: s.initialized, CheckedAt: time.Date(2026, 11, 12, 12, 0, 0, 0, time.UTC)}
-	r.Inference = runtimesvc.InferenceBackendReport{Provider: "DEMO", SelectedModel: "simulated model", State: llm.BackendHealthReady}
+	r.Inference = runtimesvc.InferenceBackendReport{Provider: demoWorkspace, SelectedModel: "simulated model", State: llm.BackendHealthReady}
 	r.Dependencies = []runtimesvc.DependencyStatus{{Name: "sandbox", Available: s.initialized, Blocking: !s.initialized, Details: "DEMO: sandbox availability is simulated; no process was launched"}}
 	if s.scenario == "doctor-degraded" {
 		r.Dependencies = append(r.Dependencies, runtimesvc.DependencyStatus{Name: "knowledge index", Degraded: true, Details: "DEMO: stale optional index; execution remains available"})
@@ -311,6 +349,10 @@ func (s *Session) publishLocked() {
 	}
 }
 func clone(value tui.FrontendSnapshot) tui.FrontendSnapshot {
+	value.Observations = slices.Clone(value.Observations)
+	for i := range value.Observations {
+		value.Observations[i].Metadata = maps.Clone(value.Observations[i].Metadata)
+	}
 	value.Messages = slices.Clone(value.Messages)
 	value.Circuit.Steps = slices.Clone(value.Circuit.Steps)
 	for i := range value.Circuit.Steps {

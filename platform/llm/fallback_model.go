@@ -74,7 +74,7 @@ func (m *FallbackToolModel) ToolRepairStrategy() string {
 			return profiled.ToolRepairStrategy()
 		}
 	}
-	return "heuristic-only"
+	return model.RepairStrategyHeuristicOnly
 }
 
 func (m *FallbackToolModel) MaxToolsPerCall() int {

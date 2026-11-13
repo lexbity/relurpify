@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"sort"
 	"sync"
 )
 
@@ -14,6 +15,7 @@ type hostLifetime struct {
 	closed    bool
 	cancel    context.CancelFunc
 	callbacks []func()
+	resources map[string]func()
 }
 
 func (l *hostLifetime) add(closeResource func()) {
@@ -30,11 +32,46 @@ func (l *hostLifetime) add(closeResource func()) {
 	l.mu.Unlock()
 }
 
+// replace owns one replaceable resource, releasing the previous generation
+// immediately. Repeated workspace changes retain only current subscriptions.
+func (l *hostLifetime) replace(name string, release func()) {
+	l.mu.Lock()
+	if l.closed {
+		l.mu.Unlock()
+		if release != nil {
+			release()
+		}
+		return
+	}
+	if l.resources == nil {
+		l.resources = make(map[string]func())
+	}
+	previous := l.resources[name]
+	if release == nil {
+		delete(l.resources, name)
+	} else {
+		l.resources[name] = release
+	}
+	l.mu.Unlock()
+	if previous != nil {
+		previous()
+	}
+}
+
 func (l *hostLifetime) close() {
 	l.once.Do(func() {
 		l.mu.Lock()
 		l.closed = true
 		callbacks := l.callbacks
+		var names []string
+		for name := range l.resources {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		for _, name := range names {
+			callbacks = append(callbacks, l.resources[name])
+		}
+		l.resources = nil
 		l.callbacks = nil
 		l.mu.Unlock()
 		l.cancel()

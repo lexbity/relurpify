@@ -150,8 +150,8 @@ func TestActivateSurfaceCachesPerAgent(t *testing.T) {
 	if got := m.activeAgentName(); got != "none" {
 		t.Fatalf("initial agent = %q, want none", got)
 	}
-	if got := len(m.tabs.All()); got != 8 {
-		t.Fatalf("initial canvas count = %d, want 6 administration canvases plus execution and settings", got)
+	if got := len(m.tabs.All()); got != 11 {
+		t.Fatalf("initial canvas count = %d, want 11 registered canvases", got)
 	}
 
 	if err := m.switchActiveAgent("guest"); err != nil {
@@ -160,8 +160,8 @@ func TestActivateSurfaceCachesPerAgent(t *testing.T) {
 	if got := m.activeAgentName(); got != "guest" {
 		t.Fatalf("agent after switch = %q, want guest", got)
 	}
-	if got := len(m.tabs.All()); got != 10 {
-		t.Fatalf("guest canvas count = %d, want 10", got)
+	if got := len(m.tabs.All()); got != 13 {
+		t.Fatalf("guest canvas count = %d, want 13", got)
 	}
 	if got := m.tabs.All()[0].Label; got != "chat" {
 		t.Fatalf("guest first tab label = %q, want chat", got)
@@ -177,7 +177,7 @@ func TestActivateSurfaceCachesPerAgent(t *testing.T) {
 	if got := m.activeAgentName(); got != "none" {
 		t.Fatalf("agent after switch back = %q, want none", got)
 	}
-	if got := len(m.tabs.All()); got != 8 {
+	if got := len(m.tabs.All()); got != 11 {
 		t.Fatalf("administration canvas count = %d, want 8", got)
 	}
 	if got := m.tabs.All()[0].Label; got != "welcome" {

@@ -7,11 +7,12 @@ import (
 
 func TestRelurpishV2RejectsProhibitedConstructs(t *testing.T) {
 	for name, source := range map[string]string{
-		"alias":      "package p; type ID = string",
-		"test_api":   "package p; func SetFocusForTest() {}",
-		"reflection": "package p; func f(v V) { v.FieldByName(\"anything\") }",
-		"renamed_os": "package p; import disk \"os\"; func f(){ disk.WriteFile(\"x\",nil,0600) }",
-		"dot_import": "package p; import . \"os\"; func f(){ WriteFile(\"x\",nil,0600) }",
+		"alias":       "package p; type ID = string",
+		"test_api":    "package p; func SetFocusForTest() {}",
+		"reflection":  "package p; func f(v V) { v.FieldByName(\"anything\") }",
+		"renamed_os":  "package p; import disk \"os\"; func f(){ disk.WriteFile(\"x\",nil,0600) }",
+		"renamed_env": "package p; import system \"os\"; func f(){ system.LookupEnv(\"TOKEN\") }",
+		"dot_import":  "package p; import . \"os\"; func f(){ WriteFile(\"x\",nil,0600) }",
 	} {
 		t.Run(name, func(t *testing.T) {
 			violations, err := CheckRelurpishV2Source("app/relurpish/euclotui/view.go", []byte(source))

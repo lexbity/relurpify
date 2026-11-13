@@ -359,6 +359,11 @@ func buildRuntime(ctx context.Context, cfg Config, secrets config.Secrets) (*Run
 	if err != nil {
 		return nil, fmt.Errorf("build telemetry chain: %w", err)
 	}
+	// Construct the observer before any producer captures its telemetry sink.
+	// The broadcast is a transient projection of the existing OTel pipeline;
+	// it is never a second journal or an execution authority.
+	execSink := telemetry.NewBroadcastSink()
+	observedTelemetry := telemetry.MultiplexTelemetry{Sinks: []telemetry.Telemetry{telemetryChain, execSink}}
 	securityProduct, err := envcomposition.BuildSecurityRuntime(ctx, envcomposition.SecurityRuntimeInput{
 		Context:           ctx,
 		Workspace:         cfg.Workspace,
@@ -371,7 +376,7 @@ func buildRuntime(ctx context.Context, cfg Config, secrets config.Secrets) (*Run
 		Security:          contract.Security,
 		PermissionManager: registration.Permissions,
 		ExistingRunner:    cfg.SecurityRunner,
-		Events:            telemetryChain,
+		Events:            observedTelemetry,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("compose security runtime: %w", err)
@@ -480,7 +485,9 @@ func buildRuntime(ctx context.Context, cfg Config, secrets config.Secrets) (*Run
 			// Q9: the identity-enriching EventSink adapter lives at the
 			// composition root; the triple is stamped per-call from the
 			// graph context envelope.
-			return envcomposition.NewEventSinkAdapter(chain, envcomposition.IdentityTriple{})
+			return envcomposition.NewEventSinkAdapter(telemetry.MultiplexTelemetry{
+				Sinks: []telemetry.Telemetry{chain, execSink},
+			}, envcomposition.IdentityTriple{})
 		},
 		TelemetrySettings: telemetrySettings,
 		TelemetryChain:    telemetryChain,
@@ -518,7 +525,6 @@ func buildRuntime(ctx context.Context, cfg Config, secrets config.Secrets) (*Run
 		emitDocumentReloadedEvent(ctx, baseTelemetry, registration.ID, cfg.AgentLabel(), docSnapshot)
 	}
 
-	execSink := telemetry.NewBroadcastSink()
 	ws.Telemetry = telemetry.MultiplexTelemetry{
 		Sinks: []telemetry.Telemetry{baseTelemetry, execSink},
 	}

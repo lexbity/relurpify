@@ -223,6 +223,9 @@ func (m RootModel) handleResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	if m.keybindings != nil {
 		m.keybindings.SetSize(msg.Width, max(1, msg.Height-5))
 	}
+	if m.provider != nil {
+		m.provider.resize(msg.Width, max(1, msg.Height-5))
+	}
 	if m.chat != nil {
 		m.chat.SetSize(msg.Width, paneH)
 	}

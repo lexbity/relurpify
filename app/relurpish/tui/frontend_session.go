@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"strings"
 
+	"codeburg.org/lexbit/relurpify/telemetry"
+
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -33,6 +35,9 @@ type FrontendSnapshot struct {
 	Decision *FrontendDecision
 	Running  bool
 	Status   string
+	// Observations are explicit demo fixtures, never actual execution evidence.
+	// Live observations arrive exclusively through the runtime's OTel pipeline.
+	Observations []telemetry.Event
 }
 
 // HostOptions is the sole composition contract for the shared host. Demo ports
@@ -48,6 +53,7 @@ type HostOptions struct {
 	Workspace      string
 	Configuration  ConfigurationReader
 	Services       ServicePort
+	Providers      ProviderEditorPort
 }
 
 type frontendSnapshotMsg struct {
@@ -70,6 +76,14 @@ func (m *RootModel) applyFrontend(snapshot FrontendSnapshot) {
 		previous = m.frontendState.Decision.ID
 	}
 	m.frontendState = snapshot
+	if m.demoScenario != "" {
+		for _, event := range snapshot.Observations {
+			if event.Seq > m.demoObserved {
+				m.activity.apply([]telemetry.Event{event})
+				m.demoObserved = event.Seq
+			}
+		}
+	}
 	if snapshot.Decision != nil {
 		m.decisionChoice = max(0, min(m.decisionChoice, len(snapshot.Decision.Choices)-1))
 	}

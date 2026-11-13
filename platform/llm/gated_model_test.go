@@ -168,3 +168,77 @@ func (m *nestedModel) Chat(context.Context, []model.Message, *model.LLMOptions) 
 func (m *nestedModel) ChatWithTools(context.Context, []model.Message, []model.LLMToolSpec, *model.LLMOptions) (*model.LLMResponse, error) {
 	return nil, errors.New("unused")
 }
+
+type controlledStreamModel struct {
+	recordingModel
+	source chan string
+}
+
+func (m *controlledStreamModel) GenerateStream(context.Context, string, *model.LLMOptions) (<-chan string, error) {
+	return m.source, nil
+}
+
+func TestV2GateStreamCancellationWaitsForProducerReclamation(t *testing.T) {
+	gate := model.NewCallGate(model.GateConfig{CancellationGracePeriod: 100 * time.Millisecond})
+	inner := &controlledStreamModel{source: make(chan string)}
+	ctx, cancel := context.WithCancel(context.Background())
+	out, err := NewGatedModel(inner, gate).GenerateStream(ctx, "request", nil)
+	require.NoError(t, err)
+	cancel()
+	require.True(t, gate.State().Active)
+	close(inner.source)
+	select {
+	case _, ok := <-out:
+		require.False(t, ok)
+	case <-time.After(time.Second):
+		t.Fatal("stream failed to close")
+	}
+	require.False(t, gate.State().Active)
+	require.False(t, gate.State().Poisoned)
+	require.EqualValues(t, 1, gate.TotalReclaimed())
+}
+
+func TestV2GateStreamUnreclaimedProducerPoisonsLane(t *testing.T) {
+	gate := model.NewCallGate(model.GateConfig{CancellationGracePeriod: 10 * time.Millisecond})
+	inner := &controlledStreamModel{source: make(chan string)}
+	defer close(inner.source)
+	ctx, cancel := context.WithCancel(context.Background())
+	out, err := NewGatedModel(inner, gate).GenerateStream(ctx, "request", nil)
+	require.NoError(t, err)
+	cancel()
+	select {
+	case _, ok := <-out:
+		require.False(t, ok)
+	case <-time.After(time.Second):
+		t.Fatal("stream cancellation hung")
+	}
+	require.True(t, gate.State().Poisoned)
+	require.True(t, gate.State().Active)
+	require.EqualValues(t, 0, gate.TotalReclaimed(), "abandoned stream was falsely acknowledged as reclaimed")
+	require.True(t, gate.Recover().Poisoned)
+	_, err = gate.Acquire(context.Background(), "next", "attempt")
+	require.ErrorIs(t, err, model.ErrGatePoisoned)
+}
+
+type profiledRecordingModel struct {
+	recordingModel
+	profile *model.ModelProfile
+}
+
+func (m *profiledRecordingModel) SetProfile(profile *model.ModelProfile) { m.profile = profile }
+func (m *profiledRecordingModel) ToolRepairStrategy() string             { return "native-only" }
+func (m *profiledRecordingModel) MaxToolsPerCall() int                   { return 7 }
+func (m *profiledRecordingModel) UsesNativeToolCalling() bool            { return true }
+
+func TestV2GatePreservesFullProfileContract(t *testing.T) {
+	inner := &profiledRecordingModel{}
+	gated := NewGatedModel(inner, model.NewDefaultCallGate())
+	profiled, ok := gated.(model.ProfiledModel)
+	require.True(t, ok)
+	require.Equal(t, "native-only", profiled.ToolRepairStrategy())
+	require.Equal(t, 7, profiled.MaxToolsPerCall())
+	require.True(t, profiled.UsesNativeToolCalling())
+	profile := &model.ModelProfile{}
+	require.True(t, ApplyProfile(gated, profile))
+	require.Equal(t, profile, inner.profile)
+}

@@ -2,7 +2,6 @@ package tui
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"path/filepath"
 	"slices"
@@ -143,14 +142,6 @@ type RuntimeAdapter interface {
 	// InitializeWorkspaceFromTemplates materializes the bundled relurpify_cfg
 	// tree into the active workspace.
 	InitializeWorkspaceFromTemplates(overwrite bool) error
-	// ApplyChatPolicy hints to the runtime that the user has switched to a
-	// chat subtab with a specific execution policy. Implementations may update
-	// the agent mode, tool enablement, or context strategy accordingly.
-	// The TUI continues regardless of whether this call returns an error.
-	ApplyChatPolicy(subtab SubTabID) error
-	// Context file management
-	AddFileToContext(path string) error
-	DropFileFromContext(path string) error
 	// ActiveWorkflowID returns the current active workflow ID (empty if none).
 	ActiveWorkflowID() string
 
@@ -1232,81 +1223,6 @@ func agentSpecPolicySummary(spec *agentspec.AgentRuntimeSpec) string {
 		parts = append(parts, fmt.Sprintf("provider-rules=%d", len(spec.ProviderPolicies)))
 	}
 	return strings.Join(parts, ", ")
-}
-
-func (r *runtimeAdapter) ApplyChatPolicy(subtab SubTabID) error {
-	if r == nil || r.currentRuntime() == nil {
-		return nil
-	}
-	// The policy is a TUI hint; no runtime enforcement needed beyond
-	// propagating the mode hint via metadata on the next ExecuteInstruction
-	// call (which happens via buildMetadata in ChatPane). Nothing to do here.
-	return nil
-}
-
-// Context file management
-func (r *runtimeAdapter) AddFileToContext(path string) error {
-	if r == nil || r.currentRuntime() == nil {
-		return fmt.Errorf("runtime unavailable")
-	}
-	return nil
-}
-
-func (r *runtimeAdapter) DropFileFromContext(path string) error {
-	if r == nil || r.currentRuntime() == nil {
-		return fmt.Errorf("runtime unavailable")
-	}
-	return nil
-}
-
-func (r *runtimeAdapter) QueryPatternProposals(scope string) ([]PatternProposalInfo, error) {
-	_ = scope
-	return nil, nil
-}
-
-func (r *runtimeAdapter) QueryConfirmedPatterns(scope string) ([]PatternRecordInfo, error) {
-	_ = scope
-	return nil, nil
-}
-
-func (r *runtimeAdapter) QueryIntentGaps(filePath, scope string) ([]IntentGapInfo, error) {
-	if r == nil || r.currentRuntime() == nil {
-		return nil, errors.New("runtime not initialized")
-	}
-	return nil, errors.New("QueryIntentGaps not implemented")
-}
-
-func (r *runtimeAdapter) QueryTensions(scope string) ([]TensionInfo, error) {
-	if r == nil || r.currentRuntime() == nil {
-		return nil, errors.New("runtime not initialized")
-	}
-	return nil, errors.New("QueryTensions not implemented")
-}
-
-func (r *runtimeAdapter) LoadLivePlan(workflowID string) (*LivePlanInfo, error) {
-	_ = workflowID
-	return nil, errors.New("LoadLivePlan not implemented")
-}
-
-func (r *runtimeAdapter) AddPlanNote(stepRef string, body string) error {
-	_ = stepRef
-	_ = body
-	return nil
-}
-
-func (r *runtimeAdapter) GetPlanDiff(workflowID string) (PlanDiffInfo, error) {
-	info := PlanDiffInfo{WorkflowID: workflowID}
-	plan, err := r.LoadLivePlan(workflowID)
-	if err != nil || plan == nil {
-		return info, err
-	}
-	info.WorkflowID = plan.WorkflowID
-	info.Steps = append([]PlanStepInfo(nil), plan.Steps...)
-	return info, nil
-}
-
-func (r *runtimeAdapter) GetLatestTrace() (TraceInfo, error) {
-	return TraceInfo{}, nil
 }
 
 // ActiveWorkflowID satisfies RuntimeAdapter.

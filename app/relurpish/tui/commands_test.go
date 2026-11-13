@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -109,5 +110,26 @@ func TestHostRegistrySeparatesGuestCommands(t *testing.T) {
 	}
 	if _, ok := m.cmdReg.Lookup("workspace"); !ok {
 		t.Fatal("expected guest registry to include host commands")
+	}
+}
+
+func TestV2ContextCommandsChangeFutureSelectionWithoutFakeRuntimeSuccess(t *testing.T) {
+	m, _ := newFocusTestModel()
+	m.inputBar.SetValue("retain request")
+	rootHandleAdd(&m, []string{"src/../notes.txt"})
+	if got := m.sharedCtx.List(); len(got) != 1 || got[0] != "notes.txt" {
+		t.Fatalf("selected context = %v", got)
+	}
+	rootHandleAdd(&m, []string{"notes.txt"})
+	if len(m.sharedCtx.List()) != 1 || !strings.Contains(m.notice, "already in context") {
+		t.Fatal("duplicate was falsely reported as added")
+	}
+	rootHandleRemove(&m, []string{"notes.txt"})
+	if len(m.sharedCtx.List()) != 0 || m.inputBar.Value() != "retain request" {
+		t.Fatal("removal failed or changed the request")
+	}
+	rootHandleAdd(&m, []string{"one", "two"})
+	if len(m.sharedCtx.List()) != 0 {
+		t.Fatal("invalid arguments changed the selection")
 	}
 }
