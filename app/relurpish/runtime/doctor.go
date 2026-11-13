@@ -42,6 +42,28 @@ type DependencyStatus struct {
 	Details   string
 }
 
+// DoctorCheck represents a single doctor check result (P05).
+type DoctorCheck struct {
+	// ID is the unique identifier for this check.
+	ID string
+	// Name is a human-readable name.
+	Name string
+	// Description describes what the check does.
+	Description string
+	// Status is the current status (passed, failed, degraded, unknown, pending).
+	Status string
+	// Blocking indicates if this check blocks workspace readiness.
+	Blocking bool
+	// OperationID is the ID of the operation that performed this check.
+	OperationID string
+	// Details contains additional details about the check result.
+	Details string
+	// StartedAt is when the check started.
+	StartedAt time.Time
+	// CompletedAt is when the check completed.
+	CompletedAt time.Time
+}
+
 // ProviderHealth captures the health and metadata of a single catalog provider.
 type ProviderHealth struct {
 	Name      string
@@ -92,6 +114,12 @@ type DoctorReport struct {
 	// When false, guest chat is blocked but tools may still run
 	// if SandboxReady is true (e.g. tape/offline sessions).
 	ModelReady bool
+	// ModelDegraded is true when the model is available but degraded.
+	ModelDegraded bool
+	// Checks is the list of individual check results (P05).
+	Checks []DoctorCheck
+	// AuditStoreHealthy indicates if the audit store is healthy.
+	AuditStoreHealthy bool
 }
 
 func (r DoctorReport) HasBlockingIssues() bool {
@@ -329,7 +357,7 @@ func BuildDoctorReport(ctx context.Context, cfg Config, secrets config.Secrets) 
 	report.Dependencies = deps
 
 	report.SandboxReady = computeSandboxReady(report)
-	report.ModelReady = computeModelReady(report)
+	report.ModelReady, report.ModelDegraded = computeModelReady(report)
 	return report
 }
 
@@ -410,8 +438,10 @@ func computeSandboxReady(r DoctorReport) bool {
 	return true
 }
 
-func computeModelReady(r DoctorReport) bool {
-	return r.Inference.State == llm.BackendHealthReady || r.Inference.State == llm.BackendHealthDegraded
+func computeModelReady(r DoctorReport) (ready bool, degraded bool) {
+	ready = r.Inference.State == llm.BackendHealthReady
+	degraded = r.Inference.State == llm.BackendHealthDegraded
+	return ready, degraded
 }
 
 func checkEmbeddedTemplates() bool {
