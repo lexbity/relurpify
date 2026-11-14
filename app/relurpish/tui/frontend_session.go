@@ -95,9 +95,12 @@ func (m *RootModel) applyFrontend(snapshot FrontendSnapshot) {
 	if snapshot.Decision == nil || snapshot.Decision.ID != previous {
 		m.decisionChoice, m.decisionAnswer, m.decisionEditing = 0, "", false
 	}
-	// A new attention item never changes focus. An expired item simply closes
-	// its existing detail; it never grants/denies an application decision.
-	if snapshot.Decision == nil {
+	// A new attention item never changes focus. An expired conversation
+	// decision closes its existing detail; it never grants/denies an
+	// application decision. Legacy HITL approvals surface through the
+	// notification queue, not this snapshot, so they must not clear the
+	// deliberate focus the user just opened.
+	if previous != "" && snapshot.Decision == nil {
 		m.decisionFocused = false
 	}
 }
