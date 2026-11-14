@@ -130,7 +130,6 @@ type ChatPane struct {
 	hitlSvc tui.HITLServiceIface
 	runtime tui.RuntimeAdapter
 	router  *EucloEventRouter
-	diff    *DiffPane
 
 	lastPrompt    string
 	allowParallel bool
@@ -192,14 +191,10 @@ func NewChatPane(parentCtx context.Context, rt tui.RuntimeAdapter, ctx *tui.Agen
 		router:           router,
 		expandTarget:     "thinking",
 		astOption:        "workspace",
-		diff:             NewDiffPane(router, sessionWorkspace(sess), th),
 		showSidebar:      false,
 		sidebarFocused:   false,
 		sidebarEntries:   nil,
 		sidebarSelection: 0,
-	}
-	if rt != nil {
-		pane.diff.SetRuntime(rt)
 	}
 	pane.feed.SetTheme(th)
 	return pane
@@ -263,16 +258,9 @@ func (p *ChatPane) SetSubTab(id tui.SubTabID)  { p.activeSubTab = id }
 func (p *ChatPane) ActiveSubTab() tui.SubTabID { return p.activeSubTab }
 func (p *ChatPane) SetSessionStore(store *tui.SessionStore) {
 	p.store = store
-	if p.diff != nil {
-		p.diff.SetSessionStore(store)
-	}
 }
 func (p *ChatPane) SetActiveTab(id tui.TabID) {
 	p.activeTab = id
-	if p.diff != nil {
-		p.diff.SetRouter(p.router)
-		p.diff.SetWorkspace(sessionWorkspace(p.session))
-	}
 }
 
 func (p *ChatPane) SetSize(w, h int) {
@@ -286,9 +274,6 @@ func (p *ChatPane) SetSize(w, h int) {
 		feedWidth = 0
 	}
 	p.feed.SetSize(feedWidth, h)
-	if p.diff != nil {
-		p.diff.SetSize(w, h)
-	}
 }
 
 func (p *ChatPane) Update(msg tea.Msg) (tui.ChatPaner, tea.Cmd) {
@@ -319,12 +304,6 @@ func (p *ChatPane) Update(msg tea.Msg) (tui.ChatPaner, tea.Cmd) {
 		p.addSystemMessage(msg.Text)
 		return p, nil
 	case tea.KeyMsg:
-		if p.activeTab == tui.TabDiff && p.diff != nil {
-			if cmd := p.diff.Update(msg); cmd != nil {
-				return p, cmd
-			}
-			return p, nil
-		}
 		return p.handleKey(msg)
 	case tea.MouseMsg:
 		f, cmd := p.feed.Update(msg)
@@ -338,9 +317,6 @@ func (p *ChatPane) Update(msg tea.Msg) (tui.ChatPaner, tea.Cmd) {
 }
 
 func (p *ChatPane) View() string {
-	if p.activeTab == tui.TabDiff && p.diff != nil {
-		return p.diff.View()
-	}
 	if p.width < 60 {
 		return lipgloss.JoinVertical(lipgloss.Left,
 			p.th.Dim().Render("Terminal too narrow. Minimum 60 columns required."),

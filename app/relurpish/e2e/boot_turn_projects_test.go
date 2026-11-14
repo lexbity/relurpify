@@ -2,7 +2,6 @@ package e2e
 
 import (
 	"context"
-	"strings"
 	"testing"
 	"time"
 
@@ -10,7 +9,6 @@ import (
 
 	"codeburg.org/lexbit/relurpify/app/relurpish/euclotui"
 	relurpishruntime "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
-	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 	"codeburg.org/lexbit/relurpify/execution"
 	governanceports "codeburg.org/lexbit/relurpify/governance/ports"
 	"codeburg.org/lexbit/relurpify/model"
@@ -150,14 +148,6 @@ collectLoop:
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("timeout waiting for tool.edited event")
-	}
-
-	// ASSERTION 5: The surface renders the stepper view with step glyphs.
-	pane := euclotui.NewRecipePane(router, theme.Default())
-	pane.SetSize(100, 20)
-	stepperView := pane.View()
-	if !strings.Contains(stepperView, "●") && !strings.Contains(stepperView, "done") {
-		t.Logf("stepper view (may not contain glyphs in echo scenario):\n%s", stepperView)
 	}
 
 	t.Logf("regression test passed: stepper + diff both populated from a single turn")

@@ -18,6 +18,4 @@ func RegisterEucloTabs(reg *tui.TabRegistry) {
 			{ID: tui.SubTabChatOnlineEdit, Label: "online-edit-on"},
 		},
 	})
-	reg.Register(tui.TabDefinition{ID: tui.TabDiff, Label: "diff", AgentFilter: []string{"euclo"}})
-	reg.Register(tui.TabDefinition{ID: TabRecipe, Label: "recipe", AgentFilter: []string{"euclo"}})
 }

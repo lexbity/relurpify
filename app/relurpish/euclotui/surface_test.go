@@ -25,7 +25,7 @@ func TestEucloSurfaceFactoryResolvesGuestAndBaseSurfaces(t *testing.T) {
 	reg := tui.NewTabRegistry()
 	RegisterEucloTabs(reg)
 	tabs := reg.TabsForAgent("euclo")
-	if len(tabs) != 3 || tabs[0].ID != tui.TabChat || tabs[1].ID != tui.TabDiff || tabs[2].ID != TabRecipe {
+	if len(tabs) != 1 || tabs[0].ID != tui.TabChat {
 		t.Fatalf("euclo tabs = %#v, want [chat diff]", tabs)
 	}
 

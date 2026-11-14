@@ -132,12 +132,6 @@ func TestIntegrationLinearRecipe(t *testing.T) {
 		t.Errorf("stepper render missing steps:\n%s", rendered)
 	}
 
-	// Verify recipe pane shows all steps.
-	pane := NewRecipePane(router, theme.Default())
-	paneView := pane.View()
-	if !strings.Contains(paneView, "step.1") || !strings.Contains(paneView, "step.2") || !strings.Contains(paneView, "step.3") {
-		t.Errorf("recipe pane missing steps:\n%s", paneView)
-	}
 
 	// Verify resume roundtrip preserves state.
 	data := router.ResumeData()
@@ -188,12 +182,6 @@ func TestIntegrationParallelRecipe(t *testing.T) {
 		t.Errorf("stepper missing parallel steps:\n%s", rendered)
 	}
 
-	// Recipe pane shows group topology.
-	pane := NewRecipePane(router, theme.Default())
-	paneView := pane.View()
-	if !strings.Contains(paneView, "parallel") || !strings.Contains(paneView, "fanout") {
-		t.Errorf("recipe pane missing parallel group:\n%s", paneView)
-	}
 }
 
 // ── Conditional recipe with skipped branch ─────────────────────────────────
@@ -253,17 +241,6 @@ func TestIntegrationHITLRecipe(t *testing.T) {
 
 	checkSnapshot(t, router, surface.MacroExecute, 3)
 
-	// Recipe pane shows HITL gates section.
-	pane := NewRecipePane(router, theme.Default())
-	paneView := pane.View()
-	if !strings.Contains(paneView, "HITL Gates") || !strings.Contains(paneView, "approve") {
-		t.Errorf("recipe pane missing HITL gates:\n%s", paneView)
-	}
-
-	// Verify the step with HITL annotation.
-	if !strings.Contains(paneView, "HITL: required") {
-		t.Errorf("expected HITL annotation on approve step:\n%s", paneView)
-	}
 }
 
 // ── Multi-paradigm recipe ──────────────────────────────────────────────────
@@ -333,15 +310,6 @@ func TestIntegrationFailedStep(t *testing.T) {
 		t.Errorf("step.1 status = %v, want failed", snap.StepRuntime["step.1"].Status)
 	}
 
-	// Recipe pane shows failure indication.
-	pane := NewRecipePane(router, theme.Default())
-	v := pane.View()
-	if !strings.Contains(v, "✗") {
-		t.Errorf("expected failure glyph in pane view, got:\n%s", v)
-	}
-	if !strings.Contains(v, "100ms") {
-		t.Errorf("expected 100ms duration in pane view:\n%s", v)
-	}
 }
 
 // ── Full lifecycle with verify ─────────────────────────────────────────────

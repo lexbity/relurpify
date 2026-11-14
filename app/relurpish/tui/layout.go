@@ -1,11 +1,6 @@
 package tui
 
 import (
-	"fmt"
-	"strings"
-
-	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
-
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
 )
@@ -116,73 +111,6 @@ func clipText(value string, width int) string {
 	return ansi.Truncate(value, width, "…")
 }
 
-// SubTabBar renders the subtab row for the currently active main tab.
-type SubTabBar struct {
-	active  SubTabID
-	subtabs []SubTabDefinition
-	width   int
-	// Theme is the active semantic style source.
-	th *theme.Theme
-}
-
-// NewSubTabBar creates a SubTabBar from a tab definition.
-func NewSubTabBar(def TabDefinition) SubTabBar {
-	var active SubTabID
-	if len(def.SubTabs) > 0 {
-		active = def.SubTabs[0].ID
-	}
-	return SubTabBar{active: active, subtabs: def.SubTabs, th: theme.Default()}
-}
-
-// SetActive updates the active subtab.
-func (s *SubTabBar) SetActive(id SubTabID) { s.active = id }
-
-// SetWidth propagates terminal width.
-func (s *SubTabBar) SetWidth(w int) { s.width = w }
-
-// SetSubTabs updates the rendered subtab list (called on tab switch).
-func (s *SubTabBar) SetSubTabs(def TabDefinition) {
-	s.subtabs = def.SubTabs
-	// Preserve active if still present; otherwise reset to first.
-	for _, st := range def.SubTabs {
-		if st.ID == s.active {
-			return
-		}
-	}
-	if len(def.SubTabs) > 0 {
-		s.active = def.SubTabs[0].ID
-	} else {
-		s.active = ""
-	}
-}
-
-// View renders the subtab bar. Returns empty string when there are no subtabs.
-func (s SubTabBar) View() string {
-	if len(s.subtabs) == 0 {
-		return s.th.Bar().Width(s.width).Render("")
-	}
-	parts := make([]string, 0, len(s.subtabs))
-	available := s.width - (len(s.subtabs)-1)*2
-	if available < len(s.subtabs) {
-		available = len(s.subtabs)
-	}
-	cellWidth := available / len(s.subtabs)
-	if cellWidth < chromeMinCellWidth {
-		cellWidth = chromeMinCellWidth
-	}
-	for i, st := range s.subtabs {
-		label := fmt.Sprintf("[%d] %s", i+1, st.Label)
-		label = clipText(label, cellWidth)
-		if st.ID == s.active {
-			parts = append(parts, s.th.Subhead().Width(cellWidth).Render(label))
-		} else {
-			parts = append(parts, s.th.Dim().Width(cellWidth).Render(label))
-		}
-	}
-	content := strings.Join(parts, "  ")
-	return s.th.Bar().Width(s.width).Render(content)
-}
-
 // notificationRowVisible reports whether the host should reserve a row for
 // notification or HITL presentation.
 func (m RootModel) notificationRowVisible() bool {
@@ -201,18 +129,12 @@ func (m RootModel) handleResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 
 	m.layout.Recalculate(msg.Width, msg.Height, m.notificationRowVisible())
 
-	m.subTabBar.SetWidth(msg.Width)
-	m.tabBar.SetWidth(msg.Width)
 	if m.notifBar != nil {
 		m.notifBar.SetWidth(msg.Width)
 	}
 	if m.inputBar != nil {
 		m.inputBar.SetWidth(msg.Width)
 	}
-	if m.activeInput != nil {
-		m.activeInput.SetSize(m.layout.Region3Width(), 1)
-	}
-
 	paneH := m.layout.Region1PaneRows()
 	if m.doctor != nil {
 		m.doctor.SetSize(msg.Width, max(1, msg.Height-5))
@@ -236,9 +158,6 @@ func (m RootModel) handleResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	if m.baseSurface != nil {
 		m.baseSurface.SetSize(msg.Width, paneH)
 	}
-	if m.activeNav != nil {
-		m.activeNav.SetSize(msg.Width, 1)
-	}
 	if m.hitlRow != nil {
 		m.hitlRow.SetWidth(msg.Width)
 	}
@@ -246,9 +165,3 @@ func (m RootModel) handleResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// SetTheme sets the active semantic style source.
-func (s *SubTabBar) SetTheme(th *theme.Theme) {
-	if th != nil {
-		s.th = th
-	}
-}

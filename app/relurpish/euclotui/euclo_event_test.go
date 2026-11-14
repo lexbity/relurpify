@@ -63,9 +63,4 @@ func TestEucloEventRouterProjectsWorkflowStream(t *testing.T) {
 	if got := RenderChatProjection(theme.Default(), snap); !strings.Contains(got, "Inspect parser package") {
 		t.Fatalf("chat render missing milestone: %q", got)
 	}
-	diffPane := NewDiffPane(router, "", nil)
-	diffPane.SetSize(120, 30)
-	if got := diffPane.View(); !strings.Contains(got, "thoughtrecipes/parser_test.go") {
-		t.Fatalf("diff render missing file name: %q", got)
-	}
 }

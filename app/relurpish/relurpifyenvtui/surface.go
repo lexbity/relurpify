@@ -42,14 +42,6 @@ func (s *Surface) NewChat(context.Context, tui.RuntimeAdapter, *tui.AgentContext
 	return nil
 }
 
-func (s *Surface) NewInput(tui.RuntimeAdapter, *tui.AgentContext, *tui.Session) tui.InputSurface {
-	return nil
-}
-
-func (s *Surface) NewNav(tui.RuntimeAdapter, *tui.AgentContext, *tui.Session) tui.NavSurface {
-	return nil
-}
-
 func (s *Surface) NewRegion1(rt tui.RuntimeAdapter, ctx *tui.AgentContext, sess *tui.Session, store *tui.SessionStore, notifQ *tui.NotificationQueue) tui.Region1Surface {
 	return newControlCenterPane(rt, ctx, sess, store, notifQ)
 }

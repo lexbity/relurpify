@@ -8,15 +8,9 @@ import (
 )
 
 // TestReservedChordsSurviveAllFocusStates verifies that ctrl+a and ctrl+c
-// always escape through to the host even when an adversarial surface owns
-// input and navigation — animations and full-frame surfaces must never
-// swallow these chords.
+// always escape through to the host even when animations and full-frame surfaces must never swallow these chords.
 func TestReservedChordsSurviveAllFocusStates(t *testing.T) {
-	surface := &ownedSurface{
-		fakeSurface: &fakeSurface{name: "guest", chat: &fakeChatPane{}},
-		input:       &hostileInputSurface{},
-		nav:         &hostileNavSurface{},
-	}
+	surface := &fakeSurface{name: "guest", chat: &fakeChatPane{}}
 	factory := &countingFactory{shared: surface}
 	m := NewRootModel(context.Background(), HostOptions{SurfaceFactory: factory})
 

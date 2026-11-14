@@ -334,10 +334,6 @@ func TestPanelGoldenViews(t *testing.T) {
 	chat.AppendMessage(euclotui.RenderInteractionFrame(theme.Default(), *chatFrame))
 	assertGolden(t, "euclo_chat_panel.txt", chat.View())
 
-	diff := euclotui.NewDiffPane(chatRouter, sandboxDir, nil)
-	diff.SetSize(96, 18)
-	assertGolden(t, "euclo_diff_panel.txt", diff.View())
-
 }
 
 func TestRootTUIViews(t *testing.T) {

@@ -5,16 +5,15 @@ import (
 	"sort"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
-
 	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 )
 
 // AgentSurface owns the interaction surface for a given agent.
 // The host keeps shell chrome, lifecycle, and persistence, while the surface
-// owns its tabs, commands, notification rendering, and frame handling.
-// Optional input/nav surfaces let an agent replace Region 3 and Region 4.
+// owns its tabs, commands, notification rendering, and frame handling. The
+// host owns the universal command bar and navigation; surfaces cannot replace
+// either (the former guest NewInput/NewNav opt-outs are removed).
 type AgentSurface interface {
 	Name() string
 	RegisterTabs(reg *TabRegistry)
@@ -23,8 +22,6 @@ type AgentSurface interface {
 	// contexts (typically the program's signal context); runs die with it.
 	NewChat(parentCtx context.Context, rt RuntimeAdapter, ctx *AgentContext, sess *Session, notifQ *NotificationQueue) ChatPaner
 	NewRegion1(rt RuntimeAdapter, ctx *AgentContext, sess *Session, store *SessionStore, notifQ *NotificationQueue) Region1Surface
-	NewInput(rt RuntimeAdapter, ctx *AgentContext, sess *Session) InputSurface
-	NewNav(rt RuntimeAdapter, ctx *AgentContext, sess *Session) NavSurface
 	InitialTab() TabID
 	InitialSubTab(tab TabID) SubTabID
 	RenderNotification(item NotificationItem) string
@@ -49,22 +46,6 @@ type SurfaceFrameMsg struct {
 	Message      Message
 	Frame        any
 	Notification NotificationItem
-}
-
-// InputSurface owns the host's Region 3 input bar when a surface opts out of
-// the default host input chrome.
-type InputSurface interface {
-	SetSize(w, h int)
-	View() string
-	HandleKey(msg tea.KeyMsg) (tea.Cmd, bool)
-}
-
-// NavSurface owns the host's Region 4 navigation bar when a surface opts out
-// of the default host tab switcher chrome.
-type NavSurface interface {
-	SetSize(w, h int)
-	View() string
-	HandleKey(msg tea.KeyMsg) (tea.Cmd, bool)
 }
 
 type surfaceRegistry struct {
@@ -169,14 +150,6 @@ func (genericSurface) NewChat(context.Context, RuntimeAdapter, *AgentContext, *S
 }
 
 func (genericSurface) NewRegion1(rt RuntimeAdapter, ctx *AgentContext, sess *Session, store *SessionStore, notifQ *NotificationQueue) Region1Surface {
-	return nil
-}
-
-func (genericSurface) NewInput(rt RuntimeAdapter, ctx *AgentContext, sess *Session) InputSurface {
-	return nil
-}
-
-func (genericSurface) NewNav(rt RuntimeAdapter, ctx *AgentContext, sess *Session) NavSurface {
 	return nil
 }
 

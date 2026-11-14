@@ -27,7 +27,6 @@ const (
 // Guest tab IDs — registered by the active surface on init.
 const (
 	TabChat     TabID = "chat"
-	TabDiff     TabID = "diff"
 	TabRun      TabID = "run"
 	TabWorkshop TabID = "workshop"
 )

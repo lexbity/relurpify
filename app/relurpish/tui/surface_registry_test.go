@@ -36,13 +36,7 @@ func (s *registrySurface) NewChat(context.Context, RuntimeAdapter, *AgentContext
 	return &fakeChatPane{}
 }
 
-func (s *registrySurface) NewInput(RuntimeAdapter, *AgentContext, *Session) InputSurface {
-	return nil
-}
 
-func (s *registrySurface) NewNav(RuntimeAdapter, *AgentContext, *Session) NavSurface {
-	return nil
-}
 
 func (s *registrySurface) NewRegion1(RuntimeAdapter, *AgentContext, *Session, *SessionStore, *NotificationQueue) Region1Surface {
 	return nil
@@ -135,7 +129,6 @@ func TestActivateSurfaceCachesPerAgent(t *testing.T) {
 		name: "guest",
 		tabs: []TabDefinition{
 			{ID: TabChat, Label: "chat"},
-			{ID: TabDiff, Label: "diff"},
 		},
 		chat: guestChat,
 	}
@@ -160,15 +153,15 @@ func TestActivateSurfaceCachesPerAgent(t *testing.T) {
 	if got := m.activeAgentName(); got != "guest" {
 		t.Fatalf("agent after switch = %q, want guest", got)
 	}
-	if got := len(m.tabs.All()); got != 14 {
-		t.Fatalf("guest canvas count = %d, want 14", got)
+	if got := len(m.tabs.All()); got != 13 {
+		t.Fatalf("guest canvas count = %d, want 13", got)
 	}
 	if got := m.tabs.All()[0].Label; got != "chat" {
 		t.Fatalf("guest first tab label = %q, want chat", got)
 	}
 
 	guestChat.width = 77
-	m.setActiveTab(TabDiff)
+	m.setActiveTab(TabRun)
 	m.setActiveSubTab("")
 
 	if err := m.switchActiveAgent("none"); err != nil {
@@ -190,13 +183,13 @@ func TestActivateSurfaceCachesPerAgent(t *testing.T) {
 	if got := m.activeAgentName(); got != "guest" {
 		t.Fatalf("agent after restoring = %q, want guest", got)
 	}
-	if got := m.tabs.ActiveTab().ID; got != TabDiff {
-		t.Fatalf("restored active tab = %q, want %q", got, TabDiff)
+	if got := m.tabs.ActiveTab().ID; got != TabRun {
+		t.Fatalf("restored active tab = %q, want %q", got, TabRun)
 	}
 	if got := m.chat.(*fakeChatPane).width; got != 77 {
 		t.Fatalf("restored chat width = %d, want 77", got)
 	}
-	if got := m.tabs.All()[1].Label; got != "diff" {
+	if got := m.tabs.All()[1].Label; got != "run" {
 		t.Fatalf("guest tab labels not restored, got %q", got)
 	}
 }

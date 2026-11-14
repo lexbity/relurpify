@@ -59,12 +59,10 @@ func detectReduceMotion(preferred bool) bool {
 // the value-semantics copy that Bubble Tea makes on every Update call.
 type RootModel struct {
 	// Layout and tab registry (Phase A infrastructure).
-	layout    ChromeLayout
-	tabs      *TabRegistry
-	subTabBar SubTabBar
+	layout ChromeLayout
+	tabs   *TabRegistry
 
 	// Components (value types — cheap to copy)
-	tabBar     TabBar
 	notifBar   *NotificationBar
 	inputBar   *InputBar
 	cmdPalette *CommandPalette
@@ -74,8 +72,6 @@ type RootModel struct {
 	// Panes (pointer types — mutations survive tea.Model value copies)
 	chat                ChatPaner
 	baseSurface         Region1Surface
-	activeInput         InputSurface
-	activeNav           NavSurface
 	tasks               *TasksPane
 	session             *SessionPane
 	doctor              *DoctorPane
@@ -175,8 +171,6 @@ type surfaceState struct {
 	cmdReg  *CommandRegistry
 	chat    ChatPaner
 	region1 Region1Surface
-	input   InputSurface
-	nav     NavSurface
 }
 
 // propagateTheme distributes the active theme to all host-owned components.
@@ -201,7 +195,6 @@ func (m *RootModel) propagateTheme() {
 	if m.inputBar != nil {
 		m.inputBar.SetTheme(m.th)
 	}
-	m.tabBar.SetTheme(m.th)
 	if m.cmdPalette != nil {
 		m.cmdPalette.SetTheme(m.th)
 	}
@@ -331,9 +324,6 @@ func NewRootModel(parentCtx context.Context, options HostOptions) RootModel {
 	inputBar.SetCommandRegistry(state.cmdReg)
 	inputBar.SetContext(state.tabs.ActiveTab().ID, state.tabs.ActiveSubTab())
 
-	tabBar := NewTabBar(state.tabs.ActiveTab().ID)
-	tabBar.SetRegistry(state.tabs)
-
 	m := RootModel{
 		keys:              NewKeyMap(),
 		demoScenario:      options.DemoScenario,
@@ -341,10 +331,8 @@ func NewRootModel(parentCtx context.Context, options HostOptions) RootModel {
 		parentCtx:         parentCtx,
 		lifetime:          lifetime,
 		tabs:              state.tabs,
-		subTabBar:         NewSubTabBar(state.tabs.ActiveTab()),
 		hitlRow:           &HITLRow{th: theme.Default()},
 		inputGate:         &InputGate{},
-		tabBar:            tabBar,
 		notifBar:          NewNotificationBar(notifQ),
 		inputBar:          inputBar,
 		cmdPalette:        NewCommandPalette(),
@@ -483,16 +471,12 @@ func buildSurfaceState(parentCtx context.Context, factory SurfaceFactory, agentN
 		base.RegisterTabs(tabs)
 		region1 = base.NewRegion1(rt, ctx, sess, store, notifQ)
 	}
-	input := surface.NewInput(rt, ctx, sess)
-	nav := surface.NewNav(rt, ctx, sess)
 	return &surfaceState{
 		surface: surface,
 		tabs:    tabs,
 		cmdReg:  cmdReg,
 		chat:    chat,
 		region1: region1,
-		input:   input,
-		nav:     nav,
 	}
 }
 
@@ -516,16 +500,10 @@ func (m *RootModel) activateSurface(agentName string) {
 	if setter, ok := m.chat.(interface{ SetSessionStore(*SessionStore) }); ok && setter != nil {
 		setter.SetSessionStore(m.store)
 	}
-	m.activeInput = state.input
-	m.activeNav = state.nav
 	if m.inputBar != nil {
 		m.inputBar.SetCommandRegistry(state.cmdReg)
 		m.inputBar.SetContext(m.tabs.ActiveTab().ID, m.tabs.ActiveSubTab())
 	}
-	m.tabBar.SetRegistry(state.tabs)
-	m.tabBar.SetActive(m.tabs.ActiveTab().ID)
-	m.subTabBar.SetSubTabs(m.tabs.ActiveTab())
-	m.subTabBar.SetActive(m.tabs.ActiveSubTab())
 	if m.notifBar != nil && state.surface != nil {
 		m.notifBar.SetInteractionRenderer(state.surface.RenderNotification)
 	}
@@ -1089,20 +1067,6 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, cmd
 			}
 			m.decisionFocused = false
-		}
-		ownsInput := m.activeInput != nil
-		if m.activeInput != nil {
-			if cmd, handled := m.activeInput.HandleKey(msg); handled {
-				return m, cmd
-			}
-		}
-		if m.activeNav != nil {
-			if cmd, handled := m.activeNav.HandleKey(msg); handled {
-				return m, cmd
-			}
-		}
-		if ownsInput {
-			return m, nil
 		}
 		m.syncOverlayStack()
 		if m.overlays != nil {
@@ -1692,9 +1656,7 @@ func (m *RootModel) selectCanvas(id TabID, remember bool) {
 		m.canvasOffset = m.canvasOffsets[id]
 	}
 	m.activeTab = id
-	m.tabBar.SetActive(id)
 	m.tabs.SetActive(id)
-	m.subTabBar.SetSubTabs(m.tabs.ActiveTab())
 	sub := m.tabs.ActiveSubTab()
 	m.inputBar.SetContext(id, sub)
 	m.syncCommandPalette()
@@ -1707,10 +1669,10 @@ func (m *RootModel) selectCanvas(id TabID, remember bool) {
 			m.session.SetFrameworkMode(false)
 		}
 	}
-	if m.chat != nil && (id == TabChat || id == TabDiff) {
+	if m.chat != nil && id == TabChat {
 		m.chat.SetSubTab(sub)
 	}
-	if tabAware, ok := m.chat.(TabAwarePane); ok && (id == TabChat || id == TabDiff) {
+	if tabAware, ok := m.chat.(TabAwarePane); ok && id == TabChat {
 		tabAware.SetActiveTab(id)
 	}
 }
@@ -1719,10 +1681,9 @@ func (m *RootModel) selectCanvas(id TabID, remember bool) {
 // notifies panes that care about subtab changes.
 func (m *RootModel) setActiveSubTab(sub SubTabID) {
 	m.tabs.SetSubActive(m.activeTab, sub)
-	m.subTabBar.SetActive(sub)
 	m.inputBar.SetContext(m.activeTab, sub)
 	m.syncCommandPalette()
-	if (m.activeTab == TabChat || m.activeTab == TabDiff) && m.chat != nil {
+	if m.activeTab == TabChat && m.chat != nil {
 		m.chat.SetSubTab(sub)
 	}
 }
@@ -2012,7 +1973,7 @@ func (m *RootModel) syncActivePaneFilter(raw string) {
 	case isBaseFrameworkTab(m.activeTab) && m.baseSurface != nil:
 		m.baseSurface.SetFilter(filter)
 	default:
-		if draft.filterMode && m.chat != nil && (m.activeTab == TabChat || m.activeTab == TabDiff) {
+		if draft.filterMode && m.chat != nil && m.activeTab == TabChat {
 			m.chat.SetSearchFilter(filter)
 		}
 	}

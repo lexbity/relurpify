@@ -61,15 +61,10 @@ func (s *EucloSurface) NewChat(parentCtx context.Context, rt tui.RuntimeAdapter,
 	return NewChatPane(parentCtx, rt, ctx, sess, notifQ, s.router, s.th, nil)
 }
 
-func (s *EucloSurface) NewRegion1(rt tui.RuntimeAdapter, ctx *tui.AgentContext, sess *tui.Session, store *tui.SessionStore, notifQ *tui.NotificationQueue) tui.Region1Surface {
-	return NewRecipePane(s.router, s.th)
-}
-
-func (s *EucloSurface) NewInput(tui.RuntimeAdapter, *tui.AgentContext, *tui.Session) tui.InputSurface {
-	return nil
-}
-
-func (s *EucloSurface) NewNav(tui.RuntimeAdapter, *tui.AgentContext, *tui.Session) tui.NavSurface {
+// NewRegion1 returns nil: the host replaces the Region 1 pane with the base
+// control center for every non-"none" agent, so the Euclo surface never owns
+// one. The former legacy recipe pane rendered no registered tab and is deleted.
+func (s *EucloSurface) NewRegion1(tui.RuntimeAdapter, *tui.AgentContext, *tui.Session, *tui.SessionStore, *tui.NotificationQueue) tui.Region1Surface {
 	return nil
 }
 

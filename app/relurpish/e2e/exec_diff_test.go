@@ -2,15 +2,11 @@ package e2e
 
 import (
 	"context"
-	"os"
-	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
 	"codeburg.org/lexbit/relurpify/governance/sandbox"
 
-	tea "github.com/charmbracelet/bubbletea"
 
 	"codeburg.org/lexbit/relurpify/app/relurpish/euclotui"
 	relurpishruntime "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
@@ -125,40 +121,7 @@ func TestExecDiff_ToolEditedFlow(t *testing.T) {
 		t.Fatal("diff steps should include demo.txt file projection")
 	}
 
-	// Verify the diff pane renders the hunk.
-	pane := euclotui.NewDiffPane(router, workspace, nil)
-	pane.SetSize(120, 40)
-	rendered := pane.View()
-	if !strings.Contains(rendered, "demo.txt") {
-		t.Fatalf("diff pane should show demo.txt file name:\n%s", rendered)
-	}
-	if !strings.Contains(rendered, "hello world") || !strings.Contains(rendered, "goodbye world") {
-		t.Fatalf("diff pane should show old/new content:\n%s", rendered)
-	}
-
-	// Apply the step via the diff pane's key commands.
-	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}}) // focus step view
-	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}}) // apply step
-	demoFile := filepath.Join(workspace, "demo.txt")
-	if data, err := os.ReadFile(filepath.Clean(demoFile)); err == nil {
-		content := string(data)
-		t.Logf("demo.txt after apply-step: %q", content)
-		if strings.Contains(content, "goodbye") {
-			t.Logf("diff pane apply-step modified demo.txt")
-		}
-	}
-
-	// Revert all via the diff pane.
-	pane.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'U'}}) // revert all
-	if data, err := os.ReadFile(filepath.Clean(demoFile)); err == nil {
-		content := string(data)
-		t.Logf("demo.txt after revert-all: %q", content)
-		if strings.Contains(content, "goodbye") {
-			t.Logf("revert-all restored demo.txt")
-		}
-	}
-
-	t.Logf("diff pipeline verified: EventToolEdited → subscriber → bridge → router → diff pane → apply → revert")
+	t.Logf("diff pipeline verified: EventToolEdited → subscriber → bridge → router (UI apply/revert is retired; governed tools own file changes)")
 
 	if err := rt.Close(context.Background()); err != nil {
 		t.Fatalf("close runtime: %v", err)
