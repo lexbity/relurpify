@@ -102,3 +102,23 @@ func (f *welcomeFactory) AvailableAgents() []string {
 	}
 	return f.agents
 }
+
+func TestV2WelcomeHelpOpensHostHelpWithoutLosingDraft(t *testing.T) {
+	for _, key := range []tea.KeyMsg{{Type: tea.KeyEnter}, {Type: tea.KeySpace}} {
+		pane := NewWelcomePane(&Session{}, nil, nil)
+		for range 5 {
+			pane.Update(tea.KeyMsg{Type: tea.KeyTab})
+		}
+		_, cmd := pane.Update(key)
+		if cmd == nil {
+			t.Fatal("Welcome Help had no action")
+		}
+		m, _ := newFocusTestModel()
+		m.inputBar.SetValue("unfinished request")
+		next, _ := m.Update(cmd())
+		m = next.(RootModel)
+		if !m.showHelp || m.inputBar.Value() != "unfinished request" {
+			t.Fatal("Help failed to open or changed the request")
+		}
+	}
+}

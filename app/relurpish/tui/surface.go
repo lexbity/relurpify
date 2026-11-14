@@ -155,7 +155,6 @@ func (genericSurface) RegisterTabs(reg *TabRegistry) {
 		Label:       "sandbox",
 		AgentFilter: []string{"none"},
 	})
-	reg.Register(TabDefinition{ID: TabSecurityGuard, Label: "securityguard", AgentFilter: []string{"none"}})
 	reg.Register(TabDefinition{ID: TabAIProvider, Label: "ai provider", AgentFilter: []string{"none"}})
 	reg.Register(TabDefinition{ID: TabKeybindings, Label: "keybindings", AgentFilter: []string{"none"}})
 	reg.Register(TabDefinition{ID: TabDoctor, Label: "doctor", AgentFilter: []string{"none"}})

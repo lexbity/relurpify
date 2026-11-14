@@ -18,8 +18,18 @@ type shellPolicyFile struct {
 
 // LoadShellPolicy loads and validates the shell policy file.
 func LoadShellPolicy(path, workspace string, decode Decoder) (*ShellBlacklist, error) {
+	data, path, err := readPolicy(path, workspace, ShellPolicyPath)
+	if err != nil {
+		return nil, err
+	}
+	return ParseShellPolicy(path, data, decode)
+}
+
+// ParseShellPolicy validates an already-read source without filesystem access.
+// Confined diagnostic reads and boot loading share this validation boundary.
+func ParseShellPolicy(path string, data []byte, decode Decoder) (*ShellBlacklist, error) {
 	var file shellPolicyFile
-	if err := loadAndDecode(path, workspace, decode, ShellPolicyPath, &file); err != nil {
+	if err := decodePolicy(path, data, decode, &file); err != nil {
 		return nil, err
 	}
 	if err := validateShellBlacklistRules(file.Rules); err != nil {

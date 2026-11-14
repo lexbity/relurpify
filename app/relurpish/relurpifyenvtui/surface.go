@@ -29,7 +29,6 @@ func (s *Surface) RegisterTabs(reg *tui.TabRegistry) {
 	}
 	reg.Register(tui.TabDefinition{ID: tui.TabWelcome, Label: "welcome", AgentFilter: []string{"none"}})
 	reg.Register(tui.TabDefinition{ID: tui.TabSandbox, Label: "sandbox", AgentFilter: []string{"none"}})
-	reg.Register(tui.TabDefinition{ID: tui.TabSecurityGuard, Label: "securityguard", AgentFilter: []string{"none"}})
 	reg.Register(tui.TabDefinition{ID: tui.TabAIProvider, Label: "ai provider", AgentFilter: []string{"none"}})
 	reg.Register(tui.TabDefinition{ID: tui.TabKeybindings, Label: "keybindings", AgentFilter: []string{"none"}})
 	reg.Register(tui.TabDefinition{ID: tui.TabDoctor, Label: "doctor", AgentFilter: []string{"none"}})

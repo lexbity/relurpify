@@ -28,8 +28,18 @@ type sandboxPolicyFile struct {
 
 // LoadSandboxPolicy loads and validates the sandbox policy file.
 func LoadSandboxPolicy(path, workspace string, decode Decoder) (*SandboxPolicyConfig, error) {
+	data, path, err := readPolicy(path, workspace, SandboxPolicyPath)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSandboxPolicy(path, workspace, data, decode)
+}
+
+// ParseSandboxPolicy validates an already-read source without filesystem access.
+// Confined diagnostic reads and boot loading share this validation boundary.
+func ParseSandboxPolicy(path, workspace string, data []byte, decode Decoder) (*SandboxPolicyConfig, error) {
 	var file sandboxPolicyFile
-	if err := loadAndDecode(path, workspace, decode, SandboxPolicyPath, &file); err != nil {
+	if err := decodePolicy(path, data, decode, &file); err != nil {
 		return nil, err
 	}
 	absWorkspace, err := filepath.Abs(workspace)

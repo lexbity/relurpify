@@ -40,6 +40,11 @@ type ModelConfig struct {
 	Profiles  []*model.ModelProfileConfig
 }
 
+const (
+	configDiagnosticBlocking = "blocking"
+	configSectionWorkspace   = "workspace"
+)
+
 // ConfigDiagnostic captures a section-level load issue for doctor/reporting use.
 type ConfigDiagnostic struct {
 	Path     string
@@ -77,7 +82,8 @@ func Load(opts LoadOptions) (*AppConfig, *Secrets, error) {
 }
 
 // LoadDiagnostic loads the workspace configuration and preserves partial
-// results together with per-section diagnostics.
+// results together with per-section diagnostics. Canonical security policies
+// use confined reads; strict boot loading remains a separate migration.
 func LoadDiagnostic(opts LoadOptions) (PartialBundle, []ConfigDiagnostic, error) {
 	return loadBundle(opts, false)
 }
@@ -110,7 +116,7 @@ func loadBundle(opts LoadOptions, strict bool) (PartialBundle, []ConfigDiagnosti
 	diags = append(diags, workspaceDiags...)
 	if workspaceCfg == nil {
 		if strict {
-			return PartialBundle{}, diags, diagnosticsError("workspace", workspaceDiags)
+			return PartialBundle{}, diags, diagnosticsError(configSectionWorkspace, workspaceDiags)
 		}
 		workspaceCfg = defaultWorkspaceConfig(absWorkspace)
 	}
@@ -142,9 +148,12 @@ func loadBundle(opts LoadOptions, strict bool) (PartialBundle, []ConfigDiagnosti
 		}
 	}
 
-	securityBundle, securityDiags, err := loadSecurityBundle(absWorkspace)
-	if err != nil {
-		return PartialBundle{}, nil, err
+	var securityBundle *security.Bundle
+	var securityDiags []ConfigDiagnostic
+	if strict {
+		securityBundle, securityDiags = loadSecurityBundle(absWorkspace)
+	} else {
+		securityBundle, securityDiags = loadConfinedSecurityBundle(absWorkspace)
 	}
 	diags = append(diags, securityDiags...)
 
@@ -161,7 +170,7 @@ func loadBundle(opts LoadOptions, strict bool) (PartialBundle, []ConfigDiagnosti
 	diags = append(diags, toConfigDiagnostics("profile", profileDiags)...)
 
 	if err := workspaceCfg.ValidateModelRef(providers); err != nil {
-		diag := ConfigDiagnostic{Path: DefaultWorkspaceConfigPath(absWorkspace), Section: "workspace", Severity: "blocking", Message: err.Error()}
+		diag := ConfigDiagnostic{Path: DefaultWorkspaceConfigPath(absWorkspace), Section: configSectionWorkspace, Severity: configDiagnosticBlocking, Message: err.Error()}
 		diags = append(diags, diag)
 		if strict {
 			return PartialBundle{}, diags, fmt.Errorf("load workspace config: %w", err)
@@ -169,14 +178,14 @@ func loadBundle(opts LoadOptions, strict bool) (PartialBundle, []ConfigDiagnosti
 	}
 	resolvedWorkspaceModel, err := model.ResolveModelRef(workspaceCfg.Model, model.ModelRef{}, providers)
 	if err != nil {
-		diag := ConfigDiagnostic{Path: DefaultWorkspaceConfigPath(absWorkspace), Section: "workspace", Severity: "blocking", Message: err.Error()}
+		diag := ConfigDiagnostic{Path: DefaultWorkspaceConfigPath(absWorkspace), Section: configSectionWorkspace, Severity: configDiagnosticBlocking, Message: err.Error()}
 		diags = append(diags, diag)
 		if strict {
 			return PartialBundle{}, diags, fmt.Errorf("workspace model: %w", err)
 		}
 	}
 	if resolvedWorkspaceModel != nil && resolvedWorkspaceModel.Provider != nil && model.ProviderRequiresAuth(resolvedWorkspaceModel.Provider.Kind) && strings.TrimSpace(secrets.LLMAPIKey) == "" {
-		diag := ConfigDiagnostic{Path: DefaultWorkspaceConfigPath(absWorkspace), Section: "workspace", Severity: "blocking", Message: fmt.Sprintf("provider %q requires RELURPIFY_LLM_API_KEY", resolvedWorkspaceModel.Provider.Name)}
+		diag := ConfigDiagnostic{Path: DefaultWorkspaceConfigPath(absWorkspace), Section: configSectionWorkspace, Severity: configDiagnosticBlocking, Message: fmt.Sprintf("provider %q requires RELURPIFY_LLM_API_KEY", resolvedWorkspaceModel.Provider.Name)}
 		diags = append(diags, diag)
 		if strict {
 			return PartialBundle{}, diags, errors.New(diag.Message)
@@ -186,7 +195,7 @@ func loadBundle(opts LoadOptions, strict bool) (PartialBundle, []ConfigDiagnosti
 	toolDir := DefaultToolManifestDir(absWorkspace)
 	toolManifests, err := LoadToolManifests(toolDir)
 	if err != nil {
-		diag := ConfigDiagnostic{Path: toolDir, Section: "tool", Severity: "blocking", Message: err.Error()}
+		diag := ConfigDiagnostic{Path: toolDir, Section: "tool", Severity: configDiagnosticBlocking, Message: err.Error()}
 		diags = append(diags, diag)
 		if strict {
 			return PartialBundle{}, diags, fmt.Errorf("load tools: %w", err)
@@ -196,7 +205,7 @@ func loadBundle(opts LoadOptions, strict bool) (PartialBundle, []ConfigDiagnosti
 	if err == nil {
 		toolRegistry, err = BuildRegistry(toolManifests, securityBundle.LocalTool, nil, opts.SubprocessToolFactory)
 		if err != nil {
-			diag := ConfigDiagnostic{Path: toolDir, Section: "tool", Severity: "blocking", Message: err.Error()}
+			diag := ConfigDiagnostic{Path: toolDir, Section: "tool", Severity: configDiagnosticBlocking, Message: err.Error()}
 			diags = append(diags, diag)
 			if strict {
 				return PartialBundle{}, diags, fmt.Errorf("build tool registry: %w", err)
@@ -241,12 +250,12 @@ func loadWorkspaceConfigSection(absWorkspace string, strictMode bool) (*Workspac
 			cfg := defaultWorkspaceConfig(absWorkspace)
 			return cfg, nil
 		}
-		diag := ConfigDiagnostic{Path: path, Section: "workspace", Severity: "blocking", Message: fmt.Sprintf("stat workspace config: %v", err)}
+		diag := ConfigDiagnostic{Path: path, Section: configSectionWorkspace, Severity: configDiagnosticBlocking, Message: fmt.Sprintf("stat workspace config: %v", err)}
 		return nil, []ConfigDiagnostic{diag}
 	}
 	cfg, err := LoadWorkspaceConfig(path, absWorkspace, WorkspaceLoadOptions{Strict: strictMode})
 	if err != nil {
-		diag := ConfigDiagnostic{Path: path, Section: "workspace", Severity: "blocking", Message: err.Error()}
+		diag := ConfigDiagnostic{Path: path, Section: configSectionWorkspace, Severity: configDiagnosticBlocking, Message: err.Error()}
 		return nil, []ConfigDiagnostic{diag}
 	}
 	for _, usage := range cfg.DefaultsUsed {
@@ -255,7 +264,7 @@ func loadWorkspaceConfigSection(absWorkspace string, strictMode bool) (*Workspac
 	return cfg, nil
 }
 
-func loadSecurityBundle(absWorkspace string) (*security.Bundle, []ConfigDiagnostic, error) {
+func loadSecurityBundle(absWorkspace string) (*security.Bundle, []ConfigDiagnostic) {
 	bundle := &security.Bundle{
 		Sandbox:   &security.SandboxPolicyConfig{},
 		Shell:     &security.ShellBlacklist{},
@@ -263,42 +272,26 @@ func loadSecurityBundle(absWorkspace string) (*security.Bundle, []ConfigDiagnost
 	}
 	var diags []ConfigDiagnostic
 	if sandboxPolicy, err := security.LoadSandboxPolicy("", absWorkspace, StrictDecode); err != nil {
-		severity := "blocking"
-		if errors.Is(err, os.ErrNotExist) {
-			severity = "warning"
-		}
-		diags = append(diags, ConfigDiagnostic{Path: security.SandboxPolicyPath(absWorkspace), Section: "security", Severity: severity, Message: err.Error()})
+		diags = append(diags, policyReadDiagnostic(security.SandboxPolicyPath(absWorkspace), err))
 	} else {
 		bundle.Sandbox = sandboxPolicy
 	}
 	if shellPolicy, err := security.LoadShellPolicy("", absWorkspace, StrictDecode); err != nil {
-		severity := "blocking"
-		if errors.Is(err, os.ErrNotExist) {
-			severity = "warning"
-		}
-		diags = append(diags, ConfigDiagnostic{Path: security.ShellPolicyPath(absWorkspace), Section: "security", Severity: severity, Message: err.Error()})
+		diags = append(diags, policyReadDiagnostic(security.ShellPolicyPath(absWorkspace), err))
 	} else {
 		bundle.Shell = shellPolicy
 	}
 	if localToolPolicy, err := security.LoadLocalToolPolicy("", absWorkspace, StrictDecode); err != nil {
-		severity := "blocking"
-		if errors.Is(err, os.ErrNotExist) {
-			severity = "warning"
-		}
-		diags = append(diags, ConfigDiagnostic{Path: security.LocalToolPolicyPath(absWorkspace), Section: "security", Severity: severity, Message: err.Error()})
+		diags = append(diags, policyReadDiagnostic(security.LocalToolPolicyPath(absWorkspace), err))
 	} else {
 		bundle.LocalTool = localToolPolicy
 	}
 	if ingestionRules, err := security.LoadWorkspaceIngestionPolicy("", absWorkspace, StrictDecode); err != nil {
-		severity := "blocking"
-		if errors.Is(err, os.ErrNotExist) {
-			severity = "warning"
-		}
-		diags = append(diags, ConfigDiagnostic{Path: security.WorkspaceIngestionPolicyPath(absWorkspace), Section: "security", Severity: severity, Message: err.Error()})
+		diags = append(diags, policyReadDiagnostic(security.WorkspaceIngestionPolicyPath(absWorkspace), err))
 	} else {
 		bundle.Ingestion = ingestionRules
 	}
-	return bundle, diags, nil
+	return bundle, diags
 }
 
 func defaultWorkspaceConfig(absWorkspace string) *WorkspaceConfig {
@@ -329,7 +322,7 @@ func toConfigDiagnostics(section string, diags []model.LoadDiagnostic) []ConfigD
 
 func hasBlockingConfigDiagnostics(diags []ConfigDiagnostic) bool {
 	for _, diag := range diags {
-		if strings.EqualFold(strings.TrimSpace(diag.Severity), "blocking") {
+		if strings.EqualFold(strings.TrimSpace(diag.Severity), configDiagnosticBlocking) {
 			return true
 		}
 	}

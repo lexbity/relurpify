@@ -3,409 +3,268 @@ package tui
 import (
 	"context"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
-	"unicode/utf8"
 
-	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 	"codeburg.org/lexbit/relurpify/capability/sandbox"
 	"codeburg.org/lexbit/relurpify/userconfig/config"
-
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
-	"gopkg.in/yaml.v3"
 )
 
-type securityGuardRuntime interface {
-	SessionInfo() SessionInfo
+type guardResultMsg struct {
+	owner    *SecurityGuardPane
+	epoch    uint64
+	section  config.GuardSection
+	snapshot GuardPolicySnapshot
+	err      error
 }
 
-type securityPanel int
-
-const (
-	securityPanelShell securityPanel = iota
-	securityPanelIngestion
-)
-
-type securityGuardFile struct {
-	Version string                  `yaml:"version,omitempty" json:"version,omitempty"`
-	Rules   []sandbox.BlacklistRule `yaml:"rules" json:"rules"`
-}
-
+// SecurityGuardPane inspects disk rules and tests a selected shell pattern.
+// It has no write, activation, execution, or permission-granting capability.
+// Policy editing is deferred until G1 grammar and G2 ingestion enforcement exist.
 type SecurityGuardPane struct {
-	runtime securityGuardRuntime
-
-	shellRules []sandbox.BlacklistRule
-
-	activePanel securityPanel
-	shellSel    int
-
-	editing    bool
-	editBuffer string
-	editLabel  string
-
-	testMode    bool
-	testBuffer  string
-	testLabel   string
-	testResult  string
-	confirmDrop bool
-
-	width  int
-	height int
-	status string
-	// Theme is the active semantic style source.
-	th *theme.Theme
+	parent        context.Context
+	port          GuardPolicyPort
+	section       config.GuardSection
+	snapshots     map[config.GuardSection]GuardPolicySnapshot
+	views         map[config.GuardSection]*documentInspector
+	rules         config.GuardPolicyRules
+	testField     textinput.Model
+	testMode      bool
+	working       bool
+	epoch         uint64
+	status        string
+	width, height int
+	demo          bool
 }
 
-func NewSecurityGuardPane(rt securityGuardRuntime) *SecurityGuardPane {
-	p := &SecurityGuardPane{th: theme.Default(), runtime: rt}
-	p.Refresh()
-	return p
+// NewSecurityGuardPane constructs the shared read-only inspector without I/O.
+func NewSecurityGuardPane(parent context.Context, port GuardPolicyPort, demo bool) *SecurityGuardPane {
+	if parent == nil {
+		panic("guard inspector requires a parent context")
+	}
+	field := textinput.New()
+	field.CharLimit = 65536
+	field.Prompt = "> "
+	return &SecurityGuardPane{parent: parent, port: port, demo: demo, section: config.GuardShell, snapshots: make(map[config.GuardSection]GuardPolicySnapshot), views: make(map[config.GuardSection]*documentInspector), testField: field}
 }
 
-func (p *SecurityGuardPane) SetSize(w, h int) {
-	p.width = w
-	p.height = h
+// SetSize assigns the bounded inspector and explicit sample-input field.
+func (p *SecurityGuardPane) SetSize(width, height int) {
+	p.width, p.height = width, height
+	p.testField.Width = max(1, width-4)
 }
 
-func (p *SecurityGuardPane) SetFilter(filter string) {
-	_ = filter
+// OwnsEscape preserves an open detail or explicit matcher field before bar focus.
+func (p *SecurityGuardPane) OwnsEscape() bool {
+	view := p.views[p.section]
+	return p.testMode || (view != nil && view.detail)
 }
 
-func (p *SecurityGuardPane) Refresh() {
-	p.loadShellRules()
+func (p *SecurityGuardPane) open() tea.Cmd {
+	if p.working || p.views[p.section] != nil {
+		return nil
+	}
+	return p.query(p.section)
 }
-
-func (p *SecurityGuardPane) Update(msg tea.Msg) (*SecurityGuardPane, tea.Cmd) {
-	if msg, ok := msg.(tea.KeyMsg); ok {
-		if p.activePanel == securityPanelIngestion {
-			if msg.String() == "tab" || msg.String() == "shift+tab" {
-				p.activePanel = securityPanelShell
-			}
-			return p, nil
+func (p *SecurityGuardPane) query(section config.GuardSection) tea.Cmd {
+	if p.working {
+		return nil
+	}
+	if p.port == nil {
+		p.status = "Guard inspection unavailable: no policy reader is connected"
+		return nil
+	}
+	p.working = true
+	p.status = "Reading " + string(section) + " policy source…"
+	p.epoch++
+	epoch, parent, port := p.epoch, p.parent, p.port
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(parent, 5*time.Second)
+		defer cancel()
+		snapshot, err := port.GuardPolicy(ctx, section)
+		return guardResultMsg{owner: p, epoch: epoch, section: section, snapshot: snapshot, err: err}
+	}
+}
+func (p *SecurityGuardPane) apply(result guardResultMsg) {
+	if result.owner != p || result.epoch != p.epoch || !p.working {
+		return
+	}
+	p.working = false
+	if result.err != nil {
+		p.status = "Inspection failed: " + result.err.Error()
+		if len(p.snapshots) > 0 {
+			p.status += " · prior observation retained"
 		}
-		if p.confirmDrop {
-			switch msg.String() {
-			case "y", "enter":
-				p.confirmDrop = false
-				return p, p.dropSelectedCmd()
-			case "n", "esc":
-				p.confirmDrop = false
-				return p, nil
-			}
-			return p, nil
+		return
+	}
+	if result.snapshot.Document.Section != result.section {
+		p.status = "Policy response section does not match the request; prior observation retained"
+		return
+	}
+	p.section = result.section
+	p.snapshots[p.section] = result.snapshot
+	p.rules, _ = config.ParseGuardPolicy(p.section, result.snapshot.Document.Source)
+	document := guardInspection(result.snapshot)
+	view := p.views[p.section]
+	if view == nil {
+		view = &documentInspector{}
+		p.views[p.section] = view
+	}
+	view.apply(document)
+	p.status = "Read-only source observation. Live enforcement is not established (G1/G2)."
+}
+func guardInspection(snapshot GuardPolicySnapshot) InspectionDocument {
+	section := snapshot.Document.Section
+	document := InspectionDocument{Title: "Settings / Guard / " + string(section), Notice: "Read-only inspection · G1/G2 enforcement unresolved. Tab changes section; r refreshes; t tests a shell pattern only."}
+	if snapshot.Notice != "" {
+		document.Notice += " " + snapshot.Notice
+	}
+	rules, err := config.ParseGuardPolicy(section, snapshot.Document.Source)
+	if err != nil {
+		document.Entries = append(document.Entries, InspectionEntry{ID: "diagnostics", Label: "Policy source diagnostics", Origin: snapshot.Workspace, Body: err.Error()})
+	}
+	for _, rule := range rules.Shell {
+		document.Entries = append(document.Entries, InspectionEntry{ID: rule.ID, Label: rule.ID + " · " + rule.Action, Origin: snapshot.Workspace, Summary: "Configured rule; observed enforcement is not established", Fields: []InspectionField{{Name: "Pattern", Value: rule.Pattern}, {Name: "Action", Value: rule.Action}, {Name: "Reason", Value: rule.Reason}, {Name: "Source revision", Value: snapshot.Document.Revision}}})
+	}
+	for _, rule := range rules.Ingestion {
+		var actors []string
+		for _, actor := range rule.Conditions.Actors {
+			actors = append(actors, actor.ID)
 		}
+		document.Entries = append(document.Entries, InspectionEntry{ID: rule.ID, Label: fmt.Sprintf("%s · enabled=%t · %s", rule.ID, rule.Enabled, rule.Effect.Action), Origin: snapshot.Workspace, Summary: "Configured ingestion declaration; G2 evaluator is unresolved", Fields: []InspectionField{{Name: "Name", Value: rule.Name}, {Name: "Priority", Value: fmt.Sprint(rule.Priority)}, {Name: "Actor IDs", Value: strings.Join(actors, ", ")}, {Name: "Approvers", Value: strings.Join(rule.Effect.Approvers, ", ")}, {Name: "Approval TTL", Value: rule.Effect.ApprovalTTL}, {Name: "Reason", Value: rule.Effect.Reason}, {Name: "Source revision", Value: snapshot.Document.Revision}}})
+	}
+	if err == nil && len(document.Entries) == 0 {
+		document.Notice = "No rules in the inspected file. This does not establish authorization or protection. Tab changes section; r refreshes."
+	}
+	return document
+}
+
+func (p *SecurityGuardPane) beginTest() {
+	if p.section != config.GuardShell {
+		p.status = "Ingestion sample evaluation is unavailable until G2 is implemented"
+		return
+	}
+	view := p.views[p.section]
+	if view == nil {
+		return
+	}
+	for _, rule := range p.rules.Shell {
+		if rule.ID == view.selected {
+			p.testMode = true
+			p.testField.SetValue("")
+			p.testField.Focus()
+			return
+		}
+	}
+	p.status = "Select a decoded shell rule before testing its pattern"
+}
+func (p *SecurityGuardPane) runTest() {
+	view := p.views[p.section]
+	if view == nil {
+		p.testMode = false
+		return
+	}
+	for _, rule := range p.rules.Shell {
+		if rule.ID != view.selected {
+			continue
+		}
+		matcher, err := sandbox.NewShellBlacklist([]sandbox.BlacklistRule{{ID: rule.ID, Raw: rule.Pattern, Action: sandbox.BlacklistAction(rule.Action), Reason: rule.Reason}})
+		switch {
+		case err != nil:
+			p.status = "Pattern test error: " + err.Error()
+		case matcher.Check(p.testField.Value()) != nil:
+			p.status = "Matches selected pattern: " + rule.Action + " · command not executed"
+		default:
+			p.status = "No match · matcher only; this does not establish authorization"
+		}
+		p.testMode = false
+		return
+	}
+	p.testMode = false
+	p.status = "Selected rule is no longer present; no test was performed"
+}
+
+// Update consumes only inspection replies and deliberate local interaction.
+func (p *SecurityGuardPane) Update(message tea.Msg) (*SecurityGuardPane, tea.Cmd) {
+	switch msg := message.(type) {
+	case guardResultMsg:
+		p.apply(msg)
+	case tea.KeyMsg:
 		if p.testMode {
-			switch msg.String() {
-			case "enter":
+			switch msg.Type {
+			case tea.KeyEsc:
+				p.testMode = false
+				return p, nil
+			case tea.KeyEnter:
 				p.runTest()
 				return p, nil
-			case "esc":
-				p.testMode = false
-				p.testBuffer = ""
-				p.testLabel = ""
-				return p, nil
-			case "backspace", "delete":
-				if len(p.testBuffer) > 0 {
-					_, size := utf8.DecodeLastRuneInString(p.testBuffer)
-					p.testBuffer = p.testBuffer[:len(p.testBuffer)-size]
-				}
+			}
+			if msg.Type == tea.KeyRunes && (len(string(msg.Runes))+len(p.testField.Value()) > 65536 || strings.ContainsAny(string(msg.Runes), "\x00\x1b\r\n")) {
+				p.status = "Sample input rejected; previous input retained"
 				return p, nil
 			}
-			if len(msg.Runes) > 0 {
-				if len(p.testBuffer)+len(string(msg.Runes)) <= 65536 {
-					p.testBuffer += string(msg.Runes)
-				} else {
-					p.status = "Test input exceeds 64 KiB; previous text retained"
-				}
-			}
+			var cmd tea.Cmd
+			p.testField, cmd = p.testField.Update(msg)
+			return p, cmd
+		}
+		if msg.Paste {
 			return p, nil
 		}
-		if p.editing {
-			switch msg.String() {
-			case "enter":
-				p.commitEdit()
-				return p, nil
-			case "esc":
-				p.editing = false
-				p.editBuffer = ""
-				p.editLabel = ""
-				return p, nil
-			case "backspace", "delete":
-				if len(p.editBuffer) > 0 {
-					_, size := utf8.DecodeLastRuneInString(p.editBuffer)
-					p.editBuffer = p.editBuffer[:len(p.editBuffer)-size]
-				}
+		if msg.Type == tea.KeyTab || msg.Type == tea.KeyShiftTab {
+			if p.working {
 				return p, nil
 			}
-			if len(msg.Runes) > 0 {
-				if len(p.editBuffer)+len(string(msg.Runes)) <= 8192 {
-					p.editBuffer += string(msg.Runes)
-				} else {
-					p.status = "Rule pattern exceeds 8 KiB; previous text retained"
-				}
+			next := config.GuardIngestion
+			if p.section == config.GuardIngestion {
+				next = config.GuardShell
 			}
-			return p, nil
+			if snapshot, ok := p.snapshots[next]; ok {
+				p.section = next
+				p.rules, _ = config.ParseGuardPolicy(next, snapshot.Document.Source)
+				p.status = "Cached " + string(next) + " source observation; live enforcement is not established"
+				return p, nil
+			}
+			return p, p.query(next)
 		}
-		switch msg.String() {
-		case "tab":
-			p.activePanel = (p.activePanel + 1) % 2
-		case "shift+tab":
-			p.activePanel = (p.activePanel + 1) % 2
-		case "up", "k":
-			p.moveSelection(-1)
-		case "down", "j":
-			p.moveSelection(1)
-		case "e":
-			p.beginEdit()
-		case "n":
-			p.addNewRule()
-		case "d":
-			p.confirmDrop = true
-			p.status = "press y to delete selected rule"
-		case "t":
-			p.beginTest()
-		case "space":
-			p.toggleSelectedState()
+		if msg.Type == tea.KeyRunes && len(msg.Runes) == 1 {
+			switch msg.Runes[0] {
+			case 't':
+				p.beginTest()
+				return p, nil
+			case 'r':
+				return p, p.query(p.section)
+			}
+		}
+		if view := p.views[p.section]; view != nil {
+			view.key(msg)
 		}
 	}
 	return p, nil
 }
 
-// OwnsEscape keeps edit, deletion review and pattern testing inside their focus frame.
-func (p *SecurityGuardPane) OwnsEscape() bool { return p.editing || p.confirmDrop || p.testMode }
-
+// View never queries, writes, activates, or executes. Missing data is explicit.
 func (p *SecurityGuardPane) View() string {
-	panel := p.renderShellPanel()
-	footer := p.th.Dim().Render("tab switch panel  arrows navigate  e edit  n new  d delete  t test  space toggle")
-	if p.activePanel == securityPanelIngestion {
-		panel = p.renderIngestionPanel()
-		footer = p.th.Dim().Render("Tab returns to shell rules · ingestion mutation is unavailable")
+	width, height := max(1, p.width), max(1, p.height)
+	if p.testMode {
+		return boundedScreen("Guard / selected shell pattern\n\nMatcher test only; command not executed.\nLive shell enforcement is not established (G1).\n\n"+p.testField.View()+"\n\nEnter tests · Escape cancels · F6 returns to the bar\n\n"+terminalText(p.status), width, height)
 	}
-	switch {
-	case p.testMode:
-		footer = warningText(p.th, fmt.Sprintf("Test %s: %s", p.testLabel, p.testBuffer)) + "\n" + footer
-	case p.editing:
-		footer = warningText(p.th, fmt.Sprintf("Edit %s: %s", p.editLabel, p.editBuffer)) + "\n" + footer
-	case p.confirmDrop:
-		footer = warningText(p.th, "Delete selected rule? press y to confirm or n to cancel") + "\n" + footer
+	if view := p.views[p.section]; view != nil {
+		// Keep operation feedback outside the scrolling observation document.
+		rows := max(1, height-2)
+		body := view.view(width, rows)
+		return boundedScreen(body+"\n"+terminalText(p.status), width, height)
+	}
+	lines := []string{"Settings / Guard / " + string(p.section), "", "Read-only policy inspection and shell pattern test.", "Rule editing is deferred until G1/G2 enforcement is real.", "", "Open /securityguard or press r to inspect policy source."}
+	if p.working {
+		lines = append(lines, "Reading policy source…")
 	}
 	if p.status != "" {
-		footer = p.th.Dim().Render(p.status) + "\n" + footer
+		lines = append(lines, "", terminalText(p.status))
 	}
-	return strings.Join([]string{panel, footer}, "\n\n")
-}
-
-func (p *SecurityGuardPane) loadShellRules() {
-	workspace := ""
-	if p.runtime != nil {
-		workspace = p.runtime.SessionInfo().Workspace
+	if p.demo {
+		lines = append(lines, "", "DEMO: inspection fixture only; no file or command effects")
 	}
-	path := filepath.Join(config.New(workspace).ConfigRoot(), "security", "shell.policy.yaml")
-	data, err := os.ReadFile(filepath.Clean(path))
-	if err != nil {
-		if os.IsNotExist(err) {
-			p.shellRules = nil
-			return
-		}
-		p.status = fmt.Sprintf("shell blacklist load failed: %v", err)
-		p.shellRules = nil
-		return
-	}
-	var file securityGuardFile
-	if err := yaml.Unmarshal(data, &file); err != nil {
-		p.status = fmt.Sprintf("shell blacklist parse failed: %v", err)
-		p.shellRules = nil
-		return
-	}
-	p.shellRules = append([]sandbox.BlacklistRule(nil), file.Rules...)
-}
-
-func (p *SecurityGuardPane) beginEdit() {
-	switch p.activePanel {
-	case securityPanelShell:
-		rule := p.selectedShellRule()
-		if rule == nil {
-			return
-		}
-		p.editLabel = "pattern"
-		p.editBuffer = rule.Raw
-		p.editing = true
-	}
-}
-
-func (p *SecurityGuardPane) commitEdit() {
-	value := strings.TrimSpace(p.editBuffer)
-	switch p.activePanel {
-	case securityPanelShell:
-		if rule := p.selectedShellRule(); rule != nil {
-			rule.Raw = value
-			rule.Pattern = nil
-		}
-	}
-	p.editing = false
-	p.editBuffer = ""
-	p.editLabel = ""
-}
-
-func (p *SecurityGuardPane) addNewRule() {
-	switch p.activePanel {
-	case securityPanelShell:
-		p.shellRules = append(p.shellRules, sandbox.BlacklistRule{
-			ID:     fmt.Sprintf("rule-%d", time.Now().UnixNano()),
-			Raw:    "",
-			Reason: "created from SecurityGuard",
-			Action: sandbox.BlacklistActionBlock,
-		})
-		p.shellSel = len(p.shellRules) - 1
-		p.beginEdit()
-	}
-}
-
-func (p *SecurityGuardPane) dropSelectedCmd() tea.Cmd {
-	switch p.activePanel {
-	case securityPanelShell:
-		if len(p.shellRules) == 0 {
-			return nil
-		}
-		idx := clampIndex(p.shellSel, len(p.shellRules))
-		p.shellRules = append(p.shellRules[:idx], p.shellRules[idx+1:]...)
-		p.shellSel = clampIndex(p.shellSel, len(p.shellRules))
-	}
-	return p.saveCmd()
-}
-
-func (p *SecurityGuardPane) moveSelection(delta int) {
-	switch p.activePanel {
-	case securityPanelShell:
-		if len(p.shellRules) == 0 {
-			p.shellSel = 0
-			return
-		}
-		p.shellSel = clampIndex(p.shellSel+delta, len(p.shellRules))
-	}
-}
-
-func (p *SecurityGuardPane) toggleSelectedState() {
-	if p.activePanel != securityPanelIngestion {
-		if rule := p.selectedShellRule(); rule != nil {
-			if rule.Action == sandbox.BlacklistActionBlock {
-				rule.Action = sandbox.BlacklistActionHITL
-			} else {
-				rule.Action = sandbox.BlacklistActionBlock
-			}
-		}
-		return
-	}
-}
-
-func (p *SecurityGuardPane) beginTest() {
-	switch p.activePanel {
-	case securityPanelShell:
-		rule := p.selectedShellRule()
-		if rule == nil {
-			return
-		}
-		p.testLabel = rule.ID
-		p.testBuffer = ""
-		p.testMode = true
-	}
-}
-
-func (p *SecurityGuardPane) runTest() {
-	sample := p.testBuffer
-	switch p.activePanel {
-	case securityPanelShell:
-		rule := p.selectedShellRule()
-		if rule == nil {
-			return
-		}
-		matcher, err := sandbox.NewShellBlacklist([]sandbox.BlacklistRule{*rule})
-		switch {
-		case err != nil:
-			p.testResult = "Invalid shell rule: " + err.Error()
-		case matcher.Check(sample) != nil:
-			p.testResult = "Matches selected rule: " + string(rule.Action) + " · pattern only; command not executed"
-		default:
-			p.testResult = "No match · pattern only; this does not establish authorization"
-		}
-	}
-	p.status = p.testResult
-	p.testMode = false
-	p.testBuffer = ""
-	p.testLabel = ""
-}
-
-func (p *SecurityGuardPane) saveCmd() tea.Cmd {
-	workspace := ""
-	if p.runtime != nil {
-		workspace = p.runtime.SessionInfo().Workspace
-	}
-	shellRules := append([]sandbox.BlacklistRule(nil), p.shellRules...)
-	return func() tea.Msg {
-		if workspace == "" {
-			return sandboxPersistedMsg{Err: fmt.Errorf("workspace unavailable")}
-		}
-		shellPath := filepath.Join(config.New(workspace).ConfigRoot(), "security", "shell.policy.yaml")
-		backup, err := config.CreateTimestampedBackup(shellPath)
-		if err != nil {
-			return sandboxPersistedMsg{Err: err}
-		}
-		if err := config.SaveYAML(shellPath, securityGuardFile{Version: "1", Rules: shellRules}); err != nil {
-			return sandboxPersistedMsg{Err: err}
-		}
-		if p.runtime != nil {
-			if reloader, ok := p.runtime.(interface {
-				ReloadWorkspace(context.Context, string) error
-			}); ok && reloader != nil {
-				if err := reloader.ReloadWorkspace(context.Background(), workspace); err != nil {
-					return ChatSystemMsg{Text: fmt.Sprintf("security save failed after reload: %v", err)}
-				}
-			}
-		}
-		return ChatSystemMsg{Text: fmt.Sprintf("security rules saved (backup: %s)", backup)}
-	}
-}
-
-func (p *SecurityGuardPane) selectedShellRule() *sandbox.BlacklistRule {
-	if len(p.shellRules) == 0 {
-		return nil
-	}
-	idx := clampIndex(p.shellSel, len(p.shellRules))
-	return &p.shellRules[idx]
-}
-
-func (p *SecurityGuardPane) renderShellPanel() string {
-	lines := []string{p.th.Subhead().Render("Shell Command Blacklist")}
-	if len(p.shellRules) == 0 {
-		lines = append(lines, p.th.Dim().Render("(no blacklist rules)"))
-	} else {
-		for i, rule := range p.shellRules {
-			line := fmt.Sprintf("%s  %s", strings.ToUpper(string(rule.Action)), rule.Raw)
-			if i == p.shellSel && p.activePanel == securityPanelShell {
-				line = p.th.Active().Render(line)
-			}
-			lines = append(lines, line)
-			if rule.Reason != "" {
-				lines = append(lines, p.th.Dim().Render("  "+rule.Reason))
-			}
-		}
-	}
-	if p.activePanel == securityPanelShell && p.testResult != "" {
-		lines = append(lines, "", p.th.Dim().Render("test: "+p.testResult))
-	}
-	return sectionPanel(p.th, "SecurityGuard", p.width, strings.Join(lines, "\n"))
-}
-
-func (p *SecurityGuardPane) renderIngestionPanel() string {
-	return sectionPanel(p.th, "Ingestion policy", p.width,
-		"Ingestion policy owner is not connected.\nInspection and editing are unavailable.\nShell pattern tests do not establish authorization.")
-}
-
-// SetTheme sets the active semantic style source.
-func (p *SecurityGuardPane) SetTheme(th *theme.Theme) {
-	if th != nil {
-		p.th = th
-	}
+	return boundedScreen(strings.Join(lines, "\n"), width, height)
 }

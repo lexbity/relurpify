@@ -12,6 +12,7 @@
 //   - InspectConfiguration: scenario configuration and actual strategy metadata.
 //   - Services/ControlServices: scoped lifecycle state and partial restart failure.
 //   - ProviderSettings/Save/Probe/Activate: distinct saved and active scenario state.
+//   - GuardPolicy: read-only declarations; no simulated policy writes or enforcement.
 //   - Observations: fixed examples of the existing telemetry contract, never emitted.
 //
 // Real execution ownership, actual-call provenance, and atomic initialization

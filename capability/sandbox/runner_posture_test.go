@@ -302,3 +302,41 @@ func bytesRepeatXNewline(n int) []byte {
 	}
 	return out
 }
+
+// Default protection is enforced at argv construction even with an empty
+// policy, for both container backends. No daemon or live model is involved.
+func TestRunnerPosture_DefaultProtectedRootsReachBothContainerBackends(t *testing.T) {
+	for _, native := range []bool{false, true} {
+		name := "gvisor"
+		if native {
+			name = "docker"
+		}
+		t.Run(name, func(t *testing.T) {
+			ws := t.TempDir()
+			for _, dir := range []string{"relurpify_cfg", ".git", "custom"} {
+				require.NoError(t, os.MkdirAll(filepath.Join(ws, dir), 0o700))
+			}
+			rt := NewSandboxRuntime(sandbox.SandboxConfig{})
+			require.NoError(t, rt.ApplyPolicy(t.Context(), sandbox.SandboxPolicy{}))
+			runner, err := newSandboxCommandRunner(&CommandRunnerConfig{Workspace: ws}, rt, native)
+			require.NoError(t, err)
+			assertMounts := func(want []string) {
+				t.Helper()
+				args := runner.runArgs(t.Context(), "guard-regression", nil, "/workspace", CommandRequest{Args: []string{"true"}})
+				var mounts []string
+				for i, arg := range args {
+					if arg == "-v" {
+						require.Less(t, i+1, len(args))
+						mounts = append(mounts, args[i+1])
+					}
+				}
+				require.ElementsMatch(t, want, mounts)
+			}
+			defaults := []string{ws + ":/workspace", filepath.Join(ws, "relurpify_cfg") + ":/workspace/relurpify_cfg:ro", filepath.Join(ws, ".git") + ":/workspace/.git:ro"}
+			assertMounts(defaults)
+			// Explicit duplicate defaults cannot override or duplicate the read-only binds.
+			require.NoError(t, rt.ApplyPolicy(t.Context(), sandbox.SandboxPolicy{ProtectedPaths: []string{filepath.Join(ws, "relurpify_cfg"), filepath.Join(ws, "custom")}}))
+			assertMounts(append(defaults, filepath.Join(ws, "custom")+":/workspace/custom:ro"))
+		})
+	}
+}

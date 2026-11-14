@@ -12,10 +12,9 @@ type controlCenterPane struct {
 	session *tui.Session
 	store   *tui.SessionStore
 
-	welcome       *tui.WelcomePane
-	sandbox       *tui.SandboxPane
-	securityguard *tui.SecurityGuardPane
-	aiprovider    *tui.AIProviderPane
+	welcome    *tui.WelcomePane
+	sandbox    *tui.SandboxPane
+	aiprovider *tui.AIProviderPane
 
 	activeTab tui.TabID
 	width     int
@@ -28,8 +27,6 @@ func (p *controlCenterPane) OwnsEscape() bool {
 		return p.sandbox.OwnsEscape()
 	case tui.TabAIProvider:
 		return p.aiprovider.OwnsEscape()
-	case tui.TabSecurityGuard:
-		return p.securityguard.OwnsEscape()
 	default:
 		return false
 	}
@@ -44,7 +41,6 @@ func newControlCenterPane(rt tui.RuntimeAdapter, ctx *tui.AgentContext, sess *tu
 	}
 	p.welcome = tui.NewWelcomePane(sess, store, nil)
 	p.sandbox = tui.NewSandboxPane(rt)
-	p.securityguard = tui.NewSecurityGuardPane(rt)
 	p.aiprovider = tui.NewAIProviderPane(rt)
 	p.activeTab = tui.TabWelcome
 	return p
@@ -64,18 +60,19 @@ func (p *controlCenterPane) SetStore(store *tui.SessionStore) {
 	if p.sandbox != nil {
 		p.sandbox.Refresh()
 	}
-	if p.securityguard != nil {
-		p.securityguard.Refresh()
-	}
 	if p.aiprovider != nil {
 		p.aiprovider.Refresh()
 	}
-	p.Refresh()
+	// Each workspace-bound form was refreshed above. Re-reading the active
+	// one here would duplicate I/O and discard freshly established view state.
+	p.applySize()
 }
 
 func (p *controlCenterPane) SetActiveTab(id tui.TabID) {
 	p.activeTab = id
-	p.Refresh()
+	// Navigation must not reload forms and discard local drafts. Explicit
+	// refresh, successful writes and workspace changes own observation updates.
+	p.applySize()
 }
 
 func (p *controlCenterPane) SetFilter(filter string) {
@@ -87,10 +84,6 @@ func (p *controlCenterPane) SetFilter(filter string) {
 	case tui.TabSandbox:
 		if p.sandbox != nil {
 			p.sandbox.SetFilter(filter)
-		}
-	case tui.TabSecurityGuard:
-		if p.securityguard != nil {
-			p.securityguard.SetFilter(filter)
 		}
 	case tui.TabAIProvider:
 		if p.aiprovider != nil {
@@ -108,10 +101,6 @@ func (p *controlCenterPane) Refresh() {
 	case tui.TabSandbox:
 		if p.sandbox != nil {
 			p.sandbox.Refresh()
-		}
-	case tui.TabSecurityGuard:
-		if p.securityguard != nil {
-			p.securityguard.Refresh()
 		}
 	case tui.TabAIProvider:
 		if p.aiprovider != nil {
@@ -162,12 +151,6 @@ func (p *controlCenterPane) Update(msg tea.Msg) (tui.Region1Surface, tea.Cmd) {
 				p.sandbox = sp
 				return p, cmd
 			}
-		case tui.TabSecurityGuard:
-			if p.securityguard != nil {
-				cp, cmd := p.securityguard.Update(msg)
-				p.securityguard = cp
-				return p, cmd
-			}
 		case tui.TabAIProvider:
 			if p.aiprovider != nil {
 				pa, cmd := p.aiprovider.Update(msg)
@@ -188,10 +171,6 @@ func (p *controlCenterPane) View() string {
 	case tui.TabSandbox:
 		if p.sandbox != nil {
 			return p.sandbox.View()
-		}
-	case tui.TabSecurityGuard:
-		if p.securityguard != nil {
-			return p.securityguard.View()
 		}
 	case tui.TabAIProvider:
 		if p.aiprovider != nil {
@@ -215,8 +194,6 @@ func (p *controlCenterPane) FocusFilescopes() {
 	}
 }
 
-func (p *controlCenterPane) OpenSecurityGuard() { p.activeTab = tui.TabSecurityGuard }
-
 func (p *controlCenterPane) OpenAIProvider() { p.activeTab = tui.TabAIProvider }
 
 func (p *controlCenterPane) OpenKeybindings() { p.activeTab = tui.TabKeybindings }
@@ -233,9 +210,6 @@ func (p *controlCenterPane) applySize() {
 	}
 	if p.sandbox != nil {
 		p.sandbox.SetSize(p.width, paneH)
-	}
-	if p.securityguard != nil {
-		p.securityguard.SetSize(p.width, paneH)
 	}
 	if p.aiprovider != nil {
 		p.aiprovider.SetSize(p.width, paneH)

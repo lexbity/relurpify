@@ -204,3 +204,24 @@ func TestV2PTYRecipeAuthorSaveRunAndQuit(t *testing.T) {
 	write("\x1b[17~!")
 	awaitV2Text(t, recording, "preserve this draft!")
 }
+
+func TestV2PTYGuardInspectPatternAndDraft(t *testing.T) {
+	recording, write := launchV2Terminal(t, "--demo", "quiet", "--inference-provider", "deliberately-invalid")
+	awaitV2Text(t, recording, "DEMO")
+	write("retain guard request")
+	write("\x10securityguard\r")
+	awaitV2Text(t, recording, "Settings / Guard / shell")
+	awaitV2Text(t, recording, "destructive-root")
+	write("\r")
+	awaitV2Text(t, recording, "Source revision")
+	write("t")
+	awaitV2Text(t, recording, "Matcher test only; command not executed")
+	write("rm -rf /\r")
+	awaitV2Text(t, recording, "Matches selected pattern: block")
+	write("\t")
+	awaitV2Text(t, recording, "Settings / Guard / ingestion")
+	write("t")
+	awaitV2Text(t, recording, "until G2 is implemented")
+	write("\x1b[17~!")
+	awaitV2Text(t, recording, "retain guard request!")
+}

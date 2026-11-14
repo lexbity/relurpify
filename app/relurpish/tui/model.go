@@ -93,6 +93,8 @@ type RootModel struct {
 	configurationReader ConfigurationReader
 	configurationEpoch  uint64
 	configuration       documentInspector
+	guard               *SecurityGuardPane
+	guardFromWorkspace  bool
 	services            *ServicesPane
 	activity            activityCanvas
 	demoObserved        uint64
@@ -251,7 +253,7 @@ func propagateSurfaceTheme(m *RootModel, surface AgentSurface) {
 
 func isBaseFrameworkTab(id TabID) bool {
 	switch id {
-	case TabWelcome, TabSandbox, TabSecurityGuard, TabAIProvider, TabKeybindings, TabDoctor:
+	case TabWelcome, TabSandbox, TabAIProvider, TabKeybindings, TabDoctor:
 		return true
 	default:
 		return false
@@ -397,6 +399,12 @@ func NewRootModel(parentCtx context.Context, options HostOptions) RootModel {
 	if servicePort == nil {
 		servicePort, _ = rt.(ServicePort)
 	}
+	guardPort := options.Guards
+	if guardPort == nil && options.DemoScenario == "" {
+		guardPort = NewWorkspaceGuardReader(info.Workspace)
+		m.guardFromWorkspace = true
+	}
+	m.guard = NewSecurityGuardPane(parentCtx, guardPort, options.DemoScenario != "")
 	m.services = NewServicesPane(parentCtx, servicePort, options.DemoScenario != "")
 	m.services.workspace = info.Workspace
 	m.activity.demo = options.DemoScenario != ""
@@ -421,7 +429,7 @@ func NewRootModel(parentCtx context.Context, options HostOptions) RootModel {
 	m.setActiveTab(m.activeTab)
 	if options.DemoScenario != "" {
 		m.applyFrontend(options.Conversation.Current())
-		m.cmdReg.retain("ask", "chat", "back", "quit", "run", "inspect", "attention", "cancel", "doctor", "help", "keybindings", "settings", "config", "services", "service", "activity", "model-provider", "model", "save-model")
+		m.cmdReg.retain("ask", "chat", "back", "quit", "run", "inspect", "attention", "cancel", "doctor", "help", "keybindings", "settings", "config", "services", "service", "activity", "model-provider", "model", "save-model", string(TabSecurityGuard))
 		if options.Recipes != nil {
 			registerRecipeCommands(parentCtx, m.cmdReg, options.Recipes)
 		}
@@ -448,6 +456,7 @@ func buildSurfaceState(parentCtx context.Context, factory SurfaceFactory, agentN
 	tabs.Register(TabDefinition{ID: TabConfiguration, Label: "configuration"})
 	tabs.Register(TabDefinition{ID: TabServices, Label: string(TabServices)})
 	tabs.Register(TabDefinition{ID: TabActivity, Label: "activity"})
+	tabs.Register(TabDefinition{ID: TabSecurityGuard, Label: string(TabSecurityGuard)})
 	initialTab := surface.InitialTab()
 	if initialTab == "" {
 		initialTab = tabs.ActiveTab().ID
@@ -775,6 +784,9 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 		return m, nil
+	case guardResultMsg:
+		_, cmd := m.guard.Update(msg)
+		return m, cmd
 	case providerResultMsg:
 		if m.provider != nil {
 			m.provider.apply(msg)
@@ -918,6 +930,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		formOwnsKeys := m.activeTab == TabWorkshop && m.focus.State().InRegion1() && m.workshop.Editing()
 		formOwnsKeys = formOwnsKeys || m.decisionFocused
+		formOwnsKeys = formOwnsKeys || (m.activeTab == TabSecurityGuard && m.focus.State().InRegion1() && m.guard.testMode)
 		formOwnsKeys = formOwnsKeys || (m.activeTab == TabKeybindings && m.focus.State().InRegion1() && m.keybindings.OwnsEscape())
 		formOwnsKeys = formOwnsKeys || (m.provider != nil && m.activeTab == TabAIProvider && m.focus.State().InRegion1() && m.provider.ownsEscape())
 		if owner, ok := m.baseSurface.(EscapeOwner); ok && m.focus.State().InRegion1() && isBaseFrameworkTab(m.activeTab) {
@@ -972,6 +985,10 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if cmd, handled := m.workshop.key(msg); handled {
 				return m, cmd
 			}
+		}
+		if m.activeTab == TabSecurityGuard && m.focus.State().InRegion1() && !m.showHelp && !m.decisionFocused && (msg.Type != tea.KeyEsc || m.guard.OwnsEscape()) && !keyMsgMatchesBinding(msg, m.keys.Attention) {
+			_, cmd := m.guard.Update(msg)
+			return m, cmd
 		}
 		if m.activeTab == TabSettings && m.focus.State().InRegion1() && !m.showHelp && !m.decisionFocused {
 			if cmd, handled := m.settingsKey(msg); handled {
@@ -1610,6 +1627,9 @@ func (m RootModel) View() string {
 }
 
 func (m RootModel) activePaneView() string {
+	if m.activeTab == TabSecurityGuard {
+		return m.guard.View()
+	}
 	if m.provider != nil && m.activeTab == TabAIProvider {
 		return m.provider.view()
 	}
@@ -1916,6 +1936,12 @@ func (m RootModel) handleWorkspaceSelected(workspace string) (tea.Model, tea.Cmd
 	}
 	m.configurationEpoch++
 	m.configuration = documentInspector{}
+	guardPort := m.guard.port
+	if m.guardFromWorkspace {
+		guardPort = NewWorkspaceGuardReader(workspace)
+	}
+	m.guard = NewSecurityGuardPane(m.parentCtx, guardPort, m.demoScenario != "")
+	m.guard.SetSize(m.width, max(1, m.height-5))
 	if m.provider != nil {
 		previous := m.provider
 		m.provider = NewProviderPane(m.parentCtx, previous.port, previous.activator, m.demoScenario != "")

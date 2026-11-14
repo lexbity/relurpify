@@ -114,7 +114,6 @@ func (s *fakeSurface) View() string                                             
 func (s *fakeSurface) HandleInputSubmit(string) tea.Cmd                         { return nil }
 func (s *fakeSurface) Cleanup()                                                 {}
 func (s *fakeSurface) FocusFilescopes()                                         {}
-func (s *fakeSurface) OpenSecurityGuard()                                       {}
 func (s *fakeSurface) OpenAIProvider()                                          {}
 func (s *fakeSurface) OpenKeybindings()                                         {}
 func (s *fakeSurface) OpenDoctor()                                              {}

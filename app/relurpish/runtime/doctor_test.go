@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"codeburg.org/lexbit/relurpify/capability/fs"
@@ -138,6 +139,37 @@ func TestUniqueStrings(t *testing.T) {
 			if v != tt.want[i] {
 				t.Fatalf("uniqueStrings(%v) = %v, want %v", tt.input, got, tt.want)
 			}
+		}
+	}
+}
+
+func TestDoctorConfinedPolicyFailureIsVisibleAndBlocksReadiness(t *testing.T) {
+	workspace := t.TempDir()
+	path := filepath.Join(workspace, "relurpify_cfg", "security", "shell.policy.yaml")
+	deps := doctorPolicyDependencies(workspace, []config.ConfigDiagnostic{{Path: path, Section: "security", Severity: "blocking", Message: "policy source must be a regular file"}}, nil)
+	if len(deps) != 4 {
+		t.Fatalf("got %d checks, want four canonical policies", len(deps))
+	}
+	report := DoctorReport{SandboxReady: true, ModelReady: true, Dependencies: deps}
+	if report.Ready() || !report.HasBlockingIssues() {
+		t.Fatal("unsafe policy was reported as ready")
+	}
+	found := false
+	for _, dep := range deps {
+		if dep.Name == "policy/shell.policy.yaml" {
+			found = dep.Blocking && !dep.Available && strings.Contains(dep.Details, "regular file")
+		}
+	}
+	if !found {
+		t.Fatal("Doctor hid the confined-read failure")
+	}
+}
+
+func TestDoctorDoesNotClaimPolicyReadWhenConfigurationLoadFailed(t *testing.T) {
+	deps := doctorPolicyDependencies(t.TempDir(), nil, os.ErrPermission)
+	for _, dep := range deps {
+		if dep.Available || !dep.Blocking || !strings.Contains(dep.Details, "incomplete") {
+			t.Fatalf("unperformed policy read claimed success: %+v", dep)
 		}
 	}
 }

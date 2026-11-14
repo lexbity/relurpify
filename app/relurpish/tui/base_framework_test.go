@@ -20,7 +20,6 @@ func (f *baseSurfaceFake) Name() string { return "none" }
 func (f *baseSurfaceFake) RegisterTabs(reg *TabRegistry) {
 	reg.Register(TabDefinition{ID: TabWelcome, Label: "welcome", AgentFilter: []string{"none"}})
 	reg.Register(TabDefinition{ID: TabSandbox, Label: "sandbox", AgentFilter: []string{"none"}})
-	reg.Register(TabDefinition{ID: TabSecurityGuard, Label: "securityguard", AgentFilter: []string{"none"}})
 	reg.Register(TabDefinition{ID: TabAIProvider, Label: "ai provider", AgentFilter: []string{"none"}})
 	reg.Register(TabDefinition{ID: TabKeybindings, Label: "keybindings", AgentFilter: []string{"none"}})
 	reg.Register(TabDefinition{ID: TabDoctor, Label: "doctor", AgentFilter: []string{"none"}})
@@ -54,7 +53,6 @@ func (f *baseSurfaceFake) View() string                                 { return
 func (f *baseSurfaceFake) HandleInputSubmit(string) tea.Cmd             { return nil }
 func (f *baseSurfaceFake) Cleanup()                                     {}
 func (f *baseSurfaceFake) FocusFilescopes()                             {}
-func (f *baseSurfaceFake) OpenSecurityGuard()                           { f.activeTab = TabSecurityGuard }
 func (f *baseSurfaceFake) OpenAIProvider()                              { f.activeTab = TabAIProvider }
 func (f *baseSurfaceFake) OpenKeybindings()                             { f.activeTab = TabKeybindings }
 func (f *baseSurfaceFake) OpenDoctor()                                  { f.activeTab = TabDoctor }
@@ -87,7 +85,7 @@ func TestBaseFrameworkBootsWithNoneAgent(t *testing.T) {
 
 func TestBaseFrameworkRegistersAdministrationAndExecutionCanvases(t *testing.T) {
 	m := newBaseFrameworkModel()
-	want := []TabID{TabWelcome, TabSandbox, TabSecurityGuard, TabAIProvider, TabKeybindings, TabDoctor, TabRun, TabSettings, TabConfiguration, TabServices, TabActivity}
+	want := []TabID{TabWelcome, TabSandbox, TabAIProvider, TabKeybindings, TabDoctor, TabRun, TabSettings, TabConfiguration, TabServices, TabActivity, TabSecurityGuard}
 	got := m.tabs.All()
 	if len(got) != len(want) {
 		t.Fatalf("expected %d tabs, got %d: %v", len(want), len(got), tabIDs(got))

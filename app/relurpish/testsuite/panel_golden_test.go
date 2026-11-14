@@ -276,8 +276,7 @@ func TestPanelGoldenViews(t *testing.T) {
 	sandboxPane.SetSize(96, 20)
 	assertGolden(t, "sandbox_panel.txt", sandboxPane.View())
 
-	sec := &tui.SecurityGuardPane{}
-	sec.SetTheme(theme.Default())
+	sec := tui.NewSecurityGuardPane(context.Background(), nil, false)
 	sec.SetSize(96, 18)
 	assertGolden(t, "securityguard_panel.txt", sec.View())
 

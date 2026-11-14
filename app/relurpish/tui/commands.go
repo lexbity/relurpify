@@ -162,7 +162,7 @@ func registerUniversalCommands(r *CommandRegistry) {
 	for _, cmd := range []Command{
 		{Name: "workspace", Description: "Switch workspace root", Usage: "/workspace [path]", Handler: rootHandleWorkspace},
 		{Name: "permissions", Description: "Open sandbox permissions", Usage: "/permissions", Handler: rootHandlePermissions},
-		{Name: "securityguard", Description: "Open SecurityGuard filters", Usage: "/securityguard", Handler: rootHandleSecurityGuard},
+		{Name: string(TabSecurityGuard), Description: "Inspect guard source and test a selected shell pattern without execution", Usage: "/securityguard", Handler: rootHandleSecurityGuard},
 		{Name: "filescopes", Description: "Focus file scope controls", Usage: "/filescopes", Handler: rootHandleFileScopes},
 		{Name: "doctor", Description: "Show workspace doctor report", Usage: "/doctor", Handler: rootHandleDoctor},
 		{Name: "model", Description: "Inspect or set the active model", Usage: "/model [model_name]", Handler: rootHandleModel},
@@ -327,13 +327,14 @@ func rootHandlePermissions(m *RootModel, _ []string) (*RootModel, tea.Cmd) {
 	return m, nil
 }
 
-func rootHandleSecurityGuard(m *RootModel, _ []string) (*RootModel, tea.Cmd) {
-	m.setActiveTab(TabSecurityGuard)
-	if m.baseSurface != nil {
-		m.baseSurface.OpenSecurityGuard()
+func rootHandleSecurityGuard(m *RootModel, args []string) (*RootModel, tea.Cmd) {
+	if len(args) != 0 {
+		m.addSystemMessage("Usage: /securityguard (read-only inspection and pattern test)")
+		return m, nil
 	}
-	m.addSystemMessage("Opened SecurityGuard filters")
-	return m, nil
+	m.setActiveTab(TabSecurityGuard)
+	m.setFocus(FocusRegionRegion1)
+	return m, m.guard.open()
 }
 
 func rootHandleFileScopes(m *RootModel, _ []string) (*RootModel, tea.Cmd) {

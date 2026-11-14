@@ -7,17 +7,21 @@ import (
 	"strings"
 )
 
-func loadAndDecode[T any](path, workspace string, decode Decoder, defaultPath func(string) string, out *T) error {
+func readPolicy(path, workspace string, defaultPath func(string) string) ([]byte, string, error) {
 	if strings.TrimSpace(workspace) == "" {
-		return fmt.Errorf("workspace required")
+		return nil, "", fmt.Errorf("workspace required")
 	}
 	if strings.TrimSpace(path) == "" {
 		path = defaultPath(workspace)
 	}
 	data, err := os.ReadFile(filepath.Clean(path))
 	if err != nil {
-		return fmt.Errorf("read policy %s: %w", path, err)
+		return nil, "", fmt.Errorf("read policy %s: %w", path, err)
 	}
+	return data, path, nil
+}
+
+func decodePolicy[T any](path string, data []byte, decode Decoder, out *T) error {
 	if decode == nil {
 		return fmt.Errorf("decoder required")
 	}

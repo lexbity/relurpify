@@ -24,8 +24,10 @@ func (m RootModel) settingsEntries() []settingsEntry {
 	}
 	if m.baseSurface != nil {
 		entries = append(entries,
-			settingsEntry{label: "Sandbox and permissions", command: "permissions", detail: "Workspace, commands, tools and network"},
-			settingsEntry{label: "Security guard", command: "securityguard", detail: "Patterns and ingestion controls"})
+			settingsEntry{label: "Sandbox and permissions", command: "permissions", detail: "Workspace, commands, tools and network"})
+	}
+	if m.guard != nil && m.guard.port != nil {
+		entries = append(entries, settingsEntry{label: "Security guard", command: string(TabSecurityGuard), detail: "Read-only source inspection and non-executing pattern test; enforcement is unresolved"})
 	}
 	if m.workshop.port != nil {
 		entries = append(entries, settingsEntry{label: "Recipe workshop", command: "workshop", detail: "Author one saved source artifact"})

@@ -68,7 +68,6 @@ type Region1Surface interface {
 	HandleInputSubmit(value string) tea.Cmd
 	Cleanup()
 	FocusFilescopes()
-	OpenSecurityGuard()
 	OpenAIProvider()
 	OpenKeybindings()
 	OpenDoctor()

@@ -17,8 +17,18 @@ type LocalToolPolicyFile struct {
 
 // LoadLocalToolPolicy loads and validates the local tool policy file.
 func LoadLocalToolPolicy(path, workspace string, decode Decoder) (map[string]ToolPolicy, error) {
+	data, path, err := readPolicy(path, workspace, LocalToolPolicyPath)
+	if err != nil {
+		return nil, err
+	}
+	return ParseLocalToolPolicy(path, data, decode)
+}
+
+// ParseLocalToolPolicy validates an already-read source without filesystem access.
+// Confined diagnostic reads and boot loading share this validation boundary.
+func ParseLocalToolPolicy(path string, data []byte, decode Decoder) (map[string]ToolPolicy, error) {
 	var file LocalToolPolicyFile
-	if err := loadAndDecode(path, workspace, decode, LocalToolPolicyPath, &file); err != nil {
+	if err := decodePolicy(path, data, decode, &file); err != nil {
 		return nil, err
 	}
 	if err := ValidateLocalToolPolicies(file.Tools); err != nil {

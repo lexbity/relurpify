@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/capability/ports"
+	"codeburg.org/lexbit/relurpify/governance/permissions"
 	"codeburg.org/lexbit/relurpify/governance/sandbox"
 	"codeburg.org/lexbit/relurpify/telemetry"
 )
@@ -507,9 +508,9 @@ func (r *SandboxCommandRunner) protectedMounts(ctx context.Context) []string {
 		return nil
 	}
 	policy := r.rt.Policy()
-	if len(policy.ProtectedPaths) == 0 {
-		return nil
-	}
+	// Container commands need the same immutable defaults as file tools,
+	// including callers that did not load a workspace policy document.
+	policy.ProtectedPaths = permissions.NewFileScopePolicy(r.workspace, policy.ProtectedPaths).ProtectedPaths
 	seen := make(map[string]struct{}, len(policy.ProtectedPaths))
 	var mounts []string
 	for _, path := range policy.ProtectedPaths {

@@ -70,9 +70,6 @@ func (p *RecipePane) Cleanup() {}
 // FocusFilescopes implements tui.Region1Surface (no-op).
 func (p *RecipePane) FocusFilescopes() {}
 
-// OpenSecurityGuard implements tui.Region1Surface (no-op).
-func (p *RecipePane) OpenSecurityGuard() {}
-
 // OpenAIProvider implements tui.Region1Surface (no-op).
 func (p *RecipePane) OpenAIProvider() {}
 

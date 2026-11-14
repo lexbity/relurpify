@@ -55,6 +55,7 @@ type HostOptions struct {
 	Workspace      string
 	Configuration  ConfigurationReader
 	Services       ServicePort
+	Guards         GuardPolicyPort
 	Providers      ProviderEditorPort
 }
 

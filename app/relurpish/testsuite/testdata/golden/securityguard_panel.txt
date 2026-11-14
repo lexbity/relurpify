@@ -1,7 +1,6 @@
-╭────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ SecurityGuard                                                                                  │
-│ Shell Command Blacklist                                                                        │
-│ (no blacklist rules)                                                                           │
-╰────────────────────────────────────────────────────────────────────────────────────────────────╯
+Settings / Guard / shell
 
-tab switch panel  arrows navigate  e edit  n new  d delete  t test  space toggle
+Read-only policy inspection and shell pattern test.
+Rule editing is deferred until G1/G2 enforcement is real.
+
+Open /securityguard or press r to inspect policy source.

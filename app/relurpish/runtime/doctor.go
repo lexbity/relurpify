@@ -279,6 +279,7 @@ func BuildDoctorReport(ctx context.Context, cfg Config, secrets config.Secrets) 
 	// spawn decision; a degraded runner is non-blocking (degraded-boot).
 	var deps []DependencyStatus
 	deps = append(deps, probeWorkspaceDirectory(cfg.Workspace))
+	deps = append(deps, doctorPolicyDependencies(cfg.Workspace, diags, err)...)
 	deps = append(deps, probeDiskSpace(cfg.Workspace, 256*1024*1024))
 	deps = append(deps, probeRunner(config.DefaultWorkspaceStateDir(cfg.Workspace)))
 	// HITL posture: governed is the shipped default; permissive is an explicit
@@ -359,6 +360,32 @@ func BuildDoctorReport(ctx context.Context, cfg Config, secrets config.Secrets) 
 	report.SandboxReady = computeSandboxReady(report)
 	report.ModelReady, report.ModelDegraded = computeModelReady(report)
 	return report
+}
+
+// doctorPolicyDependencies exposes confined-read failures as concrete Doctor
+// checks. A successful parse is a source observation, never enforcement proof.
+func doctorPolicyDependencies(workspace string, diags []config.ConfigDiagnostic, loadErr error) []DependencyStatus {
+	var deps []DependencyStatus
+	for _, filename := range []string{"sandbox.policy.yaml", "shell.policy.yaml", "localtool.policy.yaml", "workspaceingestion.policy.yaml"} {
+		path := filepath.Join(workspace, "relurpify_cfg", "security", filename)
+		dep := DependencyStatus{Name: "policy/" + filename, Required: true, Available: true, Details: "Confined policy source read and parsed; live enforcement is not established by this check"}
+		if loadErr != nil {
+			dep.Available = false
+			dep.Blocking = true
+			dep.Details = "Policy inspection incomplete: " + loadErr.Error()
+		}
+		for _, diag := range diags {
+			if diag.Section == "security" && filepath.Clean(diag.Path) == filepath.Clean(path) {
+				dep.Available = false
+				dep.Blocking = diag.Severity == "blocking"
+				dep.Degraded = !dep.Blocking
+				dep.Details = diag.Message
+				break
+			}
+		}
+		deps = append(deps, dep)
+	}
+	return deps
 }
 
 // probeModelToolTemplate warns when the served model's prompt template has no

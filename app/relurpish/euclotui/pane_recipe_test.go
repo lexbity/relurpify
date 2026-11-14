@@ -161,7 +161,6 @@ func TestRecipePaneUpdateOps(t *testing.T) {
 	pane.Refresh()
 	pane.Cleanup()
 	pane.FocusFilescopes()
-	pane.OpenSecurityGuard()
 	pane.OpenAIProvider()
 	pane.OpenKeybindings()
 	pane.OpenDoctor()

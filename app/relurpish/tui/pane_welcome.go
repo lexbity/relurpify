@@ -137,8 +137,7 @@ func (p *WelcomePane) handleKey(msg tea.KeyMsg) (*WelcomePane, tea.Cmd) {
 		}
 	case 5: // Help
 		if msg.String() == "enter" || msg.String() == " " {
-			// Help is handled by the host via f1/?.
-			return p, nil
+			return p, func() tea.Msg { return CommandInvokedMsg{Name: "help"} }
 		}
 	}
 	return p, nil
