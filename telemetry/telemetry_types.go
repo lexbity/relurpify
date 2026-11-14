@@ -97,6 +97,9 @@ const (
 const (
 	// EventShutdownDrain reports one Runtime.Close quiesce outcome.
 	EventShutdownDrain EventType = "runtime.shutdown_drain"
+	// EventRunStatusPersistFailed reports a failed legacy run status write so
+	// the loss is observable instead of silently ignored.
+	EventRunStatusPersistFailed EventType = "runtime.run_status_persist_failed"
 	// EventShutdownAbandoned names a run that outlived its shutdown wait.
 	EventShutdownAbandoned EventType = "runtime.shutdown_abandoned"
 	// EventCheckpointMirrorFailed reports a durable checkpoint mirror write

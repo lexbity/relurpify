@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"log"
 	"fmt"
 	"os"
 	"sort"
@@ -67,6 +68,7 @@ type RootModel struct {
 	inputBar   *InputBar
 	cmdPalette *CommandPalette
 	notifQ     *NotificationQueue
+	uiRecovery *runtimesvc.UIRecoveryStore
 	overlays   *OverlayStack
 
 	// Panes (pointer types — mutations survive tea.Model value copies)
@@ -427,7 +429,25 @@ func NewRootModel(parentCtx context.Context, options HostOptions) RootModel {
 			m.startupLocked = true
 		}
 	}
+	// P12: restore the checkpointed unsent draft. Failure is visible and
+	// never clears the in-memory state.
+	if options.UIRecovery != nil {
+		m.uiRecovery = options.UIRecovery
+		if draft, derr := options.UIRecovery.LoadDraft(); derr == nil && strings.TrimSpace(draft) != "" {
+			m.inputBar.SetValue(draft)
+			if m.chat != nil {
+				m.addSystemMessage("Restored your unsent draft from the previous session.")
+			}
+		}
+	}
+
 	m.syncActivePaneFilter(m.inputBar.Value())
+
+	// Boot-time reconciliation notice (P02): interrupted runs surface once,
+	// never resume, and never block the composer.
+	if strings.TrimSpace(options.BootNotice) != "" && m.chat != nil {
+		m.addSystemMessage(options.BootNotice)
+	}
 
 	return m
 }
@@ -1336,9 +1356,17 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case doctorStatusMsg:
+		// Apply the pane's completed report to the host in THIS update: the
+		// startup gate must unlock on the same frame the pane shows Ready, and
+		// a recursion here previously let the unlocked model be lost.
 		_, cmd := m.doctor.Update(msg)
 		if cmd != nil {
-			return m.Update(cmd())
+			if dmsg, ok := cmd().(DoctorStatusMsg); ok {
+				m.applyDoctorReport(dmsg.Report)
+				if dmsg.Err != nil {
+					m.addSystemMessage(fmt.Sprintf("%s failed: %v", dmsg.Action, dmsg.Err))
+				}
+			}
 		}
 		return m, nil
 
@@ -1826,6 +1854,7 @@ func (m *RootModel) applyDoctorReport(report runtimesvc.DoctorReport) {
 	if m == nil {
 		return
 	}
+	log.Printf("doctor-debug: applyDoctorReport ready=%v locked=%v", report.Ready(), m.startupLocked)
 	wasLocked := m.startupLocked
 	m.startupLocked = !report.Ready()
 	m.doctor.SetReport(report)
@@ -2057,6 +2086,10 @@ func (m RootModel) autoSave(workflowID string) {
 
 // cleanup cancels all runs and unsubscribes HITL.
 func (m RootModel) cleanup() {
+	// P12: checkpoint the unsent draft so a crash or quit preserves typing.
+	if m.uiRecovery != nil && m.inputBar != nil {
+		_ = m.uiRecovery.SaveDraft(m.inputBar.Value())
+	}
 	if m.lifetime != nil {
 		m.lifetime.close()
 	}

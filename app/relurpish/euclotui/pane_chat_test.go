@@ -193,7 +193,6 @@ func (p *ChatPane) registerFakeRun(id string) {
 		started: time.Now(),
 		ch:      make(chan tea.Msg, 1),
 	}
-	run.ctx, run.cancel = context.WithCancel(context.Background())
 	p.runsMu.Lock()
 	p.runs[id] = run
 	p.runsMu.Unlock()

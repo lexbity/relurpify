@@ -80,6 +80,11 @@ type Runtime struct {
 	// coordinator is the run quiesce unit: Runtime.Close drains/cancels/reaps
 	// every registered run through it before tearing down stores and sinks.
 	coordinator *RunCoordinator
+	// Runs is the durable run dispatcher (P02). Nil on degraded boots: the
+	// host then offers no execution instead of an untracked one.
+	Runs *RunService
+	// History is the read-only facade over the durable journal (P12).
+	History *HistoryService
 
 	// runnerStop is the spawned runner child's quiesce step (S9): registered
 	// by the supervisor when this runtime spawned the runner, nil when
@@ -566,6 +571,14 @@ func buildRuntime(ctx context.Context, cfg Config, secrets config.Secrets) (*Run
 		modelBackend:         modelProduct.Backend,
 		execSink:             execSink,
 		knowledge:            knowledgeRuntime,
+	}
+	// P02: the runtime owns run admission, dispatch and the durable journal.
+	// Views subscribe; they never own an executor goroutine.
+	if journal, jerr := NewRunJournal(rt.GraphDB, WorkspaceID(filepath.Base(cfg.Workspace))); jerr == nil {
+		if svc, serr := NewRunService(rt, rt.coordinator, journal); serr == nil {
+			rt.Runs = svc
+			rt.History = NewHistoryService(journal, svc)
+		}
 	}
 	// Initialize P06 evidence registry from the execution sink
 	rt.EvidenceRegistry = NewEvidenceRegistry(execSink)
@@ -1323,8 +1336,15 @@ func (r *Runtime) executeTask(ctx context.Context, task *execution.Task) (*execu
 // marks its workflow as the runtime's active one. When no lifecycle
 // repository is wired (degraded boot, tests) the turn executes untracked.
 func (r *Runtime) beginWorkflow(task *execution.Task) (workflowID, runID string) {
+	// The durable journal run ID wins when a dispatcher owns this turn: one
+	// identity flows through lifecycle records, telemetry and the journal.
+	if meta := task.Metadata; meta != nil {
+		if jrn, ok := meta["journal_run_id"].(string); ok && strings.TrimSpace(jrn) != "" {
+			runID = strings.TrimSpace(jrn)
+		}
+	}
 	if r.AgentLifecycle == nil {
-		return "", ""
+		return "", runID
 	}
 	ctx := context.Background()
 	workflowID = "wf-" + telemetry.NewRunID()
@@ -1349,7 +1369,9 @@ func (r *Runtime) beginWorkflow(task *execution.Task) (workflowID, runID string)
 		StartedAt:  now,
 		Metadata:   map[string]any{"instruction": task.Instruction},
 	}); err != nil {
-		return workflowID, ""
+		// A journal-owned run may already exist under this ID; correlation
+		// identity is still returned so telemetry stays coherent.
+		return workflowID, runID
 	}
 	r.setActiveWorkflowID(workflowID)
 	return workflowID, runID
@@ -1365,11 +1387,26 @@ func (r *Runtime) endWorkflow(workflowID, runID string, runErr error) {
 	if r.AgentLifecycle == nil || runID == "" {
 		return
 	}
-	status := "completed"
-	if runErr != nil {
-		status = "failed"
+	if strings.HasPrefix(runID, "run-") {
+		// Legacy local identity (no dispatcher): keep the old terminal write
+		// but propagate the error into telemetry rather than dropping it.
+		status := "completed"
+		if runErr != nil {
+			status = "failed"
+		}
+		if err := r.AgentLifecycle.UpdateRunStatus(context.Background(), runID, status); err != nil && r.execSink != nil {
+			// The legacy terminal write failed: emit a bounded correlation
+			// event instead of dropping the failure on the floor.
+			r.execSink.Emit(telemetry.Event{
+				Type:      telemetry.EventRunStatusPersistFailed,
+				Message:   "legacy run status write failed",
+				Timestamp: time.Now().UTC(),
+				Metadata:  map[string]any{"run_id": runID, "status": status, "error_class": classifyFailure(err)},
+			})
+		}
 	}
-	_ = r.AgentLifecycle.UpdateRunStatus(context.Background(), runID, status)
+	// Journal-owned runs (run_<id>) are terminalized by the dispatcher; a
+	// legacy write here would race the journal's authoritative transition.
 }
 
 // ensureSessionID returns the runtime-scoped correlation session ID, generating

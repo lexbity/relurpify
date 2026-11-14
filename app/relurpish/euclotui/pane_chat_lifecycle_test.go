@@ -82,20 +82,21 @@ func TestChatRunDeliversExactlyOneTerminal(t *testing.T) {
 	}
 }
 
-// TestChatRunFinishCancelsContext: finishing a run (any outcome) cancels its
-// context, releasing the timeout timer and any in-flight work.
-func TestChatRunFinishCancelsContext(t *testing.T) {
+// TestChatRunFinishReleasesRun: finishing a run (any outcome) requests the
+// dispatcher's protective stop for the projection and retires the run from
+// the active registry. The executor context belongs to the dispatcher.
+func TestChatRunFinishReleasesRun(t *testing.T) {
 	defer goleak.VerifyNone(t)
 	pane, release := newLifecyclePane(t)
 	_, runID := pane.StartRunWithMetadata("work", nil)
 	run, _ := pane.getRun(runID)
 	close(release)
 	readTerminal(t, run)
-	if err := run.ctx.Err(); err != context.Canceled {
-		t.Fatalf("expected run context cancelled after finish, got %v", err)
-	}
 	if pane.HasActiveRuns() {
 		t.Fatal("finished run must leave the active registry")
+	}
+	if run.cancelRun == nil {
+		t.Fatal("finished run lost its dispatcher stop handle")
 	}
 }
 

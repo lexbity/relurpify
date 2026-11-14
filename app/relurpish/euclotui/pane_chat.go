@@ -13,6 +13,7 @@ import (
 	capresult "codeburg.org/lexbit/relurpify/capability/result"
 
 	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
+	runtimesvc "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
 	"codeburg.org/lexbit/relurpify/app/relurpish/tui"
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
@@ -26,11 +27,6 @@ import (
 )
 
 const contextFileMaxBytes = 8000
-
-// chatRunTimeout bounds a single chat run's wall clock. Cancellation now
-// propagates to the model (streaming contract R1), making long generations
-// safe to bound and interrupt.
-const chatRunTimeout = 15 * time.Minute
 
 // chatRunCleanupDrain bounds how long Cleanup waits for each live run's
 // terminal message after cancelling it, so program exit leaves no pump
@@ -62,18 +58,27 @@ func nextRunID() string {
 	return fmt.Sprintf("run-%d-%d", time.Now().UnixNano(), runIDCounter.Add(1))
 }
 
-// chatRun owns the full lifecycle of one asynchronous chat run: its context,
-// its message channel, and its terminal transition. Exactly one goroutine
-// (the work owner started by startRun) drives it to finishRun; finishRun is
-// once-guarded so the terminal RunFinishedMsg is delivered exactly once.
+// chatRun is one run's projection handle: its message channel and its
+// terminal transition. The executor goroutine and the run context belong to
+// the runtime's durable dispatcher (P02) — this struct never owns them, so
+// navigation, teardown, and async completion cannot race an executing turn.
 type chatRun struct {
 	id      string
 	prompt  string
 	started time.Time
 
-	ctx    context.Context
-	cancel context.CancelFunc
-	ch     chan tea.Msg
+	// journalRunID is the durable run identity; cancelRun requests a
+	// protective stop through the dispatcher. Both are nil-safe: a run whose
+	// admission failed has neither.
+	journalRunID string
+	cancelRun    func() (stopDelivered bool)
+	ch           chan tea.Msg
+
+	// stop is closed by requestStop exactly once, before or after the ticket
+	// arrives; the work goroutine forwards it to the dispatcher. This removes
+	// the assign-after-submit race from immediate cancellation.
+	stop     chan struct{}
+	stopOnce sync.Once
 
 	builder *tui.MessageBuilder
 
@@ -207,11 +212,12 @@ func (p *ChatPane) Init() tea.Cmd {
 	return nil
 }
 
-// Cleanup cancels every live run and gives each a bounded window to deliver
-// its terminal message, so no pump is left blocked on program exit.
+// Cleanup requests a protective stop for every live run and gives each a
+// bounded window to deliver its terminal message, so no pump is left blocked
+// on program exit. The dispatcher owns the executors; this only signals.
 func (p *ChatPane) Cleanup() {
 	for _, run := range p.listRuns() {
-		run.cancel()
+		run.requestStop()
 		p.drainRunTerminal(run)
 	}
 }
@@ -397,7 +403,7 @@ func (p *ChatPane) StartRunSilent(prompt string) (tea.Cmd, string) {
 	if run == nil {
 		return nil, ""
 	}
-	metadata := p.buildMetadata(run.ctx)
+	metadata := p.buildMetadata(p.parentCtx)
 	metadata["compact"] = true
 	p.launchWork(run, metadata)
 	return tea.Batch(listenToStream(run.ch), p.spinner.Tick), run.id
@@ -430,7 +436,7 @@ func (p *ChatPane) StartRunWithMetadata(prompt string, extra map[string]any) (te
 	}
 	p.lastPrompt = prompt
 
-	metadata := p.buildMetadata(run.ctx)
+	metadata := p.buildMetadata(p.parentCtx)
 	for k, v := range extra {
 		metadata[k] = v
 	}
@@ -438,8 +444,8 @@ func (p *ChatPane) StartRunWithMetadata(prompt string, extra map[string]any) (te
 	return tea.Batch(listenToStream(run.ch), p.spinner.Tick), run.id
 }
 
-// startRun registers a new run in the registry with a cancellable, timeout-
-// bounded context derived from the pane's parent context.
+// startRun registers a new run projection in the registry. The run's context,
+// timeout, and executor are the dispatcher's; the pane only observes.
 func (p *ChatPane) startRun(prompt string) *chatRun {
 	run := &chatRun{
 		id:      nextRunID(),
@@ -448,12 +454,22 @@ func (p *ChatPane) startRun(prompt string) *chatRun {
 		ch:      make(chan tea.Msg, 256),
 	}
 	run.builder = tui.NewMessageBuilder(run.id)
-	run.ctx, run.cancel = context.WithTimeout(p.parentCtx, chatRunTimeout)
+	run.stop = make(chan struct{})
 	p.runsMu.Lock()
 	p.runs[run.id] = run
 	p.runsMu.Unlock()
 	p.registerSpinnerAnim()
 	return run
+}
+
+// requestStop signals the run to stop. It is safe before the dispatcher
+// ticket exists: the work goroutine forwards the signal once it arrives.
+func (r *chatRun) requestStop() (stopDelivered bool) {
+	r.stopOnce.Do(func() { close(r.stop) })
+	if r.cancelRun != nil {
+		return r.cancelRun()
+	}
+	return false
 }
 
 // launchWork spawns the run's single work goroutine. It is the only goroutine
@@ -462,8 +478,10 @@ func (p *ChatPane) launchWork(run *chatRun, metadata map[string]any) {
 	go p.work(run, metadata)
 }
 
-// work executes the run's turn and finishes it — success, failure, or
-// cancellation — through the exactly-once finishRun.
+// work submits the run to the runtime's durable dispatcher and forwards its
+// observations into the pane's projection channel. The runtime owns the
+// executor goroutine and the run context: navigating away, teardown, and late
+// completion cannot race this loop because it merely subscribes.
 func (p *ChatPane) work(run *chatRun, metadata map[string]any) {
 	run.send(tui.StreamTokenMsg{
 		RunID:     run.id,
@@ -474,38 +492,65 @@ func (p *ChatPane) work(run *chatRun, metadata map[string]any) {
 			"description": "Analyzing request",
 		},
 	})
-	callback := func(token string) {
-		run.send(tui.StreamTokenMsg{RunID: run.id, TokenType: tui.TokenText, Token: token})
+	if p.runtime == nil {
+		p.finishRun(run, tui.RunFailed, errors.New("runtime unavailable"), 0)
+		return
 	}
-	result, err := p.runtime.SubmitTurn(run.ctx, run.prompt, execution.TaskTypeCodeGeneration, metadata, callback)
-	tokens := 0
-	outcome := tui.RunSucceeded
-	switch {
-	case err == nil:
-		run.setResult(result)
-		// A completed pipeline is not a successful turn: the result carries
-		// the classified outcome, and a non-success outcome is surfaced as a
-		// failed run naming its reason (never a silent "success") — except
-		// awaiting_interaction: the graph finished, the clarification frame
-		// in the notification bar awaits the answer. That is a pause, not
-		// an error.
-		if result != nil && !result.Success {
-			if categoryOf(result) == "awaiting_interaction" {
-				p.addSystemMessage("Waiting for your answer — choose a slot in the banner above (number, or enter on an empty input).")
-			} else {
-				outcome = tui.RunFailed
-				err = outcomeFailureError(result)
-			}
-		}
-		if summary := summarizeResult(result); summary != "" {
-			tokens = tui.EstimateTokens(summary)
-		}
-	case errors.Is(err, context.Canceled):
-		outcome = tui.RunCancelled
+	ticket, err := p.runtime.SubmitInstruction(p.parentCtx, runtimesvc.InstructionCommand{
+		Instruction: run.prompt,
+		TaskType:    execution.TaskTypeCodeGeneration,
+		Metadata:    metadata,
+	})
+	if err != nil {
+		p.finishRun(run, tui.RunFailed, err, 0)
+		return
+	}
+	run.journalRunID = ticket.RunID
+	run.cancelRun = ticket.Cancel
+	// An early stop (closed before the ticket existed) forwards here; later
+	// stops reach the dispatcher directly through cancelRun.
+	select {
+	case <-run.stop:
+		ticket.Cancel()
 	default:
-		outcome = tui.RunFailed
 	}
-	p.finishRun(run, outcome, err, tokens)
+	for ev := range ticket.Events {
+		switch ev.Kind {
+		case runtimesvc.RunEventToken:
+			run.send(tui.StreamTokenMsg{RunID: run.id, TokenType: tui.TokenText, Token: ev.Token})
+		case runtimesvc.RunEventAwaitingInteraction:
+			p.addSystemMessage("Waiting for your answer — choose a slot in the banner above (number, or enter on an empty input).")
+		case runtimesvc.RunEventFinished:
+			outcome := tui.RunFailed
+			var finErr error
+			switch ev.Outcome {
+			case runtimesvc.RunOutcomeCompleted:
+				outcome = tui.RunSucceeded
+			case runtimesvc.RunOutcomeCanceled:
+				outcome = tui.RunCancelled
+				finErr = ev.Err
+			default:
+				finErr = ev.Err
+				if finErr == nil {
+					finErr = errors.New("run failed")
+				}
+			}
+			if ev.Result != nil {
+				run.setResult(ev.Result)
+			}
+			if ev.Dropped > 0 {
+				run.dropped.Add(ev.Dropped)
+			}
+			if ev.Awaiting {
+				p.addSystemMessage("Waiting for your answer — choose a slot in the banner above (number, or enter on an empty input).")
+			}
+			tokens := 0
+			if summary := summarizeResult(ev.Result); summary != "" {
+				tokens = tui.EstimateTokens(summary)
+			}
+			p.finishRun(run, outcome, finErr, tokens)
+		}
+	}
 }
 
 // finishRun performs the run's terminal transition, exactly once: cancel the
@@ -517,7 +562,7 @@ func (p *ChatPane) finishRun(run *chatRun, outcome tui.RunOutcome, err error, to
 	if !run.finished.CompareAndSwap(false, true) {
 		return
 	}
-	run.cancel()
+	run.requestStop()
 	p.runsMu.Lock()
 	delete(p.runs, run.id)
 	p.finishedRuns = append(p.finishedRuns, run)
@@ -539,6 +584,7 @@ func (p *ChatPane) finishRun(run *chatRun, outcome tui.RunOutcome, err error, to
 		TokensUsed:     tokens,
 		DroppedUpdates: run.dropped.Load(),
 		WorkflowID:     workflowID,
+		JournalRunID:   run.journalRunID,
 	}
 }
 
@@ -548,6 +594,13 @@ func (p *ChatPane) HasActiveRuns() bool {
 	return len(p.runs) > 0
 }
 func (p *ChatPane) Undo() bool { return p.restoreSnapshot(&p.undoStack, &p.redoStack) }
+
+// ResetUndoHistory drops saved conversation revisions; used by /conversation
+// clear so undo cannot resurrect a deliberately cleared branch.
+func (p *ChatPane) ResetUndoHistory() {
+	p.undoStack = nil
+	p.redoStack = nil
+}
 func (p *ChatPane) Redo() bool { return p.restoreSnapshot(&p.redoStack, &p.undoStack) }
 func (p *ChatPane) ToggleCompact() {
 	switch p.expandTarget {
@@ -641,7 +694,10 @@ func (p *ChatPane) StopLatestRun() tea.Cmd {
 	if latest == nil {
 		return func() tea.Msg { return tui.ChatSystemMsg{Text: "No active run to stop."} }
 	}
-	latest.cancel()
+	delivered := latest.requestStop()
+	if !delivered {
+		return func() tea.Msg { return tui.ChatSystemMsg{Text: fmt.Sprintf("Stop requested for run %s; its executor is still starting", latest.id)} }
+	}
 	return func() tea.Msg { return tui.ChatSystemMsg{Text: fmt.Sprintf("Stopping run %s", latest.id)} }
 }
 func (p *ChatPane) RetryLastRun() tea.Cmd {

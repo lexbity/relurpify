@@ -30,6 +30,7 @@ func (p *recordingChatPane) Redo() bool                        { return false }
 func (p *recordingChatPane) ToggleCompact()                    {}
 func (p *recordingChatPane) Cleanup()                          {}
 func (p *recordingChatPane) AppendMessage(Message)             {}
+func (p *recordingChatPane) ResetUndoHistory()          {}
 func (p *recordingChatPane) ClearMessages()                    {}
 func (p *recordingChatPane) Messages() []Message               { return nil }
 func (p *recordingChatPane) SetSearchFilter(string)            {}

@@ -159,6 +159,7 @@ func registerUniversalCommands(r *CommandRegistry) {
 		return m, nil
 	}})
 	registerContextualCommands(r)
+	registerJournalCommands(r)
 	for _, cmd := range []Command{
 		{Name: "workspace", Description: "Switch workspace root", Usage: "/workspace [path]", Handler: rootHandleWorkspace},
 		{Name: "permissions", Description: "Open sandbox permissions", Usage: "/permissions", Handler: rootHandlePermissions},

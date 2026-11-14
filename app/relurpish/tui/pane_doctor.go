@@ -85,7 +85,11 @@ func (p *DoctorPane) OwnsEscape() bool { return p.detail || p.review }
 func (p *DoctorPane) Update(message tea.Msg) (*DoctorPane, tea.Cmd) {
 	switch msg := message.(type) {
 	case doctorStatusMsg:
-		if msg.Request != p.request {
+		// Drop only stale reports: two refreshes may race at boot (the pane's
+		// own initial check and the host's startup report), and discarding the
+		// newer-or-equal one silently withheld the report that unlocks the
+		// host startup gate. Out-of-order older requests remain stale.
+		if msg.Request < p.request {
 			return p, nil
 		}
 		p.working = false

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"codeburg.org/lexbit/relurpify/app/relurpish/ports"
+	runtimesvc "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
 	"codeburg.org/lexbit/relurpify/telemetry"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -57,6 +58,12 @@ type HostOptions struct {
 	Services       ServicePort
 	Guards         GuardPolicyPort
 	Providers      ProviderEditorPort
+	// BootNotice reports boot-time reconciliation (interrupted runs) to the
+	// user as a system message. It never resumes anything implicitly.
+	BootNotice string
+	// UIRecovery checkpoints unsent composer drafts (P12). Nil disables draft
+	// persistence entirely.
+	UIRecovery *runtimesvc.UIRecoveryStore
 }
 
 type frontendSnapshotMsg struct {

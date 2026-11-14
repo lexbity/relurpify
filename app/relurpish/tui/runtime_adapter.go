@@ -67,6 +67,12 @@ type RuntimeAdapter interface {
 	ExecuteInstruction(ctx context.Context, instruction string, taskType execution.TaskType, metadata map[string]any) (*execution.Result, error)
 	ExecuteInstructionStream(ctx context.Context, instruction string, taskType execution.TaskType, metadata map[string]any, callback func(string)) (*execution.Result, error)
 	SubmitTurn(ctx context.Context, instruction string, taskType execution.TaskType, metadata map[string]any, callback func(string)) (*execution.Result, error)
+	// SubmitInstruction and CancelRun are the ExecutionPort (spec §11.4):
+	// durable admission plus runtime-owned executors.
+	SubmitInstruction(ctx context.Context, cmd runtimesvc.InstructionCommand) (runtimesvc.RunTicket, error)
+	CancelRun(runID string) (stopDelivered bool, err error)
+	// History exposes the read-only durable journal port (nil when absent).
+	History() HistoryPort
 	AvailableAgents() []string
 	SwitchAgent(name string) error
 	SessionInfo() SessionInfo
@@ -438,6 +444,59 @@ func (r *runtimeAdapter) SubmitTurn(ctx context.Context, instruction string, tas
 		return nil, fmt.Errorf("runtime unavailable")
 	}
 	return r.currentRuntime().SubmitTurn(ctx, instruction, taskType, metadata, callback)
+}
+
+// SubmitInstruction implements ExecutionPort: durable admission plus a
+// runtime-owned executor. It fails closed when no dispatcher exists.
+func (r *runtimeAdapter) SubmitInstruction(ctx context.Context, cmd runtimesvc.InstructionCommand) (runtimesvc.RunTicket, error) {
+	if r == nil || r.currentRuntime() == nil || r.currentRuntime().Runs == nil {
+		return runtimesvc.RunTicket{}, fmt.Errorf("run dispatcher unavailable")
+	}
+	_, ticket, err := r.currentRuntime().Runs.Submit(ctx, cmd)
+	if err != nil {
+		return runtimesvc.RunTicket{}, err
+	}
+	return *ticket, nil
+}
+
+// CancelRun implements ExecutionPort.
+func (r *runtimeAdapter) CancelRun(runID string) (bool, error) {
+	if r == nil || r.currentRuntime() == nil || r.currentRuntime().Runs == nil {
+		return false, fmt.Errorf("run dispatcher unavailable")
+	}
+	return r.currentRuntime().Runs.CancelRun(runID)
+}
+
+// ListRuns implements HistoryPort.
+func (r *runtimeAdapter) ListRuns(ctx context.Context) ([]runtimesvc.RunSummary, error) {
+	if r == nil || r.currentRuntime() == nil || r.currentRuntime().History == nil {
+		return nil, fmt.Errorf("history unavailable")
+	}
+	return r.currentRuntime().History.ListRuns(ctx)
+}
+
+// ReadRunEvents implements HistoryPort.
+func (r *runtimeAdapter) ReadRunEvents(ctx context.Context, runID string, after uint64, limit int) ([]runtimesvc.RunEventRecord, error) {
+	if r == nil || r.currentRuntime() == nil || r.currentRuntime().History == nil {
+		return nil, fmt.Errorf("history unavailable")
+	}
+	return r.currentRuntime().History.ReadRunEvents(ctx, runID, after, limit)
+}
+
+// RunSnapshot implements HistoryPort.
+func (r *runtimeAdapter) RunSnapshot(ctx context.Context, runID string) (runtimesvc.RunSummary, bool, error) {
+	if r == nil || r.currentRuntime() == nil || r.currentRuntime().History == nil {
+		return runtimesvc.RunSummary{}, false, fmt.Errorf("history unavailable")
+	}
+	return r.currentRuntime().History.Snapshot(ctx, runID)
+}
+
+// History returns the read-only journal port, or nil without a live runtime.
+func (r *runtimeAdapter) History() HistoryPort {
+	if r == nil || r.currentRuntime() == nil {
+		return nil
+	}
+	return r
 }
 
 func (r *runtimeAdapter) InferenceModels(ctx context.Context) ([]string, error) {

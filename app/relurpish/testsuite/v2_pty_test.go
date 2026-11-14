@@ -7,6 +7,7 @@ import (
 	"flag"
 	"io"
 	"os"
+	"path/filepath"
 	"os/exec"
 	"strings"
 	"sync"
@@ -97,9 +98,60 @@ func launchV2Terminal(t *testing.T, arguments ...string) (*terminalRecording, fu
 	return recording, write
 }
 
+// launchV2TerminalIn boots the real executable in a prepared workspace and
+// returns the recording, a key writer, and a stop function. The stop function
+// quits via the quit review and waits for a clean exit.
+func launchV2TerminalIn(t *testing.T, workspace string, arguments ...string) (*terminalRecording, func(string), func()) {
+	t.Helper()
+	if *v2Binary == "" {
+		t.Fatal("-v2-binary is required; build the real executable before running this suite")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	arguments = append(arguments, "--workspace", workspace)
+	cmd := exec.CommandContext(ctx, *v2Binary, arguments...)
+	terminal, err := pty.StartWithSize(cmd, &pty.Winsize{Rows: 24, Cols: 80})
+	if err != nil {
+		cancel()
+		t.Fatalf("start actual PTY: %v", err)
+	}
+	recording := &terminalRecording{}
+	drained := make(chan struct{})
+	go func() { _, _ = io.Copy(recording, terminal); close(drained) }()
+	stop := func() {
+		_, _ = terminal.Write([]byte("\x11\x1b[B\r"))
+		finished := make(chan error, 1)
+		go func() { finished <- cmd.Wait() }()
+		select {
+		case err := <-finished:
+			if err != nil {
+				t.Errorf("terminal did not exit cleanly: %v", err)
+			}
+		case <-time.After(20 * time.Second):
+			cancel()
+			<-finished
+			t.Error("terminal shutdown exceeded twenty seconds")
+		}
+		cancel()
+		_ = terminal.Close()
+		<-drained
+	}
+	write := func(text string) {
+		t.Helper()
+		if _, err := terminal.Write([]byte(text)); err != nil {
+			t.Fatalf("write terminal: %v", err)
+		}
+	}
+	return recording, write, stop
+}
+
 func awaitV2Text(t *testing.T, recording *terminalRecording, text string) {
 	t.Helper()
-	deadline := time.Now().Add(10 * time.Second)
+	awaitV2TextFor(t, recording, text, 10*time.Second)
+}
+
+func awaitV2TextFor(t *testing.T, recording *terminalRecording, text string, timeout time.Duration) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
 		if recording.contains(text) {
 			return
@@ -224,4 +276,70 @@ func TestV2PTYGuardInspectPatternAndDraft(t *testing.T) {
 	awaitV2Text(t, recording, "until G2 is implemented")
 	write("\x1b[17~!")
 	awaitV2Text(t, recording, "retain guard request!")
+}
+
+// TestV2RuntimeOwnsRunAfterNavigation: a submitted run is admitted and
+// journaled by the runtime's dispatcher. Navigating canvases mid-turn never
+// disturbs it, and /runs reads the committed outcome from the durable journal
+// (P02). The offline backend keeps the turn deterministic; no model service
+// is contacted.
+func TestV2RuntimeOwnsRunAfterNavigation(t *testing.T) {
+	// The documented flow materializes the configuration with the CLI doctor
+	// (TUI initialization on a missing manifest is an explicit P05 deferral).
+	workspace := t.TempDir()
+	bootstrap := exec.Command(*v2Binary, "doctor", "--workspace", workspace)
+	if out, err := bootstrap.CombinedOutput(); err != nil {
+		t.Fatalf("CLI doctor materialization failed: %v\n%s", err, out)
+	}
+	// Pin the offline provider so runtime composition is deterministic and
+	// fast: the sandbox and model lanes still run their real paths.
+	configPath := filepath.Join(workspace, "relurpify_cfg", "workspace.yaml")
+	configuration, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("read workspace config: %v", err)
+	}
+	pinned := strings.Replace(string(configuration), "provider: ollama", "provider: offline", 1)
+	if pinned == string(configuration) {
+		t.Fatalf("workspace config did not name the ollama provider:\n%s", configuration)
+	}
+	if err := os.WriteFile(configPath, []byte(pinned), 0o644); err != nil {
+		t.Fatalf("pin offline provider: %v", err)
+	}
+	recording, write, stopTerminal := launchV2TerminalIn(t, workspace, "chat", "--offline", "--hitl-mode", "permissive")
+	defer stopTerminal()
+	// The pane verdict is the readiness signal: the host status row can be
+	// clipped when a canvas body exceeds its row budget (known layout bug,
+	// tracked separately), so the test reads the verdict itself.
+	awaitV2TextFor(t, recording, "Doctor / Ready", 45*time.Second)
+
+	// Submit a real instruction through the dispatcher. A submission fired
+	// before the host unlocked is kept as a draft (never dropped), so the
+	// test resubmits until the turn is admitted.
+	for attempt := 0; attempt < 6; attempt++ {
+		write("Summarize the workspace layout in one line\r")
+		deadline := time.Now().Add(3 * time.Second)
+		admitted := false
+		for time.Now().Before(deadline) {
+			if recording.contains("working · /cancel") || recording.contains("kept as a draft while work is running") {
+				admitted = true
+				break
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+		if admitted {
+			break
+		}
+	}
+
+	// Navigate away mid-turn and back: selection and drafts survive, and no
+	// navigation error appears. The run's lifetime is the dispatcher's.
+	write("/run\r")
+	awaitV2Text(t, recording, "Execution")
+	write("/chat\r")
+	awaitV2Text(t, recording, "relurpish · euclo / chat")
+
+	// The durable journal answers /runs with the committed run.
+	write("/runs\r")
+	awaitV2TextFor(t, recording, "Recorded runs", 30*time.Second)
+	awaitV2Text(t, recording, "run_")
 }

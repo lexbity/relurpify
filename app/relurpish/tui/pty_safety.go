@@ -6,6 +6,8 @@ import (
 	"log"
 	"os"
 	"runtime/debug"
+	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -43,13 +45,43 @@ func RunWithSurface(ctx context.Context, rt *runtimesvc.Runtime, factory Surface
 	}
 	adapter := NewRuntimeAdapter(rt)
 
+	// P02 boot reconciliation: runs found nonterminal in the journal after a
+	// crash become interrupted here, before the host offers any execution.
+	bootNotice := ""
+	if rt.Runs != nil {
+		if reconciled, err := rt.Runs.ReconcileAbandoned(ctx); err == nil && len(reconciled) > 0 {
+			bootNotice = fmt.Sprintf("Reconciled %d interrupted run(s) after restart: %s. Review with /runs; resumption is a new explicit action.",
+				len(reconciled), strings.Join(reconciled, ", "))
+		}
+	}
+
 	recipes := runtimesvc.NewRecipeLibrary(rt.Config.Workspace)
 
+	// P12 retention: bounded sweep of terminal runs past the retention
+	// window. Open runs, pinned runs and receipts are never touched.
+	if rt.Runs != nil {
+		if _, err := rt.Runs.Journal().SweepExpired(ctx, time.Now().UTC().AddDate(0, 0, -30), 100); err != nil {
+			// Retention is maintenance, never a boot blocker; the journal
+			// keeps serving history and the failure stays observable.
+			log.Printf("retention sweep skipped: %v", err)
+		}
+	}
+
+	// The adapter doubles as the read-only DoctorReader: the startup gate
+	// must always receive the boot report, otherwise a fully ready workspace
+	// boots locked behind a race with the doctor pane's own refresh.
+	var doctorReader DoctorReader
+	if reader, ok := adapter.(DoctorReader); ok {
+		doctorReader = reader
+	}
 	m := NewRootModel(ctx, HostOptions{
 		Runtime:        adapter,
 		SurfaceFactory: factory,
 		Recipes:        recipes,
 		Workspace:      rt.Config.Workspace,
+		BootNotice:     bootNotice,
+		UIRecovery:     runtimesvc.NewUIRecoveryStore(rt.Config.Workspace),
+		Doctor:         doctorReader,
 	})
 	return runModel(ctx, m)
 }

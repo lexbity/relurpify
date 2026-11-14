@@ -30,6 +30,7 @@ func (p *fakeChatPane) Redo() bool                                              
 func (p *fakeChatPane) ToggleCompact()                                                {}
 func (p *fakeChatPane) Cleanup()                                                      {}
 func (p *fakeChatPane) AppendMessage(Message)                                         {}
+func (p *fakeChatPane) ResetUndoHistory()                                             {}
 func (p *fakeChatPane) ClearMessages()                                                {}
 func (p *fakeChatPane) Messages() []Message                                           { return nil }
 func (p *fakeChatPane) SetSearchFilter(string)                                        {}

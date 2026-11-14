@@ -25,6 +25,8 @@ type ChatPaner interface {
 	Cleanup()
 	AppendMessage(msg Message)
 	ClearMessages()
+	// ResetUndoHistory drops saved conversation revisions.
+	ResetUndoHistory()
 	Messages() []Message
 	SetSearchFilter(filter string)
 	ScrollUp()

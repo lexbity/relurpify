@@ -564,6 +564,9 @@ type RunFinishedMsg struct {
 	// by the runtime into the result metadata; the autosave persists it so
 	// the session record stays resumable.
 	WorkflowID string
+	// JournalRunID is the durable run identity in the run journal (P02);
+	// empty when the run predates the dispatcher.
+	JournalRunID string
 }
 
 // resumeFinishedMsg reports the completion of a resume continuation turn

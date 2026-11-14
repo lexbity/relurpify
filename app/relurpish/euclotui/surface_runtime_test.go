@@ -1,11 +1,14 @@
 package euclotui
 
 import (
-	runtimesvc "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
 	"context"
+	"errors"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
+
+	runtimesvc "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -30,6 +33,45 @@ func (s *stubRuntimeAdapter) ResumeSession(context.Context, string, string) erro
 func (s *stubRuntimeAdapter) SubmitTurn(ctx context.Context, instruction string, taskType execution.TaskType, metadata map[string]any, callback func(string)) (*execution.Result, error) {
 	return s.submitFunc(ctx, instruction, taskType, metadata, callback)
 }
+
+// SubmitInstruction mirrors the production dispatcher contract: the stub owns
+// the executor goroutine and delivers exactly one terminal event.
+func (s *stubRuntimeAdapter) SubmitInstruction(ctx context.Context, cmd runtimesvc.InstructionCommand) (runtimesvc.RunTicket, error) {
+	ch := make(chan runtimesvc.RunEvent, 64)
+	runCtx, cancel := context.WithCancel(ctx)
+	var dropped atomic.Int64
+	go func() {
+		defer close(ch)
+		res, err := s.submitFunc(runCtx, cmd.Instruction, cmd.TaskType, cmd.Metadata, func(tok string) {
+			select {
+			case ch <- runtimesvc.RunEvent{Kind: runtimesvc.RunEventToken, Token: tok}:
+			default:
+				dropped.Add(1)
+			}
+		})
+		outcome := runtimesvc.RunOutcomeCompleted
+		awaiting := false
+		if err != nil {
+			if errors.Is(err, context.Canceled) {
+				outcome = runtimesvc.RunOutcomeCanceled
+			} else {
+				outcome = runtimesvc.RunOutcomeFailed
+			}
+		} else if res != nil && !res.Success {
+			if cat, _ := execution.ResultFields(res.Data)["outcome_category"].(string); cat == "awaiting_interaction" {
+				awaiting = true
+			} else {
+				outcome = runtimesvc.RunOutcomeFailed
+			}
+		}
+		ch <- runtimesvc.RunEvent{Kind: runtimesvc.RunEventFinished, Outcome: outcome, Awaiting: awaiting, Err: err, Result: res, Dropped: dropped.Load()}
+	}()
+	return runtimesvc.RunTicket{RunID: "stub-run", Events: ch, Cancel: func() (stopDelivered bool) { cancel(); return true }}, nil
+}
+
+func (s *stubRuntimeAdapter) CancelRun(string) (bool, error) { return true, nil }
+
+func (s *stubRuntimeAdapter) History() tui.HistoryPort { return nil }
 
 func (s *stubRuntimeAdapter) ExecuteInstruction(ctx context.Context, instruction string, taskType execution.TaskType, metadata map[string]any) (*execution.Result, error) {
 	return s.submitFunc(ctx, instruction, taskType, metadata, nil)
