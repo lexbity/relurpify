@@ -27,14 +27,17 @@ type Palette struct {
 // defaultPalette is the canonical relurpish palette. Light and Dark values
 // match the former tui/styles.go colour globals.
 var defaultPalette = Palette{ //nolint:gochecknoglobals // immutable default theme palette
-	Background: lipgloss.AdaptiveColor{Light: "#f4f4f5", Dark: "#1f1f23"},
-	Surface:    lipgloss.AdaptiveColor{Light: "#d8d8dd", Dark: "#2b2f36"},
-	Primary:    lipgloss.AdaptiveColor{Light: "#005f87", Dark: "#7fd7ff"},
-	Secondary:  lipgloss.AdaptiveColor{Light: "#4f6d7a", Dark: "#8ad6c2"},
-	Success:    lipgloss.AdaptiveColor{Light: "#2f7d32", Dark: "#87d75f"},
-	Warning:    lipgloss.AdaptiveColor{Light: "#9a5f00", Dark: "#ffd75f"},
-	Error:      lipgloss.AdaptiveColor{Light: "#b00020", Dark: "#ff8787"},
-	Dim:        lipgloss.AdaptiveColor{Light: "#62666d", Dark: "#8d94a1"},
+	// Dark values follow the V2 keyframe scheme (relurpish-keyframes/v2):
+	// deep navy surfaces, a single teal accent for selection/activity, muted
+	// steel text, and desaturated status hues.
+	Background: lipgloss.AdaptiveColor{Light: "#f4f4f5", Dark: "#10161f"},
+	Surface:    lipgloss.AdaptiveColor{Light: "#d8d8dd", Dark: "#1a2230"},
+	Primary:    lipgloss.AdaptiveColor{Light: "#005f87", Dark: "#56c9a5"},
+	Secondary:  lipgloss.AdaptiveColor{Light: "#4f6d7a", Dark: "#8b98a5"},
+	Success:    lipgloss.AdaptiveColor{Light: "#2f7d32", Dark: "#6fce8f"},
+	Warning:    lipgloss.AdaptiveColor{Light: "#9a5f00", Dark: "#d9a562"},
+	Error:      lipgloss.AdaptiveColor{Light: "#b00020", Dark: "#e07a7a"},
+	Dim:        lipgloss.AdaptiveColor{Light: "#62666d", Dark: "#5c6774"},
 }
 
 // Theme is the immutable semantic style source. It is safe for concurrent use.

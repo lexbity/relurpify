@@ -90,6 +90,8 @@ func (p *WelcomePane) refreshSessions() {
 
 func (p *WelcomePane) Update(msg tea.Msg) (*WelcomePane, tea.Cmd) {
 	switch msg := msg.(type) {
+	case DropdownSelectedMsg:
+		return p, nil
 	case tea.KeyMsg:
 		return p.handleKey(msg)
 	case tea.MouseMsg:

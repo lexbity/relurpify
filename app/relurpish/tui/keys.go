@@ -12,8 +12,8 @@ import (
 // KeyMap belongs to one host. No workspace or demo can alter another host's
 // shortcuts. Escape routing and Ctrl+Q remain immutable host mechanics.
 type KeyMap struct {
-	Quit, Help, AgentPicker, FocusToggle, FocusRegion1, Attention, Commands key.Binding
-	Undo, Redo, PageUp, ScrollDown                                          key.Binding
+	Quit, Help, AgentPicker, FocusToggle, FocusRegion1, Attention, Commands, ModeCycle key.Binding
+	Undo, Redo, PageUp, ScrollDown                                                     key.Binding
 }
 
 func NewKeyMap() *KeyMap {
@@ -25,6 +25,7 @@ func NewKeyMap() *KeyMap {
 		FocusRegion1: key.NewBinding(key.WithKeys("tab", "ctrl+down")),
 		Attention:    key.NewBinding(key.WithKeys("ctrl+g")),
 		Commands:     key.NewBinding(key.WithKeys("ctrl+p")),
+		ModeCycle:    key.NewBinding(key.WithKeys("alt+m")),
 		Undo:         key.NewBinding(key.WithKeys("ctrl+z")),
 		Redo:         key.NewBinding(key.WithKeys("ctrl+y")),
 		PageUp:       key.NewBinding(key.WithKeys("pgup")),
@@ -54,7 +55,7 @@ func keyMsgMatchesBinding(message tea.KeyMsg, binding key.Binding) bool {
 	return keyMatchesBinding(binding, message.String())
 }
 func isReservedChord(message tea.KeyMsg, keys *KeyMap) bool {
-	for _, binding := range []key.Binding{keys.Quit, keys.Help, keys.AgentPicker} {
+	for _, binding := range []key.Binding{keys.Quit, keys.Help, keys.AgentPicker, keys.ModeCycle} {
 		if keyMsgMatchesBinding(message, binding) {
 			return true
 		}
@@ -65,7 +66,7 @@ func isReservedChord(message tea.KeyMsg, keys *KeyMap) bool {
 // validHostChord excludes printable global shortcuts, which would reinterpret
 // ordinary Euclo requests. Local forms keep their own explicit editing keys.
 func validHostChord(chord string) bool {
-	if chord == "esc" || chord == "ctrl+q" || chord == "" || strings.ContainsAny(chord, "\x1b\x00\n\r ") {
+	if chord == "esc" || chord == "ctrl+q" || chord == "enter" || chord == "" || strings.ContainsAny(chord, "\x1b\x00\n\r ") {
 		return false
 	}
 	// Validate against the same normalized events Bubble Tea actually emits.
@@ -108,6 +109,7 @@ func buildKeybindingTargets(keys *KeyMap) []keybindingTarget {
 		{Action: "toggle_focus", Scope: "global", Description: "Move between canvas and composer", DefaultKeys: []string{"f6"}, Binding: &keys.FocusToggle},
 		{Action: "focus_canvas", Scope: "composer", Description: "Focus the current canvas", DefaultKeys: []string{"tab", "ctrl+down"}, Binding: &keys.FocusRegion1},
 		{Action: "open_attention", Scope: "global", Description: "Deliberately open a pending decision", DefaultKeys: []string{"ctrl+g"}, Binding: &keys.Attention},
+		{Action: "cycle_mode", Scope: "global", Description: "Switch the execution mode for future requests", DefaultKeys: []string{"alt+m"}, Binding: &keys.ModeCycle},
 		{Action: "open_commands", Scope: "global", Description: "Open commands while retaining the request draft", DefaultKeys: []string{"ctrl+p"}, Binding: &keys.Commands},
 		{Action: "page_up", Scope: "reading", Description: "Scroll the conversation up", DefaultKeys: []string{"pgup"}, Binding: &keys.PageUp},
 		{Action: "page_down", Scope: "reading", Description: "Scroll the conversation down", DefaultKeys: []string{"pgdown"}, Binding: &keys.ScrollDown},

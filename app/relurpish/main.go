@@ -194,12 +194,24 @@ func newChatCmd() *cobra.Command {
 			if scenario, _ := cmd.Flags().GetString("demo"); scenario != "" {
 				return runDemoSession(ctx, scenario)
 			}
-			report := runtimesvc.BuildDoctorReport(ctx, cfg, secrets)
-			if !report.Ready() {
-				return tui.PTYSafe(func() error {
-					return tui.RunDiagnostics(ctx, cfg.Workspace, runtimesvc.NewDoctorService(cfg, secrets, nil), euclotui.NewSurfaceFactory())
-				})
+			// Boot-time config loads log to stderr — the exact terminal the
+			// TUI is about to own (the video-reported corruption). Redirect
+			// boot logging before anything loads: initialized workspaces log
+			// to a boot file the runtime's rotating logger later replaces;
+			// uninitialized (read-only) workspaces discard, because their
+			// diagnostics host surfaces every relevant finding in its report.
+			// Demo sessions short-circuit above and never touch the workspace.
+			if bootCloser := redirectBootLog(cfg.Workspace); bootCloser != nil {
+				defer bootCloser()
 			}
+			// Readiness is the HOST's startup gate, not a boot-time fork: the
+			// doctor report races slow provider probes, and committing to the
+			// read-only diagnostics host on a late report locked every request
+			// into "execution is unavailable" drafts forever. Compose the
+			// runtime; the host boots onto the doctor canvas locked and
+			// unlocks when the report lands (drafts are preserved, never
+			// auto-submitted — D-15). Diagnostics-only remains for genuine
+			// composition failures.
 			rt, err := runtimesvc.New(ctx, cfg, secrets)
 			if err != nil {
 				return tui.PTYSafe(func() error {
@@ -227,11 +239,41 @@ func runDemoSession(ctx context.Context, scenario string) error {
 	return tui.RunHost(ctx, tui.HostOptions{DemoScenario: scenario, Conversation: session, Doctor: session, Initializer: session, Recipes: session, Configuration: session, Services: session, Providers: session, Guards: session})
 }
 
+// redirectBootLog retargets boot logging away from the terminal the TUI is
+// about to own. It returns a close func, or nil when redirection is not
+// possible (workspace root unresolvable) — never stderr.
+func redirectBootLog(workspace string) func() {
+	var file *os.File
+	if _, err := os.Stat(filepath.Join(workspace, "relurpify_cfg")); err == nil {
+		dir := filepath.Join(config.DefaultWorkspaceStateDir(workspace), "logs")
+		if mkErr := os.MkdirAll(dir, 0o700); mkErr == nil {
+			if opened, openErr := os.OpenFile(filepath.Join(dir, "boot.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600); openErr == nil {
+				file = opened
+			}
+		}
+	}
+	target := io.Writer(io.Discard)
+	var closer func()
+	if file != nil {
+		target = file
+		closer = func() { _ = file.Close() }
+	}
+	runtimesvc.StdlibLogWriter().Set(target)
+	return closer
+}
+
 // runWithRuntime ensures the runtime is created and cleaned up for the command.
 func runWithRuntime(cmd *cobra.Command, fn func(context.Context, *runtimesvc.Runtime) error) error {
 	ctx := cmd.Context()
 	if ctx == nil {
 		ctx = context.Background()
+	}
+	// Boot-time config loads log through the stdlib logger, whose default
+	// target is stderr — right where the TUI draws. Redirect boot logs into
+	// the workspace log directory before anything loads, so the terminal
+	// stays clean until the runtime's rotating logger takes over.
+	if bootCloser := redirectBootLog(cfg.Workspace); bootCloser != nil {
+		defer bootCloser()
 	}
 	if _, err := runtimesvc.BootstrapStartupState(ctx, cfg, secrets); err != nil {
 		return err

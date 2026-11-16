@@ -1,4 +1,4 @@
-relurpish · none / sandbox
+relurpish / none   |   sandbox   |   none
 ╭───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 │ Sandbox Permissions                                                                                                   
 │ No manifest loaded                                                                                                    
@@ -35,6 +35,5 @@ relurpish · none / sandbox
 
 
 Opened sandbox permissions
-┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
-│ request to Euclo Type here · / commands                                                                              │
-└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+[ none ] >                                                                                                    
+plain text -> Euclo   / commands

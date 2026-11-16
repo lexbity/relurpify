@@ -507,6 +507,7 @@ func (p *ChatPane) work(run *chatRun, metadata map[string]any) {
 	}
 	run.journalRunID = ticket.RunID
 	run.cancelRun = ticket.Cancel
+	p.addSystemMessage("Euclo took the request. /run inspects the circuit · /cancel stops.")
 	// An early stop (closed before the ticket existed) forwards here; later
 	// stops reach the dispatcher directly through cancelRun.
 	select {

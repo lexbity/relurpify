@@ -1,4 +1,4 @@
-relurpish · none / ai-provider
+relurpish / none   |   ai-provider   |   none
 ╭────────────────────────────────────────────────────────────╮╭─────────────────────────────────────────────────────────
 │ Models                                                     ││ Configurator                                            
 │ AI Provider                                                ││ provider: mock-ollama                                   
@@ -35,6 +35,5 @@ tab switch focus  arrows navigate  enter select  e edit  r models  t test  s sav
 
 
 Opened model provider configuration
-┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
-│ request to Euclo Type here · / commands                                                                              │
-└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+[ none ] >                                                                                                    
+plain text -> Euclo   / commands

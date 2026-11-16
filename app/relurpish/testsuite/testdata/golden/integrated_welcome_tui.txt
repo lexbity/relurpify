@@ -1,4 +1,4 @@
-relurpish · none / welcome
+relurpish / none   |   welcome   |   none
                                                          
                                            New Session   
                                                          
@@ -35,6 +35,5 @@ relurpish · none / welcome
 
 
 execution unavailable · /doctor · /help
-┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
-│ request to Euclo Type here · / commands                                                                              │
-└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+[ none ] >                                                                                                    
+plain text -> Euclo   / commands

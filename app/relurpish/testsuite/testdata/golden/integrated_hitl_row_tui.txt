@@ -1,4 +1,4 @@
-relurpish · euclo / chat
+relurpish / euclo   |   chat · local-edit-on   |   euclo
 system
 Switched agent to: euclo
 
@@ -35,6 +35,5 @@ Switched agent to: euclo
 
 
 ready · /help · Ctrl+G attention
-┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
-│ request to Euclo Type here · / commands                                                                              │
-└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+[ euclo ] >                                                                                                    
+plain text -> Euclo   / commands

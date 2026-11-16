@@ -11,7 +11,6 @@ import (
 	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 )
 
 // Messages emitted by InputBar.
@@ -41,6 +40,9 @@ type commandItem struct {
 	Usage       string
 	Description string
 	Score       int
+	// Scope names where the command applies ("chat", "run", "global", …),
+	// rendered in the palette per keyframe 02.
+	Scope string
 }
 
 // InputBar owns multiline request editing and contextual slash completion.
@@ -80,6 +82,9 @@ type InputBar struct {
 	historyDraft *string
 	// Theme is the active semantic style source.
 	th *theme.Theme
+	// agentLabel names the surface owning the bar prompt (keyframe 01:
+	// "[ Euclo ] > draft").
+	agentLabel string
 }
 
 // NewInputBar creates a focused InputBar.
@@ -89,12 +94,20 @@ func NewInputBar() *InputBar {
 	ti.SetHeight(1)
 	ti.CharLimit = 65536
 	ti.Prompt = ""
-	setInputHint(&ti, "Type here · / commands")
+	setInputHint(&ti, "")
 	ti.Focus()
 	return &InputBar{input: ti, focused: true, th: theme.Default(), cmdReg: newHostCommandRegistry()}
 }
 
 // SetWorkspace sets the workspace path for file picker globbing.
+// SetAgent names the surface owning the bar prompt.
+func (b *InputBar) SetAgent(agent string) {
+	if b == nil {
+		return
+	}
+	b.agentLabel = strings.ToLower(strings.TrimSpace(agent))
+}
+
 func (b *InputBar) SetWorkspace(path string) {
 	b.workspace = path
 }
@@ -173,7 +186,7 @@ func (b *InputBar) SetSearchMode(on bool) {
 		b.SetFocused(true)
 		return
 	}
-	setInputHint(&b.input, "Type here · / commands")
+	setInputHint(&b.input, "")
 }
 
 // SetFilePickerMode enters or exits file picker mode.
@@ -184,7 +197,7 @@ func (b *InputBar) SetFilePickerMode(on bool) {
 		b.SetFocused(true)
 		return
 	}
-	setInputHint(&b.input, "Type here · / commands")
+	setInputHint(&b.input, "")
 	b.input.SetValue("")
 }
 
@@ -372,6 +385,10 @@ func (b *InputBar) Update(msg tea.Msg, activeTab TabID) (*InputBar, tea.Cmd) {
 		}
 
 		switch {
+		case msg.String() == "ctrl+f":
+			b.searchMode = !b.searchMode
+			b.SetSearchMode(b.searchMode)
+			return b, nil
 		case msg.String() == "alt+f":
 			return b, b.requestFileCompletion()
 		case msg.String() == "alt+enter":
@@ -524,45 +541,34 @@ func (b *InputBar) Update(msg tea.Msg, activeTab TabID) (*InputBar, tea.Cmd) {
 // View renders the input bar and any active inline hint.
 func (b *InputBar) View(activeTab TabID, streaming bool) string {
 	draft := parseInputDraft(b.input.Value(), activeTab, b.searchMode)
-	prompt := b.promptLabel(activeTab, draft)
-	prefix := ""
-	if prompt != "" {
-		prefix = b.th.Active().Render(prompt + " ")
+	agent := b.agentLabel
+	if agent == "" {
+		agent = "euclo"
 	}
+	owner := agent
+	if draft.commandMode {
+		owner = "commands"
+	}
+	head := b.th.Active().Render("[ "+owner+" ]") + b.th.Dim().Render(" > ") + b.input.View()
 
-	var hint string
+	var footer string
 	switch {
 	case b.gated:
-		hint = b.th.Dim().Render(" running · / commands available")
+		footer = "run active · / commands · ctrl+q quit"
 	case streaming:
-		hint = b.th.Dim().Render(" streaming · /cancel · Ctrl+Q quit")
+		footer = "streaming · /cancel · ctrl+q quit"
 	case b.pickerActive && len(b.pickerResult.Results) > 0:
-		hint = b.th.Dim().Render(" enter/tab select | esc cancel | ↑↓ navigate")
+		footer = "enter/tab select | esc cancel | arrows navigate"
 	case b.palOpen && len(b.palette) > 0:
-		hint = b.th.Dim().Render(" enter/tab complete | esc cancel | ↑↓ select")
+		footer = "enter/tab complete | esc cancel | arrows select"
 	case b.searchMode || draft.prefix == "?":
-		hint = b.th.Dim().Render(" esc exit search | enter apply")
+		footer = "esc exit search | enter apply"
 	default:
-		hint = ""
+		footer = "plain text -> Euclo   / commands"
 	}
-
-	content := prefix + terminalText(b.input.View())
-	if hint != "" {
-		content += " " + hint
-	}
-	barStyle := lipgloss.NewStyle().
-		Border(lipgloss.NormalBorder()).
-		BorderForeground(b.th.Palette().Dim).
-		Background(b.th.Palette().Surface).
-		Padding(0, 1)
-	if b.Focused() {
-		barStyle = lipgloss.NewStyle().
-			Border(lipgloss.NormalBorder()).
-			BorderForeground(b.th.Palette().Primary).
-			Background(b.th.Palette().Background).
-			Padding(0, 1)
-	}
-	return barStyle.Width(max(1, b.width-2)).Render(ansi.Truncate(content, max(1, b.width-4), ""))
+	width := max(1, b.width)
+	view := ansi.Truncate(head, width, "") + "\n" + b.th.Dim().Render(ansi.Truncate(footer, width, ""))
+	return view
 }
 
 // PickerView renders the active file picker overlay.

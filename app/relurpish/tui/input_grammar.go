@@ -31,8 +31,8 @@ func parseInputDraft(raw string, activeTab TabID, explicitSearch bool) inputDraf
 	}
 
 	prefix := string(trimmed[0])
-	if prefix == "/" {
-		draft.prefix = prefix
+	if prefix == "/" || prefix == ":" {
+		draft.prefix = "/"
 		draft.commandMode = true
 		draft.promptLabel = "command"
 		body := strings.TrimLeft(trimmed[1:], " ")
@@ -68,12 +68,12 @@ func parseCommandLine(raw string) (prefix string, name string, args []string, ok
 		return "", "", nil, false
 	}
 	prefix = string(trimmed[0])
-	if prefix != "/" {
+	if prefix != "/" && prefix != ":" {
 		return prefix, "", nil, false
 	}
 	body := strings.TrimSpace(trimmed[1:])
 	if body == "" {
-		return prefix, "", nil, false
+		return "/", "", nil, false
 	}
 	fields, err := commandWords(body)
 	if err != nil || len(fields) == 0 {
@@ -83,10 +83,10 @@ func parseCommandLine(raw string) (prefix string, name string, args []string, ok
 	if len(fields) > 1 {
 		args = append([]string(nil), fields[1:]...)
 	}
-	return prefix, name, args, true
+	return "/", name, args, true
 }
 
-func isCommandPrefix(r rune) bool { return r == '/' }
+func isCommandPrefix(r rune) bool { return r == '/' || r == ':' }
 
 func commandPaletteItems(reg *CommandRegistry, query string, tabID TabID, subTabID SubTabID) []commandItem {
 	var candidates []Command
@@ -104,9 +104,12 @@ func commandPaletteItems(reg *CommandRegistry, query string, tabID TabID, subTab
 				score = 2
 			}
 		}
+		scope := "global"
 		if len(cmd.SubTabFilter) > 0 {
+			scope = string(cmd.SubTabFilter[0])
 			score++
 		} else if len(cmd.TabFilter) > 0 {
+			scope = string(cmd.TabFilter[0])
 			score++
 		}
 		items = append(items, commandItem{
@@ -114,6 +117,7 @@ func commandPaletteItems(reg *CommandRegistry, query string, tabID TabID, subTab
 			Usage:       cmd.Usage,
 			Description: cmd.Description,
 			Score:       score,
+			Scope:       scope,
 		})
 	}
 	sort.SliceStable(items, func(i, j int) bool {

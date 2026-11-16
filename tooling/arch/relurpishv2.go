@@ -120,7 +120,7 @@ func MissingRelurpishV2Tests(listing string) []string {
 
 func MissingRelurpishV2IntegrationTests(listing string) []string {
 	var missing []string
-	for _, name := range []string{"TestV2DoctorWithoutRuntime", "TestV2PTYFocusAndBounds", "TestV2PTYDemoCommandDraftRoundTrip", "TestV2PTYActivityProviderAndDraft", "TestV2PTYRecipeAuthorSaveRunAndQuit", "TestV2PTYGuardInspectPatternAndDraft"} {
+	for _, name := range []string{"TestV2DoctorWithoutRuntime", "TestV2TmuxFocusAndBounds", "TestV2TmuxDemoCommandDraftRoundTrip", "TestV2TmuxActivityProviderAndDraft", "TestV2TmuxRecipeAuthorSaveRunAndQuit", "TestV2TmuxGuardInspectPatternAndDraft", "TestV2RuntimeOwnsRunAfterNavigation", "TestV2TmuxBootLogsStayOffTerminal"} {
 		found := false
 		for _, line := range strings.Split(listing, "\n") {
 			if strings.TrimSpace(line) == name {

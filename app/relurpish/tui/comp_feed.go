@@ -225,28 +225,19 @@ func RenderMessage(th *theme.Theme, msg Message, width int, spinnerView string) 
 	return th.Panel().Width(boxW).Render(b.String())
 }
 
+// renderMsgHeader labels a message the way keyframe 01 does: a sparse
+// lowercase role word — "you" for the user, the agent's name for answers.
 func renderMsgHeader(th *theme.Theme, msg Message) string {
-	ts := formatMessageTimestamp(msg.Timestamp)
-	icon, role := "💬", "User"
 	switch msg.Role {
 	case RoleUser:
-		icon, role = "👤", "You"
+		return th.Body().Render("you")
 	case RoleAgent:
-		icon, role = "🤖", "Agent"
-	case RoleSystem:
-		icon, role = "⚙", "System"
+		return th.Active().Render("euclo")
+	default:
+		return th.Dim().Render("system")
 	}
-	return th.Header().Render(fmt.Sprintf("%s [%s] %s", icon, ts, role))
 }
 
-func formatMessageTimestamp(t time.Time) string {
-	now := time.Now()
-	sameDay := t.Year() == now.Year() && t.Month() == now.Month() && t.Day() == now.Day()
-	if sameDay {
-		return t.Format("15:04")
-	}
-	return t.Format("Jan 02 15:04")
-}
 
 func renderAgentContent(th *theme.Theme, msg Message, width int, spinnerView string) string {
 	var b strings.Builder

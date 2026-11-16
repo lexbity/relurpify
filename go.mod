@@ -8,7 +8,6 @@ require (
 	github.com/charmbracelet/bubbles v0.21.0
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/lipgloss v1.1.0
-	github.com/creack/pty v1.1.24
 	github.com/dgraph-io/badger/v4 v4.9.2
 	github.com/muesli/termenv v0.16.0
 	github.com/sourcegraph/jsonrpc2 v0.2.1

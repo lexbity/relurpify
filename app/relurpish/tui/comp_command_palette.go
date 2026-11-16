@@ -3,6 +3,8 @@ package tui
 import (
 	"strings"
 
+	"github.com/charmbracelet/x/ansi"
+
 	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 )
 
@@ -65,16 +67,27 @@ func (p *CommandPalette) View() string {
 	if !p.IsOpen() {
 		return ""
 	}
-	header := "Commands"
+	header := "commands"
 	if strings.TrimSpace(p.label) != "" {
-		header = p.label
+		header = p.label + " + global commands"
 	}
 	lines := []string{p.th.Subhead().Render(header)}
 	for i, item := range p.items {
+		scope := item.Scope
+		if scope == "" {
+			scope = "global"
+		}
 		label := item.Usage
 		if item.Description != "" {
 			label += "  " + p.th.Dim().Render(item.Description)
 		}
+		pad := p.width - ansi.StringWidth(label) - ansi.StringWidth(scope) - 2
+		if pad > 0 {
+			label += strings.Repeat(" ", pad)
+		} else {
+			label += "  "
+		}
+		label += p.th.Dim().Render(scope)
 		if i == p.sel {
 			label = p.th.Active().Render(label)
 		} else {
@@ -82,12 +95,14 @@ func (p *CommandPalette) View() string {
 		}
 		lines = append(lines, label)
 	}
-	content := strings.Join(lines, "\n")
+	// Keyframe 02: the palette is a sparse list above the bar — no border
+	// box, one leading blank row, per-row scope labels.
+	content := "\n" + strings.Join(lines, "\n")
 	width := p.width
 	if width < 1 {
 		width = 1
 	}
-	return p.th.Panel().Width(width).Render(content)
+	return p.th.Bar().Width(width).Render(content)
 }
 
 // SetTheme sets the active semantic style source.

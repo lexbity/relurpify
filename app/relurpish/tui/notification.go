@@ -239,6 +239,9 @@ func (nb *NotificationBar) Update(msg tea.Msg) (*NotificationBar, tea.Cmd) {
 			return nb, func() tea.Msg { return NotifReviewTaskMsg{ID: id} }
 		}
 	case "d", "esc":
+		if current.Kind == NotifKindHITL {
+			return nb, nil
+		}
 		id := current.ID
 		nb.queue.Resolve(id)
 		return nb, func() tea.Msg { return NotifDismissMsg{ID: id} }
@@ -258,7 +261,7 @@ func (nb *NotificationBar) View() string {
 	var hint string
 	switch current.Kind {
 	case NotifKindHITL:
-		hint = nb.th.Dim().Render("  [y] once  [s] session  [a] always  [n] deny  [d] dismiss")
+		hint = nb.th.Dim().Render("  [y] once  [s] session  [a] always  [n] deny")
 	case NotifKindRestore:
 		hint = nb.th.Dim().Render("  [enter] restore  [d] dismiss")
 	case NotifKindDeferred:
@@ -312,9 +315,33 @@ func renderGenericNotification(th *theme.Theme, item NotificationItem) string {
 		rendered = th.Notif(theme.NotifInfo).Render(label)
 	}
 	if item.Kind == NotifKindHITL {
-		rendered += th.Dim().Render("  [y] once  [s] session  [a] always  [n] deny  [d] dismiss")
+		rendered += th.Dim().Render("  [y] once  [s] session  [a] always  [n] deny")
 	}
 	return rendered
+}
+
+// ViewQuiet renders the current notification as a single attention row
+// without any action-key hints: the banner makes pending decisions visible
+// from every canvas, while approval keys stay unbound until the deliberate
+// Ctrl+G focus (D-03 — typing must never approve).
+func (nb *NotificationBar) ViewQuiet() string {
+	if nb == nil || nb.queue == nil || nb.th == nil {
+		return ""
+	}
+	current, ok := nb.queue.Current()
+	if !ok {
+		return ""
+	}
+	more := ""
+	if nb.queue.Len() > 1 {
+		more = fmt.Sprintf(" (+%d more)", nb.queue.Len()-1)
+	}
+	label := "● " + current.Msg
+	if current.Kind == NotifKindHITL {
+		label = "● " + renderApprovalNotification(current)
+	}
+	return nb.th.Notif(theme.NotifHITL).Render(label) +
+		nb.th.Dim().Render(fmt.Sprintf("  ctrl+g to review%s", more))
 }
 
 // PromptOverlay returns a modal overlay for notifications that require

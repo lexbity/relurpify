@@ -1,4 +1,4 @@
-relurpish · none / keybindings
+relurpish / none   |   keybindings   |   none
 Settings / Keybindings
 
 > open_help              f1
@@ -6,6 +6,7 @@ Settings / Keybindings
   toggle_focus           f6
   focus_canvas           tab, ctrl+down
   open_attention         ctrl+g
+  cycle_mode             alt+m
   open_commands          ctrl+p
   page_up                pgup
   page_down              pgdown
@@ -33,8 +34,6 @@ Settings / Keybindings
 
 
 
-
 Opened keybindings
-┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
-│ request to Euclo Type here · / commands                                                                              │
-└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+[ none ] >                                                                                                    
+plain text -> Euclo   / commands

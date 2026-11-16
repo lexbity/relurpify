@@ -151,8 +151,15 @@ func registerUniversalCommands(r *CommandRegistry) {
 	r.Register(Command{Name: "run", Description: "Open the observed recipe circuit", Usage: "/run", Handler: rootHandleRun})
 	r.Register(Command{Name: "inspect", Description: "Inspect an observed recipe step", Usage: "/inspect [step-id]", Handler: rootHandleInspect, TabFilter: []TabID{TabRun}})
 	r.Register(Command{Name: "ask", Description: "Submit literal request text, including a leading slash", Usage: "/ask --text <JSON-string>", Handler: rootHandleLiteralRequest})
-	r.Register(Command{Name: "session", Description: "Open sessions", Usage: "/session", Handler: func(m *RootModel, _ []string) (*RootModel, tea.Cmd) { m.setActiveTab(TabWelcome); return m, nil }})
-	r.Register(Command{Name: "attention", Description: "Deliberately focus the pending decision", Usage: "/attention", Handler: func(m *RootModel, _ []string) (*RootModel, tea.Cmd) { m.decisionFocused = true; return m, nil }})
+	r.Register(Command{Name: "session", Description: "Open sessions", Usage: "/session", Handler: func(m *RootModel, _ []string) (*RootModel, tea.Cmd) { m.setActiveTab(TabWelcome); m.setFocus(FocusRegionRegion1); return m, nil }})
+	r.Register(Command{Name: "attention", Description: "Deliberately focus the pending decision", Usage: "/attention", Handler: func(m *RootModel, _ []string) (*RootModel, tea.Cmd) {
+		if (m.notifBar != nil && m.notifBar.Active()) || (m.hitlRow != nil && m.hitlRow.Active()) || (m.conversation != nil && m.frontendState.Decision != nil) {
+			m.decisionFocused = true
+		} else {
+			m.addSystemMessage("No pending decisions")
+		}
+		return m, nil
+	}})
 	r.Register(Command{Name: "chat", Description: "Return to the conversation", Usage: "/chat", Handler: func(m *RootModel, _ []string) (*RootModel, tea.Cmd) {
 		m.setActiveTab(TabChat)
 		m.setFocus(FocusRegionInput)
@@ -321,6 +328,7 @@ func rootHandleWorkspace(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 
 func rootHandlePermissions(m *RootModel, _ []string) (*RootModel, tea.Cmd) {
 	m.setActiveTab(TabSandbox)
+	m.setFocus(FocusRegionRegion1)
 	if m.baseSurface != nil {
 		m.baseSurface.FocusFilescopes()
 	}
@@ -340,6 +348,7 @@ func rootHandleSecurityGuard(m *RootModel, args []string) (*RootModel, tea.Cmd) 
 
 func rootHandleFileScopes(m *RootModel, _ []string) (*RootModel, tea.Cmd) {
 	m.setActiveTab(TabSandbox)
+	m.setFocus(FocusRegionRegion1)
 	if m.baseSurface != nil {
 		m.baseSurface.FocusFilescopes()
 	}
@@ -349,6 +358,7 @@ func rootHandleFileScopes(m *RootModel, _ []string) (*RootModel, tea.Cmd) {
 
 func rootHandleDoctor(m *RootModel, _ []string) (*RootModel, tea.Cmd) {
 	m.setActiveTab(TabDoctor)
+	m.setFocus(FocusRegionRegion1)
 	if m.baseSurface != nil {
 		m.baseSurface.OpenDoctor()
 	}
@@ -406,6 +416,7 @@ func rootHandleModel(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 			current = m.sharedSess.Model
 		}
 		m.setActiveTab(TabAIProvider)
+		m.setFocus(FocusRegionRegion1)
 		if m.baseSurface != nil {
 			m.baseSurface.OpenAIProvider()
 		}
@@ -427,6 +438,7 @@ func rootHandleModel(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 		m.sharedSess.Model = model
 	}
 	m.setActiveTab(TabAIProvider)
+	m.setFocus(FocusRegionRegion1)
 	if m.baseSurface != nil {
 		m.baseSurface.OpenAIProvider()
 	}
@@ -442,6 +454,7 @@ func rootHandleModelProvider(m *RootModel, _ []string) (*RootModel, tea.Cmd) {
 	}
 
 	m.setActiveTab(TabAIProvider)
+	m.setFocus(FocusRegionRegion1)
 	if m.baseSurface != nil {
 		m.baseSurface.OpenAIProvider()
 	}
@@ -461,6 +474,7 @@ func rootHandleModelProvider(m *RootModel, _ []string) (*RootModel, tea.Cmd) {
 
 func rootHandleKeybindings(m *RootModel, _ []string) (*RootModel, tea.Cmd) {
 	m.setActiveTab(TabKeybindings)
+	m.setFocus(FocusRegionRegion1)
 	if m.baseSurface != nil {
 		m.baseSurface.OpenKeybindings()
 	}
@@ -671,19 +685,44 @@ func rootHandleHITL(m *RootModel, _ []string) (*RootModel, tea.Cmd) {
 	return m, nil
 }
 
+// agentModes lists the valid execution modes in canonical order.
+func agentModes() []string {
+	return []string{
+		string(SubTabChatLocalRead),
+		string(SubTabChatLocalEdit),
+		string(SubTabChatOnlineRead),
+		string(SubTabChatOnlineEdit),
+	}
+}
+
 func rootHandleMode(m *RootModel, args []string) (*RootModel, tea.Cmd) {
+	current := ""
+	if m.sharedSess != nil {
+		current = m.sharedSess.Mode
+	}
 	if len(args) == 0 {
-		if m.sharedSess != nil && m.sharedSess.Mode != "" {
-			m.addSystemMessage(fmt.Sprintf("Current mode: %s", m.sharedSess.Mode))
-		} else {
-			m.addSystemMessage("Current mode: (default)")
+		if current == "" {
+			current = string(SubTabChatLocalEdit)
 		}
+		m.addSystemMessage(fmt.Sprintf("Current mode: %s. Modes: %s. Set one with /mode <mode>.", current, strings.Join(agentModes(), ", ")))
+		return m, nil
+	}
+	requested := strings.ToLower(strings.TrimSpace(args[0]))
+	valid := false
+	for _, mode := range agentModes() {
+		if requested == mode {
+			valid = true
+			break
+		}
+	}
+	if !valid {
+		m.addSystemMessage(fmt.Sprintf("Unknown mode %q. Modes: %s.", requested, strings.Join(agentModes(), ", ")))
 		return m, nil
 	}
 	if m.sharedSess != nil {
-		m.sharedSess.Mode = args[0]
+		m.sharedSess.Mode = requested
 	}
-	m.addSystemMessage(fmt.Sprintf("Set mode to: %s", args[0]))
+	m.addSystemMessage(fmt.Sprintf("Mode set to %s. Future requests run under it; the active run keeps its identity.", requested))
 	return m, nil
 }
 

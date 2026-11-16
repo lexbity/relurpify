@@ -18,14 +18,16 @@ func TestDefaultPaletteValues(t *testing.T) {
 		light string
 		dark  string
 	}{
-		{"Background", p.Background, "#f4f4f5", "#1f1f23"},
-		{"Surface", p.Surface, "#d8d8dd", "#2b2f36"},
-		{"Primary", p.Primary, "#005f87", "#7fd7ff"},
-		{"Secondary", p.Secondary, "#4f6d7a", "#8ad6c2"},
-		{"Success", p.Success, "#2f7d32", "#87d75f"},
-		{"Warning", p.Warning, "#9a5f00", "#ffd75f"},
-		{"Error", p.Error, "#b00020", "#ff8787"},
-		{"Dim", p.Dim, "#62666d", "#8d94a1"},
+		// Dark values are the V2 keyframe scheme: deep navy surfaces, teal
+		// accent, muted steel text (relurpish-keyframes/v2).
+		{"Background", p.Background, "#f4f4f5", "#10161f"},
+		{"Surface", p.Surface, "#d8d8dd", "#1a2230"},
+		{"Primary", p.Primary, "#005f87", "#56c9a5"},
+		{"Secondary", p.Secondary, "#4f6d7a", "#8b98a5"},
+		{"Success", p.Success, "#2f7d32", "#6fce8f"},
+		{"Warning", p.Warning, "#9a5f00", "#d9a562"},
+		{"Error", p.Error, "#b00020", "#e07a7a"},
+		{"Dim", p.Dim, "#62666d", "#5c6774"},
 	}
 
 	for _, tc := range cases {

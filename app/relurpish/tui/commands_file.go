@@ -25,7 +25,7 @@ type filePickerResultMsg struct {
 
 func filePickerQueryCmd(parent context.Context, rt RuntimeAdapter, request filePickerResultMsg) tea.Cmd {
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(parent, 2*time.Second)
+		ctx, cancel := context.WithTimeout(parent, 10*time.Second)
 		defer cancel()
 		pattern := strings.TrimPrefix(request.Query, "@") + "*"
 		result, err := rt.InvokeCapability(ctx, "cli_find", map[string]any{CapArgs: []string{request.Workspace, "-maxdepth", "4", "-name", pattern, "-type", "f", "-not", "-path", "*/.*", "-print0"}})

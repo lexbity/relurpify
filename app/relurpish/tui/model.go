@@ -2,7 +2,7 @@ package tui
 
 import (
 	"context"
-	"log"
+	"path/filepath"
 	"fmt"
 	"os"
 	"sort"
@@ -10,10 +10,12 @@ import (
 	"time"
 
 	runtimesvc "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
+	"codeburg.org/lexbit/relurpify/userconfig/config"
 
 	"github.com/charmbracelet/bubbles/textarea"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 
 	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
@@ -319,12 +321,27 @@ func NewRootModel(parentCtx context.Context, options HostOptions) RootModel {
 	}
 	initialAgent := normalizeSurfaceKey(info.Agent)
 	if initialAgent == "" {
-		initialAgent = "none"
+		// A live runtime with an installed agent surface boots onto it, not
+		// onto the command-less "none" surface: a fresh workspace with no
+		// saved session used to land on a chat canvas that could not run
+		// anything and offered no commands. "none" remains for diagnostics
+		// and demo boots, which construct their own session information.
+		if rt != nil && options.DemoScenario == "" {
+			if available := rt.AvailableAgents(); len(available) > 0 {
+				initialAgent = normalizeSurfaceKey(available[0])
+				sess.Agent = initialAgent
+			} else {
+				initialAgent = "none"
+			}
+		} else {
+			initialAgent = "none"
+		}
 	}
 	state := buildSurfaceState(parentCtx, factory, initialAgent, rt, ctx, sess, store, notifQ)
 	lifetime.ownSurface(state)
 	inputBar.SetCommandRegistry(state.cmdReg)
 	inputBar.SetContext(state.tabs.ActiveTab().ID, state.tabs.ActiveSubTab())
+	inputBar.SetAgent(initialAgent)
 
 	m := RootModel{
 		keys:              NewKeyMap(),
@@ -429,6 +446,9 @@ func NewRootModel(parentCtx context.Context, options HostOptions) RootModel {
 			m.startupLocked = true
 		}
 	}
+	if m.startupLocked && m.activeTab == TabDoctor {
+		m.setFocus(FocusRegionRegion1)
+	}
 	// P12: restore the checkpointed unsent draft. Failure is visible and
 	// never clears the in-memory state.
 	if options.UIRecovery != nil {
@@ -513,6 +533,9 @@ func (m *RootModel) activateSurface(agentName string) {
 	}
 	state := m.surfaceStateFor(key)
 	m.activeAgent = key
+	if m.inputBar != nil {
+		m.inputBar.SetAgent(key)
+	}
 	m.activeSurface = state.surface
 	m.tabs = state.tabs
 	m.cmdReg = state.cmdReg
@@ -944,6 +967,9 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case keyMatchesBinding(m.keys.AgentPicker, msg.String()):
 				m.openAgentPicker()
 				return m, nil
+			case keyMatchesBinding(m.keys.ModeCycle, msg.String()):
+				m.cycleMode()
+				return m, nil
 			}
 		}
 		if keyMsgMatchesBinding(msg, m.keys.FocusToggle) && !m.decisionFocused && !(m.activeTab == TabKeybindings && m.keybindings.OwnsEscape() && m.focus.State().InRegion1()) {
@@ -1055,6 +1081,13 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			ownsEscape = owner.OwnsEscape()
 		}
 		if m.focus.State().InRegion1() && isBaseFrameworkTab(m.activeTab) && !m.showHelp && !m.decisionFocused && (msg.String() != keyEsc || ownsEscape) && !keyMsgMatchesBinding(msg, m.keys.Attention) {
+			// Route printable text to the composer so plain typing always requests
+			// work; keep non-text/navigation keys with the focused canvas.
+			if printable, ok := printableKey(msg); ok {
+				m.setFocus(FocusRegionInput)
+				_, cmd := m.routeInputKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(printable)})
+				return m, cmd
+			}
 			return m, m.routeRegion1Key(msg)
 		}
 		if msg.String() == keyEsc && m.showHelp {
@@ -1062,7 +1095,11 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if keyMsgMatchesBinding(msg, m.keys.Attention) {
-			m.decisionFocused = true
+			if (m.notifBar != nil && m.notifBar.Active()) || (m.hitlRow != nil && m.hitlRow.Active()) || (m.conversation != nil && m.frontendState.Decision != nil) {
+				m.decisionFocused = true
+			} else {
+				m.addSystemMessage("No pending decisions")
+			}
 			return m, nil
 		}
 		if m.decisionFocused {
@@ -1073,12 +1110,15 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.decisionFocused = false
 				return m, nil
 			}
+			hasDecision := false
 			if m.hitlRow != nil && m.hitlRow.Active() {
+				hasDecision = true
 				if cmd, handled := m.hitlRow.HandleKey(msg); handled {
 					return m, cmd
 				}
 			}
 			if m.notifBar != nil && m.notifBar.Active() {
+				hasDecision = true
 				nb, cmd := m.notifBar.Update(msg)
 				m.notifBar = nb
 				if cmd != nil {
@@ -1086,7 +1126,9 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return m, cmd
 			}
-			m.decisionFocused = false
+			if !hasDecision {
+				m.decisionFocused = false
+			}
 		}
 		m.syncOverlayStack()
 		if m.overlays != nil {
@@ -1229,6 +1271,9 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case StartSessionMsg:
 		if err := m.switchActiveAgent(msg.Agent); err != nil {
 			m.addSystemMessage(fmt.Sprintf("Failed to start session: %v", err))
+		} else {
+			m.setActiveTab(TabChat)
+			m.setFocus(FocusRegionInput)
 		}
 		return m, nil
 
@@ -1536,9 +1581,10 @@ func (m RootModel) View() string {
 	}
 	state := m.InteractionState()
 	label := string(state.Canvas)
-	header := m.th.Dim().Render("relurpish · " + terminalText(state.Agent) + " / " + label)
+	// Keyframe 01 header: relurpish / workspace | canvas[ · mode] | posture.
+	header := m.headerView(state, label)
 	if m.demoScenario != "" {
-		header = m.th.Dim().Render("DEMO · relurpish / " + label + " · " + terminalText(m.demoScenario))
+		header = m.th.Dim().Render("DEMO · ") + m.headerView(state, label)
 	}
 	body := terminalText(m.activePaneView())
 	if m.activeTab == TabChat {
@@ -1576,14 +1622,19 @@ func (m RootModel) View() string {
 		status = "Decision waiting · Ctrl+G opens it · typing stays in your request"
 	}
 	if m.decisionFocused {
-		status = "decision focused · Escape returns to your draft"
-		if m.hitlRow != nil && m.hitlRow.Active() {
-			body = m.hitlRow.View()
-		} else if m.notifBar != nil {
-			body = m.notifBar.View()
-		}
-		if m.conversation != nil && m.frontendState.Decision != nil {
-			body = m.frontendDecisionView()
+		hasDecision := (m.hitlRow != nil && m.hitlRow.Active()) || (m.notifBar != nil && m.notifBar.Active()) || (m.conversation != nil && m.frontendState.Decision != nil)
+		if !hasDecision {
+			// No active decision to review; keep canvas intact.
+		} else {
+			status = "decision focused · Escape returns to your draft"
+			if m.hitlRow != nil && m.hitlRow.Active() {
+				body = m.hitlRow.View()
+			} else if m.notifBar != nil {
+				body = m.notifBar.View()
+			}
+			if m.conversation != nil && m.frontendState.Decision != nil {
+				body = m.frontendDecisionView()
+			}
 		}
 	}
 	if m.cmdPalette != nil && m.cmdPalette.IsOpen() {
@@ -1601,7 +1652,14 @@ func (m RootModel) View() string {
 		status = "File references · Enter inserts text · no file is ingested"
 	}
 	bar := m.inputBar.View(m.activeTab, m.chat != nil && m.chat.HasActiveRuns())
-	rows := max(0, m.height-2-lipgloss.Height(bar))
+	// Pending decisions stay visible on every canvas (keyframe 06): one
+	// attention row above the status line, without action-key hints until the
+	// deliberate Ctrl+G focus.
+	banner := ""
+	if m.notifBar != nil && m.notifBar.Active() && !m.decisionFocused && !m.quitReview {
+		banner = m.notifBar.ViewQuiet()
+	}
+	rows := max(0, m.height-2-lipgloss.Height(bar)-lipgloss.Height(banner))
 	lines := strings.Split(body, "\n")
 	start := min(max(0, m.canvasOffset-1), max(0, len(lines)-rows))
 	detail := m.showHelp || m.decisionFocused || m.quitReview || m.agentPicker.IsOpen() || m.cmdPalette.IsOpen() || m.inputBar.IsFilePickerActive()
@@ -1615,7 +1673,82 @@ func (m RootModel) View() string {
 	for lipgloss.Height(content) < rows {
 		content += "\n"
 	}
-	return boundedScreen(strings.Join([]string{header, content, m.th.Dim().Render(terminalText(status)), bar}, "\n"), m.width, m.height)
+	statusRow := m.th.Dim().Render(terminalText(status))
+	if m.inputBar != nil && strings.TrimSpace(m.inputBar.Value()) != "" {
+		right := "draft preserved"
+		pad := m.width - ansi.StringWidth(terminalText(status)) - ansi.StringWidth(right) - 2
+		if pad > 0 {
+			statusRow += strings.Repeat(" ", pad)
+		} else {
+			statusRow += "  "
+		}
+		statusRow += m.th.Dim().Render(right)
+	}
+	frame := []string{header, content}
+	if banner != "" {
+		frame = append(frame, banner)
+	}
+	frame = append(frame, statusRow, bar)
+	return boundedScreen(strings.Join(frame, "\n"), m.width, m.height)
+}
+
+// headerView renders the keyframe-01 header: workspace, canvas (with the
+// active agent mode on chat), and the selection posture on the right.
+func (m RootModel) headerView(state InteractionState, canvas string) string {
+	workspace := ""
+	if m.sharedSess != nil && m.sharedSess.Workspace != "" {
+		workspace = filepath.Base(m.sharedSess.Workspace)
+	}
+	if workspace == "" {
+		workspace = terminalText(state.Agent)
+	}
+	segment := canvas
+	if m.activeTab == TabChat {
+		mode := ""
+		if m.sharedSess != nil && m.sharedSess.Mode != "" {
+			mode = m.sharedSess.Mode
+		} else if sub := m.tabs.ActiveSubTab(); sub != "" {
+			mode = string(sub)
+		}
+		if mode != "" {
+			segment = canvas + " · " + mode
+		}
+	}
+	right := postureLabel(m)
+	if right == "" {
+		right = terminalText(state.Agent)
+	}
+	left := "relurpish / " + workspace + "   |   " + segment + "   |   " + right
+	return m.th.Dim().Render(ansi.Truncate(left, max(1, m.width), ""))
+}
+
+// cycleMode switches the execution mode for FUTURE requests: the active run
+// keeps its identity. The header and this notice are the visible state.
+func (m *RootModel) cycleMode() {
+	modes := agentModes()
+	current := string(SubTabChatLocalEdit)
+	if m.sharedSess != nil && m.sharedSess.Mode != "" {
+		current = m.sharedSess.Mode
+	}
+	next := modes[0]
+	for i, mode := range modes {
+		if mode == current {
+			next = modes[(i+1)%len(modes)]
+			break
+		}
+	}
+	if m.sharedSess != nil {
+		m.sharedSess.Mode = next
+	}
+	m.addSystemMessage(fmt.Sprintf("Mode: %s — future requests run under it; the active run keeps its identity.", next))
+}
+
+// postureLabel names the approval posture when the runtime exposes one.
+func postureLabel(m RootModel) string {
+	if typeAware, ok := m.runtime.(interface{ ExecutionMode() config.ExecutionMode }); ok && m.runtime != nil {
+		return string(typeAware.ExecutionMode())
+	}
+	return ""
 }
 
 func (m RootModel) activePaneView() string {
@@ -1854,7 +1987,6 @@ func (m *RootModel) applyDoctorReport(report runtimesvc.DoctorReport) {
 	if m == nil {
 		return
 	}
-	log.Printf("doctor-debug: applyDoctorReport ready=%v locked=%v", report.Ready(), m.startupLocked)
 	wasLocked := m.startupLocked
 	m.startupLocked = !report.Ready()
 	m.doctor.SetReport(report)
@@ -1862,6 +1994,10 @@ func (m *RootModel) applyDoctorReport(report runtimesvc.DoctorReport) {
 		m.addSystemMessage("Doctor checks passed. Submit your preserved draft when ready.")
 		if postures := doctorPostureSummary(report); postures != "" {
 			m.addSystemMessage(postures)
+		}
+		if m.activeTab == TabDoctor {
+			m.setActiveTab(TabChat)
+			m.setFocus(FocusRegionInput)
 		}
 	}
 }
@@ -1886,6 +2022,13 @@ func (m RootModel) handleInputSubmitted(msg InputSubmittedMsg) (tea.Model, tea.C
 	if cmd != nil && m.inputBar != nil {
 		m.inputBar.Accept(msg.Value, msg.Sequence)
 		m.notice = ""
+		// The conversation is where the request and its answer live
+		// (keyframe 01): an accepted submit from another canvas returns
+		// there. Recipe authoring intercepts composer keys before this
+		// message, so an accepted submit is always a conversation request.
+		if m.activeTab != TabChat {
+			m.setActiveTab(TabChat)
+		}
 	}
 	return m, cmd
 }

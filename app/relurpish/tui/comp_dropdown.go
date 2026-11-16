@@ -21,14 +21,15 @@ type DropdownSelectedMsg struct {
 // items. Both keyboard (↑↓ enter esc) and mouse (click to open, click item)
 // are supported.
 type Dropdown struct {
-	label   string
-	items   []DropdownItem
-	open    bool
-	sel     int
-	focused bool
-	x, y    int // last known render position for mouse hit-testing
-	width   int
-	th      *theme.Theme
+	label    string
+	items    []DropdownItem
+	open     bool
+	sel      int
+	selected int
+	focused  bool
+	x, y     int // last known render position for mouse hit-testing
+	width    int
+	th       *theme.Theme
 }
 
 // DropdownItem is a single option in a dropdown list.
@@ -40,8 +41,10 @@ type DropdownItem struct {
 // NewDropdown creates a closed dropdown with the given label.
 func NewDropdown(label string, items []DropdownItem) *Dropdown {
 	return &Dropdown{
-		label: label,
-		items: items,
+		label:    label,
+		items:    items,
+		selected: 0,
+		sel:      0,
 	}
 }
 
@@ -64,23 +67,30 @@ func (d *Dropdown) IsOpen() bool { return d.open }
 
 // Selected returns the currently selected item (or zero value).
 func (d *Dropdown) Selected() DropdownItem {
-	if d.sel < 0 || d.sel >= len(d.items) {
+	if d.selected < 0 || d.selected >= len(d.items) {
 		return DropdownItem{}
 	}
-	return d.items[d.sel]
+	return d.items[d.selected]
 }
 
 // SelectedID returns the ID of the selected item.
 func (d *Dropdown) SelectedID() string {
-	if d.sel < 0 || d.sel >= len(d.items) {
+	if d.selected < 0 || d.selected >= len(d.items) {
 		return ""
 	}
-	return d.items[d.sel].ID
+	return d.items[d.selected].ID
 }
 
 // Open opens the dropdown list.
-func (d *Dropdown) Open()  { d.open = true }
-func (d *Dropdown) Close() { d.open = false; d.sel = 0 }
+func (d *Dropdown) Open() {
+	d.open = true
+	if d.selected >= 0 && d.selected < len(d.items) {
+		d.sel = d.selected
+	} else {
+		d.sel = 0
+	}
+}
+func (d *Dropdown) Close() { d.open = false }
 
 // Update handles keyboard input. Returns a command when enter is pressed on
 // an item.
@@ -90,7 +100,7 @@ func (d *Dropdown) Update(msg tea.KeyMsg) (tea.Cmd, bool) {
 	}
 	if !d.open {
 		if msg.String() == "enter" || msg.String() == " " {
-			d.open = true
+			d.Open()
 			return nil, true
 		}
 		return nil, false
@@ -107,12 +117,15 @@ func (d *Dropdown) Update(msg tea.KeyMsg) (tea.Cmd, bool) {
 		}
 		return nil, true
 	case "enter", " ":
-		d.open = false
 		if d.sel >= 0 && d.sel < len(d.items) {
+			d.selected = d.sel
+			id, label := d.items[d.sel].ID, d.items[d.sel].Label
+			d.open = false
 			return func() tea.Msg {
-				return DropdownSelectedMsg{ID: d.items[d.sel].ID, Label: d.items[d.sel].Label}
+				return DropdownSelectedMsg{ID: id, Label: label}
 			}, true
 		}
+		d.open = false
 		return nil, true
 	case "esc":
 		d.open = false
@@ -130,9 +143,11 @@ func (d *Dropdown) HandleClick(x, y int) (tea.Cmd, bool) {
 		idx := y - listTop
 		if idx >= 0 && idx < len(d.items) && x >= d.x && x <= d.x+d.width {
 			d.sel = idx
+			d.selected = idx
+			id, label := d.items[idx].ID, d.items[idx].Label
 			d.open = false
 			return func() tea.Msg {
-				return DropdownSelectedMsg{ID: d.items[idx].ID, Label: d.items[idx].Label}
+				return DropdownSelectedMsg{ID: id, Label: label}
 			}, true
 		}
 		d.open = false
@@ -140,7 +155,7 @@ func (d *Dropdown) HandleClick(x, y int) (tea.Cmd, bool) {
 	}
 	// Check closed control hit area.
 	if y == d.y && x >= d.x && x <= d.x+d.width {
-		d.open = true
+		d.Open()
 		return nil, true
 	}
 	return nil, false
@@ -159,6 +174,10 @@ func (d *Dropdown) View() string {
 		d.th = theme.Default()
 	}
 	prefix := fmt.Sprintf("%s ", d.label)
+	display := ""
+	if sel := d.Selected(); sel.Label != "" {
+		display = sel.Label + " "
+	}
 	if d.open {
 		itemLines := make([]string, 0, len(d.items)+1)
 		for i, item := range d.items {
@@ -173,9 +192,9 @@ func (d *Dropdown) View() string {
 			itemLines = append(itemLines, line)
 		}
 		return lipgloss.JoinVertical(lipgloss.Left,
-			d.th.Button(d.focused).Render(prefix+"▴"),
+			d.th.Button(d.focused).Render(prefix+display+"▴"),
 			strings.Join(itemLines, "\n"),
 		)
 	}
-	return d.th.Button(d.focused).Render(prefix + "▾")
+	return d.th.Button(d.focused).Render(prefix + display + "▾")
 }

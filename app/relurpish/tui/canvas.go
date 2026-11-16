@@ -23,7 +23,16 @@ func (m RootModel) chatCanvasLines() []string {
 		if message.Text == "" {
 			continue
 		}
-		lines = append(lines, message.Role)
+		// Keyframe 01 labels: sparse lowercase role words — "you" for the
+		// user's request, the agent's name for its answer.
+		label := m.th.Dim().Render(strings.ToLower(message.Role))
+		switch message.Role {
+		case "user":
+			label = m.th.Body().Render("you")
+		case "agent":
+			label = m.th.Active().Render("euclo")
+		}
+		lines = append(lines, label)
 		text := ansi.Hardwrap(terminalText(message.Text), max(1, m.width), true)
 		lines = append(lines, strings.Split(text, "\n")...)
 		lines = append(lines, "")
