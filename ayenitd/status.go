@@ -185,9 +185,23 @@ func (w *statusWriter) writeOnce() error {
 	if err := os.MkdirAll(filepath.Dir(final), 0o700); err != nil {
 		return fmt.Errorf("status: mkdir: %w", err)
 	}
-	tmp := final + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o600); err != nil {
+	// Distinct temp file per write: parallel writeOnce callers must never
+	// share a temp path, or interleaved truncate/write/rename rounds can
+	// tear two JSON documents into one. Rename of a private temp file is
+	// atomic, so status.json always holds exactly one complete snapshot.
+	tmpFile, err := os.CreateTemp(filepath.Dir(final), filepath.Base(final)+".tmp*")
+	if err != nil {
+		return fmt.Errorf("status: create temp: %w", err)
+	}
+	tmp := tmpFile.Name()
+	if _, err := tmpFile.Write(data); err != nil {
+		_ = tmpFile.Close()
+		os.Remove(tmp)
 		return fmt.Errorf("status: write: %w", err)
+	}
+	if err := tmpFile.Close(); err != nil {
+		os.Remove(tmp)
+		return fmt.Errorf("status: close temp: %w", err)
 	}
 	if err := os.Rename(tmp, final); err != nil {
 		os.Remove(tmp)
