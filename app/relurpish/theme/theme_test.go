@@ -18,16 +18,17 @@ func TestDefaultPaletteValues(t *testing.T) {
 		light string
 		dark  string
 	}{
-		// Dark values are the V2 keyframe scheme: deep navy surfaces, teal
-		// accent, muted steel text (relurpish-keyframes/v2).
-		{"Background", p.Background, "#f4f4f5", "#10161f"},
-		{"Surface", p.Surface, "#d8d8dd", "#1a2230"},
-		{"Primary", p.Primary, "#005f87", "#56c9a5"},
-		{"Secondary", p.Secondary, "#4f6d7a", "#8b98a5"},
-		{"Success", p.Success, "#2f7d32", "#6fce8f"},
-		{"Warning", p.Warning, "#9a5f00", "#d9a562"},
-		{"Error", p.Error, "#b00020", "#e07a7a"},
-		{"Dim", p.Dim, "#62666d", "#5c6774"},
+		// Dark values are the V2 keyframe scheme (relurpify-contrast):
+		// charcoal/navy canvas, restrained surfaces, muted teal selection/activity,
+		// higher-contrast readable text/status hues (relurpish-keyframes/v2).
+		{"Background", p.Background, "#f6f7f8", "#0b0f14"},
+		{"Surface", p.Surface, "#e4e7eb", "#151b23"},
+		{"Primary", p.Primary, "#006d5b", "#7de2c8"},
+		{"Secondary", p.Secondary, "#334155", "#c7d2de"},
+		{"Success", p.Success, "#1f7a3f", "#86efac"},
+		{"Warning", p.Warning, "#9a6700", "#f6c177"},
+		{"Error", p.Error, "#b42318", "#ff8f8f"},
+		{"Dim", p.Dim, "#667085", "#7b8794"},
 	}
 
 	for _, tc := range cases {

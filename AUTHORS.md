@@ -24,3 +24,4 @@ Prestin Liu
 - GLM 5.3 - via [Zcode](z.ai)
 - MiMo-V2.6-Flash - via [Opencode](https://opencode.ai/)
 - longcat-2.5 - via [Opencode](https://opencode.ai/)
+- "Iceman Contributor" [Opencode]

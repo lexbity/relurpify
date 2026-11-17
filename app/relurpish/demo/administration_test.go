@@ -67,7 +67,6 @@ func TestV2ConfigurationInspectorIsReadOnlyAndDraftPreserving(t *testing.T) {
 func TestV2ReboundHelpUsesHostMapWithoutOldAlias(t *testing.T) {
 	m, _ := model(t, "quiet")
 	m = command(m, "keybindings")
-	m = press(m, tea.KeyF6)
 	m, _ = update(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'e'}})
 	m = press(m, tea.KeyF2, tea.KeyEnter, tea.KeyF6, tea.KeyF2)
 	if !strings.Contains(m.View(), "Commands /") {

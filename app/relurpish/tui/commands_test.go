@@ -19,7 +19,7 @@ func (s *recipeGuestSurface) RegisterCommands(reg *CommandRegistry) {
 }
 
 func TestParseInputDraftPrefixes(t *testing.T) {
-	for _, raw := range []string{"> write docs", ":git status", "? why", "ordinary request"} {
+	for _, raw := range []string{"> write docs", "? why", "ordinary request"} {
 		draft := parseInputDraft(raw, TabSandbox, false)
 		if draft.commandMode || draft.filterMode || draft.prefix != "" || draft.current != raw {
 			t.Fatalf("ordinary request reinterpreted: %#v", draft)
@@ -28,6 +28,12 @@ func TestParseInputDraftPrefixes(t *testing.T) {
 	draft := parseInputDraft("/commit fix", TabChat, false)
 	if !draft.commandMode || draft.command != "commit" || len(draft.args) != 1 || draft.args[0] != "fix" {
 		t.Fatalf("bad command: %#v", draft)
+	}
+	// The colon prefix is a command alias (ex-mode ergonomics): it must
+	// open the command palette rather than submit literal request text.
+	colon := parseInputDraft(":git status", TabChat, false)
+	if !colon.commandMode || colon.prefix != "/" || colon.command != "git" || colon.current != "status" {
+		t.Fatalf("colon command not recognized: %#v", colon)
 	}
 }
 

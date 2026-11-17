@@ -248,6 +248,7 @@ func TestV2GuardActualDiskInspectionCannotMutatePolicy(t *testing.T) {
 
 func TestV2GuardPatternFieldKeepsGlobalAttentionReachable(t *testing.T) {
 	m := NewRootModel(t.Context(), HostOptions{Guards: &guardReaderFixture{}})
+	m.notifQ.Push(NotificationItem{ID: "hitl-1", Kind: NotifKindHITL, Msg: "execution approval: euclo.policy.gate"})
 	m.inputBar.SetValue("unsent request")
 	_, cmd := rootHandleSecurityGuard(&m, nil)
 	next, _ := m.Update(cmd())

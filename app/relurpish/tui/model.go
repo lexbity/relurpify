@@ -2,9 +2,9 @@ package tui
 
 import (
 	"context"
-	"path/filepath"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -187,6 +187,11 @@ func (m *RootModel) propagateTheme() {
 			setter.SetTheme(m.th)
 		}
 	}
+	if m.baseSurface != nil {
+		if setter, ok := m.baseSurface.(ThemeSetter); ok {
+			setter.SetTheme(m.th)
+		}
+	}
 	if m.tasks != nil {
 		m.tasks.SetTheme(m.th)
 	}
@@ -210,6 +215,36 @@ func (m *RootModel) propagateTheme() {
 	}
 	if m.overlays != nil {
 		m.overlays.SetTheme(m.th)
+	}
+	if m.keybindings != nil {
+		if setter, ok := interface{}(m.keybindings).(ThemeSetter); ok {
+			setter.SetTheme(m.th)
+		}
+	}
+	if m.doctor != nil {
+		if setter, ok := interface{}(m.doctor).(ThemeSetter); ok {
+			setter.SetTheme(m.th)
+		}
+	}
+	if m.workshop != nil {
+		if setter, ok := interface{}(m.workshop).(ThemeSetter); ok {
+			setter.SetTheme(m.th)
+		}
+	}
+	if m.guard != nil {
+		if setter, ok := interface{}(m.guard).(ThemeSetter); ok {
+			setter.SetTheme(m.th)
+		}
+	}
+	if m.provider != nil {
+		if setter, ok := interface{}(m.provider).(ThemeSetter); ok {
+			setter.SetTheme(m.th)
+		}
+	}
+	if m.services != nil {
+		if setter, ok := interface{}(m.services).(ThemeSetter); ok {
+			setter.SetTheme(m.th)
+		}
 	}
 }
 
@@ -879,6 +914,15 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if m.quitReview {
 			return m.quitKey(msg)
+		}
+		// Chat pane permission modal is an in-place overlay; route keys directly
+		// so approvals don't require the separate attention/decision page flow.
+		if m.activeTab == TabChat && m.chat != nil && !m.showHelp {
+			if modal, ok := m.chat.(interface{ HasPermissionModal() bool }); ok && modal.HasPermissionModal() {
+				chatPane, chatCmd := m.chat.Update(msg)
+				m.chat = chatPane
+				return m, chatCmd
+			}
 		}
 		if m.showHelp {
 			commands := m.helpCommands()
@@ -1587,7 +1631,9 @@ func (m RootModel) View() string {
 		header = m.th.Dim().Render("DEMO · ") + m.headerView(state, label)
 	}
 	body := terminalText(m.activePaneView())
-	if m.activeTab == TabChat {
+	if m.activeTab == TabChat && m.chat != nil {
+		body = m.chat.View()
+	} else if m.activeTab == TabChat {
 		body = strings.Join(m.chatCanvasLines(), "\n")
 	}
 	if m.activeTab == TabRun {
@@ -1689,7 +1735,11 @@ func (m RootModel) View() string {
 		frame = append(frame, banner)
 	}
 	frame = append(frame, statusRow, bar)
-	return boundedScreen(strings.Join(frame, "\n"), m.width, m.height)
+	out := boundedScreen(strings.Join(frame, "\n"), m.width, m.height)
+	if m.th != nil {
+		out = m.th.AppBackground().Width(m.width).Height(m.height).Render(out)
+	}
+	return out
 }
 
 // headerView renders the keyframe-01 header: workspace, canvas (with the

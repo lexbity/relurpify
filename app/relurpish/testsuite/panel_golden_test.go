@@ -120,8 +120,15 @@ func normalizeSnapshot(view, root string) string {
 }
 
 func normalizeGoldenText(s string) string {
+	s = ansiStrip.ReplaceAllString(s, "")
 	return strings.TrimRight(strings.ReplaceAll(s, "\r\n", "\n"), "\n")
 }
+
+// ansiStrip removes ANSI escape sequences from rendered views so golden
+// snapshots compare structure/content rather than terminal styling. Escape
+// sequences vary with theme and terminal capabilities; the snapshots are
+// meant to pin layout and text, not color codes.
+var ansiStrip = regexp.MustCompile(`\x1b\[[0-9;?]*[ -/]*[@-~]`)
 
 type sandboxFixtureRuntime struct {
 	workspace string

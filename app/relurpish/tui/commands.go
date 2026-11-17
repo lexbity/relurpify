@@ -151,7 +151,11 @@ func registerUniversalCommands(r *CommandRegistry) {
 	r.Register(Command{Name: "run", Description: "Open the observed recipe circuit", Usage: "/run", Handler: rootHandleRun})
 	r.Register(Command{Name: "inspect", Description: "Inspect an observed recipe step", Usage: "/inspect [step-id]", Handler: rootHandleInspect, TabFilter: []TabID{TabRun}})
 	r.Register(Command{Name: "ask", Description: "Submit literal request text, including a leading slash", Usage: "/ask --text <JSON-string>", Handler: rootHandleLiteralRequest})
-	r.Register(Command{Name: "session", Description: "Open sessions", Usage: "/session", Handler: func(m *RootModel, _ []string) (*RootModel, tea.Cmd) { m.setActiveTab(TabWelcome); m.setFocus(FocusRegionRegion1); return m, nil }})
+	r.Register(Command{Name: "session", Description: "Open sessions", Usage: "/session", Handler: func(m *RootModel, _ []string) (*RootModel, tea.Cmd) {
+		m.setActiveTab(TabWelcome)
+		m.setFocus(FocusRegionRegion1)
+		return m, nil
+	}})
 	r.Register(Command{Name: "attention", Description: "Deliberately focus the pending decision", Usage: "/attention", Handler: func(m *RootModel, _ []string) (*RootModel, tea.Cmd) {
 		if (m.notifBar != nil && m.notifBar.Active()) || (m.hitlRow != nil && m.hitlRow.Active()) || (m.conversation != nil && m.frontendState.Decision != nil) {
 			m.decisionFocused = true
@@ -177,7 +181,8 @@ func registerUniversalCommands(r *CommandRegistry) {
 		{Name: "model-provider", Description: "Open model provider configuration", Usage: "/model-provider", Handler: rootHandleModelProvider},
 		{Name: "keybindings", Description: "Open keybinding configuration", Usage: "/keybindings", Handler: rootHandleKeybindings},
 		{Name: "help", Description: "Show available commands", Usage: "/help [command]", Handler: rootHandleHelp},
-		{Name: "mode", Description: "Set agent mode", Usage: "/mode <mode>", Handler: rootHandleMode},
+		{Name: "exe-mode", Description: "Set execution mode for future requests", Usage: "/exe-mode <mode>", Handler: rootHandleExecMode},
+		{Name: "mode", Description: "Switch canvas/view", Usage: "/mode <canvas>", Handler: rootHandleCanvasMode},
 		{Name: "agent", Description: "Switch agent type", Usage: "/agent <name>", Handler: rootHandleAgent},
 		{Name: "cancel", Description: "Request cancellation of the current run", Usage: "/cancel", Handler: rootHandleStop, Arguments: &ArgumentCount{}},
 		{Name: "retry", Description: "Retry last prompt", Usage: "/retry", Handler: rootHandleRetry},
@@ -695,7 +700,7 @@ func agentModes() []string {
 	}
 }
 
-func rootHandleMode(m *RootModel, args []string) (*RootModel, tea.Cmd) {
+func rootHandleExecMode(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 	current := ""
 	if m.sharedSess != nil {
 		current = m.sharedSess.Mode
@@ -704,7 +709,7 @@ func rootHandleMode(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 		if current == "" {
 			current = string(SubTabChatLocalEdit)
 		}
-		m.addSystemMessage(fmt.Sprintf("Current mode: %s. Modes: %s. Set one with /mode <mode>.", current, strings.Join(agentModes(), ", ")))
+		m.addSystemMessage(fmt.Sprintf("Current execution mode: %s. Modes: %s. Set one with /exe-mode <mode>.", current, strings.Join(agentModes(), ", ")))
 		return m, nil
 	}
 	requested := strings.ToLower(strings.TrimSpace(args[0]))
@@ -716,13 +721,92 @@ func rootHandleMode(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 		}
 	}
 	if !valid {
-		m.addSystemMessage(fmt.Sprintf("Unknown mode %q. Modes: %s.", requested, strings.Join(agentModes(), ", ")))
+		m.addSystemMessage(fmt.Sprintf("Unknown execution mode %q. Modes: %s.", requested, strings.Join(agentModes(), ", ")))
 		return m, nil
 	}
 	if m.sharedSess != nil {
 		m.sharedSess.Mode = requested
 	}
-	m.addSystemMessage(fmt.Sprintf("Mode set to %s. Future requests run under it; the active run keeps its identity.", requested))
+	m.addSystemMessage(fmt.Sprintf("Execution mode set to %s. Future requests run under it; the active run keeps its identity.", requested))
+	return m, nil
+}
+
+func rootHandleCanvasMode(m *RootModel, args []string) (*RootModel, tea.Cmd) {
+	if m == nil || m.tabs == nil {
+		return m, nil
+	}
+	available := m.tabs.All()
+	if len(args) == 0 {
+		names := make([]string, 0, len(available))
+		for _, t := range available {
+			names = append(names, string(t.ID))
+		}
+		m.addSystemMessage(fmt.Sprintf("Current canvas: %s. Canvases: %s. Switch with /mode <canvas>.", m.activeTab, strings.Join(names, ", ")))
+		return m, nil
+	}
+	requested := strings.ToLower(strings.TrimSpace(strings.Join(args, " ")))
+	// normalize common aliases
+	aliases := map[string]TabID{
+		"chat":           TabChat,
+		"run":            TabRun,
+		"workshop":       TabWorkshop,
+		"settings":       TabSettings,
+		"doctor":         TabDoctor,
+		"welcome":        TabWelcome,
+		"sandbox":        TabSandbox,
+		"security":       TabSecurityGuard,
+		"securityguard":  TabSecurityGuard,
+		"security-guard": TabSecurityGuard,
+		"provider":       TabAIProvider,
+		"ai-provider":    TabAIProvider,
+		"model-provider": TabAIProvider,
+		"keybindings":    TabKeybindings,
+		"config":         TabConfiguration,
+		"configuration":  TabConfiguration,
+		"services":       TabServices,
+		"activity":       TabActivity,
+	}
+	var target TabID
+	if id, ok := aliases[requested]; ok {
+		target = id
+	}
+	if target == "" {
+		for _, t := range available {
+			id := strings.ToLower(string(t.ID))
+			label := strings.ToLower(strings.TrimSpace(t.Label))
+			if requested == id || requested == label || strings.ReplaceAll(requested, " ", "-") == id || strings.ReplaceAll(requested, " ", "") == strings.ReplaceAll(id, "-", "") {
+				target = t.ID
+				break
+			}
+		}
+	}
+	if target == "" {
+		// helpful hint for requested workspace-name style canvases in keyframes
+		names := make([]string, 0, len(available))
+		for _, t := range available {
+			names = append(names, string(t.ID))
+		}
+		m.addSystemMessage(fmt.Sprintf("Unknown canvas %q. Available canvases: %s.", strings.Join(args, " "), strings.Join(names, ", ")))
+		return m, nil
+	}
+	// ensure target is actually registered/available in this session
+	found := false
+	for _, t := range available {
+		if t.ID == target {
+			found = true
+			break
+		}
+	}
+	if !found {
+		names := make([]string, 0, len(available))
+		for _, t := range available {
+			names = append(names, string(t.ID))
+		}
+		m.addSystemMessage(fmt.Sprintf("Canvas %q is not available in this session. Available canvases: %s.", target, strings.Join(names, ", ")))
+		return m, nil
+	}
+	m.setActiveTab(target)
+	m.addSystemMessage(fmt.Sprintf("Switched to canvas: %s", target))
 	return m, nil
 }
 
@@ -935,7 +1019,7 @@ func rootHandleResume(m *RootModel, args []string) (*RootModel, tea.Cmd) {
 		mode = strings.TrimSpace(m.sharedSess.Mode)
 	}
 	if mode != "" && mode != "architect" {
-		m.addSystemMessage("Resume is intended for architect mode. Set /mode architect first if needed.")
+		m.addSystemMessage("Resume is intended for architect mode. Set /exe-mode architect first if needed.")
 		return m, nil
 	}
 	meta := map[string]any{}

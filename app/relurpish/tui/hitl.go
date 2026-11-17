@@ -140,6 +140,14 @@ func (m *RootModel) resolvePendingInteraction(notificationID, choiceID, freetext
 		m.notifQ.Resolve(requestID)
 	}
 	m.syncOverlayStack()
+	if m.chat != nil {
+		if modal, ok := m.chat.(interface{ DismissHITLPermissionModal(string) }); ok {
+			modal.DismissHITLPermissionModal(requestID)
+			if frameID := strings.TrimSpace(frame.ID); frameID != "" {
+				modal.DismissHITLPermissionModal(frameID)
+			}
+		}
+	}
 	if m.runtime != nil {
 		if err := m.runtime.ResolveInteractionFrame(context.Background(), frame.TaskID, frame.ID, answer, freetext); err != nil {
 			m.addSystemMessage(fmt.Sprintf("Interaction persistence failed: %v", err))
@@ -187,6 +195,14 @@ func (m *RootModel) deferPendingInteraction(notificationID string) bool {
 	frame, ok := m.interactionFrames[requestID]
 	if !ok || frame == nil {
 		return false
+	}
+	if m.chat != nil {
+		if modal, ok := m.chat.(interface{ DismissHITLPermissionModal(string) }); ok {
+			modal.DismissHITLPermissionModal(requestID)
+			if frameID := strings.TrimSpace(frame.ID); frameID != "" {
+				modal.DismissHITLPermissionModal(frameID)
+			}
+		}
 	}
 	delete(m.interactionFrames, requestID)
 	if frameID := strings.TrimSpace(frame.ID); frameID != "" {
@@ -243,9 +259,21 @@ func (m RootModel) handleHITLEvent(msg hitlEventMsg) (RootModel, tea.Cmd) {
 		if req != nil && m.notifQ != nil {
 			m.notifQ.PushHITL(req)
 		}
+		if req != nil && m.chat != nil {
+			if modal, ok := m.chat.(interface {
+				ShowHITLPermissionModal(*authorization.PermissionRequest)
+			}); ok {
+				modal.ShowHITLPermissionModal(req)
+			}
+		}
 	case authorization.HITLEventResolved, authorization.HITLEventExpired:
 		if msg.event.Request != nil && m.notifQ != nil {
 			m.notifQ.Resolve(msg.event.Request.ID)
+		}
+		if msg.event.Request != nil && m.chat != nil {
+			if modal, ok := m.chat.(interface{ DismissHITLPermissionModal(string) }); ok {
+				modal.DismissHITLPermissionModal(msg.event.Request.ID)
+			}
 		}
 		if msg.event.Type == authorization.HITLEventExpired && msg.event.Request != nil {
 			reason := msg.event.Error

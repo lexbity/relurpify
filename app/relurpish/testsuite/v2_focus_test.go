@@ -14,8 +14,8 @@ import (
 func TestV2KeyCaptureEscapeReturnsInTwoSteps(t *testing.T) {
 	m := tui.NewRootModel(context.Background(), tui.HostOptions{SurfaceFactory: euclotui.NewSurfaceFactory()})
 	m = uitest.Resize(m, 120, 40)
-	m = uitest.Navigate(m, tui.TabKeybindings)
 	m = drive(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("keep draft")})
+	m = uitest.Navigate(m, tui.TabKeybindings)
 	m = uitest.FocusCanvas(m)
 	m = drive(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'e'}})
 	if !strings.Contains(m.View(), "Press the new key") {

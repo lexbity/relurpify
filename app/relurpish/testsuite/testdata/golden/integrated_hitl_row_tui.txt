@@ -1,39 +1,40 @@
-relurpish / euclo   |   chat · local-edit-on   |   euclo
-system
-Switched agent to: euclo
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-ready · /help · Ctrl+G attention
-[ euclo ] >                                                                                                    
-plain text -> Euclo   / commands
+relurpish / euclo   |   chat · local-edit-on   |   euclo                                                                
+│ Switched agent to: euclo                                                                                           │  
+╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯  
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+ready · /help · Ctrl+G attention                                                                                        
+ [ euclo ] >                                                                                                            
+ plain text -> Euclo   / commands                                                                                       
+                                                                                                                        

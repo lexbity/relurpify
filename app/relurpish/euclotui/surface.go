@@ -3,8 +3,6 @@ package euclotui
 import (
 	"context"
 
-	"github.com/charmbracelet/lipgloss"
-
 	"codeburg.org/lexbit/relurpify/app/relurpish/relurpifyenvtui"
 	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 	"codeburg.org/lexbit/relurpify/app/relurpish/tui"
@@ -20,6 +18,7 @@ type EucloSurface struct {
 	applier      *ExecEventApplier
 	th           *theme.Theme
 	recipeLookup surface.RecipeRegistryLookup
+	chat         *ChatPane
 }
 
 // NewSurface returns the Euclo interaction surface.
@@ -29,7 +28,7 @@ func NewSurface() tui.AgentSurface {
 		base:    tui.NewDefaultSurfaceFactory().Resolve("none"),
 		router:  router,
 		applier: NewExecEventApplier(router),
-		th:      theme.Default().WithAccent(lipgloss.AdaptiveColor{Light: "#005f87", Dark: "#7fd7ff"}),
+		th:      theme.Default(),
 	}
 }
 
@@ -58,7 +57,9 @@ func (s *EucloSurface) RegisterCommands(reg *tui.CommandRegistry) {
 }
 
 func (s *EucloSurface) NewChat(parentCtx context.Context, rt tui.RuntimeAdapter, ctx *tui.AgentContext, sess *tui.Session, notifQ *tui.NotificationQueue) tui.ChatPaner {
-	return NewChatPane(parentCtx, rt, ctx, sess, notifQ, s.router, s.th, nil)
+	pane := NewChatPane(parentCtx, rt, ctx, sess, notifQ, s.router, s.th, nil)
+	s.chat = pane
+	return pane
 }
 
 // NewRegion1 returns nil: the host replaces the Region 1 pane with the base
@@ -97,6 +98,9 @@ func (s *EucloSurface) ApplyExecEvent(ev any) {
 	// sequence high-water survives across events — recreating it here would
 	// reset the dedup state on every call and defeat the seq guard (D-3).
 	s.applier.Apply(telEv)
+	if s.chat != nil {
+		s.chat.ObserveTelemetryEvent(telEv)
+	}
 }
 
 func (s *EucloSurface) HandleFrame(ctx context.Context, m *tui.RootModel, msg tui.SurfaceFrameMsg) {
@@ -120,6 +124,9 @@ func (s *EucloSurface) HandleFrame(ctx context.Context, m *tui.RootModel, msg tu
 	m.PushNotification(msg.Notification)
 	m.AppendSurfaceMessage(msg.Message)
 	m.ApplyInteractionFrame(frame)
+	if frame.Type == interaction.FrameHITLApproval && s.chat != nil {
+		s.chat.ShowInteractionPermissionModal(msg.Notification.ID, frame)
+	}
 	if notificationAllowsFreetext(msg.Notification) {
 		m.OpenInteractionGuidance(msg.Notification.ID, frame)
 	}

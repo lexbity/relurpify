@@ -224,6 +224,7 @@ func validateNoSymlinkAttack(tempPath, dest string) error {
 func ConfinedWrite(dest string, content []byte, expectedDigest string) (string, error) {
 	txn := NewFileTransaction(dest).
 		WithExpectedDigest(expectedDigest)
+	txn.Source = content
 	if err := txn.Validate(); err != nil {
 		return "", err
 	}
@@ -286,6 +287,7 @@ func (t *MultiFileTransaction) Execute() error {
 			return fmt.Errorf("get current digest for %s: %w", path, err)
 		}
 		if expectedDigest != "" && expectedDigest != currentDigest {
+			_ = t.Rollback()
 			return fmt.Errorf("revision conflict for %s: expected %s, got %s",
 				path, expectedDigest, currentDigest)
 		}

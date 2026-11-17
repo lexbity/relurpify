@@ -24,20 +24,61 @@ type Palette struct {
 	Dim        lipgloss.AdaptiveColor
 }
 
-// defaultPalette is the canonical relurpish palette. Light and Dark values
-// match the former tui/styles.go colour globals.
-var defaultPalette = Palette{ //nolint:gochecknoglobals // immutable default theme palette
-	// Dark values follow the V2 keyframe scheme (relurpish-keyframes/v2):
-	// deep navy surfaces, a single teal accent for selection/activity, muted
-	// steel text, and desaturated status hues.
-	Background: lipgloss.AdaptiveColor{Light: "#f4f4f5", Dark: "#10161f"},
-	Surface:    lipgloss.AdaptiveColor{Light: "#d8d8dd", Dark: "#1a2230"},
-	Primary:    lipgloss.AdaptiveColor{Light: "#005f87", Dark: "#56c9a5"},
-	Secondary:  lipgloss.AdaptiveColor{Light: "#4f6d7a", Dark: "#8b98a5"},
-	Success:    lipgloss.AdaptiveColor{Light: "#2f7d32", Dark: "#6fce8f"},
-	Warning:    lipgloss.AdaptiveColor{Light: "#9a5f00", Dark: "#d9a562"},
-	Error:      lipgloss.AdaptiveColor{Light: "#b00020", Dark: "#e07a7a"},
-	Dim:        lipgloss.AdaptiveColor{Light: "#62666d", Dark: "#5c6774"},
+// relurpifyContrastPalette is the default relurpish-contrast theme, aligned with
+// the V2 keyframe scheme (devdocs/relurpish-keyframes/v2): dark charcoal/navy
+// canvas, restrained surfaces, muted teal selection/activity, and higher-contrast
+// readable text/status hues.
+var relurpifyContrastPalette = Palette{ //nolint:gochecknoglobals // immutable default theme palette
+	Background: lipgloss.AdaptiveColor{Light: "#f6f7f8", Dark: "#0b0f14"},
+	Surface:    lipgloss.AdaptiveColor{Light: "#e4e7eb", Dark: "#151b23"},
+	Primary:    lipgloss.AdaptiveColor{Light: "#006d5b", Dark: "#7de2c8"},
+	Secondary:  lipgloss.AdaptiveColor{Light: "#334155", Dark: "#c7d2de"},
+	Success:    lipgloss.AdaptiveColor{Light: "#1f7a3f", Dark: "#86efac"},
+	Warning:    lipgloss.AdaptiveColor{Light: "#9a6700", Dark: "#f6c177"},
+	Error:      lipgloss.AdaptiveColor{Light: "#b42318", Dark: "#ff8f8f"},
+	Dim:        lipgloss.AdaptiveColor{Light: "#667085", Dark: "#7b8794"},
+}
+
+// defaultPalette is retained as an alias to the default relurpify-contrast palette.
+var defaultPalette = relurpifyContrastPalette //nolint:gochecknoglobals // immutable default theme palette
+
+var draculaPalette = Palette{ //nolint:gochecknoglobals // immutable dracula theme palette
+	Background: lipgloss.AdaptiveColor{Light: "#f8f8f2", Dark: "#282a36"},
+	Surface:    lipgloss.AdaptiveColor{Light: "#eaeaea", Dark: "#44475a"},
+	Primary:    lipgloss.AdaptiveColor{Light: "#7c3aed", Dark: "#bd93f9"},
+	Secondary:  lipgloss.AdaptiveColor{Light: "#6272a4", Dark: "#6272a4"},
+	Success:    lipgloss.AdaptiveColor{Light: "#2e7d32", Dark: "#50fa7b"},
+	Warning:    lipgloss.AdaptiveColor{Light: "#ef6c00", Dark: "#ffb86c"},
+	Error:      lipgloss.AdaptiveColor{Light: "#c62828", Dark: "#ff5555"},
+	Dim:        lipgloss.AdaptiveColor{Light: "#6272a4", Dark: "#6272a4"},
+}
+
+// New returns a theme with the provided palette.
+func New(pal Palette) *Theme {
+	return &Theme{pal: pal}
+}
+
+// Dracula returns the canonical Dracula-inspired theme.
+func Dracula() *Theme {
+	return New(draculaPalette).WithAccent(lipgloss.AdaptiveColor{Light: "#00838f", Dark: "#8be9fd"})
+}
+
+// WithPalette returns a clone of the theme with the palette replaced.
+func (t *Theme) WithPalette(pal Palette) *Theme {
+	clone := &Theme{pal: pal}
+	if t != nil && t.accent != nil {
+		accent := *t.accent
+		clone.accent = &accent
+	}
+	return clone
+}
+
+// AppBackground renders a full-frame style with the theme background applied.
+func (t *Theme) AppBackground() lipgloss.Style {
+	if t == nil {
+		t = Default()
+	}
+	return lipgloss.NewStyle().Background(t.pal.Background).Foreground(t.pal.Secondary)
 }
 
 // Theme is the immutable semantic style source. It is safe for concurrent use.
@@ -58,9 +99,14 @@ const (
 	NotifError
 )
 
-// Default returns the canonical default theme.
+// Default returns the canonical default theme (relurpify-contrast).
 func Default() *Theme {
-	return &Theme{pal: defaultPalette}
+	return RelurpifyContrast()
+}
+
+// RelurpifyContrast returns the default relurpify-contrast theme.
+func RelurpifyContrast() *Theme {
+	return New(relurpifyContrastPalette).WithAccent(lipgloss.AdaptiveColor{Light: "#00897b", Dark: "#56d4b5"})
 }
 
 // WithAccent returns a clone of the theme with the accent colour overridden.
@@ -102,7 +148,11 @@ func (t *Theme) Subhead() lipgloss.Style {
 
 // Body renders default body text.
 func (t *Theme) Body() lipgloss.Style {
-	return lipgloss.NewStyle()
+	if t == nil {
+		t = Default()
+	}
+	// Use a readable foreground against themed backgrounds.
+	return lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "#282a36", Dark: "#f8f8f2"})
 }
 
 // Dim renders low-emphasis muted text.

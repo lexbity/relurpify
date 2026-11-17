@@ -1,4 +1,4 @@
-relurpish / none   |   ai-provider   |   none
+relurpish / none   |   ai-provider   |   none                                                                           
 ╭────────────────────────────────────────────────────────────╮╭─────────────────────────────────────────────────────────
 │ Models                                                     ││ Configurator                                            
 │ AI Provider                                                ││ provider: mock-ollama                                   
@@ -8,32 +8,33 @@ relurpish / none   |   ai-provider   |   none
 │ Models                                                     ││ native_tool_calling: true                               
 │ (no models found)                                          │╰─────────────────────────────────────────────────────────
 ╰────────────────────────────────────────────────────────────╯                                                          
-
-Model list not probed for this draft; r explicitly queries it
-tab switch focus  arrows navigate  enter select  e edit  r models  t test  s save
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-Opened model provider configuration
-[ none ] >                                                                                                    
-plain text -> Euclo   / commands
+                                                                                                                        
+Model list not probed for this draft; r explicitly queries it                                                           
+tab switch focus  arrows navigate  enter select  e edit  r models  t test  s save                                       
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+Opened model provider configuration                                                                                     
+ [ none ] >                                                                                                             
+ plain text -> Euclo   / commands                                                                                       
+                                                                                                                        

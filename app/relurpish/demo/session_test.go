@@ -62,7 +62,6 @@ func TestV2DemoDecisionUsesSharedHostAndPreservesDraft(t *testing.T) {
 
 func TestV2DemoInitializationReviewCancelAndApply(t *testing.T) {
 	m, session := model(t, "first-launch")
-	m, _ = key(m, tea.KeyF6)
 	m, _ = update(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'h'}})
 	if !strings.Contains(m.View(), "Review initialization") {
 		t.Fatal("initialization bypassed review")
@@ -77,6 +76,7 @@ func TestV2DemoInitializationReviewCancelAndApply(t *testing.T) {
 		t.Fatal("review confirmation did not initialize demo state")
 	}
 	m, _ = update(m, cmd())
+	m = command(m, "doctor")
 	if !session.BuildDoctorReport(t.Context()).ConfigExists || !strings.Contains(m.View(), "Ready") {
 		t.Fatal("confirmed initialization was not reflected on reopening Doctor")
 	}

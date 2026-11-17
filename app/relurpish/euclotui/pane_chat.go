@@ -12,13 +12,15 @@ import (
 
 	capresult "codeburg.org/lexbit/relurpify/capability/result"
 
-	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 	runtimesvc "codeburg.org/lexbit/relurpify/app/relurpish/runtime"
+	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
 	"codeburg.org/lexbit/relurpify/app/relurpish/tui"
 	"codeburg.org/lexbit/relurpify/capability/ports"
 	"codeburg.org/lexbit/relurpify/context/contextdata"
 	execution "codeburg.org/lexbit/relurpify/execution"
+	fauthorization "codeburg.org/lexbit/relurpify/governance/authorization"
 	"codeburg.org/lexbit/relurpify/governance/classification"
+	"codeburg.org/lexbit/relurpify/governance/policy"
 	"codeburg.org/lexbit/relurpify/named/euclo/interaction"
 	euclostate "codeburg.org/lexbit/relurpify/named/euclo/state"
 	"github.com/charmbracelet/bubbles/spinner"
@@ -38,6 +40,9 @@ const chatRunCleanupDrain = 100 * time.Millisecond
 const chatRunHistory = 32
 
 var spinnerFrames = []string{"⣷", "⣯", "⣟", "⡿", "⢿", "⣻", "⣽", "⣾"} //nolint:gochecknoglobals // immutable animation frame table
+
+// chatAnimTickMsg drives typewriter streaming, shimmer, and spring animations.
+type chatAnimTickMsg time.Time
 
 var chatSubTabPolicies = map[tui.SubTabID]struct { //nolint:gochecknoglobals // immutable per-subtab policy table
 	ModeHint           string
@@ -119,6 +124,7 @@ type ChatPane struct {
 	spinner spinner.Model
 	th      *theme.Theme
 	anim    *tui.AnimationManager
+	ux      *chatUXState
 
 	// runsMu guards runs and finishedRuns: the registry is mutated by
 	// finishRun on the work goroutine and read by every Update handler on
@@ -152,6 +158,7 @@ type ChatPane struct {
 
 	spinnerAnimID tui.AnimationID
 	spinnerIdx    int
+	searchQuery   string
 
 	showSidebar        bool
 	sidebarFocused     bool
@@ -180,11 +187,14 @@ func NewChatPane(parentCtx context.Context, rt tui.RuntimeAdapter, ctx *tui.Agen
 	if parentCtx == nil {
 		panic("NewChatPane requires a parent context")
 	}
+	ux := newChatUXState()
+	ux.SetTheme(th)
 	pane := &ChatPane{
 		feed:             tui.NewFeed(),
 		spinner:          sp,
 		th:               th,
 		anim:             anim,
+		ux:               ux,
 		runs:             make(map[string]*chatRun),
 		parentCtx:        parentCtx,
 		context:          ctx,
@@ -205,11 +215,33 @@ func NewChatPane(parentCtx context.Context, rt tui.RuntimeAdapter, ctx *tui.Agen
 	return pane
 }
 
+// SetTheme applies the active theme to chat rendering and feed.
+func (p *ChatPane) SetTheme(th *theme.Theme) {
+	if p == nil {
+		return
+	}
+	if th == nil {
+		th = theme.Default()
+	}
+	p.th = th
+	if p.feed != nil {
+		p.feed.SetTheme(th)
+	}
+	if p.ux != nil {
+		p.ux.SetTheme(th)
+	}
+	p.syncUXViewport(true)
+}
+
 func (p *ChatPane) Init() tea.Cmd {
 	if p.HasActiveRuns() {
-		return p.spinner.Tick
+		return tea.Batch(p.spinner.Tick, p.animTickCmd())
 	}
 	return nil
+}
+
+func (p *ChatPane) animTickCmd() tea.Cmd {
+	return tea.Tick(33*time.Millisecond, func(t time.Time) tea.Msg { return chatAnimTickMsg(t) })
 }
 
 // Cleanup requests a protective stop for every live run and gives each a
@@ -280,15 +312,31 @@ func (p *ChatPane) SetSize(w, h int) {
 		feedWidth = 0
 	}
 	p.feed.SetSize(feedWidth, h)
+	if p.ux != nil {
+		p.ux.setSize(feedWidth, h)
+	}
 }
 
 func (p *ChatPane) Update(msg tea.Msg) (tui.ChatPaner, tea.Cmd) {
 	switch msg := msg.(type) {
+	case chatAnimTickMsg:
+		if p.ux != nil {
+			p.ux.thinkingActive = p.hasStreamingState()
+			changed := p.ux.advanceStreams(time.Time(msg))
+			if p.hasRunningToolCards() || p.ux.thinkingActive {
+				changed = true
+			}
+			p.syncUXViewport(changed)
+			if p.needsAnimTick() {
+				return p, p.animTickCmd()
+			}
+		}
+		return p, nil
 	case spinner.TickMsg:
 		p.spinner, _ = p.spinner.Update(msg)
 		p.feed.SetSpinner(p.spinner.View())
 		if p.HasActiveRuns() {
-			return p, p.spinner.Tick
+			return p, tea.Batch(p.spinner.Tick, p.animTickCmd())
 		}
 		return p, nil
 	case tui.AnimationTickMsg:
@@ -299,7 +347,7 @@ func (p *ChatPane) Update(msg tea.Msg) (tui.ChatPaner, tea.Cmd) {
 		p.spinnerIdx++
 		frame := spinnerFrames[p.spinnerIdx%len(spinnerFrames)]
 		p.feed.SetSpinner(frame)
-		return p, nil
+		return p, p.animTickCmd()
 	case tui.StreamTokenMsg:
 		return p.handleStreamToken(msg)
 	case tui.RunFinishedMsg:
@@ -312,6 +360,13 @@ func (p *ChatPane) Update(msg tea.Msg) (tui.ChatPaner, tea.Cmd) {
 	case tea.KeyMsg:
 		return p.handleKey(msg)
 	case tea.MouseMsg:
+		if p.ux != nil && p.ux.permModal != nil {
+			return p, nil
+		}
+		if p.ux != nil && p.ux.vpReady {
+			cmd := p.ux.viewportUpdate(msg)
+			return p, cmd
+		}
 		f, cmd := p.feed.Update(msg)
 		p.feed = f
 		return p, cmd
@@ -324,21 +379,22 @@ func (p *ChatPane) Update(msg tea.Msg) (tui.ChatPaner, tea.Cmd) {
 
 func (p *ChatPane) View() string {
 	if p.width < 60 {
-		return lipgloss.JoinVertical(lipgloss.Left,
-			p.th.Dim().Render("Terminal too narrow. Minimum 60 columns required."),
-			p.feed.View(),
-		)
+		msg := p.th.Dim().Render("Terminal too narrow. Minimum 60 columns required.")
+		if p.ux != nil && p.ux.vpReady {
+			return lipgloss.JoinVertical(lipgloss.Left, msg, p.ux.vp.View())
+		}
+		return lipgloss.JoinVertical(lipgloss.Left, msg, p.feed.View())
 	}
 	if !p.splitSidebarVisible() {
 		if p.showSidebar && p.width < 90 {
 			return lipgloss.JoinVertical(lipgloss.Left,
 				p.th.Dim().Render("Sidebar collapsed automatically below 90 columns."),
-				p.feed.View(),
+				p.renderChatBody(),
 			)
 		}
-		return p.feed.View()
+		return p.renderChatBody()
 	}
-	feedView := p.feed.View()
+	feedView := p.renderChatBody()
 	sidebarView := p.renderSidebar()
 	return lipgloss.JoinHorizontal(lipgloss.Top, feedView, sidebarView)
 }
@@ -655,13 +711,18 @@ func (p *ChatPane) AppendMessage(msg tui.Message) {
 		return
 	}
 	p.feed.AppendMessage(msg)
+	p.onMessageAdded()
 }
-func (p *ChatPane) ClearMessages()                { p.feed.ClearMessages() }
-func (p *ChatPane) Messages() []tui.Message       { return p.feed.Messages() }
-func (p *ChatPane) SetSearchFilter(filter string) { p.feed.SetSearchFilter(filter) }
-func (p *ChatPane) ScrollUp()                     { p.feed.ScrollUp() }
-func (p *ChatPane) PageDown()                     { p.feed.PageDown() }
-func (p *ChatPane) PageUp()                       { p.feed.PageUp() }
+func (p *ChatPane) ClearMessages()          { p.feed.ClearMessages() }
+func (p *ChatPane) Messages() []tui.Message { return p.feed.Messages() }
+func (p *ChatPane) SetSearchFilter(filter string) {
+	p.searchQuery = filter
+	p.feed.SetSearchFilter(filter)
+	p.syncUXViewport(true)
+}
+func (p *ChatPane) ScrollUp() { p.feed.ScrollUp() }
+func (p *ChatPane) PageDown() { p.feed.PageDown() }
+func (p *ChatPane) PageUp()   { p.feed.PageUp() }
 func (p *ChatPane) RollbackLastUndo() {
 	if len(p.undoStack) > 0 {
 		p.undoStack = p.undoStack[:len(p.undoStack)-1]
@@ -697,7 +758,9 @@ func (p *ChatPane) StopLatestRun() tea.Cmd {
 	}
 	delivered := latest.requestStop()
 	if !delivered {
-		return func() tea.Msg { return tui.ChatSystemMsg{Text: fmt.Sprintf("Stop requested for run %s; its executor is still starting", latest.id)} }
+		return func() tea.Msg {
+			return tui.ChatSystemMsg{Text: fmt.Sprintf("Stop requested for run %s; its executor is still starting", latest.id)}
+		}
 	}
 	return func() tea.Msg { return tui.ChatSystemMsg{Text: fmt.Sprintf("Stopping run %s", latest.id)} }
 }
@@ -737,6 +800,30 @@ func (p *ChatPane) AddFile(path string) tea.Cmd {
 
 func (p *ChatPane) handleKey(msg tea.KeyMsg) (tui.ChatPaner, tea.Cmd) {
 	key := msg.String()
+
+	// Permission modal captures focus and keys.
+	if p.ux != nil && p.ux.permModal != nil {
+		m := p.ux.permModal
+		switch key {
+		case "y", "Y":
+			cmd := p.permissionModalApproveCmd(m, false)
+			p.ux.permModal = nil
+			p.syncUXViewport(true)
+			return p, cmd
+		case "a", "A":
+			cmd := p.permissionModalApproveCmd(m, true)
+			p.ux.permModal = nil
+			p.syncUXViewport(true)
+			return p, cmd
+		case "n", "N", "esc":
+			cmd := p.permissionModalDenyCmd(m)
+			p.ux.permModal = nil
+			p.syncUXViewport(true)
+			return p, cmd
+		}
+		return p, nil
+	}
+
 	if p.showSidebar && p.splitSidebarVisible() {
 		switch key {
 		case "ctrl+]":
@@ -762,7 +849,11 @@ func (p *ChatPane) handleKey(msg tea.KeyMsg) (tui.ChatPaner, tea.Cmd) {
 				}
 				return p, nil
 			}
-			p.feed.PageUp()
+			if p.ux != nil {
+				p.ux.scrollUp(1)
+			} else {
+				p.feed.PageUp()
+			}
 			return p, nil
 		case "down", "j":
 			if p.sidebarFocused {
@@ -771,7 +862,11 @@ func (p *ChatPane) handleKey(msg tea.KeyMsg) (tui.ChatPaner, tea.Cmd) {
 				}
 				return p, nil
 			}
-			p.feed.PageDown()
+			if p.ux != nil {
+				p.ux.scrollDown(1)
+			} else {
+				p.feed.PageDown()
+			}
 			return p, nil
 		case "a":
 			if p.sidebarFocused {
@@ -788,13 +883,81 @@ func (p *ChatPane) handleKey(msg tea.KeyMsg) (tui.ChatPaner, tea.Cmd) {
 			}
 		}
 	}
-	if key == "ctrl+]" {
+
+	switch key {
+	case "ctrl+]":
 		p.ToggleSidebar()
 		return p, nil
-	}
-	if key == "tab" && p.splitSidebarVisible() {
-		p.sidebarFocused = !p.sidebarFocused
-		return p, nil
+	case "tab":
+		if p.splitSidebarVisible() {
+			p.sidebarFocused = !p.sidebarFocused
+			return p, nil
+		}
+		// Toggle expand for selected tool card when available.
+		if p.ux != nil && len(p.ux.toolCards) > 0 {
+			p.ux.toolFocus = true
+			p.ux.toggleSelectedTool()
+			p.syncUXViewport(true)
+			return p, p.animTickCmd()
+		}
+	case "enter":
+		if p.ux != nil && p.ux.toolFocus && len(p.ux.toolCards) > 0 {
+			p.ux.toggleSelectedTool()
+			p.syncUXViewport(true)
+			return p, p.animTickCmd()
+		}
+		if p.ux != nil && !p.ux.autoFollow && p.ux.newCount > 0 {
+			p.ux.gotoBottom()
+			p.syncUXViewport(true)
+			return p, nil
+		}
+	case "end", "G":
+		if p.ux != nil {
+			p.ux.gotoBottom()
+			p.syncUXViewport(true)
+			return p, nil
+		}
+	case "up", "k":
+		if p.ux != nil && len(p.ux.toolCards) > 0 && p.ux.toolFocus {
+			if p.ux.toolSel > 0 {
+				p.ux.toolSel--
+			}
+			p.syncUXViewport(true)
+			return p, nil
+		}
+		if p.ux != nil {
+			p.ux.scrollUp(1)
+			return p, nil
+		}
+	case "down", "j":
+		if p.ux != nil && len(p.ux.toolCards) > 0 && p.ux.toolFocus {
+			if p.ux.toolSel < len(p.ux.toolCards)-1 {
+				p.ux.toolSel++
+			}
+			p.syncUXViewport(true)
+			return p, nil
+		}
+		if p.ux != nil {
+			p.ux.scrollDown(1)
+			return p, nil
+		}
+	case "pgup":
+		if p.ux != nil {
+			p.ux.pageUp()
+			return p, nil
+		}
+	case "pgdown":
+		if p.ux != nil {
+			p.ux.pageDown()
+			return p, nil
+		}
+	case "t":
+		// Focus tool cards for keyboard expand/navigation when present.
+		if p.ux != nil && len(p.ux.toolCards) > 0 {
+			p.ux.toolFocus = !p.ux.toolFocus
+			p.syncUXViewport(true)
+			return p, nil
+		}
 	}
 	return p, nil
 }
@@ -807,6 +970,16 @@ func (p *ChatPane) handleStreamToken(msg tui.StreamTokenMsg) (tui.ChatPaner, tea
 	run.builder.AddToken(msg)
 	partial := run.builder.BuildPartial()
 	p.feed.UpdateMessage(partial)
+	if p.ux != nil {
+		if msg.TokenType == tui.TokenText && msg.Token != "" {
+			p.ux.appendStreamToken(msg.RunID, msg.Token)
+			// Reveal immediately so output never lags behind incoming tokens/approvals.
+			p.ux.advanceStreams(time.Now())
+		}
+		p.ux.thinkingActive = p.hasStreamingState()
+		p.syncUXViewport(true)
+		return p, tea.Batch(listenToStream(run.ch), p.animTickCmd())
+	}
 	return p, listenToStream(run.ch)
 }
 
@@ -817,6 +990,11 @@ func (p *ChatPane) handleRunFinished(msg tui.RunFinishedMsg) (tui.ChatPaner, tea
 	run, _ := p.takeFinishedRun(msg.RunID)
 
 	if p.compactRunID != "" && msg.RunID == p.compactRunID {
+		if p.ux != nil {
+			p.ux.clearStream(msg.RunID)
+			p.ux.thinkingActive = p.hasStreamingState()
+			p.syncUXViewport(true)
+		}
 		return p, p.finishCompactRun(run, msg)
 	}
 
@@ -826,16 +1004,28 @@ func (p *ChatPane) handleRunFinished(msg tui.RunFinishedMsg) (tui.ChatPaner, tea
 			run.builder.SetResult(structuredResultFromCore(run.takeResult()))
 			final := run.builder.Build(msg.Duration, msg.TokensUsed)
 			p.feed.UpdateMessage(final)
+			if p.ux != nil {
+				p.ux.finishStream(msg.RunID, final.Content.Text)
+			}
 			if p.session != nil {
 				p.session.TotalTokens += msg.TokensUsed
 				p.session.TotalDuration += msg.Duration
 			}
 		case tui.RunCancelled:
+			if p.ux != nil {
+				p.ux.clearStream(msg.RunID)
+			}
 			p.addSystemMessage(fmt.Sprintf("Run %s canceled", msg.RunID))
 		default:
+			if p.ux != nil {
+				p.ux.clearStream(msg.RunID)
+			}
 			p.addSystemMessage(fmt.Sprintf("Agent error: %v", msg.Err))
 		}
 	} else {
+		if p.ux != nil {
+			p.ux.clearStream(msg.RunID)
+		}
 		switch msg.Outcome {
 		case tui.RunCancelled:
 			p.addSystemMessage(fmt.Sprintf("Run %s canceled", msg.RunID))
@@ -849,9 +1039,16 @@ func (p *ChatPane) handleRunFinished(msg tui.RunFinishedMsg) (tui.ChatPaner, tea
 	if !p.HasActiveRuns() {
 		p.deregisterSpinnerAnim()
 	}
+	if p.ux != nil {
+		p.ux.thinkingActive = p.hasStreamingState()
+		p.syncUXViewport(true)
+	}
 	var cmd tea.Cmd
 	for _, remaining := range p.listRuns() {
 		cmd = tea.Batch(cmd, listenToStream(remaining.ch))
+	}
+	if p.needsAnimTick() {
+		cmd = tea.Batch(cmd, p.animTickCmd())
 	}
 	return p, cmd
 }
@@ -1146,6 +1343,7 @@ func (p *ChatPane) addSystemMessage(text string) {
 		Content:   tui.MessageContent{Text: text},
 	}
 	p.feed.AppendMessage(msg)
+	p.onMessageAdded()
 }
 
 func extractFileTokens(text string) []string {
@@ -1489,6 +1687,287 @@ func effectClassLabels(classes []classification.EffectClass) []string {
 		return nil
 	}
 	return out
+}
+
+func (p *ChatPane) flushStreamBuffers() {
+	if p == nil || p.ux == nil {
+		return
+	}
+	for _, b := range p.ux.streamBuffers {
+		if b == nil || len(b.pending) == 0 {
+			continue
+		}
+		b.shown.WriteString(string(b.pending))
+		b.pending = nil
+	}
+}
+
+func (p *ChatPane) HasPermissionModal() bool {
+	return p != nil && p.ux != nil && p.ux.permModal != nil
+}
+
+func (p *ChatPane) hasRunningToolCards() bool {
+	if p == nil || p.ux == nil {
+		return false
+	}
+	for _, c := range p.ux.toolCards {
+		if c.State == toolRunning || c.State == toolPending {
+			return true
+		}
+	}
+	return false
+}
+
+func (p *ChatPane) permissionModalApproveCmd(m *permissionModal, always bool) tea.Cmd {
+	if m == nil {
+		return nil
+	}
+	switch m.Source {
+	case permModalSourceInteraction:
+		choice := "approve"
+		if always && m.Frame != nil && frameHasChoice(m.Frame, "always") {
+			choice = "always"
+		} else if always {
+			// Best-effort "always" for HITL approval frames: approve.
+			choice = "approve"
+		}
+		nid := m.RequestID
+		fid := m.FrameID
+		tid := m.TaskID
+		if m.Frame != nil {
+			if fid == "" {
+				fid = m.Frame.ID
+			}
+			if tid == "" {
+				tid = m.Frame.TaskID
+			}
+		}
+		return func() tea.Msg {
+			return tui.NotifInteractionResolveMsg{NotificationID: nid, FrameID: fid, TaskID: tid, ChoiceID: choice}
+		}
+	default:
+		scope := policy.GrantScopeOneTime
+		if always {
+			scope = policy.GrantScopePersistent
+		}
+		id := m.RequestID
+		action := m.Action
+		return func() tea.Msg {
+			return tui.NotifHITLApproveMsg{ID: id, Scope: scope, Action: action}
+		}
+	}
+}
+
+func (p *ChatPane) permissionModalDenyCmd(m *permissionModal) tea.Cmd {
+	if m == nil {
+		return nil
+	}
+	switch m.Source {
+	case permModalSourceInteraction:
+		nid := m.RequestID
+		fid := m.FrameID
+		tid := m.TaskID
+		if m.Frame != nil {
+			if fid == "" {
+				fid = m.Frame.ID
+			}
+			if tid == "" {
+				tid = m.Frame.TaskID
+			}
+		}
+		choice := "reject"
+		if m.Frame != nil {
+			if frameHasChoice(m.Frame, "reject") {
+				choice = "reject"
+			} else if frameHasChoice(m.Frame, "deny") {
+				choice = "deny"
+			} else if frameHasChoice(m.Frame, "skip") {
+				choice = "skip"
+			}
+		}
+		return func() tea.Msg {
+			return tui.NotifInteractionResolveMsg{NotificationID: nid, FrameID: fid, TaskID: tid, ChoiceID: choice}
+		}
+	default:
+		id := m.RequestID
+		return func() tea.Msg { return tui.NotifHITLDenyMsg{ID: id} }
+	}
+}
+
+func (p *ChatPane) ShowHITLPermissionModal(req *fauthorization.PermissionRequest) {
+	if p == nil || p.ux == nil || req == nil {
+		return
+	}
+	p.flushStreamBuffers()
+	tool, args, detail, target, reason := permissionDetailsFromRequest(req)
+	p.ux.permModal = &permissionModal{
+		Source:    permModalSourceAuthHITL,
+		RequestID: req.ID,
+		Action:    strings.TrimSpace(req.Permission.Action),
+		Title:     "Permission required",
+		Detail:    detail,
+		Tool:      tool,
+		Args:      args,
+		Target:    target,
+		Reason:    reason,
+		Request:   req,
+	}
+	p.syncUXViewport(true)
+}
+
+func (p *ChatPane) ShowInteractionPermissionModal(notificationID string, frame interaction.InteractionFrame) {
+	if p == nil || p.ux == nil {
+		return
+	}
+	p.flushStreamBuffers()
+	f := frame
+	tool, args, detail, target, reason := permissionDetailsFromFrame(f)
+	p.ux.permModal = &permissionModal{
+		Source:    permModalSourceInteraction,
+		RequestID: strings.TrimSpace(notificationID),
+		FrameID:   strings.TrimSpace(f.ID),
+		TaskID:    strings.TrimSpace(f.TaskID),
+		Action:    firstNonEmptyStringMapLike(f.Payload, "permission", "action", "capability", "tool"),
+		Title:     "Approval required",
+		Detail:    detail,
+		Tool:      tool,
+		Args:      args,
+		Target:    target,
+		Reason:    reason,
+		Frame:     &f,
+	}
+	p.syncUXViewport(true)
+}
+
+func (p *ChatPane) DismissHITLPermissionModal(id string) {
+	if p == nil || p.ux == nil || p.ux.permModal == nil {
+		return
+	}
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return
+	}
+	m := p.ux.permModal
+	if m.RequestID == id || m.FrameID == id {
+		p.ux.permModal = nil
+		p.syncUXViewport(true)
+	}
+}
+
+func permissionDetailsFromRequest(req *fauthorization.PermissionRequest) (tool, args, detail, target, reason string) {
+	if req == nil {
+		return "", "", "", "", ""
+	}
+	action := strings.TrimSpace(req.Permission.Action)
+	tool = action
+	target = strings.TrimSpace(req.Permission.Resource)
+	if t := hitlTarget(req); strings.TrimSpace(t) != "" {
+		target = strings.TrimSpace(t)
+	}
+	reason = strings.TrimSpace(req.Justification)
+	parts := []string{}
+	if action != "" {
+		parts = append(parts, action)
+	}
+	if target != "" && !strings.Contains(action, target) {
+		parts = append(parts, target)
+	}
+	if reason != "" {
+		parts = append(parts, reason)
+	}
+	args = strings.Join(parts, "\n")
+	if args == "" {
+		args = action
+	}
+	if args == "" {
+		args = target
+	}
+	kind := "permission"
+	if v := strings.TrimSpace(string(req.Risk)); v != "" {
+		kind = v + " risk"
+	}
+	detail = fmt.Sprintf("%s approval requested", kind)
+	return tool, args, detail, target, reason
+}
+
+func permissionDetailsFromFrame(frame interaction.InteractionFrame) (tool, args, detail, target, reason string) {
+	tool = firstNonEmptyStringMapLike(frame.Payload, "permission", "tool", "capability", "action", "command")
+	if tool == "" {
+		tool = "approval"
+	}
+	target = firstNonEmptyStringMapLike(frame.Payload, "target", "resource", "path", "file", "url")
+	reason = strings.TrimSpace(frame.Question)
+	if reason == "" {
+		reason = firstNonEmptyStringMapLike(frame.Payload, "risk", "reason", "justification")
+	}
+	cmd := firstNonEmptyStringMapLike(frame.Payload, "command", "cmd", "args", "arguments", "detail")
+	if cmd == "" {
+		cmd = payloadSummaryForModal(frame.Payload)
+	}
+	if cmd == "" {
+		cmd = reason
+	}
+	args = cmd
+	detail = "A risky action requires your approval."
+	if q := strings.TrimSpace(frame.Question); q != "" {
+		detail = q
+	}
+	if tool == "" {
+		tool = frameLabel(frame)
+	}
+	return tool, args, detail, target, strings.TrimSpace(frame.Question)
+}
+
+func payloadSummaryForModal(payload map[string]any) string {
+	if len(payload) == 0 {
+		return ""
+	}
+	// Prefer explicit execution details.
+	for _, k := range []string{"command", "cmd", "args", "arguments", "input", "tool_args"} {
+		if v, ok := payload[k]; ok && v != nil {
+			return stringifyToolValue(v)
+		}
+	}
+	b, err := json.MarshalIndent(payload, "", "  ")
+	if err != nil {
+		return fmt.Sprint(payload)
+	}
+	s := string(b)
+	if len(s) > 1200 {
+		s = s[:1200] + "…"
+	}
+	return s
+}
+
+func firstNonEmptyStringMapLike(payload map[string]any, keys ...string) string {
+	for _, k := range keys {
+		v, ok := payload[k]
+		if !ok || v == nil {
+			continue
+		}
+		switch t := v.(type) {
+		case string:
+			if strings.TrimSpace(t) != "" {
+				return strings.TrimSpace(t)
+			}
+		default:
+			s := strings.TrimSpace(fmt.Sprint(t))
+			if s != "" && s != "<nil>" && s != "map[]" {
+				return s
+			}
+		}
+	}
+	return ""
+}
+
+func hitlTarget(req *fauthorization.PermissionRequest) string {
+	if req == nil {
+		return ""
+	}
+	if t := strings.TrimSpace(req.Permission.Resource); t != "" {
+		return t
+	}
+	return ""
 }
 
 func (p *ChatPane) SetAnimManager(m *tui.AnimationManager) {

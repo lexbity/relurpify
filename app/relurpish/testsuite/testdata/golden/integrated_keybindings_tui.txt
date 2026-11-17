@@ -1,39 +1,40 @@
-relurpish / none   |   keybindings   |   none
-Settings / Keybindings
-
-> open_help              f1
-  agent_picker           ctrl+a
-  toggle_focus           f6
-  focus_canvas           tab, ctrl+down
-  open_attention         ctrl+g
-  cycle_mode             alt+m
-  open_commands          ctrl+p
-  page_up                pgup
-  page_down              pgdown
-  undo                   ctrl+z
-  redo                   ctrl+y
-  quit                   ctrl+c, ctrl+d
-
-↑/↓ select · e capture · r reset one · R reset all
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-Opened keybindings
-[ none ] >                                                                                                    
-plain text -> Euclo   / commands
+relurpish / none   |   keybindings   |   none                                                                           
+Settings / Keybindings                                                                                                  
+                                                                                                                        
+> open_help              f1                                                                                             
+  agent_picker           ctrl+a                                                                                         
+  toggle_focus           f6                                                                                             
+  focus_canvas           tab, ctrl+down                                                                                 
+  open_attention         ctrl+g                                                                                         
+  cycle_mode             alt+m                                                                                          
+  open_commands          ctrl+p                                                                                         
+  page_up                pgup                                                                                           
+  page_down              pgdown                                                                                         
+  undo                   ctrl+z                                                                                         
+  redo                   ctrl+y                                                                                         
+  quit                   ctrl+c, ctrl+d                                                                                 
+                                                                                                                        
+↑/↓ select · e capture · r reset one · R reset all                                                                      
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+Opened keybindings                                                                                                      
+ [ none ] >                                                                                                             
+ plain text -> Euclo   / commands                                                                                       
+                                                                                                                        

@@ -55,13 +55,13 @@ func TestV2BlockedAndStaleSubmissionRetainsDraft(t *testing.T) {
 func TestV2PlainTextEverySurface(t *testing.T) {
 	for _, tab := range []TabID{TabChat, TabDoctor, TabSandbox, TabKeybindings, TabAIProvider} {
 		b := NewInputBar()
-		b.SetValue("  :this remains literal?  ")
+		b.SetValue("  this remains literal?  ")
 		_, cmd := b.Update(tea.KeyMsg{Type: tea.KeyEnter}, tab)
 		if cmd == nil {
 			t.Fatalf("%s did not submit", tab)
 		}
 		msg, ok := cmd().(InputSubmittedMsg)
-		if !ok || msg.Value != "  :this remains literal?  " || msg.Prefix != "" {
+		if !ok || msg.Value != "  this remains literal?  " || msg.Prefix != "" {
 			t.Fatalf("%s reinterpreted request: %#v", tab, msg)
 		}
 		if b.Value() != msg.Value {

@@ -1,39 +1,40 @@
-relurpish / none   |   sandbox   |   none
+relurpish / none   |   sandbox   |   none                                                                               
 ╭───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 │ Sandbox Permissions                                                                                                   
 │ No manifest loaded                                                                                                    
 ╰───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-Opened sandbox permissions
-[ none ] >                                                                                                    
-plain text -> Euclo   / commands
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+Opened sandbox permissions                                                                                              
+ [ none ] >                                                                                                             
+ plain text -> Euclo   / commands                                                                                       
+                                                                                                                        

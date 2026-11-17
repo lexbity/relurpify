@@ -94,7 +94,119 @@ func ExecutionEventFromTelemetry(ev telemetry.Event) (ExecutionEvent, bool) {
 		return out, len(out.PatchHunks) > 0
 	}
 
+	// Map tool/capability lifecycle events for live tool-call cards.
+	switch ev.Type {
+	case telemetry.EventToolCall:
+		out.Type = reporting.EventType("tool.call")
+		out.Payload = toolCallPayload(ev, meta, "tool")
+		return out, true
+	case telemetry.EventToolResult:
+		out.Type = reporting.EventType("tool.result")
+		out.Payload = toolResultPayload(ev, meta, "tool")
+		if v, ok := meta["success"].(bool); ok {
+			out.Success = v
+		}
+		if v := asInt(meta["duration_ms"]); v > 0 {
+			out.DurationMs = int64(v)
+		}
+		return out, true
+	case telemetry.EventCapabilityCall:
+		out.Type = reporting.EventType("capability.call")
+		out.Payload = toolCallPayload(ev, meta, "capability")
+		return out, true
+	case telemetry.EventCapabilityResult:
+		out.Type = reporting.EventType("capability.result")
+		out.Payload = toolResultPayload(ev, meta, "capability")
+		if v, ok := meta["success"].(bool); ok {
+			out.Success = v
+		}
+		if v := asInt(meta["duration_ms"]); v > 0 {
+			out.DurationMs = int64(v)
+		}
+		return out, true
+	}
+
 	return ExecutionEvent{}, false
+}
+
+func toolCallPayload(ev telemetry.Event, meta map[string]any, kind string) map[string]any {
+	p := map[string]any{
+		"tool_kind": kind,
+		"call_id":   toolCallCorrelationID(ev, meta),
+	}
+	if name := firstNonEmptyString(meta, "tool", "capability", "capability_id", "capability_name", "name"); name != "" {
+		p["name"] = name
+	}
+	if args, ok := meta["args"]; ok {
+		p["args"] = args
+	}
+	if v, ok := meta["span_attrs"].(map[string]any); ok {
+		p["span_attrs"] = v
+	}
+	if raw, ok := meta["raw_args"]; ok {
+		p["raw_args"] = raw
+	}
+	return p
+}
+
+func toolResultPayload(ev telemetry.Event, meta map[string]any, kind string) map[string]any {
+	p := map[string]any{
+		"tool_kind": kind,
+		"call_id":   toolCallCorrelationID(ev, meta),
+	}
+	if name := firstNonEmptyString(meta, "tool", "capability", "capability_id", "capability_name", "name"); name != "" {
+		p["name"] = name
+	}
+	if args, ok := meta["args"]; ok {
+		p["args"] = args
+	}
+	if v, ok := meta["success"].(bool); ok {
+		p["success"] = v
+	}
+	if errText := firstNonEmptyString(meta, "error", "tool_error", "capability_error"); errText != "" {
+		p["error"] = errText
+	}
+	if out, ok := meta["output"]; ok {
+		p["output"] = out
+	}
+	if ref := firstNonEmptyString(meta, "artifact_ref", "stdout_ref"); ref != "" {
+		p["output_ref"] = ref
+	}
+	if v := asInt(meta["exit_code"]); v != 0 {
+		p["exit_code"] = v
+	}
+	if v := asInt(meta["duration_ms"]); v > 0 {
+		p["duration_ms"] = v
+	}
+	if v := asInt(meta["stdout_bytes"]); v > 0 {
+		p["stdout_bytes"] = v
+	}
+	return p
+}
+
+func toolCallCorrelationID(ev telemetry.Event, meta map[string]any) string {
+	if id := firstNonEmptyString(meta, "call_id", "tool_call_id", "invocation_id"); id != "" {
+		return id
+	}
+	if ev.SpanID != "" {
+		return ev.SpanID
+	}
+	if ev.NodeID != "" {
+		return ev.NodeID
+	}
+	if ev.TraceID != "" && ev.Seq > 0 {
+		return fmt.Sprintf("%s:%d", ev.TraceID, ev.Seq)
+	}
+	return fmt.Sprintf("%s:%d", ev.TaskID, ev.Seq)
+}
+
+func firstNonEmptyString(meta map[string]any, keys ...string) string {
+	for _, key := range keys {
+		if v := asString(meta[key]); v != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 func patchHunksFromEditMeta(meta map[string]any) []PatchHunk {

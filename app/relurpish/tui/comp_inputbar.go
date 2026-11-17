@@ -6,6 +6,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/textarea"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
 	"codeburg.org/lexbit/relurpify/app/relurpish/theme"
@@ -96,7 +97,9 @@ func NewInputBar() *InputBar {
 	ti.Prompt = ""
 	setInputHint(&ti, "")
 	ti.Focus()
-	return &InputBar{input: ti, focused: true, th: theme.Default(), cmdReg: newHostCommandRegistry()}
+	ib := &InputBar{input: ti, focused: true, th: theme.Default(), cmdReg: newHostCommandRegistry()}
+	ib.applyThemeStyles()
+	return ib
 }
 
 // SetWorkspace sets the workspace path for file picker globbing.
@@ -568,6 +571,9 @@ func (b *InputBar) View(activeTab TabID, streaming bool) string {
 	}
 	width := max(1, b.width)
 	view := ansi.Truncate(head, width, "") + "\n" + b.th.Dim().Render(ansi.Truncate(footer, width, ""))
+	if b.th != nil {
+		return b.th.Bar().Width(width).Render(view)
+	}
 	return view
 }
 
@@ -597,5 +603,26 @@ func (b *InputBar) renderPicker() string {
 func (b *InputBar) SetTheme(th *theme.Theme) {
 	if th != nil {
 		b.th = th
+		b.applyThemeStyles()
 	}
+}
+
+func (b *InputBar) applyThemeStyles() {
+	if b == nil || b.th == nil {
+		return
+	}
+	pal := b.th.Palette()
+	fg := lipgloss.AdaptiveColor{Light: "#111827", Dark: "#f8f8f2"}
+	bg := pal.Surface
+	// Style textarea text/cursor/placeholder for visibility on themed background.
+	base := lipgloss.NewStyle().Foreground(fg).Background(bg)
+	b.input.FocusedStyle.Base = base
+	b.input.FocusedStyle.Text = lipgloss.NewStyle().Foreground(fg).Background(bg)
+	b.input.FocusedStyle.CursorLine = lipgloss.NewStyle().Background(bg)
+	b.input.FocusedStyle.Prompt = lipgloss.NewStyle().Foreground(pal.Primary).Background(bg)
+	b.input.FocusedStyle.Placeholder = lipgloss.NewStyle().Foreground(pal.Dim).Background(bg)
+	b.input.FocusedStyle.EndOfBuffer = lipgloss.NewStyle().Foreground(pal.Dim).Background(bg)
+	b.input.BlurredStyle = b.input.FocusedStyle
+	b.input.Cursor.Style = lipgloss.NewStyle().Foreground(pal.Background).Background(pal.Primary)
+	b.input.Cursor.TextStyle = lipgloss.NewStyle().Foreground(fg).Background(bg)
 }
