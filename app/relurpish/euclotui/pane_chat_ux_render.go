@@ -328,7 +328,7 @@ func (p *ChatPane) renderThinkingSteps(steps []tui.ThinkingStep, expanded bool) 
 		active := step.EndTime.IsZero()
 		line := fmt.Sprintf("%s %s", icon, step.Description)
 		if active {
-			// shimmering "thinking…" feel for active step
+			// animated "thinking…" feel for active step
 			line = p.ux.thinkingView(true, p.spinner.View()) + lipgloss.NewStyle().Foreground(p.ux.styles.muted).Render(" "+step.Description)
 		} else if !step.StartTime.IsZero() {
 			dur := step.EndTime.Sub(step.StartTime).Truncate(10 * time.Millisecond)

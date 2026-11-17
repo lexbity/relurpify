@@ -41,7 +41,7 @@ const chatRunHistory = 32
 
 var spinnerFrames = []string{"⣷", "⣯", "⣟", "⡿", "⢿", "⣻", "⣽", "⣾"} //nolint:gochecknoglobals // immutable animation frame table
 
-// chatAnimTickMsg drives typewriter streaming, shimmer, and spring animations.
+// chatAnimTickMsg drives typewriter streaming, glow, and spring animations.
 type chatAnimTickMsg time.Time
 
 var chatSubTabPolicies = map[tui.SubTabID]struct { //nolint:gochecknoglobals // immutable per-subtab policy table

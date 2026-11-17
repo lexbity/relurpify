@@ -51,7 +51,7 @@ func chatPaletteFromTheme(th *theme.Theme) chatPalette {
 	}
 }
 
-// newDraculaStyles kept as compatibility helper for older code paths; prefers theme-derived palette.
+// newDraculaStyles kept as legacy helper for older code paths; prefers theme-derived palette.
 func newDraculaStyles() chatPalette {
 	return chatPaletteFromTheme(theme.Default())
 }

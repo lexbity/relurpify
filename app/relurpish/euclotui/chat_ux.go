@@ -29,7 +29,7 @@ type chatUXState struct {
 	mdWidth     int
 	styles      chatPalette
 	th          *theme.Theme
-	shimmerTick int
+	glowTick int
 	cursorOn    bool
 	lastAnim    time.Time
 
@@ -255,7 +255,7 @@ func (s *chatUXState) advanceStreams(now time.Time) bool {
 	if now.Sub(s.lastAnim) > 450*time.Millisecond {
 		s.cursorOn = !s.cursorOn
 		s.lastAnim = now
-		s.shimmerTick++
+		s.glowTick++
 		changed = true
 	}
 	// spring animation for tool cards
@@ -311,12 +311,12 @@ func (s *chatUXState) thinkingView(active bool, spinner string) string {
 		return ""
 	}
 	label := "thinking…"
-	// shimmering gradient sweep across label
+	// gradient sweep across label
 	colors := []lipgloss.AdaptiveColor{s.styles.muted, s.styles.cyan, s.styles.purple, s.styles.pink, s.styles.cyan, s.styles.muted}
 	var b strings.Builder
 	runes := []rune(label)
 	for i, r := range runes {
-		idx := (i + s.shimmerTick) % len(colors)
+		idx := (i + s.glowTick) % len(colors)
 		st := lipgloss.NewStyle().Foreground(colors[idx]).Bold(true)
 		b.WriteRune(' ')
 		_ = st
@@ -325,7 +325,7 @@ func (s *chatUXState) thinkingView(active bool, spinner string) string {
 	// simpler: render each char with shifted color
 	b.Reset()
 	for i, r := range runes {
-		idx := (i + s.shimmerTick) % len(colors)
+		idx := (i + s.glowTick) % len(colors)
 		b.WriteString(lipgloss.NewStyle().Foreground(colors[idx]).Bold(true).Render(string(r)))
 	}
 	spin := spinner
@@ -399,7 +399,7 @@ func (s *chatUXState) renderToolCard(c toolCallCard, width int, selected bool) s
 	status := "pending"
 	switch c.State {
 	case toolRunning:
-		icon = spinnerFrames[s.shimmerTick%len(spinnerFrames)]
+		icon = spinnerFrames[s.glowTick%len(spinnerFrames)]
 		stateStyle = lipgloss.NewStyle().Foreground(s.styles.cyan)
 		elapsed := time.Since(c.Started).Truncate(100 * time.Millisecond)
 		status = fmt.Sprintf("running %s", elapsed)
