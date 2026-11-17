@@ -282,7 +282,7 @@ func (p *ChatPane) renderAgentBody(msg tui.Message) string {
 	if strings.TrimSpace(text) != "" {
 		sections = append(sections, p.renderAssistantText(text))
 	} else if len(msg.Content.Thinking) == 0 && msg.Content.Plan == nil && len(msg.Content.Changes) == 0 && msg.Content.Result == nil {
-		// empty agent placeholder
+		// empty agent content; render nothing
 	}
 	if msg.Content.Result != nil {
 		sections = append(sections, p.renderResult(msg.Content.Result))

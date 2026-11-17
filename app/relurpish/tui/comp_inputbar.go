@@ -614,7 +614,7 @@ func (b *InputBar) applyThemeStyles() {
 	pal := b.th.Palette()
 	fg := lipgloss.AdaptiveColor{Light: "#111827", Dark: "#f8f8f2"}
 	bg := pal.Surface
-	// Style textarea text/cursor/placeholder for visibility on themed background.
+	// Style textarea text/cursor/prompt for visibility on themed background.
 	base := lipgloss.NewStyle().Foreground(fg).Background(bg)
 	b.input.FocusedStyle.Base = base
 	b.input.FocusedStyle.Text = lipgloss.NewStyle().Foreground(fg).Background(bg)
