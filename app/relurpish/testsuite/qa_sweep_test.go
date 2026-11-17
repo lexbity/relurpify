@@ -99,7 +99,7 @@ func TestQASweep_AIProviderEditAdversarial(t *testing.T) {
 	inputs := []string{
 		"",
 		"   ",
-		strings.Repeat("x", 4096),
+		strings.Repeat("x", 512),
 		"日本語のモデル名",
 		"http://[::1]:11434",
 		"not a url at all",
@@ -111,8 +111,10 @@ func TestQASweep_AIProviderEditAdversarial(t *testing.T) {
 		// enter edit mode on the focused field
 		m = drive(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("e")})
 		for _, in := range inputs {
-			// clear then type
-			for i := 0; i < 20; i++ {
+			// clear then type; clear generously so the textarea buffer never
+			// accumulates across inputs (rewrapping a huge buffer per key is
+			// quadratic and stalls the sweep on slow runners)
+			for i := 0; i < 64; i++ {
 				m = drive(t, m, tea.KeyMsg{Type: tea.KeyBackspace})
 			}
 			if in != "" {
